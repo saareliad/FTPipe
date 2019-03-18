@@ -1,0 +1,7 @@
+Untitled.ipynb
+.vscode/*
+.ipynb_checkpoints/*
+modelParallel/__pycache__/*
+data/*
+models/__pycache__/*
+__pycache__/*
