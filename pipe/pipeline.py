@@ -2,7 +2,7 @@ import multiprocessing as mp
 from .stage import Stage
 
 
-class PipeLine(object):
+class PipeLine():
     def __init__(self):
         super(PipeLine, self).__init__()
         self.stages = []

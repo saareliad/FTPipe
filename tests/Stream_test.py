@@ -1,11 +1,8 @@
 import torch
 import time
 
-DIM = 2048
-M = torch.cuda.FloatTensor(DIM, DIM)
 
-
-def do_test(M, use_stream, fn):
+def do_test(M, use_stream, fn, DIM=2048):
     M.fill_(0.1)
     print('Initial value = %.4f' % fn()
           )
@@ -19,9 +16,12 @@ def do_test(M, use_stream, fn):
             print('After step %d = %.4f' % (step, fn()))
 
 
-fn = M.norm   # or 'M.sum' or 'lambda: M[0, 0]'
+def stream_test():
+    DIM = 2048
+    M = torch.cuda.FloatTensor(DIM, DIM)
+    fn = M.norm   # or 'M.sum' or 'lambda: M[0, 0]'
 
-print('=== Without using a new stream ===')
-do_test(M, False, fn)
-print('=== With using a new stream ===')
-do_test(M, True, fn)
+    print('=== Without using a new stream ===')
+    do_test(M, False, fn)
+    print('=== With using a new stream ===')
+    do_test(M, True, fn)

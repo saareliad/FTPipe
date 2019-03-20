@@ -4,4 +4,6 @@ Untitled.ipynb
 modelParallel/__pycache__/*
 data/*
 models/__pycache__/*
+*/__pycache__/*
 __pycache__/*
+
