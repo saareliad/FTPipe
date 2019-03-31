@@ -8,9 +8,11 @@ class Bottleneck(nn.Module):
     def __init__(self, in_planes, growth_rate):
         super(Bottleneck, self).__init__()
         self.bn1 = nn.BatchNorm2d(in_planes)
-        self.conv1 = nn.Conv2d(in_planes, 4 * growth_rate, kernel_size=1, bias=False)
+        self.conv1 = nn.Conv2d(in_planes, 4 * growth_rate,
+                               kernel_size=1, bias=False)
         self.bn2 = nn.BatchNorm2d(4 * growth_rate)
-        self.conv2 = nn.Conv2d(4 * growth_rate, growth_rate, kernel_size=3, padding=1, bias=False)
+        self.conv2 = nn.Conv2d(4 * growth_rate, growth_rate,
+                               kernel_size=3, padding=1, bias=False)
 
     def forward(self, x):
         y = self.conv1(func.relu(self.bn1(x)))
@@ -37,7 +39,8 @@ class DenseNet(nn.Module):
         self.growth_rate = growth_rate
 
         num_planes = 2 * growth_rate
-        self.conv1 = nn.Conv2d(3, num_planes, kernel_size=3, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(
+            3, num_planes, kernel_size=3, padding=1, bias=False)
 
         self.dense1 = self._make_dense_layers(block, num_planes, num_block[0])
         num_planes += num_block[0] * growth_rate

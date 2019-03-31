@@ -1,12 +1,7 @@
 import torch.nn as nn
-
+from .Flatten_Layer import FlattenLayer
 
 NUM_CLASSES = 10
-
-
-class FlattenLayer(nn.Module):
-    def forward(self, x):
-        return x.view(x.size(0), -1)
 
 
 def AlexNet(num_classes=NUM_CLASSES):

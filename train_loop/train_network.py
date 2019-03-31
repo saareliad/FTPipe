@@ -4,11 +4,12 @@ import torch.backends.cudnn as cudnn
 import torchvision
 from torchvision import transforms as transforms
 import numpy as np
+import torch.nn as nn
 
 import argparse
 
-from models import *
-from misc import progress_bar
+import models
+from .misc import progress_bar
 
 
 CLASSES = ('plane', 'car', 'bird', 'cat', 'deer',
@@ -69,7 +70,7 @@ class Solver(object):
             self.device = torch.device('cpu')
 
         # self.model = LeNet().to(self.device)
-        self.model = AlexNet().to(self.device)
+        self.model = models.AlexNet().to(self.device)
         # self.model = VGG11().to(self.device)
         # self.model = VGG13().to(self.device)
         # self.model = VGG16().to(self.device)
@@ -104,13 +105,11 @@ class Solver(object):
             output = self.model(data)
             loss = self.criterion(output, target)
             loss.backward()
-            print(data.shape)
             self.optimizer.step()
             train_loss += loss.item()
             # second param "1" represents the dimension to be reduced
             prediction = torch.max(output, 1)
             total += target.size(0)
-            break
 
             # train_correct incremented by one if predicted right
             train_correct += np.sum(prediction[1].cpu().numpy()
@@ -157,8 +156,6 @@ class Solver(object):
             self.scheduler.step(epoch)
             print("\n===> epoch: %d/200" % epoch)
             train_result = self.train()
-            break
-            print(train_result)
             test_result = self.test()
             accuracy = max(accuracy, test_result[1])
             if epoch == self.epochs:
