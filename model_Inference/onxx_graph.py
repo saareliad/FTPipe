@@ -1,12 +1,12 @@
 import torch
-import models
+# import models
 import torch.jit
 
 import torch.nn as nn
 if __name__ == "__main__":
 
     dummy_input = torch.randn(1, 3, 32, 32, device='cuda')
-    model = models.GoogLeNet().cuda()
+    # model = models.GoogLeNet().cuda()
 
     # # Providing input and output names sets the display names for values
     # # within the model's graph. Setting these does not change the semantics
@@ -81,16 +81,16 @@ if __name__ == "__main__":
     class complexNet(nn.Module):
         def __init__(self):
             super(complexNet, self).__init__()
-            a = nn.Linear(1, 1)
+            a = nn.Linear(2, 2)
 
             self.sub1 = nn.Sequential(
-                nn.ModuleList([a]),
-                a, nn.Linear(8, 2), nn.Sequential(nn.Linear(2, 2)))
+                nn.Sequential(a),
+                a, nn.Linear(2, 2), nn.Sequential(nn.Linear(2, 2)))
 
             self.sub2 = nn.Linear(2, 1)
 
         def forward(self, x):
-            return x
+            return self.sub2(self.sub1(x))
 
     # get all individual layers
 
@@ -114,5 +114,3 @@ if __name__ == "__main__":
         return layer_dict
 
     model = complexNet()
-
-    model_dict = layers_dict(model)
