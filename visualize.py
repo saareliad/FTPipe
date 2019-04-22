@@ -150,8 +150,12 @@ class Wrapper(nn.Module):
         super(Wrapper, self).__init__()
         self.module = sub_module
 
-    def forward(self, x):
+    def forward(self, data_in):
+        cost = 0
+        x, times = data_in
         if(x.is_cuda):
+            # milliseconds
+            torch.cuda.synchronize()
             start = torch.cuda.Event(enable_timing=True)
             end = torch.cuda.Event(enable_timing=True)
             start.record()
@@ -164,39 +168,30 @@ class Wrapper(nn.Module):
             cost = 1000*timeit.Timer(
                 lambda: self.module(x)).timeit(1)
 
-        return self.module(x)
+        return (self.module(x), times+[cost])
 
 
 class NetProfiler(nn.Module):
     def __init__(self, module):
         super(NetProfiler, self).__init__()
         self.module = module
-        for name, sub_module in self.module._modules.items():
-            self.module._modules[name] = Wrapper(sub_module)
+        self._wrap(self.module)
 
     def forward(self, x):
-        return self.module(x)
+        out, times = self.module((x, []))
+        print(times)
+        return out
+
+    def _wrap(self, module: nn.Module):
+        for key, item in module._modules.items():
+            if len(list(item.children())) == 0:
+                module._modules[key] = Wrapper(item)
+            else:
+                self._wrap(item)
 
 
 if __name__ == "__main__":
     base_model = resnet20_cifar()
     profiler = NetProfiler(complexNet())
-
-    model = complexNet()
-
-# wrap every individual layer in the model with the Wrapper class
-    def wrap(module: nn.Module):
-        for key, item in module._modules.items():
-            if len(list(item.children())) == 0:
-                module._modules[key] = Wrapper(item)
-            else:
-                wrap(item)
-        return module
-
-    model = wrap(model)
-
-    indiv_layers = list(filter(lambda l: len(list(l.children()))
-                               == 0, model.modules()))
-
-    for layer in model.named_children():
-        print(layer)
+    profiler.to("cuda:0")
+    out = profiler(torch.tensor([[1.0, 2.0], [2.0, 2.0]]).to("cuda:0"))
