@@ -6,4 +6,5 @@ models/__pycache__/*
 */__pycache__/*
 __pycache__/*
 ideas/*
+.idea/
 model_inference/hiddenlayer/**
