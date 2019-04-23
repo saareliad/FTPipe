@@ -9,20 +9,13 @@ def conveyor_gen(inputs, queue):
         yield None
 
 
-def prod_line(inputs, actions, size, output_results=True, first_ac=None, last_ac=None):
+def prod_line(inputs, actions, size, output_results=True, first_ac=lambda x: x, last_ac=lambda x: x):
     assert size == len(actions)
 
     outputs = deque([]) if output_results else None
 
     actions = [lambda x: x if x is None else act(x) for act in actions]
 
-    # make sure that the first and last actions are identity if none were inputted
-    if first_ac is None:
-        first_ac = lambda x: x
-
-    if last_ac is None:
-        last_ac = lambda x: x
-    #
     first_ac = lambda x: x if x is None else first_ac(x)
     last_ac = lambda x: x if x is None else last_ac(x)
 
@@ -40,4 +33,3 @@ def prod_line(inputs, actions, size, output_results=True, first_ac=None, last_ac
             outputs.appendleft(last_val)
 
     return outputs
-
