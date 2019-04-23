@@ -9,8 +9,8 @@ def conveyor_gen(inputs, queue):
         yield None
 
 
-def prod_line(inputs, actions, size, output_results=True, first_ac=lambda x: x, last_ac=lambda x: x):
-    assert size == len(actions)
+def prod_line(inputs, actions, output_results=True, first_ac=lambda x: x, last_ac=lambda x: x):
+    size = len(actions)
 
     outputs = deque([]) if output_results else None
 
@@ -30,6 +30,6 @@ def prod_line(inputs, actions, size, output_results=True, first_ac=lambda x: x, 
         last_val = last_ac(belt.pop())
 
         if output_results and last_val is not None:
-            outputs.appendleft(last_val)
+            outputs.append(last_val)
 
     return outputs
