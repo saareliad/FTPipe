@@ -1,13 +1,7 @@
 
-# %%
-import timeit
 import torch.nn as nn
 import math
 from torchvision import datasets, transforms
-
-import torch
-import torchvision.models
-# import hiddenlayer
 
 
 def get_cifar_10_data_set():
@@ -126,72 +120,3 @@ class ResNet_Cifar(nn.Module):
 def resnet20_cifar(**kwargs):
     model = ResNet_Cifar(BasicBlock, [3, 3, 3], **kwargs)
     return model
-
-
-# hiddenlayer.build_graph(resnet20_cifar(), torch.zeros(1, 3, 32, 32))
-
-class complexNet(nn.Module):
-    def __init__(self):
-        super(complexNet, self).__init__()
-        a = nn.Linear(2, 2)
-
-        self.sub1 = nn.Sequential(
-            nn.Sequential(a),
-            a, nn.Linear(2, 2), nn.Sequential(nn.Linear(2, 2)))
-
-        self.sub2 = nn.Linear(2, 1)
-
-    def forward(self, x):
-        return self.sub2(self.sub1(x))
-
-
-class Wrapper(nn.Module):
-    def __init__(self, sub_module):
-        super(Wrapper, self).__init__()
-        self.module = sub_module
-
-    def forward(self, data_in):
-        cost = 0
-        x, times = data_in
-        if(x.is_cuda):
-            # milliseconds
-            torch.cuda.synchronize()
-            start = torch.cuda.Event(enable_timing=True)
-            end = torch.cuda.Event(enable_timing=True)
-            start.record()
-            self.module(x)
-            end.record()
-            torch.cuda.synchronize()
-
-            cost = (start.elapsed_time(end))
-        else:
-            cost = 1000*timeit.Timer(
-                lambda: self.module(x)).timeit(1)
-
-        return (self.module(x), times+[cost])
-
-
-class NetProfiler(nn.Module):
-    def __init__(self, module):
-        super(NetProfiler, self).__init__()
-        self.module = module
-        self._wrap(self.module)
-
-    def forward(self, x):
-        out, times = self.module((x, []))
-        print(times)
-        return out
-
-    def _wrap(self, module: nn.Module):
-        for key, item in module._modules.items():
-            if len(list(item.children())) == 0:
-                module._modules[key] = Wrapper(item)
-            else:
-                self._wrap(item)
-
-
-if __name__ == "__main__":
-    base_model = resnet20_cifar()
-    profiler = NetProfiler(complexNet())
-    profiler.to("cuda:0")
-    out = profiler(torch.tensor([[1.0, 2.0], [2.0, 2.0]]).to("cuda:0"))

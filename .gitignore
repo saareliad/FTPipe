@@ -1,4 +1,3 @@
-Untitled.ipynb
 .vscode/*
 .ipynb_checkpoints/*
 modelParallel/__pycache__/*
@@ -7,4 +6,4 @@ models/__pycache__/*
 */__pycache__/*
 __pycache__/*
 ideas/*
-
+model_inference/hiddenlayer/**
