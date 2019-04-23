@@ -16,18 +16,18 @@ def prod_line(inputs, actions, output_results=True, first_ac=lambda x: x, last_a
 
     actions = [lambda x: x if x is None else act(x) for act in actions]
 
-    first_ac = lambda x: x if x is None else first_ac(x)
-    last_ac = lambda x: x if x is None else last_ac(x)
+    first_ac_wrap = lambda x: x if x is None else first_ac(x)
+    last_ac_wrap = lambda x: x if x is None else last_ac(x)
 
     belt = deque([None for _ in range(size - 1)])
 
     for x in conveyor_gen(inputs, belt):
-        belt.appendleft(first_ac(x))
+        belt.appendleft(first_ac_wrap(x))
 
         for i, act in enumerate(actions):
             belt[i] = act(belt[i])
 
-        last_val = last_ac(belt.pop())
+        last_val = last_ac_wrap(belt.pop())
 
         if output_results and last_val is not None:
             outputs.append(last_val)
