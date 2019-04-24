@@ -2,7 +2,7 @@
 import torch.nn as nn
 
 import torch
-
+import torchvision
 from network_profiler import NetProfiler
 
 from res_net_example import resnet20_cifar
@@ -12,11 +12,10 @@ from res_net_example import resnet20_cifar
 class complexNet(nn.Module):
     def __init__(self):
         super(complexNet, self).__init__()
-        a = nn.Linear(2, 2)
 
         self.sub1 = nn.Sequential(
-            nn.Sequential(a),
-            a, nn.Linear(2, 2), nn.Sequential(nn.Linear(2, 2)))
+            nn.Sequential(nn.Linear(2, 10)),
+            nn.Linear(10, 2), nn.ReLU(), nn.Linear(2, 4), nn.Sequential(nn.Linear(4, 2)))
 
         self.sub2 = nn.Linear(2, 1)
 
@@ -26,8 +25,14 @@ class complexNet(nn.Module):
 
 if __name__ == "__main__":
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
     base_model = resnet20_cifar()
-    profiler = NetProfiler(complexNet())
-    profiler.to(device)
-    output = profiler(torch.tensor([[1.0, 2.0], [2.0, 2.0]]).to(device))
+    profiler = NetProfiler(base_model, device="cpu")
+    # out = profiler(torch.randn(1, 3, 32, 32))
+    # loss = out.norm()
+    # loss.backward()
+    loss = profiler(torch.randn(1, 3, 32, 32)).norm()
+    loss.backward()
+    print("done")
+    times = profiler._gather_backward_times()
+
+    print(profiler._layer_sizes)

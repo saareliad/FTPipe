@@ -11,10 +11,20 @@ class Wrapper(nn.Module):
         self.forward_time = None
         self.backward_time = None
 
-        def time_hook(module, grad_in, grad_out):
+        def time_hook(__, _, ____):
             self.backward_time = timeit.time.time()
 
         self.module.register_backward_hook(time_hook)
+
+        self.size = self._layer_size()
+
+    def _layer_size(self):
+        size = 0
+        for param in self.module.parameters():
+            size += param.nelement() * param.element_size()
+        for buffer in self.module.buffers():
+            size += buffer.nelement() * buffer.element_size()
+        return size
 
     def forward(self, x):
         forward_time = 0
@@ -51,7 +61,7 @@ class NetProfiler(nn.Module):
         self.device = device
         self._forward_times = None
         self._backward_times = None
-        self._weights_sizes = 1
+        self._layer_sizes = [layer.size for layer in self.layers.values()]
 
     def forward(self, x):
         out = x.to(self.device)
