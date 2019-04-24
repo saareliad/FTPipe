@@ -26,13 +26,6 @@ class complexNet(nn.Module):
 if __name__ == "__main__":
 
     base_model = resnet20_cifar()
-    profiler = NetProfiler(base_model, device="cpu")
-    # out = profiler(torch.randn(1, 3, 32, 32))
-    # loss = out.norm()
-    # loss.backward()
-    loss = profiler(torch.randn(1, 3, 32, 32)).norm()
-    loss.backward()
+    profiler = NetProfiler(base_model, torch.randn(3, 3, 32, 32))
+    torch.cuda.synchronize()
     print("done")
-    times = profiler._gather_backward_times()
-
-    print(profiler._layer_sizes)

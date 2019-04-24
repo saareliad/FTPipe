@@ -24,6 +24,7 @@ class Wrapper(nn.Module):
             size += param.nelement() * param.element_size()
         for buffer in self.module.buffers():
             size += buffer.nelement() * buffer.element_size()
+
         return size
 
     def forward(self, x):
@@ -53,15 +54,16 @@ class Wrapper(nn.Module):
 
 
 class NetProfiler(nn.Module):
-    def __init__(self, module, device="cuda"):
+    def __init__(self, module, sample_input, device="cuda"):
         super(NetProfiler, self).__init__()
         self.module = module
-        self.num_layers, self.layers = self._wrap_individual_layers(
-            self.module, 0, {})
+        self.num_layers = None
+        self.layers = None
         self.device = device
-        self._forward_times = None
         self._backward_times = None
-        self._layer_sizes = [layer.size for layer in self.layers.values()]
+        self._forward_times = None
+
+        self.profile(sample_input)
 
     def forward(self, x):
         out = x.to(self.device)
@@ -71,13 +73,9 @@ class NetProfiler(nn.Module):
         b = torch.randn(2000, 1000).to(self.device)
         a.mm(b)
         if self.device == "cuda":
-            print("hello")
             torch.cuda.synchronize()
 
         out = self.module(out)
-        # gather forward times results
-        self._forward_times = [
-            layer.forward_time for layer in self.layers.values()]
 
         return out
 
@@ -87,8 +85,6 @@ class NetProfiler(nn.Module):
 
         self._backward_times = [0] + [end-start for end,
                                       start in zip(self._backward_times[1:], self._backward_times)]
-
-        return self._backward_times
 
     def _indiv_layers(self):
         def is_layer(module: nn.Module):
@@ -109,3 +105,29 @@ class NetProfiler(nn.Module):
                 idx, layers_dict = self._wrap_individual_layers(
                     sub_module, idx, layers_dict)
         return idx, layers_dict
+
+    def profile(self, sample_input):
+        # wrap all individula layers for profiling
+        self.num_layers, self.layers = self._wrap_individual_layers(
+            self.module, 0, {})
+
+        # gather all individual layer sizes
+        self._layer_sizes = [layer.size for layer in self.layers.values()]
+
+        # perform symbolic forward run
+        out = self(sample_input)
+        if self.device == "cuda":
+            torch.cuda.synchronize()
+
+        # gather forward times results
+        self._forward_times = [
+            layer.forward_time for layer in self.layers.values()]
+
+        # perform symbolic backward run
+        loss = out.norm()
+        loss.backward()
+        if self.device == "cuda":
+            torch.cuda.synchronize()
+
+        # gather backward times results
+        self._gather_backward_times()
