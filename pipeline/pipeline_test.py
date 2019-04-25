@@ -1,4 +1,7 @@
 import pytest
+from pipeline.utils import *
+from pipeline.pipeline_parallel import *
+from pipeline.sub_module_wrapper import *
 
 # TODO
 """
