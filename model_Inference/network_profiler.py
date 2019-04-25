@@ -4,34 +4,46 @@ import timeit
 
 
 class Wrapper(nn.Module):
+    '''
+    a module whose purpose is to profile a given layer,
+    measuring forward/backward computation time, and estimated memory consumption
+    '''
+
     def __init__(self, sub_module: nn.Module, idx, device):
         super(Wrapper, self).__init__()
-        self.module = sub_module
+        self.layer = sub_module
         self.device = device
         self.idx = idx
         self.forward_time = None
         self.backward_timestamp = None
 
-        def time_hook(_, __, ___):
+        def backward_time_hook(_, __, ___):
             # record when the layer finished calculating gradients
             if self.device == "cuda":
                 torch.cuda.synchronize()
             self.backward_timestamp = timeit.time.time()
 
-        self.module.register_backward_hook(time_hook)
+        self.layer.register_backward_hook(backward_time_hook)
 
         self.size = self._layer_size()
 
     def _layer_size(self):
+        '''
+        return the size of the layer considering parameters and buffers
+        '''
+        # TODO maybe include activations/gradients size
         size = 0
-        for param in self.module.parameters():
+        for param in self.layer.parameters():
             size += param.nelement() * param.element_size()
-        for buffer in self.module.buffers():
+        for buffer in self.layer.buffers():
             size += buffer.nelement() * buffer.element_size()
 
         return size
 
     def forward(self, x):
+        '''
+        measures the time in milliseconds it took for the module to complete forward computation
+        '''
         forward_time = 0
         out = None
         if(x.is_cuda):
@@ -40,7 +52,7 @@ class Wrapper(nn.Module):
             start = torch.cuda.Event(enable_timing=True)
             end = torch.cuda.Event(enable_timing=True)
             start.record()
-            out = self.module(x)
+            out = self.layer(x)
             end.record()
             torch.cuda.synchronize()
             forward_time = 0
@@ -48,7 +60,7 @@ class Wrapper(nn.Module):
         else:
             # convert to milliseconds
             start = timeit.time.time()
-            out = self.module(x)
+            out = self.layer(x)
             end = timeit.time.time()
             forward_time = 1000*(end - start)
 
@@ -58,18 +70,22 @@ class Wrapper(nn.Module):
 
 
 class NetProfiler(nn.Module):
+    '''
+    a module who profiles a network's computation time(forward/backward) and memory consumption
+    done via wrapping all layers of the network with a special Wrapper module
+    '''
+    # TODO maybe include activations/gradients size
+
     def __init__(self, module, sample_input, device="cuda"):
         super(NetProfiler, self).__init__()
-        self.module = module
+        self.network = module
         self.num_layers = None
         self.layers = None
         self.device = device
         self._backward_times = None
         self._forward_times = None
 
-        # second profiling is the best one due to gpu warmup
-        self.profile(sample_input)
-        # self.profile(sample_input)
+        self._profile(sample_input)
 
     def forward(self, x):
         out = x.to(self.device)
@@ -81,7 +97,7 @@ class NetProfiler(nn.Module):
         if self.device == "cuda":
             torch.cuda.synchronize()
 
-        out = self.module(out)
+        out = self.network(out)
 
         return out
 
@@ -94,14 +110,10 @@ class NetProfiler(nn.Module):
         self._backward_times = [
             end-start for end, start in zip(self._backward_times, self._backward_times[1:])]+[0]
 
-    def _indiv_layers(self):
-        def is_layer(module: nn.Module):
-            return len(module.children()) == 0
-
-        indiv_layers = filter(self.module.modules(), is_layer)
-        return dict(enumerate(indiv_layers))
-
     def _wrap_individual_layers(self, module: nn.Module, idx, layers_dict):
+        '''
+        wraps all layers of module by changing the binding in the network module dictionary 
+        '''
         for name, sub_module in module._modules.items():
             # assume no cyclic routes in the network
             # a module with no children is a layer
@@ -114,10 +126,13 @@ class NetProfiler(nn.Module):
                     sub_module, idx, layers_dict)
         return idx, layers_dict
 
-    def profile(self, sample_input):
+    def _profile(self, sample_input):
+        '''
+        profiles the network using a sample input
+        '''
         # wrap all individula layers for profiling
         self.num_layers, self.layers = self._wrap_individual_layers(
-            self.module, 0, {})
+            self.network, 0, {})
 
         # gather all individual layer sizes
         self._layer_sizes = [layer.size for layer in self.layers.values()]
