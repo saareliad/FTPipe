@@ -75,6 +75,7 @@ class NetProfiler(nn.Module):
     done via wrapping all layers of the network with a special Wrapper module
     '''
     # TODO maybe include activations/gradients size
+    # TODO find better way to measure the backward computation time
 
     def __init__(self, module, sample_input, device="cuda"):
         super(NetProfiler, self).__init__()
