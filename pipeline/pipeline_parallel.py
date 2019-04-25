@@ -14,8 +14,12 @@ class PipelineParallel(nn.Module):
     the list submodules reflects what you want
     """
 
-    def __init__(self, submodules: Iterable[nn.Module], devices: Iterable[str], mb_size: int, main_device: str = 'cpu'):
+    def __init__(self, submodules: List[nn.Module], devices: List[str], mb_size: int, main_device: str = 'cpu'):
         super(PipelineParallel, self).__init__()
+
+        if len(submodules) != len(devices):
+            raise Exception((f"submodules and devices must be lists of the same length, "
+                             f"got len(submodules) = {len(submodules)} and len(devices) = {len(devices)}"))
 
         self.main_device = main_device
         self.mb_size = mb_size
