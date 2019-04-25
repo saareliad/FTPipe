@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import Iterable
+from typing import Iterable, List
 
 from pipeline.utils import prod_line
 from pipeline.sub_module_wrapper import SubModuleWrapper
@@ -22,13 +22,14 @@ class PipelineParallel(nn.Module):
         self.devices = devices
         self.submodules = [SubModuleWrapper(sm, dev) for sm, dev in zip(submodules, devices)]
 
-    def __div_to_mbs(self, tensor: torch.Tensor) -> torch.Tensor:
+    def __div_to_mbs(self, tensor: torch.Tensor) -> List[torch.Tensor]:
         """
-        reshapes tensor so that the first dimension will be the microbatches
+        divides tensor to smaller ones so that the first dimension will be the microbatches in each
         :param tensor: inputted tensor
-        :return: reshaped tensor
+        :return: list of tensors with self.mb_size rows
         """
-        return tensor.view((-1, self.mb_size, *tuple(tensor.shape[1:])))
+        div_tensor = tensor.view((-1, self.mb_size, *tuple(tensor.shape[1:])))
+        return [t for t in div_tensor]
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         """
@@ -47,14 +48,8 @@ class PipelineParallel(nn.Module):
         for sb in self.submodules:
             sb.del_activations()
 
-        # divide to minibatches
-        input = self.__div_to_mbs(input)
-
         # calculate output in a pipeline on the microbatches
-        results = prod_line(
-            input, self.submodules,
-            last_ac=lambda x: x.to(self.main_device)
-        )
+        results = prod_line(self.__div_to_mbs(input), self.submodules, last_ac=lambda x: x.to(self.main_device))
 
         # reform the full results tensor from the list
         results = torch.cat(results, dim=0).detach_()
@@ -71,12 +66,11 @@ class PipelineParallel(nn.Module):
         :param grads: the gradients of the model outputs
         """
         # divide gradients to microbatches as was done in the forward function
-        grads = self.__div_to_mbs(grads)
         # reverse the order of the gradients so that it will work (look at SubModuleWrapper.backward for the reason)
-        rev_grads = [grad for grad in grads][::-1]
+        grads = self.__div_to_mbs(grads)[::-1]
 
         # the actions are the backward functions in reverse order (for correct use of the chain rule)
         actions = [m.backward for m in self.submodules[::-1]]
 
         # calculate gradients in pipeline
-        prod_line(rev_grads, actions, output_results=False)
+        prod_line(grads, actions, output_results=False)
