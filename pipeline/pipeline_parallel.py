@@ -18,7 +18,8 @@ class PipelineParallel(nn.Module):
         super(PipelineParallel, self).__init__()
 
         if len(submodules) != len(devices):
-            raise Exception((f"submodules and devices must be lists of the same length, "
+            raise Exception((f"PipelineParallel CONSTRUCTOR EXCEPTION: "
+                             f"submodules and devices must be lists of the same length, "
                              f"got len(submodules) = {len(submodules)} and len(devices) = {len(devices)}"))
 
         self.main_device = main_device
