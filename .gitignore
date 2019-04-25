@@ -8,3 +8,4 @@ __pycache__/*
 ideas/*
 .idea/
 model_inference/hiddenlayer/**
+model_inference/metis/**

@@ -4,15 +4,19 @@ import timeit
 
 
 class Wrapper(nn.Module):
-    def __init__(self, sub_module: nn.Module, idx):
+    def __init__(self, sub_module: nn.Module, idx, device):
         super(Wrapper, self).__init__()
         self.module = sub_module
+        self.device = device
         self.idx = idx
         self.forward_time = None
-        self.backward_time = None
+        self.backward_timestamp = None
 
-        def time_hook(__, _, ____):
-            self.backward_time = timeit.time.time()
+        def time_hook(_, __, ___):
+            # record when the layer finished calculating gradients
+            if self.device == "cuda":
+                torch.cuda.synchronize()
+            self.backward_timestamp = timeit.time.time()
 
         self.module.register_backward_hook(time_hook)
 
@@ -63,7 +67,9 @@ class NetProfiler(nn.Module):
         self._backward_times = None
         self._forward_times = None
 
+        # second profiling is the best one due to gpu warmup
         self.profile(sample_input)
+        # self.profile(sample_input)
 
     def forward(self, x):
         out = x.to(self.device)
@@ -80,11 +86,13 @@ class NetProfiler(nn.Module):
         return out
 
     def _gather_backward_times(self):
+        # time is calculated by subtracting successive timestamps
+        # for lack of a better option the last layer performs backpropagation in 0 time
         self._backward_times = [
-            layer.backward_time for layer in self.layers.values()]
+            layer.backward_timestamp for layer in self.layers.values()]
 
-        self._backward_times = [0] + [end-start for end,
-                                      start in zip(self._backward_times[1:], self._backward_times)]
+        self._backward_times = [
+            end-start for end, start in zip(self._backward_times, self._backward_times[1:])]+[0]
 
     def _indiv_layers(self):
         def is_layer(module: nn.Module):
@@ -98,7 +106,7 @@ class NetProfiler(nn.Module):
             # assume no cyclic routes in the network
             # a module with no children is a layer
             if len(list(sub_module.children())) == 0:
-                module._modules[name] = Wrapper(sub_module, idx)
+                module._modules[name] = Wrapper(sub_module, idx, self.device)
                 layers_dict[idx] = module._modules[name]
                 idx += 1
             else:
@@ -115,7 +123,11 @@ class NetProfiler(nn.Module):
         self._layer_sizes = [layer.size for layer in self.layers.values()]
 
         # perform symbolic forward run
+        if self.device == "cuda":
+            torch.cuda.synchronize()
+
         out = self(sample_input)
+
         if self.device == "cuda":
             torch.cuda.synchronize()
 
@@ -125,7 +137,11 @@ class NetProfiler(nn.Module):
 
         # perform symbolic backward run
         loss = out.norm()
+        if self.device == "cuda":
+            torch.cuda.synchronize()
+
         loss.backward()
+
         if self.device == "cuda":
             torch.cuda.synchronize()
 
