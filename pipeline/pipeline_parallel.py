@@ -14,7 +14,7 @@ class PipelineParallel(nn.Module):
     the list submodules reflects what you want
     """
 
-    def __init__(self, submodules: Iterable[nn.Module], devices: Iterable[str], mb_size: int, main_device='cpu'):
+    def __init__(self, submodules: Iterable[nn.Module], devices: Iterable[str], mb_size: int, main_device: str = 'cpu'):
         super(PipelineParallel, self).__init__()
 
         self.main_device = main_device
