@@ -33,8 +33,7 @@ class PipelineParallel(nn.Module):
         :param tensor: inputted tensor
         :return: list of tensors with self.mb_size rows
         """
-        div_tensor = tensor.view((-1, self.mb_size, *tuple(tensor.shape[1:])))
-        return [t for t in div_tensor]
+        return [t for t in tensor.view((-1, self.mb_size, *tuple(tensor.shape[1:])))]
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         """
@@ -72,10 +71,11 @@ class PipelineParallel(nn.Module):
         """
         # divide gradients to microbatches as was done in the forward function
         # reverse the order of the gradients so that it will work (look at SubModuleWrapper.backward for the reason)
-        grads = self.__div_to_mbs(grads)[::-1]
+        # grads = self.__div_to_mbs(grads)[::-1]
 
         # the actions are the backward functions in reverse order (for correct use of the chain rule)
         actions = [m.backward for m in self.submodules[::-1]]
 
         # calculate gradients in pipeline
-        prod_line(grads, actions, output_results=False)
+        # reverse the order of the gradients so that it will work (look at SubModuleWrapper.backward for the reason)
+        prod_line(self.__div_to_mbs(grads)[::-1], actions, output_results=False)
