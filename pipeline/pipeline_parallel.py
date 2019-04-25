@@ -10,9 +10,10 @@ class PipelineParallel(nn.Module):
 
     """
 
-    def __init__(self, submodules, devices, mb_size):
+    def __init__(self, submodules, devices, mb_size, main_device='cpu'):
         super(PipelineParallel, self).__init__()
 
+        self.main_device = main_device
         self.mb_size = mb_size
         self.devices = devices
         self.submodules = [SubModuleWrapper(sm, dev) for sm, dev in
@@ -26,24 +27,17 @@ class PipelineParallel(nn.Module):
 
         results = prod_line(
             input, self.submodules,
-            last_ac=lambda x: x.to('cpu')
+            last_ac=lambda x: x.to(self.main_device)
         )
 
-        return torch.cat(results, dim=0)
+        results = torch.cat(results, dim=0).detach_()
+        results.register_hook(self.backward)
 
-    def backward(self, loss_fn, results, targets):
-        num_samples = float(results.shape[0])
-        results = self.__div_to_mbs(results)
-        targets = self.__div_to_mbs(targets)
+        return results
 
-        losses = [loss_fn(res.detach(), tar.detach()) for res, tar in
-                  zip(results, targets)]
-        losses = [torch.sum(loss) / num_samples for loss in losses]
-
-        for loss in losses:
-            loss.backwards()
-
-        grads = [loss.grad for loss in losses[::-1]]
+    def backward(self, grads: torch.Tensor):
+        grads = self.__div_to_mbs(grads)
+        rev_grads = [grad for grad in grads][::-1]
 
         actions = [m.backward for m in self.submodules[::-1]]
-        prod_line(grads, actions, output_results=False)
+        prod_line(rev_grads, actions, output_results=False)
