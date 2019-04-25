@@ -8,8 +8,8 @@ from pipeline.sub_module_wrapper import SubModuleWrapper
 
 class PipelineParallel(nn.Module):
     """
-    class that gets submodels of one large model and the devices they should be on (+ microbatch size)
-    and makes the larged model that they consist as a pipline with each submodel being a station
+    class that gets submodules of one large model and the devices they should be on (+ microbatch size)
+    and makes the large model that they consist as a pipeline with each submodule being a station
     **IMPORTANT** this is functionally like 'Sequential(submodules)', so be aware of that and make sure that
     the list submodules reflects what you want
     """
@@ -33,16 +33,16 @@ class PipelineParallel(nn.Module):
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         """
-        forward propogation of the entire model
+        forward propagation of the entire model
         will run in a pipeline using the cuda kernels and the prod_line function
-        makes sure that the backward propogation hook is also added
+        makes sure that the backward propagation hook is also added
 
-        note: a forward propogation deletes all previously saved activations,
+        note: a forward propagation deletes all previously saved activations,
         so if you want to use backward with some results, do it before running the model again
         on other inputs
 
         :param input: inputted batch
-        :return: results of forward propogation on the batch
+        :return: results of forward propagation on the batch
         """
         # make sure to delete any activations left from former backward runs
         for sb in self.submodules:
@@ -53,15 +53,15 @@ class PipelineParallel(nn.Module):
 
         # reform the full results tensor from the list
         results = torch.cat(results, dim=0).detach_()
-        # add backward propogation hook
+        # add backward propagation hook
         results.register_hook(self.backward)
 
         return results
 
     def backward(self, grads: torch.Tensor):
         """
-        does backward propogation with gradients of full results,
-        works as hook for normal autograd backward propogations so it usually shouldn't
+        does backward propagation with gradients of full results,
+        works as hook for normal autograd backward propagation so it usually shouldn't
         be called implicitly but used as part of loss.backward() or something like that
         :param grads: the gradients of the model outputs
         """

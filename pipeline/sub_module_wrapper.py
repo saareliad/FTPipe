@@ -22,9 +22,9 @@ class SubModuleWrapper(nn.Module):
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         """
-        forward propogation of the submodel
+        forward propagation of the submodule
         will save the first activation and make sure no autograd activation savings will happen
-        :param input: the input of the submodel
+        :param input: the input of the submodule
         :return: the output as it should be calculated normally
         """
         self.first_activations.append(input.clone().detach_())
@@ -34,7 +34,7 @@ class SubModuleWrapper(nn.Module):
 
     def backward(self, grad: torch.Tensor) -> torch.Tensor:
         """
-        backward propogation of the submodel
+        backward propagation of the submodule
         do note we **must** use it on the vectors in the reverse order to how they were inputted currently
         :param grad: the gradient of the output
         :return: the gradient of the first activation corresponding to the gradient
