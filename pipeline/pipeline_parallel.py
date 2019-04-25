@@ -18,8 +18,11 @@ class PipelineParallel(nn.Module):
         self.submodules = [SubModuleWrapper(sm, dev) for sm, dev in
                            zip(submodules, devices)]
 
+    def __div_to_mbs(self, tensor: torch.Tensor) -> torch.Tensor:
+        return tensor.view((-1, self.mb_size, *tuple(tensor.shape[1:])))
+
     def forward(self, input: torch.Tensor):
-        input = input.view((-1, self.mb_size, *tuple(input.shape[1:])))
+        input = self.__div_to_mbs(input)
 
         results = prod_line(
             input, self.submodules,
@@ -30,8 +33,8 @@ class PipelineParallel(nn.Module):
 
     def backward(self, loss_fn, results, targets):
         num_samples = float(results.shape[0])
-        results = results.view((-1, self.mb_size, *tuple(results.shape[1:])))
-        targets = targets.view((-1, self.mb_size, *tuple(targets.shape[1:])))
+        results = self.__div_to_mbs(results)
+        targets = self.__div_to_mbs(targets)
 
         losses = [loss_fn(res.detach(), tar.detach()) for res, tar in
                   zip(results, targets)]
