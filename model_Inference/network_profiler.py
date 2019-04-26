@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import timeit
+# import metis
 
 
 class Wrapper(nn.Module):
@@ -76,8 +77,9 @@ class NetProfiler(nn.Module):
     '''
     # TODO maybe include activations/gradients size
     # TODO find better way to measure the backward computation time
+    # basic block can be a tuple
 
-    def __init__(self, module, sample_input, device="cuda"):
+    def __init__(self, module, sample_input, basic_block=None, device="cuda"):
         super(NetProfiler, self).__init__()
         self.network = module
         self.num_layers = None
@@ -85,6 +87,7 @@ class NetProfiler(nn.Module):
         self.device = device
         self._backward_times = None
         self._forward_times = None
+        self._basic_block = basic_block
 
         self._profile(sample_input)
 
@@ -118,7 +121,7 @@ class NetProfiler(nn.Module):
         for name, sub_module in module._modules.items():
             # assume no cyclic routes in the network
             # a module with no children is a layer
-            if len(list(sub_module.children())) == 0:
+            if len(list(sub_module.children())) == 0 or (self._basic_block != None and isinstance(sub_module, self._basic_block)):
                 module._modules[name] = Wrapper(sub_module, idx, self.device)
                 layers_dict[idx] = module._modules[name]
                 idx += 1
