@@ -8,9 +8,15 @@ class Wrapper(nn.Module):
     '''
     a module whose purpose is to profile a given layer,
     measuring forward/backward computation time, and estimated memory consumption
+
+    Parameters
+    ----------
+    sub_module:
+        a nn.module to be profiled
+
     '''
 
-    def __init__(self, sub_module: nn.Module, idx, device):
+    def __init__(self, sub_module: nn.Module, idx=0, device="cuda"):
         super(Wrapper, self).__init__()
         self.layer = sub_module
         self.device = device
@@ -74,22 +80,32 @@ class NetProfiler(nn.Module):
     '''
     a module who profiles a network's computation time(forward/backward) and memory consumption
     done via wrapping all layers of the network with a special Wrapper module
+
+    Parameters
+    ----------
+    net:
+        the network we wish to profile a nn.Module
+
+    sample_batch:
+        a sample batch that will be used to measure executation time of network a torch.Tensor
+
+    basic_block:
+        a tuple of nn.Module classes that the profiler will regard as a cohesive unit
+        for eg. if basic_block = nn.Sequential then the profiler will break it down to it's components
+
+    device:
+        the device on which we will profile the network defaults to cuda
+
     '''
     # TODO maybe include activations/gradients size
     # TODO find better way to measure the backward computation time
-    # basic block can be a tuple
 
-    def __init__(self, module, sample_input, basic_block=None, device="cuda"):
+    def __init__(self, net: nn.Module, sample_batch: torch.Tensor, basic_block=None, device="cuda"):
         super(NetProfiler, self).__init__()
-        self.network = module
-        self.num_layers = None
-        self.layers = None
+        self.network = net
+        self.basic_block = basic_block
         self.device = device
-        self._backward_times = None
-        self._forward_times = None
-        self._basic_block = basic_block
-
-        self._profile(sample_input)
+        self._profile(sample_batch)
 
     def forward(self, x):
         out = x.to(self.device)
@@ -105,15 +121,6 @@ class NetProfiler(nn.Module):
 
         return out
 
-    def _gather_backward_times(self):
-        # time is calculated by subtracting successive timestamps
-        # for lack of a better option the last layer performs backpropagation in 0 time
-        self._backward_times = [
-            layer.backward_timestamp for layer in self.layers.values()]
-
-        self._backward_times = [
-            end-start for end, start in zip(self._backward_times, self._backward_times[1:])]+[0]
-
     def _wrap_individual_layers(self, module: nn.Module, idx, layers_dict):
         '''
         wraps all layers of module by changing the binding in the network module dictionary 
@@ -121,7 +128,7 @@ class NetProfiler(nn.Module):
         for name, sub_module in module._modules.items():
             # assume no cyclic routes in the network
             # a module with no children is a layer
-            if len(list(sub_module.children())) == 0 or (self._basic_block != None and isinstance(sub_module, self._basic_block)):
+            if len(list(sub_module.children())) == 0 or (self.basic_block != None and isinstance(sub_module, self.basic_block)):
                 module._modules[name] = Wrapper(sub_module, idx, self.device)
                 layers_dict[idx] = module._modules[name]
                 idx += 1
@@ -130,7 +137,7 @@ class NetProfiler(nn.Module):
                     sub_module, idx, layers_dict)
         return idx, layers_dict
 
-    def _profile(self, sample_input):
+    def _profile(self, sample_batch):
         '''
         profiles the network using a sample input
         '''
@@ -139,13 +146,13 @@ class NetProfiler(nn.Module):
             self.network, 0, {})
 
         # gather all individual layer sizes
-        self._layer_sizes = [layer.size for layer in self.layers.values()]
+        self.layer_sizes = [layer.size for layer in self.layers.values()]
 
         # perform symbolic forward run
         if self.device == "cuda":
             torch.cuda.synchronize()
 
-        out = self(sample_input)
+        out = self(sample_batch)
 
         if self.device == "cuda":
             torch.cuda.synchronize()
@@ -165,4 +172,10 @@ class NetProfiler(nn.Module):
             torch.cuda.synchronize()
 
         # gather backward times results
-        self._gather_backward_times()
+        # time is calculated by subtracting successive timestamps
+        # for lack of a better option the last layer performs backpropagation in 0 time
+        self.backward_times = [
+            layer.backward_timestamp for layer in self.layers.values()]
+
+        self.backward_times = [
+            end-start for end, start in zip(self.backward_times, self.backward_times[1:])]+[0]
