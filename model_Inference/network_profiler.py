@@ -47,19 +47,19 @@ class Wrapper(nn.Module):
 
         return size
 
-    def forward(self, x):
+    def forward(self, *inputs, **kwargs):
         '''
         measures the time in milliseconds it took for the module to complete forward computation
         '''
         forward_time = 0
         out = None
-        if(x.is_cuda):
+        if(self.device == "cuda"):
             # milliseconds
             torch.cuda.synchronize()
             start = torch.cuda.Event(enable_timing=True)
             end = torch.cuda.Event(enable_timing=True)
             start.record()
-            out = self.layer(x)
+            out = self.layer(*inputs, **kwargs)
             end.record()
             torch.cuda.synchronize()
             forward_time = 0
@@ -67,7 +67,7 @@ class Wrapper(nn.Module):
         else:
             # convert to milliseconds
             start = timeit.time.time()
-            out = self.layer(x)
+            out = self.layer(*inputs, **kwargs)
             end = timeit.time.time()
             forward_time = 1000*(end - start)
 
@@ -87,7 +87,8 @@ class NetProfiler(nn.Module):
         the network we wish to profile a nn.Module
 
     sample_batch:
-        a sample batch that will be used to measure executation time of network a torch.Tensor
+        a sample batch that will be used to measure executation time of network
+        can be single/multiple inputs
 
     basic_block:
         a tuple of nn.Module classes that the profiler will regard as a cohesive unit
@@ -99,16 +100,17 @@ class NetProfiler(nn.Module):
     '''
     # TODO maybe include activations/gradients size
     # TODO find better way to measure the backward computation time
+    # TODO check if it is realy neccessary to call cuda.synchronize all the time
 
-    def __init__(self, net: nn.Module, sample_batch: torch.Tensor, basic_block=None, device="cuda"):
+    def __init__(self, net: nn.Module, *sample_batch, basic_block=None, device="cuda"):
         super(NetProfiler, self).__init__()
         self.network = net
         self.basic_block = basic_block
         self.device = device
-        self._profile(sample_batch)
+        self._profile(*sample_batch)
 
-    def forward(self, x):
-        out = x.to(self.device)
+    def forward(self, *inputs, **kwargs):
+        out = map(lambda t: t.to(self.device), inputs)
         self.to(self.device)
         # warmup
         a = torch.randn(1000, 2000).to(self.device)
@@ -117,7 +119,7 @@ class NetProfiler(nn.Module):
         if self.device == "cuda":
             torch.cuda.synchronize()
 
-        out = self.network(out)
+        out = self.network(*out, **kwargs)
 
         return out
 
@@ -137,7 +139,7 @@ class NetProfiler(nn.Module):
                     sub_module, idx, layers_dict)
         return idx, layers_dict
 
-    def _profile(self, sample_batch):
+    def _profile(self, *sample_batch):
         '''
         profiles the network using a sample input
         '''
@@ -152,7 +154,7 @@ class NetProfiler(nn.Module):
         if self.device == "cuda":
             torch.cuda.synchronize()
 
-        out = self(sample_batch)
+        outputs = self(*sample_batch)
 
         if self.device == "cuda":
             torch.cuda.synchronize()
@@ -162,7 +164,10 @@ class NetProfiler(nn.Module):
             layer.forward_time for layer in self.layers.values()]
 
         # perform symbolic backward run
-        loss = out.norm()
+        loss = 0.0
+        for out in outputs:
+            loss += out.norm()
+
         if self.device == "cuda":
             torch.cuda.synchronize()
 
