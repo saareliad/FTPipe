@@ -47,7 +47,7 @@ class Wrapper(nn.Module):
 
         return size
 
-    def forward(self, *inputs, **kwargs):
+    def forward(self, *inputs):
         '''
         measures the time in milliseconds it took for the module to complete forward computation
         '''
@@ -59,15 +59,14 @@ class Wrapper(nn.Module):
             start = torch.cuda.Event(enable_timing=True)
             end = torch.cuda.Event(enable_timing=True)
             start.record()
-            out = self.layer(*inputs, **kwargs)
+            out = self.layer(*inputs)
             end.record()
             torch.cuda.synchronize()
-            forward_time = 0
             forward_time = (start.elapsed_time(end))
         else:
             # convert to milliseconds
             start = timeit.time.time()
-            out = self.layer(*inputs, **kwargs)
+            out = self.layer(*inputs)
             end = timeit.time.time()
             forward_time = 1000*(end - start)
 
@@ -109,7 +108,7 @@ class NetProfiler(nn.Module):
         self.device = device
         self._profile(*sample_batch)
 
-    def forward(self, *inputs, **kwargs):
+    def forward(self, *inputs):
         out = map(lambda t: t.to(self.device), inputs)
         self.to(self.device)
         # warmup
@@ -119,7 +118,10 @@ class NetProfiler(nn.Module):
         if self.device == "cuda":
             torch.cuda.synchronize()
 
-        out = self.network(*out, **kwargs)
+        out = self.network(*out)
+
+        if self.device == "cuda":
+            torch.cuda.synchronize()
 
         return out
 
@@ -151,13 +153,7 @@ class NetProfiler(nn.Module):
         self.layer_sizes = [layer.size for layer in self.layers.values()]
 
         # perform symbolic forward run
-        if self.device == "cuda":
-            torch.cuda.synchronize()
-
         outputs = self(*sample_batch)
-
-        if self.device == "cuda":
-            torch.cuda.synchronize()
 
         # gather forward times results
         self._forward_times = [
