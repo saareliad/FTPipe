@@ -102,14 +102,16 @@ class NetProfiler(nn.Module):
     # TODO maybe measure forward+backward together via usage of detach in order to isolate different layers
     # TODO check if it is realy neccessary to call cuda.synchronize all the time
 
-    def __init__(self, net: nn.Module, *sample_batch, basic_block=None, device="cuda"):
+    def __init__(self, net: nn.Module, *sample_batch, basic_block=None, device="cuda", max_depth=None):
         super(NetProfiler, self).__init__()
         self.network = net
         self.basic_block = basic_block
         self.device = device
+        self.max_depth = max_depth if max_depth != None else 100
         self._profile(*sample_batch)
 
     def forward(self, *inputs):
+        # move all inputs and outputs to specified device
         out = map(lambda t: t.to(self.device), inputs)
         self.to(self.device)
         # warmup
@@ -126,18 +128,19 @@ class NetProfiler(nn.Module):
 
         return out
 
-    def _wrap_individual_layers(self, module: nn.Module, idx, layers_dict):
+    def _wrap_individual_layers(self, module: nn.Module, depth, idx, layers_dict):
         '''
-        wraps all layers of module by changing the binding in the network module dictionary 
+        wraps all layers of module by changing the binding in the network module dictionary
         '''
+
         for name, sub_module in module._modules.items():
-            if len(list(sub_module.children())) == 0 or (self.basic_block != None and isinstance(sub_module, self.basic_block)):
+            if len(list(sub_module.children())) == 0 or (self.basic_block != None and isinstance(sub_module, self.basic_block)) or depth == 0:
                 module._modules[name] = Wrapper(sub_module, idx, self.device)
                 layers_dict[idx] = module._modules[name]
                 idx += 1
             else:
                 idx, layers_dict = self._wrap_individual_layers(
-                    sub_module, idx, layers_dict)
+                    sub_module, depth-1, idx, layers_dict)
         return idx, layers_dict
 
     def _unwrap_layers(self, module: nn.Module, idx):
@@ -160,7 +163,7 @@ class NetProfiler(nn.Module):
         '''
         # wrap all individula layers for profiling
         self.num_layers, self.layers = self._wrap_individual_layers(
-            self.network, 0, {})
+            self.network, self.max_depth, 0, {})
 
         # gather all individual layer sizes
         self.layer_sizes = [layer.size for layer in self.layers.values()]
