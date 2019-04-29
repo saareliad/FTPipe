@@ -99,6 +99,7 @@ class NetProfiler(nn.Module):
     '''
     # TODO maybe include activations/gradients size
     # TODO find better way to measure the backward computation time
+    # TODO maybe measure forward+backward together via usage of detach in order to isolate different layers
     # TODO check if it is realy neccessary to call cuda.synchronize all the time
 
     def __init__(self, net: nn.Module, *sample_batch, basic_block=None, device="cuda"):
@@ -130,8 +131,6 @@ class NetProfiler(nn.Module):
         wraps all layers of module by changing the binding in the network module dictionary 
         '''
         for name, sub_module in module._modules.items():
-            # assume no cyclic routes in the network
-            # a module with no children is a layer
             if len(list(sub_module.children())) == 0 or (self.basic_block != None and isinstance(sub_module, self.basic_block)):
                 module._modules[name] = Wrapper(sub_module, idx, self.device)
                 layers_dict[idx] = module._modules[name]
@@ -140,6 +139,20 @@ class NetProfiler(nn.Module):
                 idx, layers_dict = self._wrap_individual_layers(
                     sub_module, idx, layers_dict)
         return idx, layers_dict
+
+    def _unwrap_layers(self, module: nn.Module, idx):
+        '''
+        return all binding to what they were originally, removes all Wrappers from self.network
+        '''
+        for name, sub_module in module._modules.items():
+            if isinstance(sub_module, Wrapper):
+                module._modules[name] = sub_module.layer
+                self.layers[idx] = module._modules[name]
+                idx += 1
+            else:
+                idx = self._unwrap_layers(
+                    sub_module, idx)
+        return idx
 
     def _profile(self, *sample_batch):
         '''
