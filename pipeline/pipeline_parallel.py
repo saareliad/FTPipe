@@ -1,9 +1,22 @@
 import torch
 import torch.nn as nn
-from typing import Iterable, List
+import torch.distributed as dist
+from typing import Iterable, List, Tuple
+import torch.multiprocessing as mp
+from multiprocessing import Queue
+import os
 
-from pipeline.utils import prod_line
-from pipeline.sub_module_wrapper import SubModuleWrapper
+
+def setup(rank, world_size):
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = '12355'
+
+    # initialize the process group
+    dist.init_process_group("gloo", rank=rank, world_size=world_size)
+
+
+def cleanup():
+    dist.destroy_process_group()
 
 
 class PipelineParallel(nn.Module):
@@ -14,26 +27,13 @@ class PipelineParallel(nn.Module):
     the list submodules reflects what you want
     """
 
-    def __init__(self, submodules: List[nn.Module], devices: List[str], mb_size: int, main_device: str = 'cpu'):
+    def __init__(self, module: nn.Module, microbatch_size: int, num_gpus: int, main_device: str = 'cpu'):
         super(PipelineParallel, self).__init__()
 
-        if len(submodules) != len(devices):
-            raise Exception((f"PipelineParallel CONSTRUCTOR EXCEPTION: "
-                             f"submodules and devices must be lists of the same length, "
-                             f"got len(submodules) = {len(submodules)} and len(devices) = {len(devices)}"))
-
         self.main_device = main_device
-        self.mb_size = mb_size
-        self.devices = devices
-        self.submodules = [SubModuleWrapper(sm, dev) for sm, dev in zip(submodules, devices)]
-
-    def __div_to_mbs(self, tensor: torch.Tensor) -> List[torch.Tensor]:
-        """
-        divides tensor to smaller ones so that the first dimension will be the microbatches in each
-        :param tensor: inputted tensor
-        :return: list of tensors with self.mb_size rows
-        """
-        return [t for t in tensor.view((-1, self.mb_size, *tuple(tensor.shape[1:])))]
+        self.microbatch_size = microbatch_size
+        self.module = module
+        self.num_gpus = num_gpus
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         """
@@ -49,33 +49,48 @@ class PipelineParallel(nn.Module):
         :return: results of forward propagation on the batch
         """
         # make sure to delete any activations left from former backward runs
-        for sb in self.submodules:
-            sb.del_activations()
+        microbatches = input.split(self.microbatch_size, dim=0)
+        queue = Queue()
 
-        # calculate output in a pipeline on the microbatches
-        results = prod_line(self.__div_to_mbs(input), self.submodules, last_ac=lambda x: x.to(self.main_device))
+        mp.spawn(self.thread_forward, args=(self.num_gpus, microbatches, queue), nprocs=self.num_gpus, join=True)
 
-        # reform the full results tensor from the list
-        results = torch.cat(results, dim=0).detach_()
-        # add backward propagation hook
-        results.register_hook(self.backward)
+        results: List[torch.Tensor] = []
+        while not queue.empty():
+            results.append(queue.get())
 
-        return results
+        return torch.cat(tuple(results), dim=0)
 
-    def backward(self, grads: torch.Tensor):
-        """
-        does backward propagation with gradients of full results,
-        works as hook for normal autograd backward propagation so it usually shouldn't
-        be called implicitly but used as part of loss.backward() or something like that
-        :param grads: the gradients of the model outputs
-        """
-        # divide gradients to microbatches as was done in the forward function
-        # reverse the order of the gradients so that it will work (look at SubModuleWrapper.backward for the reason)
-        # grads = self.__div_to_mbs(grads)[::-1]
+    def thread_forward(self, rank: int, world_size: int, microbatches: Tuple[torch.Tensor], queue: Queue):
+        setup(rank, world_size)
 
-        # the actions are the backward functions in reverse order (for correct use of the chain rule)
-        actions = [m.backward for m in self.submodules[::-1]]
+        for _ in range(rank):
+            dist.barrier()
 
-        # calculate gradients in pipeline
-        # reverse the order of the gradients so that it will work (look at SubModuleWrapper.backward for the reason)
-        prod_line(self.__div_to_mbs(grads)[::-1], actions, output_results=False)
+        for mb_idx in range(0, len(microbatches), world_size):
+            micro_batch = microbatches[mb_idx]
+            result = self.module.forward(micro_batch)
+            queue.put(result)
+            dist.barrier()
+
+        for _ in range(rank - len(microbatches) % world_size):
+            dist.barrier()
+
+        cleanup()
+    #
+    # def backward(self, grads: torch.Tensor):
+    #     """
+    #     does backward propagation with gradients of full results,
+    #     works as hook for normal autograd backward propagation so it usually shouldn't
+    #     be called implicitly but used as part of loss.backward() or something like that
+    #     :param grads: the gradients of the model outputs
+    #     """
+    #     # divide gradients to microbatches as was done in the forward function
+    #     # reverse the order of the gradients so that it will work (look at SubModuleWrapper.backward for the reason)
+    #     # grads = self.__div_to_mbs(grads)[::-1]
+    #
+    #     # the actions are the backward functions in reverse order (for correct use of the chain rule)
+    #     actions = [m.backward for m in self.submodules[::-1]]
+    #
+    #     # calculate gradients in pipeline
+    #     # reverse the order of the gradients so that it will work (look at SubModuleWrapper.backward for the reason)
+    #     prod_line(self.__div_to_mbs(grads)[::-1], actions, output_results=False)
