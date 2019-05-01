@@ -9,3 +9,4 @@ ideas/*
 .idea/
 model_inference/hiddenlayer/**
 model_inference/metis/**
+model_Inference/playground.py
