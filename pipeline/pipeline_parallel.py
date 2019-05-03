@@ -72,7 +72,11 @@ class PipelineParallel(nn.Module):
             queue.put(result)
             dist.barrier()
 
-        for _ in range(rank - len(microbatches) % world_size):
+        num_barriers = rank - len(microbatches) % world_size
+        if num_barriers < 0:
+            num_barriers = world_size + rank
+
+        for _ in range(num_barriers):
             dist.barrier()
 
         cleanup()
