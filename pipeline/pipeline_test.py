@@ -47,6 +47,8 @@ class ModelParallelResNet50(ResNet):
         super(ModelParallelResNet50, self).__init__(
             Bottleneck, [3, 4, 6, 3], num_classes=num_classes, *args, **kwargs)
 
+        dev1 = 'cuda:0'
+
         self.seq1 = nn.Sequential(
             self.conv1,
             self.bn1,
@@ -55,17 +57,21 @@ class ModelParallelResNet50(ResNet):
 
             self.layer1,
             self.layer2
-        ).to('cuda:0')
+        ).to(dev1)
+
+        self.seq1 = SyncWrapper(self.seq1, dev1)
+
+        dev2 = 'cuda:1'
 
         self.seq2 = nn.Sequential(
             self.layer3,
             self.layer4,
             self.avgpool,
-        ).to('cuda:1')
+        ).to(dev2)
 
-        self.seq2 = SyncWrapper(self.seq2, 'cuda:1')
+        self.seq2 = SyncWrapper(self.seq2, dev2)
 
-        self.fc.to('cuda:1')
+        self.fc.to(dev2)
 
     def forward(self, x):
         x = self.seq2(self.seq1(x))
