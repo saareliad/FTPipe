@@ -70,7 +70,7 @@ class PipelineParallel(nn.Module):
             micro_batch = microbatches[mb_idx]
             result = self.module.forward(micro_batch)
             queue.put(result)
-            dist.barrier()
+            # dist.barrier()
 
         num_barriers = rank - len(microbatches) % world_size
         if num_barriers < 0:
