@@ -65,6 +65,7 @@ class Wrapper(nn.Module):
         exec_time = 0
         if(self.device == "cuda"):
             # milliseconds
+            torch.cuda.synchronize()
             start = torch.cuda.Event(enable_timing=True)
             end = torch.cuda.Event(enable_timing=True)
             start.record()
