@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import timeit
 # import metis
+from torch.autograd import Variable
 
 
 class Wrapper(nn.Module):
@@ -16,21 +17,13 @@ class Wrapper(nn.Module):
 
     '''
 
-    def __init__(self, sub_module: nn.Module, idx=0, device="cuda"):
+    def __init__(self, sub_module: nn.Module, idx, device="cuda"):
         super(Wrapper, self).__init__()
         self.layer = sub_module
         self.device = device
         self.idx = idx
         self.forward_time = None
-        self.backward_timestamp = None
-
-        def backward_time_hook(_, __, ___):
-            # record when the layer finished calculating gradients
-            if self.device == "cuda":
-                torch.cuda.synchronize()
-            self.backward_timestamp = timeit.time.time()
-
-        self.layer.register_backward_hook(backward_time_hook)
+        self.backward_time = None
 
         self.size = self._layer_size()
 
@@ -38,7 +31,6 @@ class Wrapper(nn.Module):
         '''
         return the size of the layer considering parameters and buffers
         '''
-        # TODO maybe include activations/gradients size
         size = 0
         for param in self.layer.parameters():
             size += param.nelement() * param.element_size()
@@ -51,28 +43,43 @@ class Wrapper(nn.Module):
         '''
         measures the time in milliseconds it took for the module to complete forward computation
         '''
-        forward_time = 0
-        out = None
+        # detach inputs from previous history enabling us to measure execution time
+        # only for this layer
+        detached_inputs = map(
+            lambda t: Variable(t.data, requires_grad=True).to(self.device).clone(), inputs)
+
+        self.forward_time, outputs = self._time_op(
+            self.layer, *detached_inputs)
+
+        # reduce outputs to calculate dummy loss
+        loss = torch.zeros(1, requires_grad=True, device=self.device)
+        for out in outputs:
+            loss = loss + out.norm()
+
+        # measure backward execution time
+        self.backward_time, _ = self._time_op(torch.autograd.backward, loss)
+
+        return outputs
+
+    def _time_op(self, func, *inputs):
+        exec_time = 0
         if(self.device == "cuda"):
             # milliseconds
-            torch.cuda.synchronize()
             start = torch.cuda.Event(enable_timing=True)
             end = torch.cuda.Event(enable_timing=True)
             start.record()
-            out = self.layer(*inputs)
+            out = func(*inputs)
             end.record()
             torch.cuda.synchronize()
-            forward_time = (start.elapsed_time(end))
+            exec_time = (start.elapsed_time(end))
         else:
             # convert to milliseconds
             start = timeit.time.time()
-            out = self.layer(*inputs)
+            out = func(*inputs)
             end = timeit.time.time()
-            forward_time = 1000*(end - start)
+            exec_time = 1000*(end - start)
 
-        self.forward_time = forward_time
-
-        return out
+        return exec_time, out
 
 
 class NetProfiler(nn.Module):
@@ -98,8 +105,6 @@ class NetProfiler(nn.Module):
 
     '''
     # TODO maybe include activations/gradients size
-    # TODO find better way to measure the backward computation time
-    # TODO maybe measure forward+backward together via usage of detach in order to isolate different layers
     # TODO check if it is realy neccessary to call cuda.synchronize all the time
 
     def __init__(self, net: nn.Module, *sample_batch, basic_block=None, device="cuda", max_depth=None):
@@ -134,6 +139,8 @@ class NetProfiler(nn.Module):
         '''
 
         for name, sub_module in module._modules.items():
+            # assume no cyclic routes in the network
+            # a module with no children is a layer
             if len(list(sub_module.children())) == 0 or (self.basic_block != None and isinstance(sub_module, self.basic_block)) or depth == 0:
                 module._modules[name] = Wrapper(sub_module, idx, self.device)
                 layers_dict[idx] = module._modules[name]
@@ -148,6 +155,8 @@ class NetProfiler(nn.Module):
         return all binding to what they were originally, removes all Wrappers from self.network
         '''
         for name, sub_module in module._modules.items():
+            # assume no cyclic routes in the network
+            # a module with no children is a layer
             if isinstance(sub_module, Wrapper):
                 module._modules[name] = sub_module.layer
                 self.layers[idx] = module._modules[name]
@@ -175,24 +184,8 @@ class NetProfiler(nn.Module):
         self._forward_times = [
             layer.forward_time for layer in self.layers.values()]
 
-        # perform symbolic backward run
-        loss = 0.0
-        for out in outputs:
-            loss += out.norm()
-
-        if self.device == "cuda":
-            torch.cuda.synchronize()
-
-        loss.backward()
-
-        if self.device == "cuda":
-            torch.cuda.synchronize()
-
         # gather backward times results
         # time is calculated by subtracting successive timestamps
         # for lack of a better option the last layer performs backpropagation in 0 time
         self.backward_times = [
-            layer.backward_timestamp for layer in self.layers.values()]
-
-        self.backward_times = [
-            end-start for end, start in zip(self.backward_times, self.backward_times[1:])]+[0]
+            layer.backward_time for layer in self.layers.values()]
