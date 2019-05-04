@@ -10,11 +10,11 @@ def build_control_flow_graph(model, weights, *sample_batch, max_depth=None, basi
 
     model_trace = trace_graph(model, *sample_batch)
 
-    return Graph(layerNames, model_trace)
+    return Graph(layerNames, weights, model_trace)
 
 
 class Graph():
-    def __init__(self, profiled_layers, trace_graph):
+    def __init__(self, profiled_layers, weights, trace_graph):
         self.adjacency_list = []
         self.profiled_layers = profiled_layers
         self.weights = dict()
@@ -23,26 +23,30 @@ class Graph():
 
         self.add_IO_nodes(trace_graph.inputs())
 
-        self.add_node_OP(trace_graph.nodes())
+        self.add_OP_nodes(trace_graph.nodes())
 
     def add_IO_nodes(self, input_nodes):
         for node in input_nodes:
+            # add input nodes only if they are in use
+            # TODO if they are not in use how will it affect the other nodes
             if len(node.uses()) > 0:
                 self.adjacency_list.append([])
                 self.weights[node.unique()] = node.type().sizes()
                 self.num_inputs_buffs_params += 1
 
-    def add_node_OP(self, OP_nodes):
+    def add_OP_nodes(self, OP_nodes):
         for trace_node in OP_nodes:
-            node_scope = self._find_longest_prefix(trace_node.scopeName())
+            node_scope = self.find_encasing_layer(trace_node.scopeName())
 
             outputs = [o.unique() for o in trace_node.outputs()]
             inputs = [i.unique() for i in trace_node.inputs()]
 
+            # add incoming edges from inputs as they do not have an output field
             for in_idx in inputs:
                 if in_idx < self.num_inputs_buffs_params:
                     self.adjacency_list[in_idx].append(
                         self.num_inputs_buffs_params+self.num_op_nodes)
+
             # TODO multiple outputs and self idx possibly only if we combine nodes
             self.adjacency_list.append(list(set(outputs)))
 
@@ -55,20 +59,22 @@ class Graph():
 
             self.num_op_nodes += 1
 
-    def _find_longest_prefix(self, scopeName: str):
-        longest_prefix = ""
+    def find_encasing_layer(self, scopeName: str):
+        '''
+        longest prefix is the most specific layer that was profiled
+        '''
+        # unfortunately the trace graph shows only basic layers and ops
+        # so we need to manually find a profiled layer that encases the op
+        most_specific_scope = ""
         print(scopeName)
-        for prefix in self.profiled_layers:
-            if scopeName.startswith(prefix) and len(prefix) > len(longest_prefix):
-                longest_prefix = scopeName
+        for layer_scope in self.profiled_layers:
+            if scopeName.startswith(layer_scope) and len(layer_scope) > len(most_specific_scope):
+                most_specific_scope = layer_scope
 
-        return longest_prefix
+        return most_specific_scope
 
     def __getitem__(self, key):
-        return
-
-    def __setitem__(self, key, value):
-        return
+        return self.adjacency_list[key], self.weights.get(key, 0)
 
     def partition(self, num_parts):
         return
