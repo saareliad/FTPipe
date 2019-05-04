@@ -134,11 +134,11 @@ class NetProfiler(nn.Module):
 
         return out
 
-    def _wrap_individual_layers(self, module: nn.Module, depth, idx, layers_dict):
+    def _wrap_individual_layers(self, module: nn.Module, depth, idx):
         '''
         wraps all layers of module by changing the binding in the network module dictionary
         '''
-
+        layers_dict = {}
         for name, sub_module in module._modules.items():
             # assume no cyclic routes in the network
             # a module with no children is a layer
@@ -147,8 +147,9 @@ class NetProfiler(nn.Module):
                 layers_dict[idx] = module._modules[name]
                 idx += 1
             else:
-                idx, layers_dict = self._wrap_individual_layers(
-                    sub_module, depth-1, idx, layers_dict)
+                idx, sub_dict = self._wrap_individual_layers(
+                    sub_module, depth-1, idx)
+                layers_dict.update(sub_dict)
         return idx, layers_dict
 
     def _unwrap_layers(self, module: nn.Module, idx):
@@ -173,7 +174,7 @@ class NetProfiler(nn.Module):
         '''
         # wrap all individula layers for profiling
         self.num_layers, self.layers = self._wrap_individual_layers(
-            self.network, self.max_depth, 0, {})
+            self.network, self.max_depth, 0)
 
         # gather all individual layer sizes
         self.layer_sizes = [layer.size for layer in self.layers.values()]
