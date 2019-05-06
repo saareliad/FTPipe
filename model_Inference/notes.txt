@@ -46,7 +46,6 @@ partition restrictions:
 graph optimizations:
 1. merge all nodes under the same scope. 
 2. remove nodes representing constants they server no purpose.
-3. TODO maybe merge op chains after all other optimizations
 3. TODO maybe remove buffers from the graph as they were allready accounted for by the profiler.
 4. TODO add weights.
 5. TODO add supprot for graph algorithms

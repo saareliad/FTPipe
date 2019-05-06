@@ -169,11 +169,10 @@ class Graph():
         return most_specific_scope
 
     def _combine_nodes_under_the_same_scope(self):
-        '''
-        optimization that reduces number of nodes in the graph
-        combine nodes that have a commom scope we do this because\n
-        if nodes have the same scopeName than they were profiled together
-        '''
+        # optimization that reduces number of nodes in the graph
+        # combine nodes that have a commom scope we do this because\n
+        # if nodes have the same scopeName than they were profiled together
+
         node_of_scope = dict()
         optimized_graph = []
 
@@ -208,9 +207,7 @@ class Graph():
         self.adjacency_list = optimized_graph
 
     def _remove_constant_nodes(self):
-        '''
-        remove nodes representing constants as they do not provide any useful info
-        '''
+        # remove nodes representing constants as they do not provide any useful info
         optimized_graph = []
         for node in self.adjacency_list:
             if "::Constant" in node.scope:
@@ -225,13 +222,21 @@ class Graph():
         self.adjacency_list = optimized_graph
 
     def _merge_op_chains(self):
+        # op chains need to be placed on the same device anyways
         optimized_graph = []
-        nodes_to_remove = set()
-
         for node in self.adjacency_list:
-            break
+            # if OP flows only into other ops then remove it and connect it's inputs to it's outputs
+            if node.type == NodeTypes.OP and len(node.out_nodes) > 0 and (o.type == NodeTypes.OP for o in node.out_nodes):
+                for in_node in node.in_nodes:
+                    in_node.remove_out_node(node)
+                    in_node.add_out_node(node.out_nodes)
+                for out_node in node.out_nodes:
+                    out_node.remove_in_node(node)
+                    out_node.add_in_node(node.in_nodes)
+            else:
+                optimized_graph.append(node)
 
-        return
+        self.adjacency_list = optimized_graph
 
     def __getitem__(self, key):
         return self.adjacency_list[key]
@@ -258,6 +263,7 @@ def trace_graph(model, *sample_inputs, optimized=True, op_type=torch.onnx.Operat
 def _optimize_graph(graph, operator_export_type):
     # TODO there is a bug with the second scope name of sequential is carried to all layers after it in the sequence
     # maybe can be fixed bug is in torch/onnx/utils.py/139
+    # TODO acctualy it appears we perform sufficient optimizations on our own
     from torch.onnx.utils import _split_tensor_list_constants, OperatorExportTypes
     torch._C._jit_pass_remove_inplace_ops(graph)
     # we record now record some ops like ones/zeros
