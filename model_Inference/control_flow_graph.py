@@ -28,6 +28,25 @@ class NodeTypes(Enum):
 
 
 class Node():
+    '''
+    a simple graph node for directed graphs
+
+    Fields:
+    ------
+    scope:
+     the operation/layer the node represents
+    idx:
+     a serial number of the node for convience
+    node_type:
+     an enum representing if the node is an input Layer or operator(like arithmetic ops)
+    incoming_nodes:
+     the nodes who have edges from them to this node
+    out_nodes:
+     the nodes who have edges from this node
+
+     parallel edges in the same direction are not allowed
+    '''
+
     def __init__(self, scope, idx, node_type: NodeTypes, incoming_nodes=None, weight=0):
         self.scope = scope
         self.idx = idx
@@ -68,6 +87,14 @@ class Node():
 
 
 class Graph():
+    '''
+    a graph representing the control flow of a model
+    built from a pytorch trace graph.
+    the graph vertices are specified using the given profiled layer names\n
+    and will also include basic pytorch ops that connect them.
+    the edges represent the data flow.
+    '''
+
     def __init__(self, profiled_layers, weights, trace_graph):
         self.adjacency_list = []
         self.profiled_layers = profiled_layers
@@ -84,7 +111,13 @@ class Graph():
         self._remove_constant_nodes()
 
     def _add_IO_nodes(self, input_nodes):
+        '''
+        add nodes representing the input and params/buffs of the model
+        '''
         for node in input_nodes:
+            # TODO what if buffer is not used? remove or add
+            # if len(list(node.uses())) == 0:
+            #     continue
             node_scope = f"input{self.num_inputs_buffs_params}"
             new_node = Node(node_scope, self.num_inputs_buffs_params,
                             NodeTypes.IN)
@@ -94,6 +127,9 @@ class Graph():
             self.num_inputs_buffs_params += 1
 
     def _add_OP_nodes(self, OP_nodes):
+        '''
+        add nodes representing the layers/ops of the model
+        '''
         for idx, trace_node in enumerate(OP_nodes):
             node_scope = self._find_encasing_layer(trace_node.scopeName())
             input_nodes = {self.adjacency_list[i.unique()]
@@ -121,7 +157,7 @@ class Graph():
 
     def _find_encasing_layer(self, scopeName: str):
         '''
-        longest prefix is the most specific layer that was profiled
+        find the closest scope which encases scopeName
         '''
         # unfortunately the trace graph shows only basic layers and ops
         # so we need to manually find a profiled layer that encases the op
@@ -133,6 +169,11 @@ class Graph():
         return most_specific_scope
 
     def _combine_nodes_under_the_same_scope(self):
+        '''
+        optimization that reduces number of nodes in the graph
+        combine nodes that have a commom scope we do this because\n
+        if nodes have the same scopeName than they were profiled together
+        '''
         node_of_scope = dict()
         optimized_graph = []
 
@@ -148,6 +189,9 @@ class Graph():
                 node_of_scope[node.scope].add_out_node(node.out_nodes)
 
         for node in optimized_graph:
+            # get the sets of all incoming/outgoing scopes
+            # those will dictate the new set of edges and
+            # remove the internal edges of the scope
             incoming_scopes = {n.scope for n in node.in_nodes
                                if n.scope != node.scope}
             outgoing_scopes = {n.scope for n in node.out_nodes
@@ -164,6 +208,9 @@ class Graph():
         self.adjacency_list = optimized_graph
 
     def _remove_constant_nodes(self):
+        '''
+        remove nodes representing constants as they do not provide any useful info
+        '''
         optimized_graph = []
         for node in self.adjacency_list:
             if "::Constant" in node.scope:
@@ -183,9 +230,8 @@ class Graph():
     def partition(self, num_parts):
         return
 
+
 # return a trace graph of a model convenience method
-
-
 def trace_graph(model, *sample_inputs, optimized=True, op_type=torch.onnx.OperatorExportTypes.RAW):
     with torch.no_grad():
         trace_graph, _ = torch.jit.get_trace_graph(model, sample_inputs)
