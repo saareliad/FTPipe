@@ -103,12 +103,11 @@ class Graph():
         self._build_graph(trace_graph)
 
     def _build_graph(self, trace_graph):
-        print("original graph\n")
-        print(trace_graph)
         self._add_IO_nodes(trace_graph.inputs())
         self._add_OP_nodes(trace_graph.nodes())
         self._combine_nodes_under_the_same_scope()
         self._remove_constant_nodes()
+        self._merge_op_chains()
 
     def _add_IO_nodes(self, input_nodes):
         '''
@@ -137,6 +136,7 @@ class Graph():
 
             node_idx = self.num_inputs_buffs_params+idx
             new_node = None
+
             # TODO add weights
             # profiled Layer
             if node_scope != "":
@@ -224,6 +224,15 @@ class Graph():
 
         self.adjacency_list = optimized_graph
 
+    def _merge_op_chains(self):
+        optimized_graph = []
+        nodes_to_remove = set()
+
+        for node in self.adjacency_list:
+            break
+
+        return
+
     def __getitem__(self, key):
         return self.adjacency_list[key]
 
@@ -235,9 +244,9 @@ class Graph():
 def trace_graph(model, *sample_inputs, optimized=True, op_type=torch.onnx.OperatorExportTypes.RAW):
     with torch.no_grad():
         trace_graph, _ = torch.jit.get_trace_graph(model, sample_inputs)
-        if optimized:
-            trace_graph.set_graph(_optimize_graph(
-                trace_graph.graph(), op_type))
+        # if optimized:
+        #     trace_graph.set_graph(_optimize_graph(
+        #         trace_graph.graph(), op_type))
 
         trace_graph = trace_graph.graph()
 
