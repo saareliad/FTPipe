@@ -1,6 +1,8 @@
 
 import torch.nn as nn
 import torch
+from enum import Enum
+from pprint import pprint
 
 
 def build_control_flow_graph(model, weights, *sample_batch, max_depth=None, basic_block=None):
@@ -13,82 +15,164 @@ def build_control_flow_graph(model, weights, *sample_batch, max_depth=None, basi
     return Graph(layerNames, weights, model_trace)
 
 
+class NodeTypes(Enum):
+    IN = 1
+    LAYER = 2
+    OP = 3
+
+    def __repr__(self):
+        return self.name
+
+
+class Node():
+    def __init__(self, scope, idx, node_type: NodeTypes, incoming_edges=None, weight=0):
+        self.scope = scope
+        self.idx = {idx}
+        self.type = node_type
+        self.out_edges = set()
+        self.weight = weight
+        self.in_edges = incoming_edges if isinstance(
+            incoming_edges, set) else set()
+
+    def add_outgoing_edge(self, edge):
+        self.out_edges.add(edge)
+
+    def __repr__(self):
+        return f"node {self.idx} in scope {self.scope} of type {self.type} flows to {self.out_edges} gathers {self.in_edges}\n"
+
+
 class Graph():
     def __init__(self, profiled_layers, weights, trace_graph):
         self.adjacency_list = []
         self.profiled_layers = profiled_layers
         self.weights = dict()
         self.num_inputs_buffs_params = 0
-        self.num_op_nodes = 0
+        self._build_graph(trace_graph)
 
-        self.add_IO_nodes(trace_graph.inputs())
+    def _build_graph(self, trace_graph):
+        self._add_IO_nodes(trace_graph.inputs())
+        self._add_OP_nodes(trace_graph.nodes())
+        self._combine_nodes_under_the_same_scope()
+        self._remove_constant_nodes()
 
-        self.add_OP_nodes(trace_graph.nodes())
-
-    def add_IO_nodes(self, input_nodes):
+    def _add_IO_nodes(self, input_nodes):
         for node in input_nodes:
-            # add input nodes only if they are in use
-            # TODO if they are not in use how will it affect the other nodes
-            if len(node.uses()) > 0:
-                self.adjacency_list.append([])
-                self.weights[node.unique()] = node.type().sizes()
-                self.num_inputs_buffs_params += 1
+            node_scope = f"input{self.num_inputs_buffs_params}"
+            new_node = Node(node_scope, self.num_inputs_buffs_params,
+                            NodeTypes.IN)
+            self.adjacency_list.append(new_node)
 
-    def add_OP_nodes(self, OP_nodes):
-        for trace_node in OP_nodes:
-            node_scope = self.find_encasing_layer(trace_node.scopeName())
+            self.weights[node.unique()] = node.type().sizes()
+            self.num_inputs_buffs_params += 1
 
-            outputs = [o.unique() for o in trace_node.outputs()]
-            inputs = [i.unique() for i in trace_node.inputs()]
+    def _add_OP_nodes(self, OP_nodes):
+        for idx, trace_node in enumerate(OP_nodes):
+            node_scope = self._find_encasing_layer(trace_node.scopeName())
+            inputs = {i.unique() for i in trace_node.inputs()}
+            node_idx = self.num_inputs_buffs_params+idx
 
-            # add incoming edges from inputs as they do not have an output field
+            # add incoming edges
             for in_idx in inputs:
-                if in_idx < self.num_inputs_buffs_params:
-                    self.adjacency_list[in_idx].append(
-                        self.num_inputs_buffs_params+self.num_op_nodes)
-
-            # TODO multiple outputs and self idx possibly only if we combine nodes
-            self.adjacency_list.append(list(set(outputs)))
+                self.adjacency_list[in_idx].add_outgoing_edge(node_idx)
 
             # TODO add weights
+            # profiled Layer
             if node_scope != "":
-                # self.weights[trace_node.unique()] = weights[node_scope]
-                print("layer")
+                self.adjacency_list.append(
+                    Node(node_scope, node_idx, NodeTypes.LAYER, inputs))
+
+            # unprofiled OP
             else:
-                print("arithmetic")
+                node_scope = trace_node.scopeName() + \
+                    "/"+trace_node.kind() + str(idx)
+                self.adjacency_list.append(
+                    Node(node_scope, node_idx, NodeTypes.OP, inputs))
 
-            self.num_op_nodes += 1
-
-    def find_encasing_layer(self, scopeName: str):
+    def _find_encasing_layer(self, scopeName: str):
         '''
         longest prefix is the most specific layer that was profiled
         '''
         # unfortunately the trace graph shows only basic layers and ops
         # so we need to manually find a profiled layer that encases the op
         most_specific_scope = ""
-        print(scopeName)
         for layer_scope in self.profiled_layers:
             if scopeName.startswith(layer_scope) and len(layer_scope) > len(most_specific_scope):
                 most_specific_scope = layer_scope
 
         return most_specific_scope
 
+    def _combine_nodes_under_the_same_scope(self):
+        # TODO build optimized graph in 2 iterations
+        first_Node_of_scope = dict()
+        optimized_graph = []
+
+        idx = 0
+        # get the nodes of the optimized graph
+        for node in self.adjacency_list:
+            if not node.scope in first_Node_of_scope:
+                node.idx = idx
+                optimized_graph.append(node)
+                idx += 1
+                first_Node_of_scope[node.scope] = node
+
+            else:
+                # add edges create the subset of all  edeges of the scope
+                first_Node_of_scope[node.scope].in_edges.update(node.in_edges)
+                first_Node_of_scope[node.scope].out_edges.update(
+                    node.out_edges)
+
+        for node in optimized_graph:
+            # incoming and outgoing scopes are the sets of in/out scopes
+            incoming_scopes = {self.adjacency_list[idx].scope
+                               for idx in node.in_edges}
+            incoming_scopes.discard(node.scope)
+
+            outgoing_scopes = {self.adjacency_list[idx].scope
+                               for idx in node.out_edges}
+            outgoing_scopes.discard(node.scope)
+
+            # update the edges of the new graph
+            node.in_edges = {first_Node_of_scope[scope].idx
+                             for scope in incoming_scopes}
+            node.out_edges = {first_Node_of_scope[scope].idx
+                              for scope in outgoing_scopes}
+
+        self.adjacency_list = optimized_graph
+
+    def _remove_constant_nodes(self):
+        # optimized_graph = []
+        # constant_nodes = set()
+        # for node in self.adjacency_list:
+        #     if "::Constant" in node.scope:
+        #         constant_nodes.add(node.idx)
+        #     else:
+        #         optimized_graph.append(node)
+
+        # for node in optimized_graph:
+        #     node.in_edges.difference_update(constant_nodes)
+
+        # self.adjacency_list = optimized_graph
+        return False
+
     def __getitem__(self, key):
-        return self.adjacency_list[key], self.weights.get(key, 0)
+        return self.adjacency_list[key]
 
     def partition(self, num_parts):
         return
 
 
+# ONNX_ATEN RAW
 # return a trace graph of a model convenience method
-def trace_graph(model, *sample_inputs, optimized=True, op_type=torch.onnx.OperatorExportTypes.ONNX):
-    trace_graph, _ = torch.jit.get_trace_graph(model, sample_inputs)
-    if optimized:
-        trace_graph.set_graph(_optimize_graph(trace_graph.graph(), op_type))
+def trace_graph(model, *sample_inputs, optimized=True, op_type=torch.onnx.OperatorExportTypes.RAW):
+    with torch.no_grad():
+        trace_graph, _ = torch.jit.get_trace_graph(model, sample_inputs)
+        if optimized:
+            trace_graph.set_graph(_optimize_graph(
+                trace_graph.graph(), op_type))
 
-    trace_graph = trace_graph.graph()
+        trace_graph = trace_graph.graph()
 
-    return trace_graph
+        return trace_graph
 
 
 # optimizes a graph using gives op type
