@@ -26,6 +26,7 @@ class Wrapper(nn.Module):
         self.backward_time = None
 
         self.size = self._layer_size()
+        # TODO normalize weights
 
     def _layer_size(self):
         '''

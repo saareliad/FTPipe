@@ -96,18 +96,19 @@ class Graph():
     '''
 
     def __init__(self, profiled_layers, weights, trace_graph):
-        self.adjacency_list = []
+        self.nodes = []
         self.profiled_layers = profiled_layers
-        self.weights = dict()
         self.num_inputs_buffs_params = 0
         self._build_graph(trace_graph)
 
     def _build_graph(self, trace_graph):
+        print(len(list(trace_graph.inputs()))+len(list(trace_graph.nodes())))
         self._add_IO_nodes(trace_graph.inputs())
         self._add_OP_nodes(trace_graph.nodes())
         self._combine_nodes_under_the_same_scope()
         self._remove_constant_nodes()
         self._merge_op_chains()
+        self._normalize_indices()
 
     def _add_IO_nodes(self, input_nodes):
         '''
@@ -118,11 +119,16 @@ class Graph():
             # if len(list(node.uses())) == 0:
             #     continue
             node_scope = f"input{self.num_inputs_buffs_params}"
-            new_node = Node(node_scope, self.num_inputs_buffs_params,
-                            NodeTypes.IN)
-            self.adjacency_list.append(new_node)
+            node_weight = 1
+            # input/buff/parm weight is it's size
+            # TODO normalize
+            for d in node.type().sizes():
+                node_weight *= d
 
-            self.weights[node.unique()] = node.type().sizes()
+            new_node = Node(node_scope, self.num_inputs_buffs_params,
+                            NodeTypes.IN, weight=node_weight)
+            self.nodes.append(new_node)
+
             self.num_inputs_buffs_params += 1
 
     def _add_OP_nodes(self, OP_nodes):
@@ -131,7 +137,7 @@ class Graph():
         '''
         for idx, trace_node in enumerate(OP_nodes):
             node_scope = self._find_encasing_layer(trace_node.scopeName())
-            input_nodes = {self.adjacency_list[i.unique()]
+            input_nodes = {self.nodes[i.unique()]
                            for i in trace_node.inputs()}
 
             node_idx = self.num_inputs_buffs_params+idx
@@ -153,7 +159,7 @@ class Graph():
             for node in input_nodes:
                 node.add_out_node(new_node)
 
-            self.adjacency_list.append(new_node)
+            self.nodes.append(new_node)
 
     def _find_encasing_layer(self, scopeName: str):
         '''
@@ -177,7 +183,7 @@ class Graph():
         optimized_graph = []
 
         # get the nodes of the optimized graph
-        for node in self.adjacency_list:
+        for node in self.nodes:
             if not node.scope in node_of_scope:
                 optimized_graph.append(node)
                 node_of_scope[node.scope] = node
@@ -204,12 +210,12 @@ class Graph():
             node.in_nodes = in_nodes
             node.out_nodes = out_nodes
 
-        self.adjacency_list = optimized_graph
+        self.nodes = optimized_graph
 
     def _remove_constant_nodes(self):
         # remove nodes representing constants as they do not provide any useful info
         optimized_graph = []
-        for node in self.adjacency_list:
+        for node in self.nodes:
             if "::Constant" in node.scope:
                 for out_node in node.out_nodes:
                     out_node.remove_in_node(node)
@@ -219,14 +225,14 @@ class Graph():
             else:
                 optimized_graph.append(node)
 
-        self.adjacency_list = optimized_graph
+        self.nodes = optimized_graph
 
     def _merge_op_chains(self):
         # op chains need to be placed on the same device anyways
         optimized_graph = []
-        for node in self.adjacency_list:
+        for node in self.nodes:
             # if OP flows only into other ops then remove it and connect it's inputs to it's outputs
-            if node.type == NodeTypes.OP and len(node.out_nodes) > 0 and (o.type == NodeTypes.OP for o in node.out_nodes):
+            if node.type == NodeTypes.OP and len(node.out_nodes) > 0 and all(o.type == NodeTypes.OP for o in node.out_nodes):
                 for in_node in node.in_nodes:
                     in_node.remove_out_node(node)
                     in_node.add_out_node(node.out_nodes)
@@ -236,10 +242,26 @@ class Graph():
             else:
                 optimized_graph.append(node)
 
-        self.adjacency_list = optimized_graph
+        self.nodes = optimized_graph
 
     def __getitem__(self, key):
-        return self.adjacency_list[key]
+        return self.nodes[key]
+
+    def __repr__(self):
+        return str(self.nodes)
+
+    def get_nodes(self):
+        return self.nodes
+
+    def get_weights(self):
+        return [node.weight for node in self.nodes]
+
+    def adjacency_list(self):
+        return [[n.idx for n in node.out_nodes] for node in self.nodes]
+
+    def _normalize_indices(self):
+        for idx, node in enumerate(self.nodes):
+            node.idx = idx
 
     def partition(self, num_parts):
         return
