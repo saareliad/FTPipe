@@ -73,6 +73,8 @@ class ModelParallelResNet50(ResNet):
 
         self.fc.to(dev2)
 
+        self.wrappers = [self.seq1, self.seq2]
+
     def forward(self, x):
         x = self.seq2(self.seq1(x))
         return self.fc(x.view(x.size(0), -1))
@@ -118,10 +120,11 @@ def plot(means, stds, labels, fig_name):
 
 def test_first_pipline():
     num_repeat = 10
+    parallel = ModelParallelResNet50()
 
     stmt = "train(model)"
 
-    setup = "model = ModelParallelResNet50()"
+    setup = "model = PipelineParallel(parallel, 4, 2, parallel.wrappers)"
     mp_run_times = timeit.repeat(
         stmt, setup, number=1, repeat=num_repeat, globals=globals())
     mp_mean, mp_std = np.mean(mp_run_times), np.std(mp_run_times)

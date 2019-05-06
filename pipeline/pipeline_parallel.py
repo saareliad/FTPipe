@@ -1,22 +1,8 @@
 import torch
 import torch.nn as nn
-import torch.distributed as dist
 from typing import Iterable, List, Tuple
-import torch.multiprocessing as mp
-from multiprocessing import Queue
-import os
-
-
-def setup(rank, world_size):
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '12355'
-
-    # initialize the process group
-    dist.init_process_group("gloo", rank=rank, world_size=world_size)
-
-
-def cleanup():
-    dist.destroy_process_group()
+from multiprocessing import Queue, Process
+from pipeline.utils import AutoResetBarrier
 
 
 class PipelineParallel(nn.Module):
@@ -27,13 +13,17 @@ class PipelineParallel(nn.Module):
     the list submodules reflects what you want
     """
 
-    def __init__(self, module: nn.Module, microbatch_size: int, num_gpus: int, main_device: str = 'cpu'):
+    def __init__(self, module: nn.Module, microbatch_size: int, num_gpus: int, wrappers, main_device: str = 'cpu'):
         super(PipelineParallel, self).__init__()
 
         self.main_device = main_device
         self.microbatch_size = microbatch_size
         self.module = module
         self.num_gpus = num_gpus
+        self.barrier = AutoResetBarrier(num_gpus)
+
+        for wrapper in wrappers:
+            wrapper.set_barrier(self.barrier)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         """
@@ -52,21 +42,25 @@ class PipelineParallel(nn.Module):
         microbatches = input.split(self.microbatch_size, dim=0)
         queue = Queue()
 
-        mp.spawn(self.thread_forward, args=(self.num_gpus, microbatches, queue), nprocs=self.num_gpus, join=True)
+        procs = [Process(target=self.thread_forward, args=(rank, self.num_gpus, microbatches, queue)) for rank in
+                 range(self.num_gpus)]
 
-        results: List[torch.Tensor] = []
-        while not queue.empty():
-            results.append(queue.get())
+        for p in procs:
+            p.start()
+
+        results: List[torch.Tensor] = [queue.get() for _ in range(len(microbatches))]
+
+        for p in procs:
+            p.join()
 
         return torch.cat(tuple(results), dim=0)
 
     def thread_forward(self, rank: int, world_size: int, microbatches: Tuple[torch.Tensor], queue: Queue):
-        setup(rank, world_size)
 
         for _ in range(rank):
-            dist.barrier()
+            self.barrier.wait()
 
-        for mb_idx in range(0, len(microbatches), world_size):
+        for mb_idx in range(rank, len(microbatches), world_size):
             micro_batch = microbatches[mb_idx]
             result = self.module.forward(micro_batch)
             queue.put(result)
@@ -74,12 +68,11 @@ class PipelineParallel(nn.Module):
 
         num_barriers = rank - len(microbatches) % world_size
         if num_barriers < 0:
-            num_barriers = world_size + rank
+            num_barriers += world_size
 
         for _ in range(num_barriers):
-            dist.barrier()
+            self.barrier.wait()
 
-        cleanup()
     #
     # def backward(self, grads: torch.Tensor):
     #     """
