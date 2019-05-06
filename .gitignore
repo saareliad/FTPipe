@@ -10,3 +10,6 @@ ideas/*
 model_inference/hiddenlayer/**
 model_inference/metis/**
 model_Inference/playground.py
+model_Inference/notebook.py
+.pytest_cache/**
+notes.txt
