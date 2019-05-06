@@ -4,11 +4,14 @@ import torch
 from enum import Enum
 from pprint import pprint
 
+__all__ = ['build_control_flow_graph']
+
 
 def build_control_flow_graph(model, weights, *sample_batch, max_depth=None, basic_block=None):
     max_depth = max_depth if max_depth != None else 100
-    layerNames = _profiled_layers(model, max_depth, prefix=type(
-        model).__name__, basic_block=basic_block)
+    model_class_name = type(model).__name__
+    layerNames = _profiled_layers(
+        model, max_depth, prefix=model_class_name, basic_block=basic_block)
 
     model_trace = trace_graph(model, *sample_batch)
 
@@ -25,20 +28,43 @@ class NodeTypes(Enum):
 
 
 class Node():
-    def __init__(self, scope, idx, node_type: NodeTypes, incoming_edges=None, weight=0):
+    def __init__(self, scope, idx, node_type: NodeTypes, incoming_nodes=None, weight=0):
         self.scope = scope
-        self.idx = {idx}
+        self.idx = idx
         self.type = node_type
-        self.out_edges = set()
+        self.out_nodes = set()
         self.weight = weight
-        self.in_edges = incoming_edges if isinstance(
-            incoming_edges, set) else set()
+        self.in_nodes = incoming_nodes if isinstance(
+            incoming_nodes, set) else set()
 
-    def add_outgoing_edge(self, edge):
-        self.out_edges.add(edge)
+    def add_out_node(self, node):
+        if isinstance(node, Node):
+            self.out_nodes.add(node)
+        if isinstance(node, set):
+            self.out_nodes.update(node)
+
+    def add_in_node(self, node):
+        if isinstance(node, Node):
+            self.in_nodes.add(node)
+        if isinstance(node, set):
+            self.in_nodes.update(node)
+
+    def remove_in_node(self, node):
+        if isinstance(node, Node):
+            self.in_nodes.discard(node)
+        if isinstance(node, set):
+            self.in_nodes.difference_update(node)
+
+    def remove_out_node(self, node):
+        if isinstance(node, Node):
+            self.out_nodes.discard(node)
+        if isinstance(node, set):
+            self.out_nodes.difference_update(node)
 
     def __repr__(self):
-        return f"node {self.idx} in scope {self.scope} of type {self.type} flows to {self.out_edges} gathers {self.in_edges}\n"
+        out_idx = {node.idx for node in self.out_nodes}
+        in_idx = {node.idx for node in self.in_nodes}
+        return f"node {self.idx} in scope {self.scope} of type {self.type} flows to {out_idx} gathers {in_idx}\n"
 
 
 class Graph():
@@ -50,6 +76,8 @@ class Graph():
         self._build_graph(trace_graph)
 
     def _build_graph(self, trace_graph):
+        print("original graph\n")
+        print(trace_graph)
         self._add_IO_nodes(trace_graph.inputs())
         self._add_OP_nodes(trace_graph.nodes())
         self._combine_nodes_under_the_same_scope()
@@ -68,25 +96,28 @@ class Graph():
     def _add_OP_nodes(self, OP_nodes):
         for idx, trace_node in enumerate(OP_nodes):
             node_scope = self._find_encasing_layer(trace_node.scopeName())
-            inputs = {i.unique() for i in trace_node.inputs()}
+            input_nodes = {self.adjacency_list[i.unique()]
+                           for i in trace_node.inputs()}
+
             node_idx = self.num_inputs_buffs_params+idx
-
-            # add incoming edges
-            for in_idx in inputs:
-                self.adjacency_list[in_idx].add_outgoing_edge(node_idx)
-
+            new_node = None
             # TODO add weights
             # profiled Layer
             if node_scope != "":
-                self.adjacency_list.append(
-                    Node(node_scope, node_idx, NodeTypes.LAYER, inputs))
-
+                new_node = Node(node_scope, node_idx,
+                                NodeTypes.LAYER, input_nodes)
             # unprofiled OP
             else:
                 node_scope = trace_node.scopeName() + \
                     "/"+trace_node.kind() + str(idx)
-                self.adjacency_list.append(
-                    Node(node_scope, node_idx, NodeTypes.OP, inputs))
+                new_node = Node(node_scope, node_idx,
+                                NodeTypes.OP, input_nodes)
+
+            # add incoming edges
+            for node in input_nodes:
+                node.add_out_node(new_node)
+
+            self.adjacency_list.append(new_node)
 
     def _find_encasing_layer(self, scopeName: str):
         '''
@@ -102,57 +133,49 @@ class Graph():
         return most_specific_scope
 
     def _combine_nodes_under_the_same_scope(self):
-        # TODO build optimized graph in 2 iterations
-        first_Node_of_scope = dict()
+        node_of_scope = dict()
         optimized_graph = []
 
-        idx = 0
         # get the nodes of the optimized graph
         for node in self.adjacency_list:
-            if not node.scope in first_Node_of_scope:
-                node.idx = idx
+            if not node.scope in node_of_scope:
                 optimized_graph.append(node)
-                idx += 1
-                first_Node_of_scope[node.scope] = node
+                node_of_scope[node.scope] = node
 
             else:
                 # add edges create the subset of all  edeges of the scope
-                first_Node_of_scope[node.scope].in_edges.update(node.in_edges)
-                first_Node_of_scope[node.scope].out_edges.update(
-                    node.out_edges)
+                node_of_scope[node.scope].add_in_node(node.in_nodes)
+                node_of_scope[node.scope].add_out_node(node.out_nodes)
 
         for node in optimized_graph:
-            # incoming and outgoing scopes are the sets of in/out scopes
-            incoming_scopes = {self.adjacency_list[idx].scope
-                               for idx in node.in_edges}
-            incoming_scopes.discard(node.scope)
+            incoming_scopes = {n.scope for n in node.in_nodes
+                               if n.scope != node.scope}
+            outgoing_scopes = {n.scope for n in node.out_nodes
+                               if n.scope != node.scope}
 
-            outgoing_scopes = {self.adjacency_list[idx].scope
-                               for idx in node.out_edges}
-            outgoing_scopes.discard(node.scope)
+            out_nodes = {node_of_scope[out_node]
+                         for out_node in outgoing_scopes}
+            in_nodes = {node_of_scope[in_node]
+                        for in_node in incoming_scopes}
 
-            # update the edges of the new graph
-            node.in_edges = {first_Node_of_scope[scope].idx
-                             for scope in incoming_scopes}
-            node.out_edges = {first_Node_of_scope[scope].idx
-                              for scope in outgoing_scopes}
+            node.in_nodes = in_nodes
+            node.out_nodes = out_nodes
 
         self.adjacency_list = optimized_graph
 
     def _remove_constant_nodes(self):
-        # optimized_graph = []
-        # constant_nodes = set()
-        # for node in self.adjacency_list:
-        #     if "::Constant" in node.scope:
-        #         constant_nodes.add(node.idx)
-        #     else:
-        #         optimized_graph.append(node)
+        optimized_graph = []
+        for node in self.adjacency_list:
+            if "::Constant" in node.scope:
+                for out_node in node.out_nodes:
+                    out_node.remove_in_node(node)
+                # just for sanity should never happen
+                for in_node in node.in_nodes:
+                    in_node.remove_out_node(node)
+            else:
+                optimized_graph.append(node)
 
-        # for node in optimized_graph:
-        #     node.in_edges.difference_update(constant_nodes)
-
-        # self.adjacency_list = optimized_graph
-        return False
+        self.adjacency_list = optimized_graph
 
     def __getitem__(self, key):
         return self.adjacency_list[key]
@@ -160,9 +183,9 @@ class Graph():
     def partition(self, num_parts):
         return
 
-
-# ONNX_ATEN RAW
 # return a trace graph of a model convenience method
+
+
 def trace_graph(model, *sample_inputs, optimized=True, op_type=torch.onnx.OperatorExportTypes.RAW):
     with torch.no_grad():
         trace_graph, _ = torch.jit.get_trace_graph(model, sample_inputs)
