@@ -7,7 +7,7 @@ from pprint import pprint
 __all__ = ['build_control_flow_graph']
 
 
-def build_control_flow_graph(model, weights, *sample_batch, max_depth=None, basic_block=None):
+def build_control_flow_graph(model, *sample_batch, max_depth=None, weights=None, basic_block=None):
     max_depth = max_depth if max_depth != None else 100
     model_class_name = type(model).__name__
     layerNames = _profiled_layers(
@@ -15,7 +15,7 @@ def build_control_flow_graph(model, weights, *sample_batch, max_depth=None, basi
 
     model_trace = trace_graph(model, *sample_batch)
 
-    return Graph(layerNames, weights, model_trace)
+    return Graph(layerNames, model_trace, weights=weights)
 
 
 class NodeTypes(Enum):
@@ -47,7 +47,7 @@ class Node():
      parallel edges in the same direction are not allowed
     '''
 
-    def __init__(self, scope, idx, node_type: NodeTypes, incoming_nodes=None, weight=0):
+    def __init__(self, scope, idx, node_type: NodeTypes, incoming_nodes=None, weight=None):
         self.scope = scope
         self.idx = idx
         self.type = node_type
@@ -95,14 +95,15 @@ class Graph():
     the edges represent the data flow.
     '''
 
-    def __init__(self, profiled_layers, weights, trace_graph):
+    def __init__(self, profiled_layers, trace_graph, weights):
         self.nodes = []
         self.profiled_layers = profiled_layers
         self.num_inputs_buffs_params = 0
         self._build_graph(trace_graph)
 
     def _build_graph(self, trace_graph):
-        print(len(list(trace_graph.inputs()))+len(list(trace_graph.nodes())))
+        print(
+            f"number of nodes before optimizations {len(list(trace_graph.inputs()))+len(list(trace_graph.nodes()))}")
         self._add_IO_nodes(trace_graph.inputs())
         self._add_OP_nodes(trace_graph.nodes())
         self._combine_nodes_under_the_same_scope()
@@ -189,7 +190,7 @@ class Graph():
                 node_of_scope[node.scope] = node
 
             else:
-                # add edges create the subset of all  edeges of the scope
+                # add edges create the super set of all edeges in the scope
                 node_of_scope[node.scope].add_in_node(node.in_nodes)
                 node_of_scope[node.scope].add_out_node(node.out_nodes)
 
@@ -248,7 +249,10 @@ class Graph():
         return self.nodes[key]
 
     def __repr__(self):
-        return str(self.nodes)
+        discription = ''
+        for node in self.nodes:
+            discription = f"{discription}\n{node}"
+        return discription
 
     def get_nodes(self):
         return self.nodes

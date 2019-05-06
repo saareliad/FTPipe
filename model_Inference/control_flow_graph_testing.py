@@ -52,6 +52,5 @@ class branched_model(nn.Module):
 if __name__ == "__main__":
     model = resnet20_cifar()
     graph = build_control_flow_graph(
-        model, 1, torch.zeros(1, 3, 32, 32), max_depth=100)
-    pprint(graph.adjacency_list)
-    # pprint(inspect.getmembers(torch._C.Value))
+        model, torch.zeros(1, 3, 32, 32), max_depth=100)
+    pprint(graph)
