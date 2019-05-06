@@ -46,11 +46,12 @@ class PipelineParallel(nn.Module):
                  range(self.num_gpus)]
 
         for p in procs:
-            p.join()
+            p.start()
 
-        results: List[torch.Tensor] = []
-        while not queue.empty():
-            results.append(queue.get())
+        results: List[torch.Tensor] = [queue.get() for _ in range(len(microbatches))]
+
+        for p in procs:
+            p.join()
 
         return torch.cat(tuple(results), dim=0)
 
