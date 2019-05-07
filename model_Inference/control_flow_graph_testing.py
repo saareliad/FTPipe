@@ -1,10 +1,21 @@
 import torch.nn as nn
 import torch
-from network_profiler import NetProfiler
-from control_flow_graph import build_control_flow_graph
 import inspect
+from network_profiler import profileNetwork
+from control_flow_graph import build_control_flow_graph
 from pprint import pprint
 from res_net_example import resnet20_cifar
+
+
+def partition_model(model, *sample_batch, num_iter=2, max_depth=100, basic_blocks=None, device="cuda"):
+
+    profile = profileNetwork(model, *sample_batch, max_depth=max_depth,
+                             basic_block=basic_blocks, device=device, num_iter=num_iter)
+
+    graph = build_control_flow_graph(
+        model, *sample_batch, max_depth=max_depth, weights=profile, basic_block=basic_blocks, device=device)
+
+    return graph
 
 
 class complex_model(nn.Module):
@@ -50,7 +61,7 @@ class branched_model(nn.Module):
 # thus we can walk the graph and the names will tell us if we have a route from layer to layer
 # names can be obtained easily and they represent scope (depth) and
 if __name__ == "__main__":
-    model = resnet20_cifar()
-    graph = build_control_flow_graph(
-        model, torch.zeros(1, 3, 32, 32), max_depth=100)
+    model = complex_model()
+    graph = partition_model(
+        model, torch.zeros(1, 1), torch.zeros(1, 1), max_depth=0)
     pprint(graph)

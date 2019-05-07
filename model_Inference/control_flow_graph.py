@@ -2,20 +2,24 @@
 import torch.nn as nn
 import torch
 from enum import Enum
-from pprint import pprint
 
 __all__ = ['build_control_flow_graph']
 
 
-def build_control_flow_graph(model, *sample_batch, max_depth=None, weights=None, basic_block=None):
+def build_control_flow_graph(model, *sample_batch, max_depth=None, weights=None, basic_block=None, device="cuda"):
+    inputs = tuple(map(lambda t: t.to(device), sample_batch))
+    model.to(device)
+
     max_depth = max_depth if max_depth != None else 100
     model_class_name = type(model).__name__
     layerNames = _profiled_layers(
         model, max_depth, prefix=model_class_name, basic_block=basic_block)
 
-    model_trace = trace_graph(model, *sample_batch)
+    with torch.no_grad():
+        trace_graph, _ = torch.jit.get_trace_graph(model, inputs)
+        trace_graph = trace_graph.graph()
 
-    return Graph(layerNames, model_trace, weights=weights)
+    return Graph(layerNames, trace_graph, weights=weights)
 
 
 class NodeTypes(Enum):
@@ -102,8 +106,6 @@ class Graph():
         self._build_graph(trace_graph)
 
     def _build_graph(self, trace_graph):
-        print(
-            f"number of nodes before optimizations {len(list(trace_graph.inputs()))+len(list(trace_graph.nodes()))}")
         self._add_IO_nodes(trace_graph.inputs())
         self._add_OP_nodes(trace_graph.nodes())
         self._combine_nodes_under_the_same_scope()
@@ -271,69 +273,8 @@ class Graph():
         return
 
 
-# return a trace graph of a model convenience method
-def trace_graph(model, *sample_inputs, optimized=True, op_type=torch.onnx.OperatorExportTypes.RAW):
-    with torch.no_grad():
-        trace_graph, _ = torch.jit.get_trace_graph(model, sample_inputs)
-        # if optimized:
-        #     trace_graph.set_graph(_optimize_graph(
-        #         trace_graph.graph(), op_type))
-
-        trace_graph = trace_graph.graph()
-
-        return trace_graph
-
-
-# optimizes a graph using gives op type
-# a copy of torch.onnx.utils._optimize_graph
-def _optimize_graph(graph, operator_export_type):
-    # TODO there is a bug with the second scope name of sequential is carried to all layers after it in the sequence
-    # maybe can be fixed bug is in torch/onnx/utils.py/139
-    # TODO acctualy it appears we perform sufficient optimizations on our own
-    from torch.onnx.utils import _split_tensor_list_constants, OperatorExportTypes
-    torch._C._jit_pass_remove_inplace_ops(graph)
-    # we record now record some ops like ones/zeros
-    # into a trace where we previously recorded constants
-    # use constant prop to maintain our current level of onnx support
-    # without implementing symbolics for all of them
-    torch._C._jit_pass_constant_propagation(graph)
-    _split_tensor_list_constants(graph, graph)
-    # run dce to eliminate dead parts of the graph that might have been
-    # left behind by things like symbolic_override
-    torch._C._jit_pass_dce(graph)
-    torch._C._jit_pass_lint(graph)
-
-    # torch._C._jit_pass_canonicalize_ops(graph)
-    torch._C._jit_pass_lint(graph)
-
-    torch._C._jit_pass_peephole(graph, True)
-    torch._C._jit_pass_lint(graph)
-
-    # onnx only supports tensors, but 1 / 2 = 0.5 and tensor(1) / tensor(2) = 0
-    torch._C._jit_pass_prepare_division_for_onnx(graph)
-    # onnx only supports tensors, so we turn all out number types into tensors
-    torch._C._jit_pass_erase_number_types(graph)
-    # onnx does not support tuples, so try to remove them
-    torch._C._jit_pass_lower_all_tuples(graph)
-    torch._C._jit_pass_peephole(graph, True)
-    torch._C._jit_pass_lint(graph)
-
-    if operator_export_type != OperatorExportTypes.RAW:
-        graph = torch._C._jit_pass_onnx(graph, operator_export_type)
-        torch._C._jit_pass_lint(graph)
-        torch._C._jit_pass_onnx_peephole(graph)
-        torch._C._jit_pass_lint(graph)
-    torch._C._jit_pass_dce(graph)
-    torch._C._jit_pass_lint(graph)
-    torch._C._jit_pass_fixup_onnx_loops(graph)
-    torch._C._jit_pass_lint(graph)
-    graph = torch._C._jit_pass_canonicalize(graph)
-    torch._C._jit_pass_lint(graph)
-    return graph
-
-
 # scope names of all profiled layers in the model
-def _profiled_layers(module: nn.Module, depth, prefix='', basic_block=None):
+def _profiled_layers(module: nn.Module, depth, prefix, basic_block=None):
     names = []
     for name, sub_module in module._modules.items():
         # assume no cyclic routes in the network
