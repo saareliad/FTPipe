@@ -9,7 +9,7 @@ __all__ = ['build_control_flow_graph']
 def build_control_flow_graph(model, *sample_batch, max_depth=None, weights=None, basic_block=None, device="cuda"):
     inputs = tuple(map(lambda t: t.to(device), sample_batch))
     model.to(device)
-
+    num_inputs = len(inputs)
     max_depth = max_depth if max_depth != None else 100
     model_class_name = type(model).__name__
     layerNames = _profiled_layers(
@@ -19,13 +19,14 @@ def build_control_flow_graph(model, *sample_batch, max_depth=None, weights=None,
         trace_graph, _ = torch.jit.get_trace_graph(model, inputs)
         trace_graph = trace_graph.graph()
 
-    return Graph(layerNames, trace_graph, weights=weights)
+    return Graph(layerNames, num_inputs, trace_graph, weights=weights)
 
 
 class NodeTypes(Enum):
     IN = 1
-    LAYER = 2
-    OP = 3
+    PARAM = 2
+    LAYER = 3
+    OP = 4
 
     def __repr__(self):
         return self.name
@@ -99,10 +100,11 @@ class Graph():
     the edges represent the data flow.
     '''
 
-    def __init__(self, profiled_layers, trace_graph, weights):
+    def __init__(self, profiled_layers, num_inputs, trace_graph, weights):
         self.nodes = []
         self.profiled_layers = profiled_layers
         self.num_inputs_buffs_params = 0
+        self.num_inputs = num_inputs
         self._build_graph(trace_graph)
 
     def _build_graph(self, trace_graph):
@@ -117,19 +119,20 @@ class Graph():
         '''
         add nodes representing the input and params/buffs of the model
         '''
-        for node in input_nodes:
+        for idx, node in enumerate(input_nodes):
             # TODO what if buffer is not used? remove or add
             # if len(list(node.uses())) == 0:
             #     continue
-            node_scope = f"input{self.num_inputs_buffs_params}"
             node_weight = 1
             # input/buff/parm weight is it's size
             # TODO normalize
             for d in node.type().sizes():
                 node_weight *= d
 
-            new_node = Node(node_scope, self.num_inputs_buffs_params,
-                            NodeTypes.IN, weight=node_weight)
+            node_type, node_scope = (NodeTypes.IN, f"input{idx}") if idx < self.num_inputs else (
+                NodeTypes.PARAM, f"param{idx-self.num_inputs}")
+            new_node = Node(node_scope, idx,
+                            node_type, weight=node_weight)
             self.nodes.append(new_node)
 
             self.num_inputs_buffs_params += 1
@@ -268,6 +271,62 @@ class Graph():
     def _normalize_indices(self):
         for idx, node in enumerate(self.nodes):
             node.idx = idx
+
+    def build_dot(self):
+        """Generate a GraphViz Dot graph.
+
+        Returns a GraphViz Digraph object.
+        """
+
+        theme = {"background_color": "#FFFFFF",
+                 "fill_color": "#E8E8E8",
+                 "outline_color": "#000000",
+                 "font_color": "#000000",
+                 "font_name": "Times",
+                 "font_size": "10",
+                 "margin": "0,0",
+                 "padding":  "1.0,0.5"}
+        from graphviz import Digraph
+
+        # Build GraphViz Digraph
+        dot = Digraph()
+
+        dot.attr("graph",
+                 concentrate="true",
+                 bgcolor=theme["background_color"],
+                 color=theme["outline_color"],
+                 fontsize=theme["font_size"],
+                 fontcolor=theme["font_color"],
+                 fontname=theme["font_name"],
+                 margin=theme["margin"],
+                 rankdir="LR",
+                 pad=theme["padding"])
+
+        dot.attr("node", shape="box",
+                 style="filled", margin="0,0",
+                 fillcolor=theme["fill_color"],
+                 color=theme["outline_color"],
+                 fontsize=theme["font_size"],
+                 fontcolor=theme["font_color"],
+                 fontname=theme["font_name"])
+
+        dot.attr("edge", style="solid",
+                 color=theme["outline_color"],
+                 fontsize=theme["font_size"],
+                 fontcolor=theme["font_color"],
+                 fontname=theme["font_name"])
+
+        for node in self.nodes:
+            dot.node(str(node.idx), node.scope)
+
+        for node in self.nodes:
+            for in_node in node.in_nodes:
+                dot.edge(str(in_node.idx), str(node.idx))
+        return dot
+
+    def _repr_svg_(self):
+        """Allows Jupyter notebook to render the graph automatically."""
+        return self.build_dot()._repr_svg_()
 
     def partition(self, num_parts):
         return

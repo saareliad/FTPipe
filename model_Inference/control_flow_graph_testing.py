@@ -1,10 +1,11 @@
+# %%
 import torch.nn as nn
 import torch
 import inspect
-from network_profiler import profileNetwork
-from control_flow_graph import build_control_flow_graph
+from model_Inference.network_profiler import profileNetwork
+from model_Inference.control_flow_graph import build_control_flow_graph
 from pprint import pprint
-from res_net_example import resnet20_cifar
+from model_Inference.res_net_example import resnet20_cifar
 
 
 def partition_model(model, *sample_batch, num_iter=2, max_depth=100, basic_blocks=None, device="cuda"):
@@ -60,8 +61,6 @@ class branched_model(nn.Module):
 # infer control flow via scope name we can get it from the model and from the trace graph
 # thus we can walk the graph and the names will tell us if we have a route from layer to layer
 # names can be obtained easily and they represent scope (depth) and
-if __name__ == "__main__":
-    model = complex_model()
-    graph = partition_model(
-        model, torch.zeros(1, 1), torch.zeros(1, 1), max_depth=0)
-    pprint(graph)
+model = complex_model()
+g = partition_model(model, torch.zeros(1, 1), torch.zeros(1, 1), max_depth=0)
+g

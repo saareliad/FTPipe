@@ -85,8 +85,13 @@ class Wrapper(nn.Module):
 
         return exec_time, out
 
+    # TODO maybe include activations/gradients size
+    # TODO check if it is realy neccessary to call cuda.synchronize all the time
+
+
+def profileNetwork(net: nn.Module, *sample_batch, basic_block=None, device="cuda", max_depth=100, num_iter=1):
     '''
-    a module who profiles a network's computation time(forward/backward) and memory consumption
+    profiles a network's computation time(forward/backward) and memory consumption
     done via wrapping all layers of the network with a special Wrapper module
 
     Parameters
@@ -98,21 +103,19 @@ class Wrapper(nn.Module):
         a sample batch that will be used to measure executation time of network
         can be single/multiple inputs
 
+    max_depth:
+        determins how far the profiler will go in the model tree
+
     basic_block:
         a tuple of nn.Module classes that the profiler will regard as a cohesive unit
         for eg. if basic_block = nn.Sequential then the profiler will break it down to it's components
 
+    num_iter:
+        number of runs the profiler will perform in order to get time measurments
+
     device:
         the device on which we will profile the network defaults to cuda
 
-    '''
-    # TODO maybe include activations/gradients size
-    # TODO check if it is realy neccessary to call cuda.synchronize all the time
-
-
-def profileNetwork(net: nn.Module, *sample_batch, basic_block=None, device="cuda", max_depth=100, num_iter=1):
-    '''
-    profiles the network using a sample input
     '''
     # wrap all individula layers for profiling
     model_class_name = type(net).__name__
