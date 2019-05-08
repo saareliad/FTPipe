@@ -12,6 +12,10 @@ def build_control_flow_graph(model, *sample_batch, max_depth=None, weights=None,
     num_inputs = len(inputs)
     max_depth = max_depth if max_depth != None else 100
     model_class_name = type(model).__name__
+    buffer_names = [buff[0]
+                    for buff in model.named_buffers(prefix=model_class_name)]
+    weights = weights if weights != None else {}
+
     layerNames = _profiled_layers(
         model, max_depth, prefix=model_class_name, basic_block=basic_block)
 
@@ -19,14 +23,15 @@ def build_control_flow_graph(model, *sample_batch, max_depth=None, weights=None,
         trace_graph, _ = torch.jit.get_trace_graph(model, inputs)
         trace_graph = trace_graph.graph()
 
-    return Graph(layerNames, num_inputs, trace_graph, weights=weights)
+    return Graph(layerNames, num_inputs, buffer_names, trace_graph, weights=weights)
 
 
 class NodeTypes(Enum):
     IN = 1
-    PARAM = 2
-    LAYER = 3
-    OP = 4
+    BUFF = 2
+    PARAM = 3
+    LAYER = 4
+    OP = 5
 
     def __repr__(self):
         return self.name
@@ -52,7 +57,7 @@ class Node():
      parallel edges in the same direction are not allowed
     '''
 
-    def __init__(self, scope, idx, node_type: NodeTypes, incoming_nodes=None, weight=None):
+    def __init__(self, scope, idx, node_type: NodeTypes, incoming_nodes=None, weight=0):
         self.scope = scope
         self.idx = idx
         self.type = node_type
@@ -100,12 +105,16 @@ class Graph():
     the edges represent the data flow.
     '''
 
-    def __init__(self, profiled_layers, num_inputs, trace_graph, weights):
+    def __init__(self, profiled_layers, num_inputs, buffer_names, trace_graph, weights: dict):
         self.nodes = []
         self.profiled_layers = profiled_layers
         self.num_inputs_buffs_params = 0
         self.num_inputs = num_inputs
+        self.buffer_names = buffer_names
         self._build_graph(trace_graph)
+
+        for node in self.nodes:
+            node.weight = weights.get(node.scope, node.weight)
 
     def _build_graph(self, trace_graph):
         self._add_IO_nodes(trace_graph.inputs())
@@ -129,8 +138,16 @@ class Graph():
             for d in node.type().sizes():
                 node_weight *= d
 
-            node_type, node_scope = (NodeTypes.IN, f"input{idx}") if idx < self.num_inputs else (
-                NodeTypes.PARAM, f"param{idx-self.num_inputs}")
+            if idx < self.num_inputs:
+                node_type = NodeTypes.IN
+                node_scope = f"input{idx}"
+            elif idx < self.num_inputs + len(self.buffer_names):
+                node_type = NodeTypes.BUFF
+                node_scope = self.buffer_names[idx-self.num_inputs]
+            else:
+                node_type = NodeTypes.PARAM
+                node_scope = f"param{idx-self.num_inputs-len(self.buffer_names)}"
+
             new_node = Node(node_scope, idx,
                             node_type, weight=node_weight)
             self.nodes.append(new_node)
@@ -149,9 +166,9 @@ class Graph():
             node_idx = self.num_inputs_buffs_params+idx
             new_node = None
 
-            # TODO add weights
             # profiled Layer
             if node_scope != "":
+                # TODO what about function modules like ReLU which are used multiple times
                 new_node = Node(node_scope, node_idx,
                                 NodeTypes.LAYER, input_nodes)
             # unprofiled OP
@@ -272,7 +289,7 @@ class Graph():
         for idx, node in enumerate(self.nodes):
             node.idx = idx
 
-    def build_dot(self):
+    def build_dot(self, show_buffs=False, show_params=False):
         """Generate a GraphViz Dot graph.
 
         Returns a GraphViz Digraph object.
@@ -316,17 +333,34 @@ class Graph():
                  fontcolor=theme["font_color"],
                  fontname=theme["font_name"])
 
-        for node in self.nodes:
-            dot.node(str(node.idx), node.scope)
+        def hide_node(node):
+            return(node.type == NodeTypes.BUFF and not show_buffs) or (node.type == NodeTypes.PARAM and not show_params)
 
         for node in self.nodes:
+            if hide_node(node):
+                continue
+            label = node.scope
+            if node.weight != 0:
+                label = f"{label}\n {node.weight}"
+            dot.node(str(node.idx), label)
+
+        for node in self.nodes:
+            if hide_node(node):
+                continue
             for in_node in node.in_nodes:
+                if hide_node(in_node):
+                    continue
                 dot.edge(str(in_node.idx), str(node.idx))
         return dot
 
-    def _repr_svg_(self):
-        """Allows Jupyter notebook to render the graph automatically."""
-        return self.build_dot()._repr_svg_()
+    def display(self, show_buffs=False, show_params=False):
+        try:
+            from IPython.core.display import display_svg
+            display_svg(self.build_dot(show_buffs=show_buffs,
+                                       show_params=show_params), raw=False)
+        except ImportError as e:
+            print("only works in python notebooks")
+            pass
 
     def partition(self, num_parts):
         return

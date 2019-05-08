@@ -86,7 +86,6 @@ class Wrapper(nn.Module):
         return exec_time, out
 
     # TODO maybe include activations/gradients size
-    # TODO check if it is realy neccessary to call cuda.synchronize all the time
 
 
 def profileNetwork(net: nn.Module, *sample_batch, basic_block=None, device="cuda", max_depth=100, num_iter=1):
