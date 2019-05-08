@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from typing import Iterable, List, Tuple
 from multiprocessing import Queue, Process
-from pipeline.utils import AutoResetBarrier
 
 
 class PipelineParallel(nn.Module):
@@ -13,14 +12,18 @@ class PipelineParallel(nn.Module):
     the list submodules reflects what you want
     """
 
-    def __init__(self, module: nn.Module, microbatch_size: int, num_gpus: int, wrappers, main_device: str = 'cpu'):
+    def __init__(self, module: nn.Module, microbatch_size: int, num_gpus: int, main_device: str = 'cpu', wrappers=None):
         super(PipelineParallel, self).__init__()
 
         self.main_device = main_device
         self.microbatch_size = microbatch_size
         self.module = module
         self.num_gpus = num_gpus
-        self.barrier = AutoResetBarrier(num_gpus)
+
+        if wrappers is None:
+            wrappers = module.wrappers
+
+        self.wrappers = wrappers
 
         for wrapper in wrappers:
             wrapper.set_barrier(self.barrier)
@@ -56,14 +59,17 @@ class PipelineParallel(nn.Module):
         return torch.cat(tuple(results), dim=0)
 
     def thread_forward(self, rank: int, world_size: int, microbatches: Tuple[torch.Tensor], queue: Queue):
+        print(f'thread with rank {rank} started')
 
         for _ in range(rank):
             self.barrier.wait()
 
         for mb_idx in range(rank, len(microbatches), world_size):
             micro_batch = microbatches[mb_idx]
-            result = self.module.forward(micro_batch)
+            print(f'starting microbatch {mb_idx}')
+            result = self.module(micro_batch)
             queue.put(result)
+            print(f'finished microbatch {mb_idx}')
             # dist.barrier()
 
         num_barriers = rank - len(microbatches) % world_size

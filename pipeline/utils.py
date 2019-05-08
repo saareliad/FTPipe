@@ -1,6 +1,5 @@
 from collections import deque
 from typing import Iterable, Callable, List, Union, NoReturn
-import multiprocessing as mp
 
 
 def conveyor_gen(inputs: Iterable, queue: Iterable):
@@ -62,11 +61,4 @@ def prod_line(inputs: Iterable, actions: List[Callable], output_results: bool = 
             outputs.append(last_val)
 
     return outputs
-
-
-class AutoResetBarrier(mp.Barrier):
-    def wait(self):
-        i = super(AutoResetBarrier, self).wait()
-        if i == 0:
-            self.reset()
 
