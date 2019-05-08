@@ -38,8 +38,23 @@ under pipeline/pipeline_parallel.py:
 num_classes = 1000
 num_batches = 3
 batch_size = 120
-image_w = 128
-image_h = 128
+image_w = 224
+image_h = 224
+
+
+class PrintLayer(nn.Module):
+    def __init__(self, to_print: str = None):
+        super(PrintLayer, self).__init__()
+        self.to_print = to_print
+
+    def forward(self, input):
+        if self.to_print is None:
+            to_print = f'shape is {input.shape}'
+        else:
+            to_print = self.to_print
+
+        print(to_print)
+        return input
 
 
 class ModelParallelResNet50(ResNet):
@@ -47,7 +62,7 @@ class ModelParallelResNet50(ResNet):
         super(ModelParallelResNet50, self).__init__(
             Bottleneck, [3, 4, 6, 3], num_classes=num_classes, *args, **kwargs)
 
-        dev1 = 'cuda:0'
+        dev1 = 'cpu'
 
         self.seq1 = nn.Sequential(
             self.conv1,
@@ -61,7 +76,7 @@ class ModelParallelResNet50(ResNet):
 
         self.seq1 = SyncWrapper(self.seq1, dev1)
 
-        dev2 = 'cuda:1'
+        dev2 = 'cpu'
 
         self.seq2 = nn.Sequential(
             self.layer3,
@@ -85,19 +100,16 @@ def train(model):
     loss_fn = nn.MSELoss()
     optimizer = optim.SGD(model.parameters(), lr=0.001)
 
-    one_hot_indices = torch.LongTensor(batch_size) \
-        .random_(0, num_classes) \
-        .view(batch_size, 1)
+    one_hot_indices = torch.LongTensor(batch_size).random_(0, num_classes).view(batch_size, 1)
 
     for _ in range(num_batches):
         # generate random inputs and labels
         inputs = torch.randn(batch_size, 3, image_w, image_h)
-        labels = torch.zeros(batch_size, num_classes) \
-            .scatter_(1, one_hot_indices, 1)
+        labels = torch.zeros(batch_size, num_classes).scatter_(1, one_hot_indices, 1)
 
         # run forward pass
         optimizer.zero_grad()
-        outputs = model(inputs.to('cuda:0'))
+        outputs = model(inputs)
 
         # run backward pass
         labels = labels.to(outputs.device)
@@ -120,11 +132,10 @@ def plot(means, stds, labels, fig_name):
 
 def test_first_pipline():
     num_repeat = 10
-    parallel = ModelParallelResNet50()
 
     stmt = "train(model)"
 
-    setup = "model = PipelineParallel(parallel, 4, 2, parallel.wrappers)"
+    setup = "model = PipelineParallel(ModelParallelResNet50(), 20, 2)"
     mp_run_times = timeit.repeat(
         stmt, setup, number=1, repeat=num_repeat, globals=globals())
     mp_mean, mp_std = np.mean(mp_run_times), np.std(mp_run_times)
@@ -141,3 +152,7 @@ def test_first_pipline():
 
     assert mp_mean < rn_mean
     assert rn_mean / mp_mean - 1 >= 0.3
+
+
+if __name__ == "__main__":
+    test_first_pipline()
