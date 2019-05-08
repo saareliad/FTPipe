@@ -1,145 +1,280 @@
 
 import torch.nn as nn
 import torch
+from enum import Enum
+
+__all__ = ['build_control_flow_graph']
 
 
-def build_control_flow_graph(model, weights, *sample_batch, max_depth=None, basic_block=None):
+def build_control_flow_graph(model, *sample_batch, max_depth=None, weights=None, basic_block=None, device="cuda"):
+    inputs = tuple(map(lambda t: t.to(device), sample_batch))
+    model.to(device)
+
     max_depth = max_depth if max_depth != None else 100
-    layerNames = _profiled_layers(model, max_depth, prefix=type(
-        model).__name__, basic_block=basic_block)
+    model_class_name = type(model).__name__
+    layerNames = _profiled_layers(
+        model, max_depth, prefix=model_class_name, basic_block=basic_block)
 
-    model_trace = trace_graph(model, *sample_batch)
+    with torch.no_grad():
+        trace_graph, _ = torch.jit.get_trace_graph(model, inputs)
+        trace_graph = trace_graph.graph()
 
-    return Graph(layerNames, weights, model_trace)
+    return Graph(layerNames, trace_graph, weights=weights)
+
+
+class NodeTypes(Enum):
+    IN = 1
+    LAYER = 2
+    OP = 3
+
+    def __repr__(self):
+        return self.name
+
+
+class Node():
+    '''
+    a simple graph node for directed graphs
+
+    Fields:
+    ------
+    scope:
+     the operation/layer the node represents
+    idx:
+     a serial number of the node for convience
+    node_type:
+     an enum representing if the node is an input Layer or operator(like arithmetic ops)
+    incoming_nodes:
+     the nodes who have edges from them to this node
+    out_nodes:
+     the nodes who have edges from this node
+
+     parallel edges in the same direction are not allowed
+    '''
+
+    def __init__(self, scope, idx, node_type: NodeTypes, incoming_nodes=None, weight=None):
+        self.scope = scope
+        self.idx = idx
+        self.type = node_type
+        self.out_nodes = set()
+        self.weight = weight
+        self.in_nodes = incoming_nodes if isinstance(
+            incoming_nodes, set) else set()
+
+    def add_out_node(self, node):
+        if isinstance(node, Node):
+            self.out_nodes.add(node)
+        if isinstance(node, set):
+            self.out_nodes.update(node)
+
+    def add_in_node(self, node):
+        if isinstance(node, Node):
+            self.in_nodes.add(node)
+        if isinstance(node, set):
+            self.in_nodes.update(node)
+
+    def remove_in_node(self, node):
+        if isinstance(node, Node):
+            self.in_nodes.discard(node)
+        if isinstance(node, set):
+            self.in_nodes.difference_update(node)
+
+    def remove_out_node(self, node):
+        if isinstance(node, Node):
+            self.out_nodes.discard(node)
+        if isinstance(node, set):
+            self.out_nodes.difference_update(node)
+
+    def __repr__(self):
+        out_idx = {node.idx for node in self.out_nodes}
+        in_idx = {node.idx for node in self.in_nodes}
+        return f"node {self.idx} in scope {self.scope} of type {self.type} flows to {out_idx} gathers {in_idx}\n"
 
 
 class Graph():
-    def __init__(self, profiled_layers, weights, trace_graph):
-        self.adjacency_list = []
+    '''
+    a graph representing the control flow of a model
+    built from a pytorch trace graph.
+    the graph vertices are specified using the given profiled layer names\n
+    and will also include basic pytorch ops that connect them.
+    the edges represent the data flow.
+    '''
+
+    def __init__(self, profiled_layers, trace_graph, weights):
+        self.nodes = []
         self.profiled_layers = profiled_layers
-        self.weights = dict()
         self.num_inputs_buffs_params = 0
-        self.num_op_nodes = 0
+        self._build_graph(trace_graph)
 
-        self.add_IO_nodes(trace_graph.inputs())
+    def _build_graph(self, trace_graph):
+        self._add_IO_nodes(trace_graph.inputs())
+        self._add_OP_nodes(trace_graph.nodes())
+        self._combine_nodes_under_the_same_scope()
+        self._remove_constant_nodes()
+        self._merge_op_chains()
+        self._normalize_indices()
 
-        self.add_OP_nodes(trace_graph.nodes())
-
-    def add_IO_nodes(self, input_nodes):
+    def _add_IO_nodes(self, input_nodes):
+        '''
+        add nodes representing the input and params/buffs of the model
+        '''
         for node in input_nodes:
-            # add input nodes only if they are in use
-            # TODO if they are not in use how will it affect the other nodes
-            if len(node.uses()) > 0:
-                self.adjacency_list.append([])
-                self.weights[node.unique()] = node.type().sizes()
-                self.num_inputs_buffs_params += 1
+            # TODO what if buffer is not used? remove or add
+            # if len(list(node.uses())) == 0:
+            #     continue
+            node_scope = f"input{self.num_inputs_buffs_params}"
+            node_weight = 1
+            # input/buff/parm weight is it's size
+            # TODO normalize
+            for d in node.type().sizes():
+                node_weight *= d
 
-    def add_OP_nodes(self, OP_nodes):
-        for trace_node in OP_nodes:
-            node_scope = self.find_encasing_layer(trace_node.scopeName())
+            new_node = Node(node_scope, self.num_inputs_buffs_params,
+                            NodeTypes.IN, weight=node_weight)
+            self.nodes.append(new_node)
 
-            outputs = [o.unique() for o in trace_node.outputs()]
-            inputs = [i.unique() for i in trace_node.inputs()]
+            self.num_inputs_buffs_params += 1
 
-            # add incoming edges from inputs as they do not have an output field
-            for in_idx in inputs:
-                if in_idx < self.num_inputs_buffs_params:
-                    self.adjacency_list[in_idx].append(
-                        self.num_inputs_buffs_params+self.num_op_nodes)
+    def _add_OP_nodes(self, OP_nodes):
+        '''
+        add nodes representing the layers/ops of the model
+        '''
+        for idx, trace_node in enumerate(OP_nodes):
+            node_scope = self._find_encasing_layer(trace_node.scopeName())
+            input_nodes = {self.nodes[i.unique()]
+                           for i in trace_node.inputs()}
 
-            # TODO multiple outputs and self idx possibly only if we combine nodes
-            self.adjacency_list.append(list(set(outputs)))
+            node_idx = self.num_inputs_buffs_params+idx
+            new_node = None
 
             # TODO add weights
+            # profiled Layer
             if node_scope != "":
-                # self.weights[trace_node.unique()] = weights[node_scope]
-                print("layer")
+                new_node = Node(node_scope, node_idx,
+                                NodeTypes.LAYER, input_nodes)
+            # unprofiled OP
             else:
-                print("arithmetic")
+                node_scope = trace_node.scopeName() + \
+                    "/"+trace_node.kind() + str(idx)
+                new_node = Node(node_scope, node_idx,
+                                NodeTypes.OP, input_nodes)
 
-            self.num_op_nodes += 1
+            # add incoming edges
+            for node in input_nodes:
+                node.add_out_node(new_node)
 
-    def find_encasing_layer(self, scopeName: str):
+            self.nodes.append(new_node)
+
+    def _find_encasing_layer(self, scopeName: str):
         '''
-        longest prefix is the most specific layer that was profiled
+        find the closest scope which encases scopeName
         '''
         # unfortunately the trace graph shows only basic layers and ops
         # so we need to manually find a profiled layer that encases the op
         most_specific_scope = ""
-        print(scopeName)
         for layer_scope in self.profiled_layers:
             if scopeName.startswith(layer_scope) and len(layer_scope) > len(most_specific_scope):
                 most_specific_scope = layer_scope
 
         return most_specific_scope
 
+    def _combine_nodes_under_the_same_scope(self):
+        # optimization that reduces number of nodes in the graph
+        # combine nodes that have a commom scope we do this because\n
+        # if nodes have the same scopeName than they were profiled together
+
+        node_of_scope = dict()
+        optimized_graph = []
+
+        # get the nodes of the optimized graph
+        for node in self.nodes:
+            if not node.scope in node_of_scope:
+                optimized_graph.append(node)
+                node_of_scope[node.scope] = node
+
+            else:
+                # add edges create the super set of all edeges in the scope
+                node_of_scope[node.scope].add_in_node(node.in_nodes)
+                node_of_scope[node.scope].add_out_node(node.out_nodes)
+
+        for node in optimized_graph:
+            # get the sets of all incoming/outgoing scopes
+            # those will dictate the new set of edges and
+            # remove the internal edges of the scope
+            incoming_scopes = {n.scope for n in node.in_nodes
+                               if n.scope != node.scope}
+            outgoing_scopes = {n.scope for n in node.out_nodes
+                               if n.scope != node.scope}
+
+            out_nodes = {node_of_scope[out_node]
+                         for out_node in outgoing_scopes}
+            in_nodes = {node_of_scope[in_node]
+                        for in_node in incoming_scopes}
+
+            node.in_nodes = in_nodes
+            node.out_nodes = out_nodes
+
+        self.nodes = optimized_graph
+
+    def _remove_constant_nodes(self):
+        # remove nodes representing constants as they do not provide any useful info
+        optimized_graph = []
+        for node in self.nodes:
+            if "::Constant" in node.scope:
+                for out_node in node.out_nodes:
+                    out_node.remove_in_node(node)
+                # just for sanity should never happen
+                for in_node in node.in_nodes:
+                    in_node.remove_out_node(node)
+            else:
+                optimized_graph.append(node)
+
+        self.nodes = optimized_graph
+
+    def _merge_op_chains(self):
+        # op chains need to be placed on the same device anyways
+        optimized_graph = []
+        for node in self.nodes:
+            # if OP flows only into other ops then remove it and connect it's inputs to it's outputs
+            if node.type == NodeTypes.OP and len(node.out_nodes) > 0 and all(o.type == NodeTypes.OP for o in node.out_nodes):
+                for in_node in node.in_nodes:
+                    in_node.remove_out_node(node)
+                    in_node.add_out_node(node.out_nodes)
+                for out_node in node.out_nodes:
+                    out_node.remove_in_node(node)
+                    out_node.add_in_node(node.in_nodes)
+            else:
+                optimized_graph.append(node)
+
+        self.nodes = optimized_graph
+
     def __getitem__(self, key):
-        return self.adjacency_list[key], self.weights.get(key, 0)
+        return self.nodes[key]
+
+    def __repr__(self):
+        discription = ''
+        for node in self.nodes:
+            discription = f"{discription}\n{node}"
+        return discription
+
+    def get_nodes(self):
+        return self.nodes
+
+    def get_weights(self):
+        return [node.weight for node in self.nodes]
+
+    def adjacency_list(self):
+        return [[n.idx for n in node.out_nodes] for node in self.nodes]
+
+    def _normalize_indices(self):
+        for idx, node in enumerate(self.nodes):
+            node.idx = idx
 
     def partition(self, num_parts):
         return
 
 
-# return a trace graph of a model convenience method
-def trace_graph(model, *sample_inputs, optimized=True, op_type=torch.onnx.OperatorExportTypes.ONNX):
-    trace_graph, _ = torch.jit.get_trace_graph(model, sample_inputs)
-    if optimized:
-        trace_graph.set_graph(_optimize_graph(trace_graph.graph(), op_type))
-
-    trace_graph = trace_graph.graph()
-
-    return trace_graph
-
-
-# optimizes a graph using gives op type
-# a copy of torch.onnx.utils._optimize_graph
-def _optimize_graph(graph, operator_export_type):
-    # TODO there is a bug with the second scope name of sequential is carried to all layers after it in the sequence
-    # maybe can be fixed bug is in torch/onnx/utils.py/139
-    from torch.onnx.utils import _split_tensor_list_constants, OperatorExportTypes
-    torch._C._jit_pass_remove_inplace_ops(graph)
-    # we record now record some ops like ones/zeros
-    # into a trace where we previously recorded constants
-    # use constant prop to maintain our current level of onnx support
-    # without implementing symbolics for all of them
-    torch._C._jit_pass_constant_propagation(graph)
-    _split_tensor_list_constants(graph, graph)
-    # run dce to eliminate dead parts of the graph that might have been
-    # left behind by things like symbolic_override
-    torch._C._jit_pass_dce(graph)
-    torch._C._jit_pass_lint(graph)
-
-    # torch._C._jit_pass_canonicalize_ops(graph)
-    torch._C._jit_pass_lint(graph)
-
-    torch._C._jit_pass_peephole(graph, True)
-    torch._C._jit_pass_lint(graph)
-
-    # onnx only supports tensors, but 1 / 2 = 0.5 and tensor(1) / tensor(2) = 0
-    torch._C._jit_pass_prepare_division_for_onnx(graph)
-    # onnx only supports tensors, so we turn all out number types into tensors
-    torch._C._jit_pass_erase_number_types(graph)
-    # onnx does not support tuples, so try to remove them
-    torch._C._jit_pass_lower_all_tuples(graph)
-    torch._C._jit_pass_peephole(graph, True)
-    torch._C._jit_pass_lint(graph)
-
-    if operator_export_type != OperatorExportTypes.RAW:
-        graph = torch._C._jit_pass_onnx(graph, operator_export_type)
-        torch._C._jit_pass_lint(graph)
-        torch._C._jit_pass_onnx_peephole(graph)
-        torch._C._jit_pass_lint(graph)
-    torch._C._jit_pass_dce(graph)
-    torch._C._jit_pass_lint(graph)
-    torch._C._jit_pass_fixup_onnx_loops(graph)
-    torch._C._jit_pass_lint(graph)
-    graph = torch._C._jit_pass_canonicalize(graph)
-    torch._C._jit_pass_lint(graph)
-    return graph
-
-
 # scope names of all profiled layers in the model
-def _profiled_layers(module: nn.Module, depth, prefix='', basic_block=None):
+def _profiled_layers(module: nn.Module, depth, prefix, basic_block=None):
     names = []
     for name, sub_module in module._modules.items():
         # assume no cyclic routes in the network

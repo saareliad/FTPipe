@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
 import timeit
-# import metis
 from torch.autograd import Variable
+from collections import namedtuple
+__all__ = ['profileNetwork']
 
 
 class Wrapper(nn.Module):
@@ -17,15 +18,14 @@ class Wrapper(nn.Module):
 
     '''
 
-    def __init__(self, sub_module: nn.Module, idx, device="cuda"):
+    def __init__(self, sub_module: nn.Module, device="cuda"):
         super(Wrapper, self).__init__()
         self.layer = sub_module
         self.device = device
-        self.idx = idx
-        self.forward_time = None
-        self.backward_time = None
-
+        self.forward_time = 0
+        self.backward_time = 0
         self.size = self._layer_size()
+        # TODO normalize weights
 
     def _layer_size(self):
         '''
@@ -48,8 +48,10 @@ class Wrapper(nn.Module):
         detached_inputs = map(
             lambda t: Variable(t.data, requires_grad=True).to(self.device).clone(), inputs)
 
-        self.forward_time, outputs = self._time_op(
+        forward_time, outputs = self._time_op(
             self.layer, *detached_inputs)
+
+        self.forward_time += forward_time
 
         # reduce outputs to calculate dummy loss
         loss = torch.zeros(1, requires_grad=True, device=self.device)
@@ -57,7 +59,8 @@ class Wrapper(nn.Module):
             loss = loss + out.norm()
 
         # measure backward execution time
-        self.backward_time, _ = self._time_op(torch.autograd.backward, loss)
+        backward_time, _ = self._time_op(torch.autograd.backward, loss)
+        self.backward_time += backward_time
 
         return outputs
 
@@ -82,8 +85,6 @@ class Wrapper(nn.Module):
 
         return exec_time, out
 
-
-class NetProfiler(nn.Module):
     '''
     a module who profiles a network's computation time(forward/backward) and memory consumption
     done via wrapping all layers of the network with a special Wrapper module
@@ -108,86 +109,84 @@ class NetProfiler(nn.Module):
     # TODO maybe include activations/gradients size
     # TODO check if it is realy neccessary to call cuda.synchronize all the time
 
-    def __init__(self, net: nn.Module, *sample_batch, basic_block=None, device="cuda", max_depth=None):
-        super(NetProfiler, self).__init__()
-        self.network = net
-        self.basic_block = basic_block
-        self.device = device
-        self.max_depth = max_depth if max_depth != None else 100
-        self._profile(*sample_batch)
 
-    def forward(self, *inputs):
-        # move all inputs and outputs to specified device
-        out = map(lambda t: t.to(self.device), inputs)
-        self.to(self.device)
-        # warmup
-        a = torch.randn(1000, 2000).to(self.device)
-        b = torch.randn(2000, 1000).to(self.device)
-        a.mm(b)
-        if self.device == "cuda":
-            torch.cuda.synchronize()
+def profileNetwork(net: nn.Module, *sample_batch, basic_block=None, device="cuda", max_depth=100, num_iter=1):
+    '''
+    profiles the network using a sample input
+    '''
+    # wrap all individula layers for profiling
+    model_class_name = type(net).__name__
+    layers_dict = _wrap_profiled_layers(
+        net, max_depth, model_class_name, basic_block, device)
 
-        out = self.network(*out)
+    # gather all individual layer sizes
+    layer_sizes = [layer.size for layer in layers_dict.values()]
 
-        if self.device == "cuda":
-            torch.cuda.synchronize()
+    # perform symbolic forward backward run
+    for _ in range(num_iter):
+        _perform_forward_backward_pass(
+            net, device, *sample_batch)
 
-        return out
+    # gather forward and backward execution times
+    backward_times = [layer.backward_time / num_iter
+                      for layer in layers_dict.values()]
+    forward_times = [layer.forward_time/num_iter
+                     for layer in layers_dict.values()]
 
-    def _wrap_individual_layers(self, module: nn.Module, depth, idx):
-        '''
-        wraps all layers of module by changing the binding in the network module dictionary
-        '''
-        layers_dict = {}
-        for name, sub_module in module._modules.items():
-            # assume no cyclic routes in the network
-            # a module with no children is a layer
-            if len(list(sub_module.children())) == 0 or (self.basic_block != None and isinstance(sub_module, self.basic_block)) or depth == 0:
-                module._modules[name] = Wrapper(sub_module, idx, self.device)
-                layers_dict[idx] = module._modules[name]
-                idx += 1
-            else:
-                idx, sub_dict = self._wrap_individual_layers(
-                    sub_module, depth-1, idx)
-                layers_dict.update(sub_dict)
-        return idx, layers_dict
+    Profile = namedtuple('Profile', 'forward_time backward_time size')
 
-    def _unwrap_layers(self, module: nn.Module, idx):
-        '''
-        return all binding to what they were originally, removes all Wrappers from self.network
-        '''
-        for name, sub_module in module._modules.items():
-            # assume no cyclic routes in the network
-            # a module with no children is a layer
-            if isinstance(sub_module, Wrapper):
-                module._modules[name] = sub_module.layer
-                self.layers[idx] = module._modules[name]
-                idx += 1
-            else:
-                idx = self._unwrap_layers(
-                    sub_module, idx)
-        return idx
+    layers_profile = {name: Profile(forward, backward, size) for name, forward, backward, size in zip(
+        layers_dict.keys(), forward_times, backward_times, layer_sizes)}
 
-    def _profile(self, *sample_batch):
-        '''
-        profiles the network using a sample input
-        '''
-        # wrap all individula layers for profiling
-        self.num_layers, self.layers = self._wrap_individual_layers(
-            self.network, self.max_depth, 0)
+    _unwrap_layers(net)
+    return layers_profile
 
-        # gather all individual layer sizes
-        self.layer_sizes = [layer.size for layer in self.layers.values()]
 
-        # perform symbolic forward run
-        outputs = self(*sample_batch)
+def _perform_forward_backward_pass(net, device, *inputs):
+    # move all inputs and outputs to specified device
+    out = map(lambda t: t.to(device), inputs)
+    net.to(device)
+    # warmup
+    a = torch.randn(1000, 2000).to(device)
+    b = torch.randn(2000, 1000).to(device)
+    a.mm(b)
+    if device == "cuda":
+        torch.cuda.synchronize()
 
-        # gather forward times results
-        self._forward_times = [
-            layer.forward_time for layer in self.layers.values()]
+    out = net(*out)
 
-        # gather backward times results
-        # time is calculated by subtracting successive timestamps
-        # for lack of a better option the last layer performs backpropagation in 0 time
-        self.backward_times = [
-            layer.backward_time for layer in self.layers.values()]
+    if device == "cuda":
+        torch.cuda.synchronize()
+
+    return out
+
+
+def _wrap_profiled_layers(module: nn.Module, depth, prefix, basic_block, device):
+    '''
+    wraps all layers specified by depth and basic blocks of module by changing the binding in the network module dictionary
+    '''
+    layers_dict = {}
+    for name, sub_module in module._modules.items():
+        # assume no cyclic routes in the network
+        # a module with no children is a layer
+        if len(list(sub_module.children())) == 0 or (basic_block != None and isinstance(sub_module, basic_block)) or depth == 0:
+            sub_module_name = f"{prefix}/{type(sub_module).__name__}[{name}]"
+            module._modules[name] = Wrapper(sub_module, device=device)
+            layers_dict[sub_module_name] = module._modules[name]
+        else:
+            layers_dict.update(_wrap_profiled_layers(sub_module, depth-1, prefix +
+                                                     "/"+type(sub_module).__name__+f"[{name}]", basic_block, device))
+    return layers_dict
+
+
+def _unwrap_layers(module: nn.Module):
+    '''
+    return all binding to what they were originally, removes all Wrappers from self.network
+    '''
+    for name, sub_module in module._modules.items():
+        # assume no cyclic routes in the network
+        # a module with no children is a layer
+        if isinstance(sub_module, Wrapper):
+            module._modules[name] = sub_module.layer
+        else:
+            _unwrap_layers(sub_module)
