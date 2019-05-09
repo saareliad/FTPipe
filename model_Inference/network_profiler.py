@@ -126,8 +126,7 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_block=None, device="cuda
 
     # perform symbolic forward backward run
     for _ in range(num_iter):
-        _perform_forward_backward_pass(
-            net, device, *sample_batch)
+        _perform_forward_backward_pass(net, device, *sample_batch)
 
     # gather forward and backward execution times
     backward_times = [layer.backward_time / num_iter
@@ -137,6 +136,7 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_block=None, device="cuda
 
     Profile = namedtuple('Profile', 'forward_time backward_time size')
 
+    # prepare profiling results
     layers_profile = {name: Profile(forward, backward, size) for name, forward, backward, size in zip(
         layers_dict.keys(), forward_times, backward_times, layer_sizes)}
 

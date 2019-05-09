@@ -2,22 +2,27 @@
 import torch.nn as nn
 import torch
 from enum import Enum
+from pprint import pprint
 
 __all__ = ['build_control_flow_graph']
 
 
-def build_control_flow_graph(model, *sample_batch, max_depth=None, weights=None, basic_block=None, device="cuda"):
-    inputs = tuple(map(lambda t: t.to(device), sample_batch))
-    model.to(device)
-    num_inputs = len(inputs)
-    max_depth = max_depth if max_depth != None else 100
+def build_control_flow_graph(model, *sample_batch, max_depth=100, weights=None, basic_block=None, device="cuda"):
     model_class_name = type(model).__name__
     buffer_names = [buff[0]
                     for buff in model.named_buffers(prefix=model_class_name)]
+    parameter_names = [param[0]
+                       for param in model.named_modules(prefix=model_class_name)]
+
     weights = weights if weights != None else {}
 
     layerNames = _profiled_layers(
         model, max_depth, prefix=model_class_name, basic_block=basic_block)
+
+    # trace the model and build a graph
+    inputs = tuple(map(lambda t: t.to(device), sample_batch))
+    model.to(device)
+    num_inputs = len(inputs)
 
     with torch.no_grad():
         trace_graph, _ = torch.jit.get_trace_graph(model, inputs)
@@ -237,25 +242,19 @@ class Graph():
 
     def _remove_constant_nodes(self):
         # remove nodes representing constants as they do not provide any useful info
-        optimized_graph = []
-        for node in self.nodes:
-            if "::Constant" in node.scope:
-                for out_node in node.out_nodes:
-                    out_node.remove_in_node(node)
-                # just for sanity should never happen
-                for in_node in node.in_nodes:
-                    in_node.remove_out_node(node)
-            else:
-                optimized_graph.append(node)
-
-        self.nodes = optimized_graph
+        self._remove_nodes(lambda n: "::Constant" in n.scope)
 
     def _merge_op_chains(self):
+        def to_remove(n): return n.type == NodeTypes.OP and len(n.out_nodes) > 0 and all(
+            o.type == NodeTypes.OP for o in n.out_nodes)
         # op chains need to be placed on the same device anyways
+        self._remove_nodes(to_remove)
+
+    def _remove_nodes(self, condition):
         optimized_graph = []
         for node in self.nodes:
-            # if OP flows only into other ops then remove it and connect it's inputs to it's outputs
-            if node.type == NodeTypes.OP and len(node.out_nodes) > 0 and all(o.type == NodeTypes.OP for o in node.out_nodes):
+            if condition(node):
+                # connect inputs to outputs directly
                 for in_node in node.in_nodes:
                     in_node.remove_out_node(node)
                     in_node.add_out_node(node.out_nodes)
@@ -290,10 +289,9 @@ class Graph():
             node.idx = idx
 
     def build_dot(self, show_buffs=False, show_params=False):
-        """Generate a GraphViz Dot graph.
-
-        Returns a GraphViz Digraph object.
-        """
+        '''
+        return a graphviz representation of the graph
+        '''
 
         theme = {"background_color": "#FFFFFF",
                  "fill_color": "#E8E8E8",
@@ -305,7 +303,6 @@ class Graph():
                  "padding":  "1.0,0.5"}
         from graphviz import Digraph
 
-        # Build GraphViz Digraph
         dot = Digraph()
 
         dot.attr("graph",
@@ -361,9 +358,6 @@ class Graph():
         except ImportError as e:
             print("only works in python notebooks")
             pass
-
-    def partition(self, num_parts):
-        return
 
 
 # scope names of all profiled layers in the model

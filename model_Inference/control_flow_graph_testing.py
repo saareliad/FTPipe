@@ -62,7 +62,7 @@ class branched_model(nn.Module):
 # infer control flow via scope name we can get it from the model and from the trace graph
 # thus we can walk the graph and the names will tell us if we have a route from layer to layer
 # names can be obtained easily and they represent scope (depth) and
-model = resnet20_cifar()
-g = partition_model(model, torch.zeros(1, 3, 32, 32), max_depth=1)
+model = complex_model()
+g = partition_model(model, torch.zeros(1, 1), torch.zeros(1, 1), max_depth=1)
 
-g.display()
+g.display(show_buffs=True)
