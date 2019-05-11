@@ -17,7 +17,7 @@ class SyncWrapper(nn.Module):
         # number of gpu in order of pipeline
         self.gpu_num = gpu_num
 
-        # the previous layer, used ofr gradients and stuff
+        # the previous layer, used for gradients and stuff
         self.prev_layer = prev_layer
 
         # used for backward pass with saved activations, ids used to find them in the hash table
@@ -74,10 +74,10 @@ class SyncWrapper(nn.Module):
         """
         function for backward propagation iteration
         """
-        # if this iteration is one we should not work in
-        if self.__counter + 1 + self.gpu_num < self.num_gpus:
+        # if the backward propagation hasn't reached the layer yet, pass garbage
+        if self.__counter < self.num_gpus - (self.gpu_num + 1):
             self.__counter += 1
-            return self.module(torch.zeros(input.shape))
+            return self.module(torch.zeros_like(input))
 
         # if we were given a gradient to pass back
         if self.grad is not None:
@@ -86,7 +86,7 @@ class SyncWrapper(nn.Module):
 
         # if we have an activation to pass
         if self.last_input is None:
-            output = torch.zeros(input.shape)
+            output = torch.zeros_like(input)
         else:
             output = self.last_input
 
@@ -98,44 +98,48 @@ class SyncWrapper(nn.Module):
         """
         function for saving layer activation
         """
-        if self.gpu_num <= self.__counter < self.num_runs + self.gpu_num:
-            # clone and detach
-            activation = moved_input.clone().detach_()
+        # clone and detach
+        activation = moved_input.clone().detach_()
 
-            # if there was a previous layer with an activation saved for the current one
-            if self.prev_layer is not None and len(self.prev_layer.last_ids) > 0:
-                # put a backward hook for popping it when doing a backward pass
-                prev_layer_id = self.prev_layer.last_ids.pop(0)
-                activation.register_hook(lambda grad: self.prev_layer.act_hook(grad, prev_layer_id))
+        # if there was a previous layer with an activation saved for the current one
+        if self.prev_layer is not None and len(self.prev_layer.last_ids) > 0:
+            # put a backward hook for popping it when doing a backward pass
+            prev_layer_id = self.prev_layer.last_ids.pop(0)
+            activation.register_hook(lambda grad: self.prev_layer.act_hook(grad, prev_layer_id))
 
-            # save the activation and the id
-            self.activations[id(activation)] = activation
-            self.last_ids.append(id(activation))
+        # save the activation and the id
+        self.activations[id(activation)] = activation
+        self.last_ids.append(id(activation))
 
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
+    def forward(self, next_input: torch.Tensor) -> torch.Tensor:
         # move the input between devices
-        moved_input = input.to(self.device)
+        next_input = next_input.to(self.device)
 
         if self.cur_mode is ForwardMode.backward:
-            return self.backward_mode(moved_input)
-        elif self.cur_mode is ForwardMode.train:
-            self.save_activation(moved_input)
+            return self.backward_mode(next_input)
 
-        # check if the previous input is relevant
-        if self.gpu_num < self.__counter <= self.gpu_num + self.num_runs:
-            output = self.last_input
-        else:
-            output = torch.zeros_like(moved_input)
-
-        # check if the current input is relevant
+        # check if the input that waits for the submodule is relevant (garbage
+        # will be propagated before and after data passes through submodule).
         if self.gpu_num <= self.__counter < self.gpu_num + self.num_runs:
-            self.last_input = moved_input
+            # the input is relevant.
+            cur_input = self.last_input
+        else:
+            # the input is garbage.
+            cur_input = torch.zeros_like(next_input)
+
+        # check if the input to be replaced and scheduled to run on the next
+        # cycle is relevant (this should happen one cycle before previous cond).
+        if self.gpu_num <= self.__counter + 1 < self.gpu_num + self.num_runs:
+            if self.cur_mode is ForwardMode.train:
+                self.save_activation(next_input)
+
+            self.last_input = next_input
         else:
             self.last_input = None
 
         self.__counter += 1
 
-        return self.module(output)
+        return self.module(cur_input)
 
 
 class ActivationSavingLayer(nn.Module):
