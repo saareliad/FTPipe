@@ -377,10 +377,7 @@ def part_graph(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis', **
 # -------------------------------------------------------------------------
 # TODO LIST
 # -------------------------------------------------------------------------
-# 2. decide if to use gpmetis standalone program or METIS_PartGraphKway and METIS_PartGraphRecursive
 # 3. decide which optinal param are neccessery
-# 4. essentially write one part function that will enable choosing the partition algorithm
-
 def example_adjlist():
     return [[1, 2, 3, 4], [0], [0], [0], [0, 5], [4, 6], [13, 5, 7],
             [8, 6], [9, 10, 11, 12, 7], [8], [8], [8], [8], [14, 6], [13, 15],

@@ -24,15 +24,15 @@ def partition_model(model, num_gpus, *sample_batch, num_iter=2, max_depth=100, b
     weights = []
     for w in nodew:
         if isinstance(w, tuple):
-            weights.append(int(w.forward_time))
+            weights.append(int(100*w.forward_time))
         else:
-            weights.append(int(w))
+            weights.append(0)
 
     cuts, parts = part_graph(
         adjlist, nparts=num_gpus, algorithm="metis", nodew=weights, contig=1)
 
     graph.set_partition(parts)
-
+    print(cuts)
     return graph, cuts, parts
 
 
@@ -80,6 +80,6 @@ class branched_model(nn.Module):
 # names can be obtained easily and they represent scope (depth) and
 model = resnet20_cifar()
 graph, cuts, parts = partition_model(
-    model, 4, torch.zeros(1, 3, 32, 32), max_depth=100)
+    model, 4, torch.zeros(1, 3, 32, 32), max_depth=0)
 
 graph.display()

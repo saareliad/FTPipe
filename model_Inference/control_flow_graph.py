@@ -9,6 +9,7 @@ __all__ = ['build_control_flow_graph']
 
 def build_control_flow_graph(model, *sample_batch, max_depth=100, weights=None, basic_block=None, device="cuda"):
     model_class_name = type(model).__name__
+    
     buffer_names = [buff[0]
                     for buff in model.named_buffers(prefix=model_class_name)]
     parameter_names = [param[0]
@@ -379,5 +380,20 @@ def _profiled_layers(module: nn.Module, depth, prefix, basic_block=None):
                 prefix+"/"+type(sub_module).__name__+f"[{name}]")
         else:
             names = names + _profiled_layers(sub_module, depth-1, prefix +
+                                             "/"+type(sub_module).__name__+f"[{name}]")
+    return names
+
+#TODO implement
+# scope names of all profiled params and buffs in the model
+def _profiled_params_buffs(module: nn.Module, depth, prefix, basic_block=None):
+    names = []
+    for name, sub_module in module._modules.items():
+        # assume no cyclic routes in the network
+        # a module with no children is a layer
+        if len(list(sub_module.children())) == 0 or (basic_block != None and isinstance(sub_module, basic_block)) or depth == 0:
+            names.append(
+                prefix+"/"+type(sub_module).__name__+f"[{name}]")
+        else:
+            names = names + _profiled_params_buffs(sub_module, depth-1, prefix +
                                              "/"+type(sub_module).__name__+f"[{name}]")
     return names
