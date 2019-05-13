@@ -12,3 +12,4 @@ model_inference/metis/**
 model_Inference/playground.py
 model_Inference/notebook.py
 .pytest_cache/**
+playground/**

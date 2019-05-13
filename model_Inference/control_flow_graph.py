@@ -28,7 +28,7 @@ def build_control_flow_graph(model, *sample_batch, max_depth=100, weights=None, 
         trace_graph, _ = torch.jit.get_trace_graph(model, inputs)
         trace_graph = trace_graph.graph()
 
-    return Graph(layerNames, num_inputs, buffer_names, trace_graph, weights=weights)
+    return Graph(layerNames, num_inputs, buffer_names, trace_graph, weights)
 
 
 class NodeTypes(Enum):
@@ -62,12 +62,13 @@ class Node():
      parallel edges in the same direction are not allowed
     '''
 
-    def __init__(self, scope, idx, node_type: NodeTypes, incoming_nodes=None, weight=0):
+    def __init__(self, scope, idx, node_type: NodeTypes, incoming_nodes=None, weight=0, part=0):
         self.scope = scope
         self.idx = idx
         self.type = node_type
         self.out_nodes = set()
         self.weight = weight
+        self.part = part
         self.in_nodes = incoming_nodes if isinstance(
             incoming_nodes, set) else set()
 
@@ -282,11 +283,15 @@ class Graph():
         return [node.weight for node in self.nodes]
 
     def adjacency_list(self):
-        return [[n.idx for n in node.out_nodes] for node in self.nodes]
+        return [[n.idx for n in node.out_nodes.union(node.in_nodes)] for node in self.nodes]
 
     def _normalize_indices(self):
         for idx, node in enumerate(self.nodes):
             node.idx = idx
+
+    def set_partition(self, parts):
+        for node, part in zip(self.nodes, parts):
+            node.part = part
 
     def build_dot(self, show_buffs=False, show_params=False):
         '''
@@ -330,6 +335,9 @@ class Graph():
                  fontcolor=theme["font_color"],
                  fontname=theme["font_name"])
 
+        colors={0:'blue',1:'green',2:'red',3:'yellow',4:'orange',5:'brown',6:'purple',7:'pink'}
+
+
         def hide_node(node):
             return(node.type == NodeTypes.BUFF and not show_buffs) or (node.type == NodeTypes.PARAM and not show_params)
 
@@ -339,7 +347,7 @@ class Graph():
             label = node.scope
             if node.weight != 0:
                 label = f"{label}\n {node.weight}"
-            dot.node(str(node.idx), label)
+            dot.node(str(node.idx), label, fillcolor=colors[node.part])
 
         for node in self.nodes:
             if hide_node(node):

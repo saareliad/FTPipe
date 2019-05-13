@@ -4,20 +4,36 @@ import torch
 import inspect
 from model_Inference.network_profiler import profileNetwork
 from model_Inference.control_flow_graph import build_control_flow_graph
+from model_Inference.graph_partition import part_graph
 from pprint import pprint
 from model_Inference.res_net_example import resnet20_cifar
 from IPython.core.display import display_svg
 
 
-def partition_model(model, *sample_batch, num_iter=2, max_depth=100, basic_blocks=None, device="cuda"):
+def partition_model(model, num_gpus, *sample_batch, num_iter=2, max_depth=100, basic_blocks=None, device="cuda", weights=None, wrappers=None):
 
-    profile = profileNetwork(model, *sample_batch, max_depth=max_depth,
-                             basic_block=basic_blocks, device=device, num_iter=num_iter)
+    if weights is None:
+        weights = profileNetwork(model, *sample_batch, max_depth=max_depth,
+                                 basic_block=basic_blocks, device=device, num_iter=num_iter)
 
     graph = build_control_flow_graph(
-        model, *sample_batch, max_depth=max_depth, weights=profile, basic_block=basic_blocks, device=device)
+        model, *sample_batch, max_depth=max_depth, weights=weights, basic_block=basic_blocks, device=device)
 
-    return graph
+    adjlist = graph.adjacency_list()
+    nodew = graph.get_weights()
+    weights = []
+    for w in nodew:
+        if isinstance(w, tuple):
+            weights.append(int(w.forward_time))
+        else:
+            weights.append(int(w))
+
+    cuts, parts = part_graph(
+        adjlist, nparts=num_gpus, algorithm="metis", nodew=weights, contig=1)
+
+    graph.set_partition(parts)
+
+    return graph, cuts, parts
 
 
 class complex_model(nn.Module):
@@ -62,7 +78,8 @@ class branched_model(nn.Module):
 # infer control flow via scope name we can get it from the model and from the trace graph
 # thus we can walk the graph and the names will tell us if we have a route from layer to layer
 # names can be obtained easily and they represent scope (depth) and
-model = complex_model()
-g = partition_model(model, torch.zeros(1, 1), torch.zeros(1, 1), max_depth=1)
+model = resnet20_cifar()
+graph, cuts, parts = partition_model(
+    model, 4, torch.zeros(1, 3, 32, 32), max_depth=100)
 
-g.display(show_buffs=True)
+graph.display()

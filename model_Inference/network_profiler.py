@@ -107,14 +107,13 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_block=None, device="cuda
 
     basic_block:
         a tuple of nn.Module classes that the profiler will regard as a cohesive unit
-        for eg. if basic_block = nn.Sequential then the profiler will break it down to it's components
+        for eg. if basic_block = nn.Sequential then the profiler will break it down to its components
 
     num_iter:
         number of runs the profiler will perform in order to get time measurments
 
     device:
         the device on which we will profile the network defaults to cuda
-
     '''
     # wrap all individula layers for profiling
     model_class_name = type(net).__name__
