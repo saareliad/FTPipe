@@ -79,7 +79,7 @@ class branched_model(nn.Module):
 # thus we can walk the graph and the names will tell us if we have a route from layer to layer
 # names can be obtained easily and they represent scope (depth) and
 model = resnet20_cifar()
-graph, cuts, parts = partition_model(
+graph, _, _ = partition_model(
     model, 4, torch.zeros(1, 3, 32, 32), max_depth=0)
 
-graph.display()
+graph.display(show_buffs=True)

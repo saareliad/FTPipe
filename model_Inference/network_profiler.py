@@ -24,20 +24,21 @@ class Wrapper(nn.Module):
         self.device = device
         self.forward_time = 0
         self.backward_time = 0
-        self.size = self._layer_size()
-        # TODO normalize weights
+        self.input_size = 0
+        self.output_size = 0
+        self.param_size, self.buffer_size = self._layer_size()
 
     def _layer_size(self):
         '''
         return the size of the layer considering parameters and buffers
         '''
-        size = 0
+        param_size = buffer_size = 0
         for param in self.layer.parameters():
-            size += param.nelement() * param.element_size()
+            param_size += param.nelement() * param.element_size()
         for buffer in self.layer.buffers():
-            size += buffer.nelement() * buffer.element_size()
+            buffer_size += buffer.nelement() * buffer.element_size()
 
-        return size
+        return param_size, buffer_size
 
     def forward(self, *inputs):
         '''
@@ -62,6 +63,14 @@ class Wrapper(nn.Module):
         backward_time, _ = self._time_op(torch.autograd.backward, loss)
         self.backward_time += backward_time
 
+        # input and output size
+        self.input_size = 0
+        self.output_size = 0
+        for t in inputs:
+            self.input_size += t.numel()
+        for o in outputs:
+            self.output_size += o.numel()
+
         return outputs
 
     def _time_op(self, func, *inputs):
@@ -84,8 +93,6 @@ class Wrapper(nn.Module):
             exec_time = 1000*(end - start)
 
         return exec_time, out
-
-    # TODO maybe include activations/gradients size
 
 
 def profileNetwork(net: nn.Module, *sample_batch, basic_block=None, device="cuda", max_depth=100, num_iter=1):
@@ -121,7 +128,8 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_block=None, device="cuda
         net, max_depth, model_class_name, basic_block, device)
 
     # gather all individual layer sizes
-    layer_sizes = [layer.size for layer in layers_dict.values()]
+    param_sizes = [layer.param_size for layer in layers_dict.values()]
+    buffer_sizes = [layer.buffer_size for layer in layers_dict.values()]
 
     # perform symbolic forward backward run
     for _ in range(num_iter):
@@ -133,11 +141,16 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_block=None, device="cuda
     forward_times = [layer.forward_time/num_iter
                      for layer in layers_dict.values()]
 
-    Profile = namedtuple('Profile', 'forward_time backward_time size')
+    # gather input and output sizes
+    layer_input_sizes = [layer.input_size for layer in layers_dict.values()]
+    layer_output_sizes = [layer.output_size for layer in layers_dict.values()]
+
+    Profile = namedtuple(
+        'Profile', 'forward_time backward_time param_size buffer_size input_size output_size')
 
     # prepare profiling results
-    layers_profile = {name: Profile(forward, backward, size) for name, forward, backward, size in zip(
-        layers_dict.keys(), forward_times, backward_times, layer_sizes)}
+    layers_profile = {name: Profile(forward, backward, param_size, buffer_size, in_size, out_size) for name, forward, backward, param_size, buffer_size, in_size, out_size in zip(
+        layers_dict.keys(), forward_times, backward_times, param_sizes, buffer_sizes, layer_input_sizes, layer_output_sizes)}
 
     _unwrap_layers(net)
     return layers_profile

@@ -10,10 +10,11 @@ __all__ = ['build_control_flow_graph']
 def build_control_flow_graph(model, *sample_batch, max_depth=100, weights=None, basic_block=None, device="cuda"):
     model_class_name = type(model).__name__
     
-    buffer_names = [buff[0]
-                    for buff in model.named_buffers(prefix=model_class_name)]
-    parameter_names = [param[0]
-                       for param in model.named_modules(prefix=model_class_name)]
+    buffer_names = _profiled_params_buffs(
+        model, max_depth, prefix=model_class_name,generator=nn.Module.named_buffers, basic_block=basic_block)
+    
+    parameter_names = _profiled_params_buffs(
+        model, max_depth, prefix=model_class_name, generator=nn.Module.named_parameters, basic_block=basic_block)
 
     weights = weights if weights != None else {}
 
@@ -283,8 +284,10 @@ class Graph():
     def get_weights(self):
         return [node.weight for node in self.nodes]
 
-    def adjacency_list(self):
-        return [[n.idx for n in node.out_nodes.union(node.in_nodes)] for node in self.nodes]
+    def adjacency_list(self,directed=False):
+        if not directed:
+            return [[n.idx for n in node.out_nodes.union(node.in_nodes)] for node in self.nodes]
+        return [[n.idx for n in node.out_nodes] for node in self.nodes]
 
     def _normalize_indices(self):
         for idx, node in enumerate(self.nodes):
@@ -370,7 +373,7 @@ class Graph():
 
 
 # scope names of all profiled layers in the model
-def _profiled_layers(module: nn.Module, depth, prefix, basic_block=None):
+def _profiled_layers(module: nn.Module, depth, prefix, basic_block):
     names = []
     for name, sub_module in module._modules.items():
         # assume no cyclic routes in the network
@@ -380,20 +383,21 @@ def _profiled_layers(module: nn.Module, depth, prefix, basic_block=None):
                 prefix+"/"+type(sub_module).__name__+f"[{name}]")
         else:
             names = names + _profiled_layers(sub_module, depth-1, prefix +
-                                             "/"+type(sub_module).__name__+f"[{name}]")
+                                             "/"+type(sub_module).__name__+f"[{name}]",basic_block)
     return names
 
-#TODO implement
+#TODO return buffer names/params in desired format
 # scope names of all profiled params and buffs in the model
-def _profiled_params_buffs(module: nn.Module, depth, prefix, basic_block=None):
+def _profiled_params_buffs(module: nn.Module, depth, prefix,generator, basic_block):
     names = []
     for name, sub_module in module._modules.items():
         # assume no cyclic routes in the network
         # a module with no children is a layer
         if len(list(sub_module.children())) == 0 or (basic_block != None and isinstance(sub_module, basic_block)) or depth == 0:
-            names.append(
-                prefix+"/"+type(sub_module).__name__+f"[{name}]")
+            prefix = prefix+"/"+type(sub_module).__name__+f"[{name}]"
+            for item_name,_ in sub_module.named_buffers():
+                names.append(f"{prefix}/{item_name}")
         else:
             names = names + _profiled_params_buffs(sub_module, depth-1, prefix +
-                                             "/"+type(sub_module).__name__+f"[{name}]")
+                                             "/"+type(sub_module).__name__+f"[{name}]",generator,basic_block)
     return names

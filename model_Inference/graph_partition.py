@@ -5,6 +5,8 @@ import ctypes
 from enum import IntEnum
 from ctypes import POINTER as ptr, byref
 import os
+import typing
+from typing import List,Tuple,Dict,Union,Callable
 # create a dynamic lib that exposes what we need compile it like this with metis.h and libmetis.lib in the same folder
 # g++ -fPIC - shared - L. -o libmetis.so test.c - llibmetis
 
@@ -281,7 +283,7 @@ def _set_options(**options):
 # -------------------------------------------------------------------------
 # python API
 # -------------------------------------------------------------------------
-def part_graph(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis', **opts):
+def part_graph(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis', **opts:Dict[str,_MetisEnum])->Tuple[int,List[int]]:
     """
     Perform graph partitioning using k-way or recursive methods.
 
@@ -294,7 +296,7 @@ def part_graph(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis', **
       named tuple. To use the named tuple approach, you'll need to
       read the METIS manual for the meanings of the fields.
 
-      See :func:`adjlist_to_metis` for information on the use of adjacency lists.
+      See :func:`_adjlist_to_metis` for information on the use of adjacency lists.
       The extra ``nodew`` and ``nodesz`` keyword arguments of that function may be given
       directly to this function and will be forwarded to the converter.
       Alternatively, a dictionary can be provided as ``graph`` and its items
@@ -311,27 +313,13 @@ def part_graph(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis', **
     :param ubvec: The load imalance tolerance for each node constraint. Should be
       a list of floating point values each greater than 1.
 
-    :param recursive: Determines whether the partitioning should be done by
-      direct k-way cuts or by a series of recursive cuts. These correspond to
-      :c:func:`METIS_PartGraphKway` and :c:func:`METIS_PartGraphRecursive` in
-      METIS's C API.
+    :param algorithm: Determines the partitioning algorithm to use can be either
+        metis metis_recursive for:c:func:`METIS_PartGraphKway` and :c:func:`METIS_PartGraphRecursive` in
+      METIS's C API. alternatively a user function can provided this function must recieve the adjlist,node weights and
+      number of desired partitions
+      
 
     Any additional METIS options may be specified as keyword parameters.
-
-    For k-way clustering, the appropriate options are::
-
-        objtype   = 'cut' or 'vol'
-        ctype     = 'rm' or 'shem'
-        iptype    = 'grow', 'random', 'edge', 'node'
-        rtype     = 'fm', 'greedy', 'sep2sided', 'sep1sided'
-        ncuts     = integer, number of cut attempts (default = 1)
-        niter     = integer, number of iterations (default = 10)
-        ufactor   = integer, maximum load imbalance of (1+x)/1000
-        minconn   = bool, minimize degree of subdomain graph
-        contig    = bool, force contiguous partitions
-        seed      = integer, RNG seed
-        numbering = 0 (C-style) or 1 (Fortran-style) indices
-        dbglvl    = Debug flag bitfield
 
     See the METIS manual for specific meaning of each option.
     """
@@ -367,7 +355,6 @@ def part_graph(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis', **
     elif algorithm == "metis":
         res=_part_graph(*args)
     elif callable(algorithm):
-        # TODO define interface for user functions
         return algorithm(adjlist, nodew, nparts)
     else:
         raise NotImplementedError("bad algorithm")
@@ -375,9 +362,12 @@ def part_graph(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis', **
 
     return objval.value, list(partition)
 # -------------------------------------------------------------------------
-# TODO LIST
+# TODO graph partition notes
 # -------------------------------------------------------------------------
 # 3. decide which optinal param are neccessery
+# -------------------------------------------------------------------------
+# basic tests
+# -------------------------------------------------------------------------
 def example_adjlist():
     return [[1, 2, 3, 4], [0], [0], [0], [0, 5], [4, 6], [13, 5, 7],
             [8, 6], [9, 10, 11, 12, 7], [8], [8], [8], [8], [14, 6], [13, 15],
