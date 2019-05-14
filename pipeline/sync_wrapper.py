@@ -74,6 +74,24 @@ class SyncWrapper(nn.Module):
         self.pop_activation(prev_layer_id)
         self.add_grad(grad)
 
+    def is_input_valid(self):
+        if self.cur_mode is ForwardMode.backward:
+            return self.grad is not None
+
+        if self.gpu_num <= self.__counter + 1 < self.gpu_num + self.num_runs:
+            return True
+        else:
+            return False
+
+    def is_last_input_valid(self):
+        if self.cur_mode is ForwardMode.backward:
+            return self.last_input is not None
+
+        if self.gpu_num <= self.__counter < self.gpu_num + self.num_runs:
+            return True
+        else:
+            return False
+
     def backward_mode(self, input: torch.Tensor) -> torch.Tensor:
         """
         function for backward propagation iteration
@@ -84,16 +102,16 @@ class SyncWrapper(nn.Module):
             return self.module(torch.zeros_like(input))
 
         # if we were given a gradient to pass back
-        if self.grad is not None:
+        if self.is_input_valid():
             input.backward(self.grad)
             self.grad = None
 
         # if we have an activation to pass
-        if self.last_input is None:
-            output = torch.zeros(*self.output_shape)
-        else:
+        if self.is_last_input_valid():
             cur_input = self.last_input
             output = self.module(cur_input)
+        else:
+            output = torch.zeros(*self.output_shape)
 
         self.__counter += 1
 
@@ -125,7 +143,7 @@ class SyncWrapper(nn.Module):
 
         # check if the input that waits for the submodule is relevant (garbage
         # will be propagated before and after data passes through submodule).
-        if self.gpu_num <= self.__counter < self.gpu_num + self.num_runs:
+        if self.is_last_input_valid():
             # the input is relevant.
             cur_input = self.last_input
             output = self.module(cur_input)
@@ -135,7 +153,7 @@ class SyncWrapper(nn.Module):
 
         # check if the input to be replaced and scheduled to run on the next
         # cycle is relevant (this should happen one cycle before previous cond).
-        if self.gpu_num <= self.__counter + 1 < self.gpu_num + self.num_runs:
+        if self.is_input_valid():
             if self.cur_mode is ForwardMode.train:
                 self.save_activation(next_input)
 
