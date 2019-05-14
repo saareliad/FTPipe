@@ -1,12 +1,13 @@
 import torch
 import torch.nn as nn
 from enum import Enum
+from typing import Tuple
 
 ForwardMode = Enum('Mode', 'train backward production')
 
 
 class SyncWrapper(nn.Module):
-    def __init__(self, module: nn.Module, device: str, gpu_num: int, num_gpus: int,
+    def __init__(self, module: nn.Module, device: str, gpu_num: int, num_gpus: int, output_shape: Tuple[int],
                  cur_mode: ForwardMode = ForwardMode.train, prev_layer=None):
 
         super(SyncWrapper, self).__init__()
@@ -41,6 +42,9 @@ class SyncWrapper(nn.Module):
 
         # number of microabatches, used in similar way to num_gpus
         self.num_runs = 0
+
+        # used for zero-output
+        self.output_shape = output_shape
 
     def add_grad(self, grad: torch.Tensor):
         self.grad = grad
@@ -86,13 +90,14 @@ class SyncWrapper(nn.Module):
 
         # if we have an activation to pass
         if self.last_input is None:
-            output = torch.zeros_like(input)
+            output = torch.zeros(*self.output_shape)
         else:
-            output = self.last_input
+            cur_input = self.last_input
+            output = self.module(cur_input)
 
         self.__counter += 1
 
-        return self.module(output)
+        return output
 
     def save_activation(self, moved_input: torch.Tensor):
         """
@@ -123,9 +128,10 @@ class SyncWrapper(nn.Module):
         if self.gpu_num <= self.__counter < self.gpu_num + self.num_runs:
             # the input is relevant.
             cur_input = self.last_input
+            output = self.module(cur_input)
         else:
             # the input is garbage.
-            cur_input = torch.zeros_like(next_input)
+            output = torch.zeros(*self.output_shape)
 
         # check if the input to be replaced and scheduled to run on the next
         # cycle is relevant (this should happen one cycle before previous cond).
@@ -139,7 +145,7 @@ class SyncWrapper(nn.Module):
 
         self.__counter += 1
 
-        return self.module(cur_input)
+        return output
 
 
 class ActivationSavingLayer(nn.Module):
@@ -204,11 +210,11 @@ class ActivationSavingLayer(nn.Module):
         # if this iteration is one we should not work in
         if self.__counter + 1 < self.num_gpus:
             self.__counter += 1
-            return self.module(torch.zeros(input.shape))
+            return torch.zeros(*input.size())
 
         # if we have an activation to pass
         if self.last_input is None:
-            output = torch.zeros(input.shape)
+            output = torch.zeros(*input.size())
         else:
             output = self.last_input
 
