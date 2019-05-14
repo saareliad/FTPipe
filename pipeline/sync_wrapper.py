@@ -92,12 +92,15 @@ class SyncWrapper(nn.Module):
         else:
             return False
 
+    def is_backward_reach(self):
+        return self.__counter < self.num_gpus - (self.gpu_num + 1)
+
     def backward_mode(self, input: torch.Tensor) -> torch.Tensor:
         """
         function for backward propagation iteration
         """
         # if the backward propagation hasn't reached the layer yet, pass garbage
-        if self.__counter < self.num_gpus - (self.gpu_num + 1):
+        if self.is_backward_reach():
             self.__counter += 1
             return self.module(torch.zeros_like(input))
 
