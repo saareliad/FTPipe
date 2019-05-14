@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torch import autograd
 from typing import Iterable, List, Tuple
 from pipeline.sync_wrapper import SyncWrapper, ActivationSavingLayer
 
@@ -47,25 +48,28 @@ class PipelineParallel(nn.Module):
 
         results = []
         # the actual pipeline process of feeding the data and receiving outputs:
-        for cycle in range(self.num_gpus + num_mb - 1):
-            # feeding the module all the microbatches, then, until the forward
-            # propagation process ends needs to feed garbage.
-            if cycle < num_mb:
-                input = microbatches[cycle]
-            else:
-                input = torch.zeros_like(microbatches[0])
+        with autograd.no_grad:
+            for cycle in range(self.num_gpus + num_mb - 1):
+                # feeding the module all the microbatches, then, until the forward
+                # propagation process ends needs to feed garbage.
+                if cycle < num_mb:
+                    input = microbatches[cycle]
+                else:
+                    input = torch.zeros_like(microbatches[0])
 
-            result = self.module(input)
+                result = self.module(input)
 
-            # the first microbatch will finish the forward propagation only
-            # after num_gpus cycles.
-            if cycle >= self.num_gpus - 1:
-                results.append(result)
+                # the first microbatch will finish the forward propagation only
+                # after num_gpus cycles.
+                if cycle >= self.num_gpus - 1:
+                    results.append(result)
 
         for wrapper in self.wrappers:
             wrapper.finished_prop()
 
-        return torch.cat(tuple(results), dim=0)
+        output = torch.cat(tuple(results), dim=0).detach_()
+        # output.register_hook(self.backward)
+        return output
 
     def backward(self, grads: torch.Tensor):
         """
