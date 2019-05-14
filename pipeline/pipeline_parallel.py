@@ -13,7 +13,7 @@ class PipelineParallel(nn.Module):
     the list submodules reflects what you want
     """
 
-    def __init__(self, module: nn.Module, microbatch_size: int, num_gpus: int,
+    def __init__(self, module: nn.Module, microbatch_size: int, num_gpus: int, mode: str = 'train',
                  main_device: str = 'cpu', wrappers=None):
         super(PipelineParallel, self).__init__()
 
@@ -24,6 +24,14 @@ class PipelineParallel(nn.Module):
         self.first_layer = ActivationSavingLayer('cuda:0', num_gpus)
         self.module = nn.Sequential(self.first_layer, module)
         self.wrappers = [self.first_layer, *wrappers]
+        self.mode = mode
+
+    def set_mode(self, mode: str):
+        if self.mode == mode:
+            return
+
+        for wrapper in self.wrappers:
+            wrapper.change_mode(mode)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         """
@@ -39,20 +47,21 @@ class PipelineParallel(nn.Module):
         :return: results of forward propagation on the batch
         """
         microbatches = input.split(self.microbatch_size, dim=0)
-        num_mb = len(microbatches)
 
         # preparing the wrappers for the forward run.
         for wrapper in self.wrappers:
-            wrapper.set_num_runs(num_mb)
-            wrapper.change_mode('train')
+            wrapper.set_num_runs(self.microbatch_size)
+
+        if self.mode == 'backward':
+            self.set_mode('train')
 
         results = []
         # the actual pipeline process of feeding the data and receiving outputs:
         with autograd.no_grad:
-            for cycle in range(self.num_gpus + num_mb - 1):
+            for cycle in range(self.num_gpus + self.microbatch_size - 1):
                 # feeding the module all the microbatches, then, until the forward
                 # propagation process ends needs to feed garbage.
-                if cycle < num_mb:
+                if cycle < self.microbatch_size:
                     input = microbatches[cycle]
                 else:
                     input = torch.zeros_like(microbatches[0])
