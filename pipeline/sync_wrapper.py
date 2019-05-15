@@ -245,6 +245,7 @@ class ActivationSavingLayer(nn.Module):
         """
         self.last_input = None
         self.last_ids = []
+        self.grads = []
 
     def backward_mode(self, input: torch.Tensor) -> torch.Tensor:
         """
