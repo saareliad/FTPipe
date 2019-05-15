@@ -41,12 +41,8 @@ partition restrictions:
 graph optimizations:
 1. merge all nodes under the same scope. 
 2. remove nodes representing constants they server no purpose.
-3. #TODO maybe remove parameters and buffers that were accounted for by the profiler.
-4. #TODO what about buffers/parameters that float around. those are entities that where declared in levels higher than what was profiled.
-   meaning we did not account for them when we calculated size of layers nor can the profiled konw about their existence.(can be like finding scope names for layers)
-5. #TODO what about reusing functional modules that hold no state like nn.ReLU they induce circles in the graph but can be thought about as separate entities.
-   we cannot duplicate them in the real model but perhaps we can do so artificialy in the graph which will enable us to do better partitions
+3. remove parameters and buffers that were accounted for by the profiler.
 6. #TODO decide on weighting functional
 7. #TODO ensure outputs are on the same device
 8. #TODO arithmetic ops must reside on the same deveice that created them
-9. 
+9. #TODO if we decide ops must be on the same gpu we can merge them to the same node

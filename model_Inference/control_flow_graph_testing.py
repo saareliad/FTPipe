@@ -1,12 +1,12 @@
-# %%
+
 import torch.nn as nn
 import torch
 import inspect
-from model_Inference.network_profiler import profileNetwork
-from model_Inference.control_flow_graph import build_control_flow_graph
-from model_Inference.graph_partition import part_graph
+from network_profiler import profileNetwork
+from control_flow_graph import build_control_flow_graph
+from graph_partition import part_graph
 from pprint import pprint
-from model_Inference.res_net_example import resnet20_cifar
+from res_net_example import resnet20_cifar
 from IPython.core.display import display_svg
 
 
@@ -28,29 +28,33 @@ def partition_model(model, num_gpus, *sample_batch, num_iter=2, max_depth=100, b
         else:
             weights.append(0)
 
-    cuts, parts = part_graph(
-        adjlist, nparts=num_gpus, algorithm="metis", nodew=weights, contig=1)
+    # cuts, parts = part_graph(
+    #     adjlist, nparts=num_gpus, algorithm="metis", nodew=weights, contig=1)
 
-    graph.set_partition(parts)
-    print(cuts)
-    return graph, cuts, parts
+    # graph.set_partition(parts)
+    # print(cuts)
+    return graph, [], []
 
 
-class complex_model(nn.Module):
+class Complex_Model(nn.Module):
     def __init__(self):
-        super(complex_model, self).__init__()
-        self.register_buffer("buff", torch.ones(1, 1))
-        self.sub_1 = branched_model()
-        self.sub_2 = branched_model()
+        super(Complex_Model, self).__init__()
+        self.register_buffer("com_buff", torch.ones(10, 10))
+        self.register_parameter(
+            "comm_param", torch.nn.Parameter(torch.zeros(10, 10)))
+        self.sub_1 = Branched_Model(torch.ones(1, 1))
+        self.sub_2 = Branched_Model(torch.ones(2, 2))
 
     def forward(self, x, y):
-        return self.sub_1(x) * self.buff, self.sub_2(y) + self.buff
+        return self.sub_1(x) * self.comm_param.norm(), self.sub_2(y) + self.com_buff.norm()
 
 
-class branched_model(nn.Module):
-    def __init__(self):
-        super(branched_model, self).__init__()
-
+class Branched_Model(nn.Module):
+    def __init__(self, branch_buffer):
+        super(Branched_Model, self).__init__()
+        self.register_buffer("branch_buff", branch_buffer)
+        self.register_parameter(
+            "branch_param", torch.nn.Parameter(torch.zeros_like(branch_buffer)))
         # the branches can be a more complicated chains
         self.branch_1 = nn.Sequential(
             nn.Linear(1, 2), nn.ReLU(), nn.Linear(2, 1), nn.Linear(1, 1))
@@ -67,10 +71,11 @@ class branched_model(nn.Module):
         # combine branches
         # our partition must put both branch outputs on the same device if not an error would occur
         # another problem is that an operation like this is "invisible" to us
-        combined_branches = branch_1_out + branch_2_out
+        combined_branches = branch_1_out + branch_2_out+self.branch_buff.norm()
 
         # we cannot know that relu input is the combined output of both layers
         out = self.relu(combined_branches)
+        out += self.branch_param.norm()
 
         return out
 
@@ -78,8 +83,12 @@ class branched_model(nn.Module):
 # infer control flow via scope name we can get it from the model and from the trace graph
 # thus we can walk the graph and the names will tell us if we have a route from layer to layer
 # names can be obtained easily and they represent scope (depth) and
-model = resnet20_cifar()
-graph, _, _ = partition_model(
-    model, 4, torch.zeros(1, 3, 32, 32), max_depth=0)
+branched_model = Branched_Model(torch.zeros(100, 100))
+branched_graph, _, _ = partition_model(
+    branched_model, 4, torch.zeros(1, 1), max_depth=100)
+branched_graph.save("my names branched", show_buffs_params=True)
 
-graph.display(show_buffs=True)
+complex_model = Complex_Model()
+complex_graph, _, _ = partition_model(
+    complex_model, 4, torch.zeros(1, 1), torch.zeros(1, 1), max_depth=100)
+complex_graph.save("my names complex", show_buffs_params=True)

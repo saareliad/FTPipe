@@ -3,19 +3,17 @@ import torch.nn as nn
 import torch
 from enum import Enum
 from pprint import pprint
+import inspect
 
 __all__ = ['build_control_flow_graph']
 
 
 def build_control_flow_graph(model, *sample_batch, max_depth=100, weights=None, basic_block=None, device="cuda"):
+    device = "cpu" if not torch.cuda.is_available() else device
     model_class_name = type(model).__name__
     
-    buffer_names = _profiled_params_buffs(
-        model, max_depth, prefix=model_class_name,generator=nn.Module.named_buffers, basic_block=basic_block)
+    buffer_param_names = _buffer_and_params_scopes(model,  model_class_name)
     
-    parameter_names = _profiled_params_buffs(
-        model, max_depth, prefix=model_class_name, generator=nn.Module.named_parameters, basic_block=basic_block)
-
     weights = weights if weights != None else {}
 
     layerNames = _profiled_layers(
@@ -29,16 +27,15 @@ def build_control_flow_graph(model, *sample_batch, max_depth=100, weights=None, 
     with torch.no_grad():
         trace_graph, _ = torch.jit.get_trace_graph(model, inputs)
         trace_graph = trace_graph.graph()
-
-    return Graph(layerNames, num_inputs, buffer_names, trace_graph, weights)
+      
+    return Graph(layerNames, num_inputs, buffer_param_names,trace_graph, weights)
 
 
 class NodeTypes(Enum):
     IN = 1
-    BUFF = 2
-    PARAM = 3
-    LAYER = 4
-    OP = 5
+    BUFF_PARAM = 2
+    LAYER = 3
+    OP = 4
 
     def __repr__(self):
         return self.name
@@ -113,12 +110,12 @@ class Graph():
     the edges represent the data flow.
     '''
 
-    def __init__(self, profiled_layers, num_inputs, buffer_names, trace_graph, weights: dict):
+    def __init__(self, profiled_layers, num_inputs,buffer_param_names, trace_graph, weights: dict):
         self.nodes = []
         self.profiled_layers = profiled_layers
         self.num_inputs_buffs_params = 0
         self.num_inputs = num_inputs
-        self.buffer_names = buffer_names
+        self.buffer_param_names = buffer_param_names
         self._build_graph(trace_graph)
 
         for node in self.nodes:
@@ -127,7 +124,8 @@ class Graph():
     def _build_graph(self, trace_graph):
         self._add_IO_nodes(trace_graph.inputs())
         self._add_OP_nodes(trace_graph.nodes())
-        self._combine_nodes_under_the_same_scope()
+        self._combine_OP_nodes_under_the_same_scope()
+        self._combine_params_and_buffers_into_OP_nodes()
         self._remove_constant_nodes()
         self._merge_op_chains()
         self._normalize_indices()
@@ -137,25 +135,18 @@ class Graph():
         add nodes representing the input and params/buffs of the model
         '''
         for idx, node in enumerate(input_nodes):
-            # TODO what if buffer is not used? remove or add
-            # if len(list(node.uses())) == 0:
-            #     continue
             node_weight = 1
             # input/buff/parm weight is it's size
-            # TODO normalize
             for d in node.type().sizes():
                 node_weight *= d
 
             if idx < self.num_inputs:
                 node_type = NodeTypes.IN
                 node_scope = f"input{idx}"
-            elif idx < self.num_inputs + len(self.buffer_names):
-                node_type = NodeTypes.BUFF
-                node_scope = self.buffer_names[idx-self.num_inputs]
             else:
-                node_type = NodeTypes.PARAM
-                node_scope = f"param{idx-self.num_inputs-len(self.buffer_names)}"
-
+                node_type = NodeTypes.BUFF_PARAM
+                node_scope = self.buffer_param_names[idx - self.num_inputs]
+            
             new_node = Node(node_scope, idx,
                             node_type, weight=node_weight)
             self.nodes.append(new_node)
@@ -176,7 +167,6 @@ class Graph():
 
             # profiled Layer
             if node_scope != "":
-                # TODO what about function modules like ReLU which are used multiple times
                 new_node = Node(node_scope, node_idx,
                                 NodeTypes.LAYER, input_nodes)
             # unprofiled OP
@@ -205,7 +195,7 @@ class Graph():
 
         return most_specific_scope
 
-    def _combine_nodes_under_the_same_scope(self):
+    def _combine_OP_nodes_under_the_same_scope(self):
         # optimization that reduces number of nodes in the graph
         # combine nodes that have a commom scope we do this because\n
         # if nodes have the same scopeName than they were profiled together
@@ -243,6 +233,18 @@ class Graph():
 
         self.nodes = optimized_graph
 
+    def _combine_params_and_buffers_into_OP_nodes(self):
+        optimized_graph=[]
+        is_buffer_or_param = lambda n: n.type==NodeTypes.BUFF_PARAM
+        for node in self.nodes:
+            if is_buffer_or_param(node) and self._find_encasing_layer(node.scope)!='':
+                for n in node.out_nodes:
+                    n.remove_in_node(node)
+            else:
+                optimized_graph.append(node)
+
+        self.nodes=optimized_graph
+
     def _remove_constant_nodes(self):
         # remove nodes representing constants as they do not provide any useful info
         self._remove_nodes(lambda n: "::Constant" in n.scope)
@@ -252,7 +254,7 @@ class Graph():
             o.type == NodeTypes.OP for o in n.out_nodes)
         # op chains need to be placed on the same device anyways
         self._remove_nodes(to_remove)
-
+        
     def _remove_nodes(self, condition):
         optimized_graph = []
         for node in self.nodes:
@@ -297,7 +299,7 @@ class Graph():
         for node, part in zip(self.nodes, parts):
             node.part = part
 
-    def build_dot(self, show_buffs=False, show_params=False):
+    def build_dot(self, show_buffs_params=False):
         '''
         return a graphviz representation of the graph
         '''
@@ -313,7 +315,6 @@ class Graph():
         from graphviz import Digraph
 
         dot = Digraph()
-
         dot.attr("graph",
                  concentrate="true",
                  bgcolor=theme["background_color"],
@@ -322,7 +323,7 @@ class Graph():
                  fontcolor=theme["font_color"],
                  fontname=theme["font_name"],
                  margin=theme["margin"],
-                 rankdir="LR",
+                 rankdir="TB",
                  pad=theme["padding"])
 
         dot.attr("node", shape="box",
@@ -339,11 +340,11 @@ class Graph():
                  fontcolor=theme["font_color"],
                  fontname=theme["font_name"])
 
-        colors={0:'blue',1:'green',2:'red',3:'yellow',4:'orange',5:'brown',6:'purple',7:'pink'}
+        colors={0:'grey',1:'green',2:'red',3:'yellow',4:'orange',5:'brown',6:'purple',7:'pink'}
 
 
         def hide_node(node):
-            return(node.type == NodeTypes.BUFF and not show_buffs) or (node.type == NodeTypes.PARAM and not show_params)
+            return (node.type == NodeTypes.BUFF_PARAM) and (not show_buffs_params)
 
         for node in self.nodes:
             if hide_node(node):
@@ -360,24 +361,27 @@ class Graph():
                 if hide_node(in_node):
                     continue
                 dot.edge(str(in_node.idx), str(node.idx))
+
         return dot
 
-    def display(self, show_buffs=False, show_params=False):
+    def display(self, show_buffs_params=False):
         try:
             from IPython.core.display import display_svg
-            display_svg(self.build_dot(show_buffs=show_buffs,
-                                       show_params=show_params), raw=False)
-        except ImportError as e:
+            display_svg(self.build_dot(show_buffs_params), raw=False)
+        except ImportError as _:
             print("only works in python notebooks")
-            pass
 
+    def save(self,file_name,directory=None, show_buffs_params=False):
+        dot = self.build_dot(show_buffs_params)
+        dot.format = "pdf"
+        import os
+        directory=os.getcwd() if directory is None else directory
+        dot.render(file_name, directory=directory, cleanup=True)
 
 # scope names of all profiled layers in the model
 def _profiled_layers(module: nn.Module, depth, prefix, basic_block):
     names = []
     for name, sub_module in module._modules.items():
-        # assume no cyclic routes in the network
-        # a module with no children is a layer
         if len(list(sub_module.children())) == 0 or (basic_block != None and isinstance(sub_module, basic_block)) or depth == 0:
             names.append(
                 prefix+"/"+type(sub_module).__name__+f"[{name}]")
@@ -386,18 +390,21 @@ def _profiled_layers(module: nn.Module, depth, prefix, basic_block):
                                              "/"+type(sub_module).__name__+f"[{name}]",basic_block)
     return names
 
-#TODO return buffer names/params in desired format
-# scope names of all profiled params and buffs in the model
-def _profiled_params_buffs(module: nn.Module, depth, prefix,generator, basic_block):
+# scope names of all params and buffs in the model
+# we discover them manually because the tracer does not provide this info
+def _buffer_and_params_scopes(module: nn.Module,prefix):
     names = []
+    #params
+    for item_name, item in module.named_parameters(recurse=False):
+        names.append(f"{prefix}/{type(item).__name__}[{item_name}]")
+
+    #buffs
+    for item_name, item in module.named_buffers(recurse=False):
+        names.append(f"{prefix}/{type(item).__name__}[{item_name}]")
+
+    #recurse
     for name, sub_module in module._modules.items():
-        # assume no cyclic routes in the network
-        # a module with no children is a layer
-        if len(list(sub_module.children())) == 0 or (basic_block != None and isinstance(sub_module, basic_block)) or depth == 0:
-            prefix = prefix+"/"+type(sub_module).__name__+f"[{name}]"
-            for item_name,_ in sub_module.named_buffers():
-                names.append(f"{prefix}/{item_name}")
-        else:
-            names = names + _profiled_params_buffs(sub_module, depth-1, prefix +
-                                             "/"+type(sub_module).__name__+f"[{name}]",generator,basic_block)
+        names = names + _buffer_and_params_scopes(sub_module, prefix +
+                                             "/"+type(sub_module).__name__+f"[{name}]")
+
     return names
