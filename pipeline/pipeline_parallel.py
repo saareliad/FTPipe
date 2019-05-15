@@ -13,7 +13,7 @@ class PipelineParallel(nn.Module):
     the list submodules reflects what you want
     """
 
-    def __init__(self, module: nn.Module, microbatch_size: int, num_gpus: int, input_shape: Tuple[int] = None,
+    def __init__(self, module: nn.Module, microbatch_size: int, num_gpus: int, input_shape: Tuple[int, ...] = None,
                  mode: str = 'train', counter: CycleCounter = None, main_device: str = 'cpu', wrappers=None):
         super(PipelineParallel, self).__init__()
 
