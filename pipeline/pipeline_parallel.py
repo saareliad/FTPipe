@@ -65,7 +65,7 @@ class PipelineParallel(nn.Module):
             self.input_shape = (1, *input[0].size())
 
         # make sure that the counter knows how many microbatches there are
-        self.counter.set_num_run(num_runs)
+        self.counter.set_num_runs(num_runs)
 
         if self.mode == 'backward':
             self.set_mode('train')
@@ -110,7 +110,7 @@ class PipelineParallel(nn.Module):
         num_runs = len(results)
 
         # make sure that the counter knows how many microbatches there are
-        self.counter.set_num_run(num_runs)
+        self.counter.set_num_runs(num_runs)
 
         # make sure that we are on backward mode
         self.set_mode('backward')

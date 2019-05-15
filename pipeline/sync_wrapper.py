@@ -13,7 +13,7 @@ class CycleCounter:
         self.num_gpus = num_gpus
         self.num_runs = 0
 
-    def set_num_run(self, num_runs: int):
+    def set_num_runs(self, num_runs: int):
         self.num_runs = num_runs
 
     def change_mode(self, mode: Union[str, ForwardMode]):
