@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torch import autograd
 from enum import Enum
 from typing import Tuple, Union, List
 
@@ -35,6 +36,9 @@ class CycleCounter:
     def increase(self):
         self.__counter += 1
 
+    def get_count(self):
+        return self.__counter
+
     def is_input_valid(self, gpu_num: int):
         if self.cur_mode is ForwardMode.backward:
             first_iter = self.num_gpus - gpu_num
@@ -66,7 +70,7 @@ class SyncWrapper(nn.Module):
         self.prev_layer = prev_layer
 
         # used for backward pass with saved activations, ids used to find them in the hash table
-        self.activations = {}
+        self.activations = []
         self.last_ids = []
 
         # used for the input switching
@@ -105,7 +109,7 @@ class SyncWrapper(nn.Module):
             self.cur_mode = mode
 
     def pop_activation(self, act_id: int):
-        self.last_input = self.activations.pop(act_id)
+        self.last_input = self.activations.pop(0)
 
     def finished_prop(self):
         """
@@ -144,7 +148,8 @@ class SyncWrapper(nn.Module):
         function for saving layer activation
         """
         # clone and detach
-        activation = moved_input.clone().detach_()
+        activation = moved_input.clone()
+        activation.requires_grad_()
 
         # if there was a previous layer with an activation saved for the current one
         if self.prev_layer is not None and len(self.prev_layer.last_ids) > 0:
@@ -153,7 +158,7 @@ class SyncWrapper(nn.Module):
             activation.register_hook(lambda grad: self.prev_layer.act_hook(grad, prev_layer_id))
 
         # save the activation and the id
-        self.activations[id(activation)] = activation
+        self.activations.append(activation)
         self.last_ids.append(id(activation))
 
     def forward(self, next_input: torch.Tensor) -> torch.Tensor:
@@ -168,13 +173,13 @@ class SyncWrapper(nn.Module):
         if self.counter.is_last_input_valid(self.gpu_num):
             # the input is relevant.
             cur_input = self.last_input
-            output = self.module(cur_input)
+            with autograd.no_grad():
+                output = self.module(cur_input)
         else:
             # the input is garbage.
             output = torch.zeros(*self.output_shape)
 
         # check if the input to be replaced and scheduled to run on the next
-        # cycle is relevant (this should happen one cycle before previous cond).
         if self.counter.is_input_valid(self.gpu_num):
             if self.cur_mode is ForwardMode.train:
                 self.save_activation(next_input)
@@ -201,7 +206,7 @@ class ActivationSavingLayer(nn.Module):
         self.cur_mode = cur_mode
 
         # used for backward pass with saved activations, ids used to find them in the hash table
-        self.activations = {}
+        self.activations = []
         self.last_ids = []
 
         # used for the input switching in the backward pass
@@ -212,6 +217,8 @@ class ActivationSavingLayer(nn.Module):
 
         # counter we use to know if the layer should actually do work this iteration
         self.counter = counter
+
+        self.gpu_num = 0
 
     def set_counter(self, counter: CycleCounter):
         assert self.counter is None
@@ -225,7 +232,10 @@ class ActivationSavingLayer(nn.Module):
         return torch.cat(tuple(self.grads), dim=0)
 
     def pop_activation(self, act_id: int):
-        self.last_input = self.activations.pop(act_id)
+        self.last_input = self.activations.pop(0)
+
+    def act_hook(self, grad, prev_layer_id):
+        self.pop_activation(prev_layer_id)
 
     def change_mode(self, mode: Union[str, ForwardMode]):
         """
@@ -254,6 +264,7 @@ class ActivationSavingLayer(nn.Module):
         # if we have an activation to pass
         if self.counter.is_last_input_valid(0):
             output = self.last_input
+            output.register_hook(self.add_grad)
         else:
             # if this iteration is one we should not work in
             output = torch.zeros(*input.size())
@@ -267,9 +278,10 @@ class ActivationSavingLayer(nn.Module):
         if self.counter.is_input_valid(0):
             # clone without detaching
             activation = moved_input.clone()
+            activation.requires_grad_()
 
             # save the activation and the id
-            self.activations[id(activation)] = activation
+            self.activations.append(activation)
             self.last_ids.append(id(activation))
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
@@ -295,6 +307,7 @@ class LayerWrapper(nn.Module):
 
     def forward(self, input):
         if self.counter.is_last_input_valid(self.gpu_num):
-            return self.module(input)
+            with autograd.no_grad():
+                return self.module(input)
         else:
             return torch.zeros(*self.output_shape)
