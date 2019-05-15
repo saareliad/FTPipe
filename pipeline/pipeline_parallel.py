@@ -122,11 +122,9 @@ class PipelineParallel(nn.Module):
         self.set_mode('backward')
 
         # do a backward run for each gradient
-        num = 1
         for grad, result in zip(grads.split(self.microbatch_size, dim=0), results):
             result.backward(grad)
             self.module(torch.zeros(*self.input_shape))
-            num += 1
 
         # make sure that all backward passes are done
         for _ in range(self.num_gpus):
