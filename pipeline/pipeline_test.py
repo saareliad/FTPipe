@@ -180,14 +180,14 @@ def test_resnet50_times():
 def test_resnet50_correctness():
     model1_device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     seed = 1024
-    b_size = 2
+    # b_size = 2
 
 
     torch.manual_seed(seed)
     model1 = resnet50(num_classes=num_classes).to(model1_device)
 
     torch.manual_seed(seed)
-    model2 = make_pipeline_resnet(1)
+    model2 = make_pipeline_resnet(20)
 
     for param1, param2 in zip(model1.parameters(), model2.parameters()):
         assert torch.allclose(param1, param2)
@@ -196,14 +196,14 @@ def test_resnet50_correctness():
     optimizer1 = optim.SGD(model1.parameters(), lr=0.001)
     optimizer2 = optim.SGD(model2.parameters(), lr=0.001)
 
-    one_hot_indices = torch.LongTensor(b_size).random_(0, num_classes).view(b_size, 1)
+    one_hot_indices = torch.LongTensor(batch_size).random_(0, num_classes).view(batch_size, 1)
 
     for b in range(num_batches):
         print('============================')
         print(f'started batch #{b}')
         # generate random inputs and labels
-        inputs = torch.randn(b_size, 3, image_w, image_h)
-        labels = torch.zeros(b_size, num_classes).scatter_(1, one_hot_indices, 1)
+        inputs = torch.randn(batch_size, 3, image_w, image_h)
+        labels = torch.zeros(batch_size, num_classes).scatter_(1, one_hot_indices, 1)
 
         # run forward pass
         optimizer1.zero_grad()
