@@ -231,5 +231,5 @@ def test_resnet50_correctness():
 
 
 if __name__ == "__main__":
-    test_resnet50_correctness()
+    # test_resnet50_correctness()
     test_resnet50_times()
