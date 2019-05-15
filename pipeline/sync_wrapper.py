@@ -1,14 +1,58 @@
 import torch
 import torch.nn as nn
 from enum import Enum
-from typing import Tuple
+from typing import Tuple, Union
 
 ForwardMode = Enum('Mode', 'train backward production')
 
 
+class CycleCounter:
+    def __init__(self, cur_mode: ForwardMode, num_gpus: int):
+        self.__counter = 0
+        self.cur_mode = cur_mode
+        self.num_gpus = num_gpus
+        self.num_runs = 0
+
+    def set_num_run(self, num_runs: int):
+        self.num_runs = num_runs
+
+    def change_mode(self, mode: Union[str, ForwardMode]):
+        """
+        changes the mode of the forward propagation
+        :param mode: can be one of the following: 'backward', 'train', 'production'
+        """
+        assert isinstance(mode, (str, ForwardMode))
+
+        if isinstance(mode, str):
+            self.cur_mode = ForwardMode[mode]
+        else:
+            self.cur_mode = mode
+
+    def reset(self):
+        self.__counter = 0
+        self.num_runs = 0
+
+    def increase(self):
+        self.__counter += 1
+
+    def is_input_valid(self, gpu_num: int):
+        if self.cur_mode is ForwardMode.backward:
+            first_iter = self.num_gpus - gpu_num
+            return first_iter <= self.__counter < first_iter + self.num_runs
+
+        return gpu_num <= self.__counter + 1 < gpu_num + self.num_runs
+
+    def is_last_input_valid(self, gpu_num: int):
+        if self.cur_mode is ForwardMode.backward:
+            first_iter = self.num_gpus - gpu_num - 1
+            return first_iter <= self.__counter < first_iter + self.num_runs
+
+        return gpu_num <= self.__counter < gpu_num + self.num_runs
+
+
 class SyncWrapper(nn.Module):
-    def __init__(self, module: nn.Module, device: str, gpu_num: int, num_gpus: int, output_shape: Tuple[int],
-                 cur_mode: ForwardMode = ForwardMode.train, prev_layer=None):
+    def __init__(self, module: nn.Module, device: str, gpu_num: int, output_shape: Tuple[int],
+                 counter: CycleCounter = None, cur_mode: ForwardMode = ForwardMode.train, prev_layer=None):
 
         super(SyncWrapper, self).__init__()
         # Obvious fields
@@ -32,16 +76,10 @@ class SyncWrapper(nn.Module):
         self.cur_mode = cur_mode
 
         # counter we use to know if the layer should actually do work this iteration
-        self.__counter = 0
-
-        # number of gpus in the model, used for the same reason as counter
-        self.num_gpus = num_gpus
+        self.counter = counter
 
         # used for back propagation
         self.grad = None
-
-        # number of microabatches, used in similar way to num_gpus
-        self.num_runs = 0
 
         # used for zero-output
         self.output_shape = output_shape
@@ -49,15 +87,22 @@ class SyncWrapper(nn.Module):
     def add_grad(self, grad: torch.Tensor):
         self.grad = grad
 
-    def set_num_runs(self, num_runs):
-        self.num_runs = num_runs
+    def set_counter(self, counter: CycleCounter):
+        assert self.counter is None
 
-    def change_mode(self, mode: str):
+        self.counter = counter
+
+    def change_mode(self, mode: Union[str, ForwardMode]):
         """
         changes the mode of the forward propagation
         :param mode: can be one of the following: 'backward', 'train', 'production'
         """
-        self.cur_mode = ForwardMode[mode]
+        assert isinstance(mode, (str, ForwardMode))
+
+        if isinstance(mode, str):
+            self.cur_mode = ForwardMode[mode]
+        else:
+            self.cur_mode = mode
 
     def pop_activation(self, act_id: int):
         self.last_input = self.activations.pop(act_id)
@@ -68,55 +113,29 @@ class SyncWrapper(nn.Module):
         """
         self.last_input = None
         self.last_ids = []
-        self.__counter = 0
 
     def act_hook(self, grad, prev_layer_id):
         self.pop_activation(prev_layer_id)
         self.add_grad(grad)
 
-    def is_input_valid(self):
-        if self.cur_mode is ForwardMode.backward:
-            return self.grad is not None
-
-        if self.gpu_num <= self.__counter + 1 < self.gpu_num + self.num_runs:
-            return True
-        else:
-            return False
-
-    def is_last_input_valid(self):
-        if self.cur_mode is ForwardMode.backward:
-            return self.last_input is not None
-
-        if self.gpu_num <= self.__counter < self.gpu_num + self.num_runs:
-            return True
-        else:
-            return False
-
-    def is_backward_reach(self):
-        return self.__counter < self.num_gpus - (self.gpu_num + 1)
-
     def backward_mode(self, input: torch.Tensor) -> torch.Tensor:
         """
         function for backward propagation iteration
         """
-        # if the backward propagation hasn't reached the layer yet, pass garbage
-        if self.is_backward_reach():
-            self.__counter += 1
-            return self.module(torch.zeros_like(input))
-
         # if we were given a gradient to pass back
-        if self.is_input_valid():
+        if self.counter.is_input_valid(self.gpu_num):
             input.backward(self.grad)
             self.grad = None
+        else:
+            # if the backward propagation hasn't reached the layer yet, pass garbage
+            return torch.zeros(*self.output_shape)
 
         # if we have an activation to pass
-        if self.is_last_input_valid():
+        if self.counter.is_last_input_valid(self.gpu_num):
             cur_input = self.last_input
             output = self.module(cur_input)
         else:
             output = torch.zeros(*self.output_shape)
-
-        self.__counter += 1
 
         return output
 
@@ -146,7 +165,7 @@ class SyncWrapper(nn.Module):
 
         # check if the input that waits for the submodule is relevant (garbage
         # will be propagated before and after data passes through submodule).
-        if self.is_last_input_valid():
+        if self.counter.is_last_input_valid(self.gpu_num):
             # the input is relevant.
             cur_input = self.last_input
             output = self.module(cur_input)
@@ -156,15 +175,13 @@ class SyncWrapper(nn.Module):
 
         # check if the input to be replaced and scheduled to run on the next
         # cycle is relevant (this should happen one cycle before previous cond).
-        if self.is_input_valid():
+        if self.counter.is_input_valid(self.gpu_num):
             if self.cur_mode is ForwardMode.train:
                 self.save_activation(next_input)
 
             self.last_input = next_input
         else:
             self.last_input = None
-
-        self.__counter += 1
 
         return output
 
@@ -174,7 +191,7 @@ class ActivationSavingLayer(nn.Module):
     This class should be put in the very start of the module (i.e Sequential(ActivationSavingLayer, Module))
     """
 
-    def __init__(self, device: str, num_gpus: int, cur_mode: ForwardMode = ForwardMode.train):
+    def __init__(self, device: str, counter: CycleCounter = None, cur_mode: ForwardMode = ForwardMode.train):
         super(ActivationSavingLayer, self).__init__()
 
         # layer device
@@ -192,13 +209,12 @@ class ActivationSavingLayer(nn.Module):
         self.grad = None
 
         # counter we use to know if the layer should actually do work this iteration
-        self.__counter = 0
+        self.counter = counter
 
-        # number of gpus in the model, used for the same reason as counter
-        self.num_gpus = num_gpus
+    def set_counter(self, counter: CycleCounter):
+        assert self.counter is None
 
-        # number of microabatches, used in similar way to num_gpus
-        self.num_runs = 0
+        self.counter = counter
 
     def add_grad(self, grad: torch.Tensor):
         self.grad = None
@@ -206,12 +222,17 @@ class ActivationSavingLayer(nn.Module):
     def pop_activation(self, act_id: int):
         self.last_input = self.activations.pop(act_id)
 
-    def change_mode(self, mode: str):
+    def change_mode(self, mode: Union[str, ForwardMode]):
         """
         changes the mode of the forward propagation
         :param mode: can be one of the following: 'backward', 'train', 'production'
         """
-        self.cur_mode = ForwardMode[mode]
+        assert isinstance(mode, (str, ForwardMode))
+
+        if isinstance(mode, str):
+            self.cur_mode = ForwardMode[mode]
+        else:
+            self.cur_mode = mode
 
     def finished_prop(self):
         """
@@ -219,35 +240,25 @@ class ActivationSavingLayer(nn.Module):
         """
         self.last_input = None
         self.last_ids = []
-        self.__counter = 0
-
-    def set_num_runs(self, num_runs):
-        self.num_runs = num_runs
 
     def backward_mode(self, input: torch.Tensor) -> torch.Tensor:
         """
         function for backward propagation iteration
         """
-        # if this iteration is one we should not work in
-        if self.__counter + 1 < self.num_gpus:
-            self.__counter += 1
-            return torch.zeros(*input.size())
-
         # if we have an activation to pass
-        if self.last_input is None:
-            output = torch.zeros(*input.size())
-        else:
+        if self.counter.is_last_input_valid(0):
             output = self.last_input
-
-        self.__counter += 1
+        else:
+            # if this iteration is one we should not work in
+            output = torch.zeros(*input.size())
 
         return output
 
     def save_activation(self, moved_input: torch.Tensor):
         """
-        function for saving layer activation
+        function for saving layer activations
         """
-        if self.__counter < self.num_runs + self.gpu_num:
+        if self.counter.is_input_valid(0):
             # clone without detaching
             activation = moved_input.clone()
 
@@ -264,6 +275,20 @@ class ActivationSavingLayer(nn.Module):
         elif self.cur_mode is ForwardMode.train:
             self.save_activation(moved_input)
 
-        self.__counter += 1
-
         return moved_input
+
+
+class LayerWrapper(nn.Module):
+    def __init__(self, module: nn.Module, gpu_num: int, output_shape: Tuple[int], counter: CycleCounter = None):
+        super(LayerWrapper, self).__init__()
+
+        self.module = module
+        self.output_shape = output_shape
+        self.gpu_num = gpu_num
+        self.counter = counter
+
+    def forward(self, input):
+        if self.counter.is_last_input_valid(self.gpu_num):
+            return self.module(input)
+        else:
+            return torch.zeros(*self.output_shape)
