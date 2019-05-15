@@ -163,7 +163,7 @@ def test_resnet50_times():
     print('finished pipeline')
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
-    setup = "model = resnet50(num_classes=num_classes).to(device)"
+    setup = "model = resnet50(num_classes=num_classes).to('cuda:0' if torch.cuda.is_available() else 'cpu')"
     rn_run_times = timeit.repeat(
         stmt, setup, number=1, repeat=num_repeat, globals=globals())
     rn_mean, rn_std = np.mean(rn_run_times), np.std(rn_run_times)
@@ -231,5 +231,5 @@ def test_resnet50_correctness():
 
 
 if __name__ == "__main__":
-    test_resnet50_correctness()
+    # test_resnet50_correctness()
     test_resnet50_times()

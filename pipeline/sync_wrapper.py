@@ -44,6 +44,9 @@ class CycleCounter:
             first_iter = self.num_gpus - gpu_num
             return first_iter <= self.__counter < first_iter + self.num_runs
 
+        if gpu_num == 0:
+            return self.is_input_valid(1)
+
         return gpu_num <= self.__counter + 1 < gpu_num + self.num_runs
 
     def is_last_input_valid(self, gpu_num: int):
