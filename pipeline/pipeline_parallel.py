@@ -23,7 +23,6 @@ class PipelineParallel(nn.Module):
 
         self.module = module
         self.wrappers = module.wrappers if wrappers is None else wrappers
-        self.mode = mode
         self.input_shape = input_shape
 
         if counter is None:
@@ -32,6 +31,9 @@ class PipelineParallel(nn.Module):
                 wrapper.set_counter(counter)
 
         self.counter = counter
+
+        self.mode = None
+        self.set_mode(mode)
 
     def set_mode(self, mode: str):
         if self.mode == mode:
