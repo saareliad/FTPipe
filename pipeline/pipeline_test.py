@@ -62,7 +62,10 @@ class ModelParallelResNet50(ResNet):
         super(ModelParallelResNet50, self).__init__(
             Bottleneck, [3, 4, 6, 3], num_classes=num_classes, *args, **kwargs)
 
-        dev1 = 'cpu'
+        dev1 = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+
+        self.counter = CycleCounter(2)
+        self.act_saving = ActivationSavingLayer(dev1, counter=self.counter)
 
         self.seq1 = nn.Sequential(
             self.conv1,
@@ -74,9 +77,9 @@ class ModelParallelResNet50(ResNet):
             self.layer2
         ).to(dev1)
 
-        self.seq1 = SyncWrapper(self.seq1, dev1)
+        self.seq1 = LayerWrapper(self.seq1, 0, output_shape=(1, 512, 28, 28), counter=self.counter)
 
-        dev2 = 'cpu'
+        dev2 = 'cuda:1' if torch.cuda.is_available() else 'cpu'
 
         self.seq2 = nn.Sequential(
             self.layer3,
@@ -84,15 +87,27 @@ class ModelParallelResNet50(ResNet):
             self.avgpool,
         ).to(dev2)
 
-        self.seq2 = SyncWrapper(self.seq2, dev2)
+        self.seq2 = SyncWrapper(self.seq2, dev2, 1, output_shape=(1, 2048, 1, 1), counter=self.counter,
+                                prev_layer=self.act_saving)
 
         self.fc.to(dev2)
-
-        self.wrappers = [self.seq1, self.seq2]
+        self.fc = LayerWrapper(self.fc, 1, output_shape=(1, 1000), counter=self.counter)
 
     def forward(self, x):
-        x = self.seq2(self.seq1(x))
+        x = self.act_saving(x)
+        x = self.seq1(x)
+        x = self.seq2(x)
         return self.fc(x.view(x.size(0), -1))
+
+
+def make_pipeline_resnet(microbatch_size: int):
+    inner_module = ModelParallelResNet50()
+    counter = inner_module.counter
+    wrappers = [inner_module.act_saving, inner_module.seq2]
+    input_shape = (1, 3, 224, 224)
+    device = 'cuda:1' if torch.cuda.is_available() else 'cpu'
+    return PipelineParallel(inner_module, microbatch_size, 2, input_shape, counter=counter, wrappers=wrappers,
+                            main_device=device)
 
 
 def train(model):
@@ -102,19 +117,24 @@ def train(model):
 
     one_hot_indices = torch.LongTensor(batch_size).random_(0, num_classes).view(batch_size, 1)
 
-    for _ in range(num_batches):
+    dev = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+
+    for b in range(num_batches):
         # generate random inputs and labels
         inputs = torch.randn(batch_size, 3, image_w, image_h)
         labels = torch.zeros(batch_size, num_classes).scatter_(1, one_hot_indices, 1)
 
         # run forward pass
         optimizer.zero_grad()
-        outputs = model(inputs)
+        outputs = model(inputs.to(dev))
 
         # run backward pass
         labels = labels.to(outputs.device)
         loss_fn(outputs, labels).backward()
         optimizer.step()
+        print("")
+        print("======================================")
+        print(f'finished batch #{b}')
 
 
 def plot(means, stds, labels, fig_name):
@@ -130,17 +150,20 @@ def plot(means, stds, labels, fig_name):
     plt.close(fig)
 
 
-def test_first_pipline():
+def test_resnet50_times():
     num_repeat = 10
 
     stmt = "train(model)"
 
-    setup = "model = PipelineParallel(ModelParallelResNet50(), 20, 2)"
+    setup = "model = make_pipeline_resnet(20)"
     mp_run_times = timeit.repeat(
         stmt, setup, number=1, repeat=num_repeat, globals=globals())
     mp_mean, mp_std = np.mean(mp_run_times), np.std(mp_run_times)
 
-    setup = "model = resnet50(num_classes=num_classes).to('cuda:0')"
+    print('finished pipeline')
+    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+
+    setup = "model = resnet50(num_classes=num_classes).to(device)"
     rn_run_times = timeit.repeat(
         stmt, setup, number=1, repeat=num_repeat, globals=globals())
     rn_mean, rn_std = np.mean(rn_run_times), np.std(rn_run_times)
@@ -154,5 +177,59 @@ def test_first_pipline():
     assert rn_mean / mp_mean - 1 >= 0.3
 
 
+def test_resnet50_correctness():
+    model1_device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    seed = 1024
+    b_size = 2
+
+
+    torch.manual_seed(seed)
+    model1 = resnet50(num_classes=num_classes).to(model1_device)
+
+    torch.manual_seed(seed)
+    model2 = make_pipeline_resnet(1)
+
+    for param1, param2 in zip(model1.parameters(), model2.parameters()):
+        assert torch.allclose(param1, param2)
+
+    loss_fn = nn.MSELoss()
+    optimizer1 = optim.SGD(model1.parameters(), lr=0.001)
+    optimizer2 = optim.SGD(model2.parameters(), lr=0.001)
+
+    one_hot_indices = torch.LongTensor(b_size).random_(0, num_classes).view(b_size, 1)
+
+    for b in range(num_batches):
+        print('============================')
+        print(f'started batch #{b}')
+        # generate random inputs and labels
+        inputs = torch.randn(b_size, 3, image_w, image_h)
+        labels = torch.zeros(b_size, num_classes).scatter_(1, one_hot_indices, 1)
+
+        # run forward pass
+        optimizer1.zero_grad()
+        optimizer2.zero_grad()
+
+        outputs1 = model1(inputs.to(model1_device))
+        outputs2 = model2(inputs)
+        print(outputs1)
+        print(outputs2)
+        assert torch.allclose(outputs1, outputs2)
+
+        # run backward pass
+        labels = labels.to(outputs1.device)
+        loss_fn(outputs1, labels).backward()
+        loss_fn(outputs2, labels).backward()
+
+        optimizer1.step()
+        optimizer2.step()
+
+        for param1, param2 in zip(model1.parameters(), model2.parameters()):
+            assert torch.allclose(param1, param2)
+
+        print(f'finished batch #{b}')
+        print('')
+
+
 if __name__ == "__main__":
-    test_first_pipline()
+    test_resnet50_correctness()
+    test_resnet50_times()
