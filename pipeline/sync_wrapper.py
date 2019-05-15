@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from enum import Enum
-from typing import Tuple, Union
+from typing import Tuple, Union, List
 
 ForwardMode = Enum('Mode', 'train backward production')
 
@@ -51,7 +51,7 @@ class CycleCounter:
 
 
 class SyncWrapper(nn.Module):
-    def __init__(self, module: nn.Module, device: str, gpu_num: int, output_shape: Tuple[int],
+    def __init__(self, module: nn.Module, device: str, gpu_num: int, output_shape: Tuple[int, ...],
                  counter: CycleCounter = None, cur_mode: ForwardMode = ForwardMode.train, prev_layer=None):
 
         super(SyncWrapper, self).__init__()
@@ -206,7 +206,9 @@ class ActivationSavingLayer(nn.Module):
 
         # used for the input switching in the backward pass
         self.last_input = None
-        self.grad = None
+
+        # used for the output of the backward pass
+        self.grads: List[torch.Tensor, ...] = []
 
         # counter we use to know if the layer should actually do work this iteration
         self.counter = counter
@@ -217,7 +219,10 @@ class ActivationSavingLayer(nn.Module):
         self.counter = counter
 
     def add_grad(self, grad: torch.Tensor):
-        self.grad = None
+        self.grads.append(grad)
+
+    def get_final_grads(self):
+        return torch.cat(tuple(self.grads), dim=0)
 
     def pop_activation(self, act_id: int):
         self.last_input = self.activations.pop(act_id)
@@ -279,7 +284,7 @@ class ActivationSavingLayer(nn.Module):
 
 
 class LayerWrapper(nn.Module):
-    def __init__(self, module: nn.Module, gpu_num: int, output_shape: Tuple[int], counter: CycleCounter = None):
+    def __init__(self, module: nn.Module, gpu_num: int, output_shape: Tuple[int, ...], counter: CycleCounter = None):
         super(LayerWrapper, self).__init__()
 
         self.module = module
