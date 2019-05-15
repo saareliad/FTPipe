@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch import autograd
 from typing import Iterable, List, Tuple
-from pipeline.sync_wrapper import SyncWrapper, ActivationSavingLayer
+from pipeline.sync_wrapper import *
 
 
 class PipelineParallel(nn.Module):
@@ -14,22 +14,28 @@ class PipelineParallel(nn.Module):
     """
 
     def __init__(self, module: nn.Module, microbatch_size: int, num_gpus: int, mode: str = 'train',
-                 main_device: str = 'cpu', wrappers=None):
+                 counter: CycleCounter = None, main_device: str = 'cpu', wrappers=None):
         super(PipelineParallel, self).__init__()
 
         self.main_device = main_device
         self.microbatch_size = microbatch_size
         self.num_gpus = num_gpus
 
-        self.first_layer = ActivationSavingLayer('cuda:0', num_gpus)
-        self.module = nn.Sequential(self.first_layer, module)
-        self.wrappers = [self.first_layer, *wrappers]
+        self.module = module
+        self.wrappers = module.wrappers if wrappers is None else wrappers
         self.mode = mode
+
+        if counter is None:
+            self.counter = CycleCounter(ForwardMode[mode], num_gpus)
+            for wrapper in self.wrappers:
+                wrapper.set_counter(self.counter)
 
     def set_mode(self, mode: str):
         if self.mode == mode:
             return
 
+        self.mode = mode
+        self.counter.change_mode(mode)
         for wrapper in self.wrappers:
             wrapper.change_mode(mode)
 
@@ -47,10 +53,10 @@ class PipelineParallel(nn.Module):
         :return: results of forward propagation on the batch
         """
         microbatches = input.split(self.microbatch_size, dim=0)
+        num_runs = len(microbatches)
 
-        # preparing the wrappers for the forward run.
-        for wrapper in self.wrappers:
-            wrapper.set_num_runs(self.microbatch_size)
+        # make sure that the counter knows how many microbatches there are
+        self.counter.set_num_run(num_runs)
 
         if self.mode == 'backward':
             self.set_mode('train')
@@ -61,29 +67,35 @@ class PipelineParallel(nn.Module):
             for cycle in range(self.num_gpus + self.microbatch_size - 1):
                 # feeding the module all the microbatches, then, until the forward
                 # propagation process ends needs to feed garbage.
-                if cycle < self.microbatch_size:
+                if cycle < num_runs:
                     input = microbatches[cycle]
                 else:
                     input = torch.zeros_like(microbatches[0])
 
-                result = self.module(input)
+                result: torch.Tensor = self.module(input)
 
                 # the first microbatch will finish the forward propagation only
                 # after num_gpus cycles.
                 if cycle >= self.num_gpus - 1:
-                    results.append(result)
+                    prev_layer_id = self.wrappers[-1].last_ids.pop(0)
+                    result.register_hook(lambda grad: self.wrappers[-1].act_hook(grad, prev_layer_id))
+                    results.append(result.to(self.main_device))
 
+                self.counter.increase()
+
+        # make sure that the counter and wrappers are returned to default mode
+        self.counter.reset()
         for wrapper in self.wrappers:
             wrapper.finished_prop()
 
-        output = torch.cat(tuple(results), dim=0).detach_()
-        # output.register_hook(self.backward)
+        output = torch.cat(tuple(results), dim=0)
+        output.register_hook(self.backward)
         return output
 
-    def backward(self, grads: torch.Tensor):
+    def backward(self, grad: torch.Tensor):
         """
         does backward propagation with gradients of full results,
         works as hook for normal autograd backward propagation so it usually shouldn't
         be called implicitly but used as part of loss.backward() or something like that
-        :param grads: the gradients of the model outputs
+        :param grad: the gradient of the model outputs
         """
