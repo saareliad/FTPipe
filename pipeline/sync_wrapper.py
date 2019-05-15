@@ -7,7 +7,7 @@ ForwardMode = Enum('Mode', 'train backward production')
 
 
 class CycleCounter:
-    def __init__(self, cur_mode: ForwardMode, num_gpus: int):
+    def __init__(self, num_gpus: int, cur_mode: ForwardMode = ForwardMode.train):
         self.__counter = 0
         self.cur_mode = cur_mode
         self.num_gpus = num_gpus
