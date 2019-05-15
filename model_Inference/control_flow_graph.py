@@ -124,9 +124,9 @@ class Graph():
     def _build_graph(self, trace_graph):
         self._add_IO_nodes(trace_graph.inputs())
         self._add_OP_nodes(trace_graph.nodes())
+        self._remove_constant_nodes()
         self._combine_OP_nodes_under_the_same_scope()
         self._combine_params_and_buffers_into_OP_nodes()
-        self._remove_constant_nodes()
         self._merge_op_chains()
         self._normalize_indices()
 
@@ -252,12 +252,20 @@ class Graph():
     def _merge_op_chains(self):
         def to_remove(n): return n.type == NodeTypes.OP and len(n.out_nodes) > 0 and all(
             o.type == NodeTypes.OP for o in n.out_nodes)
+
+        def to_remove_reverse(n): return n.type == NodeTypes.OP and len(n.in_nodes) > 0 and all(
+            o.type == NodeTypes.OP for o in n.in_nodes)
+
         # op chains need to be placed on the same device anyways
         self._remove_nodes(to_remove)
-        
-    def _remove_nodes(self, condition):
+        self._remove_nodes(to_remove_reverse,reverse=True)
+
+    def _remove_nodes(self, condition,reverse=False):
         optimized_graph = []
-        for node in self.nodes:
+
+        nodes = reversed(self.nodes) if reverse else self.nodes
+
+        for node in nodes:
             if condition(node):
                 # connect inputs to outputs directly
                 for in_node in node.in_nodes:
@@ -376,6 +384,8 @@ class Graph():
         dot.format = "pdf"
         import os
         directory=os.getcwd() if directory is None else directory
+        if os.path.exists(f"{directory}/{file_name}.pdf"):
+            os.remove(f"{directory}/{file_name}.pdf")
         dot.render(file_name, directory=directory, cleanup=True)
 
 # scope names of all profiled layers in the model

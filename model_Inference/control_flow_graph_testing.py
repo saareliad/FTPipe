@@ -65,8 +65,8 @@ class Branched_Model(nn.Module):
     def forward(self, x):
 
         # we cannot determine if branches are independent or not
-        branch_1_out = self.branch_1(x)*5
-        branch_2_out = self.branch_2(x)*7
+        branch_1_out = self.branch_1(x)*5+2+1*8/2
+        branch_2_out = self.branch_2(x)*7*5*5*6*7*8*10/5
 
         # combine branches
         # our partition must put both branch outputs on the same device if not an error would occur
@@ -83,12 +83,22 @@ class Branched_Model(nn.Module):
 # infer control flow via scope name we can get it from the model and from the trace graph
 # thus we can walk the graph and the names will tell us if we have a route from layer to layer
 # names can be obtained easily and they represent scope (depth) and
+max_depth = 100
 branched_model = Branched_Model(torch.zeros(100, 100))
 branched_graph, _, _ = partition_model(
-    branched_model, 4, torch.zeros(1, 1), max_depth=100)
-branched_graph.save("my names branched", show_buffs_params=True)
+    branched_model, 4, torch.zeros(1, 1), max_depth=max_depth)
+branched_graph.save(f"branched_model depth{max_depth}", show_buffs_params=True)
 
 complex_model = Complex_Model()
 complex_graph, _, _ = partition_model(
-    complex_model, 4, torch.zeros(1, 1), torch.zeros(1, 1), max_depth=100)
-complex_graph.save("my names complex", show_buffs_params=True)
+    complex_model, 4, torch.zeros(1, 1), torch.zeros(1, 1), max_depth=max_depth)
+complex_graph.save(f"complex model depth{max_depth}", show_buffs_params=True)
+
+res_model = resnet20_cifar()
+res_graph, _, _ = partition_model(
+    res_model, 4, torch.zeros(32, 3, 32, 32), max_depth=max_depth)
+res_graph.save(f"resnet model depth{max_depth}", show_buffs_params=True)
+
+print(len(res_graph.nodes))
+print(len(complex_graph.nodes))
+print(len(branched_graph.nodes))
