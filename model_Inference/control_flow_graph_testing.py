@@ -3,14 +3,15 @@ import torch.nn as nn
 import torch
 import inspect
 from network_profiler import profileNetwork
-from control_flow_graph import build_control_flow_graph
-from graph_partition import part_graph
+from control_flow_graph import build_control_flow_graph, Graph
+from METIS_graph_partition import part_graph, METIS_Error, mobjtype_et
 from pprint import pprint
 from res_net_example import resnet20_cifar
 from IPython.core.display import display_svg
+from collections import namedtuple
 
 
-def partition_model(model, num_gpus, *sample_batch, num_iter=2, max_depth=100, basic_blocks=None, device="cuda", weights=None, wrappers=None):
+def partition_model(model, num_gpus, *sample_batch, num_iter=4, max_depth=100, basic_blocks=None, device="cuda", weights=None, wrappers=None):
 
     if weights is None:
         weights = profileNetwork(model, *sample_batch, max_depth=max_depth,
@@ -21,19 +22,72 @@ def partition_model(model, num_gpus, *sample_batch, num_iter=2, max_depth=100, b
 
     adjlist = graph.adjacency_list()
     nodew = graph.get_weights()
-    weights = []
-    for w in nodew:
-        if isinstance(w, tuple):
-            weights.append(int(100*w.forward_time))
-        else:
-            weights.append(0)
+
+    assert(len(adjlist) == len(nodew))
+
+    weights = [weight_func(w) for w in nodew]
 
     # cuts, parts = part_graph(
     #     adjlist, nparts=num_gpus, algorithm="metis", nodew=weights, contig=1)
 
     # graph.set_partition(parts)
-    # print(cuts)
     return graph, [], []
+
+
+# TODO decide on weighting functional
+def weight_func(w):
+    if isinstance(w, tuple):
+        return int(100*(w.forward_time+w.backward_time)/2)
+    return w//100
+
+
+def partition_cost(weights, parts, ncuts):
+    parts_w = [0 for i in range(ncuts)]
+    total_cost = 0
+    for n, p in parts:
+        parts_w[p] += weights[n]
+        total_cost += weights[n]
+
+    avg = total_cost/ncuts
+    loss = 0
+    for w in parts_w:
+        loss += abs(avg-w)
+    return loss
+
+
+# TODO make it simpler
+def find_partition(adjlist, nparts, weights, seeds):
+    best_loss = torch.inf
+    config = namedtuple("partition_config", "algorithm,contig,seed,parts")
+    best_config = ()
+    for seed in seeds:
+        for algorithm in ["metis", "metis_recursive"]:
+            if algorithm == "metis_recursive":
+                try:
+                    cuts, parts = part_graph(
+                        adjlist, nparts=nparts, algorithm=algorithm, nodew=weights, contig=contig, seed=seed, objtype=objtype)
+                    loss = partition_cost(adjlist, parts, cuts)
+                    if loss <= best_loss:
+                        best_loss = loss
+                        best_config = config(
+                            algorithm, contig, seed, parts)
+                except METIS_Error as _:
+                    continue
+            else:
+                for contig in [0, 1]:
+                    for objtype in [mobjtype_et.METIS_OBJTYPE_CUT, mobjtype_et.METIS_OBJTYPE_VOL]:
+                        if algorithm == "metis_recursive":
+                            try:
+                                cuts, parts = part_graph(
+                                    adjlist, nparts=nparts, algorithm=algorithm, nodew=weights, contig=contig, seed=seed, objtype=objtype)
+                                loss = partition_cost(adjlist, parts, cuts)
+                                if loss <= best_loss:
+                                    best_loss = loss
+                                    best_config = config(
+                                        algorithm, contig, seed, parts)
+                            except METIS_Error as _:
+                                continue
+    return best_config
 
 
 class Complex_Model(nn.Module):
@@ -97,8 +151,5 @@ complex_graph.save(f"complex model depth{max_depth}", show_buffs_params=True)
 res_model = resnet20_cifar()
 res_graph, _, _ = partition_model(
     res_model, 4, torch.zeros(32, 3, 32, 32), max_depth=max_depth)
-res_graph.save(f"resnet model depth{max_depth}", show_buffs_params=True)
-
-print(len(res_graph.nodes))
-print(len(complex_graph.nodes))
-print(len(branched_graph.nodes))
+res_graph.save(
+    f"resnet model with cycle depth{max_depth}", show_buffs_params=True)

@@ -307,7 +307,18 @@ class Graph():
         for node, part in zip(self.nodes, parts):
             node.part = part
 
-    def build_dot(self, show_buffs_params=False):
+    def _add_dummy_root(self):
+        root = Node("dummy_root",-1,NodeTypes.IN)
+        for node in self.nodes:
+            if node.type == NodeTypes.IN:
+                root.add_out_node(node)
+                node.add_in_node(root)
+            else:
+                break
+        self.nodes=[root]+self.nodes
+        self._normalize_indices()
+
+    def build_dot(self, show_buffs_params=False,show_weights=True):
         '''
         return a graphviz representation of the graph
         '''
@@ -358,7 +369,7 @@ class Graph():
             if hide_node(node):
                 continue
             label = node.scope
-            if node.weight != 0:
+            if show_weights and node.weight != 0:
                 label = f"{label}\n {node.weight}"
             dot.node(str(node.idx), label, fillcolor=colors[node.part])
 
@@ -372,21 +383,36 @@ class Graph():
 
         return dot
 
-    def display(self, show_buffs_params=False):
+    def display(self, show_buffs_params=False,show_weights=True):
         try:
             from IPython.core.display import display_svg
-            display_svg(self.build_dot(show_buffs_params), raw=False)
+            display_svg(self.build_dot(show_buffs_params,show_weights=show_weights), raw=False)
         except ImportError as _:
             print("only works in python notebooks")
 
-    def save(self,file_name,directory=None, show_buffs_params=False):
-        dot = self.build_dot(show_buffs_params)
+    def save(self,file_name,directory=None, show_buffs_params=False,show_weights=True):
+        dot = self.build_dot(show_buffs_params,show_weights=show_weights)
         dot.format = "pdf"
         import os
         directory=os.getcwd() if directory is None else directory
         if os.path.exists(f"{directory}/{file_name}.pdf"):
             os.remove(f"{directory}/{file_name}.pdf")
         dot.render(file_name, directory=directory, cleanup=True)
+
+
+def post_process_partition(graph: Graph, nparts, weights, part):
+    graph.set_partition(part)
+
+    # TODO enusre arithmetic ops have inputs on the same gpu
+
+    # TODO ensure outputs are on the same gpu
+
+    # TODO if 3 concecutive layers are on 3 different gpus merge the middle one with one of the others
+
+    # TODO nice to have enforce only contiguos partitions
+
+
+
 
 # scope names of all profiled layers in the model
 def _profiled_layers(module: nn.Module, depth, prefix, basic_block):
