@@ -186,11 +186,13 @@ def test_resnet50_times():
          'mp_vs_rn.png')
 
     if torch.cuda.is_available():
+        print(f'data parallel has speedup of {(rn_mean / dp_mean - 1) * 100} relative to single gpu')
         plot([mp_mean, rn_mean, dp_mean],
              [mp_std, rn_std, dp_std],
              ['Model Parallel', 'Single GPU', 'Data Parallel'],
              'mp_vs_rn_vs_dp.png')
 
+    print(f'pipeline has speedup of {(rn_mean / mp_mean - 1) * 100} relative to single gpu')
     assert mp_mean < rn_mean
     # assert that the speedup is at least 30%
     assert rn_mean / mp_mean - 1 >= 0.3
@@ -249,6 +251,35 @@ def test_resnet50_correctness():
         print('')
 
 
+def test_split_size():
+    num_repeat = 10
+
+    stmt = "train(model)"
+
+    means = []
+    stds = []
+    split_sizes = [1, 3, 5, 8, 10, 12, 20, 40, 60]
+
+    for split_size in split_sizes:
+        setup = "model = make_pipeline_resnet(%d)" % split_size
+        pp_run_times = timeit.repeat(
+            stmt, setup, number=1, repeat=num_repeat, globals=globals())
+        means.append(np.mean(pp_run_times))
+        stds.append(np.std(pp_run_times))
+
+    fig, ax = plt.subplots()
+    ax.plot(split_sizes, means)
+    ax.errorbar(split_sizes, means, yerr=stds, ecolor='red', fmt='ro')
+    ax.set_ylabel('ResNet50 Execution Time (Second)')
+    ax.set_xlabel('Pipeline Split Size')
+    ax.set_xticks(split_sizes)
+    ax.yaxis.grid(True)
+    plt.tight_layout()
+    plt.savefig("split_size_tradeoff.png")
+    plt.close(fig)
+
+
 if __name__ == "__main__":
     # test_resnet50_correctness()
+    test_split_size()
     test_resnet50_times()
