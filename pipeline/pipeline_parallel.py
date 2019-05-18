@@ -91,8 +91,7 @@ class PipelineParallel(nn.Module):
             # after num_gpus cycles.
             if cycle >= self.num_gpus - 1:
                 result.requires_grad_()
-                result.register_hook(lambda grad: self.wrappers[-1].act_hook(grad, prev_layer_id))
-                prev_layer_id = self.wrappers[-1].last_ids.pop(0)
+                result.register_hook(lambda grad: self.wrappers[-1].act_hook(grad))
                 results.append(result.to(self.main_device))
 
             self.counter.increase()

@@ -74,7 +74,6 @@ class SyncWrapper(nn.Module):
 
         # used for backward pass with saved activations, ids used to find them in the hash table
         self.activations = []
-        self.last_ids = []
 
         # used for the input switching
         self.last_input = None
@@ -111,7 +110,7 @@ class SyncWrapper(nn.Module):
         else:
             self.cur_mode = mode
 
-    def pop_activation(self, act_id: int):
+    def pop_activation(self):
         self.last_input = self.activations.pop(0)
 
     def finished_prop(self):
@@ -119,10 +118,9 @@ class SyncWrapper(nn.Module):
         reset fields after propagation
         """
         self.last_input = None
-        self.last_ids = []
 
-    def act_hook(self, grad, prev_layer_id):
-        self.pop_activation(prev_layer_id)
+    def act_hook(self, grad):
+        self.pop_activation()
         self.add_grad(grad)
 
     def backward_mode(self, input: torch.Tensor) -> torch.Tensor:
@@ -157,12 +155,10 @@ class SyncWrapper(nn.Module):
         # if there was a previous layer with an activation saved for the current one
         if self.prev_layer is not None and len(self.prev_layer.last_ids) > 0:
             # put a backward hook for popping it when doing a backward pass
-            prev_layer_id = self.prev_layer.last_ids.pop(0)
-            activation.register_hook(lambda grad: self.prev_layer.act_hook(grad, prev_layer_id))
+            activation.register_hook(lambda grad: self.prev_layer.act_hook(grad))
 
         # save the activation and the id
         self.activations.append(activation)
-        self.last_ids.append(id(activation))
 
     def forward(self, next_input: torch.Tensor) -> torch.Tensor:
         # move the input between devices
@@ -210,7 +206,6 @@ class ActivationSavingLayer(nn.Module):
 
         # used for backward pass with saved activations, ids used to find them in the hash table
         self.activations = []
-        self.last_ids = []
 
         # used for the input switching in the backward pass
         self.last_input = None
@@ -234,11 +229,12 @@ class ActivationSavingLayer(nn.Module):
     def get_final_grads(self):
         return torch.cat(tuple(self.grads), dim=0)
 
-    def pop_activation(self, act_id: int):
+    def pop_activation(self):
         self.last_input = self.activations.pop(0)
 
-    def act_hook(self, grad, prev_layer_id):
-        self.pop_activation(prev_layer_id)
+    def act_hook(self, grad):
+        # self.add_grad(grad.to(self.device))
+        self.pop_activation()
 
     def change_mode(self, mode: Union[str, ForwardMode]):
         """
@@ -257,8 +253,6 @@ class ActivationSavingLayer(nn.Module):
         reset fields after propagation
         """
         self.last_input = None
-        self.last_ids = []
-        self.grads = []
 
     def backward_mode(self, input: torch.Tensor) -> torch.Tensor:
         """
@@ -285,7 +279,6 @@ class ActivationSavingLayer(nn.Module):
 
             # save the activation and the id
             self.activations.append(activation)
-            self.last_ids.append(id(activation))
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         # move the input between devices
