@@ -192,6 +192,7 @@ def test_resnet50_times():
              'mp_vs_rn_vs_dp.png')
 
     assert mp_mean < rn_mean
+    # assert that the speedup is at least 30%
     assert rn_mean / mp_mean - 1 >= 0.3
 
 
