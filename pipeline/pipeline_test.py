@@ -77,7 +77,7 @@ class ModelParallelResNet50(ResNet):
             self.layer2
         ).to(dev1)
 
-        self.seq1 = LayerWrapper(self.seq1, 0, output_shape=(1, 512, 28, 28), counter=self.counter)
+        self.seq1 = LayerWrapper(self.seq1, 0, dev1, output_shape=(1, 512, 28, 28), counter=self.counter)
 
         dev2 = 'cuda:1' if torch.cuda.is_available() else 'cpu'
 
@@ -91,7 +91,7 @@ class ModelParallelResNet50(ResNet):
                                 prev_layer=self.act_saving)
 
         self.fc.to(dev2)
-        self.fc = LayerWrapper(self.fc, 1, output_shape=(1, 1000), counter=self.counter)
+        self.fc = LayerWrapper(self.fc, 1, dev2, output_shape=(1, 1000), counter=self.counter)
 
     def forward(self, x):
         x = self.act_saving(x)
@@ -110,7 +110,7 @@ def make_pipeline_resnet(microbatch_size: int):
                             main_device=device)
 
 
-def train(model):
+def train(model, is_data_parallel=False):
     model.train(True)
     loss_fn = nn.MSELoss()
     optimizer = optim.SGD(model.parameters(), lr=0.001)
@@ -132,9 +132,11 @@ def train(model):
         labels = labels.to(outputs.device)
         loss_fn(outputs, labels).backward()
         optimizer.step()
-        print("")
-        print("======================================")
-        print(f'finished batch #{b}')
+        # print("")
+        # print("======================================")
+        # print(f'finished batch #{b}')
+
+    # print('finished a train run!')
 
 
 def plot(means, stds, labels, fig_name):
@@ -168,10 +170,26 @@ def test_resnet50_times():
         stmt, setup, number=1, repeat=num_repeat, globals=globals())
     rn_mean, rn_std = np.mean(rn_run_times), np.std(rn_run_times)
 
+    print('finished single gpu')
+
+    if torch.cuda.is_available():
+        stmt = "train(model, True)"
+        setup = "model = nn.DataParallel(resnet50(num_classes=num_classes)).to('cuda:0' if torch.cuda.is_available() else 'cpu')"
+        dp_run_times = timeit.repeat(
+            stmt, setup, number=1, repeat=num_repeat, globals=globals())
+        dp_mean, dp_std = np.mean(dp_run_times), np.std(dp_run_times)
+        print(f'Data parallel mean is {dp_mean}')
+
     plot([mp_mean, rn_mean],
          [mp_std, rn_std],
          ['Model Parallel', 'Single GPU'],
          'mp_vs_rn.png')
+
+    if torch.cuda.is_available():
+        plot([mp_mean, rn_mean, dp_mean],
+             [mp_std, rn_std, dp_std],
+             ['Model Parallel', 'Single GPU', 'Data Parallel'],
+             'mp_vs_rn_vs_dp.png')
 
     assert mp_mean < rn_mean
     assert rn_mean / mp_mean - 1 >= 0.3
