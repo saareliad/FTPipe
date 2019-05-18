@@ -92,7 +92,7 @@ class SyncWrapper(nn.Module):
         self.output_shape = output_shape
 
     def add_grad(self, grad: torch.Tensor):
-        self.grad = grad
+        self.grad = grad.to(self.device)
 
     def set_counter(self, counter: CycleCounter):
         assert self.counter is None
@@ -229,7 +229,7 @@ class ActivationSavingLayer(nn.Module):
         self.counter = counter
 
     def add_grad(self, grad: torch.Tensor):
-        self.grads.append(grad)
+        self.grads.append(grad.to(self.device))
 
     def get_final_grads(self):
         return torch.cat(tuple(self.grads), dim=0)
