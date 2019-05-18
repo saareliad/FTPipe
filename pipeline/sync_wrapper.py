@@ -133,14 +133,14 @@ class SyncWrapper(nn.Module):
             self.grad = None
         else:
             # if the backward propagation hasn't reached the layer yet, pass garbage
-            return torch.zeros(*self.output_shape)
+            return torch.zeros(*self.output_shape).to(self.device)
 
         # if we have an activation to pass
         if self.counter.is_last_input_valid(self.gpu_num):
             cur_input = self.last_input
             output = self.module(cur_input)
         else:
-            output = torch.zeros(*self.output_shape)
+            output = torch.zeros(*self.output_shape).to(self.device)
 
         return output
 
@@ -153,7 +153,7 @@ class SyncWrapper(nn.Module):
         activation.requires_grad_()
 
         # if there was a previous layer with an activation saved for the current one
-        if self.prev_layer is not None and len(self.prev_layer.last_ids) > 0:
+        if self.prev_layer is not None and len(self.prev_layer.activations) > 0:
             # put a backward hook for popping it when doing a backward pass
             activation.register_hook(lambda grad: self.prev_layer.act_hook(grad))
 
@@ -176,7 +176,7 @@ class SyncWrapper(nn.Module):
                 output = self.module(cur_input)
         else:
             # the input is garbage.
-            output = torch.zeros(*self.output_shape)
+            output = torch.zeros(*self.output_shape).to(self.device)
 
         # check if the input to be replaced and scheduled to run on the next
         if self.counter.is_input_valid(self.gpu_num):
@@ -264,7 +264,7 @@ class ActivationSavingLayer(nn.Module):
             output.register_hook(self.add_grad)
         else:
             # if this iteration is one we should not work in
-            output = torch.zeros(*input.size())
+            output = torch.zeros(*input.size()).to(self.device)
 
         return output
 
@@ -293,17 +293,19 @@ class ActivationSavingLayer(nn.Module):
 
 
 class LayerWrapper(nn.Module):
-    def __init__(self, module: nn.Module, gpu_num: int, output_shape: Tuple[int, ...], counter: CycleCounter = None):
+    def __init__(self, module: nn.Module, gpu_num: int, device: str, output_shape: Tuple[int, ...],
+                 counter: CycleCounter = None):
         super(LayerWrapper, self).__init__()
 
         self.module = module
         self.output_shape = output_shape
         self.gpu_num = gpu_num
         self.counter = counter
+        self.device = device
 
     def forward(self, input):
         if self.counter.is_last_input_valid(self.gpu_num):
             with autograd.no_grad():
                 return self.module(input)
         else:
-            return torch.zeros(*self.output_shape)
+            return torch.zeros(*self.output_shape).to(self.device)
