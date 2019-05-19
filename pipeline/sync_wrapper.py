@@ -253,6 +253,8 @@ class ActivationSavingLayer(nn.Module):
         reset fields after propagation
         """
         self.last_input = None
+        # for _ in range(len(self.grads)):
+        #     self.grads.pop(0)
 
     def backward_mode(self, input: torch.Tensor) -> torch.Tensor:
         """
