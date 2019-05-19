@@ -110,7 +110,7 @@ def make_pipeline_resnet(microbatch_size: int):
                             main_device=device)
 
 
-def train(model, is_data_parallel=False):
+def train(model):
     model.train(True)
     loss_fn = nn.MSELoss()
     optimizer = optim.SGD(model.parameters(), lr=0.001)
