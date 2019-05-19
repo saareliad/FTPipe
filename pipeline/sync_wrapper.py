@@ -57,9 +57,29 @@ class CycleCounter:
         return gpu_num <= self.__counter < gpu_num + self.num_runs
 
 
+class ActivationsList(list):
+    def __init__(self, num_uses: int=1, seq=()):
+        super(ActivationsList, self).__init__(seq)
+        self.__uses_left = []
+        self.num_uses = num_uses
+
+    def append(self, element):
+        super(ActivationsList, self).append(element)
+        self.__uses_left.append(self.num_uses)
+
+    def pop(self, index: int):
+        self.__uses_left[index] -= 1
+        if self.__uses_left[index] == 0:
+            self.__uses_left.pop(index)
+            return super(ActivationsList, self).pop(index)
+
+        return self.__getitem__(index)
+
+
 class SyncWrapper(nn.Module):
     def __init__(self, module: nn.Module, device: str, gpu_num: int, output_shape: Tuple[int, ...],
-                 counter: CycleCounter = None, cur_mode: ForwardMode = ForwardMode.train, prev_layer=None):
+                 output_uses: int = 1, counter: CycleCounter = None, cur_mode: ForwardMode = ForwardMode.train,
+                 prev_layer=None):
 
         super(SyncWrapper, self).__init__()
         # Obvious fields
@@ -73,7 +93,7 @@ class SyncWrapper(nn.Module):
         self.prev_layer = prev_layer
 
         # used for backward pass with saved activations, ids used to find them in the hash table
-        self.activations = []
+        self.activations = ActivationsList(num_uses=output_uses)
 
         # used for the input switching
         self.last_input = None
