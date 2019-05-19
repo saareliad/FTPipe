@@ -111,7 +111,10 @@ class SyncWrapper(nn.Module):
         self.output_shape = output_shape
 
     def add_grad(self, grad: torch.Tensor):
-        self.grad = grad.to(self.device)
+        if self.grad is None:
+            self.grad = grad.to(self.device)
+        else:
+            self.grad += grad.to(self.device)
 
     def set_counter(self, counter: CycleCounter):
         assert self.counter is None
