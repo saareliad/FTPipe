@@ -35,6 +35,13 @@ class PipelineParallel(nn.Module):
         self.mode = None
         self.set_mode(mode)
 
+    def train(self, mode=True):
+        super(PipelineParallel, self).train(mode)
+        if mode:
+            self.set_mode('train')
+        else:
+            self.set_mode('production')
+
     def set_mode(self, mode: str):
         if self.mode == mode:
             return
@@ -73,7 +80,10 @@ class PipelineParallel(nn.Module):
         self.counter.set_num_runs(num_runs)
 
         if self.mode == 'backward':
-            self.set_mode('train')
+            if self.training:
+                self.set_mode('train')
+            else:
+                self.set_mode('production')
 
         results = []
         # the actual pipeline process of feeding the data and receiving outputs:
@@ -90,8 +100,9 @@ class PipelineParallel(nn.Module):
             # the first microbatch will finish the forward propagation only
             # after num_gpus cycles.
             if cycle >= self.num_gpus - 1:
-                result.requires_grad_()
-                result.register_hook(lambda grad: self.wrappers[-1].act_hook(grad))
+                if self.training:
+                    result.requires_grad_()
+                    result.register_hook(lambda grad: self.wrappers[-1].act_hook(grad))
                 results.append(result.to(self.main_device))
 
             self.counter.increase()
@@ -100,8 +111,9 @@ class PipelineParallel(nn.Module):
         self.finished_prop()
 
         output = torch.cat(tuple(results), dim=0).detach_()
-        output.requires_grad_()
-        output.register_hook(lambda grad: self.backward(grad, results))
+        if self.training:
+            output.requires_grad_()
+            output.register_hook(lambda grad: self.backward(grad, results))
         return output
 
     def backward(self, grads: torch.Tensor, results: List[torch.Tensor]):
