@@ -13,4 +13,4 @@ model_Inference/playground.py
 model_Inference/notebook.py
 .pytest_cache/**
 playground/**
-*.pdf
+model_inference/traces/*

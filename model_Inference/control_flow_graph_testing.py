@@ -27,11 +27,11 @@ def partition_model(model, num_gpus, *sample_batch, num_iter=4, max_depth=100, b
 
     weights = [weight_func(w) for w in nodew]
 
-    # cuts, parts = part_graph(
-    #     adjlist, nparts=num_gpus, algorithm="metis", nodew=weights, contig=1)
+    cuts, parts = part_graph(
+        adjlist, nparts=num_gpus, algorithm="metis", nodew=weights, contig=1)
 
-    # graph.set_partition(parts)
-    return graph, [], []
+    graph.set_partition(parts)
+    return graph, cuts, parts  # partition_cost(weights, parts, cuts)
 
 
 # TODO decide on weighting functional
@@ -43,8 +43,11 @@ def weight_func(w):
 
 def partition_cost(weights, parts, ncuts):
     parts_w = [0 for i in range(ncuts)]
+    print("partition cost")
+    print(ncuts)
+    print(parts)
     total_cost = 0
-    for n, p in parts:
+    for n, p in enumerate(parts):
         parts_w[p] += weights[n]
         total_cost += weights[n]
 
@@ -134,22 +137,29 @@ class Branched_Model(nn.Module):
         return out
 
 
-# infer control flow via scope name we can get it from the model and from the trace graph
-# thus we can walk the graph and the names will tell us if we have a route from layer to layer
-# names can be obtained easily and they represent scope (depth) and
-max_depth = 100
-branched_model = Branched_Model(torch.zeros(100, 100))
-branched_graph, _, _ = partition_model(
-    branched_model, 4, torch.zeros(1, 1), max_depth=max_depth)
-branched_graph.save(f"branched_model depth{max_depth}", show_buffs_params=True)
+if __name__ == "__main__":
+    nparts = 4
 
-complex_model = Complex_Model()
-complex_graph, _, _ = partition_model(
-    complex_model, 4, torch.zeros(1, 1), torch.zeros(1, 1), max_depth=max_depth)
-complex_graph.save(f"complex model depth{max_depth}", show_buffs_params=True)
+    max_depth = 1
+    res_model = resnet20_cifar()
+    res_graph, cuts, _ = partition_model(
+        res_model, nparts, torch.zeros(32, 3, 32, 32), max_depth=max_depth)
+    res_graph.save(
+        f"resnet model depth{max_depth}", show_buffs_params=True)
+    print(cuts)
 
-res_model = resnet20_cifar()
-res_graph, _, _ = partition_model(
-    res_model, 4, torch.zeros(32, 3, 32, 32), max_depth=max_depth)
-res_graph.save(
-    f"resnet model with cycle depth{max_depth}", show_buffs_params=True)
+    max_depth = 0
+    res_model = resnet20_cifar()
+    res_graph, cuts, _ = partition_model(
+        res_model, nparts, torch.zeros(32, 3, 32, 32), max_depth=max_depth)
+    res_graph.save(
+        f"resnet model depth{max_depth}", show_buffs_params=True)
+    print(cuts)
+
+    max_depth = 100
+    res_model = resnet20_cifar()
+    res_graph, cuts, _ = partition_model(
+        res_model, nparts, torch.zeros(32, 3, 32, 32), max_depth=max_depth)
+    res_graph.save(
+        f"resnet model depth{max_depth}", show_buffs_params=True)
+    print(cuts)

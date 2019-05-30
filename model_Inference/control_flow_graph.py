@@ -4,6 +4,8 @@ import torch
 from enum import Enum
 from pprint import pprint
 import inspect
+from copy import copy
+
 
 __all__ = ['build_control_flow_graph']
 
@@ -61,7 +63,7 @@ class Node():
      parallel edges in the same direction are not allowed
     '''
 
-    def __init__(self, scope, idx, node_type: NodeTypes, incoming_nodes=None, weight=0, part=0):
+    def __init__(self, scope, idx, node_type: NodeTypes, incoming_nodes=None, weight=0, part=10):
         self.scope = scope
         self.idx = idx
         self.type = node_type
@@ -157,12 +159,12 @@ class Graph():
         '''
         add nodes representing the layers/ops of the model
         '''
+        num_extra_nodes=0
         for idx, trace_node in enumerate(OP_nodes):
             node_scope = self._find_encasing_layer(trace_node.scopeName())
             input_nodes = {self.nodes[i.unique()]
                            for i in trace_node.inputs()}
-
-            node_idx = self.num_inputs_buffs_params+idx
+            node_idx = self.num_inputs_buffs_params+idx+num_extra_nodes
             new_node = None
 
             # profiled Layer
@@ -175,12 +177,23 @@ class Graph():
                     "/"+trace_node.kind() + str(idx)
                 new_node = Node(node_scope, node_idx,
                                 NodeTypes.OP, input_nodes)
-
+            
             # add incoming edges
             for node in input_nodes:
                 node.add_out_node(new_node)
 
             self.nodes.append(new_node)
+
+            #add node for each output
+            for i,_ in enumerate(trace_node.outputs()):
+                if i !=0:
+                    out_node:Node=copy(new_node)
+                    out_node.idx+=i
+                    out_node.add_in_node(self.nodes[node_idx+i-1])
+                    self.nodes[node_idx+i-1].add_out_node(out_node)
+                    self.nodes.append(out_node)
+                    num_extra_nodes+=1
+            
 
     def _find_encasing_layer(self, scopeName: str):
         '''
@@ -199,7 +212,6 @@ class Graph():
         # optimization that reduces number of nodes in the graph
         # combine nodes that have a commom scope we do this because\n
         # if nodes have the same scopeName than they were profiled together
-
         node_of_scope = dict()
         optimized_graph = []
 
@@ -208,7 +220,6 @@ class Graph():
             if not node.scope in node_of_scope:
                 optimized_graph.append(node)
                 node_of_scope[node.scope] = node
-
             else:
                 # add edges create the super set of all edeges in the scope
                 node_of_scope[node.scope].add_in_node(node.in_nodes)
@@ -359,7 +370,7 @@ class Graph():
                  fontcolor=theme["font_color"],
                  fontname=theme["font_name"])
 
-        colors={0:'grey',1:'green',2:'red',3:'yellow',4:'orange',5:'brown',6:'purple',7:'pink'}
+        colors={0:'grey',1:'green',2:'red',3:'yellow',4:'orange',5:'brown',6:'purple',7:'pink',10:"white"}
 
 
         def hide_node(node):
