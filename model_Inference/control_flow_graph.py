@@ -5,7 +5,7 @@ from enum import Enum
 from pprint import pprint
 import inspect
 from copy import copy
-
+import graph_alogrithms
 
 __all__ = ['build_control_flow_graph']
 
@@ -13,9 +13,9 @@ __all__ = ['build_control_flow_graph']
 def build_control_flow_graph(model, *sample_batch, max_depth=100, weights=None, basic_block=None, device="cuda"):
     device = "cpu" if not torch.cuda.is_available() else device
     model_class_name = type(model).__name__
-    
+
     buffer_param_names = _buffer_and_params_scopes(model,  model_class_name)
-    
+
     weights = weights if weights != None else {}
 
     layerNames = _profiled_layers(
@@ -29,7 +29,7 @@ def build_control_flow_graph(model, *sample_batch, max_depth=100, weights=None, 
     with torch.no_grad():
         trace_graph, _ = torch.jit.get_trace_graph(model, inputs)
         trace_graph = trace_graph.graph()
-      
+
     return Graph(layerNames, num_inputs, buffer_param_names,trace_graph, weights)
 
 
@@ -148,7 +148,7 @@ class Graph():
             else:
                 node_type = NodeTypes.BUFF_PARAM
                 node_scope = self.buffer_param_names[idx - self.num_inputs]
-            
+
             new_node = Node(node_scope, idx,
                             node_type, weight=node_weight)
             self.nodes.append(new_node)
@@ -177,7 +177,7 @@ class Graph():
                     "/"+trace_node.kind() + str(idx)
                 new_node = Node(node_scope, node_idx,
                                 NodeTypes.OP, input_nodes)
-            
+
             # add incoming edges
             for node in input_nodes:
                 node.add_out_node(new_node)
@@ -193,7 +193,7 @@ class Graph():
                     self.nodes[node_idx+i-1].add_out_node(out_node)
                     self.nodes.append(out_node)
                     num_extra_nodes+=1
-            
+
 
     def _find_encasing_layer(self, scopeName: str):
         '''
@@ -414,6 +414,9 @@ class Graph():
 def post_process_partition(graph: Graph, nparts, weights, part):
     graph.set_partition(part)
 
+    #make sure every scc in the graph is not splitted between different parts
+    scc_partition_correction(graph)
+
     # TODO enusre arithmetic ops have inputs on the same gpu
 
     # TODO ensure outputs are on the same gpu
@@ -422,6 +425,38 @@ def post_process_partition(graph: Graph, nparts, weights, part):
 
     # TODO nice to have enforce only contiguos partitions
 
+
+
+def scc_partition_correction(graph:Graph):
+    #create the scc graph
+    vertices = [ v.idx for v in graph.nodes ]
+    edges = {}
+    for v in graph.nodes:
+        idx_out_nodes=[ h.idx for h in v.out_nodes ]
+        edges.update( { v.idx : idx_out_nodes } )
+
+    for scc in strongly_connected_components_iterative(vertices, edges):
+        #check if the scc is splitted between 2 parts or more
+        scc_parts=[]
+        for v in scc:
+            if graph.nodes[v].part not in scc_parts:
+                scc_parts.append(graph.nodes[v].part)
+            if len(scc_parts) >= 2:
+                break
+        #if he is splitted:
+        if len(scc_parts) >= 2:
+            output_part = -1
+            #find out what part edges go to from this scc
+            for v in scc:
+                for out in graph.nodes[v].out_nodes:
+                    if out.idx not in scc:
+                        output_part = graph.nodes[out.idx].part
+                        break
+                if output_part != -1:
+                    break
+            #update the scc part to the part we found
+            for v in scc:
+                graph.nodes[v].part = output_part
 
 
 
