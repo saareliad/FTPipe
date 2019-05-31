@@ -417,6 +417,9 @@ def post_process_partition(graph: Graph, nparts, weights, part):
     #make sure every scc in the graph is not splitted between different parts
     scc_partition_correction(graph)
 
+    #make sure the inputs to an OP type node are all in the same part
+    OP_inputs_partition_correction(graph,nparts)
+
     # TODO enusre arithmetic ops have inputs on the same gpu
 
     # TODO ensure outputs are on the same gpu
@@ -426,8 +429,33 @@ def post_process_partition(graph: Graph, nparts, weights, part):
     # TODO nice to have enforce only contiguos partitions
 
 
+def OP_inputs_partition_correction(graph: Graph, nparts):
+    for v in graph.nodes:
+        if v.type == NodeTypes.OP:
+            #pick the part of the inputs as the one with least comunication
+            group = [v] + v.input_nodes
+            min_comunication = float("inf")
+            best_part = -1
+            for part in range(nparts):
+                for v in group:
+                    graph.nodes[v.idx].part = part
+                comunication=compute_comunication(graph)
+                if  comunication < min_comunication:
+                    min_comunication = comunication
+                    best_part = part
+            for v in group:
+                graph.nodes[v.idx].part = best_part
 
-def scc_partition_correction(graph:Graph):
+
+def compute_comunication(graph: Graph):
+    count = 0
+    for v in graph.nodes:
+        for input in v.in_nodes:
+            if input.part != v.part:
+                count += 1
+    return count
+
+def scc_partition_correction(graph: Graph):
     #create the scc graph
     vertices = [ v.idx for v in graph.nodes ]
     edges = {}
