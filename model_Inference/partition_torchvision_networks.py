@@ -2,8 +2,9 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 from network_profiler import profileNetwork
-from control_flow_graph import build_control_flow_graph, post_process_partition
+from control_flow_graph import build_control_flow_graph
 from METIS_graph_partition import part_graph
+from process_partition import post_process_partition
 
 
 def partition_model(model, num_gpus, *sample_batch, num_iter=4, max_depth=100, basic_blocks=None, device="cuda", weights=None, wrappers=None):

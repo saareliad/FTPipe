@@ -2,10 +2,8 @@
 import torch.nn as nn
 import torch
 from enum import Enum
-from pprint import pprint
-import inspect
+
 from copy import copy
-import graph_alogrithms
 
 __all__ = ['build_control_flow_graph']
 
@@ -409,85 +407,6 @@ class Graph():
         if os.path.exists(f"{directory}/{file_name}.pdf"):
             os.remove(f"{directory}/{file_name}.pdf")
         dot.render(file_name, directory=directory, cleanup=True)
-
-
-def post_process_partition(graph: Graph, nparts, part, weights=None):
-    graph.set_partition(part)
-
-    #make sure every scc in the graph is not splitted between different parts
-    scc_partition_correction(graph)
-
-    #make sure the inputs to an OP type node are all in the same part
-    OP_inputs_partition_correction(graph,nparts)
-
-    # TODO enusre arithmetic ops have inputs on the same gpu
-
-    # TODO ensure outputs are on the same gpu
-
-    # TODO if 3 concecutive layers are on 3 different gpus merge the middle one with one of the others
-
-    # TODO nice to have enforce only contiguos partitions
-
-
-def OP_inputs_partition_correction(graph: Graph, nparts):
-    for v in graph.nodes:
-        if v.type == NodeTypes.OP:
-            #pick the part of the inputs as the one with least comunication
-            group = {u for u in v.in_nodes}
-            group.add(v)
-            min_comunication = float("inf")
-            best_part = -1
-            for part in range(nparts):
-                for u in group:
-                    graph.nodes[u.idx].part = part
-                comunication=compute_comunication(graph)
-                if  comunication < min_comunication:
-                    min_comunication = comunication
-                    best_part = part
-            for u in group:
-                graph.nodes[u.idx].part = best_part
-
-
-def compute_comunication(graph: Graph):
-    count = 0
-    for v in graph.nodes:
-        for u in v.in_nodes:
-            if u.part != v.part:
-                count += 1
-    return count
-
-def scc_partition_correction(graph: Graph):
-    #create the scc graph
-    vertices = [ v.idx for v in graph.nodes ]
-    edges = {}
-    for v in graph.nodes:
-        idx_out_nodes=[ h.idx for h in v.out_nodes ]
-        edges.update( { v.idx : idx_out_nodes } )
-
-    for scc in graph_alogrithms.strongly_connected_components_iterative(vertices, edges):
-        #check if the scc is splitted between 2 parts or more
-        scc_parts=[]
-        for v in scc:
-            if graph.nodes[v].part not in scc_parts:
-                scc_parts.append(graph.nodes[v].part)
-            if len(scc_parts) >= 2:
-                break
-        #if he is splitted:
-        if len(scc_parts) >= 2:
-            output_part = -1
-            #find out what part edges go to from this scc
-            for v in scc:
-                for out in graph.nodes[v].out_nodes:
-                    if out.idx not in scc:
-                        output_part = graph.nodes[out.idx].part
-                        break
-                if output_part != -1:
-                    break
-            #update the scc part to the part we found
-            for v in scc:
-                graph.nodes[v].part = output_part
-
-
 
 # scope names of all profiled layers in the model
 def _profiled_layers(module: nn.Module, depth, prefix, basic_block):
