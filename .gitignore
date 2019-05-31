@@ -14,3 +14,4 @@ model_Inference/notebook.py
 .pytest_cache/**
 playground/**
 model_inference/traces/*
+model_inference/graph/__pycache__/

@@ -2,11 +2,11 @@ import torch.nn as nn
 import torch
 
 
-from control_flow_graph import Graph, NodeTypes
+from .control_flow_graph import Graph, NodeTypes
 
 
 def post_process_partition(graph: Graph, nparts, part, weights=None):
-    graph.set_partition(part)
+    set_partition(graph, part)
     # make sure the inputs to an OP type node are all in the same part
     OP_inputs_partition_correction(graph, nparts)
     # make sure every scc in the graph is not splitted between different parts
@@ -110,3 +110,8 @@ def strongly_connected_components_iterative(vertices, edges):
                         del stack[index[v]:]
                         identified.update(scc)
                         yield scc
+
+
+def set_partition(graph: Graph, parts):
+    for node, part in zip(graph.nodes, parts):
+        node.part = part

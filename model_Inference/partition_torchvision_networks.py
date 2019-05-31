@@ -2,9 +2,7 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 from network_profiler import profileNetwork
-from control_flow_graph import build_control_flow_graph
-from METIS_graph_partition import part_graph
-from process_partition import post_process_partition
+from graph import build_net_graph, part_graph, post_process_partition, optimize_graph
 
 
 def partition_model(model, num_gpus, *sample_batch, num_iter=4, max_depth=100, basic_blocks=None, device="cuda", weights=None, wrappers=None):
@@ -13,8 +11,10 @@ def partition_model(model, num_gpus, *sample_batch, num_iter=4, max_depth=100, b
         weights = profileNetwork(model, *sample_batch, max_depth=max_depth,
                                  basic_block=basic_blocks, device=device, num_iter=num_iter)
 
-    graph = build_control_flow_graph(
+    graph = build_net_graph(
         model, *sample_batch, max_depth=max_depth, weights=weights, basic_block=basic_blocks, device=device)
+
+    optimize_graph(graph)
 
     adjlist = graph.adjacency_list()
     nodew = graph.get_weights()
@@ -83,4 +83,6 @@ def partition_torchvision():
 
 
 if __name__ == "__main__":
-    partition_torchvision()
+    print("a")
+
+    # partition_torchvision()
