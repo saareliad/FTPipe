@@ -411,7 +411,7 @@ class Graph():
         dot.render(file_name, directory=directory, cleanup=True)
 
 
-def post_process_partition(graph: Graph, nparts, weights, part):
+def post_process_partition(graph: Graph, nparts, part, weights=None):
     graph.set_partition(part)
 
     #make sure every scc in the graph is not splitted between different parts
@@ -433,25 +433,26 @@ def OP_inputs_partition_correction(graph: Graph, nparts):
     for v in graph.nodes:
         if v.type == NodeTypes.OP:
             #pick the part of the inputs as the one with least comunication
-            group = [v] + v.input_nodes
+            group = {u for u in v.in_nodes}
+            group.add(v)
             min_comunication = float("inf")
             best_part = -1
             for part in range(nparts):
-                for v in group:
-                    graph.nodes[v.idx].part = part
+                for u in group:
+                    graph.nodes[u.idx].part = part
                 comunication=compute_comunication(graph)
                 if  comunication < min_comunication:
                     min_comunication = comunication
                     best_part = part
-            for v in group:
-                graph.nodes[v.idx].part = best_part
+            for u in group:
+                graph.nodes[u.idx].part = best_part
 
 
 def compute_comunication(graph: Graph):
     count = 0
     for v in graph.nodes:
-        for input in v.in_nodes:
-            if input.part != v.part:
+        for u in v.in_nodes:
+            if u.part != v.part:
                 count += 1
     return count
 
@@ -463,7 +464,7 @@ def scc_partition_correction(graph: Graph):
         idx_out_nodes=[ h.idx for h in v.out_nodes ]
         edges.update( { v.idx : idx_out_nodes } )
 
-    for scc in strongly_connected_components_iterative(vertices, edges):
+    for scc in graph_alogrithms.strongly_connected_components_iterative(vertices, edges):
         #check if the scc is splitted between 2 parts or more
         scc_parts=[]
         for v in scc:

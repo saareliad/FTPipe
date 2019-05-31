@@ -2,9 +2,8 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 from network_profiler import profileNetwork
-from control_flow_graph import build_control_flow_graph
+from control_flow_graph import build_control_flow_graph, post_process_partition
 from METIS_graph_partition import part_graph
-from res_net_example import resnet20_cifar
 
 
 def partition_model(model, num_gpus, *sample_batch, num_iter=4, max_depth=100, basic_blocks=None, device="cuda", weights=None, wrappers=None):
@@ -23,11 +22,11 @@ def partition_model(model, num_gpus, *sample_batch, num_iter=4, max_depth=100, b
 
     weights = [weight_func(w) for w in nodew]
 
-    cuts, parts = part_graph(
+    nparts, partition = part_graph(
         adjlist, nparts=num_gpus, algorithm="metis", nodew=weights, contig=1)
 
-    graph.set_partition(parts)
-    return graph, cuts, parts  # partition_cost(weights, parts, cuts)
+    post_process_partition(graph, nparts, partition)
+    return graph, nparts, partition  # partition_cost(weights, parts, nparts)
 
 
 # TODO decide on weighting functional
@@ -69,21 +68,17 @@ def partition_torchvision():
     for net in networks:
         model = net()
         for d in depth:
-            try:
-                if net.__name__.find("inception") != -1:
-                    graph, _, _ = partition_model(
-                        model, num_partitions, torch.zeros(10, 3, 299, 299), max_depth=d)
-                else:
-                    graph, _, _ = partition_model(
-                        model, num_partitions, torch.zeros(10, 3, 224, 224), max_depth=d)
+            if net.__name__.find("inception") != -1:
+                graph, _, _ = partition_model(
+                    model, num_partitions, torch.zeros(10, 3, 299, 299), max_depth=d)
+            else:
+                graph, _, _ = partition_model(
+                    model, num_partitions, torch.zeros(10, 3, 224, 224), max_depth=d)
 
-                filename = f"{net.__name__} attempted {num_partitions} partitions at depth {d}"
-                graph.save(directory="partitions", file_name=filename,
-                           show_buffs_params=False, show_weights=False)
-                print(filename)
-
-            except Exception as e:
-                print(e)
+            filename = f"{net.__name__} attempted {num_partitions} partitions at depth {d}"
+            graph.save(directory="partitions", file_name=filename,
+                       show_buffs_params=False, show_weights=False)
+            print(filename)
 
 
 if __name__ == "__main__":
