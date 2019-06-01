@@ -4,7 +4,7 @@ from .optimize_graph import optimize_graph
 from .METIS_graph_partition import part_graph
 
 
-def partition_model(model, num_gpus, *sample_batch, num_iter=4, max_depth=100, basic_blocks=None, device="cuda", weights=None, wrappers=None):
+def partition_model(model, num_gpus, *sample_batch, max_depth=100, basic_blocks=None, device="cuda", weights=None):
 
     if weights is None:
         weights = {}
