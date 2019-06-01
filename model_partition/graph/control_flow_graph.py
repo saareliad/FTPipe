@@ -320,11 +320,10 @@ class Graph():
         except ImportError as _:
             print("only works in python notebooks")
 
-    def save(self,file_name,directory=None, show_buffs_params=False,show_weights=True):
+    def save(self,file_name,directory, show_buffs_params=False,show_weights=True):
         dot = self.build_dot(show_buffs_params,show_weights=show_weights)
         dot.format = "pdf"
         import os
-        directory=os.getcwd() if directory is None else directory
         if os.path.exists(f"{directory}/{file_name}.pdf"):
             os.remove(f"{directory}/{file_name}.pdf")
         dot.render(file_name, directory=directory, cleanup=True)

@@ -1,6 +1,7 @@
 import torch
 import torchvision.models as models
 from model_partition import partition_network_using_profiler
+import os
 
 
 def torchvision_write_traces():
@@ -43,11 +44,12 @@ def partition_torchvision():
                     model, num_partitions, torch.zeros(10, 3, 224, 224), max_depth=d)
 
             filename = f"{net.__name__} attempted {num_partitions} partitions at depth {d}"
-            graph.save(directory="partitions", file_name=filename,
+
+            curr_dir = os.path.dirname(os.path.realpath(__file__))
+            out_dir = f"{curr_dir}\\partitions"
+            graph.save(directory=out_dir, file_name=filename,
                        show_buffs_params=False, show_weights=False)
-            break
             print(filename)
-        break
 
 
 if __name__ == "__main__":
