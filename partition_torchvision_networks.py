@@ -1,7 +1,7 @@
-import torch
-import torchvision.models as models
-from model_partition import partition_network_using_profiler
 import os
+from model_partition import partition_network_using_profiler
+import torch
+from sample_models import *
 
 
 def torchvision_write_traces():
@@ -29,8 +29,8 @@ def torchvision_write_traces():
 
 
 def partition_torchvision():
-    networks = [models.alexnet, models.resnet18, models.vgg11_bn,
-                models.squeezenet1_0, models.inception_v3, models.densenet121]
+    networks = [alexnet, resnet18, vgg11_bn, squeezenet1_0,
+                inception_v3, densenet121, GoogLeNet, LeNet, WideResNet]
     depth = [0, 1, 100]
     num_partitions = 4
     for net in networks:

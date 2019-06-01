@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+__all__ = ["GoogLeNet"]
+
 
 class Inception(nn.Module):
     def __init__(self, in_planes, kernel_1_x, kernel_3_in, kernel_3_x, kernel_5_in, kernel_5_x, pool_planes):

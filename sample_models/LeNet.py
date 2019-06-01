@@ -1,5 +1,7 @@
 import torch.nn as nn
 
+__all__ = ["LeNet"]
+
 
 class LeNet(nn.Module):
     def __init__(self):

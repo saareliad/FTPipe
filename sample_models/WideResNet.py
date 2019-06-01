@@ -2,6 +2,8 @@ import math
 import torch
 import torch.nn as nn
 
+__all__ = ["WideResNet"]
+
 
 class BasicBlock(nn.Module):
     def __init__(self, in_planes, out_planes, stride, drop_rate=0.0):
