@@ -7,11 +7,6 @@ models/__pycache__/*
 __pycache__/*
 ideas/*
 .idea/
-model_inference/hiddenlayer/**
-model_inference/metis/**
-model_Inference/playground.py
-model_Inference/notebook.py
 .pytest_cache/**
 playground/**
-model_inference/traces/*
-model_inference/graph/__pycache__/
+model_partition/graph/__pycache__/

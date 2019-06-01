@@ -1,5 +1,5 @@
-from .network_profiler import profileNetwork
-from .graph import partition_model
+from model_partition.network_profiler import profileNetwork
+from model_partition.graph import partition_model
 
 
 def partition_network_using_profiler(model, num_gpus, *sample_batch, num_iter=4, max_depth=100, basic_blocks=None, device="cuda"):
