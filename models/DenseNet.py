@@ -1,7 +1,6 @@
 import re
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.utils.model_zoo as model_zoo
 from collections import OrderedDict
 
@@ -29,12 +28,11 @@ class _DenseLayer(nn.Sequential):
         self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
                                            kernel_size=3, stride=1, padding=1, bias=False)),
         self.drop_rate = drop_rate
+        if self.drop_rate > 0:
+            self.add_module("dropout", nn.Dropout(p=self.drop_rate))
 
     def forward(self, x):
         new_features = super(_DenseLayer, self).forward(x)
-        if self.drop_rate > 0:
-            new_features = F.dropout(
-                new_features, p=self.drop_rate, training=self.training)
         return torch.cat([x, new_features], 1)
 
 
@@ -101,6 +99,9 @@ class DenseNet(nn.Module):
         # Final batch norm
         self.features.add_module('norm5', nn.BatchNorm2d(num_features))
 
+        self.relu = nn.ReLU()
+        self.adaptive_avg_pool2d = nn.AdaptiveAvgPool2d((1, 1))
+
         # Linear layer
         self.classifier = nn.Linear(num_features, num_classes)
 
@@ -116,8 +117,9 @@ class DenseNet(nn.Module):
 
     def forward(self, x):
         features = self.features(x)
-        out = F.relu(features, inplace=True)
-        out = F.adaptive_avg_pool2d(out, (1, 1)).view(features.size(0), -1)
+        out = self.relu(features)
+        out = self.adaptive_avg_pool2d(out)
+        out = out.view(features.size(0), -1)
         out = self.classifier(out)
         return out
 

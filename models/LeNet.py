@@ -1,5 +1,4 @@
 import torch.nn as nn
-import torch.nn.functional as func
 
 
 class LeNet(nn.Module):
@@ -10,14 +9,20 @@ class LeNet(nn.Module):
         self.fc1 = nn.Linear(16*5*5, 120)
         self.fc2 = nn.Linear(120, 84)
         self.fc3 = nn.Linear(84, 10)
+        self.relu1 = nn.ReLU()
+        self.relu2 = nn.ReLU()
+        self.relu3 = nn.ReLU()
+        self.relu4 = nn.ReLU()
+        self.max_pool2d1 = nn.MaxPool2d(2)
+        self.max_pool2d2 = nn.MaxPool2d(2)
 
     def forward(self, x):
-        x = func.relu(self.conv1(x))
-        x = func.max_pool2d(x, 2)
-        x = func.relu(self.conv2(x))
-        x = func.max_pool2d(x, 2)
+        x = self.relu1(self.conv1(x))
+        x = self.max_pool2d1(x)
+        x = self.relu2(self.conv2(x))
+        x = self.max_pool2d2(x)
         x = x.view(x.size(0), -1)
-        x = func.relu(self.fc1(x))
-        x = func.relu(self.fc2(x))
+        x = self.relu3(self.fc1(x))
+        x = self.relu4(self.fc2(x))
         x = self.fc3(x)
         return x
