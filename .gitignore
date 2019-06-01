@@ -10,3 +10,4 @@ ideas/*
 .pytest_cache/**
 playground/**
 model_partition/graph/__pycache__/
+*.pyc
