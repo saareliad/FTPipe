@@ -127,7 +127,7 @@ class Inception3(nn.Module):
         x = self.Mixed_7c(x)
         # N x 2048 x 8 x 8
         # Adaptive average pooling
-        x = self.adaptive_avg_pool2d(2)
+        x = self.adaptive_avg_pool2d(x)
         # N x 2048 x 1 x 1
         x = self.dropout(x)
         # N x 2048 x 1 x 1

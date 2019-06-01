@@ -1,12 +1,12 @@
 import os
 from model_partition import partition_network_using_profiler
 import torch
-from sample_models import *
+from sample_models import alexnet, resnet18, vgg11_bn, squeezenet1_0, inception_v3, densenet121, GoogLeNet, LeNet, WideResNet
 
 
 def torchvision_write_traces():
-    networks = [models.alexnet, models.resnet18, models.vgg11_bn,
-                models.squeezenet1_0, models.inception_v3, models.densenet121]
+    networks = [alexnet, resnet18, vgg11_bn, squeezenet1_0,
+                inception_v3, densenet121, GoogLeNet, LeNet, WideResNet]
     for net in networks:
         model = net(pretrained=False).to("cuda:0")
         if net.__name__.find("inception") != -1:
@@ -19,12 +19,12 @@ def torchvision_write_traces():
                 model, x)
             trace_graph = trace_graph.graph()
             trace = trace_graph.__str__()
-            import os
             filename = f"{net.__name__}trace"
-            directory = f"{os.getcwd()}\\traces"
-            if not os.path.exists(directory):
-                os.makedirs(directory)
-            with open(f"{directory}\\{filename}.txt", "w") as file:
+            curr_dir = os.path.dirname(os.path.realpath(__file__))
+            out_dir = f"{curr_dir}\\net_traces"
+            if not os.path.exists(out_dir):
+                os.makedirs(out_dir)
+            with open(f"{out_dir}\\{filename}.txt", "w") as file:
                 file.write(trace)
 
 
@@ -36,12 +36,19 @@ def partition_torchvision():
     for net in networks:
         model = net()
         for d in depth:
+            print(f"current net is {net.__name__}")
             if net.__name__.find("inception") != -1:
                 graph, _, _ = partition_network_using_profiler(
-                    model, num_partitions, torch.zeros(10, 3, 299, 299), max_depth=d)
+                    model, num_partitions, torch.zeros(4, 3, 299, 299), max_depth=d)
+            elif net.__name__.find("GoogLeNet") != -1:
+                graph, _, _ = partition_network_using_profiler(
+                    model, num_partitions, torch.zeros(4, 3, 32, 32), max_depth=d)
+            elif net.__name__.find("LeNet") != -1:
+                graph, _, _ = partition_network_using_profiler(
+                    model, num_partitions, torch.zeros(4, 3, 32, 32), max_depth=d)
             else:
                 graph, _, _ = partition_network_using_profiler(
-                    model, num_partitions, torch.zeros(10, 3, 224, 224), max_depth=d)
+                    model, num_partitions, torch.zeros(4, 3, 224, 224), max_depth=d)
 
             filename = f"{net.__name__} attempted {num_partitions} partitions at depth {d}"
 
