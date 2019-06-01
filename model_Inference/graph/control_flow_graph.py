@@ -5,10 +5,9 @@ from enum import Enum
 
 from copy import copy
 
-__all__ = ['build_net_graph']
 
 
-def build_net_graph(model, *sample_batch, max_depth=100, weights=None, basic_block=None, device="cuda"):
+def build_graph_from_trace(model, *sample_batch, max_depth=100, weights=None, basic_block=None, device="cuda"):
     device = "cpu" if not torch.cuda.is_available() else device
     model_class_name = type(model).__name__
 
