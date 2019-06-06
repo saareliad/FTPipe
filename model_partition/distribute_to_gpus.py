@@ -18,6 +18,13 @@ def move_to_devices(model: nn.Module, depth, basic_block, device_lst: list, grap
     return model
 
 
+def wrap_layers(model: nn.Module, depth, basic_block, device_lst: list, graph: Graph):
+    partition_lst = group_by_partition(graph, len(device_lst))
+    partition_inputs = map(partition_input_nodes, partition_lst)
+    partition_outputs = map(partition_output_nodes, partition_lst)
+    in_out, out_in = in_out_connections(partition_inputs, partition_outputs)
+
+
 def part_to_device(device_lst: list, partition_lst: list):
     in_nodes = [
         node for part in partition_lst for node in part if node.type == NodeTypes.IN]
@@ -50,7 +57,7 @@ def move_layers_to_devices(module: nn.Module, depth, prefix, basic_block, scope_
     for name, sub_module in module._modules.items():
         if len(list(sub_module.children())) == 0 or (basic_block != None and isinstance(sub_module, basic_block)) or depth == 0:
             scope = prefix+"/"+type(sub_module).__name__+f"[{name}]"
-            sub_module.to(scope_to_dev[scope])
+            module._modules[name].to(scope_to_dev[scope])
         else:
             move_layers_to_devices(sub_module, depth-1, prefix + "/"+type(
                 sub_module).__name__+f"[{name}]", basic_block, scope_to_dev)
@@ -71,3 +78,49 @@ def move_buffers_params_to_devices(module: nn.Module, prefix, buffer_and_params_
     for name, sub_module in module._modules.items():
         move_buffers_params_to_devices(sub_module, prefix +
                                        "/"+type(sub_module).__name__+f"[{name}]", buffer_and_params_scopes_to_dev)
+
+
+def partition_input_nodes(partition):
+    def is_input_node(node):
+        return not node.in_nodes or any(in_node.part != node.part for in_node in node.in_nodes)
+    part_inputs = map(is_input_node, partition)
+    return [node for node in lst for lst in part_inputs]
+
+
+def partition_output_nodes(partition):
+    def is_output_node(node):
+        return not node.out_nodes or any(out_node.part != node.part for out_node in node.out_nodes)
+    part_outputs = map(is_output_node, partition)
+    return [node for node in lst for lst in part_outputs]
+
+
+# find which input is connected to which output and vice versa
+def in_out_connections(inputs, outputs):
+    inputs_to_outputs = {in_node: set() for in_node in inputs}
+    outputs_to_inputs = {out_node: set() for out_node in outputs}
+
+    for in_node in inputs:
+        # run bfs find which input is connected to which output
+        open_nodes = [in_node]
+        closed_nodes = set()
+        while len(open_nodes) > 0:
+            node = open_nodes.pop()
+            closed_nodes.add(node)
+            if node in outputs:
+                inputs_to_outputs[in_node].add(node)
+            else:
+                open_nodes += list(node.out_nodes.difference(closed_nodes))
+
+    for out_node in inputs:
+        # run bfs find which output is connected to which input
+        open_nodes = [out_node]
+        closed_nodes = set()
+        while len(open_nodes) > 0:
+            node = open_nodes.pop()
+            closed_nodes.add(node)
+            if node in inputs:
+                outputs_to_inputs[out_node].add(node)
+            else:
+                open_nodes += list(node.out_nodes.difference(closed_nodes))
+
+    return inputs_to_outputs, outputs_to_inputs
