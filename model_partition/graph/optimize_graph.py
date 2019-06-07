@@ -83,23 +83,3 @@ def _merge_op_chains(graph: Graph):
     # op chains need to be placed on the same device anyways
     graph._remove_nodes(to_remove)
     graph._remove_nodes(to_remove_reverse, reverse=True)
-
-
-def _remove_nodes(graph: Graph, condition, reverse=False):
-    optimized_graph = []
-
-    nodes = reversed(graph.nodes) if reverse else graph.nodes
-
-    for node in nodes:
-        if condition(node):
-            # connect inputs to outputs directly
-            for in_node in node.in_nodes:
-                in_node.remove_out_node(node)
-                in_node.add_out_node(node.out_nodes)
-            for out_node in node.out_nodes:
-                out_node.remove_in_node(node)
-                out_node.add_in_node(node.in_nodes)
-        else:
-            optimized_graph.append(node)
-
-    graph.nodes = optimized_graph

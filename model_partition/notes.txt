@@ -44,5 +44,3 @@ graph optimizations:
 3. remove parameters and buffers that were accounted for by the profiler.
 
 #TODO what if we return an intermediate result of the model
-
-#TODO check if time measurements for first layer are correct
