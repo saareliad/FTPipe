@@ -77,7 +77,7 @@ class ModelParallelResNet50(ResNet):
             self.layer2
         ).to(dev1)
 
-        self.seq1 = LayerWrapper(self.seq1, 0, dev1, output_shape=(1, 512, 28, 28), counter=self.counter)
+        self.seq1 = LayerWrapper(self.seq1, 0, dev1, output_shapes=((1, 512, 28, 28),), counter=self.counter)
 
         dev2 = 'cuda:1' if torch.cuda.is_available() else 'cpu'
 
@@ -87,11 +87,10 @@ class ModelParallelResNet50(ResNet):
             self.avgpool,
         ).to(dev2)
 
-        self.seq2 = SyncWrapper(self.seq2, dev2, 1, output_shape=(1, 2048, 1, 1), counter=self.counter,
-                                prev_layer=self.act_saving)
+        self.seq2 = SyncWrapper(self.seq2, dev2, 1, output_shapes=((1, 2048, 1, 1),), counter=self.counter)
 
         self.fc.to(dev2)
-        self.fc = LayerWrapper(self.fc, 1, dev2, output_shape=(1, 1000), counter=self.counter)
+        self.fc = LayerWrapper(self.fc, 1, dev2, output_shapes=((1, 1000),), counter=self.counter)
 
     def forward(self, x):
         x = self.act_saving(x)
