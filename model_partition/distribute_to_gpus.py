@@ -22,7 +22,8 @@ def wrap_layers(model: nn.Module, depth, basic_block, device_lst: list, graph: G
     partition_lst = group_by_partition(graph, len(device_lst))
     partition_inputs = map(partition_input_nodes, partition_lst)
     partition_outputs = map(partition_output_nodes, partition_lst)
-    in_out, out_in = in_out_connections(partition_inputs, partition_outputs)
+    in_out, out_in, in_in, out_out = in_out_connections(
+        partition_inputs, partition_outputs)
 
 
 def part_to_device(device_lst: list, partition_lst: list):
@@ -96,31 +97,44 @@ def partition_output_nodes(partition):
 
 # find which input is connected to which output and vice versa
 def in_out_connections(inputs, outputs):
-    inputs_to_outputs = {in_node: set() for in_node in inputs}
-    outputs_to_inputs = {out_node: set() for out_node in outputs}
-
+    inputs_to_outputs = {}
     for in_node in inputs:
         # run bfs find which input is connected to which output
         open_nodes = [in_node]
         closed_nodes = set()
+        outs = set()
         while len(open_nodes) > 0:
             node = open_nodes.pop()
             closed_nodes.add(node)
             if node in outputs:
-                inputs_to_outputs[in_node].add(node)
+                outs.add(node)
             else:
                 open_nodes += list(node.out_nodes.difference(closed_nodes))
+        inputs_to_outputs[in_node] = outs
 
-    for out_node in inputs:
+    outputs_to_inputs = {}
+    for out_node in outputs:
         # run bfs find which output is connected to which input
         open_nodes = [out_node]
         closed_nodes = set()
+        ins = set()
         while len(open_nodes) > 0:
             node = open_nodes.pop()
             closed_nodes.add(node)
             if node in inputs:
-                outputs_to_inputs[out_node].add(node)
+                ins.add(node)
             else:
                 open_nodes += list(node.out_nodes.difference(closed_nodes))
+        outputs_to_inputs[out_node] = ins
 
-    return inputs_to_outputs, outputs_to_inputs
+    inputs_to_inputs = {}
+    for in_node, outs in inputs_to_outputs.items():
+        nodes = {node for node in outputs_to_inputs[out] for out in outs}
+        inputs_to_inputs[in_node] = nodes
+
+    outputs_to_outputs = {}
+    for out_node, ins in outputs_to_inputs.items():
+        nodes = {node for node in inputs_to_outputs[in_n] for in_n in ins}
+        outputs_to_outputs[out_node] = nodes
+
+    return inputs_to_outputs, outputs_to_inputs, inputs_to_inputs, outputs_to_outputs
