@@ -74,6 +74,8 @@ def _combine_params_and_buffers_into_OP_nodes(graph: Graph):
 
 
 def _merge_op_chains(graph: Graph):
+    # TODO in order to do this correctly we need to node which output belongs to each edge
+    # possibly via using input shapes also we need to see if it's the best course of action
     def to_remove(n): return n.type == NodeTypes.OP and len(n.out_nodes) > 0 and all(
         o.type == NodeTypes.OP for o in n.out_nodes)
 
