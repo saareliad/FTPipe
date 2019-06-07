@@ -143,6 +143,8 @@ class SyncWrapper(nn.Module):
             output = self.module(*cur_inputs)
         else:
             output = tuple([torch.zeros(*output_shape).to(self.device) for output_shape in self.output_shapes])
+            if len(output) == 1:
+                output = output[0]
 
         return output
 
@@ -175,12 +177,14 @@ class SyncWrapper(nn.Module):
         # will be propagated before and after data passes through submodule).
         if self.counter.is_last_input_valid(self.gpu_num):
             # the input is relevant.
-            cur_input = self.last_input
+            cur_inputs = self.last_inputs
             with autograd.no_grad():
-                output = self.module(cur_input)
+                output = self.module(*cur_inputs)
         else:
             # the input is garbage.
             output = tuple([torch.zeros(*output_shape).to(self.device) for output_shape in self.output_shapes])
+            if len(output) == 1:
+                output = output[0]
 
         # check if the input to be replaced and scheduled to run on the next
         if self.counter.is_input_valid(self.gpu_num):
@@ -277,12 +281,17 @@ class ActivationSavingLayer(nn.Module):
         # if we have an activation to pass
         if self.counter.is_last_input_valid(0):
             output = self.last_inputs
+            if not isinstance(output, tuple):
+                output = (output,)
+
             for idx, t in enumerate(output):
                 t.register_hook(lambda grad: self.act_hook(grad, idx))
         else:
             # if this iteration is one we should not work in
             output = tuple([torch.zeros(*input.size()).to(self.device) for input in inputs])
 
+        if len(output) == 1:
+            output = output[0]
         return output
 
     def save_activation(self, *moved_inputs: Tuple[torch.Tensor, ...]):
@@ -310,6 +319,9 @@ class ActivationSavingLayer(nn.Module):
         elif self.cur_mode is ForwardMode.train:
             self.save_activation(*moved_inputs)
 
+        if len(moved_inputs) == 0:
+            moved_inputs = moved_inputs[0]
+
         return moved_inputs
 
 
@@ -329,4 +341,7 @@ class LayerWrapper(nn.Module):
             with autograd.no_grad():
                 return self.module(*inputs)
         else:
-            return tuple([torch.zeros(*output_shape).to(self.device) for output_shape in self.output_shapes])
+            out = tuple([torch.zeros(*output_shape).to(self.device) for output_shape in self.output_shapes])
+            if len(out) == 1:
+                out = out[0]
+            return out
