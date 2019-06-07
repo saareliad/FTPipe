@@ -6,7 +6,7 @@ from .control_flow_graph import Graph, NodeTypes
 def optimize_graph(graph: Graph):
     _combine_OP_nodes_under_the_same_scope(graph)
     _combine_params_and_buffers_into_OP_nodes(graph)
-    _merge_op_chains(graph)
+    # _merge_op_chains(graph) TODO manage output shapes for such nodes
     graph._normalize_indices()
 
 
@@ -14,18 +14,24 @@ def _combine_OP_nodes_under_the_same_scope(graph: Graph):
     # optimization that reduces number of nodes in the graph
     # combine nodes that have a commom scope we do this because\n
     # if nodes have the same scopeName than they were profiled together
-    node_of_scope = dict()
+    scope_representative = dict()
+    scope_nodes = dict()
     optimized_graph = []
 
     # get the nodes of the optimized graph
     for node in graph.nodes:
-        if not node.scope in node_of_scope:
+        if not node.scope in scope_representative:
             optimized_graph.append(node)
-            node_of_scope[node.scope] = node
+            scope_nodes[node.scope] = [node]
+            scope_representative[node.scope] = node
         else:
             # add edges create the super set of all edeges in the scope
-            node_of_scope[node.scope].add_in_node(node.in_nodes)
-            node_of_scope[node.scope].add_out_node(node.out_nodes)
+            scope_representative[node.scope].add_in_node(node.in_nodes)
+            scope_representative[node.scope].add_out_node(node.out_nodes)
+            scope_nodes[node.scope].append(node)
+
+    def is_scope_output(node):
+        return not node.out_nodes or any(out_node.scope != node.scope for out_node in node.out_nodes)
 
     for node in optimized_graph:
         # get the sets of all incoming/outgoing scopes
@@ -36,10 +42,20 @@ def _combine_OP_nodes_under_the_same_scope(graph: Graph):
         outgoing_scopes = {n.scope for n in node.out_nodes
                            if n.scope != node.scope}
 
-        out_nodes = {node_of_scope[out_node]
+        scope_outs = []
+        print(node.scope)
+        for scope_node in scope_nodes[node.scope]:
+            if is_scope_output(scope_node):
+                scope_outs += scope_node.output_shape
+                if node.scope.find("bias") == -1 and node.scope.find("weight") == -1:
+                    print(scope_node.output_shape)
+
+        out_nodes = {scope_representative[out_node]
                      for out_node in outgoing_scopes}
-        in_nodes = {node_of_scope[in_node]
+        in_nodes = {scope_representative[in_node]
                     for in_node in incoming_scopes}
+
+        node.output_shape = scope_outs
 
         node.in_nodes = in_nodes
         node.out_nodes = out_nodes

@@ -11,6 +11,11 @@ def move_to_devices(model: nn.Module, depth, basic_block, device_lst: list, grap
     scope_to_dev = {scope: partition_to_device[part]
                     for scope, part in scope_to_part.items()}
 
+    partition_inputs = map(partition_input_nodes, partition_lst)
+    partition_outputs = map(partition_output_nodes, partition_lst)
+    in_out, out_in, in_in, out_out = in_out_connections(
+        partition_inputs, partition_outputs)
+
     model_name = type(model).__name__
     move_layers_to_devices(model, depth, model_name, basic_block, scope_to_dev)
     move_buffers_params_to_devices(model, model_name, scope_to_dev)
@@ -19,11 +24,7 @@ def move_to_devices(model: nn.Module, depth, basic_block, device_lst: list, grap
 
 
 def wrap_layers(model: nn.Module, depth, basic_block, device_lst: list, graph: Graph):
-    partition_lst = group_by_partition(graph, len(device_lst))
-    partition_inputs = map(partition_input_nodes, partition_lst)
-    partition_outputs = map(partition_output_nodes, partition_lst)
-    in_out, out_in, in_in, out_out = in_out_connections(
-        partition_inputs, partition_outputs)
+    pass
 
 
 def part_to_device(device_lst: list, partition_lst: list):
