@@ -319,7 +319,7 @@ class ActivationSavingLayer(nn.Module):
         elif self.cur_mode is ForwardMode.train:
             self.save_activation(*moved_inputs)
 
-        if len(moved_inputs) == 0:
+        if len(moved_inputs) == 1:
             moved_inputs = moved_inputs[0]
 
         return moved_inputs
