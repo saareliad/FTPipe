@@ -338,6 +338,9 @@ class LayerWrapper(nn.Module):
 
     def forward(self, *inputs):
         if self.counter.is_last_input_valid(self.gpu_num):
+            if self.counter.cur_mode == ForwardMode.backward:
+                return self.module(*inputs)
+
             with autograd.no_grad():
                 return self.module(*inputs)
         else:
