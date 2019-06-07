@@ -1,8 +1,8 @@
 import math
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from .Flatten_Layer import FlattenLayer
+
+__all__ = ["WideResNet"]
 
 
 class BasicBlock(nn.Module):
@@ -20,6 +20,8 @@ class BasicBlock(nn.Module):
         self.equalInOut = (in_planes == out_planes)
         self.convShortcut = (not self.equalInOut) and nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride,
                                                                 padding=0, bias=False) or None
+        if self.droprate > 0:
+            self.dropout = nn.Dropout(p=self.droprate)
 
     def forward(self, x):
         if not self.equalInOut:
@@ -29,7 +31,7 @@ class BasicBlock(nn.Module):
 
         out = self.relu2(self.bn2(self.conv1(out if self.equalInOut else x)))
         if self.droprate > 0:
-            out = F.dropout(out, p=self.droprate, training=self.training)
+            out = self.dropout(out)
         out = self.conv2(out)
         return torch.add(x if self.equalInOut else self.convShortcut(x), out)
 
@@ -53,7 +55,7 @@ class NetworkBlock(nn.Module):
 
 
 class WideResNet(nn.Module):
-    def __init__(self, depth, num_classes, widen_factor=1, drop_rate=0.0):
+    def __init__(self, depth=10, num_classes=1000, widen_factor=1, drop_rate=0.0):
         super(WideResNet, self).__init__()
         n_channels = [16, 16 * widen_factor,
                       32 * widen_factor, 64 * widen_factor]
@@ -76,7 +78,6 @@ class WideResNet(nn.Module):
         self.bn1 = nn.BatchNorm2d(n_channels[3])
         self.relu = nn.ReLU(inplace=True)
         self.avg_pool = nn.AvgPool2d(8)
-        self.flatten = FlattenLayer()
         self.fc = nn.Linear(n_channels[3], num_classes)
 
         self.nChannels = n_channels[3]
@@ -98,6 +99,5 @@ class WideResNet(nn.Module):
         out = self.block3(out)
         out = self.relu(self.bn1(out))
         out = self.avg_pool(out)
-        out = self.flatten(out)
-        # out = out.view(-1, self.nChannels)
+        out = out.view(-1, self.nChannels)
         return self.fc(out)

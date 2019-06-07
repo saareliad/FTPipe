@@ -153,6 +153,14 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_block=None, device="cuda
         layers_dict.keys(), forward_times, backward_times, param_sizes, buffer_sizes, layer_input_sizes, layer_output_sizes)}
 
     _unwrap_layers(net)
+
+    # TODO fix time measurement for first layer
+    max_node = list(layers_profile.items())[0]
+    for name, node in layers_profile.items():
+        if node.forward_time > max_node[1].forward_time:
+            max_node = (name, node)
+    layers_profile[max_node[0]] = Profile(1, 1, 1, 1, 1, 1)
+
     return layers_profile
 
 

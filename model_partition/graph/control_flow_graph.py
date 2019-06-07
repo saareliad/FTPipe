@@ -2,18 +2,17 @@
 import torch.nn as nn
 import torch
 from enum import Enum
-from pprint import pprint
-import inspect
 
-__all__ = ['build_control_flow_graph']
+from copy import copy
 
 
-def build_control_flow_graph(model, *sample_batch, max_depth=100, weights=None, basic_block=None, device="cuda"):
+
+def build_graph_from_trace(model, *sample_batch, max_depth=100, weights=None, basic_block=None, device="cuda"):
     device = "cpu" if not torch.cuda.is_available() else device
     model_class_name = type(model).__name__
-    
+
     buffer_param_names = _buffer_and_params_scopes(model,  model_class_name)
-    
+
     weights = weights if weights != None else {}
 
     layerNames = _profiled_layers(
@@ -27,8 +26,8 @@ def build_control_flow_graph(model, *sample_batch, max_depth=100, weights=None, 
     with torch.no_grad():
         trace_graph, _ = torch.jit.get_trace_graph(model, inputs)
         trace_graph = trace_graph.graph()
-      
-    return Graph(layerNames, num_inputs, buffer_param_names,trace_graph, weights)
+
+    return Graph(layerNames, num_inputs, buffer_param_names, trace_graph, weights)
 
 
 class NodeTypes(Enum):
@@ -61,7 +60,7 @@ class Node():
      parallel edges in the same direction are not allowed
     '''
 
-    def __init__(self, scope, idx, node_type: NodeTypes, incoming_nodes=None, weight=0, part=0):
+    def __init__(self, scope, idx, node_type: NodeTypes, incoming_nodes=None, weight=0, part=10):
         self.scope = scope
         self.idx = idx
         self.type = node_type
@@ -110,7 +109,7 @@ class Graph():
     the edges represent the data flow.
     '''
 
-    def __init__(self, profiled_layers, num_inputs,buffer_param_names, trace_graph, weights: dict):
+    def __init__(self, profiled_layers, num_inputs, buffer_param_names, trace_graph, weights: dict):
         self.nodes = []
         self.profiled_layers = profiled_layers
         self.num_inputs_buffs_params = 0
@@ -125,9 +124,6 @@ class Graph():
         self._add_IO_nodes(trace_graph.inputs())
         self._add_OP_nodes(trace_graph.nodes())
         self._remove_constant_nodes()
-        self._combine_OP_nodes_under_the_same_scope()
-        self._combine_params_and_buffers_into_OP_nodes()
-        self._merge_op_chains()
         self._normalize_indices()
 
     def _add_IO_nodes(self, input_nodes):
@@ -146,7 +142,7 @@ class Graph():
             else:
                 node_type = NodeTypes.BUFF_PARAM
                 node_scope = self.buffer_param_names[idx - self.num_inputs]
-            
+
             new_node = Node(node_scope, idx,
                             node_type, weight=node_weight)
             self.nodes.append(new_node)
@@ -157,12 +153,12 @@ class Graph():
         '''
         add nodes representing the layers/ops of the model
         '''
+        num_extra_nodes = 0
         for idx, trace_node in enumerate(OP_nodes):
             node_scope = self._find_encasing_layer(trace_node.scopeName())
             input_nodes = {self.nodes[i.unique()]
                            for i in trace_node.inputs()}
-
-            node_idx = self.num_inputs_buffs_params+idx
+            node_idx = self.num_inputs_buffs_params+idx+num_extra_nodes
             new_node = None
 
             # profiled Layer
@@ -182,6 +178,20 @@ class Graph():
 
             self.nodes.append(new_node)
 
+            # add node for each output
+            for i, _ in enumerate(trace_node.outputs()):
+                if i != 0:
+                    out_node: Node = copy(new_node)
+                    out_node.idx += i
+                    out_node.add_in_node(self.nodes[node_idx+i-1])
+                    self.nodes[node_idx+i-1].add_out_node(out_node)
+                    self.nodes.append(out_node)
+                    num_extra_nodes += 1
+
+    def _remove_constant_nodes(self):
+        # remove nodes representing constants as they do not provide any useful info
+        self._remove_nodes(lambda n: "::Constant" in n.scope)
+
     def _find_encasing_layer(self, scopeName: str):
         '''
         find the closest scope which encases scopeName
@@ -194,71 +204,6 @@ class Graph():
                 most_specific_scope = layer_scope
 
         return most_specific_scope
-
-    def _combine_OP_nodes_under_the_same_scope(self):
-        # optimization that reduces number of nodes in the graph
-        # combine nodes that have a commom scope we do this because\n
-        # if nodes have the same scopeName than they were profiled together
-
-        node_of_scope = dict()
-        optimized_graph = []
-
-        # get the nodes of the optimized graph
-        for node in self.nodes:
-            if not node.scope in node_of_scope:
-                optimized_graph.append(node)
-                node_of_scope[node.scope] = node
-
-            else:
-                # add edges create the super set of all edeges in the scope
-                node_of_scope[node.scope].add_in_node(node.in_nodes)
-                node_of_scope[node.scope].add_out_node(node.out_nodes)
-
-        for node in optimized_graph:
-            # get the sets of all incoming/outgoing scopes
-            # those will dictate the new set of edges and
-            # remove the internal edges of the scope
-            incoming_scopes = {n.scope for n in node.in_nodes
-                               if n.scope != node.scope}
-            outgoing_scopes = {n.scope for n in node.out_nodes
-                               if n.scope != node.scope}
-
-            out_nodes = {node_of_scope[out_node]
-                         for out_node in outgoing_scopes}
-            in_nodes = {node_of_scope[in_node]
-                        for in_node in incoming_scopes}
-
-            node.in_nodes = in_nodes
-            node.out_nodes = out_nodes
-
-        self.nodes = optimized_graph
-
-    def _combine_params_and_buffers_into_OP_nodes(self):
-        optimized_graph=[]
-        is_buffer_or_param = lambda n: n.type==NodeTypes.BUFF_PARAM
-        for node in self.nodes:
-            if is_buffer_or_param(node) and self._find_encasing_layer(node.scope)!='':
-                for n in node.out_nodes:
-                    n.remove_in_node(node)
-            else:
-                optimized_graph.append(node)
-
-        self.nodes=optimized_graph
-
-    def _remove_constant_nodes(self):
-        # remove nodes representing constants as they do not provide any useful info
-        self._remove_nodes(lambda n: "::Constant" in n.scope)
-
-    def _merge_op_chains(self):
-        def to_remove(n): return n.type == NodeTypes.OP and len(n.out_nodes) > 0 and all(
-            o.type == NodeTypes.OP for o in n.out_nodes)
-
-        def to_remove_reverse(n): return n.type == NodeTypes.OP and len(n.in_nodes) > 0 and all(
-            o.type == NodeTypes.OP for o in n.in_nodes)
-
-        # op chains need to be placed on the same device anyways
-        self._remove_nodes(to_remove)
-        self._remove_nodes(to_remove_reverse,reverse=True)
 
     def _remove_nodes(self, condition,reverse=False):
         optimized_graph = []
@@ -303,21 +248,6 @@ class Graph():
         for idx, node in enumerate(self.nodes):
             node.idx = idx
 
-    def set_partition(self, parts):
-        for node, part in zip(self.nodes, parts):
-            node.part = part
-
-    def _add_dummy_root(self):
-        root = Node("dummy_root",-1,NodeTypes.IN)
-        for node in self.nodes:
-            if node.type == NodeTypes.IN:
-                root.add_out_node(node)
-                node.add_in_node(root)
-            else:
-                break
-        self.nodes=[root]+self.nodes
-        self._normalize_indices()
-
     def build_dot(self, show_buffs_params=False,show_weights=True):
         '''
         return a graphviz representation of the graph
@@ -359,7 +289,7 @@ class Graph():
                  fontcolor=theme["font_color"],
                  fontname=theme["font_name"])
 
-        colors={0:'grey',1:'green',2:'red',3:'yellow',4:'orange',5:'brown',6:'purple',7:'pink'}
+        colors={0:'grey',1:'green',2:'red',3:'yellow',4:'orange',5:'brown',6:'purple',7:'pink',10:"white"}
 
 
         def hide_node(node):
@@ -390,29 +320,13 @@ class Graph():
         except ImportError as _:
             print("only works in python notebooks")
 
-    def save(self,file_name,directory=None, show_buffs_params=False,show_weights=True):
+    def save(self,file_name,directory, show_buffs_params=False,show_weights=True):
         dot = self.build_dot(show_buffs_params,show_weights=show_weights)
         dot.format = "pdf"
         import os
-        directory=os.getcwd() if directory is None else directory
         if os.path.exists(f"{directory}/{file_name}.pdf"):
             os.remove(f"{directory}/{file_name}.pdf")
         dot.render(file_name, directory=directory, cleanup=True)
-
-
-def post_process_partition(graph: Graph, nparts, weights, part):
-    graph.set_partition(part)
-
-    # TODO enusre arithmetic ops have inputs on the same gpu
-
-    # TODO ensure outputs are on the same gpu
-
-    # TODO if 3 concecutive layers are on 3 different gpus merge the middle one with one of the others
-
-    # TODO nice to have enforce only contiguos partitions
-
-
-
 
 # scope names of all profiled layers in the model
 def _profiled_layers(module: nn.Module, depth, prefix, basic_block):
@@ -430,15 +344,15 @@ def _profiled_layers(module: nn.Module, depth, prefix, basic_block):
 # we discover them manually because the tracer does not provide this info
 def _buffer_and_params_scopes(module: nn.Module,prefix):
     names = []
-    #params
+    # params
     for item_name, item in module.named_parameters(recurse=False):
         names.append(f"{prefix}/{type(item).__name__}[{item_name}]")
 
-    #buffs
+    # buffs
     for item_name, item in module.named_buffers(recurse=False):
         names.append(f"{prefix}/{type(item).__name__}[{item_name}]")
 
-    #recurse
+    # recurse
     for name, sub_module in module._modules.items():
         names = names + _buffer_and_params_scopes(sub_module, prefix +
                                              "/"+type(sub_module).__name__+f"[{name}]")
