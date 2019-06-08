@@ -4,19 +4,18 @@ import torch
 from enum import Enum
 import re
 from copy import copy
+from ..utils import traverse_model,traverse_params_buffs
 
 
 
 def build_graph_from_trace(model, *sample_batch, max_depth=100, weights=None, basic_block=None, device="cuda"):
     device = "cpu" if not torch.cuda.is_available() else device
-    model_class_name = type(model).__name__
 
-    buffer_param_names = _buffer_and_params_scopes(model,  model_class_name)
+    buffer_param_names = _buffer_and_params_scopes(model)
 
     weights = weights if weights != None else {}
 
-    layerNames = _profiled_layers(
-        model, max_depth, prefix=model_class_name, basic_block=basic_block)
+    layerNames = _profiled_scopes(model, max_depth, basic_block=basic_block)
 
     # trace the model and build a graph
     inputs = tuple(map(lambda t: t.to(device), sample_batch))
@@ -358,33 +357,11 @@ class Graph():
         dot.render(file_name, directory=directory, cleanup=True)
 
 # scope names of all profiled layers in the model
-def _profiled_layers(module: nn.Module, depth, prefix, basic_block):
-    names = []
-    for name, sub_module in module._modules.items():
-        if len(list(sub_module.children())) == 0 or (basic_block != None and isinstance(sub_module, basic_block)) or depth == 0:
-            names.append(
-                prefix+"/"+type(sub_module).__name__+f"[{name}]")
-        else:
-            names = names + _profiled_layers(sub_module, depth-1, prefix +
-                                             "/"+type(sub_module).__name__+f"[{name}]",basic_block)
-    return names
+def _profiled_scopes(module: nn.Module, depth, basic_block):
+    return list(map(lambda t:t[1],traverse_model(module,depth,basic_block)))
 
 # scope names of all params and buffs in the model
 # we discover them manually because the tracer does not provide this info
-def _buffer_and_params_scopes(module: nn.Module,prefix):
-    names = []
-    # params
-    for item_name, item in module.named_parameters(recurse=False):
-        names.append(f"{prefix}/{type(item).__name__}[{item_name}]")
-
-    # buffs
-    for item_name, item in module.named_buffers(recurse=False):
-        names.append(f"{prefix}/{type(item).__name__}[{item_name}]")
-
-    # recurse
-    for name, sub_module in module._modules.items():
-        names = names + _buffer_and_params_scopes(sub_module, prefix +
-                                             "/"+type(sub_module).__name__+f"[{name}]")
-
-    return names
+def _buffer_and_params_scopes(module: nn.Module):
+    return list(map(lambda t: t[1],traverse_params_buffs(module)))
 

@@ -1,6 +1,7 @@
 import torch.nn as nn
 from .graph.control_flow_graph import Graph, NodeTypes
-
+from pipeline import ActivationSavingLayer, LayerWrapper, SyncWrapper
+from .utils import *
 __all__ = ["move_to_devices"]
 
 
@@ -11,14 +12,11 @@ def move_to_devices(model: nn.Module, depth, basic_block, device_lst: list, grap
     scope_to_dev = {scope: partition_to_device[part]
                     for scope, part in scope_to_part.items()}
 
-    partition_inputs = map(partition_input_nodes, partition_lst)
     partition_outputs = map(partition_output_nodes, partition_lst)
-    in_out, out_in, in_in, out_out = in_out_connections(
-        partition_inputs, partition_outputs)
+    partition_inputs = map(partition_input_nodes, partition_lst)
 
-    model_name = type(model).__name__
-    move_layers_to_devices(model, depth, model_name, basic_block, scope_to_dev)
-    move_buffers_params_to_devices(model, model_name, scope_to_dev)
+    move_layers_to_devices(model, depth, basic_block, scope_to_dev)
+    move_buffers_params_to_devices(model, scope_to_dev)
 
     return model
 
@@ -30,8 +28,7 @@ def wrap_layers(model: nn.Module, depth, basic_block, device_lst: list, graph: G
 def part_to_device(device_lst: list, partition_lst: list):
     in_nodes = [
         node for part in partition_lst for node in part if node.type == NodeTypes.IN]
-    out_nodes = [node for part in partition_lst for node in part if len(
-        node.out_nodes) == 0]
+
     in_part = [node.part for node in in_nodes]
 
     part_lst = []
@@ -48,6 +45,7 @@ def part_to_device(device_lst: list, partition_lst: list):
     return {part: device for part, device in zip(part_lst, device_lst)}
 
 
+# return a list where each element is a list of nodes belonging to the same partition
 def group_by_partition(graph: Graph, nparts):
     lst = [[] for _ in range(nparts)]
     for node in graph.nodes:
@@ -55,33 +53,20 @@ def group_by_partition(graph: Graph, nparts):
     return lst
 
 
-def move_layers_to_devices(module: nn.Module, depth, prefix, basic_block, scope_to_dev):
-    for name, sub_module in module._modules.items():
-        if len(list(sub_module.children())) == 0 or (basic_block != None and isinstance(sub_module, basic_block)) or depth == 0:
-            scope = prefix+"/"+type(sub_module).__name__+f"[{name}]"
-            module._modules[name].to(scope_to_dev[scope])
-        else:
-            move_layers_to_devices(sub_module, depth-1, prefix + "/"+type(
-                sub_module).__name__+f"[{name}]", basic_block, scope_to_dev)
+# move layers to their designated device
+def move_layers_to_devices(module: nn.Module, depth, basic_block, scope_to_dev):
+    for sub_layer, layer_scope, parent in traverse_model(module, depth, basic_block):
+        name = layer_scope[layer_scope.rfind('[')+1:-1]
+        parent._modules[name].to(scope_to_dev[layer_scope])
 
 
-def move_buffers_params_to_devices(module: nn.Module, prefix, buffer_and_params_scopes_to_dev):
-    # params
-    for item_name, item in module.named_parameters(recurse=False):
-        scopeName = f"{prefix}/{type(item).__name__}[{item_name}]"
-        item.to(buffer_and_params_scopes_to_dev.get(scopeName, item.device))
-
-    # buffs
-    for item_name, item in module.named_buffers(recurse=False):
-        scopeName = f"{prefix}/{type(item).__name__}[{item_name}]"
-        item.to(buffer_and_params_scopes_to_dev.get(scopeName, item.device))
-
-    # recurse
-    for name, sub_module in module._modules.items():
-        move_buffers_params_to_devices(sub_module, prefix +
-                                       "/"+type(sub_module).__name__+f"[{name}]", buffer_and_params_scopes_to_dev)
+# move buffers and params to their designated device
+def move_buffers_params_to_devices(module: nn.Module, buffer_and_params_scopes_to_dev):
+    for item, item_name in traverse_params_buffs(module):
+        item.to(buffer_and_params_scopes_to_dev.get(item_name, item.device))
 
 
+# return a list where each element contains the input nodes of a partitions
 def partition_input_nodes(partition):
     def is_input_node(node):
         return not node.in_nodes or any(in_node.part != node.part for in_node in node.in_nodes)
@@ -89,6 +74,7 @@ def partition_input_nodes(partition):
     return [node for node in lst for lst in part_inputs]
 
 
+# return a list where each element contains the output nodes of a partitions
 def partition_output_nodes(partition):
     def is_output_node(node):
         return not node.out_nodes or any(out_node.part != node.part for out_node in node.out_nodes)

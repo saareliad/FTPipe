@@ -3,6 +3,8 @@ import torch.nn as nn
 import timeit
 from torch.autograd import Variable
 from collections import namedtuple
+from .utils import traverse_model
+
 __all__ = ['profileNetwork']
 
 
@@ -123,9 +125,7 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_block=None, device="cuda
         the device on which we will profile the network defaults to cuda
     '''
     # wrap all individula layers for profiling
-    model_class_name = type(net).__name__
-    layers_dict = _wrap_profiled_layers(
-        net, max_depth, model_class_name, basic_block, device)
+    layers_dict = _wrap_profiled_layers(net, max_depth, basic_block, device)
 
     # gather all individual layer sizes
     param_sizes = [layer.param_size for layer in layers_dict.values()]
@@ -183,21 +183,17 @@ def _perform_forward_backward_pass(net, device, *inputs):
     return out
 
 
-def _wrap_profiled_layers(module: nn.Module, depth, prefix, basic_block, device):
+def _wrap_profiled_layers(module: nn.Module, depth, basic_block, device):
     '''
     wraps all layers specified by depth and basic blocks of module by changing the binding in the network module dictionary
     '''
     layers_dict = {}
-    for name, sub_module in module._modules.items():
-        # assume no cyclic routes in the network
-        # a module with no children is a layer
-        if len(list(sub_module.children())) == 0 or (basic_block != None and isinstance(sub_module, basic_block)) or depth == 0:
-            sub_module_name = f"{prefix}/{type(sub_module).__name__}[{name}]"
-            module._modules[name] = Wrapper(sub_module, device=device)
-            layers_dict[sub_module_name] = module._modules[name]
-        else:
-            layers_dict.update(_wrap_profiled_layers(sub_module, depth-1, prefix +
-                                                     "/"+type(sub_module).__name__+f"[{name}]", basic_block, device))
+
+    for sub_layer, scope, parent in traverse_model(module, depth, basic_block):
+        name = scope[scope.rfind('[')+1:-1]
+        parent._modules[name] = Wrapper(sub_layer, device=device)
+        layers_dict[scope] = parent._modules[name]
+
     return layers_dict
 
 
