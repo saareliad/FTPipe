@@ -387,3 +387,4 @@ def _buffer_and_params_scopes(module: nn.Module,prefix):
                                              "/"+type(sub_module).__name__+f"[{name}]")
 
     return names
+

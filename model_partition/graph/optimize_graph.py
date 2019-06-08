@@ -6,7 +6,7 @@ from .control_flow_graph import Graph, NodeTypes
 def optimize_graph(graph: Graph):
     _combine_OP_nodes_under_the_same_scope(graph)
     _combine_params_and_buffers_into_OP_nodes(graph)
-    # _merge_op_chains(graph) TODO manage output shapes for such nodes
+    _merge_op_chains(graph)
     graph._normalize_indices()
 
 
@@ -23,10 +23,9 @@ def _combine_OP_nodes_under_the_same_scope(graph: Graph):
         return (not node.out_nodes) or any(out_node.scope != node.scope for out_node in node.out_nodes)
 
     # scope outputs
-    for node in graph.nodes:
-        if is_scope_output(node):
-            for shape in node.output_shape:
-                scope_output_shapes[node.scope].append(shape)
+    for node in filter(is_scope_output, graph.nodes):
+        for shape in node.output_shape:
+            scope_output_shapes[node.scope].append(shape)
 
     # get the nodes of the optimized graph
     for node in graph.nodes:
@@ -74,14 +73,8 @@ def _combine_params_and_buffers_into_OP_nodes(graph: Graph):
 
 
 def _merge_op_chains(graph: Graph):
-    # TODO in order to do this correctly we need to node which output belongs to each edge
-    # possibly via using input shapes also we need to see if it's the best course of action
     def to_remove(n): return n.type == NodeTypes.OP and len(n.out_nodes) > 0 and all(
         o.type == NodeTypes.OP for o in n.out_nodes)
 
-    def to_remove_reverse(n): return n.type == NodeTypes.OP and len(n.in_nodes) > 0 and all(
-        o.type == NodeTypes.OP for o in n.in_nodes)
-
     # op chains need to be placed on the same device anyways
     graph._remove_nodes(to_remove)
-    graph._remove_nodes(to_remove_reverse, reverse=True)

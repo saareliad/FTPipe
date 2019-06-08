@@ -29,11 +29,11 @@ def torchvision_write_traces():
 
 
 def partition_torchvision():
-    # networks = [alexnet, resnet18, vgg11_bn, squeezenet1_0,
-    #             inception_v3, densenet121, GoogLeNet, LeNet, WideResNet]
-    # depth = [0, 1, 100]
-    networks = [alexnet]
-    depth = [0]
+    networks = [alexnet, resnet18, vgg11_bn, squeezenet1_0,
+                inception_v3, densenet121, GoogLeNet, LeNet, WideResNet]
+    depth = [0, 1, 100]
+    # networks = [WideResNet]
+    # depth = [0]
     num_partitions = 4
     for net in networks:
         model = net()
