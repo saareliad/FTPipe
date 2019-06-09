@@ -1,5 +1,5 @@
 import os
-from model_partition import partition_network_using_profiler
+from model_partition import partition_network_using_profiler, distribute_model
 import torch
 from sample_models import alexnet, resnet18, vgg11_bn, squeezenet1_0, inception_v3, densenet121, GoogLeNet, LeNet, WideResNet
 
@@ -61,5 +61,36 @@ def partition_torchvision():
             print(filename)
 
 
+def distribute_torchvision():
+    networks = [alexnet, resnet18, vgg11_bn, squeezenet1_0,
+                inception_v3, densenet121, GoogLeNet, LeNet, WideResNet]
+    depth = [0, 1, 100]
+    # networks = [WideResNet]
+    # depth = [0]
+    for net in networks:
+        for d in depth:
+            model = net()
+            print(f"current net is {net.__name__}")
+            if net.__name__.find("inception") != -1:
+                distribute_model(model, torch.zeros(
+                    4, 3, 299, 299), device_list=["cuda", "cpu"], num_iter=4, max_depth=100, basic_blocks=None)
+
+            elif net.__name__.find("GoogLeNet") != -1:
+                distribute_model(model, torch.zeros(
+                    4, 3, 32, 32), device_list=["cuda", "cpu"], num_iter=4, max_depth=100, basic_blocks=None)
+
+            elif net.__name__.find("LeNet") != -1:
+                distribute_model(model, torch.zeros(
+                    4, 3, 32, 32), device_list=["cuda", "cpu"], num_iter=4, max_depth=100, basic_blocks=None)
+
+            else:
+                distribute_model(model, torch.zeros(
+                    4, 3, 224, 224), device_list=["cuda", "cpu"], num_iter=4, max_depth=100, basic_blocks=None)
+
+            filename = f"{net.__name__} attempted {2} partitions at depth {d}"
+
+            print(filename)
+
+
 if __name__ == "__main__":
-    partition_torchvision()
+    distribute_torchvision()

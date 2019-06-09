@@ -1,127 +1,107 @@
 import torch.nn as nn
 from .graph.control_flow_graph import Graph, NodeTypes
-from pipeline import ActivationSavingLayer, LayerWrapper, SyncWrapper
-from .utils import *
-__all__ = ["move_to_devices"]
+from pipeline import ActivationSavingLayer, LayerWrapper, SyncWrapper, CycleCounter
+from .utils import traverse_model, traverse_params_buffs
+from collections import deque
+
+__all__ = ["wrap_and_move"]
 
 
-def move_to_devices(model: nn.Module, depth, basic_block, device_lst: list, graph: Graph):
-    scope_to_part = {node.scopeName: node.part for node in graph.nodes}
-    partition_lst = group_by_partition(graph, len(device_lst))
-    partition_to_device = part_to_device(device_lst, partition_lst)
+# wraps layers and distributes them across gpus
+def wrap_and_move(model: nn.Module, depth, basic_block, device_lst: list, graph: Graph):
+    scope_to_part = {node.scope: node.part for node in graph.nodes}
+    partition_lst = _group_by_partition(graph, len(device_lst))
+
+    model_inputs = filter(lambda n: n.type == NodeTypes.IN, graph.nodes)
+    partition_to_device = _partition_to_device(device_lst, model_inputs)
     scope_to_dev = {scope: partition_to_device[part]
                     for scope, part in scope_to_part.items()}
 
-    partition_outputs = map(partition_output_nodes, partition_lst)
-    partition_inputs = map(partition_input_nodes, partition_lst)
+    counter = CycleCounter(len(partition_lst))
+    # wrap and distribute model to designated devices
+    _wrap_and_move_layers(model, device_lst, depth,
+                          basic_block, scope_to_dev, graph.nodes, counter)
 
-    move_layers_to_devices(model, depth, basic_block, scope_to_dev)
-    move_buffers_params_to_devices(model, scope_to_dev)
+    _move_buffers_params_to_devices(model, scope_to_dev)
 
-    return model
+    # TODO assumes first device is input device
+    modified_model = nn.Sequential(ActivationSavingLayer(
+        device_lst[0], counter=counter), model)
+
+    def isWrapper(module):
+        return isinstance(module, (ActivationSavingLayer, LayerWrapper, SyncWrapper))
+
+    wrappers = map(lambda t: t[0], traverse_model(modified_model))
+    wrappers = list(filter(isWrapper, wrappers))
+
+    return modified_model, wrappers
 
 
-def wrap_layers(model: nn.Module, depth, basic_block, device_lst: list, graph: Graph):
-    pass
+# wraps the layers and distributes them across devices
+def _wrap_and_move_layers(module, devices, depth, basic_block, scope_to_device, nodes, counter):
+    inputs = _partition_input_nodes(nodes)
+    partition_in_scopes = list(map(lambda n: n.scope, inputs))
+    scope_to_node = {node.scope: node for node in nodes}
+
+    for sub_layer, layer_scope, parent in traverse_model(module, depth, basic_block):
+        name = layer_scope[layer_scope.rfind('[')+1:-1]
+        layer_device = scope_to_device[layer_scope]
+        gpu_num = devices.index(layer_device)
+        output_shape = scope_to_node[layer_scope].output_shape
+
+        wrapper = None
+        # decide which wrapper to use
+        if layer_scope in partition_in_scopes:
+            wrapper = SyncWrapper(sub_layer, layer_device,
+                                  gpu_num, output_shape, counter=counter)
+        else:
+            wrapper = LayerWrapper(
+                sub_layer, layer_device, gpu_num, output_shape, counter).to(layer_device)
+        parent._modules[name] = wrapper
+
+    return module
 
 
-def part_to_device(device_lst: list, partition_lst: list):
-    in_nodes = [
-        node for part in partition_lst for node in part if node.type == NodeTypes.IN]
+# map a partition index to actual device
+def _partition_to_device(device_lst, model_inputs):
+    part_to_device = dict()
+    num_taken = 0
+    open_nodes = deque(model_inputs)
+    closed = set()
+    seen_parts = set()
 
-    in_part = [node.part for node in in_nodes]
+    while num_taken < len(device_lst):
+        node = open_nodes.popleft()
+        if node.part not in seen_parts:
+            part_to_device[node.part] = device_lst[num_taken]
+            num_taken += 1
+            seen_parts.add(node.part)
 
-    part_lst = []
-    part_lst.append(in_part[0])
-    to_part = []
-    for _ in range(len(device_lst)):
-        nodes = [node for node in lst for idx,
-                 lst in enumerate(partition_lst) if idx in part_lst]
-        for node in nodes:
-            for o_node in node.out_nodes:
-                to_part.append(o_node.part)
-        part_lst = part_lst + to_part
-        to_part = []
-    return {part: device for part, device in zip(part_lst, device_lst)}
+        closed.add(node)
+        edges = node.out_nodes.union(node.in_nodes)
+
+        open_nodes.extend(edges.difference(closed, set(open_nodes)))
+
+    return part_to_device
 
 
 # return a list where each element is a list of nodes belonging to the same partition
-def group_by_partition(graph: Graph, nparts):
+def _group_by_partition(graph: Graph, nparts):
     lst = [[] for _ in range(nparts)]
     for node in graph.nodes:
         lst[node.part].append(node)
     return lst
 
 
-# move layers to their designated device
-def move_layers_to_devices(module: nn.Module, depth, basic_block, scope_to_dev):
-    for sub_layer, layer_scope, parent in traverse_model(module, depth, basic_block):
-        name = layer_scope[layer_scope.rfind('[')+1:-1]
-        parent._modules[name].to(scope_to_dev[layer_scope])
-
-
 # move buffers and params to their designated device
-def move_buffers_params_to_devices(module: nn.Module, buffer_and_params_scopes_to_dev):
+def _move_buffers_params_to_devices(module: nn.Module, buffer_and_params_scopes_to_dev):
     for item, item_name in traverse_params_buffs(module):
         item.to(buffer_and_params_scopes_to_dev.get(item_name, item.device))
 
 
-# return a list where each element contains the input nodes of a partitions
-def partition_input_nodes(partition):
+# return list of all nodes who are inputs of a partition
+def _partition_input_nodes(nodes):
     def is_input_node(node):
         return not node.in_nodes or any(in_node.part != node.part for in_node in node.in_nodes)
-    part_inputs = map(is_input_node, partition)
-    return [node for node in lst for lst in part_inputs]
 
-
-# return a list where each element contains the output nodes of a partitions
-def partition_output_nodes(partition):
-    def is_output_node(node):
-        return not node.out_nodes or any(out_node.part != node.part for out_node in node.out_nodes)
-    part_outputs = map(is_output_node, partition)
-    return [node for node in lst for lst in part_outputs]
-
-
-# find which input is connected to which output and vice versa
-def in_out_connections(inputs, outputs):
-    inputs_to_outputs = {}
-    for in_node in inputs:
-        # run bfs find which input is connected to which output
-        open_nodes = [in_node]
-        closed_nodes = set()
-        outs = set()
-        while len(open_nodes) > 0:
-            node = open_nodes.pop()
-            closed_nodes.add(node)
-            if node in outputs:
-                outs.add(node)
-            else:
-                open_nodes += list(node.out_nodes.difference(closed_nodes))
-        inputs_to_outputs[in_node] = outs
-
-    outputs_to_inputs = {}
-    for out_node in outputs:
-        # run bfs find which output is connected to which input
-        open_nodes = [out_node]
-        closed_nodes = set()
-        ins = set()
-        while len(open_nodes) > 0:
-            node = open_nodes.pop()
-            closed_nodes.add(node)
-            if node in inputs:
-                ins.add(node)
-            else:
-                open_nodes += list(node.out_nodes.difference(closed_nodes))
-        outputs_to_inputs[out_node] = ins
-
-    inputs_to_inputs = {}
-    for in_node, outs in inputs_to_outputs.items():
-        nodes = {node for node in outputs_to_inputs[out] for out in outs}
-        inputs_to_inputs[in_node] = nodes
-
-    outputs_to_outputs = {}
-    for out_node, ins in outputs_to_inputs.items():
-        nodes = {node for node in inputs_to_outputs[in_n] for in_n in ins}
-        outputs_to_outputs[out_node] = nodes
-
-    return inputs_to_outputs, outputs_to_inputs, inputs_to_inputs, outputs_to_outputs
+    return list(filter(is_input_node, nodes))
