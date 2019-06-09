@@ -84,7 +84,7 @@ class ModelParallelResNet50(ResNet):
         self.seq2 = nn.Sequential(
             self.layer3,
             self.layer4,
-            self.avgpool,
+            self.avgpool
         ).to(dev2)
 
         self.seq2 = SyncWrapper(self.seq2, dev2, 1, output_shapes=((1, 2048, 1, 1),), counter=self.counter)

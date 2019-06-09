@@ -36,15 +36,15 @@ class PipelineParallel(nn.Module):
         self.set_mode(mode)
 
     def train(self, mode=True):
-        super(PipelineParallel, self).train(mode)
         if mode:
             self.set_mode('train')
         else:
             self.set_mode('production')
+        return super(PipelineParallel, self).train(mode)
 
     def eval(self):
-        super(PipelineParallel, self).eval()
         self.set_mode('production')
+        return super(PipelineParallel, self).eval()
 
     def set_mode(self, mode: str):
         if self.mode == mode:
@@ -140,16 +140,18 @@ class PipelineParallel(nn.Module):
         # make sure that we are on backward mode
         self.set_mode('backward')
 
-        # do a backward run for each gradient
-        for grad in grads.split(self.microbatch_size, dim=0):
-            self.pop_activations()
-            self.module(torch.zeros(*self.input_shape)).backward(grad)
-            self.counter.increase()
+        with autograd.enable_grad():
+            # do a backward run for each gradient
+            for grad in grads.split(self.microbatch_size, dim=0):
+                self.pop_activations()
+                self.module(torch.zeros(*self.input_shape)).backward(grad)
+                self.counter.increase()
 
-        # make sure that all backward passes are done
-        for _ in range(self.num_gpus):
-            self.module(torch.zeros(*self.input_shape))
-            self.counter.increase()
+            # make sure that all backward passes are done
+            for _ in range(self.num_gpus - 1):
+                self.pop_activations()
+                self.module(torch.zeros(*self.input_shape))
+                self.counter.increase()
 
         # get final gradients
         # out_grads = self.wrappers[0].get_final_grads()

@@ -134,13 +134,14 @@ class SyncWrapper(nn.Module):
         # if we were given a gradient to pass back
         if self.counter.is_input_valid(self.gpu_num):
             for input, grad in zip(inputs, self.grads):
-                input.backward(self.grad)
+                input.backward(grad)
             self.grads = [None for _ in range(self.num_inputs)]
 
         # if we have an activation to pass
         if self.counter.is_last_input_valid(self.gpu_num):
             cur_inputs = self.last_inputs
-            output = self.module(*cur_inputs)
+            with autograd.enable_grad():
+                output = self.module(*cur_inputs)
         else:
             output = tuple([torch.zeros(*output_shape).to(self.device) for output_shape in self.output_shapes])
             if len(output) == 1:
@@ -155,8 +156,8 @@ class SyncWrapper(nn.Module):
         acts = []
         for idx, moved_input in enumerate(moved_inputs):
             # clone and detach
-            activation = moved_input.clone()
-            activation.requires_grad_()
+            activation = moved_input.clone().detach().requires_grad_(True)
+            # activation.requires_grad_()
 
             # put a backward hook for popping it when doing a backward pass
             activation.register_hook(lambda grad: self.act_hook(grad, idx))
@@ -302,8 +303,8 @@ class ActivationSavingLayer(nn.Module):
         if self.counter.is_input_valid(0):
             for moved_input in moved_inputs:
                 # clone without detaching
-                activation = moved_input.clone()
-                activation.requires_grad_()
+                activation = moved_input.clone().detach().requires_grad_(True)
+                # activation.requires_grad_()
 
                 # save the activation and the id
                 acts.append(activation)
@@ -339,7 +340,8 @@ class LayerWrapper(nn.Module):
     def forward(self, *inputs):
         if self.counter.is_last_input_valid(self.gpu_num):
             if self.counter.cur_mode == ForwardMode.backward:
-                return self.module(*inputs)
+                with autograd.enable_grad():
+                    return self.module(*inputs)
 
             with autograd.no_grad():
                 return self.module(*inputs)
