@@ -71,6 +71,7 @@ def _partition_to_device(device_lst, model_inputs):
     seen_parts = set()
 
     while num_taken < len(device_lst):
+        # TODO there was an instance where it crushed here assuming there were less partitions then assumed
         node = open_nodes.popleft()
         if node.part not in seen_parts:
             part_to_device[node.part] = device_lst[num_taken]
