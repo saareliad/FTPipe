@@ -7,13 +7,21 @@ from ctypes import POINTER as ptr, byref
 import os
 import typing
 from typing import List,Tuple,Dict,Union,Callable
+import platform
+import warnings
 # create a dynamic lib that exposes what we need compile it like this with metis.h and libmetis.lib in the same folder
 # g++ -fPIC - shared - L. -o libmetis.so test.c - llibmetis
 
 # then load it using ctypes and use it
 
 # metis lib loading
-metis_path = os.path.dirname(os.path.realpath(__file__))+"/libmetis.so"
+if 'Win' in platform.system():
+    metis_path = os.path.dirname(os.path.realpath(__file__))+"/Wlibmetis.so"
+elif 'Lin' in platform.system():
+    metis_path = os.path.dirname(os.path.realpath(__file__))+"/Llibmetis.so"
+else:
+    warnings.warn("unsuported os for METIS supported for windows and linux")
+
 metisLib=ctypes.CDLL(metis_path)
 
 # -------------------------------------------------------------------------
@@ -361,10 +369,6 @@ def part_graph(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis', **
     _error_handler(res)
 
     return objval.value, list(partition)
-# -------------------------------------------------------------------------
-# TODO graph partition notes
-# -------------------------------------------------------------------------
-# support linux
 # -------------------------------------------------------------------------
 # basic tests
 # -------------------------------------------------------------------------
