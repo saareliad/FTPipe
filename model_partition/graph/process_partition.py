@@ -1,10 +1,9 @@
 import torch.nn as nn
 import torch
+from collections import deque
+from .control_flow_graph import Graph, NodeTypes, Node
 
-
-from .control_flow_graph import Graph, NodeTypes
-
-# TODO there was a cese where the partition was not not connected densenet depth 100
+# TODO there was a case where the partition was not not connected densenet depth 100
 
 
 def post_process_partition(graph: Graph, nparts, part, weights=None):
@@ -13,27 +12,36 @@ def post_process_partition(graph: Graph, nparts, part, weights=None):
     OP_inputs_partition_correction(graph, nparts)
     # make sure every scc in the graph is not splitted between different parts
     scc_partition_correction(graph)
+    # _check_bi_directional(graph, nparts)
 
 
+# TODO fix
 def OP_inputs_partition_correction(graph: Graph, nparts):
+    node_to_best_part = dict()
     for v in graph.nodes:
         if v.type == NodeTypes.OP:
             # pick the part of the inputs as the one with least comunication
             group = {u for u in v.in_nodes}
             group.add(v)
-            min_comunication = 1000000.0
+            min_comunication = float('inf')
             best_part = -1
             for part in range(nparts):
+                parts = []
                 for u in group:
+                    parts.append(graph.nodes[u.idx].part)
                     graph.nodes[u.idx].part = part
+
                 comunication = compute_comunication(graph)
                 if comunication < min_comunication:
                     min_comunication = comunication
                     best_part = part
-                if best_part == -1:
-                    print(comunication)
-            for u in group:
-                graph.nodes[u.idx].part = best_part
+
+            for u, p in zip(group, parts):
+                node_to_best_part[u.idx] = best_part
+                graph.nodes[u.idx].part = p
+
+    for idx, best in node_to_best_part.items():
+        graph.nodes[idx].part = best
 
 
 def compute_comunication(graph: Graph):
@@ -117,3 +125,67 @@ def strongly_connected_components_iterative(vertices, edges):
 def set_partition(graph: Graph, parts):
     for node, part in zip(graph.nodes, parts):
         node.part = part
+
+
+def _check_bi_directional(graph, nparts):
+    outputs_per_partition = map(
+        _partition_out_nodes, _group_by_partition(graph, nparts))
+    inputs = _partition_input_nodes(graph.nodes)
+
+    part_to_device = _partition_to_device(list(range(nparts)), inputs)
+
+    for node in graph.nodes:
+        node.part = part_to_device[node.part]
+
+    def out_parts(partition_outs):
+        res = set(*map(lambda node: map(lambda n: n.part,
+                                        node.out_nodes), partition_outs))
+        res.discard(partition_outs[0].part)
+        return res
+
+
+# return a list where each element is a list of nodes belonging to the same partition
+def _group_by_partition(graph: Graph, nparts):
+    lst = [[] for _ in range(nparts)]
+    for node in graph.nodes:
+        lst[node.part].append(node)
+    return lst
+
+
+# return list of all nodes who are inputs of a partition
+def _partition_input_nodes(nodes):
+    def is_input_node(node):
+        return not node.in_nodes or any(in_node.part != node.part for in_node in node.in_nodes)
+
+    return list(filter(is_input_node, nodes))
+
+
+def _partition_out_nodes(nodes):
+    def is_output_node(node):
+        return not node.out_nodes or any(out_node.part != node.part for out_node in node.out_nodes)
+
+    return list(filter(is_output_node, nodes))
+
+
+# map a partition index to a another set of indices
+def _partition_to_device(normalized_ids, model_inputs):
+    part_to_device = dict()
+    num_taken = 0
+    open_nodes = deque(model_inputs)
+    closed = set()
+    seen_parts = set()
+
+    while num_taken < len(normalized_ids):
+        # TODO there was an instance where it crushed here assuming there were less partitions then assumed
+        node = open_nodes.popleft()
+        if node.part not in seen_parts:
+            part_to_device[node.part] = normalized_ids[num_taken]
+            num_taken += 1
+            seen_parts.add(node.part)
+
+        closed.add(node)
+        edges = node.out_nodes.union(node.in_nodes)
+
+        open_nodes.extend(edges.difference(closed, set(open_nodes)))
+
+    return part_to_device

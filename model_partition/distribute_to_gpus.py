@@ -7,6 +7,10 @@ from collections import deque
 __all__ = ["wrap_and_move"]
 
 
+# TODO no need for sync wrappers for first partition
+# TODO gpu num is depth of partition in bfs tree from inputs
+# TODO if by miracle an entire block is in the same gpu merge it with scope tree
+
 # wraps layers and distributes them across gpus
 def wrap_and_move(model: nn.Module, depth, basic_block, device_lst: list, graph: Graph):
     scope_to_part = {node.scope: node.part for node in graph.nodes}
@@ -24,12 +28,11 @@ def wrap_and_move(model: nn.Module, depth, basic_block, device_lst: list, graph:
 
     _move_buffers_params_to_devices(model, scope_to_dev)
 
-    # TODO assumes first device is input device
     modified_model = nn.Sequential(ActivationSavingLayer(
         device_lst[0], counter=counter), model)
 
     def isWrapper(module):
-        return isinstance(module, (ActivationSavingLayer, LayerWrapper, SyncWrapper))
+        return isinstance(module, (ActivationSavingLayer, SyncWrapper))
 
     wrappers = map(lambda t: t[0], traverse_model(modified_model))
     wrappers = list(filter(isWrapper, wrappers))
@@ -57,6 +60,7 @@ def _wrap_and_move_layers(module, devices, depth, basic_block, scope_to_device, 
         else:
             wrapper = LayerWrapper(
                 sub_layer, layer_device, gpu_num, output_shape, counter).to(layer_device)
+
         parent._modules[name] = wrapper
 
     return module

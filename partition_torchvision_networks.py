@@ -32,8 +32,6 @@ def partition_torchvision():
     networks = [alexnet, resnet18, vgg11_bn, squeezenet1_0,
                 inception_v3, densenet121, GoogLeNet, LeNet, WideResNet]
     depth = [0, 1, 100]
-    # networks = [WideResNet]
-    # depth = [0]
     num_partitions = 4
     for net in networks:
         model = net()
@@ -64,9 +62,9 @@ def partition_torchvision():
 def distribute_torchvision():
     # networks = [alexnet, resnet18, vgg11_bn, squeezenet1_0,
     #             inception_v3, densenet121, GoogLeNet, LeNet, WideResNet]
-    depth = [0, 1, 100]
+    # depth = [0, 1, 100]
     networks = [densenet121]
-    # depth = [0]
+    depth = [100]
     for net in networks:
         for d in depth:
             model = net()
