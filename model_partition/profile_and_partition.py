@@ -17,7 +17,7 @@ def distribute_model(model, *sample_batch, device_list=None, num_iter=4, max_dep
                                                    max_depth=max_depth, basic_blocks=basic_blocks, device=trace_device)
 
     distributed_model, wrappers = wrap_and_move(
-        model, max_depth, basic_blocks, device_list, graph)
+        model, basic_blocks, device_list, graph)
 
     return distributed_model, graph, wrappers
 
