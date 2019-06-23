@@ -132,7 +132,7 @@ class SyncWrapper(nn.Module):
 
     def reset_grads(self):
         for idx in range(len(self.grads)):
-            self.grads[idx] = None
+            self.grads[idx] *= 0
 
     def backward_mode(self, *inputs: Tuple[torch.Tensor, ...]) -> Tuple[torch.Tensor, ...]:
         """
@@ -140,7 +140,6 @@ class SyncWrapper(nn.Module):
         """
         # if we were given a gradient to pass back
         if self.counter.is_input_valid(self.gpu_num):
-            print("DOING BACK")
             for input, grad in zip(inputs, self.grads):
                 input.backward(grad)
 
@@ -148,7 +147,6 @@ class SyncWrapper(nn.Module):
 
         # if we have an activation to pass
         if self.counter.is_last_input_valid(self.gpu_num):
-            print("NON ZEROES!")
             cur_inputs = self.last_inputs
             for idx, activation in enumerate(cur_inputs):
                 activation.requires_grad_(True).register_hook(self.add_grad[idx])
@@ -157,7 +155,6 @@ class SyncWrapper(nn.Module):
 
             self.last_inputs = [None for _ in range(self.num_inputs)]
         else:
-            print("ZEROES!")
             output = tuple([torch.zeros(*output_shape).to(self.device) for output_shape in self.output_shapes])
             if len(output) == 1:
                 output = output[0]
@@ -254,9 +251,9 @@ class ActivationSavingLayer(nn.Module):
         if self.counter.is_last_input_valid(self.gpu_num):
             self.last_inputs = self.activations.pop(0)
 
-        for grads_list in self.grads:
-            grads_list.append(self.current_grads.pop(0))
-        self.current_grads = [None for _ in range(self.num_inputs)]
+        # for grads_list in self.grads:
+        #     grads_list.append(self.current_grads.pop(0))
+        # self.current_grads = [None for _ in range(self.num_inputs)]
 
     # def act_hook(self, grad, idx):
     #     self.add_grad(grad.to(self.device), idx)
@@ -288,12 +285,13 @@ class ActivationSavingLayer(nn.Module):
         """
         # if we have an activation to pass
         if self.counter.is_last_input_valid(0):
-            output = tuple([activation.requires_grad_(True) for activation in self.last_inputs])
+            # output = tuple([activation.requires_grad_(True) for activation in self.last_inputs])
+            output = tuple(self.last_inputs)
             # if not isinstance(output, tuple):
             #     output = (output,)
 
-            for idx, activation in enumerate(output):
-                activation.register_hook(self.add_grad[idx])
+            # for idx, activation in enumerate(output):
+            #     activation.register_hook(self.add_grad[idx])
         else:
             # if this iteration is one we should not work in
             output = tuple([torch.zeros(*input.size()).to(self.device) for input in inputs])
