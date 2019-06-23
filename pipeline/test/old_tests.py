@@ -200,5 +200,5 @@ def train(model):
 
 
 if __name__ == "__main__":
-    # test_split_size()
+    test_split_size()
     test_resnet50_time()
