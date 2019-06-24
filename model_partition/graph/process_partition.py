@@ -16,24 +16,32 @@ def post_process_partition(graph: Graph, nparts, part, weights=None):
 
 
 def OP_inputs_partition_correction(graph: Graph, nparts):
+    groups=[]
     for v in graph.nodes:
         if v.type == NodeTypes.OP:
-            # pick the part of the inputs as the one with least comunication
             group = {u for u in v.in_nodes}
             group.add(v)
-            min_comunication = 1000000.0
-            best_part = -1
-            for part in range(nparts):
-                for u in group:
-                    graph.nodes[u.idx].part = part
-                comunication = compute_comunication(graph)
-                if comunication < min_comunication:
-                    min_comunication = comunication
-                    best_part = part
-                if best_part == -1:
-                    print(comunication)
-            for u in group:
+            groups.append(group)
+    nodes_left = [ v for v in graph.nodes ]
+    #check and update for every group
+    for group in groups:
+        min_comunication = float("inf")
+        best_part = -1
+         for part in range(nparts):
+             #try a part
+             for u in group:
+                 graph.nodes[u.idx].part = part
+            #compute how good it is
+             comunication = compute_comunication(graph)
+            #update part if he is better
+             if comunication < min_comunication:
+                 min_comunication = comunication
+                 best_part = part
+        #update part to the best part and remove it from nodes to check
+        for u in group:
+            if u in nodes_left:
                 graph.nodes[u.idx].part = best_part
+                nodes_left.remove(u)
 
 
 def compute_comunication(graph: Graph):
