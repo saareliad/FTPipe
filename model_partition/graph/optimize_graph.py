@@ -1,21 +1,22 @@
-import torch.nn as nn
-import torch
 from .control_flow_graph import Graph, NodeTypes
 
 
 def optimize_graph(graph: Graph):
-    _combine_OP_nodes_under_the_same_scope(graph)
+    nodes = graph.nodes
+    nodes = _combine_OP_nodes_under_the_same_scope(nodes)
+    graph.nodes = nodes
     _combine_params_and_buffers_into_OP_nodes(graph)
     _merge_op_chains(graph)
+
     graph._normalize_indices()
 
 
-def _combine_OP_nodes_under_the_same_scope(graph: Graph):
+def _combine_OP_nodes_under_the_same_scope(nodes):
     # optimization that reduces number of nodes in the graph
     # combine nodes that have a commom scope we do this because\n
     # if nodes have the same scopeName than they were profiled together
     scope_representative = dict()
-    scope_output_shapes = {node.scope: [] for node in graph.nodes}
+    scope_output_shapes = {node.scope: [] for node in nodes}
 
     optimized_graph = []
 
@@ -23,12 +24,12 @@ def _combine_OP_nodes_under_the_same_scope(graph: Graph):
         return (not node.out_nodes) or any(out_node.scope != node.scope for out_node in node.out_nodes)
 
     # scope outputs
-    for node in filter(is_scope_output, graph.nodes):
+    for node in filter(is_scope_output, nodes):
         for shape in node.output_shape:
             scope_output_shapes[node.scope].append(shape)
 
     # get the nodes of the optimized graph
-    for node in graph.nodes:
+    for node in nodes:
         if not node.scope in scope_representative:
             node.output_shape = scope_output_shapes[node.scope]
             optimized_graph.append(node)
@@ -55,7 +56,7 @@ def _combine_OP_nodes_under_the_same_scope(graph: Graph):
         node.in_nodes = in_nodes
         node.out_nodes = out_nodes
 
-    graph.nodes = optimized_graph
+    return optimized_graph
 
 
 def _combine_params_and_buffers_into_OP_nodes(graph: Graph):
@@ -68,7 +69,6 @@ def _combine_params_and_buffers_into_OP_nodes(graph: Graph):
                 n.remove_in_node(node)
         else:
             optimized_graph.append(node)
-
     graph.nodes = optimized_graph
 
 

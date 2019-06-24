@@ -1,10 +1,7 @@
-import torch.nn as nn
-import torch
-
-
+from collections import deque
 from .control_flow_graph import Graph, NodeTypes
 
-# TODO there was a cese where the partition was not not connected densenet depth 100
+# TODO there was a case where the partition was not not connected densenet depth 100
 
 
 def post_process_partition(graph: Graph, nparts, part, weights=None):
@@ -15,6 +12,7 @@ def post_process_partition(graph: Graph, nparts, part, weights=None):
     scc_partition_correction(graph)
 
 
+# TODO fix
 def OP_inputs_partition_correction(graph: Graph, nparts):
     groups=[]
     for v in graph.nodes:

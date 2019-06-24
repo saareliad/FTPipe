@@ -2,19 +2,21 @@ import torch.nn as nn
 __all__ = ["traverse_model", "traverse_params_buffs"]
 
 
-def traverse_model(model: nn.Module, depth=1000, basic_block=None):
+def traverse_model(model: nn.Module, depth=1000, basic_block=None, full=False):
     prefix = type(model).__name__
-    yield from _traverse_model(model, depth, prefix, basic_block)
+    yield from _traverse_model(model, depth, prefix, basic_block, full)
 
 
-def _traverse_model(module: nn.Module, depth, prefix, basic_block):
+def _traverse_model(module: nn.Module, depth, prefix, basic_block, full):
     for name, sub_module in module._modules.items():
+        scope = prefix+"/"+type(sub_module).__name__+f"[{name}]"
         if len(list(sub_module.children())) == 0 or (basic_block != None and isinstance(sub_module, basic_block)) or depth == 0:
-            scope = prefix+"/"+type(sub_module).__name__+f"[{name}]"
             yield sub_module, scope, module
         else:
+            if full:
+                yield sub_module, scope, module
             yield from _traverse_model(sub_module, depth-1, prefix + "/"+type(
-                sub_module).__name__+f"[{name}]", basic_block)
+                sub_module).__name__+f"[{name}]", basic_block, full)
 
 
 def traverse_params_buffs(module: nn.Module):
