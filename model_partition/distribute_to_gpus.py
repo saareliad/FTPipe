@@ -6,7 +6,9 @@ from collections import deque
 from pprint import pprint
 __all__ = ["wrap_and_move"]
 
+
 # TODO gpu num is depth of partition in bfs tree from inputs
+# TODO shapes
 
 
 def wrap_and_move(model: nn.Module, basic_block, device_lst: list, graph: Graph):
@@ -15,7 +17,7 @@ def wrap_and_move(model: nn.Module, basic_block, device_lst: list, graph: Graph)
     model_inputs = filter(lambda n: n.type == NodeTypes.IN, graph.nodes)
     partition_to_device = _partition_to_device(used_devices, model_inputs)
 
-    top_scope_out_shape, top_scopes_to_device, nodes_to_top_scopes = optimize_wrappers(
+    top_scopes_to_device, nodes_to_top_scopes = optimize_wrappers(
         graph, partition_to_device)
 
     part_inputs_nodes = _partition_input_nodes(graph.nodes)
@@ -32,7 +34,7 @@ def wrap_and_move(model: nn.Module, basic_block, device_lst: list, graph: Graph)
         top_scopes, model, effective_depth, basic_block)
 
     modified_model = wrap_model(relevant_sub_modules, top_scopes_to_device,
-                                used_devices, top_scope_out_shape, part_inputs, counter, model)
+                                used_devices, part_inputs, counter, model)
 
     wrappers = extract_wrappers(modified_model)
 
@@ -56,9 +58,9 @@ def modules_of_top_scopes(top_scopes, model, effective_depth, basic_block):
     return list(relevant_sub_modules)
 
 
-def wrap_model(relevant_sub_modules, top_scopes_to_device, device_lst, top_scope_out_shape, part_inputs, counter, model):
+def wrap_model(relevant_sub_modules, top_scopes_to_device, device_lst, part_inputs, counter, model):
     wrap_layers(relevant_sub_modules, top_scopes_to_device,
-                device_lst, top_scope_out_shape, part_inputs, counter)
+                device_lst, part_inputs, counter)
 
     _move_buffers_params_to_devices(model, top_scopes_to_device)
 
@@ -68,12 +70,12 @@ def wrap_model(relevant_sub_modules, top_scopes_to_device, device_lst, top_scope
     return modified_model
 
 
-def wrap_layers(layers, top_scopes_to_device, device_lst, top_scope_out_shape, part_inputs, counter):
+def wrap_layers(layers, top_scopes_to_device, device_lst, part_inputs, counter):
     for sub_layer, layer_scope, parent in layers:
         name = layer_scope[layer_scope.rfind('[')+1:-1]
         layer_device = top_scopes_to_device[layer_scope]
         gpu_num = device_lst.index(layer_device)
-        output_shape = top_scope_out_shape[layer_scope]
+        output_shape = (1,)  # TODO shape
         if layer_scope in part_inputs and gpu_num != 0:
             # syncWrap all first nodes of a partition except the first one
             wrapper = SyncWrapper(sub_layer, layer_device,
@@ -106,16 +108,7 @@ def optimize_wrappers(graph, partition_to_device):
                 top_scopes_to_nodes[scope] = nodes
                 break
 
-    top_scope_out_shape = {scope: []
-                           for scope in top_modules_that_need_wrapping.keys()}
-
-    # output shape of top scopes
-    for scope, nodes in top_scopes_to_nodes.items():
-        for node in nodes:
-            if not node.out_nodes or any(nodes_to_top_scopes[out] != nodes_to_top_scopes[node] for out in node.out_nodes):
-                top_scope_out_shape[scope].append(node.output_shape)
-
-    return top_scope_out_shape, top_scopes_to_device, nodes_to_top_scopes
+    return top_scopes_to_device, nodes_to_top_scopes
 
 
 # return the topmost modules that reside in one partition (optimization)

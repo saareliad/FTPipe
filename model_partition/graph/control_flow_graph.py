@@ -59,14 +59,13 @@ class Node():
      parallel edges in the same direction are not allowed
     '''
 
-    def __init__(self, scope, idx, node_type: NodeTypes,output_shape, incoming_nodes=None, weight=0, part=10):
+    def __init__(self, scope, idx, node_type: NodeTypes, incoming_nodes=None, weight=0, part=10):
         self.scope = scope
         self.idx = idx
         self.type = node_type
         self.out_nodes = set()
         self.weight = weight
         self.part = part
-        self.output_shape=[output_shape] if isinstance(output_shape,tuple) else output_shape
         self.in_nodes = incoming_nodes if isinstance(incoming_nodes, set) else set()
 
     def add_out_node(self, node):
@@ -143,8 +142,7 @@ class Graph():
                 node_type = NodeTypes.BUFF_PARAM
                 node_scope = self.buffer_param_names[idx - self.num_inputs]
 
-            output_shape = tuple(node.type().sizes())
-            new_node = Node(node_scope, idx,node_type,output_shape, weight=node_weight)
+            new_node = Node(node_scope, idx,node_type, weight=node_weight)
             self.nodes.append(new_node)
 
             self.num_inputs_buffs_params += 1
@@ -159,29 +157,19 @@ class Graph():
             input_nodes = {self.nodes[i.unique()]
                            for i in trace_node.inputs()}
             node_idx = self.num_inputs_buffs_params+idx+num_extra_nodes
-            
-            #node output_shape
-            m = re.match(r".*Float\(([\d\s\,]+)\).*",
-                         str(next(trace_node.outputs())))
-            if m:
-                shape = m.group(1)
-                shape = shape.split(",")
-                shape = tuple(map(int, shape))
-            else:
-                shape = (1,)
 
             new_node = None
 
             # profiled Layer
             if node_scope != "":
                 new_node = Node(node_scope, node_idx,
-                                NodeTypes.LAYER,shape, input_nodes)
+                                NodeTypes.LAYER, input_nodes)
             # unprofiled OP
             else:
                 node_scope = trace_node.scopeName() + \
                     "/"+trace_node.kind() + str(idx)
                 new_node = Node(node_scope, node_idx,
-                                NodeTypes.OP,shape, input_nodes)
+                                NodeTypes.OP, input_nodes)
     
             # add incoming edges
             for node in input_nodes:
@@ -328,7 +316,6 @@ class Graph():
             label = node.scope
             if show_weights and node.weight != 0:
                 label = f"{label}\n {node.weight}"
-            label=f"{label}\n output_shape {node.output_shape}"
             dot.node(str(node.idx), label, fillcolor=colors[node.part])
 
         for node in self.nodes:

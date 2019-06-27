@@ -16,22 +16,12 @@ def _combine_OP_nodes_under_the_same_scope(nodes):
     # combine nodes that have a commom scope we do this because\n
     # if nodes have the same scopeName than they were profiled together
     scope_representative = dict()
-    scope_output_shapes = {node.scope: [] for node in nodes}
 
     optimized_graph = []
-
-    def is_scope_output(node):
-        return (not node.out_nodes) or any(out_node.scope != node.scope for out_node in node.out_nodes)
-
-    # scope outputs
-    for node in filter(is_scope_output, nodes):
-        for shape in node.output_shape:
-            scope_output_shapes[node.scope].append(shape)
 
     # get the nodes of the optimized graph
     for node in nodes:
         if not node.scope in scope_representative:
-            node.output_shape = scope_output_shapes[node.scope]
             optimized_graph.append(node)
             scope_representative[node.scope] = node
         else:
