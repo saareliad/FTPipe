@@ -7,7 +7,7 @@ from pprint import pprint
 __all__ = ["wrap_and_move"]
 
 
-# TODO gpu num is depth of partition in bfs tree from inputs
+
 # TODO shapes
 
 
