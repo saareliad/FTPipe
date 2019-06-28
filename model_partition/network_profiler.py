@@ -160,18 +160,13 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_block=None, device="cuda
         if node.forward_time > max_node[1].forward_time:
             max_node = (name, node)
 
-    max_name , max_n = max_node
-    f_time = 0
-    b_time = 0
-    count = 0
-    for _,node in layers_profile.items():
-        if node.type == max_n.type:
-            f_time += node.forward_time
-            b_time += node.backward_time
-            count += 1
-    f_time /= count
-    b_time /= count
-    layers_profile[max_node[0]] = Profile(1, f_time, b_time, 1, 1, 1)
+    max_name, _ = max_node
+
+    exec_times = map(lambda profile: (profile.forward_time,
+                                      profile.backward_time), layers_profile.values())
+    f_time, b_time = map(sum, zip(*exec_times))
+
+    layers_profile[max_name] = Profile(f_time, b_time, 1, 1, 1, 1)
 
     return layers_profile
 
