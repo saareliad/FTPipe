@@ -6,8 +6,7 @@ import re
 from pprint import pprint
 import inspect
 from copy import copy
-from ..utils import traverse_model,traverse_params_buffs
-
+from ..utils import traverse_model, traverse_params_buffs
 
 
 def build_graph_from_trace(model, *sample_batch, max_depth=100, weights=None, basic_block=None, device="cuda"):
@@ -68,7 +67,10 @@ class Node():
         self.out_nodes = set()
         self.weight = weight
         self.part = part
-        self.in_nodes = incoming_nodes if isinstance(incoming_nodes, set) else set()
+        self.in_nodes = incoming_nodes if isinstance(
+            incoming_nodes, set) else set()
+        self.outputs = set()
+        self.inputs = set()
 
     def add_out_node(self, node):
         if isinstance(node, Node):
@@ -100,6 +102,29 @@ class Node():
         return f"node {self.idx} in scope {self.scope} of type {self.type} flows to {out_idx} gathers {in_idx}\n"
 
 
+class LayerOutput():
+    def __init__(self, idx, origin_scope, output_shape):
+        self.idx = idx
+        self.scope = origin_scope
+        self.output_shape = output_shape
+        self.out_scopes=set()
+
+    def __eq__(self, other):
+        if not isinstance(other, LayerOutput):
+            return False
+
+        return self.idx == other.idx
+    
+    def __hash__(self):
+        return self.idx.__hash__()
+    
+    def __str__(self):
+        return str(self.output_shape)
+
+    def __repr__(self):
+        return str(self)
+
+
 class Graph():
     '''
     a graph representing the control flow of a model
@@ -123,7 +148,7 @@ class Graph():
     def _build_graph(self, trace_graph):
         self._add_IO_nodes(trace_graph.inputs())
         self._add_OP_nodes(trace_graph.nodes())
-        self._add_tensor_shapes(trace_graph)
+        self._add_edges(trace_graph)
         self._remove_constant_nodes()
         self._remove_nodes_that_go_nowhere(trace_graph.outputs())
         self._normalize_indices()
@@ -145,7 +170,7 @@ class Graph():
                 node_type = NodeTypes.BUFF_PARAM
                 node_scope = self.buffer_param_names[idx - self.num_inputs]
 
-            new_node = Node(node_scope, idx,node_type, weight=node_weight)
+            new_node = Node(node_scope, idx, node_type, weight=node_weight)
             self.nodes.append(new_node)
 
             self.num_inputs_buffs_params += 1
@@ -173,7 +198,7 @@ class Graph():
                     "/"+trace_node.kind() + str(idx)
                 new_node = Node(node_scope, node_idx,
                                 NodeTypes.OP, input_nodes)
-    
+
             # add incoming edges
             for node in input_nodes:
                 node.add_out_node(new_node)
@@ -184,59 +209,63 @@ class Graph():
             for i, _ in enumerate(trace_node.outputs()):
                 if i != 0:
                     out_node: Node = copy(new_node)
-                    #TODO check if correct
-                    #it appears those are dummpy outputs so we just add them for bookkeeping and remove them later
-                    out_node.out_nodes=set()
-
+                    # it appears those are dummpy outputs so we just add them for bookkeeping and remove them later
+                    out_node.out_nodes = set()
                     out_node.idx += i
-                    out_node.add_in_node(self.nodes[node_idx+i-1])
-                    self.nodes[node_idx+i-1].add_out_node(out_node)
                     self.nodes.append(out_node)
                     num_extra_nodes += 1
 
-    def _add_tensor_shapes(self,trace_graph):
-        idx=0
-        #for the inputs params buffs we are good
+    def _add_edges(self, trace_graph):
+        def get_shape(n):
+            try:
+                # works if not constant
+                shape = tuple(n.type().sizes())
+
+                if len(shape) == 0:
+                    shape = (1,)
+
+            except RuntimeError as _:
+                # crashes for constant
+                shape = (1,)
+            return tuple(shape,)
+
+        idx = 0
+        output_idx = 0
+        # for the inputs params buffs we are good
         for node in trace_graph.inputs():
+            u = self.nodes[idx]
+            layer_out = LayerOutput(output_idx, u.scope, get_shape(node))
+            u.outputs.add(layer_out)
+            out_scopes=set()
+
             for use in node.uses():
-                target_node=use.user
-             
-                try:
-                    #works if not constant
-                    tuple(node.type().sizes())
-
-                    if len(node.type().sizes()) == 0:
-                        (1,)
-
-                except RuntimeError as _:
-                    # crashes for constant
-                    (1,)
-
-                #find the node idx of the user
+                target_node = use.user
+                # find the node idx of the user
                 for out in target_node.outputs():
-                    self.nodes[out.unique()].scope
-                    out
+                    v = self.nodes[out.unique()]
+                    v.inputs.add(layer_out)
+                    out_scopes.add(v.scope)
+            layer_out.out_scopes=out_scopes
+
+            output_idx += 1
             idx += 1
-                
+
         for node in trace_graph.nodes():
             for out in node.outputs():
-                try:
-                    #works if not constant
-                    tuple(out.type().sizes())
-
-                    if len(out.type().sizes())==0:
-                        (1,)
-                    
-                except RuntimeError as _:
-                    # crashes for constant
-                    (1,)
+                u = self.nodes[idx]
+                layer_out = LayerOutput(output_idx, u.scope, get_shape(out))
+                u.outputs.add(layer_out)
+                out_scopes=set()
                 for use in out.uses():
-                    target_node=use.user
+                    target_node = use.user
                     for target_out in target_node.outputs():
-                        # print(out.unique())
-                        pass
-                idx += 1
+                        v = self.nodes[target_out.unique()]
+                        v.inputs.add(layer_out)
+                        out_scopes.add(v.scope)
 
+                layer_out.out_scopes=out_scopes
+                idx += 1
+                output_idx += 1
 
     def _remove_constant_nodes(self):
         # remove nodes representing constants as they do not provide any useful info
@@ -255,32 +284,35 @@ class Graph():
 
         return most_specific_scope
 
-    def _remove_nodes_that_go_nowhere(self,trace_outputs):
-        out_list=list(trace_outputs)
-        out_indices=list(map(lambda n: int(n.uniqueName()),out_list))
+    def _remove_nodes_that_go_nowhere(self, trace_outputs):
+        out_list = list(trace_outputs)
+        out_indices = list(map(lambda n: int(n.uniqueName()),out_list))
+
         def going_nowhere(node):
             return (not node.out_nodes) and (not node.idx in out_indices)
-            
+
         self._remove_nodes(going_nowhere)
 
-    def _remove_nodes(self, condition,reverse=False):
-        changed=True
+    def _remove_nodes(self, condition, reverse=False):
+        changed = True
         while changed:
-            changed=False
+            changed = False
             optimized_graph = []
 
             nodes = reversed(self.nodes) if reverse else self.nodes
 
             for node in nodes:
                 if condition(node):
-                    changed=True
+                    changed = True
                     # connect inputs to outputs directly
                     for in_node in node.in_nodes:
                         in_node.remove_out_node(node)
                         in_node.add_out_node(node.out_nodes)
                     for out_node in node.out_nodes:
                         out_node.remove_in_node(node)
+                        out_node.inputs.difference_update(node.outputs)
                         out_node.add_in_node(node.in_nodes)
+                        out_node.inputs.update(node.inputs)
                 else:
                     optimized_graph.append(node)
 
@@ -301,7 +333,7 @@ class Graph():
     def get_weights(self):
         return [node.weight for node in self.nodes]
 
-    def adjacency_list(self,directed=False):
+    def adjacency_list(self, directed=False):
         if not directed:
             return [[n.idx for n in node.out_nodes.union(node.in_nodes)] for node in self.nodes]
         return [[n.idx for n in node.out_nodes] for node in self.nodes]
@@ -310,7 +342,7 @@ class Graph():
         for idx, node in enumerate(self.nodes):
             node.idx = idx
 
-    def build_dot(self, show_buffs_params=False,show_weights=True):
+    def build_dot(self, show_buffs_params=False, show_weights=True):
         '''
         return a graphviz representation of the graph
         '''
@@ -351,8 +383,7 @@ class Graph():
                  fontcolor=theme["font_color"],
                  fontname=theme["font_name"])
 
-        colors={0:'grey',1:'green',2:'red',3:'yellow',4:'orange',5:'brown',6:'purple',7:'pink',10:"white"}
-
+        colors = {0:'grey',1:'green',2:'red',3:'yellow',4:'orange',5:'brown',6:'purple',7:'pink',10:"white"}
 
         def hide_node(node):
             return (node.type == NodeTypes.BUFF_PARAM) and (not show_buffs_params)
@@ -361,6 +392,10 @@ class Graph():
             if hide_node(node):
                 continue
             label = node.scope
+
+            if not node.out_nodes:
+                label=f"{label}\n {node.outputs}"
+
             if show_weights and node.weight != 0:
                 label = f"{label}\n {node.weight}"
             dot.node(str(node.idx), label, fillcolor=colors[node.part])
@@ -371,19 +406,22 @@ class Graph():
             for in_node in node.in_nodes:
                 if hide_node(in_node):
                     continue
-                dot.edge(str(in_node.idx), str(node.idx))
+                label = filter(lambda layer_in: layer_in.scope ==
+                               in_node.scope, node.inputs)
+                label=list(map(str,label))
+                dot.edge(str(in_node.idx), str(node.idx),label=str(label))
 
         return dot
 
-    def display(self, show_buffs_params=False,show_weights=True):
+    def display(self, show_buffs_params=False, show_weights=True):
         try:
             from IPython.core.display import display_svg
-            display_svg(self.build_dot(show_buffs_params,show_weights=show_weights), raw=False)
+            display_svg(self.build_dot(show_buffs_params, show_weights=show_weights), raw=False)
         except ImportError as _:
             print("only works in python notebooks")
 
-    def save(self,file_name,directory, show_buffs_params=False,show_weights=True):
-        dot = self.build_dot(show_buffs_params,show_weights=show_weights)
+    def save(self, file_name,directory, show_buffs_params=False,show_weights=True):
+        dot = self.build_dot(show_buffs_params, show_weights=show_weights)
         dot.format = "pdf"
         import os
         if os.path.exists(f"{directory}/{file_name}.pdf"):
@@ -391,11 +429,12 @@ class Graph():
         dot.render(file_name, directory=directory, cleanup=True)
 
 # scope names of all profiled layers in the model
+
 def _profiled_scopes(module: nn.Module, depth, basic_block):
-    return list(map(lambda t:t[1],traverse_model(module,depth,basic_block)))
+    return list(map(lambda t: t[1],traverse_model(module,depth,basic_block)))
 
 # scope names of all params and buffs in the model
 # we discover them manually because the tracer does not provide this info
-def _buffer_and_params_scopes(module: nn.Module):
-    return list(map(lambda t: t[1],traverse_params_buffs(module)))
 
+def _buffer_and_params_scopes(module: nn.Module):
+    return list(map(lambda t: t[1], traverse_params_buffs(module)))

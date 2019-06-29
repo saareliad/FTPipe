@@ -7,7 +7,6 @@ def optimize_graph(graph: Graph):
     graph.nodes = nodes
     _combine_params_and_buffers_into_OP_nodes(graph)
     _merge_op_chains(graph)
-
     graph._normalize_indices()
 
 
@@ -27,7 +26,10 @@ def _combine_OP_nodes_under_the_same_scope(nodes):
         else:
             # add edges create the super set of all edeges in the scope
             scope_representative[node.scope].add_in_node(node.in_nodes)
+            scope_representative[node.scope].inputs.update(node.inputs)
+
             scope_representative[node.scope].add_out_node(node.out_nodes)
+            scope_representative[node.scope].outputs.update(node.outputs)
 
     for node in optimized_graph:
         # get the sets of all incoming/outgoing scopes
@@ -38,6 +40,11 @@ def _combine_OP_nodes_under_the_same_scope(nodes):
         outgoing_scopes = {n.scope for n in node.out_nodes
                            if n.scope != node.scope}
 
+        inputs = {layer_in for layer_in in node.inputs
+                  if layer_in.scope != node.scope}
+        outputs = {layer_out for layer_out in node.outputs
+                   if node.scope not in layer_out.out_scopes}
+
         out_nodes = {scope_representative[out_node]
                      for out_node in outgoing_scopes}
         in_nodes = {scope_representative[in_node]
@@ -45,21 +52,17 @@ def _combine_OP_nodes_under_the_same_scope(nodes):
 
         node.in_nodes = in_nodes
         node.out_nodes = out_nodes
+        node.inputs = inputs
+        node.outputs = outputs
 
     return optimized_graph
 
 
 def _combine_params_and_buffers_into_OP_nodes(graph: Graph):
-    optimized_graph = []
+    def is_buffer_or_param(n):
+        return n.type == NodeTypes.BUFF_PARAM and graph._find_encasing_layer(n.scope) != ''
 
-    def is_buffer_or_param(n): return n.type == NodeTypes.BUFF_PARAM
-    for node in graph.nodes:
-        if is_buffer_or_param(node) and graph._find_encasing_layer(node.scope) != '':
-            for n in node.out_nodes:
-                n.remove_in_node(node)
-        else:
-            optimized_graph.append(node)
-    graph.nodes = optimized_graph
+    graph._remove_nodes(is_buffer_or_param)
 
 
 def _merge_op_chains(graph: Graph):
