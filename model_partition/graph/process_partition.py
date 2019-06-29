@@ -12,7 +12,6 @@ def post_process_partition(graph: Graph, nparts, part, weights=None):
     scc_partition_correction(graph)
 
 
-# TODO fix
 def OP_inputs_partition_correction(graph: Graph, nparts):
     groups = []
     for v in graph.nodes:

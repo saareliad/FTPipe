@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch
 from enum import Enum
 import re
+from pprint import pprint
+import inspect
 from copy import copy
 from ..utils import traverse_model,traverse_params_buffs
 
@@ -121,6 +123,7 @@ class Graph():
     def _build_graph(self, trace_graph):
         self._add_IO_nodes(trace_graph.inputs())
         self._add_OP_nodes(trace_graph.nodes())
+        self._add_tensor_shapes(trace_graph)
         self._remove_constant_nodes()
         self._remove_nodes_that_go_nowhere(trace_graph.outputs())
         self._normalize_indices()
@@ -129,10 +132,10 @@ class Graph():
         '''
         add nodes representing the input and params/buffs of the model
         '''
-        for idx, node in enumerate(input_nodes):
+        for idx, trace_node in enumerate(input_nodes):
             node_weight = 1
             # input/buff/parm weight is it's size
-            for d in node.type().sizes():
+            for d in trace_node.type().sizes():
                 node_weight *= d
 
             if idx < self.num_inputs:
@@ -190,6 +193,50 @@ class Graph():
                     self.nodes[node_idx+i-1].add_out_node(out_node)
                     self.nodes.append(out_node)
                     num_extra_nodes += 1
+
+    def _add_tensor_shapes(self,trace_graph):
+        idx=0
+        #for the inputs params buffs we are good
+        for node in trace_graph.inputs():
+            for use in node.uses():
+                target_node=use.user
+             
+                try:
+                    #works if not constant
+                    tuple(node.type().sizes())
+
+                    if len(node.type().sizes()) == 0:
+                        (1,)
+
+                except RuntimeError as _:
+                    # crashes for constant
+                    (1,)
+
+                #find the node idx of the user
+                for out in target_node.outputs():
+                    self.nodes[out.unique()].scope
+                    out
+            idx += 1
+                
+        for node in trace_graph.nodes():
+            for out in node.outputs():
+                try:
+                    #works if not constant
+                    tuple(out.type().sizes())
+
+                    if len(out.type().sizes())==0:
+                        (1,)
+                    
+                except RuntimeError as _:
+                    # crashes for constant
+                    (1,)
+                for use in out.uses():
+                    target_node=use.user
+                    for target_out in target_node.outputs():
+                        # print(out.unique())
+                        pass
+                idx += 1
+
 
     def _remove_constant_nodes(self):
         # remove nodes representing constants as they do not provide any useful info

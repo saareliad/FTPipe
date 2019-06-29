@@ -33,6 +33,8 @@ def partition_torchvision():
                 inception_v3, densenet121, GoogLeNet, LeNet, WideResNet]
     depth = [0, 1, 100]
     num_partitions = 4
+    networks = [resnet18]
+    depth = [100]
     for net in networks:
         model = net()
         for d in depth:
@@ -95,4 +97,4 @@ def distribute_torchvision():
 
 
 if __name__ == "__main__":
-    distribute_torchvision()
+    partition_torchvision()

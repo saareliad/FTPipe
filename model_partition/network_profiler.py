@@ -154,19 +154,22 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_block=None, device="cuda
 
     _unwrap_layers(net)
 
-    # TODO fix time measurement for first layer
+    # fix a weird behaviour where the first layer has overly large measured exec time
     max_node = list(layers_profile.items())[0]
     for name, node in layers_profile.items():
         if node.forward_time > max_node[1].forward_time:
             max_node = (name, node)
 
-    max_name, _ = max_node
+    max_name, p = max_node
 
     exec_times = map(lambda profile: (profile.forward_time,
                                       profile.backward_time), layers_profile.values())
     f_time, b_time = map(sum, zip(*exec_times))
-
-    layers_profile[max_name] = Profile(f_time, b_time, 1, 1, 1, 1)
+    f_time /= len(layers_profile)
+    b_time /= len(layers_profile)
+    imputed_profile = Profile(f_time, b_time, p.param_size,
+                              p.buffer_size, p.input_size, p.output_size)
+    layers_profile[max_name] = imputed_profile
 
     return layers_profile
 
