@@ -96,25 +96,25 @@ class PipelineParallel(nn.Module):
         results = []
         # the actual pipeline process of feeding the data and receiving outputs:
         for cycle in range(self.num_gpus + num_runs - 1):
-            # feeding the module all the microbatches, then, until the forward
-            # propagation process ends needs to feed garbage.
-            if cycle < num_runs:
-                input = microbatches[cycle]
-            else:
-                input = torch.zeros(*self.input_shape)
-
             with autograd.no_grad():
+                # feeding the module all the microbatches, then, until the forward
+                # propagation process ends needs to feed garbage.
+                if cycle < num_runs:
+                    input = microbatches[cycle]
+                else:
+                    input = torch.zeros(*self.input_shape)
+
                 result: Tuple[torch.Tensor] = self.module(input)
 
-            # the first microbatch will finish the forward propagation only
-            # after num_gpus cycles.
-            if cycle >= self.num_gpus - 1:
-                # if self.training:
-                #     result.requires_grad_()
-                #     result.register_hook(lambda grad: self.wrappers[-1].act_hook(grad))
-                results.append(result.to(self.main_device))
+                # the first microbatch will finish the forward propagation only
+                # after num_gpus cycles.
+                if cycle >= self.num_gpus - 1:
+                    # if self.training:
+                    #     result.requires_grad_()
+                    #     result.register_hook(lambda grad: self.wrappers[-1].act_hook(grad))
+                    results.append(result.to(self.main_device))
 
-            self.counter.increase()
+                self.counter.increase()
 
         # make sure that the counter and wrappers are returned to default mode
         self.finished_prop()
@@ -141,16 +141,17 @@ class PipelineParallel(nn.Module):
         # make sure that we are on backward mode
         self.set_mode('backward')
 
-        with autograd.enable_grad():
-            # do a backward run for each gradient
-            for grad in grads.split(self.microbatch_size, dim=0):
+        # do a backward run for each gradient
+        for grad in grads.split(self.microbatch_size, dim=0):
+            with torch.set_grad_enabled(True):
                 self.pop_activations()
                 out = self.module(torch.zeros(*self.input_shape))
                 out.backward(grad)
                 self.counter.increase()
 
-            # make sure that all backward passes are done
-            for _ in range(self.num_gpus - 1):
+        # make sure that all backward passes are done
+        for _ in range(self.num_gpus - 1):
+            with torch.set_grad_enabled(True):
                 self.pop_activations()
                 self.module(torch.zeros(*self.input_shape))
                 self.counter.increase()
@@ -162,4 +163,3 @@ class PipelineParallel(nn.Module):
         self.finished_prop()
 
         # return out_grads
-

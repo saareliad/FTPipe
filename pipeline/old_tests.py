@@ -3,14 +3,14 @@ from pipeline.pipeline_parallel import *
 from pipeline.sync_wrapper import *
 import torch
 import torch.nn as nn
-from torchvision.models.resnet import ResNet, Bottleneck
+from torchvision.models.resnet import ResNet, Bottleneck, resnet50
 import matplotlib.pyplot as plt
 import numpy as np
 import timeit
 
 num_classes = 1000
 num_batches = 3
-batch_size = 120
+batch_size = 12
 image_w = 224
 image_h = 224
 
@@ -116,7 +116,7 @@ def test_resnet50_time():
 
     stmt = "train(model)"
 
-    setup = "model = make_pipeline_resnet(20)"
+    setup = "model = make_pipeline_resnet(4)"
     mp_run_times = timeit.repeat(
         stmt, setup, number=1, repeat=num_repeat, globals=globals())
     mp_mean, mp_std = np.mean(mp_run_times), np.std(mp_run_times)
@@ -192,13 +192,13 @@ def train(model):
         labels = labels.to(outputs.device)
         loss_fn(outputs, labels).backward()
         optimizer.step()
-        # print("")
-        # print("======================================")
-        # print(f'finished batch #{b}')
+        print("")
+        print("======================================")
+        print(f'finished batch #{b}')
 
-    # print('finished a train run!')
+    print('finished a train run!')
 
 
 if __name__ == "__main__":
-    test_split_size()
+    # test_split_size()
     test_resnet50_time()

@@ -88,14 +88,14 @@ class SyncWrapper(nn.Module):
         self.output_shapes = output_shapes
 
         # activation hooks
-        self.add_grad = tuple([self.add_grad_(idx) for idx in range(num_inputs)])
+        # self.add_grad = tuple([self.add_grad_(idx) for idx in range(num_inputs)])
 
     def add_grad_(self, idx: int):
         def add_grad_idx(grad: torch.Tensor):
             if self.grads[idx] is None:
-                self.grads[idx] = grad.to(self.device)
+                self.grads[idx] = grad.to(self.device).clone()
             else:
-                self.grads[idx] += grad.to(self.device)
+                self.grads[idx] += grad.to(self.device).clone()
 
         return add_grad_idx
 
@@ -116,8 +116,16 @@ class SyncWrapper(nn.Module):
     #     else:
     #         self.cur_mode = mode
 
+    def has_grads(self):
+        for act in self.last_inputs:
+            if act is None:
+                return False
+        return True
+
     def pop_activation(self):
         if self.counter.is_last_input_valid(self.gpu_num):
+            if self.has_grads():
+                self.grads = tuple([act.grad.clone() for act in self.last_inputs])
             self.last_inputs = self.activations.pop(0)
 
     def finished_prop(self):
@@ -132,7 +140,8 @@ class SyncWrapper(nn.Module):
 
     def reset_grads(self):
         for idx in range(len(self.grads)):
-            self.grads[idx] *= 0
+            self.grads[idx] = None
+        # self.add_grad = tuple([self.add_grad_(idx) for idx in range(self.num_inputs)])
 
     def backward_mode(self, *inputs: Tuple[torch.Tensor, ...]) -> Tuple[torch.Tensor, ...]:
         """
@@ -143,17 +152,15 @@ class SyncWrapper(nn.Module):
             for input, grad in zip(inputs, self.grads):
                 input.backward(grad)
 
-            self.reset_grads()
+            torch.set_grad_enabled(True)
+            # self.reset_grads()
 
         # if we have an activation to pass
         if self.counter.is_last_input_valid(self.gpu_num):
-            cur_inputs = self.last_inputs
-            for idx, activation in enumerate(cur_inputs):
-                activation.requires_grad_(True).register_hook(self.add_grad[idx])
+            for activation in self.last_inputs:
+                activation.requires_grad_(True)
 
-            output = self.module(*cur_inputs)
-
-            self.last_inputs = [None for _ in range(self.num_inputs)]
+            output = self.module(*self.last_inputs)
         else:
             output = tuple([torch.zeros(*output_shape).to(self.device) for output_shape in self.output_shapes])
             if len(output) == 1:
@@ -169,19 +176,17 @@ class SyncWrapper(nn.Module):
 
     def forward(self, *input: Tuple[torch.Tensor, ...]) -> torch.Tensor:
         # move the input between devices
-        next_inputs: Tuple[torch.Tensor, ...] = tuple([next_input.to(self.device) for next_input in input])
+        next_inputs: Tuple[torch.Tensor, ...] = tuple([next_input.to(self.device).clone() for next_input in input])
 
         if self.counter.cur_mode is ForwardMode.backward:
-            with autograd.enable_grad():
-                return self.backward_mode(*next_inputs)
+            return self.backward_mode(*next_inputs)
 
         # check if the input that waits for the submodule is relevant (garbage
         # will be propagated before and after data passes through submodule).
         if self.counter.is_last_input_valid(self.gpu_num):
             # the input is relevant.
             cur_inputs = self.last_inputs
-            with autograd.no_grad():
-                output = self.module(*cur_inputs)
+            output = self.module(*cur_inputs)
         else:
             # the input is garbage.
             output = tuple([torch.zeros(*output_shape).to(self.device) for output_shape in self.output_shapes])
@@ -226,7 +231,7 @@ class ActivationSavingLayer(nn.Module):
         self.counter = counter
 
         # activation hooks
-        self.add_grad = tuple([self.add_grad_(idx) for idx in range(num_inputs)])
+        # self.add_grad = tuple([self.add_grad_(idx) for idx in range(num_inputs)])
 
         self.gpu_num = 0
 
@@ -311,11 +316,10 @@ class ActivationSavingLayer(nn.Module):
         # move the input between devices
         moved_inputs = tuple([input.to(self.device) for input in inputs])
 
-        with autograd.enable_grad():
-            if self.counter.cur_mode is ForwardMode.backward:
-                return self.backward_mode(*moved_inputs)
-            elif self.counter.cur_mode is ForwardMode.train:
-                self.save_activation(*moved_inputs)
+        if self.counter.cur_mode is ForwardMode.backward:
+            return self.backward_mode(*moved_inputs)
+        elif self.counter.cur_mode is ForwardMode.train:
+            self.save_activation(*moved_inputs)
 
         if len(moved_inputs) == 1:
             moved_inputs = moved_inputs[0]
@@ -336,12 +340,7 @@ class LayerWrapper(nn.Module):
 
     def forward(self, *inputs):
         if self.counter.is_last_input_valid(self.gpu_num):
-            if self.counter.cur_mode == ForwardMode.backward:
-                with autograd.enable_grad():
-                    return self.module(*inputs)
-
-            with autograd.no_grad():
-                return self.module(*inputs)
+            return self.module(*inputs)
         else:
             out = tuple([torch.zeros(*output_shape).to(self.device) for output_shape in self.output_shapes])
             if len(out) == 1:
