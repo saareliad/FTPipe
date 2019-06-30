@@ -318,7 +318,7 @@ class ActivationSavingLayer(nn.Module):
 
         if self.counter.cur_mode is ForwardMode.backward:
             return self.backward_mode(*moved_inputs)
-        elif self.counter.cur_mode is ForwardMode.train:
+        elif self.counter.cur_mode is ForwardMode.train and self.counter.is_input_valid(self.gpu_num):
             self.save_activation(*moved_inputs)
 
         if len(moved_inputs) == 1:
