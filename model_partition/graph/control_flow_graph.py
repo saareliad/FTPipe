@@ -119,7 +119,10 @@ class LayerOutput():
         return self.idx.__hash__()
     
     def __str__(self):
-        return str(self.output_shape)
+        res=''
+        for d in self.output_shape:
+            res=f"{res}x{d}"
+        return res[1:]
 
     def __repr__(self):
         return str(self)
@@ -394,7 +397,9 @@ class Graph():
             label = node.scope
 
             if not node.out_nodes:
-                label=f"{label}\n {node.outputs}"
+                outputs = list(map(str, node.outputs))
+                outputs = ",".join(outputs)
+                label=f"{label}\n {outputs}"
 
             if show_weights and node.weight != 0:
                 label = f"{label}\n {node.weight}"
@@ -406,10 +411,12 @@ class Graph():
             for in_node in node.in_nodes:
                 if hide_node(in_node):
                     continue
-                label = filter(lambda layer_in: layer_in.scope ==
+                edge_label = filter(lambda layer_in: layer_in.scope ==
                                in_node.scope, node.inputs)
-                label=list(map(str,label))
-                dot.edge(str(in_node.idx), str(node.idx),label=str(label))
+
+                edge_label=list(map(str,edge_label))
+                edge_label=",".join(edge_label)
+                dot.edge(str(in_node.idx), str(node.idx), label=edge_label)
 
         return dot
 

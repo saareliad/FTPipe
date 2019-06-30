@@ -7,8 +7,8 @@ from pprint import pprint
 __all__ = ["wrap_and_move"]
 
 
-
-# TODO shapes
+# TODO shapes of top scopes
+# TODO gpu num is bfs depth from inputs
 
 
 def wrap_and_move(model: nn.Module, basic_block, device_lst: list, graph: Graph):
