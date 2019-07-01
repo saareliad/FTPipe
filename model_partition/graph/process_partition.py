@@ -1,9 +1,12 @@
-from collections import deque
 from .control_flow_graph import Graph, NodeTypes
 
 
-def post_process_partition(graph: Graph, nparts, part, weights=None):
+def post_process_partition(graph: Graph, part, weights=None):
     set_partition(graph, part)
+
+    ensure_graph_validity(graph)
+
+    nparts = len({n.part for n in graph.nodes})
     # make sure the inputs to an OP type node are all in the same part
     OP_inputs_partition_correction(graph, nparts)
     # make sure every scc in the graph is not splitted between different parts
@@ -16,7 +19,10 @@ def OP_inputs_partition_correction(graph: Graph, nparts):
         if v.type == NodeTypes.OP:
             group = {u for u in v.in_nodes}
             group.add(v)
-            groups.append(group)
+
+            if len({u.part for u in group}) > 1:
+                groups.append(group)
+
     nodes_left = [v for v in graph.nodes]
     # check and update for every group
     for group in groups:
@@ -120,3 +126,12 @@ def strongly_connected_components_iterative(vertices, edges):
 def set_partition(graph: Graph, parts):
     for node, part in zip(graph.nodes, parts):
         node.part = part
+
+
+def ensure_graph_validity(graph: Graph):
+    op_nodes = filter(lambda n: n.type == NodeTypes.OP, graph.nodes)
+
+    for node in op_nodes:
+        if any((in_node.type == NodeTypes.OP and in_node.part != node.part) for in_node in node.in_nodes):
+            print("we have discovered 2 arithmetic ops that reside on different devices\n we recommend using a smaller depth or using more general basic blocks")
+            return

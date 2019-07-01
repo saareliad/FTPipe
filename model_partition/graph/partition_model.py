@@ -21,11 +21,11 @@ def partition_model(model, num_gpus, *sample_batch, max_depth=100, basic_blocks=
 
     weights = [weight_func(w) for w in nodew]
 
-    nparts, partition = part_graph(
+    edge_cut, partition = part_graph(
         adjlist, nparts=num_gpus, algorithm="metis", nodew=weights, contig=1)
 
-    post_process_partition(graph, nparts, partition)
-    return graph, nparts, partition
+    post_process_partition(graph, partition)
+    return graph, partition, edge_cut
 
 
 # TODO decide on weighting functional

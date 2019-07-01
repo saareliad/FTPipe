@@ -9,7 +9,7 @@ __all__ = ["wrap_and_move"]
 
 
 def wrap_and_move(model: nn.Module, basic_block, device_lst: list, graph: Graph, *inputs):
-    nparts = len(set(map(lambda n: n.part, graph.nodes)))
+    nparts = len({n.part for n in graph.nodes})
     used_devices = device_lst[:nparts]
     model_inputs = filter(lambda n: n.type == NodeTypes.IN, graph.nodes)
     partition_to_device, part_to_gpu_num = _partition_to_device(
