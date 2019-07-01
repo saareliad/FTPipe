@@ -16,8 +16,9 @@ def distribute_model(model, *sample_batch, device_list=None, num_iter=4, max_dep
     graph, _, _ = partition_network_using_profiler(model, len(device_list), *sample_batch, num_iter=num_iter,
                                                    max_depth=max_depth, basic_blocks=basic_blocks, device=trace_device)
 
+    batch = map(lambda t: t.to(device_list[0]), sample_batch)
     distributed_model, wrappers = wrap_and_move(
-        model, basic_blocks, device_list, graph)
+        model, basic_blocks, device_list, graph, *batch)
 
     return distributed_model, graph, wrappers
 

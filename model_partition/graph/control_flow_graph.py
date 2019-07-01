@@ -2,9 +2,6 @@
 import torch.nn as nn
 import torch
 from enum import Enum
-import re
-from pprint import pprint
-import inspect
 from copy import copy
 from ..utils import traverse_model, traverse_params_buffs
 
@@ -234,7 +231,6 @@ class Graph():
 
         idx = 0
         output_idx = 0
-        # for the inputs params buffs we are good
         for node in trace_graph.inputs():
             u = self.nodes[idx]
             layer_out = LayerOutput(output_idx, u.scope, get_shape(node))

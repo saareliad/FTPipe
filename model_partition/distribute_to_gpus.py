@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch
 from .graph.control_flow_graph import Graph, NodeTypes
 from pipeline import ActivationSavingLayer, LayerWrapper, SyncWrapper, CycleCounter
 from .utils import traverse_model, traverse_params_buffs
@@ -10,8 +11,7 @@ __all__ = ["wrap_and_move"]
 # TODO shapes of top scopes
 # TODO gpu num is bfs depth from inputs
 
-
-def wrap_and_move(model: nn.Module, basic_block, device_lst: list, graph: Graph):
+def wrap_and_move(model: nn.Module, basic_block, device_lst: list, graph: Graph, *inputs):
     nparts = len(set(map(lambda n: n.part, graph.nodes)))
     used_devices = device_lst[:nparts]
     model_inputs = filter(lambda n: n.type == NodeTypes.IN, graph.nodes)
@@ -33,8 +33,10 @@ def wrap_and_move(model: nn.Module, basic_block, device_lst: list, graph: Graph)
     relevant_sub_modules = modules_of_top_scopes(
         top_scopes, model, effective_depth, basic_block)
 
+    scope_to_shape = find_oputput_shapes_of_scopes(model, top_scopes, *inputs)
+
     modified_model = wrap_model(relevant_sub_modules, top_scopes_to_device,
-                                used_devices, part_inputs, counter, model)
+                                used_devices, part_inputs, counter, model, scope_to_shape)
 
     wrappers = extract_wrappers(modified_model)
 
@@ -45,7 +47,7 @@ def extract_wrappers(modified_model):
     def isWrapper(module):
         return isinstance(module, (ActivationSavingLayer, SyncWrapper))
 
-    wrappers = map(lambda t: t[0], traverse_model(modified_model))
+    wrappers = map(lambda t: t[0], traverse_model(modified_model, full=True))
     wrappers = list(filter(isWrapper, wrappers))
     return wrappers
 
@@ -58,9 +60,9 @@ def modules_of_top_scopes(top_scopes, model, effective_depth, basic_block):
     return list(relevant_sub_modules)
 
 
-def wrap_model(relevant_sub_modules, top_scopes_to_device, device_lst, part_inputs, counter, model):
+def wrap_model(relevant_sub_modules, top_scopes_to_device, device_lst, part_inputs, counter, model, scope_to_shape):
     wrap_layers(relevant_sub_modules, top_scopes_to_device,
-                device_lst, part_inputs, counter)
+                device_lst, part_inputs, counter, scope_to_shape)
 
     _move_buffers_params_to_devices(model, top_scopes_to_device)
 
@@ -70,12 +72,12 @@ def wrap_model(relevant_sub_modules, top_scopes_to_device, device_lst, part_inpu
     return modified_model
 
 
-def wrap_layers(layers, top_scopes_to_device, device_lst, part_inputs, counter):
+def wrap_layers(layers, top_scopes_to_device, device_lst, part_inputs, counter, scope_to_shape):
     for sub_layer, layer_scope, parent in layers:
         name = layer_scope[layer_scope.rfind('[')+1:-1]
         layer_device = top_scopes_to_device[layer_scope]
-        gpu_num = device_lst.index(layer_device)
-        output_shape = (1,)  # TODO shape
+        gpu_num = device_lst.index(layer_device)  # TODO gpu num
+        output_shape = scope_to_shape[layer_scope]
         if layer_scope in part_inputs and gpu_num != 0:
             # syncWrap all first nodes of a partition except the first one
             wrapper = SyncWrapper(sub_layer, layer_device,
@@ -96,16 +98,12 @@ def optimize_wrappers(graph, partition_to_device):
                             for scope, part in top_modules_that_need_wrapping.items()}
 
     nodes_to_top_scopes = dict()
-    top_scopes_to_nodes = dict()
 
     # group graph nodes by their common scope
     for node in graph.nodes:
         for scope in top_scopes_to_device:
             if node.scope.startswith(scope):
                 nodes_to_top_scopes[node] = scope
-                nodes = top_scopes_to_nodes.get(scope, [])
-                nodes.append(node)
-                top_scopes_to_nodes[scope] = nodes
                 break
 
     return top_scopes_to_device, nodes_to_top_scopes
@@ -179,3 +177,48 @@ def _partition_input_nodes(nodes):
         return not node.in_nodes or any(in_node.part != node.part for in_node in node.in_nodes)
 
     return list(filter(is_input_node, nodes))
+
+
+def find_partition_depth(model):
+    pass
+
+
+def find_oputput_shapes_of_scopes(model, scopes, *inputs):
+    backup = dict()
+
+    for layer, scope, parent in traverse_model(model, full=True):
+        if scope in scopes:
+            name = scope[scope.rfind('[')+1:-1]
+            parent._modules[name] = ShapeWrapper(layer)
+
+            new_scope = scope[:scope.rfind('/')+1]+f"ShapeWrapper[{name}]"
+            backup[new_scope] = (scope, name)
+
+    with torch.no_grad():
+        model(*inputs)
+
+    scope_to_shape = {}
+    for layer, scope, parent in traverse_model(model, full=True):
+        if isinstance(layer, ShapeWrapper):
+            old_scope, name = backup[scope]
+            scope_to_shape[old_scope] = layer.output_shape
+            parent._modules[name] = layer.sub_layer
+
+    return scope_to_shape
+
+
+class ShapeWrapper(nn.Module):
+    def __init__(self, sub_module: nn.Module):
+        super(ShapeWrapper, self).__init__()
+        self.output_shape = []
+        self.sub_layer = sub_module
+
+    def forward(self, *inputs):
+        outs = self.sub_layer(*inputs)
+
+        if isinstance(outs, torch.Tensor):
+            self.output_shape.append(outs.shape[1:])
+        else:
+            for t in outs:
+                self.output_shape.append(t.shape[1:])
+        return outs

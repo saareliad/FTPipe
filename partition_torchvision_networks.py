@@ -65,8 +65,8 @@ def distribute_torchvision():
     networks = [alexnet, resnet18, vgg11_bn, squeezenet1_0,
                 inception_v3, densenet121, GoogLeNet, LeNet, WideResNet]
     depth = [0, 1, 100]
-    networks = [resnet18]
-    depth = [100]
+    depth = [0]
+    networks = [alexnet]
     for net in networks:
         for d in depth:
             model = net()
@@ -90,11 +90,11 @@ def distribute_torchvision():
             filename = f"{net.__name__} attempted {2} partitions at depth {d}"
             curr_dir = os.path.dirname(os.path.realpath(__file__))
             out_dir = f"{curr_dir}\\distribution_viz"
-            graph.save(directory=out_dir, file_name=filename,
-                       show_buffs_params=False, show_weights=False)
+            # graph.save(directory=out_dir, file_name=filename,
+            #            show_buffs_params=False, show_weights=False)
 
             print(filename)
 
 
 if __name__ == "__main__":
-    partition_torchvision()
+    distribute_torchvision()
