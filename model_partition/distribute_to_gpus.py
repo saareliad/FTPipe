@@ -8,9 +8,6 @@ from pprint import pprint
 __all__ = ["wrap_and_move"]
 
 
-# TODO shapes of top scopes
-# TODO gpu num is bfs depth from inputs
-
 def wrap_and_move(model: nn.Module, basic_block, device_lst: list, graph: Graph, *inputs):
     nparts = len(set(map(lambda n: n.part, graph.nodes)))
     used_devices = device_lst[:nparts]
@@ -21,8 +18,8 @@ def wrap_and_move(model: nn.Module, basic_block, device_lst: list, graph: Graph,
     top_scopes_to_device, nodes_to_top_scopes = optimize_wrappers(
         graph, partition_to_device)
 
-    top_scopes_to_gpu_num = {
-        scope: part_to_gpu_num[node.part] for node, scope in nodes_to_top_scopes.items()}
+    top_scopes_to_gpu_num = {scope: part_to_gpu_num[node.part]
+                             for node, scope in nodes_to_top_scopes.items()}
 
     part_inputs_nodes = _partition_input_nodes(graph.nodes)
     part_inputs = set(map(lambda n: nodes_to_top_scopes[n], part_inputs_nodes))
@@ -40,7 +37,7 @@ def wrap_and_move(model: nn.Module, basic_block, device_lst: list, graph: Graph,
     scope_to_shape = find_oputput_shapes_of_scopes(model, top_scopes, *inputs)
 
     modified_model = wrap_model(relevant_sub_modules, top_scopes_to_device,
-                                used_devices, part_inputs, counter, model, scope_to_shape, top_scopes_to_gpu_num)
+                                used_devices[0], part_inputs, counter, model, scope_to_shape, top_scopes_to_gpu_num)
 
     wrappers = extract_wrappers(modified_model)
 
@@ -64,19 +61,19 @@ def modules_of_top_scopes(top_scopes, model, effective_depth, basic_block):
     return list(relevant_sub_modules)
 
 
-def wrap_model(relevant_sub_modules, top_scopes_to_device, device_lst, part_inputs, counter, model, scope_to_shape, top_scopes_to_gpu_num):
+def wrap_model(relevant_sub_modules, top_scopes_to_device, input_device, part_inputs, counter, model, scope_to_shape, top_scopes_to_gpu_num):
     wrap_layers(relevant_sub_modules, top_scopes_to_device,
-                device_lst, part_inputs, counter, scope_to_shape, top_scopes_to_gpu_num)
+                part_inputs, counter, scope_to_shape, top_scopes_to_gpu_num)
 
     _move_buffers_params_to_devices(model, top_scopes_to_device)
 
     modified_model = nn.Sequential(ActivationSavingLayer(
-        device_lst[0], counter=counter), model)
+        input_device, counter=counter), model)
 
     return modified_model
 
 
-def wrap_layers(layers, top_scopes_to_device, device_lst, part_inputs, counter, scope_to_shape, top_scopes_to_gpu_num):
+def wrap_layers(layers, top_scopes_to_device, part_inputs, counter, scope_to_shape, top_scopes_to_gpu_num):
     for sub_layer, layer_scope, parent in layers:
         name = layer_scope[layer_scope.rfind('[')+1:-1]
         layer_device = top_scopes_to_device[layer_scope]

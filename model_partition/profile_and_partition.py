@@ -11,10 +11,8 @@ def distribute_model(model, *sample_batch, device_list=None, num_iter=4, max_dep
         else:
             device_list = ["cpu"]
 
-    trace_device = device_list[0]
-
     graph, _, _ = partition_network_using_profiler(model, len(device_list), *sample_batch, num_iter=num_iter,
-                                                   max_depth=max_depth, basic_blocks=basic_blocks, device=trace_device)
+                                                   max_depth=max_depth, basic_blocks=basic_blocks)
 
     batch = map(lambda t: t.to(device_list[0]), sample_batch)
     distributed_model, wrappers = wrap_and_move(
@@ -23,9 +21,9 @@ def distribute_model(model, *sample_batch, device_list=None, num_iter=4, max_dep
     return distributed_model, graph, wrappers
 
 
-def partition_network_using_profiler(model, num_gpus, *sample_batch, num_iter=4, max_depth=100, basic_blocks=None, device="cuda"):
+def partition_network_using_profiler(model, num_gpus, *sample_batch, num_iter=4, max_depth=100, basic_blocks=None):
     weights = profileNetwork(model, *sample_batch, max_depth=max_depth,
-                             basic_block=basic_blocks, device=device, num_iter=num_iter)
+                             basic_block=basic_blocks, num_iter=num_iter)
 
     return partition_model(model, num_gpus, *sample_batch, max_depth=max_depth,
-                           basic_blocks=basic_blocks, device=device, weights=weights)
+                           basic_blocks=basic_blocks, weights=weights)

@@ -1,8 +1,6 @@
 from collections import deque
 from .control_flow_graph import Graph, NodeTypes
 
-# TODO there was a case where the partition was not not connected densenet depth 100
-
 
 def post_process_partition(graph: Graph, nparts, part, weights=None):
     set_partition(graph, part)

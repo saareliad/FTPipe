@@ -6,8 +6,7 @@ from copy import copy
 from ..utils import traverse_model, traverse_params_buffs
 
 
-def build_graph_from_trace(model, *sample_batch, max_depth=100, weights=None, basic_block=None, device="cuda"):
-    device = "cpu" if not torch.cuda.is_available() else device
+def build_graph_from_trace(model, *sample_batch, max_depth=100, weights=None, basic_block=None):
 
     buffer_param_names = _buffer_and_params_scopes(model)
 
@@ -16,12 +15,10 @@ def build_graph_from_trace(model, *sample_batch, max_depth=100, weights=None, ba
     layerNames = _profiled_scopes(model, max_depth, basic_block=basic_block)
 
     # trace the model and build a graph
-    inputs = tuple(map(lambda t: t.to(device), sample_batch))
-    model.to(device)
-    num_inputs = len(inputs)
+    num_inputs = len(sample_batch)
 
     with torch.no_grad():
-        trace_graph, _ = torch.jit.get_trace_graph(model, inputs)
+        trace_graph, _ = torch.jit.get_trace_graph(model, sample_batch)#inputs)
         trace_graph = trace_graph.graph()
 
     return Graph(layerNames, num_inputs, buffer_param_names, trace_graph, weights)
@@ -57,7 +54,7 @@ class Node():
      parallel edges in the same direction are not allowed
     '''
 
-    def __init__(self, scope, idx, node_type: NodeTypes, incoming_nodes=None, weight=0, part=10):
+    def __init__(self, scope, idx, node_type: NodeTypes, incoming_nodes=None, weight=0, part=0):
         self.scope = scope
         self.idx = idx
         self.type = node_type
@@ -382,7 +379,7 @@ class Graph():
                  fontcolor=theme["font_color"],
                  fontname=theme["font_name"])
 
-        colors = {0:'grey',1:'green',2:'red',3:'yellow',4:'orange',5:'brown',6:'purple',7:'pink',10:"white"}
+        colors = {0:'grey',1:'green',2:'red',3:'yellow',4:'orange',5:'brown',6:'purple',7:'pink'}
 
         def hide_node(node):
             return (node.type == NodeTypes.BUFF_PARAM) and (not show_buffs_params)
