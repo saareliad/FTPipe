@@ -65,8 +65,6 @@ def distribute_torchvision():
     networks = [alexnet, resnet18, vgg11_bn, squeezenet1_0,
                 inception_v3, densenet121, GoogLeNet, LeNet, WideResNet]
     depth = [0, 1, 100]
-    depth = [0]
-    networks = [alexnet]
     for net in networks:
         for d in depth:
             model = net()

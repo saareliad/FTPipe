@@ -15,10 +15,14 @@ def wrap_and_move(model: nn.Module, basic_block, device_lst: list, graph: Graph,
     nparts = len(set(map(lambda n: n.part, graph.nodes)))
     used_devices = device_lst[:nparts]
     model_inputs = filter(lambda n: n.type == NodeTypes.IN, graph.nodes)
-    partition_to_device = _partition_to_device(used_devices, model_inputs)
+    partition_to_device, part_to_gpu_num = _partition_to_device(
+        used_devices, model_inputs)
 
     top_scopes_to_device, nodes_to_top_scopes = optimize_wrappers(
         graph, partition_to_device)
+
+    top_scopes_to_gpu_num = {
+        scope: part_to_gpu_num[node.part] for node, scope in nodes_to_top_scopes.items()}
 
     part_inputs_nodes = _partition_input_nodes(graph.nodes)
     part_inputs = set(map(lambda n: nodes_to_top_scopes[n], part_inputs_nodes))
@@ -36,7 +40,7 @@ def wrap_and_move(model: nn.Module, basic_block, device_lst: list, graph: Graph,
     scope_to_shape = find_oputput_shapes_of_scopes(model, top_scopes, *inputs)
 
     modified_model = wrap_model(relevant_sub_modules, top_scopes_to_device,
-                                used_devices, part_inputs, counter, model, scope_to_shape)
+                                used_devices, part_inputs, counter, model, scope_to_shape, top_scopes_to_gpu_num)
 
     wrappers = extract_wrappers(modified_model)
 
@@ -60,9 +64,9 @@ def modules_of_top_scopes(top_scopes, model, effective_depth, basic_block):
     return list(relevant_sub_modules)
 
 
-def wrap_model(relevant_sub_modules, top_scopes_to_device, device_lst, part_inputs, counter, model, scope_to_shape):
+def wrap_model(relevant_sub_modules, top_scopes_to_device, device_lst, part_inputs, counter, model, scope_to_shape, top_scopes_to_gpu_num):
     wrap_layers(relevant_sub_modules, top_scopes_to_device,
-                device_lst, part_inputs, counter, scope_to_shape)
+                device_lst, part_inputs, counter, scope_to_shape, top_scopes_to_gpu_num)
 
     _move_buffers_params_to_devices(model, top_scopes_to_device)
 
@@ -72,11 +76,11 @@ def wrap_model(relevant_sub_modules, top_scopes_to_device, device_lst, part_inpu
     return modified_model
 
 
-def wrap_layers(layers, top_scopes_to_device, device_lst, part_inputs, counter, scope_to_shape):
+def wrap_layers(layers, top_scopes_to_device, device_lst, part_inputs, counter, scope_to_shape, top_scopes_to_gpu_num):
     for sub_layer, layer_scope, parent in layers:
         name = layer_scope[layer_scope.rfind('[')+1:-1]
         layer_device = top_scopes_to_device[layer_scope]
-        gpu_num = device_lst.index(layer_device)  # TODO gpu num
+        gpu_num = top_scopes_to_gpu_num[layer_scope]
         output_shape = scope_to_shape[layer_scope]
         if layer_scope in part_inputs and gpu_num != 0:
             # syncWrap all first nodes of a partition except the first one
@@ -146,23 +150,26 @@ def _group_by_scope(nodes):
 def _partition_to_device(device_lst, model_inputs):
     part_to_device = dict()
     num_taken = 0
-    open_nodes = deque(model_inputs)
+    open_nodes = deque([(n, 0)for n in model_inputs])
     closed = set()
     seen_parts = set()
+    part_to_gpu_num = dict()
 
     while num_taken < len(device_lst):
-        node = open_nodes.popleft()
+        node, d = open_nodes.popleft()
         if node.part not in seen_parts:
             part_to_device[node.part] = device_lst[num_taken]
+            part_to_gpu_num[node.part] = d
             num_taken += 1
             seen_parts.add(node.part)
+            d += 1
 
         closed.add(node)
         edges = node.out_nodes.union(node.in_nodes)
+        nodes = edges.difference(closed, set(open_nodes))
+        open_nodes.extend([(n, d) for n in nodes])
 
-        open_nodes.extend(edges.difference(closed, set(open_nodes)))
-
-    return part_to_device
+    return part_to_device, part_to_gpu_num
 
 
 # move buffers and params to their designated device
@@ -177,10 +184,6 @@ def _partition_input_nodes(nodes):
         return not node.in_nodes or any(in_node.part != node.part for in_node in node.in_nodes)
 
     return list(filter(is_input_node, nodes))
-
-
-def find_partition_depth(model):
-    pass
 
 
 def find_oputput_shapes_of_scopes(model, scopes, *inputs):
