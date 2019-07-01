@@ -215,7 +215,7 @@ def train(model, num_classes, num_batches, batch_size, image_w, image_h):
 def pretty_size(size):
     """Pretty prints a torch.Size object"""
     assert (isinstance(size, torch.Size))
-    return " × ".join(map(str, size))
+    return " x ".join(map(str, size))
 
 
 def dump_tensors(gpu_only=True):
