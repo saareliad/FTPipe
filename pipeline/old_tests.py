@@ -149,7 +149,6 @@ def test_resnet50_time(**tests_config):
          'mp_vs_rn.png')
 
     if torch.cuda.is_available():
-        stmt = "train(model)"
         setup = f"model = nn.DataParallel(resnet50(num_classes={num_classes})).to({device_str})"
         dp_run_times = timeit.repeat(
             stmt, setup, number=1, repeat=num_repeat, globals=globals())
