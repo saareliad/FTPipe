@@ -202,13 +202,8 @@ def train(model, num_classes, num_batches, batch_size, image_w, image_h):
         labels = labels.to(outputs.device)
         loss_fn(outputs, labels).backward()
         optimizer.step()
-        print("")
-        print("======================================")
-        print(f'finished batch #{b}')
-        del outputs, labels
 
-    del model
-    print('finished a train run!')
+    print('.', end='')
 
 
 def pretty_size(size):
