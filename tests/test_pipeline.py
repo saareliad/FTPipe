@@ -1,6 +1,7 @@
+import pytest
+
 from torch import optim
-from pipeline.pipeline_parallel import *
-from pipeline.sync_wrapper import *
+from pytorch_Gpipe.pipeline import *
 import torch
 import torch.nn as nn
 from torchvision.models.resnet import ResNet, Bottleneck, resnet50
@@ -28,7 +29,8 @@ class PrintLayer(nn.Module):
 
 class ModelParallelResNet50(ResNet):
     def __init__(self, *args, **kwargs):
-        super(ModelParallelResNet50, self).__init__(Bottleneck, [3, 4, 6, 3], *args, **kwargs)
+        super(ModelParallelResNet50, self).__init__(
+            Bottleneck, [3, 4, 6, 3], *args, **kwargs)
 
         dev1 = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
@@ -45,7 +47,8 @@ class ModelParallelResNet50(ResNet):
             self.layer2
         ).to(dev1)
 
-        self.seq1 = LayerWrapper(self.seq1, 0, dev1, output_shapes=((1, 512, 28, 28),), counter=self.counter)
+        self.seq1 = LayerWrapper(self.seq1, 0, dev1, output_shapes=(
+            (1, 512, 28, 28),), counter=self.counter)
 
         dev2 = 'cuda:1' if torch.cuda.is_available() else 'cpu'
 
@@ -55,10 +58,12 @@ class ModelParallelResNet50(ResNet):
             self.avgpool
         ).to(dev2)
 
-        self.seq2 = SyncWrapper(self.seq2, dev2, 1, output_shapes=((1, 2048, 1, 1),), counter=self.counter)
+        self.seq2 = SyncWrapper(self.seq2, dev2, 1, output_shapes=(
+            (1, 2048, 1, 1),), counter=self.counter)
 
         self.fc.to(dev2)
-        self.fc = LayerWrapper(self.fc, 1, dev2, output_shapes=((1, 1000),), counter=self.counter)
+        self.fc = LayerWrapper(self.fc, 1, dev2, output_shapes=(
+            (1, 1000),), counter=self.counter)
 
     def forward(self, x):
         x = self.act_saving(x)
@@ -108,7 +113,8 @@ def test_split_size(**tests_config):
             stmt, setup, number=1, repeat=num_repeat, globals=globals())
         means.append(np.mean(pp_run_times))
         stds.append(np.std(pp_run_times))
-        print(f'Split size {split_size} has a mean execution time of {means[-1]} with standard deviation of {stds[-1]}')
+        print(
+            f'Split size {split_size} has a mean execution time of {means[-1]} with standard deviation of {stds[-1]}')
 
     fig, ax = plt.subplots()
     ax.plot(split_sizes, means)
@@ -155,13 +161,15 @@ def test_resnet50_time(**tests_config):
         dp_mean, dp_std = np.mean(dp_run_times), np.std(dp_run_times)
         print(f'Data parallel mean is {dp_mean}')
 
-        print(f'data parallel has speedup of {(rn_mean / dp_mean - 1) * 100}% relative to single gpu')
+        print(
+            f'data parallel has speedup of {(rn_mean / dp_mean - 1) * 100}% relative to single gpu')
         plot([mp_mean, rn_mean, dp_mean],
              [mp_std, rn_std, dp_std],
              ['Model Parallel', 'Single GPU', 'Data Parallel'],
              'mp_vs_rn_vs_dp.png')
 
-    print(f'pipeline has speedup of {(rn_mean / mp_mean - 1) * 100}% relative to single gpu')
+    print(
+        f'pipeline has speedup of {(rn_mean / mp_mean - 1) * 100}% relative to single gpu')
     assert mp_mean < rn_mean
     # assert that the speedup is at least 30%
     assert rn_mean / mp_mean - 1 >= 0.3
@@ -185,14 +193,16 @@ def train(model, num_classes, num_batches, batch_size, image_w, image_h):
     loss_fn = nn.MSELoss()
     optimizer = optim.SGD(model.parameters(), lr=0.001)
 
-    one_hot_indices = torch.LongTensor(batch_size).random_(0, num_classes).view(batch_size, 1)
+    one_hot_indices = torch.LongTensor(batch_size).random_(
+        0, num_classes).view(batch_size, 1)
 
     dev = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
     for b in range(num_batches):
         # generate random inputs and labels
         inputs = torch.randn(batch_size, 3, image_w, image_h)
-        labels = torch.zeros(batch_size, num_classes).scatter_(1, one_hot_indices, 1)
+        labels = torch.zeros(batch_size, num_classes).scatter_(
+            1, one_hot_indices, 1)
 
         # run forward pass
         optimizer.zero_grad()

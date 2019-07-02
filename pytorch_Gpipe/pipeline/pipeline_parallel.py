@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch import autograd
 from typing import Iterable, List, Tuple
-from pipeline.sync_wrapper import *
+from .sync_wrapper import *
 
 
 class PipelineParallel(nn.Module):
@@ -24,7 +24,8 @@ class PipelineParallel(nn.Module):
         self.module = module
         self.wrappers = module.wrappers if wrappers is None else wrappers
         self.input_shape = input_shape
-        self.module_devices = set([wrapper.device for wrapper in wrappers] + [main_device])
+        self.module_devices = set(
+            [wrapper.device for wrapper in wrappers] + [main_device])
 
         if counter is None:
             counter = CycleCounter(ForwardMode[mode], num_gpus)
@@ -107,14 +108,16 @@ class PipelineParallel(nn.Module):
                 if cycle < num_runs:
                     input = microbatches[cycle]
                 else:
-                    input = torch.zeros(*self.input_shape, device=self.wrappers[0].device)
+                    input = torch.zeros(*self.input_shape,
+                                        device=self.wrappers[0].device)
 
                 result: Tuple[torch.Tensor] = self.module(input)
 
                 # the first microbatch will finish the forward propagation only
                 # after num_gpus cycles.
                 if cycle >= self.num_gpus - 1:
-                    results.append(result.to(self.main_device, non_blocking=True))
+                    results.append(
+                        result.to(self.main_device, non_blocking=True))
 
                 self.counter.increase()
                 if torch.cuda.is_available():

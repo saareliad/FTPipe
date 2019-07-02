@@ -1,5 +1,5 @@
 import os
-from pytorch_Gpipe import partition_with_profiler, distribute_using_profiler
+from pytorch_Gpipe import partition_with_profiler, distribute_using_profiler, pipeline
 import torch
 from sample_models import alexnet, resnet18, vgg11_bn, squeezenet1_0, inception_v3, densenet121, GoogLeNet, LeNet, WideResNet
 

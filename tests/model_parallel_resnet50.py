@@ -1,5 +1,5 @@
-from pipeline.pipeline_parallel import *
-from pipeline.sync_wrapper import *
+import pytest
+from pytorch_Gpipe.pipeline import *
 import torch
 import torch.nn as nn
 from torchvision.models.resnet import ResNet, Bottleneck
@@ -7,7 +7,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import timeit
 
-from pipeline.test.run_test import num_classes
+num_classes = 1000
+num_batches = 3
+batch_size = 120
+image_w = 224
+image_h = 224
 
 plt.switch_backend('Agg')
 
@@ -47,7 +51,8 @@ class ModelParallelResNet50(ResNet):
             self.layer2
         ).to(dev1)
 
-        self.seq1 = LayerWrapper(self.seq1, 0, dev1, output_shapes=((1, 512, 28, 28),), counter=self.counter)
+        self.seq1 = LayerWrapper(self.seq1, 0, dev1, output_shapes=(
+            (1, 512, 28, 28),), counter=self.counter)
 
         dev2 = 'cuda:1' if torch.cuda.is_available() else 'cpu'
 
@@ -57,10 +62,12 @@ class ModelParallelResNet50(ResNet):
             self.avgpool
         ).to(dev2)
 
-        self.seq2 = SyncWrapper(self.seq2, dev2, 1, output_shapes=((1, 2048, 1, 1),), counter=self.counter)
+        self.seq2 = SyncWrapper(self.seq2, dev2, 1, output_shapes=(
+            (1, 2048, 1, 1),), counter=self.counter)
 
         self.fc.to(dev2)
-        self.fc = LayerWrapper(self.fc, 1, dev2, output_shapes=((1, 1000),), counter=self.counter)
+        self.fc = LayerWrapper(self.fc, 1, dev2, output_shapes=(
+            (1, 1000),), counter=self.counter)
 
     def forward(self, x):
         x = self.act_saving(x)

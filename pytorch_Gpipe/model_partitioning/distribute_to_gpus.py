@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torch
 from ..model_profiling import Graph, NodeTypes
-from pipeline import ActivationSavingLayer, LayerWrapper, SyncWrapper, CycleCounter
+from ..pipeline import ActivationSavingLayer, LayerWrapper, SyncWrapper, CycleCounter
 from ..utils import traverse_model, traverse_params_buffs
 from collections import deque
 __all__ = ["wrap_and_move"]

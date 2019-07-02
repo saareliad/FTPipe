@@ -1,3 +1,4 @@
+import pytest
 import torch
 from torch.utils.data import DataLoader
 import torch.nn as nn
@@ -8,8 +9,13 @@ import matplotlib.pyplot as plt
 
 import torch.optim as optim
 
-from pipeline.test.model_parallel_resnet50 import make_pipeline_resnet
-from pipeline.test.run_test import num_classes, batch_size
+from .model_parallel_resnet50 import make_pipeline_resnet
+
+num_classes = 1000
+num_batches = 3
+batch_size = 120
+image_w = 224
+image_h = 224
 
 # using constant seed for reproducibility purposes
 seed = 42
@@ -22,16 +28,20 @@ transform = transforms.Compose(
 )
 
 # fixed data-sets
-train_set = CIFAR10(root='./data', train=True, download=True, transform=transform)
-test_set = CIFAR10(root='./data', train=False, download=True, transform=transform)
+train_set = CIFAR10(root='./data', train=True,
+                    download=True, transform=transform)
+test_set = CIFAR10(root='./data', train=False,
+                   download=True, transform=transform)
 
-classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+classes = ('plane', 'car', 'bird', 'cat', 'deer',
+           'dog', 'frog', 'horse', 'ship', 'truck')
 
 
 def test_resnet50_loss():
     # the models to compare
     model_single = resnet50(num_classes=len(classes)).to(device_single)
-    model_pipe = make_pipeline_resnet(microbatch_size=20, num_classes=num_classes)
+    model_pipe = make_pipeline_resnet(
+        microbatch_size=20, num_classes=num_classes)
 
     print(f"Training resnet50 on {device_single}")
     stats_single = train_with_stats_saved(model_single)
@@ -54,7 +64,8 @@ def test_resnet50_loss():
 def train_with_stats_saved(model):
     # using fixed seed to endure same train-set loader
     torch.manual_seed(seed)
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=2)
+    train_loader = DataLoader(
+        train_set, batch_size=batch_size, shuffle=True, num_workers=2)
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
@@ -88,7 +99,8 @@ def train_with_stats_saved(model):
 
 def test(model):
     # always using same test-set loader
-    test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False, num_workers=2)
+    test_loader = DataLoader(
+        test_set, batch_size=batch_size, shuffle=False, num_workers=2)
 
     total_accuracy = 0.
     counter = 0
@@ -136,25 +148,3 @@ def get_accuracy(outputs, labels):
     _, predictions = torch.max(outputs.data, 1)
 
     return (predictions == labels).sum().item() / labels.size(0)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

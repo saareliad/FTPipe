@@ -6,7 +6,7 @@ from enum import IntEnum
 from ctypes import POINTER as ptr, byref
 import os
 import typing
-from typing import List,Tuple,Dict,Union,Callable
+from typing import List, Tuple, Dict, Union, Callable
 import platform
 import warnings
 # create a dynamic lib that exposes what we need compile it like this with metis.h and libmetis.lib in the same folder
@@ -22,15 +22,15 @@ elif 'Lin' in platform.system():
 else:
     warnings.warn("unsuported os for METIS supported for windows and linux")
 
-metisLib=ctypes.CDLL(metis_path)
+metisLib = ctypes.CDLL(metis_path)
 
 # -------------------------------------------------------------------------
 # type declarations and constants
 # -------------------------------------------------------------------------
-idx_t=ctypes.c_int32
-real_t=ctypes.c_float
-METIS_NOPTIONS=40
-METIS_Graph=namedtuple('METIS_Graph',
+idx_t = ctypes.c_int32
+real_t = ctypes.c_float
+METIS_NOPTIONS = 40
+METIS_Graph = namedtuple('METIS_Graph',
                          'nvtxs ncon xadj adjncy vwgt vsize adjwgt')
 
 
@@ -46,105 +46,105 @@ class _MetisEnum(IntEnum):
 
 # Return codes
 class rstatus_et(_MetisEnum):
-    METIS_OK=1            # Returned normally
-    METIS_ERROR_INPUT=-2  # Returned due to erroneous inputs and/or options
-    METIS_ERROR_MEMORY=-3  # Returned due to insufficient memory
-    METIS_ERROR=-4  # Some other errors
+    METIS_OK = 1            # Returned normally
+    METIS_ERROR_INPUT = -2  # Returned due to erroneous inputs and/or options
+    METIS_ERROR_MEMORY = -3  # Returned due to insufficient memory
+    METIS_ERROR = -4  # Some other errors
 
 
 # Operation type codes
 class moptype_et (_MetisEnum):
 
-    METIS_OP_PMETIS=0
-    METIS_OP_KMETIS=1
-    METIS_OP_OMETIS=2
+    METIS_OP_PMETIS = 0
+    METIS_OP_KMETIS = 1
+    METIS_OP_OMETIS = 2
 
 
 # Options codes(i.e., options[])
 class moptions_et(_MetisEnum):
-    METIS_OPTION_PTYPE=0
-    METIS_OPTION_OBJTYPE=1
-    METIS_OPTION_CTYPE=2
-    METIS_OPTION_IPTYPE=3
-    METIS_OPTION_RTYPE=4
-    METIS_OPTION_DBGLVL=5
-    METIS_OPTION_NITER=6
-    METIS_OPTION_NCUTS=7
-    METIS_OPTION_SEED=8
-    METIS_OPTION_MINCONN=9
-    METIS_OPTION_CONTIG=10
-    METIS_OPTION_COMPRESS=11
-    METIS_OPTION_CCORDER=12
-    METIS_OPTION_PFACTOR=13
-    METIS_OPTION_NSEPS=14
-    METIS_OPTION_UFACTOR=15
-    METIS_OPTION_NUMBERING=16
+    METIS_OPTION_PTYPE = 0
+    METIS_OPTION_OBJTYPE = 1
+    METIS_OPTION_CTYPE = 2
+    METIS_OPTION_IPTYPE = 3
+    METIS_OPTION_RTYPE = 4
+    METIS_OPTION_DBGLVL = 5
+    METIS_OPTION_NITER = 6
+    METIS_OPTION_NCUTS = 7
+    METIS_OPTION_SEED = 8
+    METIS_OPTION_MINCONN = 9
+    METIS_OPTION_CONTIG = 10
+    METIS_OPTION_COMPRESS = 11
+    METIS_OPTION_CCORDER = 12
+    METIS_OPTION_PFACTOR = 13
+    METIS_OPTION_NSEPS = 14
+    METIS_OPTION_UFACTOR = 15
+    METIS_OPTION_NUMBERING = 16
 
     # Used for command-line parameter purposes
-    METIS_OPTION_HELP=18
-    METIS_OPTION_TPWGTS=19
-    METIS_OPTION_NCOMMON=20
-    METIS_OPTION_NOOUTPUT=21
-    METIS_OPTION_BALANCE=22
-    METIS_OPTION_GTYPE=23
-    METIS_OPTION_UBVEC=24
+    METIS_OPTION_HELP = 18
+    METIS_OPTION_TPWGTS = 19
+    METIS_OPTION_NCOMMON = 20
+    METIS_OPTION_NOOUTPUT = 21
+    METIS_OPTION_BALANCE = 22
+    METIS_OPTION_GTYPE = 23
+    METIS_OPTION_UBVEC = 24
 
 
 # Partitioning Schemes
 class mptype_et (_MetisEnum):
-    METIS_PTYPE_RB=1
-    METIS_PTYPE_KWAY=1
+    METIS_PTYPE_RB = 1
+    METIS_PTYPE_KWAY = 1
 
 
 # Graph types for meshes
 class mgtype_et(_MetisEnum):
-    METIS_GTYPE_DUAL=0
-    METIS_GTYPE_NODAL=1
+    METIS_GTYPE_DUAL = 0
+    METIS_GTYPE_NODAL = 1
 
 
 # Coarsening Schemes
 class mctype_et(_MetisEnum):
-    METIS_CTYPE_RM=0
-    METIS_CTYPE_SHEM=1
+    METIS_CTYPE_RM = 0
+    METIS_CTYPE_SHEM = 1
 
 
 # Initial partitioning schemes
 class miptype_et(_MetisEnum):
-    METIS_IPTYPE_GROW=0
-    METIS_IPTYPE_RANDOM=1
-    METIS_IPTYPE_EDGE=2
-    METIS_IPTYPE_NODE=3
-    METIS_IPTYPE_METISRB=4
+    METIS_IPTYPE_GROW = 0
+    METIS_IPTYPE_RANDOM = 1
+    METIS_IPTYPE_EDGE = 2
+    METIS_IPTYPE_NODE = 3
+    METIS_IPTYPE_METISRB = 4
 
 
 # Refinement schemes
 class mrtype_et(_MetisEnum):
-    METIS_RTYPE_FM=0
-    METIS_RTYPE_GREEDY=1
-    METIS_RTYPE_SEP2SIDED=2
-    METIS_RTYPE_SEP1SIDED=3
+    METIS_RTYPE_FM = 0
+    METIS_RTYPE_GREEDY = 1
+    METIS_RTYPE_SEP2SIDED = 2
+    METIS_RTYPE_SEP1SIDED = 3
 
 
 # Debug Levels
 class mdbglvl_et(_MetisEnum):
-    METIS_DBG_INFO=1         # Shows various diagnostic messages
-    METIS_DBG_TIME=2         # Perform timing analysis
-    METIS_DBG_COARSEN=4      # Show the coarsening progress
-    METIS_DBG_REFINE=8       # Show the refinement progress
-    METIS_DBG_IPART=16       # Show info on initial partitioning
-    METIS_DBG_MOVEINFO=32    # Show info on vertex moves during refinement
-    METIS_DBG_SEPINFO=64     # Show info on vertex moves during sep refinement
-    METIS_DBG_CONNINFO=128   # Show info on minimization of subdomain connectivity
-    METIS_DBG_CONTIGINFO=256  # Show info on elimination of connected components
-    METIS_DBG_MEMORY=2048    # Show info related to wspace allocation
-    METIS_DBG_ALL=sum(2**i for i in list(range(9))+[11])
+    METIS_DBG_INFO = 1         # Shows various diagnostic messages
+    METIS_DBG_TIME = 2         # Perform timing analysis
+    METIS_DBG_COARSEN = 4      # Show the coarsening progress
+    METIS_DBG_REFINE = 8       # Show the refinement progress
+    METIS_DBG_IPART = 16       # Show info on initial partitioning
+    METIS_DBG_MOVEINFO = 32    # Show info on vertex moves during refinement
+    METIS_DBG_SEPINFO = 64     # Show info on vertex moves during sep refinement
+    METIS_DBG_CONNINFO = 128   # Show info on minimization of subdomain connectivity
+    METIS_DBG_CONTIGINFO = 256  # Show info on elimination of connected components
+    METIS_DBG_MEMORY = 2048    # Show info related to wspace allocation
+    METIS_DBG_ALL = sum(2**i for i in list(range(9))+[11])
 
 
 # Types of objectives
 class mobjtype_et(_MetisEnum):
-    METIS_OBJTYPE_CUT=0
-    METIS_OBJTYPE_VOL=1
-    METIS_OBJTYPE_NODE=2
+    METIS_OBJTYPE_CUT = 0
+    METIS_OBJTYPE_VOL = 1
+    METIS_OBJTYPE_NODE = 2
 
 
 # -------------------------------------------------------------------------
@@ -181,26 +181,26 @@ class METIS_OtherError(METIS_Error):
 # -------------------------------------------------------------------------
 # lib function declarations and argtypes
 # -------------------------------------------------------------------------
-_part_graph=metisLib.METIS_PartGraphKway
-_part_graph_recursive=metisLib.METIS_PartGraphRecursive
-_SetDefaultOptions=metisLib.METIS_SetDefaultOptions
+_part_graph = metisLib.METIS_PartGraphKway
+_part_graph_recursive = metisLib.METIS_PartGraphRecursive
+_SetDefaultOptions = metisLib.METIS_SetDefaultOptions
 
-METIS_PartGraphKway_args=[ptr(idx_t), ptr(idx_t), ptr(idx_t), ptr(idx_t),
+METIS_PartGraphKway_args = [ptr(idx_t), ptr(idx_t), ptr(idx_t), ptr(idx_t),
                             ptr(idx_t), ptr(idx_t), ptr(
-                                idx_t), ptr(idx_t), ptr(real_t),
-                            ptr(real_t), ptr(idx_t), ptr(idx_t), ptr(idx_t)
-                            ]
-METIS_PartGraphRecursive_args=[ptr(idx_t), ptr(idx_t), ptr(idx_t), ptr(idx_t),
+    idx_t), ptr(idx_t), ptr(real_t),
+    ptr(real_t), ptr(idx_t), ptr(idx_t), ptr(idx_t)
+]
+METIS_PartGraphRecursive_args = [ptr(idx_t), ptr(idx_t), ptr(idx_t), ptr(idx_t),
                                  ptr(idx_t), ptr(idx_t), ptr(
-                                     idx_t), ptr(idx_t),
-                                 ptr(real_t), ptr(real_t), ptr(idx_t),
-                                 ptr(idx_t), ptr(idx_t)
-                                 ]
-METIS_SetDefaultOptions_args=[ptr(idx_t)]
+    idx_t), ptr(idx_t),
+    ptr(real_t), ptr(real_t), ptr(idx_t),
+    ptr(idx_t), ptr(idx_t)
+]
+METIS_SetDefaultOptions_args = [ptr(idx_t)]
 
-_part_graph.argtypes=METIS_PartGraphKway_args
-_part_graph_recursive.argtypes=METIS_PartGraphRecursive_args
-_SetDefaultOptions.argtypes=METIS_SetDefaultOptions_args
+_part_graph.argtypes = METIS_PartGraphKway_args
+_part_graph_recursive.argtypes = METIS_PartGraphRecursive_args
+_SetDefaultOptions.argtypes = METIS_SetDefaultOptions_args
 
 
 # -------------------------------------------------------------------------
@@ -223,45 +223,45 @@ def _adjlist_to_metis(adjlist, nodew=None, nodesz=None):
 
     Note that all weights and sizes must be non-negative integers.
     """
-    n=len(adjlist)
-    m2=sum(map(len, adjlist))
+    n = len(adjlist)
+    m2 = sum(map(len, adjlist))
 
-    xadj=(idx_t*(n+1))()
-    adjncy=(idx_t*m2)()
-    adjwgt=(idx_t*m2)()
-    seen_adjwgt=False
+    xadj = (idx_t*(n+1))()
+    adjncy = (idx_t*m2)()
+    adjwgt = (idx_t*m2)()
+    seen_adjwgt = False
 
-    ncon=idx_t(1)
+    ncon = idx_t(1)
     if nodew:
         if isinstance(nodew[0], int):
-            vwgt=(idx_t*n)(*nodew)
+            vwgt = (idx_t*n)(*nodew)
         else:
-            nw=len(nodew[0])
-            ncon=idx_t(nw)
-            vwgt=(idx_t*(nw*n))(*reduce(op.add, nodew))
+            nw = len(nodew[0])
+            ncon = idx_t(nw)
+            vwgt = (idx_t*(nw*n))(*reduce(op.add, nodew))
     else:
-        vwgt=None
+        vwgt = None
 
     if nodesz:
-        vsize=(idx_t*n)(*nodesz)
+        vsize = (idx_t*n)(*nodesz)
     else:
-        vsize=None
+        vsize = None
 
-    xadj[0]=0
-    edge_idx=0
+    xadj[0] = 0
+    edge_idx = 0
     for i, adj in enumerate(adjlist):
         for j in adj:
             try:
-                adjncy[edge_idx], adjwgt[edge_idx]=j
-                seen_adjwgt=True
+                adjncy[edge_idx], adjwgt[edge_idx] = j
+                seen_adjwgt = True
             except TypeError:
-                adjncy[edge_idx], adjwgt[edge_idx]=j, 1
+                adjncy[edge_idx], adjwgt[edge_idx] = j, 1
             edge_idx += 1
-        xadj[i+1]=edge_idx
+        xadj[i+1] = edge_idx
 
     # pass edge wieghts only they are being used
     if not seen_adjwgt:
-        adjwgt=None
+        adjwgt = None
 
     return METIS_Graph(idx_t(n), ncon, xadj, adjncy, vwgt, vsize, adjwgt)
 
@@ -275,23 +275,23 @@ def _set_options(**options):
         a dictionary containing pairs of option value pairs
         for example {'dbglvl':mdbglvl_et.METIS_DBG_ALL}
     '''
-    opts_arr=(idx_t*METIS_NOPTIONS)()
+    opts_arr = (idx_t*METIS_NOPTIONS)()
     _SetDefaultOptions(opts_arr)
     if options != None:
         for key, value in options.items():
-            opt_key=f"METIS_OPTION_{key.upper()}"
+            opt_key = f"METIS_OPTION_{key.upper()}"
             try:
                 moptions_et[opt_key]
             except KeyError as _:
                 print("invalid metis option")
-            opts_arr[moptions_et[opt_key]]=value
+            opts_arr[moptions_et[opt_key]] = value
     return opts_arr
 
 
 # -------------------------------------------------------------------------
 # python API
 # -------------------------------------------------------------------------
-def METIS_partition(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis', **opts:Dict[str,_MetisEnum])->Tuple[int,List[int]]:
+def METIS_partition(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis', **opts: Dict[str, _MetisEnum])->Tuple[int, List[int]]:
     """
     Perform graph partitioning using k-way or recursive methods.
 
@@ -325,43 +325,43 @@ def METIS_partition(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis
         metis metis_recursive for:c:func:`METIS_PartGraphKway` and :c:func:`METIS_PartGraphRecursive` in
       METIS's C API. alternatively a user function can provided this function must recieve the adjlist,node weights and
       number of desired partitions
-      
+
 
     Any additional METIS options may be specified as keyword parameters.
 
     See the METIS manual for specific meaning of each option.
     """
-    nodesz=opts.pop('nodesz', None)
-    nodew=opts.pop('nodew', None)
-    graph=_adjlist_to_metis(adjlist, nodew, nodesz)
+    nodesz = opts.pop('nodesz', None)
+    nodew = opts.pop('nodew', None)
+    graph = _adjlist_to_metis(adjlist, nodew, nodesz)
 
-    options=_set_options(**opts)
+    options = _set_options(**opts)
     if tpwgts and not isinstance(tpwgts, ctypes.Array):
         if isinstance(tpwgts[0], (tuple, list)):
-            tpwgts=reduce(op.add, tpwgts)
-        tpwgts=(real_t*len(tpwgts))(*tpwgts)
+            tpwgts = reduce(op.add, tpwgts)
+        tpwgts = (real_t*len(tpwgts))(*tpwgts)
     if ubvec and not isinstance(ubvec, ctypes.Array):
-        ubvec=(real_t*len(ubvec))(*ubvec)
+        ubvec = (real_t*len(ubvec))(*ubvec)
 
     if tpwgts:
         assert len(tpwgts) == nparts * graph.ncon.value
     if ubvec:
         assert len(ubvec) == graph.ncon.value
 
-    nparts_var=idx_t(nparts)
+    nparts_var = idx_t(nparts)
 
-    objval=idx_t()
-    partition=(idx_t*graph.nvtxs.value)()
+    objval = idx_t()
+    partition = (idx_t*graph.nvtxs.value)()
 
-    args=(byref(graph.nvtxs), byref(graph.ncon), graph.xadj,
+    args = (byref(graph.nvtxs), byref(graph.ncon), graph.xadj,
             graph.adjncy, graph.vwgt, graph.vsize, graph.adjwgt,
             byref(nparts_var), tpwgts, ubvec, options,
             byref(objval), partition)
 
     if algorithm == "metis_recursive":
-        res=_part_graph_recursive(*args)
+        res = _part_graph_recursive(*args)
     elif algorithm == "metis":
-        res=_part_graph(*args)
+        res = _part_graph(*args)
     elif callable(algorithm):
         return algorithm(adjlist, nodew, nparts)
     else:
@@ -369,60 +369,3 @@ def METIS_partition(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis
     _error_handler(res)
 
     return objval.value, list(partition)
-# -------------------------------------------------------------------------
-# basic tests
-# -------------------------------------------------------------------------
-def example_adjlist():
-    return [[1, 2, 3, 4], [0], [0], [0], [0, 5], [4, 6], [13, 5, 7],
-            [8, 6], [9, 10, 11, 12, 7], [8], [8], [8], [8], [14, 6], [13, 15],
-            [16, 17, 18, 14], [15], [15], [15]]
-
-
-def test1():
-    adjlist=example_adjlist()
-
-    print("Testing k-way cut")
-    cuts, parts=METIS_partition(adjlist, 3, algorithm="metis",
-                             dbglvl=mdbglvl_et.METIS_DBG_ALL)
-    assert cuts == 2
-    assert set(parts) == set([0, 1, 2])
-
-    print("Testing recursive cut")
-    cuts, parts=METIS_partition(adjlist, 3, algorithm="metis_recursive",
-                             dbglvl=mdbglvl_et.METIS_DBG_ALL)
-    assert cuts == 2
-    assert set(parts) == set([0, 1, 2])
-
-    print("METIS appears to be working.")
-
-
-def test2():
-    nVertices=6
-    nParts=2
-
-    # Indexes of starting points in adjacent array
-    adj_idx=[0, 2, 5, 7, 9, 12, 14]
-
-    # Adjacent vertices in consecutive index order
-    adjv=[1, 3, 0, 4, 2, 1, 5, 0, 4, 3, 1, 5, 4, 2]
-
-    adjlist=[adjv[adj_idx[i]:adj_idx[i+1]] for i in range(nVertices)]
-
-
-
-    # Weights of vertices
-    # if all weights are equal then can be set to NULL
-    nodew=[i*nVertices for i in range(nVertices)]
-
-    # int ret = METIS_PartGraphRecursive( & nVertices, & nWeights, xadj, adjncy,
-                                          #            NULL, NULL, NULL, & nParts, NULL,
-                                          #            NULL, NULL, & objval, part)
-
-    cuts, parts=METIS_partition(
-        adjlist, nParts, algorithm="metis", nodew=nodew, contig=1)
-
-    print(parts)
-
-if __name__ == '__main__':
-    test1()
-    test2()
