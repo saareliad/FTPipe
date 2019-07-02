@@ -24,6 +24,7 @@ class PipelineParallel(nn.Module):
         self.module = module
         self.wrappers = module.wrappers if wrappers is None else wrappers
         self.input_shape = input_shape
+        self.module_devices = set([wrapper.device for wrapper in wrappers] + [main_device])
 
         if counter is None:
             counter = CycleCounter(ForwardMode[mode], num_gpus)
@@ -52,17 +53,21 @@ class PipelineParallel(nn.Module):
 
         self.mode = mode
         self.counter.change_mode(mode)
-        # for wrapper in self.wrappers:
-        #     wrapper.change_mode(mode)
 
     def finished_prop(self):
         self.counter.reset()
         for wrapper in self.wrappers:
             wrapper.finished_prop()
 
-    def pop_activations(self):
+    def init_backwards_cycle(self):
         for wrapper in self.wrappers:
+            wrapper.update_grads()
             wrapper.pop_activation()
+
+    def synchronize_streams(self):
+        for dev in self.module_devices:
+            with torch.cuda.device(torch.device(dev)):
+                torch.cuda.synchronize()
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         """
@@ -96,25 +101,24 @@ class PipelineParallel(nn.Module):
         results = []
         # the actual pipeline process of feeding the data and receiving outputs:
         for cycle in range(self.num_gpus + num_runs - 1):
-            # feeding the module all the microbatches, then, until the forward
-            # propagation process ends needs to feed garbage.
-            if cycle < num_runs:
-                input = microbatches[cycle]
-            else:
-                input = torch.zeros(*self.input_shape)
-
             with autograd.no_grad():
+                # feeding the module all the microbatches, then, until the forward
+                # propagation process ends needs to feed garbage.
+                if cycle < num_runs:
+                    input = microbatches[cycle]
+                else:
+                    input = torch.zeros(*self.input_shape, device=self.wrappers[-1].device)
+
                 result: Tuple[torch.Tensor] = self.module(input)
 
-            # the first microbatch will finish the forward propagation only
-            # after num_gpus cycles.
-            if cycle >= self.num_gpus - 1:
-                # if self.training:
-                #     result.requires_grad_()
-                #     result.register_hook(lambda grad: self.wrappers[-1].act_hook(grad))
-                results.append(result.to(self.main_device))
+                # the first microbatch will finish the forward propagation only
+                # after num_gpus cycles.
+                if cycle >= self.num_gpus - 1:
+                    results.append(result.to(self.main_device, non_blocking=True))
 
-            self.counter.increase()
+                self.counter.increase()
+                if torch.cuda.is_available():
+                    self.synchronize_streams()
 
         # make sure that the counter and wrappers are returned to default mode
         self.finished_prop()
@@ -141,25 +145,31 @@ class PipelineParallel(nn.Module):
         # make sure that we are on backward mode
         self.set_mode('backward')
 
-        with autograd.enable_grad():
-            # do a backward run for each gradient
-            for grad in grads.split(self.microbatch_size, dim=0):
-                self.pop_activations()
+        # do a backward run for each gradient
+        for grad in grads.split(self.microbatch_size, dim=0):
+            with torch.set_grad_enabled(True):
+                self.init_backwards_cycle()
+
+                if torch.cuda.is_available():
+                    self.synchronize_streams()
+
                 out = self.module(torch.zeros(*self.input_shape))
                 out.backward(grad)
                 self.counter.increase()
 
-            # make sure that all backward passes are done
-            for _ in range(self.num_gpus - 1):
-                self.pop_activations()
+        # make sure that all backward passes are done
+        for _ in range(self.num_gpus - 1):
+            with torch.set_grad_enabled(True):
+                self.init_backwards_cycle()
+
+                if torch.cuda.is_available():
+                    self.synchronize_streams()
+
                 self.module(torch.zeros(*self.input_shape))
                 self.counter.increase()
 
-        # get final gradients
-        # out_grads = self.wrappers[0].get_final_grads()
+        if torch.cuda.is_available():
+            self.synchronize_streams()
 
         # make sure that the counter and wrappers are returned to default mode
         self.finished_prop()
-
-        # return out_grads
-

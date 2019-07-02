@@ -3,16 +3,10 @@ from pipeline.pipeline_parallel import *
 from pipeline.sync_wrapper import *
 import torch
 import torch.nn as nn
-from torchvision.models.resnet import ResNet, Bottleneck
+from torchvision.models.resnet import ResNet, Bottleneck, resnet50
 import matplotlib.pyplot as plt
 import numpy as np
 import timeit
-
-num_classes = 1000
-num_batches = 3
-batch_size = 120
-image_w = 224
-image_h = 224
 
 plt.switch_backend('Agg')
 
@@ -73,7 +67,7 @@ class ModelParallelResNet50(ResNet):
         return self.fc(x.view(x.size(0), -1))
 
 
-def make_pipeline_resnet(microbatch_size: int, num_classes=num_classes):
+def make_pipeline_resnet(microbatch_size: int, num_classes: int):
     inner_module = ModelParallelResNet50(num_classes=num_classes)
     counter = inner_module.counter
     wrappers = [inner_module.act_saving, inner_module.seq2]
@@ -83,21 +77,38 @@ def make_pipeline_resnet(microbatch_size: int, num_classes=num_classes):
                             main_device=device)
 
 
-def test_split_size():
-    num_repeat = 10
+def kwargs_string(*pos_strings, **kwargs):
+    return ', '.join(list(pos_strings) + [f'{key}={val}' for key, val in kwargs.items()])
 
-    stmt = "train(model)"
+
+def call_func_stmt(func, *params, **tests_config):
+    if isinstance(func, str):
+        func_name = func
+    else:
+        func_name = func.__name__
+
+    params_str = [str(param) for param in params]
+
+    return f'{func_name}({kwargs_string(*params_str, **tests_config)})'
+
+
+def test_split_size(**tests_config):
+    num_repeat = 10
+    num_classes = tests_config['num_classes']
+
+    stmt = call_func_stmt(train, 'model', **tests_config)
 
     means = []
     stds = []
     split_sizes = [1, 3, 5, 8, 10, 12, 20, 40, 60]
 
     for split_size in split_sizes:
-        setup = "model = make_pipeline_resnet(%d)" % split_size
+        setup = f"model = make_pipeline_resnet({split_size}, {num_classes})"
         pp_run_times = timeit.repeat(
             stmt, setup, number=1, repeat=num_repeat, globals=globals())
         means.append(np.mean(pp_run_times))
         stds.append(np.std(pp_run_times))
+        print(f'Split size {split_size} has a mean execution time of {means[-1]} with standard deviation of {stds[-1]}')
 
     fig, ax = plt.subplots()
     ax.plot(split_sizes, means)
@@ -111,33 +122,26 @@ def test_split_size():
     plt.close(fig)
 
 
-def test_resnet50_time():
+def test_resnet50_time(**tests_config):
     num_repeat = 10
+    num_classes = tests_config['num_classes']
 
-    stmt = "train(model)"
+    stmt = call_func_stmt(train, 'model', **tests_config)
 
-    setup = "model = make_pipeline_resnet(20)"
+    setup = f"model = make_pipeline_resnet(20, {num_classes})"
     mp_run_times = timeit.repeat(
         stmt, setup, number=1, repeat=num_repeat, globals=globals())
     mp_mean, mp_std = np.mean(mp_run_times), np.std(mp_run_times)
 
     print('finished pipeline')
-    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    device_str = """'cuda:0' if torch.cuda.is_available() else 'cpu'"""
 
-    setup = "model = resnet50(num_classes=num_classes).to('cuda:0' if torch.cuda.is_available() else 'cpu')"
+    setup = f"model = resnet50(num_classes={num_classes}).to({device_str})"
     rn_run_times = timeit.repeat(
         stmt, setup, number=1, repeat=num_repeat, globals=globals())
     rn_mean, rn_std = np.mean(rn_run_times), np.std(rn_run_times)
 
     print('finished single gpu')
-
-    if torch.cuda.is_available():
-        stmt = "train(model, True)"
-        setup = "model = nn.DataParallel(resnet50(num_classes=num_classes)).to('cuda:0' if torch.cuda.is_available() else 'cpu')"
-        dp_run_times = timeit.repeat(
-            stmt, setup, number=1, repeat=num_repeat, globals=globals())
-        dp_mean, dp_std = np.mean(dp_run_times), np.std(dp_run_times)
-        print(f'Data parallel mean is {dp_mean}')
 
     plot([mp_mean, rn_mean],
          [mp_std, rn_std],
@@ -145,13 +149,19 @@ def test_resnet50_time():
          'mp_vs_rn.png')
 
     if torch.cuda.is_available():
-        print(f'data parallel has speedup of {(rn_mean / dp_mean - 1) * 100} relative to single gpu')
+        setup = f"model = nn.DataParallel(resnet50(num_classes={num_classes})).to({device_str})"
+        dp_run_times = timeit.repeat(
+            stmt, setup, number=1, repeat=num_repeat, globals=globals())
+        dp_mean, dp_std = np.mean(dp_run_times), np.std(dp_run_times)
+        print(f'Data parallel mean is {dp_mean}')
+
+        print(f'data parallel has speedup of {(rn_mean / dp_mean - 1) * 100}% relative to single gpu')
         plot([mp_mean, rn_mean, dp_mean],
              [mp_std, rn_std, dp_std],
              ['Model Parallel', 'Single GPU', 'Data Parallel'],
              'mp_vs_rn_vs_dp.png')
 
-    print(f'pipeline has speedup of {(rn_mean / mp_mean - 1) * 100} relative to single gpu')
+    print(f'pipeline has speedup of {(rn_mean / mp_mean - 1) * 100}% relative to single gpu')
     assert mp_mean < rn_mean
     # assert that the speedup is at least 30%
     assert rn_mean / mp_mean - 1 >= 0.3
@@ -170,7 +180,7 @@ def plot(means, stds, labels, fig_name):
     plt.close(fig)
 
 
-def train(model):
+def train(model, num_classes, num_batches, batch_size, image_w, image_h):
     model.train(True)
     loss_fn = nn.MSELoss()
     optimizer = optim.SGD(model.parameters(), lr=0.001)
@@ -192,13 +202,55 @@ def train(model):
         labels = labels.to(outputs.device)
         loss_fn(outputs, labels).backward()
         optimizer.step()
-        # print("")
-        # print("======================================")
-        # print(f'finished batch #{b}')
+        print("")
+        print("======================================")
+        print(f'finished batch #{b}')
+        del outputs, labels
 
-    # print('finished a train run!')
+    del model
+    print('finished a train run!')
+
+
+def pretty_size(size):
+    """Pretty prints a torch.Size object"""
+    assert (isinstance(size, torch.Size))
+    return " x ".join(map(str, size))
+
+
+def dump_tensors(gpu_only=True):
+    """Prints a list of the Tensors being tracked by the garbage collector."""
+    import gc
+    total_size = 0
+    for obj in gc.get_objects():
+        try:
+            if torch.is_tensor(obj):
+                if not gpu_only or obj.is_cuda:
+                    print("%s:%s%s %s" % (type(obj).__name__,
+                                          " GPU" if obj.is_cuda else "",
+                                          " pinned" if obj.is_pinned else "",
+                                          pretty_size(obj.size())))
+                    total_size += obj.numel()
+            elif hasattr(obj, "data") and torch.is_tensor(obj.data):
+                if not gpu_only or obj.is_cuda:
+                    print("%s → %s:%s%s%s%s %s" % (type(obj).__name__,
+                                                   type(obj.data).__name__,
+                                                   " GPU" if obj.is_cuda else "",
+                                                   " pinned" if obj.data.is_pinned else "",
+                                                   " grad" if obj.requires_grad else "",
+                                                   " volatile" if obj.volatile else "",
+                                                   pretty_size(obj.data.size())))
+                    total_size += obj.data.numel()
+        except Exception as e:
+            pass
+    print("Total size:", total_size)
+
+
+def run_tests(*tests, **tests_config):
+    for test in tests:
+        print(f'Running {test.__name__}')
+        test(**tests_config)
 
 
 if __name__ == "__main__":
-    test_split_size()
-    test_resnet50_time()
+    run_tests(test_split_size, test_resnet50_time, num_classes=1000, num_batches=3, batch_size=120, image_w=224,
+              image_h=224)
