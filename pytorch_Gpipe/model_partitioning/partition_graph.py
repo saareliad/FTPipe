@@ -19,10 +19,16 @@ def partition_graph(graph: Graph, num_partitions, weighting_function=None):
                                           nodew=weights, contig=1)
 
     post_process_partition(graph, partition)
+
+    actual_nparts = len({n.part for n in graph.nodes})
+
+    if(actual_nparts < num_partitions):
+        print(
+            f"expected {num_partitions} partitions but only {actual_nparts} found implicating that the model to partition is too small")
+        print("consider increasing the depth of graph or disabling the basic blocks option")
     return graph, partition, edge_cut
 
 
-# TODO decide on default weighting functiona
 def weight_func(w):
     if isinstance(w, tuple) and hasattr(w, 'forward_time') and hasattr(w, 'backward_time'):
         return int(100*(w.forward_time+w.backward_time)/2)

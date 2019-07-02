@@ -48,7 +48,7 @@ def distribute_torchvision():
             model = net().to(device)
             print(f"current net is {net.__name__}")
             if net.__name__.find("inception") != -1:
-                pipeline, graph, _ = distribute_using_profiler(model, torch.zeros(
+                pipeline, graph, (counter, wrappers, sample_batch) = distribute_using_profiler(model, torch.zeros(
                     4, 3, 299, 299).to(device), device_list=devices, num_iter=4, max_depth=d, basic_blocks=None)
 
             elif net.__name__.find("GoogLeNet") != -1:
