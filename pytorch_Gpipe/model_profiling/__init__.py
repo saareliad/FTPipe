@@ -2,7 +2,7 @@ from .control_flow_graph import Graph, NodeTypes, graph_builder
 from .optimize_graph import optimize_graph
 from .network_profiler import profileNetwork
 
-__all__ = ['visualize', 'visualize_with_profiler']
+__all__ = ['visualize', 'visualize_with_profiler', 'profileNetwork']
 
 
 def visualize(model, *sample_batch, max_depth=1000, basic_blocks=None, weights=None):

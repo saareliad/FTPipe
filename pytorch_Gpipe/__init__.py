@@ -41,7 +41,8 @@ def pipeline_using_custom_weights(model, weights, *sample_batch, device_list=Non
     graph = visualize(model, *sample_batch, max_depth=max_depth,
                       basic_blocks=basic_blocks, weights=weights)
 
-    graph, _, _ = partition_graph(graph, len(device_list))
+    graph, _, _ = partition_graph(graph, len(
+        device_list), weighting_function=lambda w: w)
 
     modified_model, _ = wrap_and_move(
         model, basic_blocks, device_list, graph, *sample_batch)
