@@ -40,7 +40,7 @@ def wrap_and_move(model: nn.Module, basic_block, device_lst: list, graph: Graph,
 
     wrappers = extract_wrappers(modified_model)
 
-    return modified_model, wrappers
+    return modified_model, wrappers, counter
 
 
 def extract_wrappers(modified_model):

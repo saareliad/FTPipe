@@ -1,5 +1,5 @@
 import os
-from pytorch_Gpipe import partition_with_profiler, pipeline_using_profiler
+from pytorch_Gpipe import partition_with_profiler, distribute_using_profiler
 import torch
 from sample_models import alexnet, resnet18, vgg11_bn, squeezenet1_0, inception_v3, densenet121, GoogLeNet, LeNet, WideResNet
 
@@ -33,8 +33,8 @@ def partition_torchvision():
 
             curr_dir = os.path.dirname(os.path.realpath(__file__))
             out_dir = f"{curr_dir}\\partition_visualization"
-            # graph.save(directory=out_dir, file_name=filename,
-            #            show_buffs_params=False, show_weights=False)
+            graph.save(directory=out_dir, file_name=filename,
+                       show_buffs_params=False, show_weights=False)
             print(filename)
 
 
@@ -48,29 +48,29 @@ def distribute_torchvision():
             model = net().to(device)
             print(f"current net is {net.__name__}")
             if net.__name__.find("inception") != -1:
-                pipeline, graph = pipeline_using_profiler(model, torch.zeros(
+                pipeline, graph, _ = distribute_using_profiler(model, torch.zeros(
                     4, 3, 299, 299).to(device), device_list=devices, num_iter=4, max_depth=d, basic_blocks=None)
 
             elif net.__name__.find("GoogLeNet") != -1:
-                pipeline, graph = pipeline_using_profiler(model, torch.zeros(
+                pipeline, graph, _ = distribute_using_profiler(model, torch.zeros(
                     4, 3, 32, 32).to(device), device_list=devices, num_iter=4, max_depth=d, basic_blocks=None)
 
             elif net.__name__.find("LeNet") != -1:
-                pipeline, graph = pipeline_using_profiler(model, torch.zeros(
+                pipeline, graph, _ = distribute_using_profiler(model, torch.zeros(
                     4, 3, 32, 32).to(device), device_list=devices, num_iter=4, max_depth=d, basic_blocks=None)
 
             else:
-                pipeline, graph = pipeline_using_profiler(model, torch.zeros(
+                pipeline, graph, _ = distribute_using_profiler(model, torch.zeros(
                     4, 3, 224, 224).to(device), device_list=devices, num_iter=4, max_depth=d, basic_blocks=None)
 
             filename = f"{net.__name__} attempted {len(devices)} partitions at depth {d}"
             curr_dir = os.path.dirname(os.path.realpath(__file__))
             out_dir = f"{curr_dir}\\partition_visualization"
-            # graph.save(directory=out_dir, file_name=filename,
-            #            show_buffs_params=False, show_weights=False)
+            graph.save(directory=out_dir, file_name=filename,
+                       show_buffs_params=False, show_weights=False)
 
             print(filename)
 
 
 if __name__ == "__main__":
-    partition_torchvision()
+    distribute_torchvision()
