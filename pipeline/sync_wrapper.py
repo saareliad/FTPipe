@@ -117,7 +117,6 @@ class SyncWrapper(nn.Module):
     def reset_grads(self):
         for idx in range(len(self.grads)):
             self.grads[idx] = None
-        # self.add_grad = tuple([self.add_grad_(idx) for idx in range(self.num_inputs)])
 
     def backward_mode(self, *inputs: Tuple[torch.Tensor, ...]) -> Tuple[torch.Tensor, ...]:
         """
@@ -129,7 +128,6 @@ class SyncWrapper(nn.Module):
                 input.backward(grad)
 
             torch.set_grad_enabled(True)
-            # self.reset_grads()
 
         # if we have an activation to pass
         if self.counter.is_last_input_valid(self.gpu_num):
@@ -148,6 +146,7 @@ class SyncWrapper(nn.Module):
         """
         function for saving layer activation
         """
+        # TODO: check if detach needed, shouldn't have a graph as we work with no_grad in forward mode
         self.activations.append(tuple([moved_input.clone().detach() for moved_input in moved_inputs]))
 
     def forward(self, *input: Tuple[torch.Tensor, ...]) -> torch.Tensor:
@@ -215,9 +214,6 @@ class ActivationSavingLayer(nn.Module):
 
         self.counter = counter
 
-    def get_final_grads(self):
-        return [torch.cat(tuple(grads), dim=0) for grads in self.grads]
-
     def pop_activation(self):
         if self.counter.is_last_input_valid(self.gpu_num):
             self.last_inputs = self.activations.pop(0)
@@ -230,8 +226,6 @@ class ActivationSavingLayer(nn.Module):
         reset fields after propagation
         """
         self.last_inputs = [None for _ in range(self.num_inputs)]
-        # for _ in range(len(self.grads)):
-        #     self.grads.pop(0)
 
     def backward_mode(self, *inputs) -> Tuple[torch.Tensor, ...]:
         """

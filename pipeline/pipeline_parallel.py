@@ -107,7 +107,7 @@ class PipelineParallel(nn.Module):
                 if cycle < num_runs:
                     input = microbatches[cycle]
                 else:
-                    input = torch.zeros(*self.input_shape, device=self.wrappers[-1].device)
+                    input = torch.zeros(*self.input_shape, device=self.wrappers[0].device)
 
                 result: Tuple[torch.Tensor] = self.module(input)
 
