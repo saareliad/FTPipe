@@ -1,5 +1,5 @@
 import os
-from pytorch_Gpipe import partition_network_using_profiler, distribute_model
+from pytorch_Gpipe import partition_with_profiler, pipeline_using_profiler
 import torch
 from sample_models import alexnet, resnet18, vgg11_bn, squeezenet1_0, inception_v3, densenet121, GoogLeNet, LeNet, WideResNet
 
@@ -17,17 +17,17 @@ def partition_torchvision():
         for d in depth:
             print(f"current net is {net.__name__}")
             if net.__name__.find("inception") != -1:
-                graph, _, _ = partition_network_using_profiler(
-                    model, num_partitions, torch.zeros(4, 3, 299, 299).to(device), max_depth=d)
+                graph = partition_with_profiler(
+                    model, torch.zeros(4, 3, 299, 299).to(device), nparts=num_partitions, max_depth=d)
             elif net.__name__.find("GoogLeNet") != -1:
-                graph, _, _ = partition_network_using_profiler(
-                    model, num_partitions, torch.zeros(4, 3, 32, 32).to(device), max_depth=d)
+                graph = partition_with_profiler(
+                    model, torch.zeros(4, 3, 32, 32).to(device), nparts=num_partitions, max_depth=d)
             elif net.__name__.find("LeNet") != -1:
-                graph, _, _ = partition_network_using_profiler(
-                    model, num_partitions, torch.zeros(4, 3, 32, 32).to(device), max_depth=d)
+                graph = partition_with_profiler(
+                    model, torch.zeros(4, 3, 32, 32).to(device), nparts=num_partitions, max_depth=d)
             else:
-                graph, _, _ = partition_network_using_profiler(
-                    model, num_partitions, torch.zeros(4, 3, 224, 224).to(device), max_depth=d)
+                graph = partition_with_profiler(
+                    model, torch.zeros(4, 3, 224, 224).to(device), nparts=num_partitions, max_depth=d)
 
             filename = f"{net.__name__} attempted {num_partitions} partitions at depth {d}"
 
@@ -48,19 +48,19 @@ def distribute_torchvision():
             model = net().to(device)
             print(f"current net is {net.__name__}")
             if net.__name__.find("inception") != -1:
-                pipeline, graph, _ = distribute_model(model, torch.zeros(
+                pipeline, graph = pipeline_using_profiler(model, torch.zeros(
                     4, 3, 299, 299).to(device), device_list=devices, num_iter=4, max_depth=d, basic_blocks=None)
 
             elif net.__name__.find("GoogLeNet") != -1:
-                pipeline, graph, _ = distribute_model(model, torch.zeros(
+                pipeline, graph = pipeline_using_profiler(model, torch.zeros(
                     4, 3, 32, 32).to(device), device_list=devices, num_iter=4, max_depth=d, basic_blocks=None)
 
             elif net.__name__.find("LeNet") != -1:
-                pipeline, graph, _ = distribute_model(model, torch.zeros(
+                pipeline, graph = pipeline_using_profiler(model, torch.zeros(
                     4, 3, 32, 32).to(device), device_list=devices, num_iter=4, max_depth=d, basic_blocks=None)
 
             else:
-                pipeline, graph, _ = distribute_model(model, torch.zeros(
+                pipeline, graph = pipeline_using_profiler(model, torch.zeros(
                     4, 3, 224, 224).to(device), device_list=devices, num_iter=4, max_depth=d, basic_blocks=None)
 
             filename = f"{net.__name__} attempted {len(devices)} partitions at depth {d}"
@@ -73,4 +73,4 @@ def distribute_torchvision():
 
 
 if __name__ == "__main__":
-    distribute_torchvision()
+    partition_torchvision()
