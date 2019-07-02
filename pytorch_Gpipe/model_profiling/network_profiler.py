@@ -3,7 +3,7 @@ import torch.nn as nn
 import timeit
 from torch.autograd import Variable
 from collections import namedtuple
-from .utils import traverse_model
+from ..utils import traverse_model
 
 __all__ = ['profileNetwork']
 

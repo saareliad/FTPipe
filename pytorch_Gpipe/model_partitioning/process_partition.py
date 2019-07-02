@@ -1,4 +1,4 @@
-from .control_flow_graph import Graph, NodeTypes
+from ..model_profiling import Graph, NodeTypes
 
 
 def post_process_partition(graph: Graph, part, weights=None):

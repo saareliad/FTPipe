@@ -1,6 +1,5 @@
-from model_partition.network_profiler import profileNetwork
-from model_partition.graph import partition_model
-from model_partition.distribute_to_gpus import wrap_and_move
+from .model_profiling import profileNetwork
+from .model_partitioning import partition_model, wrap_and_move
 import torch
 
 

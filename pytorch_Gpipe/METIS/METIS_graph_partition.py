@@ -291,7 +291,7 @@ def _set_options(**options):
 # -------------------------------------------------------------------------
 # python API
 # -------------------------------------------------------------------------
-def part_graph(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis', **opts:Dict[str,_MetisEnum])->Tuple[int,List[int]]:
+def METIS_partition(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis', **opts:Dict[str,_MetisEnum])->Tuple[int,List[int]]:
     """
     Perform graph partitioning using k-way or recursive methods.
 
@@ -382,13 +382,13 @@ def test1():
     adjlist=example_adjlist()
 
     print("Testing k-way cut")
-    cuts, parts=part_graph(adjlist, 3, algorithm="metis",
+    cuts, parts=METIS_partition(adjlist, 3, algorithm="metis",
                              dbglvl=mdbglvl_et.METIS_DBG_ALL)
     assert cuts == 2
     assert set(parts) == set([0, 1, 2])
 
     print("Testing recursive cut")
-    cuts, parts=part_graph(adjlist, 3, algorithm="metis_recursive",
+    cuts, parts=METIS_partition(adjlist, 3, algorithm="metis_recursive",
                              dbglvl=mdbglvl_et.METIS_DBG_ALL)
     assert cuts == 2
     assert set(parts) == set([0, 1, 2])
@@ -418,7 +418,7 @@ def test2():
                                           #            NULL, NULL, NULL, & nParts, NULL,
                                           #            NULL, NULL, & objval, part)
 
-    cuts, parts=part_graph(
+    cuts, parts=METIS_partition(
         adjlist, nParts, algorithm="metis", nodew=nodew, contig=1)
 
     print(parts)

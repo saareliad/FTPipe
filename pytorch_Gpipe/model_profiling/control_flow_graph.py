@@ -6,7 +6,7 @@ from copy import copy
 from ..utils import traverse_model, traverse_params_buffs
 
 
-def build_graph_from_trace(model, *sample_batch, max_depth=100, weights=None, basic_block=None):
+def graph_builder(model, *sample_batch, max_depth=100, weights=None, basic_block=None):
 
     buffer_param_names = _buffer_and_params_scopes(model)
 

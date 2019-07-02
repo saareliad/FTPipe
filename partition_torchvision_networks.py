@@ -1,5 +1,5 @@
 import os
-from model_partition import partition_network_using_profiler, distribute_model
+from pytorch_Gpipe import partition_network_using_profiler, distribute_model
 import torch
 from sample_models import alexnet, resnet18, vgg11_bn, squeezenet1_0, inception_v3, densenet121, GoogLeNet, LeNet, WideResNet
 
@@ -33,8 +33,8 @@ def partition_torchvision():
 
             curr_dir = os.path.dirname(os.path.realpath(__file__))
             out_dir = f"{curr_dir}\\partition_visualization"
-            graph.save(directory=out_dir, file_name=filename,
-                       show_buffs_params=False, show_weights=False)
+            # graph.save(directory=out_dir, file_name=filename,
+            #            show_buffs_params=False, show_weights=False)
             print(filename)
 
 
@@ -66,8 +66,8 @@ def distribute_torchvision():
             filename = f"{net.__name__} attempted {len(devices)} partitions at depth {d}"
             curr_dir = os.path.dirname(os.path.realpath(__file__))
             out_dir = f"{curr_dir}\\partition_visualization"
-            graph.save(directory=out_dir, file_name=filename,
-                       show_buffs_params=False, show_weights=False)
+            # graph.save(directory=out_dir, file_name=filename,
+            #            show_buffs_params=False, show_weights=False)
 
             print(filename)
 
