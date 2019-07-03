@@ -136,7 +136,7 @@ class SyncWrapper(nn.Module):
 
             output = self.module(*self.last_inputs)
         else:
-            output = tuple([torch.zeros(*output_shape, device=self.device) for output_shape in self.output_shapes])
+            output = tuple([torch.empty(*output_shape, device=self.device) for output_shape in self.output_shapes])
             if len(output) == 1:
                 output = output[0]
 
@@ -162,7 +162,7 @@ class SyncWrapper(nn.Module):
             output = self.module(*cur_inputs)
         else:
             # the input is garbage.
-            output = tuple([torch.zeros(*output_shape, device=self.device) for output_shape in self.output_shapes])
+            output = tuple([torch.empty(*output_shape, device=self.device) for output_shape in self.output_shapes])
             if len(output) == 1:
                 output = output[0]
 
@@ -237,7 +237,7 @@ class ActivationSavingLayer(nn.Module):
 
         else:
             # if this iteration is one we should not work in
-            output = tuple([torch.zeros(*input.size(), device=self.device) for input in inputs])
+            output = tuple([torch.empty(*input.size(), device=self.device) for input in inputs])
 
         if len(output) == 1:
             output = output[0]
@@ -281,7 +281,7 @@ class LayerWrapper(nn.Module):
         if self.counter.is_last_input_valid(self.gpu_num):
             return self.module(*inputs)
         else:
-            out = tuple([torch.zeros(*output_shape, device=self.device) for output_shape in self.output_shapes])
+            out = tuple([torch.empty(*output_shape, device=self.device) for output_shape in self.output_shapes])
             if len(out) == 1:
                 out = out[0]
             return out
