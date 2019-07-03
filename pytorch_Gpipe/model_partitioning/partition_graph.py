@@ -2,10 +2,10 @@
 from ..METIS import METIS_partition
 from .process_partition import post_process_partition
 from ..model_profiling import Graph
+from typing import Optional, Callable, Any
 
 
-def partition_graph(graph: Graph, num_partitions, weighting_function=None):
-
+def partition_graph(graph: Graph, num_partitions: int, weighting_function: Optional[Callable[[Any], int]] = None):
     wfunc = weighting_function if weighting_function != None else weight_func
 
     adjlist = graph.adjacency_list()

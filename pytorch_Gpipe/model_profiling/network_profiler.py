@@ -4,8 +4,129 @@ import timeit
 from torch.autograd import Variable
 from collections import namedtuple
 from ..utils import traverse_model
+from typing import List, Optional, Dict
 
 __all__ = ['profileNetwork']
+
+Profile = namedtuple(
+    'Profile', 'forward_time backward_time param_size buffer_size input_size output_size')
+
+
+def profileNetwork(net: nn.Module, *sample_batch, basic_block: Optional[List[nn.Module]] = None, max_depth=100, num_iter=1)->Dict[str, Profile]:
+    '''
+    profiles a network's computation time(forward/backward) and memory consumption
+    done via wrapping all layers of the network with a special Wrapper module
+
+    Parameters
+    ----------
+    net:
+        the network we wish to profile a nn.Module
+
+    sample_batch:
+        a sample batch that will be used to measure executation time of network
+        can be single/multiple inputs
+
+    max_depth:
+        determins how far the profiler will go in the model tree
+
+    basic_block:
+        a tuple of nn.Module classes that the profiler will regard as a cohesive unit
+        for eg. if basic_block = nn.Sequential then the profiler will break it down to its components
+
+    num_iter:
+        number of runs the profiler will perform in order to get time measurments
+
+    '''
+    # wrap all individula layers for profiling
+    layers_dict = _wrap_profiled_layers(net, max_depth, basic_block)
+
+    # gather all individual layer sizes
+    param_sizes = [layer.param_size for layer in layers_dict.values()]
+    buffer_sizes = [layer.buffer_size for layer in layers_dict.values()]
+
+    # perform symbolic forward backward run
+    for _ in range(num_iter):
+        _perform_forward_backward_pass(net, *sample_batch)
+
+    # gather forward and backward execution times
+    backward_times = [layer.backward_time / num_iter
+                      for layer in layers_dict.values()]
+    forward_times = [layer.forward_time/num_iter
+                     for layer in layers_dict.values()]
+
+    # gather input and output sizes
+    layer_input_sizes = [layer.input_size for layer in layers_dict.values()]
+    layer_output_sizes = [layer.output_size for layer in layers_dict.values()]
+
+    # prepare profiling results
+    layers_profile = {name: Profile(forward, backward, param_size, buffer_size, in_size, out_size) for name, forward, backward, param_size, buffer_size, in_size, out_size in zip(
+        layers_dict.keys(), forward_times, backward_times, param_sizes, buffer_sizes, layer_input_sizes, layer_output_sizes)}
+
+    _unwrap_layers(net)
+
+    # fix a weird behaviour where the first layer has overly large measured exec time
+    max_node = list(layers_profile.items())[0]
+    for name, node in layers_profile.items():
+        if node.forward_time > max_node[1].forward_time:
+            max_node = (name, node)
+
+    max_name, p = max_node
+
+    exec_times = map(lambda profile: (profile.forward_time,
+                                      profile.backward_time), layers_profile.values())
+    f_time, b_time = map(sum, zip(*exec_times))
+    f_time /= len(layers_profile)
+    b_time /= len(layers_profile)
+    imputed_profile = Profile(f_time, b_time, p.param_size,
+                              p.buffer_size, p.input_size, p.output_size)
+    layers_profile[max_name] = imputed_profile
+
+    return layers_profile
+
+
+def _perform_forward_backward_pass(net, *inputs):
+    # move all inputs and outputs to specified device
+    # warmup
+    device = inputs[0].device
+    a = torch.randn(1000, 2000).to(device)
+    b = torch.randn(2000, 1000).to(device)
+    a.mm(b)
+    if device == "cuda":
+        torch.cuda.synchronize()
+
+    out = net(*inputs)
+
+    if device == "cuda":
+        torch.cuda.synchronize()
+
+    return out
+
+
+def _wrap_profiled_layers(module: nn.Module, depth, basic_block: List[nn.Module]):
+    '''
+    wraps all layers specified by depth and basic blocks of module by changing the binding in the network module dictionary
+    '''
+    layers_dict = {}
+
+    for sub_layer, scope, parent in traverse_model(module, depth, basic_block):
+        name = scope[scope.rfind('[')+1:-1]
+        parent._modules[name] = Wrapper(sub_layer)
+        layers_dict[scope] = parent._modules[name]
+
+    return layers_dict
+
+
+def _unwrap_layers(module: nn.Module):
+    '''
+    return all binding to what they were originally, removes all Wrappers from self.network
+    '''
+    for name, sub_module in module._modules.items():
+        # assume no cyclic routes in the network
+        # a module with no children is a layer
+        if isinstance(sub_module, Wrapper):
+            module._modules[name] = sub_module.layer
+        else:
+            _unwrap_layers(sub_module)
 
 
 class Wrapper(nn.Module):
@@ -96,123 +217,3 @@ class Wrapper(nn.Module):
             exec_time = 1000*(end - start)
 
         return exec_time, out
-
-
-def profileNetwork(net: nn.Module, *sample_batch, basic_block=None, max_depth=100, num_iter=1):
-    '''
-    profiles a network's computation time(forward/backward) and memory consumption
-    done via wrapping all layers of the network with a special Wrapper module
-
-    Parameters
-    ----------
-    net:
-        the network we wish to profile a nn.Module
-
-    sample_batch:
-        a sample batch that will be used to measure executation time of network
-        can be single/multiple inputs
-
-    max_depth:
-        determins how far the profiler will go in the model tree
-
-    basic_block:
-        a tuple of nn.Module classes that the profiler will regard as a cohesive unit
-        for eg. if basic_block = nn.Sequential then the profiler will break it down to its components
-
-    num_iter:
-        number of runs the profiler will perform in order to get time measurments
-
-    '''
-    # wrap all individula layers for profiling
-    layers_dict = _wrap_profiled_layers(net, max_depth, basic_block)
-
-    # gather all individual layer sizes
-    param_sizes = [layer.param_size for layer in layers_dict.values()]
-    buffer_sizes = [layer.buffer_size for layer in layers_dict.values()]
-
-    # perform symbolic forward backward run
-    for _ in range(num_iter):
-        _perform_forward_backward_pass(net, *sample_batch)
-
-    # gather forward and backward execution times
-    backward_times = [layer.backward_time / num_iter
-                      for layer in layers_dict.values()]
-    forward_times = [layer.forward_time/num_iter
-                     for layer in layers_dict.values()]
-
-    # gather input and output sizes
-    layer_input_sizes = [layer.input_size for layer in layers_dict.values()]
-    layer_output_sizes = [layer.output_size for layer in layers_dict.values()]
-
-    Profile = namedtuple(
-        'Profile', 'forward_time backward_time param_size buffer_size input_size output_size')
-
-    # prepare profiling results
-    layers_profile = {name: Profile(forward, backward, param_size, buffer_size, in_size, out_size) for name, forward, backward, param_size, buffer_size, in_size, out_size in zip(
-        layers_dict.keys(), forward_times, backward_times, param_sizes, buffer_sizes, layer_input_sizes, layer_output_sizes)}
-
-    _unwrap_layers(net)
-
-    # fix a weird behaviour where the first layer has overly large measured exec time
-    max_node = list(layers_profile.items())[0]
-    for name, node in layers_profile.items():
-        if node.forward_time > max_node[1].forward_time:
-            max_node = (name, node)
-
-    max_name, p = max_node
-
-    exec_times = map(lambda profile: (profile.forward_time,
-                                      profile.backward_time), layers_profile.values())
-    f_time, b_time = map(sum, zip(*exec_times))
-    f_time /= len(layers_profile)
-    b_time /= len(layers_profile)
-    imputed_profile = Profile(f_time, b_time, p.param_size,
-                              p.buffer_size, p.input_size, p.output_size)
-    layers_profile[max_name] = imputed_profile
-
-    return layers_profile
-
-
-def _perform_forward_backward_pass(net, *inputs):
-    # move all inputs and outputs to specified device
-    # warmup
-    device = inputs[0].device
-    a = torch.randn(1000, 2000).to(device)
-    b = torch.randn(2000, 1000).to(device)
-    a.mm(b)
-    if device == "cuda":
-        torch.cuda.synchronize()
-
-    out = net(*inputs)
-
-    if device == "cuda":
-        torch.cuda.synchronize()
-
-    return out
-
-
-def _wrap_profiled_layers(module: nn.Module, depth, basic_block):
-    '''
-    wraps all layers specified by depth and basic blocks of module by changing the binding in the network module dictionary
-    '''
-    layers_dict = {}
-
-    for sub_layer, scope, parent in traverse_model(module, depth, basic_block):
-        name = scope[scope.rfind('[')+1:-1]
-        parent._modules[name] = Wrapper(sub_layer)
-        layers_dict[scope] = parent._modules[name]
-
-    return layers_dict
-
-
-def _unwrap_layers(module: nn.Module):
-    '''
-    return all binding to what they were originally, removes all Wrappers from self.network
-    '''
-    for name, sub_module in module._modules.items():
-        # assume no cyclic routes in the network
-        # a module with no children is a layer
-        if isinstance(sub_module, Wrapper):
-            module._modules[name] = sub_module.layer
-        else:
-            _unwrap_layers(sub_module)

@@ -1,8 +1,10 @@
 import torch.nn as nn
+import torch
+from typing import List, Optional, Iterator, Tuple
 __all__ = ["traverse_model", "traverse_params_buffs"]
 
 
-def traverse_model(model: nn.Module, depth=1000, basic_block=None, full=False):
+def traverse_model(model: nn.Module, depth: int = 1000, basic_block: Optional[List[nn.Module]] = None, full=False)->Iterator[Tuple[nn.Module, str, nn.Module]]:
     prefix = type(model).__name__
     yield from _traverse_model(model, depth, prefix, basic_block, full)
 
@@ -19,7 +21,7 @@ def _traverse_model(module: nn.Module, depth, prefix, basic_block, full):
                 sub_module).__name__+f"[{name}]", basic_block, full)
 
 
-def traverse_params_buffs(module: nn.Module):
+def traverse_params_buffs(module: nn.Module)->Iterator[Tuple[torch.tensor, str]]:
     prefix = type(module).__name__
     yield from _traverse_params_buffs(module, prefix)
 

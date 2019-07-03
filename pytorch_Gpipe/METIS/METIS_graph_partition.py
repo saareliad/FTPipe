@@ -212,12 +212,13 @@ def _adjlist_to_metis(adjlist, nodew=None, nodesz=None):
       in the graph. Each item in the tuples represents an edge. These items may be
       single integers representing neighbor index, or they may be an (index, weight)
       tuple if you want weighted edges. Default weight is 1 for missing weights.
-
       The graph must be undirected, and each edge must be represented twice (once for
       each node). The weights should be identical, if provided.
+
     :param nodew: is a list of node weights, and must be the same size as `adjlist` if given.
       If desired, the elements of `nodew` may be tuples of the same size (>= 1) to provided
       multiple weights for each node.
+
     :param nodesz: is a list of node sizes. These are relevant when doing volume-based
       partitioning.
 
@@ -291,7 +292,7 @@ def _set_options(**options):
 # -------------------------------------------------------------------------
 # python API
 # -------------------------------------------------------------------------
-def METIS_partition(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis', **opts: Dict[str, _MetisEnum])->Tuple[int, List[int]]:
+def METIS_partition(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis', **opts)->Tuple[int, List[int]]:
     """
     Perform graph partitioning using k-way or recursive methods.
 
@@ -300,15 +301,14 @@ def METIS_partition(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis
     the objective function that was minimized (either the edge cuts
     or the total volume).
 
-    :param graph:an adjacency list, or a :class:`METIS_Graph`
-      named tuple. To use the named tuple approach, you'll need to
-      read the METIS manual for the meanings of the fields.
+    :param adjlist: an adjacency list describing the graph
 
       See :func:`_adjlist_to_metis` for information on the use of adjacency lists.
       The extra ``nodew`` and ``nodesz`` keyword arguments of that function may be given
       directly to this function and will be forwarded to the converter.
       Alternatively, a dictionary can be provided as ``graph`` and its items
       will be passed as keyword arguments.
+
     :param nparts: The target number of partitions. You might get fewer.
     :param tpwgts: Target partition weights. For each partition, there should
       be one (float) weight for each node constraint. That is, if `nparts` is 3 and
@@ -322,13 +322,9 @@ def METIS_partition(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis
       a list of floating point values each greater than 1.
 
     :param algorithm: Determines the partitioning algorithm to use can be either
-        metis metis_recursive for:c:func:`METIS_PartGraphKway` and :c:func:`METIS_PartGraphRecursive` in
-      METIS's C API. alternatively a user function can provided this function must recieve the adjlist,node weights and
-      number of desired partitions
-
+        metis for METIS_PartGraphKway and metis_recursive for METIS_PartGraphRecursive 
 
     Any additional METIS options may be specified as keyword parameters.
-
     See the METIS manual for specific meaning of each option.
     """
     nodesz = opts.pop('nodesz', None)
@@ -362,8 +358,6 @@ def METIS_partition(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis
         res = _part_graph_recursive(*args)
     elif algorithm == "metis":
         res = _part_graph(*args)
-    elif callable(algorithm):
-        return algorithm(adjlist, nodew, nparts)
     else:
         raise NotImplementedError("bad algorithm")
     _error_handler(res)

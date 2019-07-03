@@ -1,4 +1,5 @@
-from .control_flow_graph import Graph, NodeTypes
+from .control_flow_graph import Graph, Node, NodeTypes
+from typing import List
 
 
 def optimize_graph(graph: Graph):
@@ -10,7 +11,7 @@ def optimize_graph(graph: Graph):
     graph._normalize_indices()
 
 
-def _combine_OP_nodes_under_the_same_scope(nodes):
+def _combine_OP_nodes_under_the_same_scope(nodes: List[Node]):
     # optimization that reduces number of nodes in the graph
     # combine nodes that have a commom scope we do this because\n
     # if nodes have the same scopeName than they were profiled together

@@ -1,127 +1,6 @@
-
-import torch.nn as nn
-import torch
 from enum import Enum
 from copy import copy
-from ..utils import traverse_model, traverse_params_buffs
-
-
-def graph_builder(model, *sample_batch, max_depth=100, weights=None, basic_block=None):
-
-    buffer_param_names = _buffer_and_params_scopes(model)
-
-    weights = weights if weights != None else {}
-
-    layerNames = _profiled_scopes(model, max_depth, basic_block=basic_block)
-
-    # trace the model and build a graph
-    num_inputs = len(sample_batch)
-
-    with torch.no_grad():
-        trace_graph, _ = torch.jit.get_trace_graph(model, sample_batch)#inputs)
-        trace_graph = trace_graph.graph()
-
-    return Graph(layerNames, num_inputs, buffer_param_names, trace_graph, weights)
-
-
-class NodeTypes(Enum):
-    IN = 1
-    BUFF_PARAM = 2
-    LAYER = 3
-    OP = 4
-
-    def __repr__(self):
-        return self.name
-
-
-class Node():
-    '''
-    a simple graph node for directed graphs
-
-    Fields:
-    ------
-    scope:
-     the operation/layer the node represents
-    idx:
-     a serial number of the node for convience
-    node_type:
-     an enum representing if the node is an input Layer or operator(like arithmetic ops)
-    incoming_nodes:
-     the nodes who have edges from them to this node
-    out_nodes:
-     the nodes who have edges from this node
-
-     parallel edges in the same direction are not allowed
-    '''
-
-    def __init__(self, scope, idx, node_type: NodeTypes, incoming_nodes=None, weight=0, part=0):
-        self.scope = scope
-        self.idx = idx
-        self.type = node_type
-        self.out_nodes = set()
-        self.weight = weight
-        self.part = part
-        self.in_nodes = incoming_nodes if isinstance(
-            incoming_nodes, set) else set()
-        self.outputs = set()
-        self.inputs = set()
-
-    def add_out_node(self, node):
-        if isinstance(node, Node):
-            self.out_nodes.add(node)
-        if isinstance(node, set):
-            self.out_nodes.update(node)
-
-    def add_in_node(self, node):
-        if isinstance(node, Node):
-            self.in_nodes.add(node)
-        if isinstance(node, set):
-            self.in_nodes.update(node)
-
-    def remove_in_node(self, node):
-        if isinstance(node, Node):
-            self.in_nodes.discard(node)
-        if isinstance(node, set):
-            self.in_nodes.difference_update(node)
-
-    def remove_out_node(self, node):
-        if isinstance(node, Node):
-            self.out_nodes.discard(node)
-        if isinstance(node, set):
-            self.out_nodes.difference_update(node)
-
-    def __repr__(self):
-        out_idx = {node.idx for node in self.out_nodes}
-        in_idx = {node.idx for node in self.in_nodes}
-        return f"node {self.idx} in scope {self.scope} of type {self.type} flows to {out_idx} gathers {in_idx}\n"
-
-
-class LayerOutput():
-    def __init__(self, idx, origin_scope, output_shape):
-        self.idx = idx
-        self.scope = origin_scope
-        self.output_shape = output_shape
-        self.out_scopes=set()
-
-    def __eq__(self, other):
-        if not isinstance(other, LayerOutput):
-            return False
-
-        return self.idx == other.idx
-    
-    def __hash__(self):
-        return self.idx.__hash__()
-    
-    def __str__(self):
-        res=''
-        for d in self.output_shape:
-            res=f"{res}x{d}"
-        return res[1:]
-
-    def __repr__(self):
-        return str(self)
-
-
+from typing import List,Dict,Any
 class Graph():
     '''
     a graph representing the control flow of a model
@@ -131,7 +10,7 @@ class Graph():
     the edges represent the data flow.
     '''
 
-    def __init__(self, profiled_layers, num_inputs, buffer_param_names, trace_graph, weights: dict):
+    def __init__(self, profiled_layers: List[str], num_inputs: int, buffer_param_names: List[str], trace_graph, weights: Dict[str, Any]):
         self.nodes = []
         self.profiled_layers = profiled_layers
         self.num_inputs_buffs_params = 0
@@ -145,7 +24,7 @@ class Graph():
     def _build_graph(self, trace_graph):
         self._add_IO_nodes(trace_graph.inputs())
         self._add_OP_nodes(trace_graph.nodes())
-        self._add_edges(trace_graph)
+        self._add_shapes(trace_graph)
         self._remove_constant_nodes()
         self._remove_nodes_that_go_nowhere(trace_graph.outputs())
         self._normalize_indices()
@@ -212,7 +91,7 @@ class Graph():
                     self.nodes.append(out_node)
                     num_extra_nodes += 1
 
-    def _add_edges(self, trace_graph):
+    def _add_shapes(self, trace_graph):
         def get_shape(n):
             try:
                 # works if not constant
@@ -289,7 +168,7 @@ class Graph():
 
         self._remove_nodes(going_nowhere)
 
-    def _remove_nodes(self, condition, reverse=False):
+    def _remove_nodes(self, condition, reverse:bool=False):
         changed = True
         while changed:
             changed = False
@@ -329,7 +208,7 @@ class Graph():
     def get_weights(self):
         return [node.weight for node in self.nodes]
 
-    def adjacency_list(self, directed=False):
+    def adjacency_list(self, directed=False)->List[List[int]]:
         if not directed:
             return [[n.idx for n in node.out_nodes.union(node.in_nodes)] for node in self.nodes]
         return [[n.idx for n in node.out_nodes] for node in self.nodes]
@@ -428,13 +307,100 @@ class Graph():
             os.remove(f"{directory}/{file_name}.pdf")
         dot.render(file_name, directory=directory, cleanup=True)
 
-# scope names of all profiled layers in the model
 
-def _profiled_scopes(module: nn.Module, depth, basic_block):
-    return list(map(lambda t: t[1],traverse_model(module,depth,basic_block)))
+class NodeTypes(Enum):
+    IN = 1
+    BUFF_PARAM = 2
+    LAYER = 3
+    OP = 4
 
-# scope names of all params and buffs in the model
-# we discover them manually because the tracer does not provide this info
+    def __repr__(self):
+        return self.name
 
-def _buffer_and_params_scopes(module: nn.Module):
-    return list(map(lambda t: t[1], traverse_params_buffs(module)))
+
+class Node():
+    '''
+    a simple graph node for directed graphs
+
+    Fields:
+    ------
+    scope:
+     the operation/layer the node represents
+    idx:
+     a serial number of the node for convience
+    node_type:
+     an enum representing if the node is an input Layer or operator(like arithmetic ops)
+    incoming_nodes:
+     the nodes who have edges from them to this node
+    out_nodes:
+     the nodes who have edges from this node
+
+     parallel edges in the same direction are not allowed
+    '''
+
+    def __init__(self, scope:str, idx:int, node_type: NodeTypes, incoming_nodes=None, weight=0, part=0):
+        self.scope = scope
+        self.idx = idx
+        self.type = node_type
+        self.out_nodes = set()
+        self.weight = weight
+        self.part = part
+        self.in_nodes = incoming_nodes if isinstance(
+            incoming_nodes, set) else set()
+        self.outputs = set()
+        self.inputs = set()
+
+    def add_out_node(self, node):
+        if isinstance(node, Node):
+            self.out_nodes.add(node)
+        if isinstance(node, set):
+            self.out_nodes.update(node)
+
+    def add_in_node(self, node):
+        if isinstance(node, Node):
+            self.in_nodes.add(node)
+        if isinstance(node, set):
+            self.in_nodes.update(node)
+
+    def remove_in_node(self, node):
+        if isinstance(node, Node):
+            self.in_nodes.discard(node)
+        if isinstance(node, set):
+            self.in_nodes.difference_update(node)
+
+    def remove_out_node(self, node):
+        if isinstance(node, Node):
+            self.out_nodes.discard(node)
+        if isinstance(node, set):
+            self.out_nodes.difference_update(node)
+
+    def __repr__(self):
+        out_idx = {node.idx for node in self.out_nodes}
+        in_idx = {node.idx for node in self.in_nodes}
+        return f"node {self.idx} in scope {self.scope} of type {self.type} flows to {out_idx} gathers {in_idx}\n"
+
+
+class LayerOutput():
+    def __init__(self, idx, origin_scope, output_shape):
+        self.idx = idx
+        self.scope = origin_scope
+        self.output_shape = output_shape
+        self.out_scopes = set()
+
+    def __eq__(self, other):
+        if not isinstance(other, LayerOutput):
+            return False
+
+        return self.idx == other.idx
+
+    def __hash__(self):
+        return self.idx.__hash__()
+
+    def __str__(self):
+        res = ''
+        for d in self.output_shape:
+            res = f"{res}x{d}"
+        return res[1:]
+
+    def __repr__(self):
+        return str(self)

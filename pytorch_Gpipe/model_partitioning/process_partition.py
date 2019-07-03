@@ -1,7 +1,8 @@
 from ..model_profiling import Graph, NodeTypes
+from typing import List
 
 
-def post_process_partition(graph: Graph, part, weights=None):
+def post_process_partition(graph: Graph, part: List[int]):
     set_partition(graph, part)
 
     ensure_graph_validity(graph)
@@ -13,6 +14,7 @@ def post_process_partition(graph: Graph, part, weights=None):
     scc_partition_correction(graph)
 
 
+# TODO still does wierd things
 def OP_inputs_partition_correction(graph: Graph, nparts):
     groups = []
     for v in graph.nodes:
@@ -123,7 +125,7 @@ def strongly_connected_components_iterative(vertices, edges):
                         yield scc
 
 
-def set_partition(graph: Graph, parts):
+def set_partition(graph: Graph, parts: List[int]):
     for node, part in zip(graph.nodes, parts):
         node.part = part
 
@@ -132,6 +134,9 @@ def ensure_graph_validity(graph: Graph):
     op_nodes = filter(lambda n: n.type == NodeTypes.OP, graph.nodes)
 
     for node in op_nodes:
-        if any((in_node.type == NodeTypes.OP and in_node.part != node.part) for in_node in node.in_nodes):
-            print("we have discovered 2 arithmetic ops that reside on different devices\n we recommend using a smaller depth or using more general basic blocks")
-            return
+        parent_scope = node.scope.rsplit('/', 1)[0]
+        for other in filter(lambda n: n.type == NodeTypes.OP, node.out_nodes):
+            other_parent_scope = other.scope.rsplit('/', 1)[0]
+            if other.part != node.part and parent_scope == other_parent_scope:
+                print("we have discovered 2 consecutive arithmetic ops that reside on different devices\n we recommend using a smaller depth or using more general basic blocks")
+                return

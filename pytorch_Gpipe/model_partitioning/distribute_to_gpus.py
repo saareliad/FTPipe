@@ -4,10 +4,11 @@ from ..model_profiling import Graph, NodeTypes
 from ..pipeline import ActivationSavingLayer, LayerWrapper, SyncWrapper, CycleCounter
 from ..utils import traverse_model, traverse_params_buffs
 from collections import deque
+from typing import List
 __all__ = ["wrap_and_move"]
 
 
-def wrap_and_move(model: nn.Module, basic_block, device_lst: list, graph: Graph, *inputs):
+def wrap_and_move(model: nn.Module, basic_block: List[nn.Module], device_lst: list, graph: Graph, *inputs):
     nparts = len({n.part for n in graph.nodes})
     used_devices = device_lst[:nparts]
     model_inputs = filter(lambda n: n.type == NodeTypes.IN, graph.nodes)
