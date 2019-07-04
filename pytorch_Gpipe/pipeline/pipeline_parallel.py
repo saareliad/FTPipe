@@ -24,8 +24,7 @@ class PipelineParallel(nn.Module):
         self.module = module
         self.wrappers = module.wrappers if wrappers is None else wrappers
         self.input_shape = input_shape
-        self.module_devices = set(
-            [wrapper.device for wrapper in wrappers] + [main_device])
+        self.module_devices = set([wrapper.device for wrapper in wrappers] + [main_device])
 
         if counter is None:
             counter = CycleCounter(ForwardMode[mode], num_gpus)
@@ -108,20 +107,18 @@ class PipelineParallel(nn.Module):
                 if cycle < num_runs:
                     input = microbatches[cycle]
                 else:
-                    input = torch.zeros(*self.input_shape,
-                                        device=self.wrappers[0].device)
+                    input = torch.empty(*self.input_shape, device=self.wrappers[0].device)
 
                 result: Tuple[torch.Tensor] = self.module(input)
 
                 # the first microbatch will finish the forward propagation only
                 # after num_gpus cycles.
                 if cycle >= self.num_gpus - 1:
-                    results.append(
-                        result.to(self.main_device, non_blocking=True))
+                    results.append(result.to(self.main_device, non_blocking=True))
 
                 self.counter.increase()
-                if torch.cuda.is_available():
-                    self.synchronize_streams()
+                # if torch.cuda.is_available():
+                #     self.synchronize_streams()
 
         # make sure that the counter and wrappers are returned to default mode
         self.finished_prop()
@@ -153,10 +150,10 @@ class PipelineParallel(nn.Module):
             with torch.set_grad_enabled(True):
                 self.init_backwards_cycle()
 
-                if torch.cuda.is_available():
-                    self.synchronize_streams()
+                # if torch.cuda.is_available():
+                #     self.synchronize_streams()
 
-                out = self.module(torch.zeros(*self.input_shape))
+                out = self.module(torch.empty(*self.input_shape))
                 out.backward(grad)
                 self.counter.increase()
 
@@ -165,14 +162,14 @@ class PipelineParallel(nn.Module):
             with torch.set_grad_enabled(True):
                 self.init_backwards_cycle()
 
-                if torch.cuda.is_available():
-                    self.synchronize_streams()
+                # if torch.cuda.is_available():
+                #     self.synchronize_streams()
 
-                self.module(torch.zeros(*self.input_shape))
+                self.module(torch.empty(*self.input_shape))
                 self.counter.increase()
 
-        if torch.cuda.is_available():
-            self.synchronize_streams()
+        # if torch.cuda.is_available():
+        #     self.synchronize_streams()
 
         # make sure that the counter and wrappers are returned to default mode
         self.finished_prop()
