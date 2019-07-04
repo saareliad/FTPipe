@@ -1,7 +1,8 @@
 import torch.nn as nn
 import torch
 from typing import List, Optional, Iterator, Tuple
-__all__ = ["traverse_model", "traverse_params_buffs"]
+__all__ = ["traverse_model", "traverse_params_buffs",
+           "find_output_shapes_of_scopes"]
 
 
 def traverse_model(model: nn.Module, depth: int = 1000, basic_block: Optional[List[nn.Module]] = None, full=False)->Iterator[Tuple[nn.Module, str, nn.Module]]:
@@ -40,3 +41,44 @@ def _traverse_params_buffs(module: nn.Module, prefix):
     # recurse
     for name, sub_module in module._modules.items():
         yield from _traverse_params_buffs(sub_module, prefix + "/"+type(sub_module).__name__+f"[{name}]")
+
+
+def find_output_shapes_of_scopes(model, scopes, *inputs):
+    backup = dict()
+
+    for layer, scope, parent in traverse_model(model, full=True):
+        if scope in scopes:
+            name = scope[scope.rfind('[')+1:-1]
+            parent._modules[name] = ShapeWrapper(layer)
+
+            new_scope = scope[:scope.rfind('/')+1]+f"ShapeWrapper[{name}]"
+            backup[new_scope] = (scope, name)
+
+    with torch.no_grad():
+        model(*inputs)
+
+    scope_to_shape = {}
+    for layer, scope, parent in traverse_model(model, full=True):
+        if isinstance(layer, ShapeWrapper):
+            old_scope, name = backup[scope]
+            scope_to_shape[old_scope] = layer.output_shape
+            parent._modules[name] = layer.sub_layer
+
+    return scope_to_shape
+
+
+class ShapeWrapper(nn.Module):
+    def __init__(self, sub_module: nn.Module):
+        super(ShapeWrapper, self).__init__()
+        self.output_shape = []
+        self.sub_layer = sub_module
+
+    def forward(self, *inputs):
+        outs = self.sub_layer(*inputs)
+
+        if isinstance(outs, torch.Tensor):
+            self.output_shape.append(outs.shape[1:])
+        else:
+            for t in outs:
+                self.output_shape.append(t.shape[1:])
+        return outs

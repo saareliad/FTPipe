@@ -1,5 +1,5 @@
 import os
-from pytorch_Gpipe import partition_with_profiler, distribute_using_profiler, pipeline
+from pytorch_Gpipe import partition_with_profiler, distribute_using_profiler
 import torch
 from sample_models import alexnet, resnet18, vgg11_bn, squeezenet1_0, inception_v3, densenet121, GoogLeNet, LeNet, WideResNet
 
@@ -68,8 +68,8 @@ def distribute_torchvision(nruns=1):
                 filename = f"{net.__name__} {len(devices)} partitions at depth {d} attempt {idx}"
                 curr_dir = os.path.dirname(os.path.realpath(__file__))
                 out_dir = f"{curr_dir}\\densenet121_4p_100d_corrected"
-                graph.save(directory=out_dir, file_name=filename,
-                           show_buffs_params=False, show_weights=False)
+                # graph.save(directory=out_dir, file_name=filename,
+                #            show_buffs_params=False, show_weights=False)
 
                 print(filename)
 

@@ -1,8 +1,7 @@
 import torch.nn as nn
-import torch
 from ..model_profiling import Graph, NodeTypes
 from ..pipeline import ActivationSavingLayer, LayerWrapper, SyncWrapper, CycleCounter
-from ..utils import traverse_model, traverse_params_buffs
+from ..utils import traverse_model, traverse_params_buffs, find_output_shapes_of_scopes
 from collections import deque
 from typing import List
 __all__ = ["wrap_and_move"]
@@ -34,7 +33,7 @@ def wrap_and_move(model: nn.Module, basic_block: List[nn.Module], device_lst: li
     relevant_sub_modules = modules_of_top_scopes(
         top_scopes, model, effective_depth, basic_block)
 
-    scope_to_shape = find_oputput_shapes_of_scopes(model, top_scopes, *inputs)
+    scope_to_shape = find_output_shapes_of_scopes(model, top_scopes, *inputs)
 
     modified_model = wrap_model(relevant_sub_modules, top_scopes_to_device,
                                 used_devices[0], part_inputs, counter, model, scope_to_shape, top_scopes_to_gpu_num)
@@ -181,44 +180,3 @@ def _partition_input_nodes(nodes):
         return not node.in_nodes or any(in_node.part != node.part for in_node in node.in_nodes)
 
     return list(filter(is_input_node, nodes))
-
-
-def find_oputput_shapes_of_scopes(model, scopes, *inputs):
-    backup = dict()
-
-    for layer, scope, parent in traverse_model(model, full=True):
-        if scope in scopes:
-            name = scope[scope.rfind('[')+1:-1]
-            parent._modules[name] = ShapeWrapper(layer)
-
-            new_scope = scope[:scope.rfind('/')+1]+f"ShapeWrapper[{name}]"
-            backup[new_scope] = (scope, name)
-
-    with torch.no_grad():
-        model(*inputs)
-
-    scope_to_shape = {}
-    for layer, scope, parent in traverse_model(model, full=True):
-        if isinstance(layer, ShapeWrapper):
-            old_scope, name = backup[scope]
-            scope_to_shape[old_scope] = layer.output_shape
-            parent._modules[name] = layer.sub_layer
-
-    return scope_to_shape
-
-
-class ShapeWrapper(nn.Module):
-    def __init__(self, sub_module: nn.Module):
-        super(ShapeWrapper, self).__init__()
-        self.output_shape = []
-        self.sub_layer = sub_module
-
-    def forward(self, *inputs):
-        outs = self.sub_layer(*inputs)
-
-        if isinstance(outs, torch.Tensor):
-            self.output_shape.append(outs.shape[1:])
-        else:
-            for t in outs:
-                self.output_shape.append(t.shape[1:])
-        return outs

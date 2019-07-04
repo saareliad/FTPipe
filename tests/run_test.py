@@ -2,7 +2,6 @@ import pytest
 from .model_parallel_resnet50 import test_split_size
 from .test_time import test_resnet50_time
 
-# TODO
 """
 **ADD TESTS FOR THE FOLLOWING**
 
