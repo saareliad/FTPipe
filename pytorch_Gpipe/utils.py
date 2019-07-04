@@ -13,7 +13,7 @@ def traverse_model(model: nn.Module, depth: int = 1000, basic_block: Optional[Li
 def _traverse_model(module: nn.Module, depth, prefix, basic_block, full):
     for name, sub_module in module._modules.items():
         scope = prefix+"/"+type(sub_module).__name__+f"[{name}]"
-        if len(list(sub_module.children())) == 0 or (basic_block != None and isinstance(sub_module, basic_block)) or depth == 0:
+        if len(list(sub_module.children())) == 0 or (basic_block != None and isinstance(sub_module, tuple(basic_block))) or depth == 0:
             yield sub_module, scope, module
         else:
             if full:

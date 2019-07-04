@@ -196,6 +196,9 @@ class Graph():
     def __getitem__(self, key):
         return self.nodes[key]
 
+    def __len__(self):
+        return len(self.nodes)
+
     def __repr__(self):
         discription = ''
         for node in self.nodes:

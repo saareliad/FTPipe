@@ -1,9 +1,9 @@
-from .model_profiling import visualize, visualize_with_profiler
+from .model_profiling import visualize, visualize_with_profiler, profileNetwork
 from .model_partitioning import partition_graph, wrap_and_move
 import torch
 
 __all__ = ['partition_with_profiler', 'distribute_using_profiler', 'distribute_using_custom_weights',
-           'visualize', 'visualize_with_profiler', 'partition_graph', 'wrap_and_move']
+           'visualize', 'visualize_with_profiler', 'partition_graph', 'wrap_and_move', 'profileNetwork']
 
 
 def partition_with_profiler(model, *sample_batch, nparts=4, num_iter=4, max_depth=100, basic_blocks=None):
