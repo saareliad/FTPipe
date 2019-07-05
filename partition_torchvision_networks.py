@@ -44,7 +44,7 @@ def distribute_torchvision(nruns=1, nparts=4):
                 inception_v3, densenet121, GoogLeNet, LeNet, WideResNet]
     depth = [0, 1, 100]
     devices = ['cuda' for _ in range(nparts)]
-    depth = [100]
+    depth = [1]
     networks = [densenet121]
     for idx in range(nruns):
         for net in networks:

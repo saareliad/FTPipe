@@ -1,7 +1,7 @@
 import torch
 from pytorch_Gpipe import profileNetwork
 import pytest
-from dummy_nets import combinedTreeNet, treeNet
+from .dummy_nets import combinedTreeNet, treeNet
 
 
 def test_max_depth(device='cpu'):

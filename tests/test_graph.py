@@ -2,7 +2,7 @@ from pytorch_Gpipe import visualize, visualize_with_profiler
 import torch
 import pytest
 from pytorch_Gpipe.utils import traverse_model
-from dummy_nets import arithmeticNet, combinedTreeNet, netWithTensors, treeNet
+from .dummy_nets import arithmeticNet, combinedTreeNet, netWithTensors, treeNet
 
 
 def test_max_depth(device='cpu'):

@@ -137,7 +137,7 @@ def cannonize_partition_indices(graph: Graph, node_parts: List[int]):
     closed = set()
     cannonical_parts = dict()
 
-    while num_taken < len(num_parts):
+    while num_taken < num_parts:
         node, d = open_nodes.popleft()
         if node.part not in cannonical_parts:
             cannonical_parts[node.part] = num_taken

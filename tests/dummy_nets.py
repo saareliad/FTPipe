@@ -51,6 +51,7 @@ class arithmeticNet(nn.Module):
 
 
 class netWithTensors(nn.Module):
+
     def __init__(self):
         super(netWithTensors, self).__init__()
 
