@@ -12,7 +12,7 @@
 1. add documentation
 2. add static typing
 3. optimize like there is no tommorow
-4. add cpu support via multiprocessing maybe?
+4. add cpu support via multiprocessing 
 
 #TODO provided functionality:
 1a. model profiling +
@@ -22,10 +22,9 @@
 3a. model partition using our Graph +
 3b. model partition using our Graph and custom weights/weighting function +
 4a. model distibution using our Graph + (still need to write the pipeline wrapper) +-
-5b. model distribution without our Graph given: - ? still need to decide what is required
-    1. scope to device mapping 
-    2. buffers and parameters to device mapping if they are not part of said scopes
-    2. scope output shapes without the batch dim
-    3. partition input scopes(a subset of 1)
-    4. model input shape (for each scope of 1)
-    5. ?
+5b. model distribution without our Graph given a tuple containing:+ (enable serialization)
+    1.nparts
+    2.scopes_to_device
+    3.scope_shapes
+    4.scope_gpu_num
+    5.part_inputs

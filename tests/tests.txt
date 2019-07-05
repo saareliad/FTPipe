@@ -23,12 +23,12 @@ profiling:
     2. check that we do not change the model in the process+
 
 control_flow:
-    1. check that we find all relevant scopes
-    2. ensure control flow is accurate
-    3. check that output shapes are correct
+    1. check that we find all relevant scopes+
+    2. ensure control flow is accurate+
+    3. check that output shapes are correct+
     4. check that weights are allocated correctly+
 
 partitioning:
-    1. check that we distribute the model according to the graph/specifications
-    2. check that we do not induce unexpected changes
-    3. check that we optimize the wrappers correctly
+    1. check that we distribute the model according to the graph/specifications+
+    2. check that we do not induce unexpected changes+
+    3. check that we optimize the wrappers correctly+

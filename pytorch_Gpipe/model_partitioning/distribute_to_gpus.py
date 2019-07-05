@@ -2,11 +2,15 @@ import torch.nn as nn
 from ..model_profiling import Graph, NodeTypes
 from ..pipeline import ActivationSavingLayer, LayerWrapper, SyncWrapper, CycleCounter
 from ..utils import traverse_model, traverse_params_buffs, find_output_shapes_of_scopes
-from collections import deque
-__all__ = ["wrap_and_move"]
+from collections import deque, namedtuple
+__all__ = ["distribute_model", "distribute_model_from_config"]
 
 
-def wrap_and_move(model: nn.Module, device_lst: list, graph: Graph, *inputs):
+partitionConfig = namedtuple("partitionConfig",
+                             "nparts scopes_to_device scope_shapes scope_gpu_num part_inputs")
+
+
+def distribute_model(model: nn.Module, device_lst: list, graph: Graph, *inputs, return_config: bool = False):
     nparts = len({n.part for n in graph.nodes})
     used_devices = device_lst[:nparts]
     model_inputs = filter(lambda n: n.type == NodeTypes.IN, graph.nodes)
@@ -39,6 +43,35 @@ def wrap_and_move(model: nn.Module, device_lst: list, graph: Graph, *inputs):
 
     wrappers = extract_wrappers(modified_model)
 
+    if return_config:
+        nparts = len(device_lst)
+        config = partitionConfig(nparts, top_scopes_to_device,
+                                 scope_to_shape, top_scopes_to_gpu_num, part_inputs)
+
+        return modified_model, wrappers, counter, config
+
+    return modified_model, wrappers, counter
+
+
+def distribute_model_from_config(model, device_lst: list, config: partitionConfig):
+    nparts, scopes_to_device, scope_shapes, scope_gpu_num, part_inputs = config
+
+    if nparts != len(device_lst):
+        print(
+            f"requested {len(device_lst)} partitions but only {nparts} are present in the partition")
+        print("so no action was taken")
+        return model
+
+    counter = CycleCounter(nparts)
+
+    def is_top_scope(a): return (a[1] in scopes_to_device)
+    relevant_sub_modules = filter(is_top_scope,
+                                  traverse_model(model, full=True))
+
+    modified_model = wrap_model(relevant_sub_modules, scopes_to_device,
+                                device_lst[0], part_inputs, counter, model, scope_shapes, scope_gpu_num)
+
+    wrappers = extract_wrappers(modified_model)
     return modified_model, wrappers, counter
 
 

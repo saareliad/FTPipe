@@ -1,8 +1,10 @@
 import torch
 from .dummy_nets import treeNet
 from pytorch_Gpipe import visualize, partition_graph, distribute_using_custom_weights
-from pytorch_Gpipe.utils import traverse_model
+from pytorch_Gpipe.utils import traverse_model, model_scopes
+from pytorch_Gpipe.pipeline import ActivationSavingLayer, LayerWrapper, SyncWrapper
 import pytest
+import torch.nn as nn
 
 
 def test_every_layer_has_a_partition(device='cpu'):
@@ -56,3 +58,24 @@ def test_every_layer_is_allocated_a_device_as_specified_by_the_graph():
         expected_device = torch.device(f"cuda:{part_idx}")
         assert all(b.device == expected_device for b in layer.buffers)
         assert all(p.device == expected_device for p in layer.parameters)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available() or torch.cuda.device_count() < 2, reason='cuda required')
+def test_wrappers_are_otimized_if_possible():
+    device = 'cuda:0'
+    depth = 10
+    net = treeNet(depth).to(device)
+    x = torch.zeros(50, 10).to(device)
+    scopes = model_scopes(net)
+    weights = {scope: 10 for scope in scopes}
+    distributed_model, _, _ = distribute_using_custom_weights(net, weights, x)
+
+    def find_layers_of_class(model: nn.Module, cls):
+        return filter(lambda l: isinstance(l, cls), model.modules())
+
+    assert len(find_layers_of_class(
+        distributed_model, ActivationSavingLayer)) == 1
+
+    assert len(find_layers_of_class(distributed_model, SyncWrapper)) == 1
+
+    assert len(find_layers_of_class(distributed_model, LayerWrapper)) <= 2

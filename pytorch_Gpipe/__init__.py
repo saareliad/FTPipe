@@ -1,9 +1,9 @@
 from .model_profiling import visualize, visualize_with_profiler, profileNetwork
-from .model_partitioning import partition_graph, wrap_and_move
+from .model_partitioning import partition_graph, distribute_model, distribute_model_from_config
 import torch
 
 __all__ = ['partition_with_profiler', 'distribute_using_profiler', 'distribute_using_custom_weights',
-           'visualize', 'visualize_with_profiler', 'partition_graph', 'wrap_and_move', 'profileNetwork']
+           'visualize', 'visualize_with_profiler', 'partition_graph', 'distribute_model', 'distribute_model_from_config']
 
 
 def partition_with_profiler(model, *sample_batch, nparts=4, num_iter=4, max_depth=100, basic_blocks=None):
@@ -15,7 +15,7 @@ def partition_with_profiler(model, *sample_batch, nparts=4, num_iter=4, max_dept
     return graph
 
 
-def distribute_using_profiler(model, *sample_batch, device_list=None, num_iter=4, max_depth=100, basic_blocks=None):
+def distribute_using_profiler(model, *sample_batch, device_list=None, num_iter=4, max_depth=100, basic_blocks=None, return_config=False):
     if device_list is None:
         if torch.cuda.is_available():
             device_list = list(range(torch.cuda.device_count()))
@@ -25,13 +25,17 @@ def distribute_using_profiler(model, *sample_batch, device_list=None, num_iter=4
     graph = partition_with_profiler(model, *sample_batch, nparts=len(device_list),
                                     num_iter=num_iter, max_depth=max_depth, basic_blocks=basic_blocks)
 
-    modified_model, wrappers, counter = wrap_and_move(model,
-                                                      device_list, graph, *sample_batch)
+    if return_config:
+        modified_model, wrappers, counter, config = distribute_model(model,
+                                                                     device_list, graph, *sample_batch, return_config=True)
+        return modified_model, graph, (counter, wrappers, sample_batch), config
 
+    modified_model, wrappers, counter = distribute_model(model,
+                                                         device_list, graph, *sample_batch, return_config=False)
     return modified_model, graph, (counter, wrappers, sample_batch)
 
 
-def distribute_using_custom_weights(model, weights, *sample_batch, device_list=None, max_depth=100, basic_blocks=None):
+def distribute_using_custom_weights(model, weights, *sample_batch, device_list=None, max_depth=100, basic_blocks=None, return_config=False):
     if device_list is None:
         if torch.cuda.is_available():
             device_list = list(range(torch.cuda.device_count()))
@@ -44,7 +48,11 @@ def distribute_using_custom_weights(model, weights, *sample_batch, device_list=N
     graph, _, _ = partition_graph(graph, len(
         device_list), weighting_function=lambda w: w)
 
-    modified_model, wrappers, counter = wrap_and_move(model,
-                                                      device_list, graph, *sample_batch)
+    if return_config:
+        modified_model, wrappers, counter, config = distribute_model(model,
+                                                                     device_list, graph, *sample_batch, return_config=True)
+        return modified_model, graph, (counter, wrappers, sample_batch), config
 
+    modified_model, wrappers, counter = distribute_model(model,
+                                                         device_list, graph, *sample_batch, return_config=False)
     return modified_model, graph, (counter, wrappers, sample_batch)
