@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
 from typing import List, Optional, Iterator, Tuple
 __all__ = ["traverse_model", "traverse_params_buffs",
-           "find_output_shapes_of_scopes"]
+           "find_output_shapes_of_scopes", "model_scopes"]
 
 
 def traverse_model(model: nn.Module, depth: int = 1000, basic_block: Optional[List[nn.Module]] = None, full=False)->Iterator[Tuple[nn.Module, str, nn.Module]]:
@@ -20,6 +20,10 @@ def _traverse_model(module: nn.Module, depth, prefix, basic_block, full):
                 yield sub_module, scope, module
             yield from _traverse_model(sub_module, depth-1, prefix + "/"+type(
                 sub_module).__name__+f"[{name}]", basic_block, full)
+
+
+def model_scopes(model: nn.Module, depth: int = 1000, basic_block: Optional[List[nn.Module]] = None, full=False)->List[str]:
+    return list(map(lambda t: t[1], traverse_model(model, depth=depth, basic_block=basic_block, full=full)))
 
 
 def traverse_params_buffs(module: nn.Module)->Iterator[Tuple[torch.tensor, str]]:

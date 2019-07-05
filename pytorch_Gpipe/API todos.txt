@@ -12,7 +12,7 @@
 1. add documentation
 2. add static typing
 3. optimize like there is no tommorow
-
+4. add cpu support via multiprocessing maybe?
 
 #TODO provided functionality:
 1a. model profiling +

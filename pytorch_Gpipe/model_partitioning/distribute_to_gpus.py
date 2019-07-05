@@ -144,7 +144,7 @@ def _group_by_scope(nodes):
 
 # map a partition index to actual device using bfs from inputs
 def _partition_to_device(device_lst, model_inputs):
-    part_to_device = dict()
+    part_to_device = {i: d for i, d in enumerate(device_lst)}
     num_taken = 0
     open_nodes = deque([(n, 0)for n in model_inputs])
     closed = set()
@@ -154,7 +154,6 @@ def _partition_to_device(device_lst, model_inputs):
     while num_taken < len(device_lst):
         node, d = open_nodes.popleft()
         if node.part not in seen_parts:
-            part_to_device[node.part] = device_lst[num_taken]
             part_to_gpu_num[node.part] = d
             num_taken += 1
             seen_parts.add(node.part)

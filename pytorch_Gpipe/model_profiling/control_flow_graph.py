@@ -194,7 +194,17 @@ class Graph():
             self.nodes = optimized_graph
 
     def __getitem__(self, key):
-        return self.nodes[key]
+        if isinstance(key,int):
+            return self.nodes[key]
+        # assume key is scopeName
+        for node in self.nodes:
+            if node.scope == key:
+                return node
+        return None
+
+
+    def scopes(self)->List[str]:
+        return list(map(lambda n:n.scope,self.nodes))
 
     def __len__(self):
         return len(self.nodes)
@@ -261,7 +271,7 @@ class Graph():
                  fontcolor=theme["font_color"],
                  fontname=theme["font_name"])
 
-        colors = {0:'grey',1:'green',2:'red',3:'yellow',4:'orange',5:'brown',6:'purple',7:'pink'}
+        colors = {-1:'grey',0:'grey',1:'green',2:'red',3:'yellow',4:'orange',5:'brown',6:'purple',7:'pink'}
 
         def hide_node(node):
             return (node.type == NodeTypes.BUFF_PARAM) and (not show_buffs_params)
@@ -341,7 +351,7 @@ class Node():
      parallel edges in the same direction are not allowed
     '''
 
-    def __init__(self, scope:str, idx:int, node_type: NodeTypes, incoming_nodes=None, weight=0, part=0):
+    def __init__(self, scope:str, idx:int, node_type: NodeTypes, incoming_nodes=None, weight=0, part=-1):
         self.scope = scope
         self.idx = idx
         self.type = node_type
@@ -391,6 +401,9 @@ class LayerOutput():
         self.out_scopes = set()
 
     def __eq__(self, other):
+        if isinstance(other,tuple):
+            return other == tuple(self.output_shape)
+
         if not isinstance(other, LayerOutput):
             return False
 

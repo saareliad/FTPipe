@@ -19,13 +19,14 @@ METIS:
     1.check that it works +
 
 profiling:
-    1. check that we discover all intended layers
-    2. check that we do not change the model in the process
+    1. check that we discover all intended layers+
+    2. check that we do not change the model in the process+
 
 control_flow:
-    1. check that we find all relevant scopes and that control flow is accurate
-    2. check that output shapes are correct
-    3. check that weights are allocated correctly
+    1. check that we find all relevant scopes
+    2. ensure control flow is accurate
+    3. check that output shapes are correct
+    4. check that weights are allocated correctly+
 
 partitioning:
     1. check that we distribute the model according to the graph/specifications

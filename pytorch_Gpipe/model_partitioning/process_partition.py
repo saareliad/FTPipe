@@ -1,13 +1,14 @@
 from ..model_profiling import Graph, NodeTypes
 from typing import List
+from collections import deque
 
 
 def post_process_partition(graph: Graph, part: List[int]):
-    set_partition(graph, part)
+    cannonize_partition_indices(graph, part)
 
     ensure_graph_validity(graph)
 
-    nparts = len({n.part for n in graph.nodes})
+    nparts = len(set(part))
     # make sure the inputs to an OP type node are all in the same part
     OP_inputs_partition_correction(graph, nparts)
     # make sure every scc in the graph is not splitted between different parts
@@ -125,9 +126,30 @@ def strongly_connected_components_iterative(vertices, edges):
                         yield scc
 
 
-def set_partition(graph: Graph, parts: List[int]):
-    for node, part in zip(graph.nodes, parts):
+def cannonize_partition_indices(graph: Graph, node_parts: List[int]):
+    for node, part in zip(graph.nodes, node_parts):
         node.part = part
+
+    num_parts = len(set(node_parts))
+    num_taken = 0
+    model_inputs = graph.nodes[graph.num_inputs:]
+    open_nodes = deque([(n, 0)for n in model_inputs])
+    closed = set()
+    cannonical_parts = dict()
+
+    while num_taken < len(num_parts):
+        node, d = open_nodes.popleft()
+        if node.part not in cannonical_parts:
+            cannonical_parts[node.part] = num_taken
+            num_taken += 1
+
+        closed.add(node)
+        edges = node.out_nodes.union(node.in_nodes)
+        nodes = edges.difference(closed, set(open_nodes))
+        open_nodes.extend([(n, d) for n in nodes])
+
+    for node in graph.nodes:
+        node.part = cannonical_parts[node.part]
 
 
 def ensure_graph_validity(graph: Graph):

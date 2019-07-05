@@ -124,6 +124,48 @@ def test_weights_from_profiler(device='cpu'):
     assert all(isinstance(w, tuple) for w in scope_weights)
 
 
+def test_control_flow(device='cpu'):
+    '''the graph recreates the model control flow accuratly'''
+    depth = 3
+    net = treeNet(depth).to(device)
+    x = torch.randn(50, 10, device=device)
+    graph = visualize(net, x)
+    it = graph[0]
+    assert it.scope == 'input0'
+    it = list(it.out_nodes)[0]
+    i = 1
+    # this net is computed sequentially
+    while len(it.out_nodes) > 0:
+        if i % 4 == 1:
+            assert it.scope.endswith('[left]')
+        elif i % 4 == 2:
+            assert it.scope.endswith('[middle]')
+        elif i % 4 == 3:
+            assert it.scope.endswith('[right]')
+        else:
+            assert it.scope.endswith('[middle]')
+        i += 1
+        it = list(it.out_nodes)[0]
+
+    assert i == len(list(traverse_model(net)))
+
+
+def test_output_shapes(device='cpu'):
+    '''the graph models the intermidiate tensor shapes correctly'''
+    depth = 5
+    net = combinedTreeNet(depth).to(device)
+    x = torch.randn(50, 10, device=device)
+    graph = visualize(net, x)
+
+    actual = map(lambda n: n.outputs, graph.nodes)
+    actual = list(map(lambda out: list(out)[0], actual))
+
+    expected = [(50, 10) for _ in graph.nodes]
+
+    for e, a in zip(expected, actual):
+        assert e == a
+
+
 @pytest.mark.skipif(not torch.cuda.is_available(), reason='cuda required')
 def test_works_with_cuda():
     '''test that the cuda version also works'''

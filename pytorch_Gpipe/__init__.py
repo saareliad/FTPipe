@@ -20,7 +20,7 @@ def distribute_using_profiler(model, *sample_batch, device_list=None, num_iter=4
         if torch.cuda.is_available():
             device_list = list(range(torch.cuda.device_count()))
         else:
-            device_list = ["cpu"]
+            raise ValueError('CUDA is required but is not available')
 
     graph = partition_with_profiler(model, *sample_batch, nparts=len(device_list),
                                     num_iter=num_iter, max_depth=max_depth, basic_blocks=basic_blocks)
