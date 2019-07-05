@@ -25,8 +25,8 @@ def distribute_using_profiler(model, *sample_batch, device_list=None, num_iter=4
     graph = partition_with_profiler(model, *sample_batch, nparts=len(device_list),
                                     num_iter=num_iter, max_depth=max_depth, basic_blocks=basic_blocks)
 
-    modified_model, wrappers, counter = wrap_and_move(
-        model, basic_blocks, device_list, graph, *sample_batch)
+    modified_model, wrappers, counter = wrap_and_move(model,
+                                                      device_list, graph, *sample_batch)
 
     return modified_model, graph, (counter, wrappers, sample_batch)
 
@@ -44,7 +44,7 @@ def distribute_using_custom_weights(model, weights, *sample_batch, device_list=N
     graph, _, _ = partition_graph(graph, len(
         device_list), weighting_function=lambda w: w)
 
-    modified_model, wrappers, counter = wrap_and_move(
-        model, basic_blocks, device_list, graph, *sample_batch)
+    modified_model, wrappers, counter = wrap_and_move(model,
+                                                      device_list, graph, *sample_batch)
 
     return modified_model, graph, (counter, wrappers, sample_batch)

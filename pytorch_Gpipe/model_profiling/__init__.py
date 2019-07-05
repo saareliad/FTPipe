@@ -42,4 +42,4 @@ def graph_builder(model: nn.Module, *sample_batch, max_depth: int = 1000, weight
         trace_graph = trace_graph.graph()
 
     num_inputs = len(sample_batch)
-    return Graph(layerNames, num_inputs, buffer_param_names, trace_graph, weights)
+    return Graph(layerNames, num_inputs, buffer_param_names, trace_graph, weights, basic_block, max_depth)
