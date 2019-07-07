@@ -39,11 +39,6 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_block: Optional[List[nn.
     # wrap all individula layers for profiling
     layers_dict = _wrap_profiled_layers(net, max_depth, basic_block)
 
-    # gather all individual layer sizes
-    param_sizes = [layer.param_size for layer in layers_dict.values()]
-    buffer_sizes = [layer.buffer_size for layer in layers_dict.values()]
-    cuda_memory = [layer.cuda_memory for layer in layers_dict.values()]
-
     # perform symbolic forward backward run
     for _ in range(num_iter):
         _perform_forward_backward_pass(net, *sample_batch)
@@ -58,27 +53,31 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_block: Optional[List[nn.
     layer_input_sizes = [layer.input_size for layer in layers_dict.values()]
     layer_output_sizes = [layer.output_size for layer in layers_dict.values()]
 
+    # gather all individual layer sizes
+    param_sizes = [layer.param_size for layer in layers_dict.values()]
+    buffer_sizes = [layer.buffer_size for layer in layers_dict.values()]
+
+    cuda_memory = [(layer.forward_cuda_mem, layer.backward_cuda_mem)
+                   for layer in layers_dict.values()]
+
     # prepare profiling results
     layers_profile = {name: Profile(forward, backward, cuda_mem, param_size+buffer_size+in_size+out_size) for name, forward, backward, param_size, buffer_size, in_size, out_size, cuda_mem in zip(
         layers_dict.keys(), forward_times, backward_times, param_sizes, buffer_sizes, layer_input_sizes, layer_output_sizes, cuda_memory)}
 
     _unwrap_layers(net)
 
-    for s, p in layers_profile.items():
-        print(s)
-        print(p)
     return layers_profile
 
 
 def _perform_forward_backward_pass(net, *inputs):
     # move all inputs and outputs to specified device
     device = inputs[0].device
-    if device == "cuda":
-        torch.cuda.synchronize()
+    if device.type == "cuda":
+        torch.cuda.synchronize(device=device)
     out = net(*inputs)
 
-    if device == "cuda":
-        torch.cuda.synchronize()
+    if device.type == "cuda":
+        torch.cuda.synchronize(device=device)
 
     return out
 
@@ -130,7 +129,8 @@ class Wrapper(nn.Module):
         self.input_size = 0
         self.output_size = 0
         self.param_size, self.buffer_size = self._layer_size()
-        self.cuda_memory = 0
+        self.forward_cuda_mem = 0
+        self.backward_cuda_mem = 0
 
     def _layer_size(self):
         '''
@@ -138,9 +138,9 @@ class Wrapper(nn.Module):
         '''
         param_size = buffer_size = 0
         for param in self.layer.parameters():
-            param_size += (param.nelement() / 1000) * param.element_size()
+            param_size += param.nelement() * param.element_size()
         for buffer in self.layer.buffers():
-            buffer_size += (buffer.nelement() / 1000) * buffer.element_size()
+            buffer_size += buffer.nelement() * buffer.element_size()
 
         return param_size, buffer_size
 
@@ -154,44 +154,46 @@ class Wrapper(nn.Module):
         device = inputs[0].device
         detached_inputs = map(lambda t: t.detach(), inputs)
 
-        forward_time, outputs = self._time_op(self.layer, *detached_inputs)
+        forward_time, outputs, self.forward_cuda_mem = self._time_op(
+            self.layer, *detached_inputs)
 
         self.forward_time += forward_time
-
         # reduce outputs to calculate dummy loss
         loss = torch.zeros(1, requires_grad=True, device=device)
         for out in outputs:
             loss = loss + out.norm()
 
         # measure backward execution time
-        backward_time, _ = self._time_op(torch.autograd.backward, loss)
+        backward_time, _,  self.backward_cuda_mem = self._time_op(
+            torch.autograd.backward, loss)
         self.backward_time += backward_time
 
         # input and output size
         self.input_size = 0
         self.output_size = 0
         for t in inputs:
-            self.input_size += (t.nelement()/1000) * t.element_size()
+            self.input_size += t.nelement() * t.element_size()
         for o in outputs:
-            self.output_size += (o.nelement()/1000) * o.element_size()
+            self.output_size += o.nelement() * o.element_size()
 
         return outputs
 
     def _time_op(self, func, *inputs):
         exec_time = 0
-        device = inputs[0].device.type
-        if(device == 'cuda'):
+        cuda_mem = 0
+        device = inputs[0].device
+        if(device.type == 'cuda'):
             # milliseconds
-            torch.cuda.reset_max_memory_allocated(inputs[0].device)
-            torch.cuda.synchronize()
+            torch.cuda.reset_max_memory_allocated(device=device)
+            torch.cuda.synchronize(device=device)
             start = torch.cuda.Event(enable_timing=True)
             end = torch.cuda.Event(enable_timing=True)
             start.record()
             out = func(*inputs)
             end.record()
-            torch.cuda.synchronize()
+            torch.cuda.synchronize(device=device)
             exec_time = (start.elapsed_time(end))
-            self.cuda_memory = torch.cuda.max_memory_allocated(device)
+            cuda_mem = torch.cuda.max_memory_allocated(device=device)
         else:
             # convert to milliseconds
             start = timeit.time.time()
@@ -199,8 +201,8 @@ class Wrapper(nn.Module):
             end = timeit.time.time()
             exec_time = 1000*(end - start)
 
-        return exec_time, out
+        return exec_time, out, cuda_mem
 
 
-# TODO think about how to measure memory allocation (cuda.max_memory_allocated does not seem to work as intended)
+# TODO think about how to measure memory allocation (there is a difference between the profiler's measurment and external measurments)
 # TODO think what to do about first time measurement

@@ -1,6 +1,6 @@
 from collections import OrderedDict
 import os
-from pytorch_Gpipe import partition_with_profiler, distribute_using_profiler
+from pytorch_Gpipe import partition_with_profiler, distribute_using_profiler, profileNetwork
 import torch
 from sample_models import alexnet, resnet18, vgg11_bn, squeezenet1_0, inception_v3, densenet121, GoogLeNet, LeNet, WideResNet
 import torch.nn as nn
@@ -131,5 +131,49 @@ def test_exec_time():
         print(b_time)
 
 
+def test_cuda_mem():
+    device = 'cuda:0'
+    num_init_features = 64
+    features = nn.Sequential(OrderedDict([
+        ('conv0', nn.Conv2d(3, num_init_features,
+                            kernel_size=7, stride=2, padding=3, bias=False)),
+        ('norm0', nn.BatchNorm2d(num_init_features)),
+        ('relu0', nn.ReLU(inplace=True)),
+        ('pool0', nn.MaxPool2d(kernel_size=3, stride=2, padding=1)),
+    ])).to(device)
+
+    x = torch.randn(4, 3, 224, 224, device=device)
+    names = ['conv0', 'norm0', 'relu0', 'pool0']
+    diffs = dict()
+    for l, n in zip(features, names):
+        torch.cuda.reset_max_memory_allocated(device=device)
+        torch.cuda.synchronize(device)
+        x = l(x)
+        torch.cuda.synchronize(device)
+        size = torch.cuda.max_memory_allocated(device=device)
+        diffs[n] = size
+
+    x = torch.randn(4, 3, 224, 224, device=device)
+    features = nn.Sequential(OrderedDict([
+        ('conv0', nn.Conv2d(3, num_init_features,
+                            kernel_size=7, stride=2, padding=3, bias=False)),
+        ('norm0', nn.BatchNorm2d(num_init_features)),
+        ('relu0', nn.ReLU(inplace=True)),
+        ('pool0', nn.MaxPool2d(kernel_size=3, stride=2, padding=1)),
+    ])).to(device)
+
+    profiles = profileNetwork(features, x)
+
+    for n, p in profiles.items():
+        size = p.cuda_memory[0]
+        for other in names:
+            if other in n:
+                b = diffs[other]
+                diffs[other] = (size-b)/1024
+                break
+
+    print(diffs)
+
+
 if __name__ == "__main__":
-    test_exec_time()
+    test_cuda_mem()
