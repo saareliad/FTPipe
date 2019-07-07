@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import timeit
-from torch.autograd import Variable
 from collections import namedtuple
 from ..utils import traverse_model
 from typing import List, Optional, Dict
@@ -9,10 +8,10 @@ from typing import List, Optional, Dict
 __all__ = ['profileNetwork']
 
 Profile = namedtuple(
-    'Profile', 'forward_time backward_time param_size buffer_size input_size output_size')
+    'Profile', 'forward_time backward_time cuda_memory layer_size')
 
 
-def profileNetwork(net: nn.Module, *sample_batch, basic_block: Optional[List[nn.Module]] = None, max_depth=100, num_iter=1)->Dict[str, Profile]:
+def profileNetwork(net: nn.Module, *sample_batch, basic_block: Optional[List[nn.Module]] = None, max_depth=100, num_iter=1) -> Dict[str, Profile]:
     '''
     profiles a network's computation time(forward/backward) and memory consumption
     done via wrapping all layers of the network with a special Wrapper module
@@ -43,6 +42,7 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_block: Optional[List[nn.
     # gather all individual layer sizes
     param_sizes = [layer.param_size for layer in layers_dict.values()]
     buffer_sizes = [layer.buffer_size for layer in layers_dict.values()]
+    cuda_memory = [layer.cuda_memory for layer in layers_dict.values()]
 
     # perform symbolic forward backward run
     for _ in range(num_iter):
@@ -59,41 +59,22 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_block: Optional[List[nn.
     layer_output_sizes = [layer.output_size for layer in layers_dict.values()]
 
     # prepare profiling results
-    layers_profile = {name: Profile(forward, backward, param_size, buffer_size, in_size, out_size) for name, forward, backward, param_size, buffer_size, in_size, out_size in zip(
-        layers_dict.keys(), forward_times, backward_times, param_sizes, buffer_sizes, layer_input_sizes, layer_output_sizes)}
+    layers_profile = {name: Profile(forward, backward, cuda_mem, param_size+buffer_size+in_size+out_size) for name, forward, backward, param_size, buffer_size, in_size, out_size, cuda_mem in zip(
+        layers_dict.keys(), forward_times, backward_times, param_sizes, buffer_sizes, layer_input_sizes, layer_output_sizes, cuda_memory)}
 
     _unwrap_layers(net)
 
-    # fix a weird behaviour where the first layer has overly large measured exec time
-    max_node = list(layers_profile.items())[0]
-    for name, node in layers_profile.items():
-        if node.forward_time > max_node[1].forward_time:
-            max_node = (name, node)
-
-    max_name, p = max_node
-
-    exec_times = map(lambda profile: (profile.forward_time,
-                                      profile.backward_time), layers_profile.values())
-    f_time, b_time = map(sum, zip(*exec_times))
-    f_time /= len(layers_profile)
-    b_time /= len(layers_profile)
-    imputed_profile = Profile(f_time, b_time, p.param_size,
-                              p.buffer_size, p.input_size, p.output_size)
-    layers_profile[max_name] = imputed_profile
-
+    for s, p in layers_profile.items():
+        print(s)
+        print(p)
     return layers_profile
 
 
 def _perform_forward_backward_pass(net, *inputs):
     # move all inputs and outputs to specified device
-    # warmup
     device = inputs[0].device
-    a = torch.randn(1000, 2000).to(device)
-    b = torch.randn(2000, 1000).to(device)
-    a.mm(b)
     if device == "cuda":
         torch.cuda.synchronize()
-
     out = net(*inputs)
 
     if device == "cuda":
@@ -149,6 +130,7 @@ class Wrapper(nn.Module):
         self.input_size = 0
         self.output_size = 0
         self.param_size, self.buffer_size = self._layer_size()
+        self.cuda_memory = 0
 
     def _layer_size(self):
         '''
@@ -156,9 +138,9 @@ class Wrapper(nn.Module):
         '''
         param_size = buffer_size = 0
         for param in self.layer.parameters():
-            param_size += param.nelement() * param.element_size()
+            param_size += (param.nelement() / 1000) * param.element_size()
         for buffer in self.layer.buffers():
-            buffer_size += buffer.nelement() * buffer.element_size()
+            buffer_size += (buffer.nelement() / 1000) * buffer.element_size()
 
         return param_size, buffer_size
 
@@ -170,11 +152,9 @@ class Wrapper(nn.Module):
         # only for this layer
 
         device = inputs[0].device
-        detached_inputs = map(
-            lambda t: Variable(t.data, requires_grad=True).to(device).clone(), inputs)
+        detached_inputs = map(lambda t: t.detach(), inputs)
 
-        forward_time, outputs = self._time_op(
-            self.layer, *detached_inputs)
+        forward_time, outputs = self._time_op(self.layer, *detached_inputs)
 
         self.forward_time += forward_time
 
@@ -191,16 +171,18 @@ class Wrapper(nn.Module):
         self.input_size = 0
         self.output_size = 0
         for t in inputs:
-            self.input_size += t.numel()
+            self.input_size += (t.nelement()/1000) * t.element_size()
         for o in outputs:
-            self.output_size += o.numel()
+            self.output_size += (o.nelement()/1000) * o.element_size()
 
         return outputs
 
     def _time_op(self, func, *inputs):
         exec_time = 0
-        if(inputs[0].device == 'cuda'):
+        device = inputs[0].device.type
+        if(device == 'cuda'):
             # milliseconds
+            torch.cuda.reset_max_memory_allocated(inputs[0].device)
             torch.cuda.synchronize()
             start = torch.cuda.Event(enable_timing=True)
             end = torch.cuda.Event(enable_timing=True)
@@ -209,6 +191,7 @@ class Wrapper(nn.Module):
             end.record()
             torch.cuda.synchronize()
             exec_time = (start.elapsed_time(end))
+            self.cuda_memory = torch.cuda.max_memory_allocated(device)
         else:
             # convert to milliseconds
             start = timeit.time.time()
@@ -217,3 +200,7 @@ class Wrapper(nn.Module):
             exec_time = 1000*(end - start)
 
         return exec_time, out
+
+
+# TODO think about how to measure memory allocation (cuda.max_memory_allocated does not seem to work as intended)
+# TODO think what to do about first time measurement

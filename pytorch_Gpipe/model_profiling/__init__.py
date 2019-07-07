@@ -9,7 +9,7 @@ import torch
 __all__ = ['visualize', 'visualize_with_profiler', 'profileNetwork']
 
 
-def visualize(model: nn.Module, *sample_batch, max_depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None, weights: Optional[Dict[str, Any]] = None)->Graph:
+def visualize(model: nn.Module, *sample_batch, max_depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None, weights: Optional[Dict[str, Any]] = None) -> Graph:
     graph = graph_builder(
         model, *sample_batch, max_depth=max_depth, basic_block=basic_blocks, weights=weights)
 
@@ -18,14 +18,14 @@ def visualize(model: nn.Module, *sample_batch, max_depth: int = 1000, basic_bloc
     return graph
 
 
-def visualize_with_profiler(model: nn.Module, *sample_batch, max_depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None, num_iter: int = 1)->Graph:
+def visualize_with_profiler(model: nn.Module, *sample_batch, max_depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None, num_iter: int = 1) -> Graph:
     layers_profile = profileNetwork(model, *sample_batch, max_depth=max_depth,
                                     basic_block=basic_blocks, num_iter=num_iter)
 
     return visualize(model, *sample_batch, max_depth=max_depth, basic_blocks=basic_blocks, weights=layers_profile)
 
 
-def graph_builder(model: nn.Module, *sample_batch, max_depth: int = 1000, weights: Optional[Dict[str, Any]] = None, basic_block: Optional[List[nn.Module]] = None)->Graph:
+def graph_builder(model: nn.Module, *sample_batch, max_depth: int = 1000, weights: Optional[Dict[str, Any]] = None, basic_block: Optional[List[nn.Module]] = None) -> Graph:
     weights = weights if weights != None else {}
 
     buffer_param_names = map(lambda t: t[1], traverse_params_buffs(model))
