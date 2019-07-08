@@ -7,9 +7,9 @@ __all__ = ['partition_with_profiler', 'distribute_using_profiler', 'distribute_u
            'visualize', 'visualize_with_profiler', 'partition_graph', 'distribute_model', 'distribute_model_from_config']
 
 
-def partition_with_profiler(model, *sample_batch, nparts=4, num_iter=4, max_depth=100, basic_blocks=None, weighting_function: Optional[Callable[[Any], int]] = None):
+def partition_with_profiler(model, *sample_batch, nparts=4, max_depth=100, basic_blocks=None, weighting_function: Optional[Callable[[Any], int]] = None):
     graph = visualize_with_profiler(model, *sample_batch, max_depth=max_depth,
-                                    basic_blocks=basic_blocks, num_iter=num_iter)
+                                    basic_blocks=basic_blocks)
 
     graph, _, _ = partition_graph(
         graph, nparts, weighting_function=weighting_function)
@@ -17,7 +17,7 @@ def partition_with_profiler(model, *sample_batch, nparts=4, num_iter=4, max_dept
     return graph
 
 
-def distribute_using_profiler(model, *sample_batch, device_list=None, num_iter=4, max_depth=100, basic_blocks=None, return_config=False, weighting_function: Optional[Callable[[Any], int]] = None):
+def distribute_using_profiler(model, *sample_batch, device_list=None, max_depth=100, basic_blocks=None, return_config=False, weighting_function: Optional[Callable[[Any], int]] = None):
     if device_list is None:
         if torch.cuda.is_available():
             device_list = list(range(torch.cuda.device_count()))
@@ -25,7 +25,7 @@ def distribute_using_profiler(model, *sample_batch, device_list=None, num_iter=4
             raise ValueError('CUDA is required but is not available')
 
     graph = partition_with_profiler(model, *sample_batch, nparts=len(device_list),
-                                    num_iter=num_iter, max_depth=max_depth, basic_blocks=basic_blocks, weighting_function=weighting_function)
+                                    max_depth=max_depth, basic_blocks=basic_blocks, weighting_function=weighting_function)
 
     if return_config:
         modified_model, wrappers, counter, config = distribute_model(model,

@@ -11,7 +11,7 @@ Profile = namedtuple(
     'Profile', 'forward_time backward_time cuda_memory layer_size')
 
 
-def profileNetwork(net: nn.Module, *sample_batch, basic_block: Optional[List[nn.Module]] = None, max_depth=100, num_iter=1) -> Dict[str, Profile]:
+def profileNetwork(net: nn.Module, *sample_batch, basic_block: Optional[List[nn.Module]] = None, max_depth=100) -> Dict[str, Profile]:
     '''
     profiles a network's computation time(forward/backward) and memory consumption
     done via wrapping all layers of the network with a special Wrapper module
@@ -32,21 +32,18 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_block: Optional[List[nn.
         a tuple of nn.Module classes that the profiler will regard as a cohesive unit
         for eg. if basic_block = nn.Sequential then the profiler will break it down to its components
 
-    num_iter:
-        number of runs the profiler will perform in order to get time measurments
-
     '''
     # wrap all individula layers for profiling
     layers_dict = _wrap_profiled_layers(net, max_depth, basic_block)
 
-    # perform symbolic forward backward run
-    for _ in range(num_iter):
-        _perform_forward_backward_pass(net, *sample_batch)
+    # perform 2 symbolic forward backward run first one is warmup as we have seen the first time measurements are higher
+    _perform_forward_backward_pass(net, *sample_batch)
+    _perform_forward_backward_pass(net, *sample_batch)
 
     # gather forward and backward execution times
-    backward_times = [layer.backward_time / num_iter
+    backward_times = [layer.backward_time
                       for layer in layers_dict.values()]
-    forward_times = [layer.forward_time/num_iter
+    forward_times = [layer.forward_time
                      for layer in layers_dict.values()]
 
     # gather input and output sizes
@@ -57,6 +54,7 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_block: Optional[List[nn.
     param_sizes = [layer.param_size for layer in layers_dict.values()]
     buffer_sizes = [layer.buffer_size for layer in layers_dict.values()]
 
+    # gather cuda memory consumption
     cuda_memory = [(layer.forward_cuda_mem, layer.backward_cuda_mem)
                    for layer in layers_dict.values()]
 
@@ -150,23 +148,20 @@ class Wrapper(nn.Module):
         '''
         # detach inputs from previous history enabling us to measure execution time
         # only for this layer
-
         device = inputs[0].device
         detached_inputs = map(lambda t: t.detach(), inputs)
 
-        forward_time, outputs, self.forward_cuda_mem = self._time_op(
+        self.forward_time, outputs, self.forward_cuda_mem = self._time_op(
             self.layer, *detached_inputs)
 
-        self.forward_time += forward_time
         # reduce outputs to calculate dummy loss
         loss = torch.zeros(1, requires_grad=True, device=device)
         for out in outputs:
             loss = loss + out.norm()
 
         # measure backward execution time
-        backward_time, _,  self.backward_cuda_mem = self._time_op(
+        self.backward_time, _,  self.backward_cuda_mem = self._time_op(
             torch.autograd.backward, loss)
-        self.backward_time += backward_time
 
         # input and output size
         self.input_size = 0
@@ -175,6 +170,14 @@ class Wrapper(nn.Module):
             self.input_size += t.nelement() * t.element_size()
         for o in outputs:
             self.output_size += o.nelement() * o.element_size()
+
+        #size in Gigabaytes
+        self.backward_cuda_mem /= 1e9
+        self.forward_cuda_mem /= 1e9
+        self.input_size /= 1e9
+        self.output_size /= 1e9
+        self.param_size /= 1e9
+        self.buffer_size /= 1e9
 
         return outputs
 
@@ -205,4 +208,3 @@ class Wrapper(nn.Module):
 
 
 # TODO think about how to measure memory allocation (there is a difference between the profiler's measurment and external measurments)
-# TODO think what to do about first time measurement

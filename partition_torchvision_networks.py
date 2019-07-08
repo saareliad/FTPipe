@@ -2,15 +2,16 @@ from collections import OrderedDict
 import os
 from pytorch_Gpipe import partition_with_profiler, distribute_using_profiler, profileNetwork
 import torch
-from sample_models import alexnet, resnet18, vgg11_bn, squeezenet1_0, inception_v3, densenet121, GoogLeNet, LeNet, WideResNet
+from sample_models import alexnet, resnet152, vgg19_bn, squeezenet1_1, inception_v3, densenet201, GoogLeNet, LeNet, WideResNet
 import torch.nn as nn
 
 
 def partition_torchvision(nparts=4):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    networks = [alexnet, resnet18, vgg11_bn, squeezenet1_0,
-                inception_v3, densenet121, GoogLeNet, LeNet, WideResNet]
+    networks = [alexnet, resnet152, vgg19_bn, squeezenet1_1,
+                inception_v3, densenet201, GoogLeNet, LeNet, WideResNet]
     depth = [0, 1, 100]
+    networks = [densenet201]
     for net in networks:
         model = net().to(device)
         for d in depth:
@@ -42,32 +43,31 @@ def distribute_torchvision(nruns=1, nparts=4):
         raise ValueError("CUDA is required")
 
     device = 'cuda'
-    networks = [alexnet, resnet18, vgg11_bn, squeezenet1_0,
-                inception_v3, densenet121, GoogLeNet, LeNet, WideResNet]
-    depth = [0, 1, 100]
     devices = ['cuda' for _ in range(nparts)]
-    depth = [0]
-    networks = [densenet121]
+    networks = [alexnet, resnet152, vgg19_bn, squeezenet1_1,
+                inception_v3, densenet201, GoogLeNet, LeNet, WideResNet]
+    depth = [0, 1, 100]
+    networks = [densenet201]
+    depth = [1]
     for idx in range(nruns):
         for net in networks:
             for d in depth:
                 model = net().to(device)
-                print(f"current net is {net.__name__}")
                 if net.__name__.find("inception") != -1:
-                    pipeline, graph, (counter, wrappers, sample_batch) = distribute_using_profiler(model, torch.zeros(
-                        4, 3, 299, 299, device=device), device_list=devices, num_iter=4, max_depth=d, basic_blocks=None)
+                    _, graph, _ = distribute_using_profiler(model, torch.zeros(
+                        4, 3, 299, 299, device=device), device_list=devices, max_depth=d, basic_blocks=None)
 
                 elif net.__name__.find("GoogLeNet") != -1:
-                    pipeline, graph, _ = distribute_using_profiler(model, torch.zeros(
-                        4, 3, 32, 32, device=device), device_list=devices, num_iter=4, max_depth=d, basic_blocks=None)
+                    _, graph, _ = distribute_using_profiler(model, torch.zeros(
+                        4, 3, 32, 32, device=device), device_list=devices, max_depth=d, basic_blocks=None)
 
                 elif net.__name__.find("LeNet") != -1:
-                    pipeline, graph, _ = distribute_using_profiler(model, torch.zeros(
-                        4, 3, 32, 32, device=device), device_list=devices, num_iter=4, max_depth=d, basic_blocks=None)
+                    _, graph, _ = distribute_using_profiler(model, torch.zeros(
+                        4, 3, 32, 32, device=device), device_list=devices, max_depth=d, basic_blocks=None)
 
                 else:
-                    pipeline, graph, _ = distribute_using_profiler(model, torch.zeros(
-                        4, 3, 224, 224, device=device), device_list=devices, num_iter=4, max_depth=d, basic_blocks=None)
+                    _, graph, _ = distribute_using_profiler(model, torch.zeros(
+                        4, 3, 224, 224, device=device), device_list=devices, max_depth=d, basic_blocks=None)
 
                 filename = f"{net.__name__} {nparts} partitions at depth {d} attempt {idx}"
                 curr_dir = os.path.dirname(os.path.realpath(__file__))
@@ -75,74 +75,58 @@ def distribute_torchvision(nruns=1, nparts=4):
                 # graph.save(directory=out_dir, file_name=filename,
                 #            show_buffs_params=False, show_weights=False)
 
-                print(filename)
 
+def compare_exec_time():
+    device = torch.device('cuda:0')
+    net = densenet201().to(device)
 
-def test_alloc_time(*dims, immediate=False):
-    torch.cuda.synchronize()
-    start = torch.cuda.Event(enable_timing=True)
-    end = torch.cuda.Event(enable_timing=True)
-    if immediate:
-        start.record()
-        a = torch.randn(*dims, device="cuda:0")
-        end.record()
-    else:
-        start.record()
-        a = torch.randn(*dims).to('cuda:0')
-        end.record()
-    torch.cuda.synchronize()
-    print(start.elapsed_time(end))
-
-
-def test_exec_time():
-    num_init_features = 64
-    features = nn.Sequential(OrderedDict([
-        ('conv0', nn.Conv2d(3, num_init_features,
-                            kernel_size=7, stride=2, padding=3, bias=False)),
-        ('norm0', nn.BatchNorm2d(num_init_features)),
-        ('relu0', nn.ReLU(inplace=True)),
-        ('pool0', nn.MaxPool2d(kernel_size=3, stride=2, padding=1)),
-    ])).to('cuda:0')
-
-    for _ in range(5):
+    for _ in range(2):
         # milliseconds
         start = torch.cuda.Event(enable_timing=True)
         end = torch.cuda.Event(enable_timing=True)
         torch.cuda.synchronize()
         start.record()
-        x = torch.randn(4, 3, 224, 224, device='cuda:0')
-        x = features(x)
+        x = torch.randn(16, 3, 224, 224, device=device)
+        x = net(x)
         end.record()
         torch.cuda.synchronize()
         f_time = (start.elapsed_time(end))
-        print(f_time)
+        print(f"f_time {f_time}")
 
         start = torch.cuda.Event(enable_timing=True)
         end = torch.cuda.Event(enable_timing=True)
+        x = torch.randn(16, 3, 224, 224, device=device)
+        y = net(x)
         torch.cuda.synchronize()
         start.record()
-        x = torch.randn(4, 3, 224, 224, device='cuda:0')
-        y = features(x)
         loss = y.norm()
         loss.backward()
         end.record()
         torch.cuda.synchronize()
         b_time = (start.elapsed_time(end))
-        print(b_time)
+        print(f"b_time {b_time}")
+
+    for d in range(5):
+        x = torch.randn(16, 3, 224, 224, device=device)
+        profileNetwork(net, x, max_depth=d)
+        torch.cuda.synchronize(device)
 
 
-def test_cuda_mem():
-    device = 'cuda:0'
+def compare_cuda_mem():
+    device = torch.device('cuda:0')
     num_init_features = 64
-    features = nn.Sequential(OrderedDict([
-        ('conv0', nn.Conv2d(3, num_init_features,
-                            kernel_size=7, stride=2, padding=3, bias=False)),
-        ('norm0', nn.BatchNorm2d(num_init_features)),
-        ('relu0', nn.ReLU(inplace=True)),
-        ('pool0', nn.MaxPool2d(kernel_size=3, stride=2, padding=1)),
-    ])).to(device)
 
-    x = torch.randn(4, 3, 224, 224, device=device)
+    def init():
+        net = nn.Sequential(OrderedDict([
+            ('conv0', nn.Conv2d(3, num_init_features,
+                                kernel_size=7, stride=2, padding=3, bias=False)),
+            ('norm0', nn.BatchNorm2d(num_init_features)),
+            ('relu0', nn.ReLU(inplace=True)),
+            ('pool0', nn.MaxPool2d(kernel_size=3, stride=2, padding=1)), ])).to(device)
+        tensor = torch.randn(4, 3, 224, 224, device=device)
+        return net, tensor
+
+    features, x = init()
     names = ['conv0', 'norm0', 'relu0', 'pool0']
     diffs = dict()
     for l, n in zip(features, names):
@@ -150,17 +134,10 @@ def test_cuda_mem():
         torch.cuda.synchronize(device)
         x = l(x)
         torch.cuda.synchronize(device)
-        size = torch.cuda.max_memory_allocated(device=device)
+        size = torch.cuda.max_memory_allocated(device=device)/1e9
         diffs[n] = size
 
-    x = torch.randn(4, 3, 224, 224, device=device)
-    features = nn.Sequential(OrderedDict([
-        ('conv0', nn.Conv2d(3, num_init_features,
-                            kernel_size=7, stride=2, padding=3, bias=False)),
-        ('norm0', nn.BatchNorm2d(num_init_features)),
-        ('relu0', nn.ReLU(inplace=True)),
-        ('pool0', nn.MaxPool2d(kernel_size=3, stride=2, padding=1)),
-    ])).to(device)
+    features, x = init()
 
     profiles = profileNetwork(features, x)
 
@@ -169,11 +146,10 @@ def test_cuda_mem():
         for other in names:
             if other in n:
                 b = diffs[other]
-                diffs[other] = (size-b)/1024
-                break
+                diffs[other] = size-b
 
     print(diffs)
 
 
 if __name__ == "__main__":
-    test_cuda_mem()
+    compare_cuda_mem()

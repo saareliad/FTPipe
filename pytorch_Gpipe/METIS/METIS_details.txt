@@ -1,1 +1,6 @@
 #TODO explain METIS integration
+
+
+#TODO possible integer overflow
+        ***Cannot bisect a graph with 0 vertices!
+        ***You are trying to partition a graph into too many parts

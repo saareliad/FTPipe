@@ -53,11 +53,3 @@ def sequential_partition(seq, nparts):
             # if p==k goto 1 else goto 2
             if p == k:
                 break
-
-
-def test_sequential_partition():
-    assert sequential_partition([1, 2, 3, 4, 5, 6], 2) == [0, 4, 6]
-
-
-def test_sequential_partition_zeros():
-    assert sequential_partition([0, 0], 2) == [0, 1, 2]

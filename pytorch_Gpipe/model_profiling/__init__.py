@@ -18,9 +18,9 @@ def visualize(model: nn.Module, *sample_batch, max_depth: int = 1000, basic_bloc
     return graph
 
 
-def visualize_with_profiler(model: nn.Module, *sample_batch, max_depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None, num_iter: int = 1) -> Graph:
+def visualize_with_profiler(model: nn.Module, *sample_batch, max_depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None) -> Graph:
     layers_profile = profileNetwork(model, *sample_batch, max_depth=max_depth,
-                                    basic_block=basic_blocks, num_iter=num_iter)
+                                    basic_block=basic_blocks)
 
     return visualize(model, *sample_batch, max_depth=max_depth, basic_blocks=basic_blocks, weights=layers_profile)
 

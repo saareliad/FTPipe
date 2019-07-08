@@ -1,4 +1,1 @@
 #TODO explaion model distribution
-
-
-#TODO add options to distribute without using our graph (predetermined configuration)

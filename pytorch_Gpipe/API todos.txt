@@ -28,3 +28,8 @@
     3.scope_shapes
     4.scope_gpu_num
     5.part_inputs
+
+
+#realy optional
+6. provide sequential optimization like torchGpipe-
+7. decide what is a sequential model

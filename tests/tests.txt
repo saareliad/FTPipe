@@ -32,3 +32,4 @@ partitioning:
     1. check that we distribute the model according to the graph/specifications+
     2. check that we do not induce unexpected changes+
     3. check that we optimize the wrappers correctly+
+    4. add tests for sequential partitioning-
