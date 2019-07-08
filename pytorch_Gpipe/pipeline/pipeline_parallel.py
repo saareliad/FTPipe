@@ -3,38 +3,59 @@ import torch.nn as nn
 from torch import autograd
 from typing import Iterable, List, Tuple
 from .sync_wrapper import *
+from .. import distribute_using_profiler
+from typing import Optional, List, Tuple
 
 
 class PipelineParallel(nn.Module):
     """
-    class that gets submodules of one large model and the devices they should be on (+ microbatch size)
-    and makes the large model that they consist as a pipeline with each submodule being a station
-    **IMPORTANT** this is functionally like 'Sequential(submodules)', so be aware of that and make sure that
-    the list submodules reflects what you want
+    This class is used to accelerate the performance of a given pytorch neural-network
+    model using multiple GPUs. This is done using a model parallelism approach, and
+    more specifically, in a pipeline-like fashion.
+
+    The given model will be partitioned into multiple 'stations'.
+    Every batch of data that is used as input for the model will be divided into 'micro-
+    batches' that will be forwarded through different stations at the same time in a
+    way that resembles a pipeline.
+
+    In contrast to DataParallel, the output of PipelineParallel should be exactly the
+    same as the output of the original model (obviously, within a certain degree of
+    numerical error).
+    Because of this, using any number of GPUs will not damage the training performance
+    of the model.
+
+    :param model: the model to be accelerated.
+    :param microbatch_size: the size of each micro-batch, to which the input batches
+        will be divided.
+    :param input_shape: the shape of each individual data entry (not including the
+        batch dimension).
+    :param devices: a list of devices onto which the submodule will be saved.
+        default: all available CUDA GPUs, or just the cpu if none are.
+    :param depth: TODO: explain
+    :param main_device: the devices onto which the output of the model will be placed.
+        default: 'cpu'.
     """
 
-    def __init__(self, module: nn.Module, microbatch_size: int, num_gpus: int, input_shape: Tuple[int, ...] = None,
-                 mode: str = 'train', counter: CycleCounter = None, main_device: str = 'cpu', wrappers=None):
+    def __init__(self, model: nn.Module, microbatch_size: int,
+                 input_shape: Tuple[int, ...], devices: Optional[List[str]] = None,
+                 depth: int = 100, main_device: str = 'cpu'):
         super(PipelineParallel, self).__init__()
+
+        sample_batch = torch.zeros(microbatch_size, *input_shape)
+        self.model, _, (self.counter, self.wrappers, _) = \
+            distribute_using_profiler(
+                model, sample_batch,
+                device_list=devices,
+                max_depth=depth
+            )
 
         self.main_device = main_device
         self.microbatch_size = microbatch_size
-        self.num_gpus = num_gpus
-
-        self.module = module
-        self.wrappers = module.wrappers if wrappers is None else wrappers
+        self.num_devices = len(devices)
         self.input_shape = input_shape
-        self.module_devices = set([wrapper.device for wrapper in wrappers] + [main_device])
-
-        if counter is None:
-            counter = CycleCounter(ForwardMode[mode], num_gpus)
-            for wrapper in self.wrappers:
-                wrapper.set_counter(counter)
-
-        self.counter = counter
-
+        self.module_devices = set([wrapper.device for wrapper in self.wrappers] + [main_device])
         self.mode = None
-        self.set_mode(mode)
+        self.set_mode('train')
 
     def train(self, mode=True):
         if mode:
@@ -100,7 +121,7 @@ class PipelineParallel(nn.Module):
 
         results = []
         # the actual pipeline process of feeding the data and receiving outputs:
-        for cycle in range(self.num_gpus + num_runs - 1):
+        for cycle in range(self.num_devices + num_runs - 1):
             with autograd.no_grad():
                 # feeding the module all the microbatches, then, until the forward
                 # propagation process ends needs to feed garbage.
@@ -109,11 +130,11 @@ class PipelineParallel(nn.Module):
                 else:
                     input = torch.empty(*self.input_shape, device=self.wrappers[0].device)
 
-                result: Tuple[torch.Tensor] = self.module(input)
+                result: Tuple[torch.Tensor] = self.model(input)
 
                 # the first microbatch will finish the forward propagation only
                 # after num_gpus cycles.
-                if cycle >= self.num_gpus - 1:
+                if cycle >= self.num_devices - 1:
                     results.append(result.to(self.main_device, non_blocking=True))
 
                 self.counter.increase()
@@ -153,19 +174,19 @@ class PipelineParallel(nn.Module):
                 # if torch.cuda.is_available():
                 #     self.synchronize_streams()
 
-                out = self.module(torch.empty(*self.input_shape))
+                out = self.model(torch.empty(*self.input_shape))
                 out.backward(grad)
                 self.counter.increase()
 
         # make sure that all backward passes are done
-        for _ in range(self.num_gpus - 1):
+        for _ in range(self.num_devices - 1):
             with torch.set_grad_enabled(True):
                 self.init_backwards_cycle()
 
                 # if torch.cuda.is_available():
                 #     self.synchronize_streams()
 
-                self.module(torch.empty(*self.input_shape))
+                self.model(torch.empty(*self.input_shape))
                 self.counter.increase()
 
         # if torch.cuda.is_available():
