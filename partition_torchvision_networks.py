@@ -47,8 +47,6 @@ def distribute_torchvision(nruns=1, nparts=4):
     networks = [alexnet, resnet152, vgg19_bn, squeezenet1_1,
                 inception_v3, densenet201, GoogLeNet, LeNet, WideResNet]
     depth = [0, 1, 100]
-    networks = [densenet201]
-    depth = [1]
     for idx in range(nruns):
         for net in networks:
             for d in depth:
@@ -72,8 +70,8 @@ def distribute_torchvision(nruns=1, nparts=4):
                 filename = f"{net.__name__} {nparts} partitions at depth {d} attempt {idx}"
                 curr_dir = os.path.dirname(os.path.realpath(__file__))
                 out_dir = f"{curr_dir}\\graphs"
-                # graph.save(directory=out_dir, file_name=filename,
-                #            show_buffs_params=False, show_weights=False)
+                graph.save(directory=out_dir, file_name=filename,
+                           show_buffs_params=False, show_weights=False)
 
 
 def compare_exec_time():
@@ -124,32 +122,34 @@ def compare_cuda_mem():
             ('relu0', nn.ReLU(inplace=True)),
             ('pool0', nn.MaxPool2d(kernel_size=3, stride=2, padding=1)), ])).to(device)
         tensor = torch.randn(4, 3, 224, 224, device=device)
+        torch.cuda.synchronize(device=device)
+        torch.cuda.reset_max_memory_allocated(device=device)
         return net, tensor
 
     features, x = init()
     names = ['conv0', 'norm0', 'relu0', 'pool0']
-    diffs = dict()
+    expected_mem = dict()
     for l, n in zip(features, names):
         torch.cuda.reset_max_memory_allocated(device=device)
         torch.cuda.synchronize(device)
         x = l(x)
         torch.cuda.synchronize(device)
-        size = torch.cuda.max_memory_allocated(device=device)/1e9
-        diffs[n] = size
+        expected = torch.cuda.max_memory_allocated(device=device)/1e9
+        expected_mem[n] = expected
 
     features, x = init()
 
     profiles = profileNetwork(features, x)
-
+    diffs = dict()
     for n, p in profiles.items():
-        size = p.cuda_memory[0]
+        actual = p.cuda_memory[0]
         for other in names:
             if other in n:
-                b = diffs[other]
-                diffs[other] = size-b
+                expected = expected_mem[other]
+                diffs[n] = abs(expected-actual)
 
     print(diffs)
 
 
 if __name__ == "__main__":
-    compare_cuda_mem()
+    distribute_torchvision()

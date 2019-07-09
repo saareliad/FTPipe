@@ -7,8 +7,10 @@ import pytest
 import torch.nn as nn
 
 
-def test_every_layer_has_a_partition(device='cpu'):
+@pytest.mark.skipif(not torch.cuda.is_available(), reason='cuda required')
+def test_every_layer_has_a_partition():
     depth = 3
+    device = 'cuda:0'
     net = treeNet(depth).to(device)
     x = torch.zeros(50, 10).to(device)
 
@@ -28,7 +30,6 @@ def test_every_layer_has_a_partition(device='cpu'):
 
     after = {n.part for n in graph.nodes}
     assert after == {0, 1, 2, 3}
-    assert parts == list(map(lambda n: n.part, graph.nodes))
 
 
 @pytest.mark.skipif(not torch.cuda.is_available() or torch.cuda.device_count() < 2, reason='cuda required')
@@ -60,7 +61,7 @@ def test_every_layer_is_allocated_a_device_as_specified_by_the_graph():
         assert all(p.device == expected_device for p in layer.parameters)
 
 
-@pytest.mark.skipif(not torch.cuda.is_available() or torch.cuda.device_count() < 2, reason='cuda required')
+@pytest.mark.skipif(not torch.cuda.is_available() or torch.cuda.device_count() < 2, reason='more than 2 CUDA devices required')
 def test_wrappers_are_otimized_if_possible():
     device = 'cuda:0'
     depth = 10

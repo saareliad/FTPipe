@@ -1,6 +1,6 @@
 from ..model_profiling import Graph, NodeTypes
 from typing import List
-from collections import deque
+from collections import deque, Counter
 
 
 def post_process_partition(graph: Graph, part: List[int]):
@@ -9,8 +9,11 @@ def post_process_partition(graph: Graph, part: List[int]):
     ensure_graph_validity(graph)
 
     nparts = len(set(part))
+
+    complete_a_block(graph)
+
     # make sure the inputs to an OP type node are all in the same part
-    OP_inputs_partition_correction(graph, nparts)
+    # OP_inputs_partition_correction(graph, nparts)
     # make sure every scc in the graph is not splitted between different parts
     scc_partition_correction(graph)
 
@@ -162,3 +165,27 @@ def ensure_graph_validity(graph: Graph):
             if other.part != node.part and parent_scope == other_parent_scope:
                 print("we have discovered 2 consecutive arithmetic ops that reside on different devices\n we recommend using a smaller depth or using more general basic blocks")
                 return
+
+
+# ensure that partitions do not end mid scope
+def complete_a_block(graph: Graph):
+    def is_first_in_partition(node):
+        return any(other.part != node.part for other in node.in_nodes)
+
+    first_nodes_of_partition = filter(is_first_in_partition, graph.nodes)
+
+    for node in first_nodes_of_partition:
+        scope_depth = node.scope.count('/')-1
+        # dont do it too shallow
+        if scope_depth >= 2:  # TODO think about threshold
+            parent_scope = node.scope.rsplit('/', 1)[0]
+
+            def in_scope(n):
+                return parent_scope == n.scope.rsplit('/', 1)[0]
+            scope_nodes = list(filter(in_scope, graph.nodes))
+            parts = [n.part for n in scope_nodes]
+            part_histogram = Counter(parts)
+            most_common, num_layers = part_histogram.most_common(1)[0]
+            if num_layers >= len(parts)//2:
+                for other in scope_nodes:
+                    other.part = most_common

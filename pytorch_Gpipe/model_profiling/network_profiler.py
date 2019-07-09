@@ -205,6 +205,3 @@ class Wrapper(nn.Module):
             exec_time = 1000*(end - start)
 
         return exec_time, out, cuda_mem
-
-
-# TODO think about how to measure memory allocation (there is a difference between the profiler's measurment and external measurments)
