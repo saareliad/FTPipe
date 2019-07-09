@@ -1,6 +1,6 @@
 import torch.nn as nn
 from ..model_profiling import Graph, NodeTypes
-from ..pipeline import ActivationSavingLayer, LayerWrapper, SyncWrapper, CycleCounter
+from ..pipeline.sync_wrapper import ActivationSavingLayer, LayerWrapper, SyncWrapper, CycleCounter
 from ..utils import traverse_model, traverse_params_buffs, find_output_shapes_of_scopes
 from collections import deque
 from typing import List
