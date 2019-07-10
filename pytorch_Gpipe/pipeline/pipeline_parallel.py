@@ -35,7 +35,7 @@ class PipelineParallel(nn.Module):
 
     def __init__(self, model: nn.Module, microbatch_size: int,
                  input_shape: Tuple[int, ...], devices: Optional[List[str]] = None,
-                 depth: int = 100, main_device: str = 'cpu'):
+                 depth: int = 100, main_device: str = None):
         super(PipelineParallel, self).__init__()
 
         sample_batch = torch.zeros(microbatch_size, *input_shape)
@@ -46,11 +46,17 @@ class PipelineParallel(nn.Module):
                 max_depth=depth
             )
 
-        self.main_device = main_device
+        devices = [wrapper.dev for wrapper in self.wrappers]
+
+        if main_device is None:
+            self.main_device = devices[-1]
+        else:
+            self.main_device = main_device
+
         self.microbatch_size = microbatch_size
-        self.num_devices = len(devices)
-        self.input_shape = input_shape
-        self.module_devices = set([wrapper.device for wrapper in self.wrappers] + [main_device])
+        self.num_devices = len(set(devices))
+        self.input_shape = (1, *input_shape)
+        self.module_devices = set(devices + [self.main_device])
         self.mode = None
         self.set_mode('train')
 
