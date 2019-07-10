@@ -4,9 +4,28 @@ from .process_partition import post_process_partition
 from ..model_profiling import Graph
 from typing import Optional, Callable, Any
 
+__all__ = ["partition_graph"]
+
 
 def partition_graph(graph: Graph, num_partitions: int, weighting_function: Optional[Callable[[Any], int]] = None, **METIS_opts):
-    wfunc = weighting_function if weighting_function != None else weight_func
+    '''
+    partition the graph using METIS's PartGraphKway and then optimizes it to our needs
+
+    Parameters
+    ----------
+    graph:
+        the Graph object to partition
+    num_partitions:
+        the requested number of partitions
+    weighting_function:
+        a weighting function that transforms the graph weights to non negative integers
+        if not specified a default function will be used
+    METIS_opts:
+        additional options to pass to METIS
+        for eg. for the option METIS_OPTION_SEED pass seed=value
+    '''
+
+    wfunc = weighting_function if weighting_function != None else default_weight_func
 
     adjlist = graph.adjacency_list()
     nodew = graph.get_weights()
@@ -35,7 +54,7 @@ def partition_graph(graph: Graph, num_partitions: int, weighting_function: Optio
     return graph, partition, edge_cut
 
 
-def weight_func(w):
+def default_weight_func(w):
     if isinstance(w, tuple) and hasattr(w, 'forward_time') and hasattr(w, 'backward_time'):
-        return int(100*(w.forward_time+w.backward_time)/2)
+        return max(int(100*(w.forward_time+w.backward_time)/2), 1)
     return 0

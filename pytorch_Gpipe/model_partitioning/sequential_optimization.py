@@ -3,7 +3,13 @@ import numpy as np
 __all__ = ['sequential_partition']
 
 
+# TODO I do not think we realy need to use it except for comparison with our own method
+
 def sequential_partition(seq, nparts):
+    '''
+    a sequence partition algorithm implementation
+    as described in https://arxiv.org/pdf/1308.2452.pdf
+    '''
     max_elem = max(seq)
     min_elem = min(seq)
 

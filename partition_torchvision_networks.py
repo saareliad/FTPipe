@@ -47,6 +47,8 @@ def distribute_torchvision(nruns=1, nparts=4):
     networks = [alexnet, resnet152, vgg19_bn, squeezenet1_1,
                 inception_v3, densenet201, GoogLeNet, LeNet, WideResNet]
     depth = [0, 1, 100]
+    depth = [100]
+    networks = [densenet201]
     for idx in range(nruns):
         for net in networks:
             for d in depth:
@@ -72,6 +74,8 @@ def distribute_torchvision(nruns=1, nparts=4):
                 out_dir = f"{curr_dir}\\graphs"
                 graph.save(directory=out_dir, file_name=filename,
                            show_buffs_params=False, show_weights=False)
+
+                print(filename)
 
 
 def compare_exec_time():

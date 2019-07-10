@@ -21,7 +21,7 @@
 2c. model visualization (using custom weights)+
 3a. model partition using our Graph +
 3b. model partition using our Graph and custom weights/weighting function +
-4a. model distibution using our Graph + (still need to write the pipeline wrapper) +-
+4a. model distibution using our Graph + (still need to write the pipeline wrapper) +
 5b. model distribution without our Graph given a tuple containing:+ (enable serialization)
     1.nparts
     2.scopes_to_device

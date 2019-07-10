@@ -3,6 +3,10 @@ from typing import List
 
 
 def optimize_graph(graph: Graph):
+    '''
+    this module takes the raw Graph and removes/merges nodes in order to get the requested graph.
+    this method is called as part of graph_builder method
+    '''
     nodes = graph.nodes
     nodes = _combine_OP_nodes_under_the_same_scope(nodes)
     graph.nodes = nodes

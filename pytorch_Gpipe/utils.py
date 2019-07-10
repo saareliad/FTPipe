@@ -5,7 +5,20 @@ __all__ = ["traverse_model", "traverse_params_buffs",
            "find_output_shapes_of_scopes", "model_scopes"]
 
 
-def traverse_model(model: nn.Module, depth: int = 1000, basic_block: Optional[List[nn.Module]] = None, full=False)->Iterator[Tuple[nn.Module, str, nn.Module]]:
+def traverse_model(model: nn.Module, depth: int = 1000, basic_block: Optional[List[nn.Module]] = None, full=False) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
+    '''
+    iterate over model layers yielding the layer,layer_scope,encasing_module
+    Parameters:
+    -----------
+    model:
+        the model to iterate over
+    depth:
+        how far down in the model tree to go
+    basic_block:
+        a list of modules that if encountered will not be broken down
+    full:
+        whether to yield only layers specified by the depth and basick_block options or to yield all layers 
+    '''
     prefix = type(model).__name__
     yield from _traverse_model(model, depth, prefix, basic_block, full)
 
@@ -22,11 +35,32 @@ def _traverse_model(module: nn.Module, depth, prefix, basic_block, full):
                 sub_module).__name__+f"[{name}]", basic_block, full)
 
 
-def model_scopes(model: nn.Module, depth: int = 1000, basic_block: Optional[List[nn.Module]] = None, full=False)->List[str]:
+def model_scopes(model: nn.Module, depth: int = 1000, basic_block: Optional[List[nn.Module]] = None, full=False) -> List[str]:
+    '''
+    return a list of all model scopes for the given configuration
+     Parameters:
+    -----------
+    model:
+        the model to iterate over
+    depth:
+        how far down in the model tree to go
+    basic_block:
+        a list of modules that if encountered will not be broken down
+    full:
+        whether to return only scopes specified by the depth and basick_block options or to yield all scopes up to them
+    '''
     return list(map(lambda t: t[1], traverse_model(model, depth=depth, basic_block=basic_block, full=full)))
 
 
-def traverse_params_buffs(module: nn.Module)->Iterator[Tuple[torch.tensor, str]]:
+def traverse_params_buffs(module: nn.Module) -> Iterator[Tuple[torch.tensor, str]]:
+    '''
+    iterate over model's buffers and parameters yielding obj,obj_scope
+
+    Parameters:
+    -----------
+    model:
+        the model to iterate over
+    '''
     prefix = type(module).__name__
     yield from _traverse_params_buffs(module, prefix)
 
@@ -48,6 +82,19 @@ def _traverse_params_buffs(module: nn.Module, prefix):
 
 
 def find_output_shapes_of_scopes(model, scopes, *inputs):
+    '''
+    returns a dictionary from scopes to output shapes without the batch dimention
+    by performing a forward pass
+
+    Parameters:
+    -----------
+    model:
+        the model to profile
+    scopes:
+        the scopes we wish to know their output shapes
+    inputs:
+        the model inputs that will used in the forward pass
+    '''
     backup = dict()
 
     for layer, scope, parent in traverse_model(model, full=True):
@@ -72,6 +119,10 @@ def find_output_shapes_of_scopes(model, scopes, *inputs):
 
 
 class ShapeWrapper(nn.Module):
+    '''
+    a wrapper that when it performs forward pass it records the underlying layer's output shape without batch dimention
+    '''
+
     def __init__(self, sub_module: nn.Module):
         super(ShapeWrapper, self).__init__()
         self.output_shape = []

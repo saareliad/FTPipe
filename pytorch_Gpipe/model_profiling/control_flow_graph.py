@@ -3,11 +3,12 @@ from copy import copy
 from typing import List,Dict,Any,Optional
 class Graph():
     '''
-    a graph representing the control flow of a model
-    built from a pytorch trace graph.
-    the graph vertices are specified using the given profiled layer names\n
-    and will also include basic pytorch ops that connect them.
-    the edges represent the data flow.
+    a Graph data structure that model a pytorch network built from a pytorch trace\n
+    the nodes operations like layer,Tensor ops etc.
+    the edges represent the data flow in the model.
+    names of the nodes are the scope names of their respective operations in the model.
+    the graph can have weighted nodes
+    do not instanciate this class directly use the graph_builder method provided with this module
     '''
 
     def __init__(self, profiled_layers: List[str], num_inputs: int, buffer_param_names: List[str], trace_graph, weights: Dict[str, Any],basic_block:Optional[List],depth:int):
@@ -94,6 +95,9 @@ class Graph():
                     num_extra_nodes += 1
 
     def _add_shapes(self, trace_graph):
+        '''
+        add the shapes of all intermediate outputs and inputs to the graph nodes
+        '''
         def get_shape(n):
             try:
                 # works if not constant
@@ -145,7 +149,7 @@ class Graph():
                 output_idx += 1
 
     def _remove_constant_nodes(self):
-        # remove nodes representing constants as they do not provide any useful info
+        ''' remove nodes representing constants as they do not provide any useful info'''
         self._remove_nodes(lambda n: "::Constant" in n.scope)
 
     def _find_encasing_layer(self, scopeName: str):
@@ -162,6 +166,9 @@ class Graph():
         return most_specific_scope
 
     def _remove_nodes_that_go_nowhere(self, trace_outputs):
+        '''remove nodes without out edges that are not outputs of the model'''
+        #necessary because the trace can contain such nodes for certain ops
+        #those nodes provide no additional info to the graph
         out_list = list(trace_outputs)
         out_indices = list(map(lambda n: int(n.uniqueName()),out_list))
 
@@ -204,7 +211,6 @@ class Graph():
                 return node
         return None
 
-
     def scopes(self)->List[str]:
         return list(map(lambda n:n.scope,self.nodes))
 
@@ -224,6 +230,13 @@ class Graph():
         return [node.weight for node in self.nodes]
 
     def adjacency_list(self, directed=False)->List[List[int]]:
+        '''
+        returns an adjacency list of the graph
+        Parameters
+        ----------
+        directed:
+            whether the adjacency list will be of the directed graph or the undirected graph 
+        '''
         if not directed:
             return [[n.idx for n in node.out_nodes.union(node.in_nodes)] for node in self.nodes]
         return [[n.idx for n in node.out_nodes] for node in self.nodes]
@@ -235,6 +248,12 @@ class Graph():
     def build_dot(self, show_buffs_params=False, show_weights=True):
         '''
         return a graphviz representation of the graph
+        Parameters
+        ----------
+        show_buffs_params:
+            whether to display also buffers and parameters which are not encased in the graph scopes
+        show_weights:
+            whether to display the nodes weight
         '''
 
         theme = {"background_color": "#FFFFFF",
@@ -273,6 +292,8 @@ class Graph():
                  fontcolor=theme["font_color"],
                  fontname=theme["font_name"])
 
+        #TODO make split big graphs to multiple pdfs
+
         colors = {-1:'grey',0:'grey',1:'green',2:'red',3:'yellow',4:'orange',5:'brown',6:'purple',7:'pink'}
 
         def hide_node(node):
@@ -308,6 +329,16 @@ class Graph():
         return dot
 
     def display(self, show_buffs_params=False, show_weights=True):
+        '''
+        display the graph in Jupyter
+
+        Parameters
+        ----------
+        show_buffs_params:
+            whether to display also buffers and parameters which are not encased in the graph scopes
+        show_weights:
+            whether to display the nodes weight
+        '''
         try:
             from IPython.core.display import display_svg
             display_svg(self.build_dot(show_buffs_params, show_weights=show_weights), raw=False)
@@ -315,6 +346,16 @@ class Graph():
             print("only works in python notebooks")
 
     def save(self, file_name,directory, show_buffs_params=False,show_weights=True):
+        '''
+        save the graph to a file
+
+        Parameters
+        ----------
+        show_buffs_params:
+            whether to display also buffers and parameters which are not encased in the graph scopes
+        show_weights:
+            whether to display the nodes weight
+        '''
         dot = self.build_dot(show_buffs_params, show_weights=show_weights)
         dot.format = "pdf"
         import os
@@ -324,6 +365,9 @@ class Graph():
 
 
 class NodeTypes(Enum):
+    '''
+    Enum representing the possible types of Nodes in the Graph
+    '''
     IN = 1
     BUFF_PARAM = 2
     LAYER = 3
@@ -335,21 +379,29 @@ class NodeTypes(Enum):
 
 class Node():
     '''
-    a simple graph node for directed graphs
+    a simple graph node for weighted directed graphs
 
     Fields:
     ------
     scope:
      the operation/layer the node represents
     idx:
-     a serial number of the node for convience
+        a serial number of the node for convience
     node_type:
-     an enum representing if the node is an input Layer or operator(like arithmetic ops)
+        an enum representing if the node is an input Layer or operator(like arithmetic ops)
     incoming_nodes:
-     the nodes who have edges from them to this node
+        the nodes who have edges from them to this node
     out_nodes:
-     the nodes who have edges from this node
-
+        the nodes who have edges from this node
+    inputs:
+        the LayerOutputs that consumed by this Node
+    outputs:
+        the LayerOutputs produced by this Node
+    weight:
+        the weight of the edge can be anything
+    part:
+        partition idx determines the color of the Node
+    
      parallel edges in the same direction are not allowed
     '''
 
@@ -396,6 +448,18 @@ class Node():
 
 
 class LayerOutput():
+    '''
+    a simple class representing a layer output
+
+    Fields
+    ----------
+    idx:
+        a unique index of this output
+    origin_scope:
+        the scope which produces this output
+    output_shape:
+        the shape of this output
+    '''
     def __init__(self, idx, origin_scope, output_shape):
         self.idx = idx
         self.scope = origin_scope

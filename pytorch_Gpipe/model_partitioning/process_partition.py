@@ -2,62 +2,29 @@ from ..model_profiling import Graph, NodeTypes
 from typing import List
 from collections import deque, Counter
 
+__all__ = ["post_process_partition"]
+
 
 def post_process_partition(graph: Graph, part: List[int]):
+    '''
+    process the partition and optimize it
+    called as part of partition_graph method
+
+    Parameters:
+    ----------
+    graph:
+        the Graph object that was partitioned
+    part:
+        a list of the nodes partition indices
+    '''
     cannonize_partition_indices(graph, part)
 
     ensure_graph_validity(graph)
 
-    nparts = len(set(part))
+    make_partitions_change_only_at_end_of_scope(graph)
 
-    complete_a_block(graph)
-
-    # make sure the inputs to an OP type node are all in the same part
-    # OP_inputs_partition_correction(graph, nparts)
     # make sure every scc in the graph is not splitted between different parts
     scc_partition_correction(graph)
-
-
-# TODO still does wierd things
-def OP_inputs_partition_correction(graph: Graph, nparts):
-    groups = []
-    for v in graph.nodes:
-        if v.type == NodeTypes.OP:
-            group = {u for u in v.in_nodes}
-            group.add(v)
-
-            if len({u.part for u in group}) > 1:
-                groups.append(group)
-
-    nodes_left = [v for v in graph.nodes]
-    # check and update for every group
-    for group in groups:
-        min_comunication = float("inf")
-        best_part = -1
-        for part in range(nparts):
-            # try a part
-            for u in group:
-                graph.nodes[u.idx].part = part
-            # compute how good it is
-            comunication = compute_comunication(graph)
-            # update part if he is better
-            if comunication < min_comunication:
-                min_comunication = comunication
-                best_part = part
-        # update part to the best part and remove it from nodes to check
-        for u in group:
-            if u in nodes_left:
-                graph.nodes[u.idx].part = best_part
-                nodes_left.remove(u)
-
-
-def compute_comunication(graph: Graph):
-    count = 0
-    for v in graph.nodes:
-        for u in v.in_nodes:
-            if u.part != v.part:
-                count += 1
-    return count
 
 
 def scc_partition_correction(graph: Graph):
@@ -168,7 +135,7 @@ def ensure_graph_validity(graph: Graph):
 
 
 # ensure that partitions do not end mid scope
-def complete_a_block(graph: Graph):
+def make_partitions_change_only_at_end_of_scope(graph: Graph):
     def is_first_in_partition(node):
         return any(other.part != node.part for other in node.in_nodes)
 

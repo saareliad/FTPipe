@@ -3,7 +3,8 @@ from ..model_profiling import Graph, NodeTypes
 from ..pipeline import ActivationSavingLayer, LayerWrapper, SyncWrapper, CycleCounter
 from ..utils import traverse_model, traverse_params_buffs, find_output_shapes_of_scopes
 from collections import deque, namedtuple
-__all__ = ["distribute_model", "distribute_model_from_config"]
+__all__ = ["distribute_model",
+           "distribute_model_from_config", "partitionConfig"]
 
 
 partitionConfig = namedtuple("partitionConfig",
@@ -11,6 +12,24 @@ partitionConfig = namedtuple("partitionConfig",
 
 
 def distribute_model(model: nn.Module, device_lst: list, graph: Graph, *inputs, return_config: bool = False):
+    '''
+    distribute and wraph the model as part of model pipelining\n
+    !!!! this method changes the given model do not use it directly
+
+    Parameters:
+    -----------
+    model:
+        the model to distribute
+    device_lst:
+        the devices which will hold the model parts
+    graph:
+        the model's graph that dictates how to distriubte the model
+    inputs:
+        a sample batch used in order to find specific input/output shapes nd their respective ordering
+    return_config:
+        wheter to return a configuration of the partition useful if you wish to do the partitioning process once
+        and use it for multiple instances of the model
+    '''
     nparts = len({n.part for n in graph.nodes})
     used_devices = device_lst[:nparts]
     model_inputs = filter(lambda n: n.type == NodeTypes.IN, graph.nodes)
@@ -54,6 +73,20 @@ def distribute_model(model: nn.Module, device_lst: list, graph: Graph, *inputs, 
 
 
 def distribute_model_from_config(model, device_lst: list, config: partitionConfig):
+    '''
+    distribute and wraph the model as part of model pipelining as specified in the given config\n
+    !!!! this method changes the given model do not use it directly
+
+    Parameters:
+    -----------
+    model:
+        the model to distribute
+    device_lst:
+        the devices which will hold the model parts
+    config:
+        the config object that specifes how to distribute the model
+
+    '''
     nparts, scopes_to_device, scope_shapes, scope_gpu_num, part_inputs = config
 
     if nparts != len(device_lst):
@@ -75,6 +108,7 @@ def distribute_model_from_config(model, device_lst: list, config: partitionConfi
     return modified_model, wrappers, counter
 
 
+# return a list of all the wrappers added to to the model
 def extract_wrappers(modified_model):
     def isWrapper(module):
         return isinstance(module, (ActivationSavingLayer, SyncWrapper))
@@ -84,6 +118,7 @@ def extract_wrappers(modified_model):
     return wrappers
 
 
+# return the layers that correspond to the given scopes
 def modules_of_top_scopes(top_scopes, model, effective_depth, basic_block):
     def is_top_scope(a): return (a[1] in top_scopes)
     relevant_sub_modules = filter(is_top_scope, traverse_model(
@@ -92,6 +127,7 @@ def modules_of_top_scopes(top_scopes, model, effective_depth, basic_block):
     return list(relevant_sub_modules)
 
 
+# wraps the model and move parameters and buffers to their designated devices
 def wrap_model(relevant_sub_modules, top_scopes_to_device, input_device, part_inputs, counter, model, scope_to_shape, top_scopes_to_gpu_num):
     wrap_layers(relevant_sub_modules, top_scopes_to_device,
                 part_inputs, counter, scope_to_shape, top_scopes_to_gpu_num)
@@ -104,6 +140,9 @@ def wrap_model(relevant_sub_modules, top_scopes_to_device, input_device, part_in
     return modified_model
 
 
+# wrap the layers of the model with the sync and layer wrappers
+# sync wrappers for the input layers of partitions
+# layer wrappers for all other layers
 def wrap_layers(layers, top_scopes_to_device, part_inputs, counter, scope_to_shape, top_scopes_to_gpu_num):
     for sub_layer, layer_scope, parent in layers:
         name = layer_scope[layer_scope.rfind('[')+1:-1]

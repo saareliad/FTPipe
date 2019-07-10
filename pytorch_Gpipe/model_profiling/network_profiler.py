@@ -5,16 +5,16 @@ from collections import namedtuple
 from ..utils import traverse_model
 from typing import List, Optional, Dict
 
-__all__ = ['profileNetwork']
+__all__ = ['profileNetwork', 'Profile']
 
-Profile = namedtuple(
-    'Profile', 'forward_time backward_time cuda_memory layer_size')
+Profile = namedtuple('Profile',
+                     'forward_time backward_time cuda_memory layer_size')
 
 
 def profileNetwork(net: nn.Module, *sample_batch, basic_block: Optional[List[nn.Module]] = None, max_depth=100) -> Dict[str, Profile]:
     '''
     profiles a network's computation time(forward/backward) and memory consumption
-    done via wrapping all layers of the network with a special Wrapper module
+    returns a dictionary from layer_scope to Profile
 
     Parameters
     ----------
@@ -25,12 +25,14 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_block: Optional[List[nn.
         a sample batch that will be used to measure executation time of network
         can be single/multiple inputs
 
-    max_depth:
-        determins how far the profiler will go in the model tree
-
     basic_block:
         a tuple of nn.Module classes that the profiler will regard as a cohesive unit
         for eg. if basic_block = nn.Sequential then the profiler will break it down to its components
+
+    max_depth:
+        determins how far the profiler will go in the model tree
+
+
 
     '''
     # wrap all individula layers for profiling
@@ -51,8 +53,8 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_block: Optional[List[nn.
     layer_output_sizes = [layer.output_size for layer in layers_dict.values()]
 
     # gather all individual layer sizes
-    param_sizes = [layer.param_size for layer in layers_dict.values()]
-    buffer_sizes = [layer.buffer_size for layer in layers_dict.values()]
+    param_sizes = [layer.parameters_size for layer in layers_dict.values()]
+    buffer_sizes = [layer.buffers_size for layer in layers_dict.values()]
 
     # gather cuda memory consumption
     cuda_memory = [(layer.forward_cuda_mem, layer.backward_cuda_mem)
@@ -68,22 +70,18 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_block: Optional[List[nn.
 
 
 def _perform_forward_backward_pass(net, *inputs):
-    # move all inputs and outputs to specified device
     device = inputs[0].device
     if device.type == "cuda":
         torch.cuda.synchronize(device=device)
-    out = net(*inputs)
-
-    if device.type == "cuda":
+        out = net(*inputs)
         torch.cuda.synchronize(device=device)
+    else:
+        out = net(*inputs)
 
     return out
 
 
 def _wrap_profiled_layers(module: nn.Module, depth, basic_block: List[nn.Module]):
-    '''
-    wraps all layers specified by depth and basic blocks of module by changing the binding in the network module dictionary
-    '''
     layers_dict = {}
 
     for sub_layer, scope, parent in traverse_model(module, depth, basic_block):
@@ -95,12 +93,7 @@ def _wrap_profiled_layers(module: nn.Module, depth, basic_block: List[nn.Module]
 
 
 def _unwrap_layers(module: nn.Module):
-    '''
-    return all binding to what they were originally, removes all Wrappers from self.network
-    '''
     for name, sub_module in module._modules.items():
-        # assume no cyclic routes in the network
-        # a module with no children is a layer
         if isinstance(sub_module, Wrapper):
             module._modules[name] = sub_module.layer
         else:
@@ -109,8 +102,16 @@ def _unwrap_layers(module: nn.Module):
 
 class Wrapper(nn.Module):
     '''
-    a module whose purpose is to profile a given layer,
-    measuring forward/backward computation time, and estimated memory consumption
+    a module whose purpose is to profile a given layer\n
+    when the wrapper performs forward propagation it records the following metrics:\n
+        forward_time: the execution time of a forward pass of the underlying layer in milliseconds\n
+        backward_time: the execution time of a backward pass of the underlying layer in milliseconds\n
+        input_size: the input size in GB
+        output_size: the layer output size in GB
+        parameters_size: the size of parameters of the layer in GB
+        buffers_size: the size of buffers of the layer in GB
+        forward_cuda_mem: the peak CUDA memory usage during the forward pass in GB
+        backward_cuda_mem: the peak CUDA memory usage during the backward pass in GB
 
     Parameters
     ----------
@@ -126,7 +127,7 @@ class Wrapper(nn.Module):
         self.backward_time = 0
         self.input_size = 0
         self.output_size = 0
-        self.param_size, self.buffer_size = self._layer_size()
+        self.parameters_size, self.buffers_size = self._layer_size()
         self.forward_cuda_mem = 0
         self.backward_cuda_mem = 0
 
@@ -134,18 +135,19 @@ class Wrapper(nn.Module):
         '''
         return the size of the layer considering parameters and buffers
         '''
-        param_size = buffer_size = 0
+        parameters_size = buffers_size = 0
         for param in self.layer.parameters():
-            param_size += param.nelement() * param.element_size()
+            parameters_size += param.nelement() * param.element_size()
         for buffer in self.layer.buffers():
-            buffer_size += buffer.nelement() * buffer.element_size()
+            buffers_size += buffer.nelement() * buffer.element_size()
 
-        return param_size, buffer_size
+        return parameters_size, buffers_size
 
     def forward(self, *inputs):
         '''
-        measures the time in milliseconds it took for the module to complete forward computation
+        perform forward and backward pass of the underlying layer and measure metrics
         '''
+
         # detach inputs from previous history enabling us to measure execution time
         # only for this layer
         device = inputs[0].device
@@ -176,8 +178,8 @@ class Wrapper(nn.Module):
         self.forward_cuda_mem /= 1e9
         self.input_size /= 1e9
         self.output_size /= 1e9
-        self.param_size /= 1e9
-        self.buffer_size /= 1e9
+        self.parameters_size /= 1e9
+        self.buffers_size /= 1e9
 
         return outputs
 
@@ -198,7 +200,7 @@ class Wrapper(nn.Module):
             exec_time = (start.elapsed_time(end))
             cuda_mem = torch.cuda.max_memory_allocated(device=device)
         else:
-            # convert to milliseconds
+            # convert seconds to milliseconds
             start = timeit.time.time()
             out = func(*inputs)
             end = timeit.time.time()
