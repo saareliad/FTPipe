@@ -1,4 +1,4 @@
-from ..model_profiling import Graph, NodeTypes
+from ..model_profiling import Graph
 from typing import List
 from collections import deque, Counter
 
@@ -18,8 +18,6 @@ def post_process_partition(graph: Graph, part: List[int]):
         a list of the nodes partition indices
     '''
     cannonize_partition_indices(graph, part)
-
-    ensure_graph_validity(graph)
 
     make_partitions_change_only_at_end_of_scope(graph)
 
@@ -122,19 +120,6 @@ def cannonize_partition_indices(graph: Graph, node_parts: List[int]):
         node.part = cannonical_parts[node.part]
 
 
-def ensure_graph_validity(graph: Graph):
-    op_nodes = filter(lambda n: n.type == NodeTypes.OP, graph.nodes)
-
-    for node in op_nodes:
-        parent_scope = node.scope.rsplit('/', 1)[0]
-        for other in filter(lambda n: n.type == NodeTypes.OP, node.out_nodes):
-            other_parent_scope = other.scope.rsplit('/', 1)[0]
-            if other.part != node.part and parent_scope == other_parent_scope:
-                print("we have discovered 2 consecutive arithmetic ops that reside on different devices\n we recommend using a smaller depth or using more general basic blocks")
-                return
-
-
-# ensure that partitions do not end mid scope
 def make_partitions_change_only_at_end_of_scope(graph: Graph):
     def is_first_in_partition(node):
         return any(other.part != node.part for other in node.in_nodes)

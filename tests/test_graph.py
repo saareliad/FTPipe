@@ -1,4 +1,4 @@
-from pytorch_Gpipe import visualize, visualize_with_profiler
+from pytorch_Gpipe import graph_builder, visualize_with_profiler
 import torch
 import pytest
 from pytorch_Gpipe.utils import traverse_model
@@ -10,7 +10,7 @@ def test_max_depth(device='cpu'):
     depth = 5
     net = treeNet(depth).to(device)
     x = torch.randn(50, 10).to(device)
-    graph = visualize(net, x)
+    graph = graph_builder(net, x)
 
     assert len(graph) == (2**(depth+1) + 2**(depth+1)-1 + 1)
 
@@ -21,7 +21,7 @@ def test_custom_depth(device='cpu'):
     profiled_depth = 3
     net = treeNet(depth).to(device)
     x = torch.randn(50, 10).to(device)
-    graph = visualize(net, x, max_depth=profiled_depth)
+    graph = graph_builder(net, x, max_depth=profiled_depth)
 
     assert len(graph) == (
         2**(profiled_depth+1) + 2**(profiled_depth+1)-1 + 1)
@@ -32,7 +32,7 @@ def test_custom_basic_blocks(device='cpu'):
     depth = 5
     x = torch.randn(50, 10, device=device)
     net = treeNet(depth).to(device)
-    graph = visualize(net, x, basic_blocks=[treeNet])
+    graph = graph_builder(net, x, basic_block=[treeNet])
 
     assert len(graph) == (3+1)
 
@@ -43,8 +43,8 @@ def test_custom_depth_and_blocks(device='cpu'):
     profiled_depth = 7
     net = combinedTreeNet(depth).to(device)
     x = torch.randn(50, 10, device=device)
-    graph = visualize(net, x, max_depth=profiled_depth,
-                      basic_blocks=[treeNet])
+    graph = graph_builder(net, x, max_depth=profiled_depth,
+                          basic_block=[treeNet])
 
     assert len(graph) == (2 + profiled_depth + 1)
 
@@ -57,7 +57,7 @@ def test_does_not_induce_side_effects(device='cpu'):
     expected_y = net(x)
     expected_modules = list(net.modules())
     expected_data = list(net.buffers()) + list(net.parameters())
-    visualize(net, x)
+    graph_builder(net, x)
 
     actual_modules = list(net.modules())
     actual_data = list(net.buffers()) + list(net.parameters())
@@ -76,7 +76,7 @@ def test_arithmetic_ops_are_also_profiled(device='cpu'):
     net = arithmeticNet().to(device)
     x = torch.randn(50, 10, device=device)
 
-    graph = visualize(net, x)
+    graph = graph_builder(net, x)
 
     assert len(graph) == 4
 
@@ -86,7 +86,7 @@ def test_buffers_and_parameters(device='cpu'):
     net = netWithTensors().to(device)
     x = torch.randn(50, 10, device=device)
 
-    graph = visualize(net, x)
+    graph = graph_builder(net, x)
 
     assert len(graph) == (1+2+2+1)
 
@@ -99,7 +99,7 @@ def test_custom_weights(device='cpu'):
     scopes = list(map(lambda t: t[1], traverse_model(net))) + ['input0']
 
     custom_weights = {scope: 13 for scope in scopes}
-    graph = visualize(net, x, weights=custom_weights)
+    graph = graph_builder(net, x, weights=custom_weights)
 
     assert (len(list(n.weight == 13 for n in graph.nodes if n.scope in scopes))) > 0
     assert all(n.weight == 13 for n in graph.nodes if n.scope in scopes)
@@ -129,7 +129,7 @@ def test_control_flow(device='cpu'):
     depth = 3
     net = treeNet(depth).to(device)
     x = torch.randn(50, 10, device=device)
-    graph = visualize(net, x)
+    graph = graph_builder(net, x)
     it = graph[0]
     assert it.scope == 'input0'
     it = list(it.out_nodes)[0]
@@ -155,7 +155,7 @@ def test_output_shapes(device='cpu'):
     depth = 5
     net = combinedTreeNet(depth).to(device)
     x = torch.randn(50, 10, device=device)
-    graph = visualize(net, x)
+    graph = graph_builder(net, x)
 
     actual = map(lambda n: n.outputs, graph.nodes)
     actual = list(map(lambda out: list(out)[0], actual))

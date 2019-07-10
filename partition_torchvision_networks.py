@@ -47,11 +47,15 @@ def distribute_torchvision(nruns=1, nparts=4):
     networks = [alexnet, resnet152, vgg19_bn, squeezenet1_1,
                 inception_v3, densenet201, GoogLeNet, LeNet, WideResNet]
     depth = [0, 1, 100]
-    depth = [100]
-    networks = [densenet201]
     for idx in range(nruns):
         for net in networks:
             for d in depth:
+                print()
+                filename = f"{net.__name__} {nparts} partitions at depth {d} attempt {idx}"
+                curr_dir = os.path.dirname(os.path.realpath(__file__))
+                out_dir = f"{curr_dir}\\graphs"
+
+                print(filename)
                 model = net().to(device)
                 if net.__name__.find("inception") != -1:
                     _, graph, _ = distribute_using_profiler(model, torch.zeros(
@@ -69,13 +73,11 @@ def distribute_torchvision(nruns=1, nparts=4):
                     _, graph, _ = distribute_using_profiler(model, torch.zeros(
                         4, 3, 224, 224, device=device), device_list=devices, max_depth=d, basic_blocks=None)
 
-                filename = f"{net.__name__} {nparts} partitions at depth {d} attempt {idx}"
-                curr_dir = os.path.dirname(os.path.realpath(__file__))
-                out_dir = f"{curr_dir}\\graphs"
                 graph.save(directory=out_dir, file_name=filename,
                            show_buffs_params=False, show_weights=False)
 
                 print(filename)
+                print()
 
 
 def compare_exec_time():
@@ -156,4 +158,4 @@ def compare_cuda_mem():
 
 
 if __name__ == "__main__":
-    distribute_torchvision()
+    distribute_torchvision(nruns=4)

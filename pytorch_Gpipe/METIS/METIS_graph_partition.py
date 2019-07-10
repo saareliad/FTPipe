@@ -292,7 +292,7 @@ def _set_options(**options):
 # -------------------------------------------------------------------------
 # python API
 # -------------------------------------------------------------------------
-def METIS_partition(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis', **opts)->Tuple[int, List[int]]:
+def METIS_partition(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis', **opts) -> Tuple[int, List[int]]:
     """
     Perform graph partitioning using k-way or recursive methods.
 
