@@ -1,13 +1,14 @@
 from .model_profiling import visualize_with_profiler, profileNetwork, graph_builder
 from .model_partitioning import partition_graph, distribute_model, distribute_model_from_config, sequential_partition
 import torch
+import torch.nn as nn
 from typing import Optional, Callable, Any
 
 __all__ = ['partition_with_profiler', 'distribute_using_profiler', 'distribute_using_custom_weights',
            'visualize_with_profiler', 'partition_graph', 'distribute_model', 'distribute_model_from_config']
 
 
-def partition_with_profiler(model, *sample_batch, nparts=4, max_depth=100, basic_blocks=None, weighting_function: Optional[Callable[[Any], int]] = None):
+def partition_with_profiler(model: nn.Module, *sample_batch, nparts=4, max_depth=100, basic_blocks=None, weighting_function: Optional[Callable[[Any], int]] = None):
     '''
     return a graph representing the partitioned model with the weights given by the profiler
     this method does not distribute the model accross devices
@@ -35,7 +36,7 @@ def partition_with_profiler(model, *sample_batch, nparts=4, max_depth=100, basic
     return graph
 
 
-def distribute_using_profiler(model, *sample_batch, device_list=None, max_depth=100, basic_blocks=None, return_config=False, weighting_function: Optional[Callable[[Any], int]] = None):
+def distribute_using_profiler(model: nn.Module, *sample_batch, device_list=None, max_depth=100, basic_blocks=None, return_config=False, weighting_function: Optional[Callable[[Any], int]] = None):
     '''
     distributes a model accross the given devices in accordance to given specifications and data from the profiler\n
     !!!this method changes the the given model and is part of the internal API
@@ -77,7 +78,7 @@ def distribute_using_profiler(model, *sample_batch, device_list=None, max_depth=
     return modified_model, graph, (counter, wrappers, sample_batch)
 
 
-def distribute_using_custom_weights(model, weights, *sample_batch, device_list=None, max_depth=100, basic_blocks=None, return_config=False, weighting_function: Optional[Callable[[Any], int]] = None):
+def distribute_using_custom_weights(model: nn.Module, weights, *sample_batch, device_list=None, max_depth=100, basic_blocks=None, return_config=False, weighting_function: Optional[Callable[[Any], int]] = None):
     '''
     distributes a model accross the given devices in accordance to given specifications and custom node weights\n
     !!!this method changes the the given model and is part of the internal API

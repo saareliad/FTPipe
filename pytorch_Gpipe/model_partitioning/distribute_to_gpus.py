@@ -155,7 +155,7 @@ def wrap_layers(layers, top_scopes_to_device, part_inputs, counter, scope_to_sha
                                   gpu_num, output_shape, counter=counter)
         else:
             wrapper = LayerWrapper(
-                sub_layer, layer_device, gpu_num, output_shape, counter)
+                sub_layer, gpu_num, layer_device, output_shape, counter)
         parent._modules[name] = wrapper.to(layer_device)
 
 
