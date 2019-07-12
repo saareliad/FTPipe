@@ -1,0 +1,41 @@
+prerequisites:
+1. make sure you have the packages specified in environment.yml (graphviz and python-graphviz are optional for graph visualization)
+2. clone the repository
+3. if you wish to use METIS library(recommendend) in order to decide how to divide the model follow the next section
+
+
+METIS build instructions:
+    source code can be downloaded from http://glaros.dtc.umn.edu/gkhome/metis/metis/download
+
+    for linux(tested):
+        in the file include/metis.h
+            1.in line 33 set IDXTYPEWIDTH to 64
+            2.in line 42 set REALTYPEWIDTH to 64
+
+        1. make config shared=1
+        2. make install
+        3. copy build/libmetis/libmetis.so to pytorch_Gpipe/METIS
+        4. run tests/test_metis.py if passes then you have successfully integrated metis into this project
+
+    for windows(tested):
+        requires CMake to build 
+        1.in the file include/metis.h
+            a. in line 33 set IDXTYPEWIDTH to 64
+            b. in line 42 set REALTYPEWIDTH to 64
+
+        1. in the top level CMakeLists.txt:
+            a. change line 4 set(GKLIB_PATH "GKlib" CACHE PATH "path to GKlib") to set(GKLIB_PATH "${CMAKE_SOURCE_DIR}/GKlib" CACHE PATH "path to GKlib")
+            b. change line 6 set(SHARED FALSE CACHE BOOL "build a shared library") to set(SHARED TRUE CACHE BOOL "build a shared library")
+        
+        2. in the file  GKlib/gk_arch.h
+            a. comment line 42 #include sys/resource.h
+        
+        3. in the file GKlib/getopt.h
+            a. comment all extern declarations lines 53-57:
+                extern int gk_getopt(int __argc, char **__argv, char *__shortopts);
+                extern int gk_getopt_long(int __argc, char **__argv, char *__shortopts,struct gk_option *__longopts, int *__longind);
+                extern int gk_getopt_long_only (int __argc, char **__argv,char *__shortopts, struct gk_option *__longopts, int *__longind); 
+
+        4. build the libmetis.dll target
+        5. copy build/libmetis/libmetis.dll to pytorch_Gpipe/METIS
+        6. run tests/test_metis.py if passes then you have successfully integrated metis into this project

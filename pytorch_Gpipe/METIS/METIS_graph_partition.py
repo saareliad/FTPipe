@@ -8,27 +8,24 @@ import os
 import typing
 from typing import List, Tuple, Dict, Union, Callable
 import platform
-import warnings
-# create a dynamic lib that exposes what we need compile it like this with metis.h and libmetis.lib in the same folder
-# g++ -fPIC - shared - L. -o libmetis.so test.c - llibmetis
-
-# then load it using ctypes and use it
 
 # metis lib loading
 if 'Win' in platform.system():
-    metis_path = os.path.dirname(os.path.realpath(__file__))+"/Wlibmetis.so"
+    metis_path = os.path.dirname(os.path.realpath(__file__))+"/libmetis.dll"
 elif 'Lin' in platform.system():
-    metis_path = os.path.dirname(os.path.realpath(__file__))+"/Llibmetis.so"
-else:
-    warnings.warn("unsuported os for METIS supported for windows and linux")
+    metis_path = os.path.dirname(os.path.realpath(__file__))+"/libmetis.so"
+
+if not os.path.exists(metis_path):
+    raise FileNotFoundError(
+        "the metis library could not be found please follow the build notes for further instructions")
 
 metisLib = ctypes.CDLL(metis_path)
 
 # -------------------------------------------------------------------------
 # type declarations and constants
 # -------------------------------------------------------------------------
-idx_t = ctypes.c_int32
-real_t = ctypes.c_float
+idx_t = ctypes.c_int64
+real_t = ctypes.c_double
 METIS_NOPTIONS = 40
 METIS_Graph = namedtuple('METIS_Graph',
                          'nvtxs ncon xadj adjncy vwgt vsize adjwgt')

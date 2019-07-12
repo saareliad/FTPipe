@@ -57,4 +57,4 @@ def partition_graph(graph: Graph, num_partitions: int, weighting_function: Optio
 def default_weight_func(w):
     if isinstance(w, tuple) and hasattr(w, 'forward_time') and hasattr(w, 'backward_time'):
         return max(int(100*(w.forward_time+w.backward_time)/2), 1)
-    return 0
+    return 1

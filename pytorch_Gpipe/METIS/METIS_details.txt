@@ -3,3 +3,4 @@
 
 #TODO   ***Cannot bisect a graph with 0 vertices!
         ***You are trying to partition a graph into too many parts
+        this occures when the ratio between largest and smallest weights is larger than ~10000

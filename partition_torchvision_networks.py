@@ -12,22 +12,23 @@ def partition_torchvision(nparts=4):
                 inception_v3, densenet201, GoogLeNet, LeNet, WideResNet]
     depth = [0, 1, 100]
     networks = [densenet201]
+    depth = [0]
     for net in networks:
         model = net().to(device)
         for d in depth:
             print(f"current net is {net.__name__}")
             if net.__name__.find("inception") != -1:
                 graph = partition_with_profiler(
-                    model, torch.zeros(4, 3, 299, 299, device=device), nparts=nparts, max_depth=d)
+                    model, torch.zeros(16, 3, 299, 299, device=device), nparts=nparts, max_depth=d)
             elif net.__name__.find("GoogLeNet") != -1:
                 graph = partition_with_profiler(
-                    model, torch.zeros(4, 3, 32, 32, device=device), nparts=nparts, max_depth=d)
+                    model, torch.zeros(16, 3, 32, 32, device=device), nparts=nparts, max_depth=d)
             elif net.__name__.find("LeNet") != -1:
                 graph = partition_with_profiler(
-                    model, torch.zeros(4, 3, 32, 32, device=device), nparts=nparts, max_depth=d)
+                    model, torch.zeros(16, 3, 32, 32, device=device), nparts=nparts, max_depth=d)
             else:
                 graph = partition_with_profiler(
-                    model, torch.zeros(4, 3, 224, 224, device=device), nparts=nparts, max_depth=d)
+                    model, torch.zeros(16, 3, 224, 224, device=device), nparts=nparts, max_depth=d)
 
             filename = f"{net.__name__} attempted {nparts} partitions at depth {d}"
 
@@ -47,6 +48,8 @@ def distribute_torchvision(nruns=1, nparts=4):
     networks = [alexnet, resnet152, vgg19_bn, squeezenet1_1,
                 inception_v3, densenet201, GoogLeNet, LeNet, WideResNet]
     depth = [0, 1, 100]
+    # networks = [densenet201]
+    depth = [0]
     for idx in range(nruns):
         for net in networks:
             for d in depth:
@@ -73,8 +76,8 @@ def distribute_torchvision(nruns=1, nparts=4):
                     _, graph, _ = distribute_using_profiler(model, torch.zeros(
                         4, 3, 224, 224, device=device), device_list=devices, max_depth=d, basic_blocks=None)
 
-                graph.save(directory=out_dir, file_name=filename,
-                           show_buffs_params=False, show_weights=False)
+                # graph.save(directory=out_dir, file_name=filename,
+                #            show_buffs_params=False, show_weights=False)
 
                 print(filename)
                 print()
@@ -83,7 +86,10 @@ def distribute_torchvision(nruns=1, nparts=4):
 def compare_exec_time():
     device = torch.device('cuda:0')
     net = densenet201().to(device)
-
+    torch.cuda.synchronize()
+    x = torch.randn(16, 3, 224, 224, device=device)
+    x = net(x)
+    torch.cuda.synchronize()
     for _ in range(2):
         # milliseconds
         start = torch.cuda.Event(enable_timing=True)
@@ -110,10 +116,17 @@ def compare_exec_time():
         b_time = (start.elapsed_time(end))
         print(f"b_time {b_time}")
 
-    for d in range(5):
+    for _ in range(2):
         x = torch.randn(16, 3, 224, 224, device=device)
-        profileNetwork(net, x, max_depth=d)
+        profiles = profileNetwork(net, x, max_depth=0)
         torch.cuda.synchronize(device)
+
+        profs = profiles.values()
+        profs = list(filter(lambda p: hasattr(p, 'forward_time')
+                            and hasattr(p, 'backward_time'), profs))
+
+        profs = list(map(lambda p: (p.forward_time, p.backward_time), profs))
+        print(profs)
 
 
 def compare_cuda_mem():
@@ -158,4 +171,5 @@ def compare_cuda_mem():
 
 
 if __name__ == "__main__":
-    distribute_torchvision(nruns=4)
+    distribute_torchvision()
+    # compare_exec_time()
