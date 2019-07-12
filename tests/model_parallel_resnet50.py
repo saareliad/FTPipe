@@ -1,5 +1,6 @@
 import pytest
-from pytorch_Gpipe.pipeline import *
+from pytorch_Gpipe.pipeline.pipeline_parallel import PipelineParallel
+from pytorch_Gpipe.pipeline.sync_wrapper import *
 import torch
 import torch.nn as nn
 from torchvision.models.resnet import ResNet, Bottleneck
