@@ -293,7 +293,7 @@ def METIS_partition(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis
     """
     Perform graph partitioning using k-way or recursive methods.
 
-    Returns a 2-tuple `(objval, parts)`, where `parts` is a list of
+    Returns a 2-tuple `(parts,objval)`, where `parts` is a list of
     partition indices corresponding and `objval` is the value of
     the objective function that was minimized (either the edge cuts
     or the total volume).
@@ -359,4 +359,4 @@ def METIS_partition(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis
         raise NotImplementedError("bad algorithm")
     _error_handler(res)
 
-    return objval.value, list(partition)
+    return list(partition), objval.value

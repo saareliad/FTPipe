@@ -40,8 +40,8 @@ def partition_graph(graph: Graph, num_partitions: int, weighting_function: Optio
     if 'contig' not in METIS_opts:
         METIS_opts['contig'] = 1
 
-    edge_cut, partition = METIS_partition(adjlist, nparts=num_partitions, algorithm="metis",
-                                          nodew=weights, **METIS_opts)
+    partition, _ = METIS_partition(adjlist, nparts=num_partitions, algorithm="metis",
+                                   nodew=weights, **METIS_opts)
 
     post_process_partition(graph, partition)
 
@@ -51,7 +51,7 @@ def partition_graph(graph: Graph, num_partitions: int, weighting_function: Optio
         print(
             f"expected {num_partitions} partitions but only {actual_nparts} found implicating that the model to partition is too small")
         print("consider increasing the depth of graph or disabling the basic blocks option")
-    return graph, partition, edge_cut
+    return graph, partition
 
 
 def default_weight_func(w):

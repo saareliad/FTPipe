@@ -25,7 +25,7 @@ def test_every_layer_has_a_partition():
     before_partition = {n.part for n in graph.nodes}
     assert before_partition == {-1}
 
-    _, parts, _ = partition_graph(
+    parts, _ = partition_graph(
         graph, num_partitions=4, weighting_function=lambda w: w)
 
     after = {n.part for n in graph.nodes}
@@ -47,7 +47,7 @@ def test_every_layer_is_allocated_a_device_as_specified_by_the_graph():
 
     weights = {scope: 10 for scope in scopes}
 
-    _, graph, _ = distribute_using_custom_weights(net, weights, x)
+    _, _, _, graph = distribute_using_custom_weights(net, weights, x)
 
     graph_scopes = list(map(lambda n: (n.scope, n.part), graph.nodes[1:]))
 
@@ -69,7 +69,8 @@ def test_wrappers_are_otimized_if_possible():
     x = torch.zeros(50, 10).to(device)
     scopes = model_scopes(net)
     weights = {scope: 10 for scope in scopes}
-    distributed_model, _, _ = distribute_using_custom_weights(net, weights, x)
+    distributed_model, _, _, _ = distribute_using_custom_weights(
+        net, weights, x)
 
     def find_layers_of_class(model: nn.Module, cls):
         return filter(lambda l: isinstance(l, cls), model.modules())

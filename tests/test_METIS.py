@@ -18,13 +18,13 @@ def test_1():
     adjlist = example_adjlist()
 
     print("Testing k-way cut")
-    cuts, parts = METIS_partition(adjlist, 3, algorithm="metis",
+    parts, cuts = METIS_partition(adjlist, 3, algorithm="metis",
                                   dbglvl=mdbglvl_et.METIS_DBG_ALL)
     assert cuts == 2
     assert set(parts) == set([0, 1, 2])
 
     print("Testing recursive cut")
-    cuts, parts = METIS_partition(adjlist, 3, algorithm="metis_recursive",
+    parts, cuts = METIS_partition(adjlist, 3, algorithm="metis_recursive",
                                   dbglvl=mdbglvl_et.METIS_DBG_ALL)
     assert cuts == 2
     assert set(parts) == set([0, 1, 2])
@@ -52,7 +52,7 @@ def test_2():
     #            NULL, NULL, NULL, & nParts, NULL,
     #            NULL, NULL, & objval, part)
 
-    cuts, parts = METIS_partition(
+    parts, _ = METIS_partition(
         adjlist, nParts, algorithm="metis", nodew=nodew, contig=1)
 
     assert len(set(parts)) == nParts

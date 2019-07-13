@@ -5,7 +5,61 @@ import torch.nn as nn
 from typing import Optional, Callable, Any
 
 __all__ = ['partition_with_profiler', 'distribute_using_profiler', 'distribute_using_custom_weights',
-           'visualize_with_profiler', 'partition_graph', 'distribute_model', 'distribute_model_from_config']
+           'visualize_with_profiler', 'partition_graph', 'distribute_model', 'distribute_model_from_config', 'distribute_by_memory', 'distribute_by_time']
+
+
+def distribute_by_time(model: nn.Module, *sample_batch, device_list=None, return_config=False):
+    '''
+    distirbutes a model according to layer's execution time.\n
+    this method is a convenience method as is equivalent to:
+    distribute_using_profiler(model: nn.Module, *sample_batch, device_list, max_depth=100, basic_blocks=None, return_config, weighting_function: Optional[Callable[[Any], int]] =w_func)\n
+    where w_func is 100*(layer.forward_time+layer.backward_time)/2
+
+    Parameters:
+    -----------
+    model:
+        the network we wish to model
+    sample_batch:
+        a sample input to use for tracing
+    device_list:
+        the devices to distribute the model accross each device will hold a partition
+    return_config:
+        wheter to return a configuration of the partition useful if you wish to do the partitioning process once
+        and use it for multiple instances of the model
+    '''
+    def w_function(w):
+        if isinstance(w, tuple) and hasattr(w, 'forward_time') and hasattr(w, 'backward_time'):
+            return max(int(100*(w.forward_time+w.backward_time)/2), 1)
+        return 1
+
+    return distribute_using_profiler(model, *sample_batch, device_list=device_list, return_config=return_config, weighting_function=w_function)
+
+
+def distribute_by_memory(model: nn.Module, *sample_batch, device_list=None, return_config=False):
+    '''
+    distirbutes a model according to layer's peak memory consumption as recoreded by CUDA in GB.\n
+    this method is a convenience method as is equivalent to:
+    distribute_using_profiler(model: nn.Module, *sample_batch, device_list, max_depth=100, basic_blocks=None, return_config, weighting_function: Optional[Callable[[Any], int]] =w_func)\n
+    where w_func is 100*(layer.cuda_memory_forward+layer.cuda_memory_backward)/2
+
+    Parameters:
+    -----------
+    model:
+        the network we wish to model
+    sample_batch:
+        a sample input to use for tracing
+    device_list:
+        the devices to distribute the model accross each device will hold a partition
+    return_config:
+        wheter to return a configuration of the partition useful if you wish to do the partitioning process once
+        and use it for multiple instances of the model
+    '''
+    def w_function(w):
+        if hasattr(w, 'cuda_memory_forward') and hasattr(w, 'cuda_memory_backward'):
+            return max(int(100*(w.cuda_memory_forward+w.cuda_memory_backward)/2), 1)
+        return 1
+
+    return distribute_using_profiler(model, *sample_batch, device_list=device_list, return_config=return_config, weighting_function=w_function)
 
 
 def partition_with_profiler(model: nn.Module, *sample_batch, nparts=4, max_depth=100, basic_blocks=None, weighting_function: Optional[Callable[[Any], int]] = None):
@@ -30,7 +84,7 @@ def partition_with_profiler(model: nn.Module, *sample_batch, nparts=4, max_depth
     graph = visualize_with_profiler(model, *sample_batch, max_depth=max_depth,
                                     basic_blocks=basic_blocks)
 
-    graph, _, _ = partition_graph(
+    graph, _ = partition_graph(
         graph, nparts, weighting_function=weighting_function)
 
     return graph
@@ -68,14 +122,10 @@ def distribute_using_profiler(model: nn.Module, *sample_batch, device_list=None,
     graph = partition_with_profiler(model, *sample_batch, nparts=len(device_list),
                                     max_depth=max_depth, basic_blocks=basic_blocks, weighting_function=weighting_function)
 
-    if return_config:
-        modified_model, wrappers, counter, config = distribute_model(model,
-                                                                     device_list, graph, *sample_batch, return_config=True)
-        return modified_model, graph, (counter, wrappers, sample_batch), config
+    result = distribute_model(model, device_list, graph,
+                              *sample_batch, return_config=return_config)
 
-    modified_model, wrappers, counter = distribute_model(model,
-                                                         device_list, graph, *sample_batch, return_config=False)
-    return modified_model, graph, (counter, wrappers, sample_batch)
+    return result+(graph,)
 
 
 def distribute_using_custom_weights(model: nn.Module, weights, *sample_batch, device_list=None, max_depth=100, basic_blocks=None, return_config=False, weighting_function: Optional[Callable[[Any], int]] = None):
@@ -111,24 +161,10 @@ def distribute_using_custom_weights(model: nn.Module, weights, *sample_batch, de
     graph = graph_builder(model, *sample_batch, max_depth=max_depth,
                           basic_block=basic_blocks, weights=weights)
 
-    graph, _, _ = partition_graph(graph, len(device_list),
-                                  weighting_function=weighting_function if weighting_function != None else lambda w: w)
+    graph, _, = partition_graph(graph, len(device_list),
+                                weighting_function=weighting_function if weighting_function != None else lambda w: w)
 
-    if return_config:
-        modified_model, wrappers, counter, config = distribute_model(model,
-                                                                     device_list, graph, *sample_batch, return_config=True)
-        return modified_model, graph, (counter, wrappers, sample_batch), config
+    res = distribute_model(model, device_list, graph,
+                           *sample_batch, return_config=return_config)
 
-    modified_model, wrappers, counter = distribute_model(model,
-                                                         device_list, graph, *sample_batch, return_config=False)
-    return modified_model, graph, (counter, wrappers, sample_batch)
-
-
-# TODO partition by time
-def distribute_by_time():
-    pass
-
-
-# TODO partition by memory
-def distribute_by_memory():
-    pass
+    return res+(graph,)

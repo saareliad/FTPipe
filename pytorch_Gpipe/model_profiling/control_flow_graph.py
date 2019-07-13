@@ -292,7 +292,7 @@ class Graph():
                  fontcolor=theme["font_color"],
                  fontname=theme["font_name"])
 
-        #TODO make split big graphs to multiple pdfs
+        #TODO split big graphs to multiple pdfs
 
         colors = {-1:'grey',0:'grey',1:'green',2:'red',3:'yellow',4:'orange',5:'brown',6:'purple',7:'pink'}
 

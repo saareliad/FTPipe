@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-import timeit
+import time
 from collections import namedtuple
 from ..utils import traverse_model
 from typing import List, Optional, Dict
@@ -8,7 +8,7 @@ from typing import List, Optional, Dict
 __all__ = ['profileNetwork', 'Profile']
 
 Profile = namedtuple('Profile',
-                     'forward_time backward_time cuda_memory layer_size')
+                     'forward_time backward_time cuda_memory_forward cuda_memory_backward  layer_size')
 
 
 def profileNetwork(net: nn.Module, *sample_batch, basic_block: Optional[List[nn.Module]] = None, max_depth=100) -> Dict[str, Profile]:
@@ -61,7 +61,7 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_block: Optional[List[nn.
                    for layer in layers_dict.values()]
 
     # prepare profiling results
-    layers_profile = {name: Profile(forward, backward, cuda_mem, param_size+buffer_size+in_size+out_size) for name, forward, backward, param_size, buffer_size, in_size, out_size, cuda_mem in zip(
+    layers_profile = {name: Profile(forward, backward, *cuda_mem, param_size+buffer_size+in_size+out_size) for name, forward, backward, param_size, buffer_size, in_size, out_size, cuda_mem in zip(
         layers_dict.keys(), forward_times, backward_times, param_sizes, buffer_sizes, layer_input_sizes, layer_output_sizes, cuda_memory)}
 
     _unwrap_layers(net)
@@ -201,9 +201,9 @@ class Wrapper(nn.Module):
             cuda_mem = torch.cuda.max_memory_allocated(device=device)
         else:
             # convert seconds to milliseconds
-            start = timeit.time.time()
+            start = time.time()
             out = func(*inputs)
-            end = timeit.time.time()
+            end = time.time()
             exec_time = 1000*(end - start)
 
         return exec_time, out, cuda_mem

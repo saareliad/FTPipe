@@ -1,6 +1,6 @@
 from collections import OrderedDict
 import os
-from pytorch_Gpipe import partition_with_profiler, distribute_using_profiler, profileNetwork
+from pytorch_Gpipe import partition_with_profiler, profileNetwork, distribute_by_memory, distribute_by_time, distribute_using_profiler
 import torch
 from sample_models import alexnet, resnet152, vgg19_bn, squeezenet1_1, inception_v3, densenet201, GoogLeNet, LeNet, WideResNet
 import torch.nn as nn
@@ -11,8 +11,6 @@ def partition_torchvision(nparts=4):
     networks = [alexnet, resnet152, vgg19_bn, squeezenet1_1,
                 inception_v3, densenet201, GoogLeNet, LeNet, WideResNet]
     depth = [0, 1, 100]
-    networks = [densenet201]
-    depth = [0]
     for net in networks:
         model = net().to(device)
         for d in depth:
@@ -32,10 +30,10 @@ def partition_torchvision(nparts=4):
 
             filename = f"{net.__name__} attempted {nparts} partitions at depth {d}"
 
-            curr_dir = os.path.dirname(os.path.realpath(__file__))
-            out_dir = f"{curr_dir}\\partition_visualization"
-            graph.save(directory=out_dir, file_name=filename,
-                       show_buffs_params=False, show_weights=False)
+            # curr_dir = os.path.dirname(os.path.realpath(__file__))
+            # out_dir = f"{curr_dir}\\partition_visualization"
+            # graph.save(directory=out_dir, file_name=filename,
+            #            show_buffs_params=False, show_weights=False)
             print(filename)
 
 
@@ -48,8 +46,6 @@ def distribute_torchvision(nruns=1, nparts=4):
     networks = [alexnet, resnet152, vgg19_bn, squeezenet1_1,
                 inception_v3, densenet201, GoogLeNet, LeNet, WideResNet]
     depth = [0, 1, 100]
-    # networks = [densenet201]
-    depth = [0]
     for idx in range(nruns):
         for net in networks:
             for d in depth:
@@ -61,23 +57,23 @@ def distribute_torchvision(nruns=1, nparts=4):
                 print(filename)
                 model = net().to(device)
                 if net.__name__.find("inception") != -1:
-                    _, graph, _ = distribute_using_profiler(model, torch.zeros(
+                    _, _, _, graph = distribute_using_profiler(model, torch.zeros(
                         4, 3, 299, 299, device=device), device_list=devices, max_depth=d, basic_blocks=None)
 
                 elif net.__name__.find("GoogLeNet") != -1:
-                    _, graph, _ = distribute_using_profiler(model, torch.zeros(
+                    _, _, _, graph = distribute_using_profiler(model, torch.zeros(
                         4, 3, 32, 32, device=device), device_list=devices, max_depth=d, basic_blocks=None)
 
                 elif net.__name__.find("LeNet") != -1:
-                    _, graph, _ = distribute_using_profiler(model, torch.zeros(
+                    _, _, _, graph = distribute_using_profiler(model, torch.zeros(
                         4, 3, 32, 32, device=device), device_list=devices, max_depth=d, basic_blocks=None)
 
                 else:
-                    _, graph, _ = distribute_using_profiler(model, torch.zeros(
+                    _, _, _, graph = distribute_using_profiler(model, torch.zeros(
                         4, 3, 224, 224, device=device), device_list=devices, max_depth=d, basic_blocks=None)
 
-                # graph.save(directory=out_dir, file_name=filename,
-                #            show_buffs_params=False, show_weights=False)
+                graph.save(directory=out_dir, file_name=filename,
+                           show_buffs_params=False, show_weights=False)
 
                 print(filename)
                 print()
@@ -161,7 +157,7 @@ def compare_cuda_mem():
     profiles = profileNetwork(features, x)
     diffs = dict()
     for n, p in profiles.items():
-        actual = p.cuda_memory[0]
+        actual = p.cuda_memory_forward
         for other in names:
             if other in n:
                 expected = expected_mem[other]
@@ -171,5 +167,6 @@ def compare_cuda_mem():
 
 
 if __name__ == "__main__":
+    # partition_torchvision()
     distribute_torchvision()
     # compare_exec_time()
