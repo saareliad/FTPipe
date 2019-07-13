@@ -324,6 +324,9 @@ def METIS_partition(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis
     Any additional METIS options may be specified as keyword parameters.
     See the METIS manual for specific meaning of each option.
     """
+    if(nparts <= 1):
+        raise ValueError("nparts must be greater than 1")
+
     nodesz = opts.pop('nodesz', None)
     nodew = opts.pop('nodew', None)
     graph = _adjlist_to_metis(adjlist, nodew, nodesz)

@@ -1,7 +1,6 @@
 
 from .sync_wrapper import *
-from .. import distribute_using_profiler
-from typing import Optional, List, Tuple
+from typing import List, Tuple
 
 
 class PipelineParallel(nn.Module):
@@ -34,19 +33,12 @@ class PipelineParallel(nn.Module):
     """
 
     def __init__(self, model: nn.Module, microbatch_size: int,
-                 input_shape: Tuple[int, ...], devices: Optional[List[str]] = None,
-                 depth: int = 100, main_device: str = None):
+                 input_shape: Tuple[int, ...], wrappers, counter, main_device: str = None):
         super(PipelineParallel, self).__init__()
-
-        sample_batch = torch.zeros(microbatch_size, *input_shape)
-        self.model, _, (self.counter, self.wrappers, _) = \
-            distribute_using_profiler(
-                model, sample_batch,
-                device_list=devices,
-                max_depth=depth
-            )
-
-        devices = [wrapper.dev for wrapper in self.wrappers]
+        self.model = model
+        self.wrappers = wrappers
+        self.counter = counter
+        devices = [wrapper.device for wrapper in self.wrappers]
 
         if main_device is None:
             self.main_device = devices[-1]
@@ -131,14 +123,16 @@ class PipelineParallel(nn.Module):
                 if cycle < num_runs:
                     input = microbatches[cycle]
                 else:
-                    input = torch.empty(*self.input_shape, device=self.wrappers[0].device)
+                    input = torch.empty(*self.input_shape,
+                                        device=self.wrappers[0].device)
 
                 result: Tuple[torch.Tensor] = self.model(input)
 
                 # the first microbatch will finish the forward propagation only
                 # after num_gpus cycles.
                 if cycle >= self.num_devices - 1:
-                    results.append(result.to(self.main_device, non_blocking=True))
+                    results.append(
+                        result.to(self.main_device, non_blocking=True))
 
                 self.counter.increase()
                 # if torch.cuda.is_available():

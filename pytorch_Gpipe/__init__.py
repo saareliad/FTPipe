@@ -1,11 +1,31 @@
 from .model_profiling import visualize_with_profiler, profileNetwork, graph_builder
 from .model_partitioning import partition_graph, distribute_model, distribute_model_from_config, sequential_partition
+from .pipeline import PipelineParallel
 import torch
 import torch.nn as nn
 from typing import Optional, Callable, Any
 
-__all__ = ['partition_with_profiler', 'distribute_using_profiler', 'distribute_using_custom_weights',
+__all__ = ['pipe_model', 'partition_with_profiler', 'distribute_using_profiler', 'distribute_using_custom_weights',
            'visualize_with_profiler', 'partition_graph', 'distribute_model', 'distribute_model_from_config', 'distribute_by_memory', 'distribute_by_time']
+
+
+def pipe_model(model: nn.Module, microbatch_size, sample_batch, device_list=None):
+    modified_model, wrappers, counter, _ = distribute_by_time(
+        model, sample_batch, device_list=device_list)
+
+    in_shape = []
+    if isinstance(sample_batch, torch.Tensor):
+        in_shape.append(sample_batch.shape[1:])
+    else:
+        for t in sample_batch:
+            in_shape.append(t.shape[1:])
+
+    in_shape = tuple(in_shape)
+
+    pipe = PipelineParallel(
+        modified_model, microbatch_size, in_shape, wrappers, counter)
+
+    return pipe
 
 
 def distribute_by_time(model: nn.Module, *sample_batch, device_list=None, return_config=False):

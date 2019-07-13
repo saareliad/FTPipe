@@ -1,6 +1,6 @@
 from collections import OrderedDict
 import os
-from pytorch_Gpipe import partition_with_profiler, profileNetwork, distribute_by_memory, distribute_by_time, distribute_using_profiler
+from pytorch_Gpipe import partition_with_profiler, profileNetwork, distribute_by_memory, distribute_by_time, distribute_using_profiler, pipe_model
 import torch
 from sample_models import alexnet, resnet152, vgg19_bn, squeezenet1_1, inception_v3, densenet201, GoogLeNet, LeNet, WideResNet
 import torch.nn as nn
@@ -11,6 +11,7 @@ def partition_torchvision(nparts=4):
     networks = [alexnet, resnet152, vgg19_bn, squeezenet1_1,
                 inception_v3, densenet201, GoogLeNet, LeNet, WideResNet]
     depth = [0, 1, 100]
+    networks = [alexnet]
     for net in networks:
         model = net().to(device)
         for d in depth:
@@ -166,7 +167,16 @@ def compare_cuda_mem():
     print(diffs)
 
 
+def integration():
+    device = 'cuda'
+    devices = ['cuda:0', 'cuda:1']
+    x = torch.randn(16, 3, 224, 224, device=device)
+    net = alexnet().to(device)
+    pipe_net = pipe_model(net,  8, x, device_list=devices)
+    # pipe_net(x)
+
+
 if __name__ == "__main__":
-    # partition_torchvision()
-    distribute_torchvision()
+    integration()
+    # distribute_torchvision()
     # compare_exec_time()
