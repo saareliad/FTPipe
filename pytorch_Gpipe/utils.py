@@ -5,7 +5,7 @@ __all__ = ["traverse_model", "traverse_params_buffs",
            "find_output_shapes_of_scopes", "model_scopes"]
 
 
-def traverse_model(model: nn.Module, depth: int = 1000, basic_block: Optional[List[nn.Module]] = None, full=False) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
+def traverse_model(model: nn.Module, depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None, full=False) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
     '''
     iterate over model layers yielding the layer,layer_scope,encasing_module
     Parameters:
@@ -14,28 +14,28 @@ def traverse_model(model: nn.Module, depth: int = 1000, basic_block: Optional[Li
         the model to iterate over
     depth:
         how far down in the model tree to go
-    basic_block:
+    basic_blocks:
         a list of modules that if encountered will not be broken down
     full:
         whether to yield only layers specified by the depth and basick_block options or to yield all layers 
     '''
     prefix = type(model).__name__
-    yield from _traverse_model(model, depth, prefix, basic_block, full)
+    yield from _traverse_model(model, depth, prefix, basic_blocks, full)
 
 
-def _traverse_model(module: nn.Module, depth, prefix, basic_block, full):
+def _traverse_model(module: nn.Module, depth, prefix, basic_blocks, full):
     for name, sub_module in module._modules.items():
         scope = prefix+"/"+type(sub_module).__name__+f"[{name}]"
-        if len(list(sub_module.children())) == 0 or (basic_block != None and isinstance(sub_module, tuple(basic_block))) or depth == 0:
+        if len(list(sub_module.children())) == 0 or (basic_blocks != None and isinstance(sub_module, tuple(basic_blocks))) or depth == 0:
             yield sub_module, scope, module
         else:
             if full:
                 yield sub_module, scope, module
             yield from _traverse_model(sub_module, depth-1, prefix + "/"+type(
-                sub_module).__name__+f"[{name}]", basic_block, full)
+                sub_module).__name__+f"[{name}]", basic_blocks, full)
 
 
-def model_scopes(model: nn.Module, depth: int = 1000, basic_block: Optional[List[nn.Module]] = None, full=False) -> List[str]:
+def model_scopes(model: nn.Module, depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None, full=False) -> List[str]:
     '''
     return a list of all model scopes for the given configuration
      Parameters:
@@ -44,12 +44,12 @@ def model_scopes(model: nn.Module, depth: int = 1000, basic_block: Optional[List
         the model to iterate over
     depth:
         how far down in the model tree to go
-    basic_block:
+    basic_blocks:
         a list of modules that if encountered will not be broken down
     full:
         whether to return only scopes specified by the depth and basick_block options or to yield all scopes up to them
     '''
-    return list(map(lambda t: t[1], traverse_model(model, depth=depth, basic_block=basic_block, full=full)))
+    return list(map(lambda t: t[1], traverse_model(model, depth=depth, basic_blocks=basic_blocks, full=full)))
 
 
 def traverse_params_buffs(module: nn.Module) -> Iterator[Tuple[torch.tensor, str]]:
@@ -81,7 +81,7 @@ def _traverse_params_buffs(module: nn.Module, prefix):
         yield from _traverse_params_buffs(sub_module, prefix + "/"+type(sub_module).__name__+f"[{name}]")
 
 
-def find_output_shapes_of_scopes(model, scopes, *inputs):
+def find_output_shapes_of_scopes(model, scopes, *sample_batch):
     '''
     returns a dictionary from scopes to output shapes without the batch dimention
     by performing a forward pass
@@ -92,8 +92,8 @@ def find_output_shapes_of_scopes(model, scopes, *inputs):
         the model to profile
     scopes:
         the scopes we wish to know their output shapes
-    inputs:
-        the model inputs that will used in the forward pass
+    sample_batch:
+        the model sample_batch that will used in the forward pass
     '''
     backup = dict()
 
@@ -106,7 +106,7 @@ def find_output_shapes_of_scopes(model, scopes, *inputs):
             backup[new_scope] = (scope, name)
 
     with torch.no_grad():
-        model(*inputs)
+        model(*sample_batch)
 
     scope_to_shape = {}
     for layer, scope, parent in traverse_model(model, full=True):

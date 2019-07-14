@@ -1,4 +1,4 @@
-from pytorch_Gpipe import graph_builder, visualize_with_profiler
+from pytorch_Gpipe import graph_builder
 import torch
 import pytest
 from pytorch_Gpipe.utils import traverse_model
@@ -28,11 +28,11 @@ def test_custom_depth(device='cpu'):
 
 
 def test_custom_basic_blocks(device='cpu'):
-    ''' if a basic_block list is provided then those classes will not be broken down to their sub layers'''
+    ''' if a basic_blocks list is provided then those classes will not be broken down to their sub layers'''
     depth = 5
     x = torch.randn(50, 10, device=device)
     net = treeNet(depth).to(device)
-    graph = graph_builder(net, x, basic_block=[treeNet])
+    graph = graph_builder(net, x, basic_blocks=[treeNet])
 
     assert len(graph) == (3+1)
 
@@ -44,7 +44,7 @@ def test_custom_depth_and_blocks(device='cpu'):
     net = combinedTreeNet(depth).to(device)
     x = torch.randn(50, 10, device=device)
     graph = graph_builder(net, x, max_depth=profiled_depth,
-                          basic_block=[treeNet])
+                          basic_blocks=[treeNet])
 
     assert len(graph) == (2 + profiled_depth + 1)
 
@@ -111,11 +111,11 @@ def test_weights_from_profiler(device='cpu'):
     profiled_depth = 7
     net = combinedTreeNet(depth).to(device)
     x = torch.randn(50, 10, device=device)
-    graph = visualize_with_profiler(
-        net, x, max_depth=profiled_depth, basic_blocks=[treeNet])
+    graph = graph_builder(
+        net, x, max_depth=profiled_depth, basic_blocks=[treeNet], use_profiler=True)
 
     scopes = list(map(lambda t: t[1], traverse_model(
-        net, depth=profiled_depth, basic_block=[treeNet])))
+        net, depth=profiled_depth, basic_blocks=[treeNet])))
 
     scope_weights = filter(lambda n: n.scope in scopes, graph.nodes)
     scope_weights = list(map(lambda n: n.weight, scope_weights))

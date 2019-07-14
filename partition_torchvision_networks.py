@@ -73,8 +73,8 @@ def distribute_torchvision(nruns=1, nparts=4):
                     _, _, _, graph = distribute_using_profiler(model, torch.zeros(
                         4, 3, 224, 224, device=device), device_list=devices, max_depth=d, basic_blocks=None)
 
-                graph.save(directory=out_dir, file_name=filename,
-                           show_buffs_params=False, show_weights=False)
+                # graph.save(directory=out_dir, file_name=filename,
+                #            show_buffs_params=False, show_weights=False)
 
                 print(filename)
                 print()
@@ -177,6 +177,6 @@ def integration():
 
 
 if __name__ == "__main__":
-    integration()
-    # distribute_torchvision()
+    # integration()
+    distribute_torchvision()
     # compare_exec_time()

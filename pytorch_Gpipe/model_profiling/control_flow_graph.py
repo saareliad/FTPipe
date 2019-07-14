@@ -1,6 +1,6 @@
 from enum import Enum
 from copy import copy
-from typing import List,Dict,Any,Optional
+from typing import List,Dict,Any
 class Graph():
     '''
     a Graph data structure that model a pytorch network built from a pytorch trace\n
@@ -11,14 +11,14 @@ class Graph():
     do not instanciate this class directly use the graph_builder method provided with this module
     '''
 
-    def __init__(self, profiled_layers: List[str], num_inputs: int, buffer_param_names: List[str], trace_graph, weights: Dict[str, Any],basic_block:Optional[List],depth:int):
+    def __init__(self, profiled_layers: List[str], num_inputs: int, buffer_param_names: List[str], trace_graph, weights: Dict[str, Any],basic_blocks:List,depth:int):
         self.nodes = []
         self.profiled_layers = profiled_layers
         self.num_inputs_buffs_params = 0
         self.num_inputs = num_inputs
         self.buffer_param_names = buffer_param_names
         self._build_graph(trace_graph)
-        self.basic_block=basic_block
+        self.basic_blocks=basic_blocks
         self.depth=depth
 
         for node in self.nodes:

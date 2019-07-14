@@ -2,7 +2,7 @@ import torch
 from .dummy_nets import treeNet
 from pytorch_Gpipe import graph_builder, partition_graph, distribute_using_custom_weights
 from pytorch_Gpipe.utils import traverse_model, model_scopes
-from pytorch_Gpipe.pipeline import ActivationSavingLayer, LayerWrapper, SyncWrapper
+from pytorch_Gpipe.pipeline.sync_wrapper import ActivationSavingLayer, LayerWrapper, SyncWrapper
 import pytest
 import torch.nn as nn
 

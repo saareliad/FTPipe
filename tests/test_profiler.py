@@ -9,7 +9,7 @@ def test_max_depth(device='cpu'):
     depth = 7
     net = treeNet(depth).to(device)
     report = profileNetwork(net, torch.randn(
-        50, 10, device=device), basic_block=None)
+        50, 10, device=device), basic_blocks=None)
 
     assert len(report) == (2**(depth+1) + 2**(depth+1)-1)
 
@@ -20,17 +20,17 @@ def test_custom_depth(device='cpu'):
     profiled_depth = 3
     net = treeNet(depth).to(device)
     report = profileNetwork(net, torch.randn(50, 10, device=device),
-                            max_depth=profiled_depth, basic_block=None)
+                            max_depth=profiled_depth, basic_blocks=None)
 
     assert len(report) == (2**(profiled_depth+1) + 2**(profiled_depth+1)-1)
 
 
 def test_custom_basic_block(device='cpu'):
-    ''' if a basic_block list is provided then those classes will not be broken down to their sub layers'''
+    ''' if a basic_blocks list is provided then those classes will not be broken down to their sub layers'''
     depth = 5
     net = treeNet(depth).to(device)
     report = profileNetwork(net, torch.randn(
-        50, 10, device=device), basic_block=[treeNet])
+        50, 10, device=device), basic_blocks=[treeNet])
 
     assert len(report) == 3
 
@@ -41,7 +41,7 @@ def test_using_custom_depth_and_blocks(device='cpu'):
     profiled_depth = 7
     net = combinedTreeNet(depth).to(device)
     report = profileNetwork(net, torch.randn(50, 10, device=device),
-                            max_depth=profiled_depth, basic_block=[treeNet])
+                            max_depth=profiled_depth, basic_blocks=[treeNet])
 
     assert len(report) == (2 + profiled_depth)
 

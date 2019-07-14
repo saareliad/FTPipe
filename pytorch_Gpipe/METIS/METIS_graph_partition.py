@@ -329,7 +329,7 @@ def METIS_partition(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis
 
     nodesz = opts.pop('nodesz', None)
     nodew = opts.pop('nodew', None)
-    graph = _adjlist_to_metis(adjlist, nodew, nodesz)
+    graph = _adjlist_to_metis(adjlist, nodew=nodew, nodesz=nodesz)
 
     options = _set_options(**opts)
     if tpwgts and not isinstance(tpwgts, ctypes.Array):

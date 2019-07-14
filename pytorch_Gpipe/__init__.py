@@ -1,4 +1,4 @@
-from .model_profiling import visualize_with_profiler, profileNetwork, graph_builder
+from .model_profiling import profileNetwork, graph_builder
 from .model_partitioning import partition_graph, distribute_model, distribute_model_from_config, sequential_partition
 from .pipeline import PipelineParallel
 import torch
@@ -6,12 +6,17 @@ import torch.nn as nn
 from typing import Optional, Callable, Any
 
 __all__ = ['pipe_model', 'partition_with_profiler', 'distribute_using_profiler', 'distribute_using_custom_weights',
-           'visualize_with_profiler', 'partition_graph', 'distribute_model', 'distribute_model_from_config', 'distribute_by_memory', 'distribute_by_time']
+           'partition_graph', 'distribute_model', 'distribute_model_from_config', 'distribute_by_memory', 'distribute_by_time']
 
 
-def pipe_model(model: nn.Module, microbatch_size, sample_batch, device_list=None):
-    modified_model, wrappers, counter, _ = distribute_by_time(
-        model, sample_batch, device_list=device_list)
+# TODO this a temp method and will change
+def pipe_model(model: nn.Module, microbatch_size, sample_batch, device_list=None, by_memory=False):
+    if by_memory:
+        modified_model, wrappers, counter, _ = distribute_by_memory(
+            model, sample_batch, device_list=device_list)
+    else:
+        modified_model, wrappers, counter, _ = distribute_by_time(
+            model, sample_batch, device_list=device_list)
 
     in_shape = []
     if isinstance(sample_batch, torch.Tensor):
@@ -96,13 +101,13 @@ def partition_with_profiler(model: nn.Module, *sample_batch, nparts=4, max_depth
         the number of partitions
     max_depth:
         how far down we go in the model tree determines the detail level of the graph
-    basic_block:
+    basic_blocks:
         an optional list of modules that if encountered will not be broken down
     weighting_function:
         an optional function from node weights to non negative integers if not provided a deafualt function will be used
     '''
-    graph = visualize_with_profiler(model, *sample_batch, max_depth=max_depth,
-                                    basic_blocks=basic_blocks)
+    graph = graph_builder(model, *sample_batch, max_depth=max_depth,
+                          basic_blocks=basic_blocks, use_profiler=True)
 
     graph, _ = partition_graph(
         graph, nparts, weighting_function=weighting_function)
@@ -124,7 +129,7 @@ def distribute_using_profiler(model: nn.Module, *sample_batch, device_list=None,
         the devices to distribute the model accross each device will hold a partition
     max_depth:
         how far down we go in the model tree determines the detail level of the graph
-    basic_block:
+    basic_blocks:
         an optional list of modules that if encountered will not be broken down
     return_config:
         wheter to return a configuration of the partition useful if you wish to do the partitioning process once
@@ -164,7 +169,7 @@ def distribute_using_custom_weights(model: nn.Module, weights, *sample_batch, de
         the devices to distribute the model accross each device will hold a partition
     max_depth:
         how far down we go in the model tree determines the detail level of the graph
-    basic_block:
+    basic_blocks:
         an optional list of modules that if encountered will not be broken down
     return_config:
         wheter to return a configuration of the partition useful if you wish to do the partitioning process once
@@ -179,7 +184,7 @@ def distribute_using_custom_weights(model: nn.Module, weights, *sample_batch, de
             device_list = ["cpu"]
 
     graph = graph_builder(model, *sample_batch, max_depth=max_depth,
-                          basic_block=basic_blocks, weights=weights)
+                          basic_blocks=basic_blocks, weights=weights)
 
     graph, _, = partition_graph(graph, len(device_list),
                                 weighting_function=weighting_function if weighting_function != None else lambda w: w)

@@ -11,7 +11,7 @@ Profile = namedtuple('Profile',
                      'forward_time backward_time cuda_memory_forward cuda_memory_backward  layer_size')
 
 
-def profileNetwork(net: nn.Module, *sample_batch, basic_block: Optional[List[nn.Module]] = None, max_depth=100) -> Dict[str, Profile]:
+def profileNetwork(net: nn.Module, *sample_batch, basic_blocks: Optional[List[nn.Module]] = None, max_depth=100) -> Dict[str, Profile]:
     '''
     profiles a network's computation time(forward/backward) and memory consumption
     returns a dictionary from layer_scope to Profile
@@ -25,9 +25,9 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_block: Optional[List[nn.
         a sample batch that will be used to measure executation time of network
         can be single/multiple inputs
 
-    basic_block:
+    basic_blocks:
         a tuple of nn.Module classes that the profiler will regard as a cohesive unit
-        for eg. if basic_block = nn.Sequential then the profiler will break it down to its components
+        for eg. if basic_blocks = nn.Sequential then the profiler will break it down to its components
 
     max_depth:
         determins how far the profiler will go in the model tree
@@ -36,7 +36,7 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_block: Optional[List[nn.
 
     '''
     # wrap all individula layers for profiling
-    layers_dict = _wrap_profiled_layers(net, max_depth, basic_block)
+    layers_dict = _wrap_profiled_layers(net, max_depth, basic_blocks)
 
     # perform 2 symbolic forward backward run first one is warmup as we have seen the first time measurements are higher
     _perform_forward_backward_pass(net, *sample_batch)
@@ -69,22 +69,22 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_block: Optional[List[nn.
     return layers_profile
 
 
-def _perform_forward_backward_pass(net, *inputs):
-    device = inputs[0].device
+def _perform_forward_backward_pass(net, *sample_batch):
+    device = sample_batch[0].device
     if device.type == "cuda":
         torch.cuda.synchronize(device=device)
-        out = net(*inputs)
+        out = net(*sample_batch)
         torch.cuda.synchronize(device=device)
     else:
-        out = net(*inputs)
+        out = net(*sample_batch)
 
     return out
 
 
-def _wrap_profiled_layers(module: nn.Module, depth, basic_block: List[nn.Module]):
+def _wrap_profiled_layers(module: nn.Module, depth, basic_blocks: List[nn.Module]):
     layers_dict = {}
 
-    for sub_layer, scope, parent in traverse_model(module, depth, basic_block):
+    for sub_layer, scope, parent in traverse_model(module, depth, basic_blocks):
         name = scope[scope.rfind('[')+1:-1]
         parent._modules[name] = Wrapper(sub_layer)
         layers_dict[scope] = parent._modules[name]
