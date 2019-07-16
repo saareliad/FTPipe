@@ -1,22 +1,24 @@
-from .model_profiling import profileNetwork, graph_builder
-from .model_partitioning import partition_graph, distribute_model, distribute_model_from_config, sequential_partition
+from .model_profiling import profileNetwork, graph_builder, Graph
+from .model_partitioning import partition_graph, distribute_model, distribute_model_from_config
 from .pipeline import PipelineParallel
 import torch
 import torch.nn as nn
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, List
 
 __all__ = ['pipe_model', 'partition_with_profiler', 'distribute_using_profiler', 'distribute_using_custom_weights',
            'partition_graph', 'distribute_model', 'distribute_model_from_config', 'distribute_by_memory', 'distribute_by_time']
 
 
 # TODO this a temp method and will change
-def pipe_model(model: nn.Module, microbatch_size, sample_batch, device_list=None, by_memory=False):
+def pipe_model(model: nn.Module, microbatch_size, sample_batch, device_list=None, by_memory=False) -> nn.Module:
     if by_memory:
-        modified_model, wrappers, counter, _ = distribute_by_memory(
+        result = distribute_by_memory(
             model, sample_batch, device_list=device_list)
     else:
-        modified_model, wrappers, counter, _ = distribute_by_time(
+        result = distribute_by_time(
             model, sample_batch, device_list=device_list)
+
+    modified_model, wrappers, counter, _ = result
 
     in_shape = []
     if isinstance(sample_batch, torch.Tensor):
@@ -53,7 +55,7 @@ def distribute_by_time(model: nn.Module, *sample_batch, device_list=None, return
         and use it for multiple instances of the model
     '''
     def w_function(w):
-        if isinstance(w, tuple) and hasattr(w, 'forward_time') and hasattr(w, 'backward_time'):
+        if hasattr(w, 'forward_time') and hasattr(w, 'backward_time'):
             return max(int(100*(w.forward_time+w.backward_time)/2), 1)
         return 1
 
@@ -87,7 +89,7 @@ def distribute_by_memory(model: nn.Module, *sample_batch, device_list=None, retu
     return distribute_using_profiler(model, *sample_batch, device_list=device_list, return_config=return_config, weighting_function=w_function)
 
 
-def partition_with_profiler(model: nn.Module, *sample_batch, nparts=4, max_depth=100, basic_blocks=None, weighting_function: Optional[Callable[[Any], int]] = None):
+def partition_with_profiler(model: nn.Module, *sample_batch, nparts=4, max_depth=100, basic_blocks: Optional[List[nn.Module]] = None, weighting_function: Optional[Callable[[Any], int]] = None) -> Graph:
     '''
     return a graph representing the partitioned model with the weights given by the profiler
     this method does not distribute the model accross devices
@@ -109,13 +111,13 @@ def partition_with_profiler(model: nn.Module, *sample_batch, nparts=4, max_depth
     graph = graph_builder(model, *sample_batch, max_depth=max_depth,
                           basic_blocks=basic_blocks, use_profiler=True)
 
-    graph, _ = partition_graph(
+    graph = partition_graph(
         graph, nparts, weighting_function=weighting_function)
 
     return graph
 
 
-def distribute_using_profiler(model: nn.Module, *sample_batch, device_list=None, max_depth=100, basic_blocks=None, return_config=False, weighting_function: Optional[Callable[[Any], int]] = None):
+def distribute_using_profiler(model: nn.Module, *sample_batch, device_list=None, max_depth=100, basic_blocks: Optional[List[nn.Module]] = None, return_config=False, weighting_function: Optional[Callable[[Any], int]] = None):
     '''
     distributes a model accross the given devices in accordance to given specifications and data from the profiler\n
     !!!this method changes the the given model and is part of the internal API
@@ -153,7 +155,7 @@ def distribute_using_profiler(model: nn.Module, *sample_batch, device_list=None,
     return result+(graph,)
 
 
-def distribute_using_custom_weights(model: nn.Module, weights, *sample_batch, device_list=None, max_depth=100, basic_blocks=None, return_config=False, weighting_function: Optional[Callable[[Any], int]] = None):
+def distribute_using_custom_weights(model: nn.Module, weights, *sample_batch, device_list=None, max_depth=100, basic_blocks: Optional[List[nn.Module]] = None, return_config=False, weighting_function: Optional[Callable[[Any], int]] = None):
     '''
     distributes a model accross the given devices in accordance to given specifications and custom node weights\n
     !!!this method changes the the given model and is part of the internal API
@@ -186,8 +188,8 @@ def distribute_using_custom_weights(model: nn.Module, weights, *sample_batch, de
     graph = graph_builder(model, *sample_batch, max_depth=max_depth,
                           basic_blocks=basic_blocks, weights=weights)
 
-    graph, _, = partition_graph(graph, len(device_list),
-                                weighting_function=weighting_function if weighting_function != None else lambda w: w)
+    graph = partition_graph(graph, len(device_list),
+                            weighting_function=weighting_function if weighting_function != None else lambda w: w)
 
     res = distribute_model(model, device_list, graph,
                            *sample_batch, return_config=return_config)

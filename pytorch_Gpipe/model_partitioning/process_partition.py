@@ -1,5 +1,5 @@
 from ..model_profiling import Graph
-from typing import List
+from typing import List, Dict
 from collections import deque, Counter
 
 __all__ = ["post_process_partition"]
@@ -57,7 +57,7 @@ def scc_partition_correction(graph: Graph):
                 graph.nodes[v].part = output_part
 
 
-def strongly_connected_components_iterative(vertices, edges):
+def strongly_connected_components_iterative(vertices: List[int], edges: Dict[int, List[int]]):
     identified = set()
     stack = []
     index = {}

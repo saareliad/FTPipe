@@ -2,12 +2,12 @@
 from ..METIS import METIS_partition
 from .process_partition import post_process_partition
 from ..model_profiling import Graph
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, List
 
 __all__ = ["partition_graph"]
 
 
-def partition_graph(graph: Graph, num_partitions: int, weighting_function: Optional[Callable[[Any], int]] = None, **METIS_opts):
+def partition_graph(graph: Graph, num_partitions: int, weighting_function: Optional[Callable[[Any], int]] = None, **METIS_opts) -> Graph:
     '''
     partition the graph using METIS's PartGraphKway and then optimizes it to our needs
 
@@ -51,10 +51,10 @@ def partition_graph(graph: Graph, num_partitions: int, weighting_function: Optio
         print(
             f"expected {num_partitions} partitions but only {actual_nparts} found implicating that the model to partition is too small")
         print("consider increasing the depth of graph or disabling the basic blocks option")
-    return graph, partition
+    return graph
 
 
 def default_weight_func(w):
-    if isinstance(w, tuple) and hasattr(w, 'forward_time') and hasattr(w, 'backward_time'):
+    if hasattr(w, 'forward_time') and hasattr(w, 'backward_time'):
         return max(int(100*(w.forward_time+w.backward_time)/2), 1)
     return 1

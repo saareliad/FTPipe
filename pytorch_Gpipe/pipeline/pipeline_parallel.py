@@ -1,5 +1,6 @@
 
-from .sync_wrapper import *
+from torch import nn, autograd
+import torch
 from typing import List, Tuple
 
 

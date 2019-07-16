@@ -5,8 +5,7 @@ import ctypes
 from enum import IntEnum
 from ctypes import POINTER as ptr, byref
 import os
-import typing
-from typing import List, Tuple, Dict, Union, Callable
+from typing import List, Tuple
 import platform
 
 # metis lib loading
@@ -203,7 +202,7 @@ _SetDefaultOptions.argtypes = METIS_SetDefaultOptions_args
 # -------------------------------------------------------------------------
 # help functions
 # -------------------------------------------------------------------------
-def _adjlist_to_metis(adjlist, nodew=None, nodesz=None):
+def _adjlist_to_metis(adjlist: List[List[int]], nodew=None, nodesz=None):
     """
     :param adjlist: A list of tuples. Each list element represents a node or vertex
       in the graph. Each item in the tuples represents an edge. These items may be
@@ -289,7 +288,7 @@ def _set_options(**options):
 # -------------------------------------------------------------------------
 # python API
 # -------------------------------------------------------------------------
-def METIS_partition(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis', **opts) -> Tuple[int, List[int]]:
+def METIS_partition(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis', **opts) -> Tuple[List[int], int]:
     """
     Perform graph partitioning using k-way or recursive methods.
 

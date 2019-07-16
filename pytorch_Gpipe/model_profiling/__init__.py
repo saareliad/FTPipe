@@ -1,7 +1,7 @@
 from .control_flow_graph import Graph, NodeTypes
 from .optimize_graph import optimize_graph
 from .network_profiler import profileNetwork
-from ..utils import *
+from ..utils import traverse_model, traverse_params_buffs
 from typing import Optional, List, Dict, Any
 import torch.nn as nn
 import torch

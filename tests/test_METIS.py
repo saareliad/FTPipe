@@ -1,5 +1,3 @@
-import pytest
-
 from pytorch_Gpipe.METIS import METIS_partition, mdbglvl_et
 
 

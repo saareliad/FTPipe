@@ -1,8 +1,7 @@
 import torch
 import torch.nn as nn
-from torch import autograd
 from enum import Enum
-from typing import Tuple, Union, List
+from typing import Tuple, Union
 
 ForwardMode = Enum('Mode', 'train backward production')
 
