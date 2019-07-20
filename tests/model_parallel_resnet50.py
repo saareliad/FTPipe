@@ -35,7 +35,7 @@ class PrintLayer(nn.Module):
 class ModelParallelResNet50(ResNet):
     def __init__(self, *args, **kwargs):
         super(ModelParallelResNet50, self).__init__(
-            Bottleneck, [3, 4, 6, 3], num_classes=num_classes, *args, **kwargs)
+            Bottleneck, [3, 4, 6, 3], *args, **kwargs)
 
         dev1 = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 

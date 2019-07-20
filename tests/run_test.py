@@ -1,6 +1,7 @@
 import pytest
-from .model_parallel_resnet50 import test_split_size
-from .test_time import test_resnet50_time
+from tests.model_parallel_resnet50 import test_split_size
+from tests.test_time import test_resnet50_time
+from tests.test_loss import test_resnet50_loss
 
 """
 **ADD TESTS FOR THE FOLLOWING**
@@ -34,3 +35,4 @@ image_h = 224
 if __name__ == "__main__":
     test_split_size()
     test_resnet50_time()
+    test_resnet50_loss()
