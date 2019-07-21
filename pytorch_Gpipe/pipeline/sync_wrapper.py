@@ -56,6 +56,29 @@ class CycleCounter:
         return gpu_num <= self.__counter < gpu_num + self.num_runs
 
 
+class DeviceAgnosticStream:
+    """
+    This class is a device agnostic implementation of torch.Stream.
+    It behaves the same as torch.Stream if given device is a cuda device, and
+    doesn't do anything if the device is 'cpu'.
+    """
+    def __init__(self, device: str = None):
+        if device == 'cpu':
+            self.stream = None
+        else:
+            self.stream = torch.cuda.Stream(device=device)
+
+    def __enter__(self):
+        if self.stream is not None:
+            return self.stream.__enter__()
+        else:
+            return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.stream is not None:
+            return self.stream.__exit__()
+
+
 class SyncWrapper(nn.Module):
     def __init__(self, module: nn.Module, device: str, gpu_num: int, output_shapes: Tuple[Tuple[int, ...], ...],
                  num_inputs=1, counter: CycleCounter = None):
@@ -66,7 +89,8 @@ class SyncWrapper(nn.Module):
         self.device = device
         self.input_devices = None
 
-        self.pipe_stream = torch.cuda.Stream(device=torch.device(device))
+        self.pipe_stream = torch.cuda.Stream(device=device)
+        # self.pipe_stream = DeviceAgnosticStream(device=device)
 
         # number of gpu in order of pipeline
         self.gpu_num = gpu_num
@@ -200,7 +224,8 @@ class ActivationSavingLayer(nn.Module):
         # layer device
         self.device = device
 
-        self.pipe_stream = torch.cuda.Stream(device=torch.device(device))
+        # self.pipe_stream = DeviceAgnosticStream(device)
+        self.pipe_stream = torch.cuda.Stream(device=device)
 
         # used for backward pass with saved activations, ids used to find them in the hash table
         self.activations = []
