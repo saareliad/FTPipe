@@ -10,8 +10,25 @@ __all__ = ["distribute_model",
 partitionConfig = namedtuple("partitionConfig",
                              "nparts scopes_to_device scope_shapes scope_gpu_num part_input_scopes num_inputs")
 
-# TODO num inputs for syncWrapper
+# TODO num inputs for syncwrapper
+def num_inputs_to_parts(graph: Graph):
+    inputs_to_parts = []
+    parts = []
 
+    for node in graph.nodes:
+        if node.part not in parts:
+            parts.append(node.part)
+
+    for part in range(len(parts)):
+        count = 0
+        for node in graph.nodes:
+            if node.part != part:
+                for o_node in node.out_nodes:   # i think thats the meaning of inputs to part
+                    if o_node.part == part:
+                        count = count +1
+        inputs_to_parts.append(count)
+
+    return inputs_to_parts
 
 def distribute_model(model: nn.Module, device_lst: list, graph: Graph, *sample_batch, return_config: bool = False):
     # TODO refactor and simplify split to sub functions
