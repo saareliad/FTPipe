@@ -1,5 +1,5 @@
-import pytest
-from pytorch_Gpipe.pipeline.pipeline_parallel import PipelineParallel
+
+from pytorch_Gpipe import pipe_model
 from pytorch_Gpipe.pipeline.sync_wrapper import *
 import torch
 import torch.nn as nn
@@ -11,6 +11,7 @@ import timeit
 num_classes = 1000
 num_batches = 3
 batch_size = 120
+image_c = 3
 image_w = 224
 image_h = 224
 
@@ -78,13 +79,10 @@ class ModelParallelResNet50(ResNet):
 
 
 def make_pipeline_resnet(microbatch_size: int, num_classes=num_classes):
-    inner_module = ModelParallelResNet50(num_classes=num_classes)
-    counter = inner_module.counter
-    wrappers = [inner_module.act_saving, inner_module.seq2]
-    input_shape = (1, 3, 224, 224)
+    model = ModelParallelResNet50(num_classes=num_classes)
+    sample_batch = torch.zeros(batch_size, image_c, image_h, image_w)
     device = 'cuda:1' if torch.cuda.is_available() else 'cpu'
-    return PipelineParallel(inner_module, microbatch_size, 2, input_shape, counter=counter, wrappers=wrappers,
-                            main_device=device)
+    return pipe_model(model, microbatch_size, sample_batch, [device])
 
 
 def test_split_size():

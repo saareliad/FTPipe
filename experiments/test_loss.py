@@ -1,4 +1,4 @@
-import pytest
+
 import torch
 from torch.utils.data import DataLoader
 import torch.nn as nn
@@ -40,8 +40,7 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer',
 def test_resnet50_loss():
     # the models to compare
     model_single = resnet50(num_classes=len(classes)).to(device_single)
-    model_pipe = make_pipeline_resnet(
-        microbatch_size=20, num_classes=num_classes)
+    model_pipe = make_pipeline_resnet(microbatch_size=20, num_classes=num_classes)
 
     print(f"Training resnet50 on {device_single}")
     stats_single = train_with_stats_saved(model_single)

@@ -1,6 +1,5 @@
-import pytest
-import timeit
 
+import timeit
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
@@ -19,7 +18,8 @@ def test_resnet50_time():
 
     stmt = "train(model)"
 
-    setup = "model = make_pipeline_resnet(20)"
+    setup = "from .model_parallel_resnet50 import make_pipeline_resnet\n" \
+            "model = make_pipeline_resnet(20)"
     mp_run_times = timeit.repeat(
         stmt, setup, number=1, repeat=num_repeat, globals=globals())
     mp_mean, mp_std = np.mean(mp_run_times), np.std(mp_run_times)

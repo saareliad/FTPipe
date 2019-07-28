@@ -89,8 +89,8 @@ class SyncWrapper(nn.Module):
         self.device = device
         self.input_devices = None
 
-        self.pipe_stream = torch.cuda.Stream(device=device)
-        # self.pipe_stream = DeviceAgnosticStream(device=device)
+        # self.pipe_stream = torch.cuda.Stream(device=device)
+        self.pipe_stream = DeviceAgnosticStream(device=device)
 
         # number of gpu in order of pipeline
         self.gpu_num = gpu_num
@@ -132,8 +132,7 @@ class SyncWrapper(nn.Module):
         if self.counter.is_input_valid(self.gpu_num) and self.has_grads():
             with torch.cuda.stream(self.pipe_stream):
                 acts = self.last_inputs
-                self.grads = tuple([act.grad.to(dev, non_blocking=True)
-                                    for act, dev in zip(acts, self.input_devices)])
+                self.grads = tuple([act.grad.to(dev, non_blocking=True) for act, dev in zip(acts, self.input_devices)])
 
     def finished_prop(self):
         """
@@ -160,8 +159,7 @@ class SyncWrapper(nn.Module):
 
             output = self.module(*self.last_inputs)
         else:
-            output = tuple([torch.empty(1, *output_shape, device=self.device)
-                            for output_shape in self.output_shapes])
+            output = tuple([torch.empty(*output_shape, device=self.device) for output_shape in self.output_shapes])
             if len(output) == 1:
                 output = output[0]
 
@@ -172,8 +170,7 @@ class SyncWrapper(nn.Module):
         function for saving layer activation
         """
         # TODO: check if detach needed, shouldn't have a graph as we work with no_grad in forward mode
-        self.activations.append(
-            tuple([moved_input.clone().detach() for moved_input in moved_inputs]))
+        self.activations.append(tuple([moved_input.clone().detach() for moved_input in moved_inputs]))
 
     def forward(self, *input: Tuple[torch.Tensor, ...]) -> torch.Tensor:
         # move the input between devices
@@ -188,8 +185,7 @@ class SyncWrapper(nn.Module):
             output = self.module(*cur_inputs)
         else:
             # the input is garbage.
-            output = tuple([torch.empty(1, *output_shape, device=self.device)
-                            for output_shape in self.output_shapes])
+            output = tuple([torch.empty(*output_shape, device=self.device) for output_shape in self.output_shapes])
             if len(output) == 1:
                 output = output[0]
 
@@ -197,8 +193,7 @@ class SyncWrapper(nn.Module):
         if self.counter.is_input_valid(self.gpu_num):
             with torch.cuda.stream(self.pipe_stream):
                 if self.counter.get_count() == self.gpu_num:
-                    self.input_devices = [
-                        next_input.device for next_input in input]
+                    self.input_devices = [next_input.device for next_input in input]
 
                 next_inputs: Tuple[torch.Tensor, ...] = tuple(
                     [next_input.to(self.device, non_blocking=True) for next_input in input])
@@ -224,8 +219,8 @@ class ActivationSavingLayer(nn.Module):
         # layer device
         self.device = device
 
-        # self.pipe_stream = DeviceAgnosticStream(device)
-        self.pipe_stream = torch.cuda.Stream(device=device)
+        self.pipe_stream = DeviceAgnosticStream(device)
+        # self.pipe_stream = torch.cuda.Stream(device=device)
 
         # used for backward pass with saved activations, ids used to find them in the hash table
         self.activations = []
@@ -269,8 +264,7 @@ class ActivationSavingLayer(nn.Module):
 
         else:
             # if this iteration is one we should not work in
-            output = tuple(
-                [torch.empty(*input.size(), device=self.device) for input in inputs])
+            output = tuple([torch.empty(*input.size(), device=self.device) for input in inputs])
 
         if len(output) == 1:
             output = output[0]
@@ -282,15 +276,13 @@ class ActivationSavingLayer(nn.Module):
         function for saving layer activations
         """
 
-        self.activations.append(
-            tuple([moved_input.clone() for moved_input in moved_inputs]))
+        self.activations.append(tuple([moved_input.clone() for moved_input in moved_inputs]))
 
     def forward(self, *inputs: Tuple[torch.Tensor, ...]) -> Tuple[torch.Tensor, ...]:
         if self.counter.cur_mode is ForwardMode.backward:
             return self.backward_mode(*inputs)
 
-        moved_inputs = tuple(
-            [input.to(self.device, non_blocking=True) for input in inputs])
+        moved_inputs = tuple([input.to(self.device, non_blocking=True) for input in inputs])
 
         if self.counter.cur_mode is ForwardMode.train and self.counter.is_input_valid(self.gpu_num):
             with torch.cuda.stream(self.pipe_stream):
@@ -317,8 +309,7 @@ class LayerWrapper(nn.Module):
         if self.counter.is_last_input_valid(self.gpu_num):
             return self.module(*inputs)
         else:
-            out = tuple([torch.empty(1, *output_shape, device=self.device)
-                         for output_shape in self.output_shapes])
+            out = tuple([torch.empty(*output_shape, device=self.device) for output_shape in self.output_shapes])
             if len(out) == 1:
                 out = out[0]
             return out
