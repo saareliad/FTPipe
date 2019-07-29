@@ -2,9 +2,9 @@
 import torch
 import torch.nn as nn
 
-from .test_models import MLP
+from tests.pipeline.test_models import MLP
 from pytorch_Gpipe import pipe_model
-from .utils import tensors_almost_equal
+from tests.pipeline.utils import tensors_almost_equal
 
 
 def test_linear_one_input_cpu():

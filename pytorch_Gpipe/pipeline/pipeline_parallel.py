@@ -130,12 +130,12 @@ class PipelineParallel(nn.Module):
                 result: Tuple[torch.Tensor] = self.model(input)
 
                 # the first microbatch will finish the forward propagation only
-                # after num_gpus cycles.
+                # after num_devices cycles
                 if cycle >= self.num_devices - 1:
                     results.append(
                         result.to(self.main_device, non_blocking=True))
 
-                self.counter.increase()
+                self.counter.tick()
                 # if torch.cuda.is_available():
                 #     self.synchronize_streams()
 
@@ -174,7 +174,7 @@ class PipelineParallel(nn.Module):
 
                 out = self.model(torch.empty(*self.input_shape))
                 out.backward(grad)
-                self.counter.increase()
+                self.counter.tick()
 
         # make sure that all backward passes are done
         for _ in range(self.num_devices - 1):
@@ -185,7 +185,7 @@ class PipelineParallel(nn.Module):
                 #     self.synchronize_streams()
 
                 self.model(torch.empty(*self.input_shape))
-                self.counter.increase()
+                self.counter.tick()
 
         # if torch.cuda.is_available():
         #     self.synchronize_streams()
