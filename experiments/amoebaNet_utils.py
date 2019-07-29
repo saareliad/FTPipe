@@ -62,6 +62,7 @@ def calc_reduction_layers(num_cells, num_reduction_layers):
     reduction_layers.append(layer_num)
   return reduction_layers
 
+
 def factorized_reduction(output2, output_filters, stride):
   """Reduces the shape of net without information loss due to striding."""
   assert output_filters % 2 == 0, ('Need even number of filters when using this factorized reduction.')
@@ -74,15 +75,16 @@ def factorized_reduction(output2, output_filters, stride):
   layers.append([])
   # Skip path 1
   layers[0].append(nn.AvgPool2d(kernel_size=1,stride=stride))
-  layers[0].append(nn.Conv2d(path1.shape[1],int(output_filters / 2), 1))
+  layers[0].append(nn.Conv2d(output2.shape[1],int(output_filters / 2), 1))
   # Skip path 2
   # First pad with 0's on the right and bottom, then shift the filter to
   # include those 0's that were added.
   layers[1].append(nn.ZeroPad2d((0, 1, 0, 1))) #take indices [:,:,1:,1:]
   layers[1].append(nn.AvgPool2d(kernel_size=1, stride=stride))
-  layers[1].append(nn.Conv2d( path2.shape[1] , int(output_filters / 2), 1))
+  layers[1].append(nn.Conv2d( output2.shape[1] , int(output_filters / 2), 1))
   # Concat and apply BN
   return layers
+
 
 class net(nn.Module):
   def __init__(self,input_shape,filter_size,hiddenstate_indices,operations
@@ -107,7 +109,7 @@ class net(nn.Module):
 
 
     if !(self.prev_output is None):
-        if curr_filter_shape != prev_filter_shape:
+        if input_shape[1] != self.prev_output.shape[1]:
             self.p2.append(nn.ReLU())
             layers = factorized_reduction(prev_output,self.filter_size, stride=2)
             if len(layers) == 1:
@@ -122,7 +124,7 @@ class net(nn.Module):
 
         elif self.filter_size != prev_output.shape[1]:
             self.p2.append(nn.ReLU())
-            self.p2.append(nn.Conv2d(in_channels=input_shape[1], out_channels=self.filter_size, kernel_size=1))
+            self.p2.append(nn.Conv2d(in_channels=self.prev_output.shape[1], out_channels=self.filter_size, kernel_size=1))
             self.p2.append(nn.BatchNorm2d(self.filter_size))
 
     i = 0
@@ -146,13 +148,13 @@ class net(nn.Module):
 
   def forward(self, x):
       output1 = x
-      output2 = x
+      output2 = self.prev_output
       #calculate output1
       for layer in p1:
           output1 = layer(output1)
       #calculate output2
       if !(self.prev_output is None):
-          if curr_filter_shape != prev_filter_shape:
+          if output1.shape[1] != output2.shape[1]:
               output2 = self.p2[0](output2)
 
               if len(layers) == 1:
