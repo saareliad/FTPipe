@@ -182,7 +182,7 @@ class net(nn.Module):
                   output2 = layer(output2)
 
       if self.prev_output is None:
-          output2 = output1
+          output2 = x
 
       output1 = torch.split(output1 , output1.shape[1] ,dim=1)
       output1 = list(output1)
