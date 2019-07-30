@@ -1,7 +1,6 @@
 import pytest
 
 from torch import optim
-from pytorch_Gpipe.pipeline import *
 import torch
 import torch.nn as nn
 from torchvision.models.resnet import ResNet, Bottleneck, resnet50

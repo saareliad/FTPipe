@@ -1,7 +1,5 @@
-import pytest
-from tests.model_parallel_resnet50 import test_split_size
-from tests.test_time import test_resnet50_time
-from tests.test_loss import test_resnet50_loss
+from experiments.test_time import test_resnet50_time
+from experiments.test_loss import test_resnet50_loss
 
 """
 **ADD TESTS FOR THE FOLLOWING**
@@ -23,7 +21,6 @@ under pipeline/pipeline_parallel.py:
 - take a model and create 2 identical copies, train each with the same random state in the start and make sure they are
     the same in the end (should have the same parameters and outputs at every step
 - make sure it works with [1, 2, 3, 4] different devices
-
 """
 
 num_classes = 1000
@@ -32,7 +29,11 @@ batch_size = 120
 image_w = 224
 image_h = 224
 
-if __name__ == "__main__":
-    test_split_size()
+
+def run_pipeline_tests():
     test_resnet50_time()
     test_resnet50_loss()
+
+
+if __name__ == '__main__':
+    run_pipeline_tests()
