@@ -19,11 +19,11 @@ class SyncWrapper(nn.Module):
         super(SyncWrapper, self).__init__()
 
         self.module = module
-        self.device = device
+        self.device = torch.device(device)
         self.input_devices = None
 
-        self.pipe_stream = DeviceAgnosticStream(device=device)
-        # self.pipe_stream = torch.cuda.Stream(device=device)
+        # self.pipe_stream = DeviceAgnosticStream(device=self.input_devices)
+        self.pipe_stream = torch.cuda.Stream(device=self.device)
 
         # number of GPU in order of pipeline
         self.gpu_num = gpu_num
@@ -52,6 +52,9 @@ class SyncWrapper(nn.Module):
         assert self.counter is None
 
         self.counter = counter
+
+    def set_mb_size(self, mb_size):
+        self.mb_size = mb_size
 
     def has_grads(self):
         for act in self.prev_inputs:
@@ -93,7 +96,8 @@ class SyncWrapper(nn.Module):
 
             output = self.module(*self.prev_inputs)
         else:
-            output = tuple(torch.empty(*output_shape, device=self.device) for output_shape in self.output_shapes)
+            output = tuple(torch.empty((inputs[0].size(0), *shape), device=self.device)
+                           for shape in self.output_shapes)
             if len(output) == 1:
                 output = output[0]
 
@@ -117,7 +121,8 @@ class SyncWrapper(nn.Module):
             output = self.module(*self.prev_inputs)
         else:
             # the input is garbage
-            output = tuple(torch.empty(*shape, device=self.device) for shape in self.output_shapes)
+            output = tuple(torch.empty((inputs[0].size(0), *shape), device=self.device)
+                           for shape in self.output_shapes)
             if len(output) == 1:
                 output = output[0]
 
@@ -149,10 +154,10 @@ class ActivationSavingLayer(nn.Module):
     def __init__(self, device: str, num_inputs=1, counter: CycleCounter = None):
         super(ActivationSavingLayer, self).__init__()
 
-        self.device = device
+        self.device = torch.device(device)
 
-        self.pipe_stream = DeviceAgnosticStream(device)
-        # self.pipe_stream = torch.cuda.Stream(device=device)
+        # self.pipe_stream = DeviceAgnosticStream(device=self.input_devices)
+        self.pipe_stream = torch.cuda.Stream(device=self.device)
 
         # saved activations of the previous microbatches
         self.activations = []
@@ -231,13 +236,14 @@ class LayerWrapper(nn.Module):
         self.output_shapes = output_shapes
         self.gpu_num = gpu_num
         self.counter = counter
-        self.device = device
+        self.device = torch.device(device)
 
     def forward(self, *inputs):
         if self.counter.prev_input_valid(self.gpu_num):
             return self.module(*inputs)
         else:
-            out = tuple(torch.empty(*output_shape, device=self.device) for output_shape in self.output_shapes)
+            out = tuple(torch.empty((inputs[0].size(0), *shape), device=self.device)
+                        for shape in self.output_shapes)
             if len(out) == 1:
                 out = out[0]
             return out

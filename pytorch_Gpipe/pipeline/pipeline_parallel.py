@@ -48,7 +48,7 @@ class PipelineParallel(nn.Module):
 
         self.microbatch_size = microbatch_size
         self.num_devices = len(set(devices))
-        self.input_shape = (1, *input_shape)
+        self.input_shape = (microbatch_size, *input_shape)
         self.module_devices = set(devices + [self.main_device])
         self.mode = None
         self.set_mode('train')
@@ -86,6 +86,11 @@ class PipelineParallel(nn.Module):
             with torch.cuda.device(torch.device(dev)):
                 torch.cuda.synchronize()
 
+    # updates the microbatches sizes for each wrapper
+    def set_wrappers_mb_size(self):
+        for wrapper in self.wrappers:
+            wrapper.set_mb_size(self.microbatch_size)
+
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         """
         forward propagation of the entire model
@@ -102,8 +107,8 @@ class PipelineParallel(nn.Module):
         microbatches = input.split(self.microbatch_size, dim=0)
         num_runs = len(microbatches)
 
-        if self.input_shape is None:
-            self.input_shape = (1, *input[0].size())
+        # if self.input_shape is None:
+        #     self.input_shape = (1, *input[0].size())
 
         # make sure that the counter knows how many microbatches there are
         self.counter.reset()
