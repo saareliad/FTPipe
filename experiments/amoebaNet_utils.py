@@ -107,6 +107,9 @@ class net(nn.Module):
     self.operations = operations
     self.used_hiddenstates = used_hiddenstates
 
+    track_shape = [input_shape,prev_output.shape]
+    track_shape[0][1]=self.filter_size
+
 
     if !(self.prev_output is None):
         if input_shape[1] != self.prev_output.shape[1]:
@@ -120,12 +123,21 @@ class net(nn.Module):
                     self.p3.append(layer)
                 for layer in layers[1]:
                     self.p4.append(layer)
-                self.BN = nn.BatchNorm2d(self.filter_size)
+                self.BN = nn.BatchNorm2d(int(self.filter_size/2)*2)
+                track_shape[1][1] = int(self.filter_size/2)*2
+                track_shape[1][2] = int( (track_shape[1][2]/2) + 0.5 )
+                track_shape[1][3] = int( (track_shape[1][3]/2) + 0.5 )
 
         elif self.filter_size != prev_output.shape[1]:
             self.p2.append(nn.ReLU())
             self.p2.append(nn.Conv2d(in_channels=self.prev_output.shape[1], out_channels=self.filter_size, kernel_size=1))
             self.p2.append(nn.BatchNorm2d(self.filter_size))
+            track_shape[1][1]=self.filter_size
+
+    if self.prev_output is None:
+        track_shape[1] = input_shape
+
+
 
     i = 0
     for iteration in range(5):
@@ -141,10 +153,35 @@ class net(nn.Module):
       self.p5 = self.p5 +
       [
       opera(input_shape,filter_size, operation_left ,stride, original_input_left
-          ,drop_path_keep_prob,cell_num,total_training_steps,total_num_cells),
+          ,drop_path_keep_prob,cell_num,total_training_steps,total_num_cells,track_shape[left_hiddenstate_idx]),
       opera(input_shape,filter_size, operation_right ,stride, original_input_right
-          ,drop_path_keep_prob,cell_num,total_training_steps,total_num_cells)
+          ,drop_path_keep_prob,cell_num,total_training_steps,total_num_cells,track_shape[right_hiddenstate_idx])
       ]
+
+      new_shape = self.p5[i-2].get_shape()
+      track_shape.append(new_shape)
+
+    self.suc = []
+    self.BN2 = []
+    final_height = int(track_shape[-1][2])
+    final_num_filters = int(track_shape[-1][1])
+    for idx, used_h in enumerate(self.used_hiddenstates):
+      curr_height = int(track_shape[idx][2])
+      curr_num_filters = int(track_shape[idx][1])
+      # Determine if a reduction should be applied to make the number of
+      # filters match.
+      should_reduce = final_num_filters != curr_num_filters
+      should_reduce = (final_height != curr_height) or should_reduce
+      should_reduce = should_reduce and not used_h
+      if should_reduce:
+        stride = 2 if final_height != curr_height else 1
+        layers = factorized_reduction(torch.randn(track_shape[idx]), final_num_filters, stride)
+        self.suc.append(layers)
+        self.BN2.append(nn.BatchNorm2d(int(self.filter_size/2)*2))
+      else:
+        self.suc.append([])
+        self.BN2.append([])
+
 
   def forward(self, x):
       output1 = x
@@ -156,26 +193,17 @@ class net(nn.Module):
       if !(self.prev_output is None):
           if output1.shape[1] != output2.shape[1]:
               output2 = self.p2[0](output2)
-
-              if len(layers) == 1:
-                  for layer in self.p2[1:]:
-                      output2 = layer(output2)
-
-              else:
-                  output3 = output2
-                  output4 = output2
-
-                  for layer in self.p3:
-                      output3 = layer(output3)
-
-                  for idx,layer in enumerate(self.p4):
-                      if idx == 0:
-                          output4 = layer(output4)[:,:,1:,1:]
-                      else:
-                          output4 = layer(output4)
-
-                  output2 = torch.cat((output3, output4), dim=1)
-                  output2 = self.BN(output2)
+              output3 = output2
+              output4 = output2
+              for layer in self.p3:
+                output3 = layer(output3)
+              for idx,layer in enumerate(self.p4):
+                if idx == 0:
+                    output4 = layer(output4)[:,:,1:,1:]
+                else:
+                    output4 = layer(output4)
+              output2 = torch.cat((output3, output4), dim=1)
+              output2 = self.BN(output2)
 
           elif self.filter_size != prev_output.shape[1]:
               for layer in self.p2:
@@ -204,52 +232,69 @@ class net(nn.Module):
       for layer in self.p5:
           layer.update_step()
 
-      output1 = _combine_unused_states(output1,self.used_hiddenstates,)
+      final_height = int(output1[-1].shape[2])
+      final_num_filters = int(output1[-1].shape[1])
+      assert len(used_hiddenstates) == len(output1)
+
+      for idx, used_h in enumerate(used_hiddenstates):
+        curr_height = int(output1[idx].shape[2])
+        curr_num_filters = int(output1[idx].shape[1])
+        # Determine if a reduction should be applied to make the number of
+        # filters match.
+        should_reduce = final_num_filters != curr_num_filters
+        should_reduce = (final_height != curr_height) or should_reduce
+        should_reduce = should_reduce and not used_h
+        if should_reduce:
+          if len(self.suc[idx]) == 1:
+              for layer in self.suc[idx][0]:
+                  output1[idx] = layer(output1[idx])
+          if len(self.suc[idx]) >= 1:
+              output5 = output1[idx]
+              output6 = output1[idx]
+              for layer in self.suc[idx][0]:
+                  output5 = layer(output5)
+              for idx2,layer in enumerate(self.suc[idx][1]):
+                if idx2 == 0:
+                    output6 = layer(output6)[:,:,1:,1:]
+                else:
+                    output6 = layer(output6)
+              output1[idx] = torch.cat((output5,output6),dim=1)
+              output1[idx] = self.BN2[idx](output1[idx])
+
+      states_to_combine = ([h for h, is_used in zip(output1, self.used_hiddenstates) if not is_used])
+      # Return the concat of all the states
+      output1 = torch.cat(states_to_combine, dim=1)
 
       return output1
 
 
-
-def _combine_unused_states(self, x , used_hiddenstates):
-    """Concatenate the unused hidden states of the cell."""
-    final_height = int(x[-1].shape[2])
-    final_num_filters = int(x[-1].shape[1])
-    assert len(used_hiddenstates) == len(x)
-
-#WHY IS THIS FOR LOOP HERE IT CAN MAKE THINGS HARD
-    for idx, used_h in enumerate(used_hiddenstates):
-      curr_height = int(x[idx].shape[2])
-      curr_num_filters = int(x[idx].shape[1])
-      # Determine if a reduction should be applied to make the number of
-      # filters match.
-      should_reduce = final_num_filters != curr_num_filters
-      should_reduce = (final_height != curr_height) or should_reduce
-      should_reduce = should_reduce and not used_h
-      if should_reduce:
-        stride = 2 if final_height != curr_height else 1
-        x[idx] = factorized_reduction(x[idx], final_num_filters, stride)
-
-    states_to_combine = ([h for h, is_used in zip(x, used_hiddenstates) if not is_used])
-    # Return the concat of all the states
-    x = torch.cat(states_to_combine, dim=1)
-    return x
-
-
-
-def _stacked_separable_conv(stride, operation, filter_size):
+def _stacked_separable_conv(stride, operation, filter_size,track_shape):
   """Takes in an operations and parses it to the correct sep operation."""
   layers = []
   num_layers, kernel_size = _operation_to_info(operation)
   for layer_num in range(num_layers - 1):
     layers.append(nn.ReLU())
-    layers.append(depthwise_separable_conv(filter_size,filter_size,kernel_size,depth_multiplier=1,stride=stride))
+    if layer_num == 0:
+        layers.append(depthwise_separable_conv(track_shape[1],filter_size,kernel_size,depth_multiplier=1,stride=stride))
+    else:
+        layers.append(depthwise_separable_conv(filter_size,filter_size,kernel_size,depth_multiplier=1,stride=stride))
     layers.append(nn.BatchNorm2d(filter_size))
+
+    track_shape[1] = filter_size
+    track_shape[2] = int( ( (track_shape[2]-kernel_size)/stride ) + 1 )
+    track_shape[3] = int( ( (track_shape[3]-kernel_size)/stride ) + 1 )
+
     stride = 1
 
   layers.append(nn.ReLU())
   layers.append(depthwise_separable_conv(filter_size,filter_size,kernel_size,depth_multiplier=1,stride=stride))
   layers.append(nn.BatchNorm2d(filter_size))
-  return layers
+
+  track_shape[1] = filter_size
+  track_shape[2] = int( ( (track_shape[2]-kernel_size)/stride ) + 1 )
+  track_shape[3] = int( ( (track_shape[3]-kernel_size)/stride ) + 1 )
+
+  return layers,track_shape
 
 
 class depthwise_separable_conv(nn.Module):
@@ -265,31 +310,56 @@ class depthwise_separable_conv(nn.Module):
 
 
 
-def _apply_conv_operation(self,operation, stride, filter_size):
+def _apply_conv_operation(self,operation, stride, filter_size,track_shape):
     layers = []
+
     if operation == '1x1':
-      layers.append(nn.Conv2d(in_channels=filter_size, out_channels=filter_size, kernel_size=1))
+      layers.append(nn.Conv2d(in_channels=track_shape[1], out_channels=filter_size, kernel_size=1))
+
+      track_shape[1] = filter_size
+
     elif operation == '3x3':
-      layers.append(nn.Conv2d(in_channels=filter_size, out_channels=filter_size, kernel_size=3,stride=stride))
+      layers.append(nn.Conv2d(in_channels=track_shape[1], out_channels=filter_size, kernel_size=3,stride=stride))
+
+      track_shape[1] = filter_size
+      track_shape[2] = int( ( (track_shape[2]-3)/stride ) + 1 )
+      track_shape[3] = int( ( (track_shape[3]-3)/stride ) + 1 )
+
     elif operation == '1x7_7x1':
-      layers.append(nn.Conv2d(in_channels=filter_size, out_channels=filter_size, kernel_size=[1,7],stride=[1,stride]))
+      layers.append(nn.Conv2d(in_channels=track_shape[1], out_channels=filter_size, kernel_size=[1,7],stride=[1,stride]))
       layers.append(nn.BatchNorm2d(filter_size))
       layers.append(nn.ReLU())
       layers.append(nn.Conv2d(in_channels=filter_size, out_channels=filter_size, kernel_size=[7,1],stride=[stride,1]))
+
+      track_shape[1] = filter_size
+      track_shape[3] = int( ( (track_shape[3]-7)/stride ) + 1 )
+      track_shape[2] = int( ( (track_shape[2]-7)/stride ) + 1 )
+
     elif operation == '1x3_3x1':
-      layers.append(nn.Conv2d(in_channels=filter_size, out_channels=filter_size, kernel_size=[1,3],stride=[1,stride]))
+      layers.append(nn.Conv2d(in_channels=track_shape[1], out_channels=filter_size, kernel_size=[1,3],stride=[1,stride]))
       layers.append(nn.BatchNorm2d(filter_size))
       layers.append(nn.ReLU())
       layers.append(nn.Conv2d(in_channels=filter_size, out_channels=filter_size, kernel_size=[3,1],stride=[stride,1]))
+
+      track_shape[1] = filter_size
+      track_shape[3] = int( ( (track_shape[3]-3)/stride ) + 1 )
+      track_shape[2] = int( ( (track_shape[2]-3)/stride ) + 1 )
+
     elif operation in ['dilated_3x3_rate_2', 'dilated_3x3_rate_4','dilated_3x3_rate_6']:
       dilation_rate = int(operation.split('_')[-1])
-      layers.append(nn.Conv2d(in_channels=filter_size, out_channels=filter_size, kernel_size=3,dilation=dilation_rate,stride=stride))
+      layers.append(nn.Conv2d(in_channels=track_shape[1], out_channels=filter_size, kernel_size=3,dilation=dilation_rate,stride=stride))
+
+      track_shape[1] = filter_size
+      track_shape[3] = int( ( (track_shape[3]-dilation_rate*2 - 1)/stride ) + 1 )
+      track_shape[2] = int( ( (track_shape[2]-dilation_rate*2 - 1)/stride ) + 1 )
+
     else:
       raise NotImplementedError('Unimplemented conv operation: ', operation)
-    return layers
+
+    return layers,track_shape
 
 
-def _pooling(net, stride, operation):
+def _pooling(stride, operation,track_shape):
   """Parses operation and performs the correct pooling operation on net."""
   layer = None
   pooling_type, pooling_shape = _operation_to_pooling_info(operation)
@@ -303,12 +373,15 @@ def _pooling(net, stride, operation):
   else:
     raise NotImplementedError('Unimplemented pooling type: ', pooling_type)
 
-  return layer,pooling_type
+  track_shape[2] = ceil(track_shape[2]/stride)
+  track_shape[3] = ceil(track_shape[3]/stride)
+
+  return layer,pooling_type,track_shape
 
 
 class opera(nn.Module):
     def __init__(self, input_shape,filter_size, operation,stride, is_from_original_input
-        ,drop_path_keep_prob,cell_num,drop_path_burn_in_steps,num_cells):
+        ,drop_path_keep_prob,cell_num,drop_path_burn_in_steps,num_cells,track_shape):
       super().__init__()
       self.operation = operation
       self.layers = []
@@ -318,13 +391,14 @@ class opera(nn.Module):
       self.drop_path_burn_in_steps = drop_path_burn_in_steps
       self.num_cells = num_cells
       self.current_step = 0
+      self.track_shape = track_shape
 
       if stride > 1 and not is_from_original_input:
         stride = 1
       input_filters = input_shape[1]
 
       if 'separable' in operation:
-        self.layers = _stacked_separable_conv(stride, operation, filter_size)
+        self.layers,self.track_shape = _stacked_separable_conv(stride, operation, filter_size,self.track_shape)
 
       elif operation in ['dilated_3x3_rate_2', 'dilated_3x3_rate_4',
                          'dilated_3x3_rate_6', '3x3', '1x7_7x1', '1x3_3x1']:
@@ -337,32 +411,39 @@ class opera(nn.Module):
           # If the intermediate number of channels would be too small, then don't
           # use a bottleneck layer.
           self.layers.append(nn.ReLU())
-          self.layers = self.layers + _apply_conv_operation(operation, stride, filter_size)
+          self.layers , self.track_shape = self.layers + _apply_conv_operation(operation, stride, filter_size,self.track_shape)
           self.layers.append(nn.BatchNorm2d(filter_size))
         else:
           # Use a bottleneck layer.
           self.layers.append(nn.ReLU())
-          self.layers.append(nn.Conv2d(in_channels=filter_size, out_channels=reduced_filter_size, kernel_size=1))
+          self.layers.append(nn.Conv2d(in_channels=self.track_shape[1], out_channels=reduced_filter_size, kernel_size=1))
           self.layers.append(nn.BatchNorm2d(reduced_filter_size))
           self.layers.append(nn.ReLU())
-          self.layers = self.layers + _apply_conv_operation(operation, stride, reduced_filter_size)
+          self.track_shape[1] = reduced_filter_size
+          self.layers , self.track_shape = self.layers + _apply_conv_operation(operation, stride, reduced_filter_size,self.track_shape)
           self.layers.append(nn.BatchNorm2d(reduced_filter_size))
           self.layers.append(nn.ReLU())
           self.layers.append(nn.Conv2d(in_channels=reduced_filter_size, out_channels=filter_size, kernel_size=1))
           self.layers.append(nn.BatchNorm2d(filter_size))
+          self.track_shape[1] = filter_size
 
       elif operation in ['none', '1x1']:
         # Check if a stride is needed, then use a strided 1x1 here
         if stride > 1 or operation == '1x1' or (input_filters != filter_size):
           self.layers.append(nn.ReLU())
-          self.layers.append(nn.Conv2d(in_channels=filter_size, out_channels=filter_size, kernel_size=1,stride=stride))
+          self.layers.append(nn.Conv2d(in_channels=self.track_shape[1], out_channels=filter_size, kernel_size=1,stride=stride))
           self.layers.append(nn.BatchNorm2d(filter_size))
+          self.track_shape[1] = filter_size
+          self.track_shape[2] = int( ( (self.track_shape[2]-1)/stride )+1 )
+          self.track_shape[3] = int( ( (self.track_shape[3]-1)/stride )+1 )
+
       elif 'pool' in operation:
-        l , _ = _pooling(stride, operation)
+        l , _ ,self.track_shape = _pooling( stride , operation , self.track_shape )
         self.layers.append(l)
         if input_filters != filter_size: #maybe channel dim is not right check later
-          self.layers.append(nn.Conv2d(in_channels=filter_size, out_channels=filter_size, kernel_size=1,stride=1))
+          self.layers.append(nn.Conv2d(in_channels=self.track_shape[1], out_channels=filter_size, kernel_size=1,stride=1))
           self.layers.append(nn.BatchNorm2d(filter_size))
+          self.track_shape[1] = filter_size
       else:
         raise ValueError('Unimplemented operation', operation)
 
@@ -391,7 +472,8 @@ class opera(nn.Module):
     def update_step(self):
         self.current_step = current_step + 1
 
-
+    def get_shape(self):
+        return self.track_shape
 
 def _apply_drop_path(x,drop_path_keep_prob,cell_num,drop_path_burn_in_steps,num_cells,current_step,drop_connect_version='v1'):
     if drop_path_keep_prob < 1.0:
