@@ -74,9 +74,6 @@ class AmoebaNet(nn.Module):
       self.soft = nn.Softmax()
 
 
-
-
-
   def forward(self,x):
       end_points = {"aux_logits":[]}
       filter_scaling_rate = 2
@@ -117,9 +114,12 @@ class AmoebaNet(nn.Module):
 
       logit = out.type(torch.float32)
       predictions = self.soft(logit)
+
       end_points["logits"] = logit
       end_points["predictions"] = predictions
+
       return logit,end_points
+
 
 class imagenet_stem(nn.Module):
   def __init__(inputs, hparams, stem_cell_factory: au.BaseCell , filter_scaling_rate):
