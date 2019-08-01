@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
 from typing import List, Optional, Iterator, Tuple
 __all__ = ["traverse_model", "traverse_params_buffs",
-           "find_output_shapes_of_scopes", "model_scopes"]
+           "find_output_shapes_of_scopes", "model_scopes", "get_device", "_detach_inputs", "_get_size", "_get_shape"]
 
 
 def traverse_model(model: nn.Module, depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None, full=False) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
@@ -130,14 +130,75 @@ class ShapeWrapper(nn.Module):
         self.input_shape = []
 
     def forward(self, *inputs):
-        for t in inputs:
-            self.input_shape.append(t.shape[1:])
+        self.input_shape = _get_shape(inputs)
 
         outs = self.sub_layer(*inputs)
 
-        if isinstance(outs, torch.Tensor):
-            self.output_shape.append(outs.shape[1:])
-        else:
-            for t in outs:
-                self.output_shape.append(t.shape[1:])
+        self.output_shape = _get_shape(outs)
+
         return outs
+
+
+def get_device(x):
+    if isinstance(x, torch.Tensor):
+        return x.device
+    if isinstance(x, (list, tuple)):
+        return get_device(x[0])
+    raise ValueError(
+        "we only support Tensor,List[Tensor],tuple[Tensor] inputs")
+
+
+# TODO consolidate
+
+def _detach_inputs(*inputs):
+    detached = []
+    for x in inputs:
+        if isinstance(x, torch.Tensor):
+            detached.append(x.detach())
+        elif isinstance(x, (list, tuple)):
+            tmp = []
+            for a in x:
+                tmp.append(_detach_inputs(a))
+            if isinstance(x, tuple):
+                detached.append(tuple(tmp))
+            else:
+                detached.append(tmp)
+        else:
+            raise ValueError(
+                "we only support Tensor,List[Tensor],tuple[Tensor] inputs")
+
+    return detached[0] if len(detached) == 1 else tuple(detached)
+
+
+def _get_shape(*inputs):
+    shapes = []
+    for x in inputs:
+        if isinstance(x, torch.Tensor):
+            shapes.append(x.shape[1:])
+        elif isinstance(x, (list, tuple)):
+            tmp = []
+            for a in x:
+                tmp.append(_get_shape(a))
+            if isinstance(x, tuple):
+                shapes.append(tuple(tmp))
+            else:
+                shapes.append(tmp)
+        else:
+            raise ValueError(
+                "we only support Tensor,List[Tensor],tuple[Tensor] inputs")
+
+    return shapes[0] if len(shapes) == 1 else tuple(shapes)
+
+
+def _get_size(*inputs):
+    size = 0
+    for x in inputs:
+        if isinstance(x, torch.Tensor):
+            size += x.nelement() * x.element_size()
+        elif isinstance(x, (list, tuple)):
+            for a in x:
+                size += _get_size(a)
+        else:
+            raise ValueError(
+                "we only support Tensor,List[Tensor],tuple[Tensor] inputs")
+    return size

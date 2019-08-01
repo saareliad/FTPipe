@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import time
 from collections import namedtuple
-from ..utils import traverse_model
+from ..utils import traverse_model, get_device, _detach_inputs, _get_size
 from typing import List, Optional, Dict
 
 __all__ = ['profileNetwork', 'Profile']
@@ -70,7 +70,7 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_blocks: Optional[List[nn
 
 
 def _perform_forward_backward_pass(net, *sample_batch):
-    device = sample_batch[0].device
+    device = get_device(sample_batch)
     if device.type == "cuda":
         torch.cuda.synchronize(device=device)
         out = net(*sample_batch)
@@ -150,8 +150,9 @@ class Wrapper(nn.Module):
 
         # detach inputs from previous history enabling us to measure execution time
         # only for this layer
-        device = inputs[0].device
-        detached_inputs = map(lambda t: t.detach(), inputs)
+        device = get_device(inputs)
+        # detached_inputs = map(lambda t: t.detach(), inputs)
+        detached_inputs = _detach_inputs(inputs)
 
         self.forward_time, outputs, self.forward_cuda_mem = self._time_op(
             self.layer, *detached_inputs)
@@ -166,12 +167,8 @@ class Wrapper(nn.Module):
             torch.autograd.backward, loss)
 
         # input and output size
-        self.input_size = 0
-        self.output_size = 0
-        for t in inputs:
-            self.input_size += t.nelement() * t.element_size()
-        for o in outputs:
-            self.output_size += o.nelement() * o.element_size()
+        self.input_size = _get_size(inputs)
+        self.output_size = _get_size(outputs)
 
         #size in Gigabaytes
         self.backward_cuda_mem /= 1e9
@@ -186,7 +183,7 @@ class Wrapper(nn.Module):
     def _time_op(self, func, *inputs):
         exec_time = 0
         cuda_mem = 0
-        device = inputs[0].device
+        device = get_device(inputs)
         if(device.type == 'cuda'):
             # milliseconds
             torch.cuda.reset_max_memory_allocated(device=device)
