@@ -53,9 +53,6 @@ class SyncWrapper(nn.Module):
 
         self.counter = counter
 
-    def set_mb_size(self, mb_size):
-        self.mb_size = mb_size
-
     def has_grads(self):
         for act in self.prev_inputs:
             if act is None:
@@ -239,7 +236,7 @@ class LayerWrapper(nn.Module):
         self.device = torch.device(device)
 
     def forward(self, *inputs):
-        if self.counter.prev_input_valid(self.gpu_num):
+        if self.counter.current_input_valid(self.gpu_num):
             return self.module(*inputs)
         else:
             out = tuple(torch.empty((inputs[0].size(0), *shape), device=self.device)
