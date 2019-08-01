@@ -6,7 +6,7 @@ from sample_models import alexnet, resnet152, vgg19_bn, squeezenet1_1, inception
 import torch.nn as nn
 
 
-def partition_torchvision(nparts=4):
+def partition_torchvision(nparts=4, save_graph=False):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     networks = [alexnet, resnet152, vgg19_bn, squeezenet1_1,
                 inception_v3, densenet201, GoogLeNet, LeNet, WideResNet]
@@ -31,14 +31,15 @@ def partition_torchvision(nparts=4):
 
             filename = f"{net.__name__} attempted {nparts} partitions at depth {d}"
 
-            # curr_dir = os.path.dirname(os.path.realpath(__file__))
-            # out_dir = f"{curr_dir}\\partition_visualization"
-            # graph.save(directory=out_dir, file_name=filename,
-            #            show_buffs_params=False, show_weights=False)
+            curr_dir = os.path.dirname(os.path.realpath(__file__))
+            out_dir = f"{curr_dir}\\partition_visualization"
+            if save_graph:
+                graph.save(directory=out_dir, file_name=filename,
+                           show_buffs_params=False, show_weights=False)
             print(filename)
 
 
-def distribute_torchvision(nruns=1, nparts=4):
+def distribute_torchvision(nruns=1, nparts=4, save_graph=False):
     if not torch.cuda.is_available():
         raise ValueError("CUDA is required")
 
@@ -72,9 +73,9 @@ def distribute_torchvision(nruns=1, nparts=4):
                 else:
                     _, _, _, graph = distribute_using_profiler(model, torch.zeros(
                         4, 3, 224, 224, device=device), device_list=devices, max_depth=d, basic_blocks=None)
-
-                graph.save(directory=out_dir, file_name=filename,
-                           show_buffs_params=False, show_weights=False)
+                if save_graph:
+                    graph.save(directory=out_dir, file_name=filename,
+                               show_buffs_params=False, show_weights=False)
 
                 print(filename)
                 print()

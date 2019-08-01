@@ -17,7 +17,7 @@ def traverse_model(model: nn.Module, depth: int = 1000, basic_blocks: Optional[L
     basic_blocks:
         a list of modules that if encountered will not be broken down
     full:
-        whether to yield only layers specified by the depth and basick_block options or to yield all layers 
+        whether to yield only layers specified by the depth and basick_block options or to yield all layers
     '''
     prefix = type(model).__name__
     yield from _traverse_model(model, depth, prefix, basic_blocks, full)
@@ -83,7 +83,7 @@ def _traverse_params_buffs(module: nn.Module, prefix):
 
 def find_output_shapes_of_scopes(model, scopes, *sample_batch):
     '''
-    returns a dictionary from scopes to output shapes without the batch dimention
+    returns a dictionary from scope to input/output shapes without the batch dimention
     by performing a forward pass
 
     Parameters:
@@ -112,7 +112,7 @@ def find_output_shapes_of_scopes(model, scopes, *sample_batch):
     for layer, scope, parent in traverse_model(model, full=True):
         if isinstance(layer, ShapeWrapper):
             old_scope, name = backup[scope]
-            scope_to_shape[old_scope] = layer.output_shape
+            scope_to_shape[old_scope] = (layer.input_shape, layer.output_shape)
             parent._modules[name] = layer.sub_layer
 
     return scope_to_shape
@@ -127,8 +127,12 @@ class ShapeWrapper(nn.Module):
         super(ShapeWrapper, self).__init__()
         self.output_shape = []
         self.sub_layer = sub_module
+        self.input_shape = []
 
     def forward(self, *inputs):
+        for t in inputs:
+            self.input_shape.append(t.shape[1:])
+
         outs = self.sub_layer(*inputs)
 
         if isinstance(outs, torch.Tensor):

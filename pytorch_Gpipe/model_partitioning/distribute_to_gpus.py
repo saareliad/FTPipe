@@ -11,25 +11,6 @@ __all__ = ["distribute_model",
 partitionConfig = namedtuple("partitionConfig",
                              "nparts scopes_to_device scope_shapes scope_gpu_num part_input_scopes num_inputs")
 
-# TODO num inputs for syncwrapper
-def num_inputs_to_parts(graph: Graph):
-    inputs_to_parts = []
-    parts = []
-
-    for node in graph.nodes:
-        if node.part not in parts:
-            parts.append(node.part)
-
-    for part in range(len(parts)):
-        count = 0
-        for node in graph.nodes:
-            if node.part != part:
-                for o_node in node.out_nodes:   # i think thats the meaning of inputs to part
-                    if o_node.part == part:
-                        count = count +1
-        inputs_to_parts.append(count)
-
-    return inputs_to_parts
 
 def distribute_model(model: nn.Module, device_lst: list, graph: Graph, *sample_batch, return_config: bool = False):
     # TODO refactor and simplify split to sub functions
@@ -64,7 +45,6 @@ def distribute_model(model: nn.Module, device_lst: list, graph: Graph, *sample_b
     top_scopes_to_gpu_num = {scope: part_to_gpu_num[node.part]
                              for node, scope in nodes_to_top_scopes.items()}
 
-    # TODO does not seem correct
     part_input_nodes = _partition_input_nodes(graph.nodes)
     part_input_scopes = set(
         map(lambda n: nodes_to_top_scopes[n], part_input_nodes))
@@ -173,11 +153,11 @@ def wrap_layers(layers, top_scopes_to_device, part_input_scopes, counter, scope_
         name = layer_scope[layer_scope.rfind('[')+1:-1]
         layer_device = top_scopes_to_device[layer_scope]
         gpu_num = top_scopes_to_gpu_num[layer_scope]
-        output_shape = scope_to_shape[layer_scope]
+        input_shape, output_shape = scope_to_shape[layer_scope]
         if layer_scope in part_input_scopes and gpu_num != 0:
             # syncWrap all first nodes of a partition except the first one
             wrapper = SyncWrapper(sub_layer, layer_device,
-                                  gpu_num, output_shape, counter=counter)
+                                  gpu_num, output_shape, num_inputs=len(input_shape), counter=counter)
         else:
             wrapper = LayerWrapper(
                 sub_layer, gpu_num, layer_device, output_shape, counter=counter)
