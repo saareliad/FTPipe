@@ -106,6 +106,7 @@ class PipelineParallel(nn.Module):
         """
         microbatches = input.split(self.microbatch_size, dim=0)
         num_runs = len(microbatches)
+        rng_state = torch.get_rng_state()
 
         # if self.input_shape is None:
         #     self.input_shape = (1, *input[0].size())
@@ -123,6 +124,7 @@ class PipelineParallel(nn.Module):
         results = []
         # the actual pipeline process of feeding the data and receiving outputs:
         for cycle in range(self.num_devices + num_runs - 1):
+            torch.set_rng_state(rng_state)
             with autograd.no_grad():
                 # feeding the module all the microbatches, then, until the forward
                 # propagation process ends needs to feed garbage.
