@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torch
 from torch.distributions import uniform
-
+import math
 
 def _operation_to_filter_shape(operation):
     splitted_operation = operation.split('x')
@@ -67,7 +67,7 @@ def calc_reduction_layers(num_cells, num_reduction_layers):
 
 def factorized_reduction(output2, output_filters, stride):
     """Reduces the shape of net without information loss due to striding."""
-    assert output_filters % 2 == 0, ('Need even number of filters when using this factorized reduction.')
+    assert output_filters % 2 == 0, 'Need even number of filters when using this factorized reduction.'
     layers = [[]]
     if stride == 1:
         layers[0].append(nn.Conv2d(output2.shape[1], output_filters, 1))
@@ -95,8 +95,8 @@ class net(nn.Module):
         super().__init__()
         self.p1 = [
             nn.ReLU(),
-            nn.Conv2d(in_channels=input_shape[1], out_channels=self.filter_size, kernel_size=1),
-            nn.BatchNorm2d(self.filter_size)
+            nn.Conv2d(in_channels=input_shape[1], out_channels=filter_size, kernel_size=1),
+            nn.BatchNorm2d(filter_size)
         ]
         self.p2 = []
         self.p3 = []
@@ -108,7 +108,13 @@ class net(nn.Module):
         self.operations = operations
         self.used_hiddenstates = used_hiddenstates
 
-        self.track_shape = [input_shape, prev_output.shape]
+        input_shape = list(input_shape)
+
+        if self.prev_output is None:
+            self.track_shape = [input_shape, input_shape]
+        else:
+            self.track_shape = [input_shape, list(prev_output.shape)]
+
         self.track_shape[0][1] = self.filter_size
 
         if self.prev_output is not None:
@@ -195,10 +201,10 @@ class net(nn.Module):
 
         states_to_combine = ([h for h, is_used in zip(self.track_shape, self.used_hiddenstates) if not is_used])
         shape = states_to_combine[1]
-        sum = 0
+        summing = 0
         for shape in states_to_combine:
-            sum = sum + shape[1]
-        shape[1] = sum
+            summing = summing + shape[1]
+        shape[1] = summing
         self.track_shape = shape
 
     def forward(self, x):
@@ -281,6 +287,7 @@ class net(nn.Module):
 
         states_to_combine = ([h for h, is_used in zip(output1, self.used_hiddenstates) if not is_used])
         # Return the concat of all the states
+        states_to_combine = tuple(states_to_combine)
         output1 = torch.cat(states_to_combine, dim=1)
 
         return output1
@@ -332,7 +339,7 @@ class depthwise_separable_conv(nn.Module):
         return out
 
 
-def _apply_conv_operation(self, operation, stride, filter_size, track_shape):
+def _apply_conv_operation(operation, stride, filter_size, track_shape):
     layers = []
 
     if operation == '1x1':
@@ -404,8 +411,8 @@ def _pooling(stride, operation, track_shape):
     else:
         raise NotImplementedError('Unimplemented pooling type: ', pooling_type)
 
-    track_shape[2] = torch.ceil(track_shape[2] / stride)
-    track_shape[3] = torch.ceil(track_shape[3] / stride)
+    track_shape[2] = math.ceil(track_shape[2] / stride)
+    track_shape[3] = math.ceil(track_shape[3] / stride)
 
     return layer, pooling_type, track_shape
 
@@ -442,8 +449,8 @@ class opera(nn.Module):
                 # If the intermediate number of channels would be too small, then don't
                 # use a bottleneck layer.
                 self.layers.append(nn.ReLU())
-                self.layers, self.track_shape = self.layers + _apply_conv_operation(operation, stride, filter_size,
-                                                                                    self.track_shape)
+                layers, self.track_shape = _apply_conv_operation(operation, stride, filter_size, self.track_shape)
+                self.layers += layers
                 self.layers.append(nn.BatchNorm2d(filter_size))
             else:
                 # Use a bottleneck layer.
@@ -453,9 +460,9 @@ class opera(nn.Module):
                 self.layers.append(nn.BatchNorm2d(reduced_filter_size))
                 self.layers.append(nn.ReLU())
                 self.track_shape[1] = reduced_filter_size
-                self.layers, self.track_shape = self.layers + _apply_conv_operation(operation, stride,
-                                                                                    reduced_filter_size,
-                                                                                    self.track_shape)
+                layers, self.track_shape = _apply_conv_operation(operation, stride, reduced_filter_size,
+                                                                 self.track_shape)
+                self.layers += layers
                 self.layers.append(nn.BatchNorm2d(reduced_filter_size))
                 self.layers.append(nn.ReLU())
                 self.layers.append(nn.Conv2d(in_channels=reduced_filter_size, out_channels=filter_size, kernel_size=1))
@@ -491,7 +498,7 @@ class opera(nn.Module):
             for layer in self.layers:
                 x = layer(x)
         elif 'pool' in self.operation:
-            _, op, _ = _pooling(self.stride, self.operation)
+            _, op, _ = _pooling(self.stride, self.operation, x.shape)
             if op == 'min':
                 x = self.layers[0](-1 * x)
                 x = -1 * x
@@ -560,7 +567,7 @@ class BaseCell(object):
 
     def __init__(self, num_conv_filters, operations, used_hiddenstates,
                  hiddenstate_indices, drop_path_keep_prob, total_num_cells,
-                 total_training_steps, in_channels):
+                 total_training_steps):
         self._num_conv_filters = num_conv_filters
         self._operations = operations
         self._used_hiddenstates = used_hiddenstates
@@ -570,12 +577,12 @@ class BaseCell(object):
         self._total_training_steps = total_training_steps
 
     # input shape N,C,H,W
-    def __call__(self, input, prev_output=None, filter_scaling=1, stride=1, cell_num=-1):
+    def __call__(self, inputs: torch.Tensor, prev_output: torch.Tensor = None, filter_scaling=1, stride=1, cell_num=-1):
         """Runs the conv cell."""
         self._cell_num = cell_num
         self._filter_scaling = filter_scaling
         self._filter_size = int(self._num_conv_filters * filter_scaling)
 
-        return net(input.shape, self._filter_size, self._hiddenstate_indices, self._operations,
+        return net(inputs.shape, self._filter_size, self._hiddenstate_indices, self._operations,
                    stride, self._drop_path_keep_prob, self._cell_num, self._total_training_steps,
                    self._total_num_cells, self._used_hiddenstates, prev_output)

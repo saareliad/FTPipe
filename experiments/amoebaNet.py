@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch
 import experiments.amoebaNet_utils as au
+import math
 
 
 class AmoebaNet(nn.Module):
@@ -49,7 +50,7 @@ class AmoebaNet(nn.Module):
 
             if cell_num in reduction_indices:
                 filter_scaling *= 2
-                red_cell = self.reduction_cell_factory(cell_outputs[-1], prev_layer=cell_outputs[-2],
+                red_cell = self.reduction_cell_factory(cell_outputs[-1], prev_output=cell_outputs[-2],
                                                        filter_scaling=filter_scaling, stride=2, cell_num=true_cell_num)
                 true_cell_num += 1
                 cell_outputs.append(torch.randn(red_cell.get_shape()))
@@ -57,7 +58,7 @@ class AmoebaNet(nn.Module):
             else:
                 self.red.append([])
 
-            norm_cell = self.normal_cell_factory(cell_outputs[-1], prev_layer=cell_outputs[-2],
+            norm_cell = self.normal_cell_factory(cell_outputs[-1], prev_output=cell_outputs[-2],
                                                  filter_scaling=filter_scaling, stride=stride, cell_num=true_cell_num)
             true_cell_num += 1
             self.norm.append(norm_cell)
@@ -132,7 +133,7 @@ class imagenet_stem(nn.Module):
         num_stem_filters = hparams.stem_reduction_size
         self.layers = []
 
-        track_shape = inputs.shape
+        track_shape = list(inputs.shape)
         self.conv = nn.Conv2d(inputs.shape[1], num_stem_filters, kernel_size=3, stride=2)
         self.BN = nn.BatchNorm2d(num_stem_filters)
         track_shape[1] = num_stem_filters
@@ -168,21 +169,21 @@ class aux_head(nn.Module):
     def __init__(self, inputs, num_classes, hparams):
         super().__init__()
         self.layers = []
-        track_shape = inputs.shape
+        track_shape = list(inputs.shape)
         aux_scaling = 1.0
         if hasattr(hparams, 'aux_scaling'):
             aux_scaling = hparams.aux_scaling
 
         self.layers.append(nn.AvgPool2d(kernel_size=5, stride=3, padding=0, ceil_mode=True))
-        track_shape[2] = torch.ceil(((track_shape[2] - 5) / 3) + 1)
-        track_shape[3] = torch.ceil(((track_shape[3] - 5) / 3) + 1)
+        track_shape[2] = math.ceil(((track_shape[2] - 5) / 3) + 1)
+        track_shape[3] = math.ceil(((track_shape[3] - 5) / 3) + 1)
         self.layers.append(nn.Conv2d(track_shape[1], int(128 * aux_scaling), 1))
         track_shape[1] = int(128 * aux_scaling)
         self.layers.append(nn.BatchNorm2d(track_shape[1]))
         self.layers.append(nn.ReLU())
 
         self.layers.append(
-            nn.Conv2d(track_shape[1], int(768 * aux_scaling), kernel_size=track_shape[2:4], padding=0, ceil_mode=True))
+            nn.Conv2d(track_shape[1], int(768 * aux_scaling), kernel_size=track_shape[2:4], padding=0))
         track_shape[1] = int(768 * aux_scaling)
         track_shape[2] = 1
         track_shape[3] = 1
