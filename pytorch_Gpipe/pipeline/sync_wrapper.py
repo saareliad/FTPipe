@@ -48,6 +48,8 @@ class SyncWrapper(nn.Module):
         # used for garbage-output
         self.output_shapes = output_shapes
 
+        self.rng_state = None
+
     def set_counter(self, counter: CycleCounter):
         assert self.counter is None
 
@@ -106,10 +108,23 @@ class SyncWrapper(nn.Module):
         # TODO: check if detach needed, shouldn't have a graph as we work with no_grad in forward mode
         self.activations.append(tuple(moved_input.clone().detach() for moved_input in moved_inputs))
 
+    def sync_rng_state(self):
+        """syncs the RNG state to the the state present on original valid data arrival"""
+        # on the first valid input arrival set the RNG state
+        if self.counter.current_input_valid(self.gpu_num) and \
+                not self.counter.prev_input_valid(self.gpu_num):
+            self.rng_state = torch.cuda.get_rng_state(self.device)
+
+        # with every valid input arrival need to re-sync the RNG state
+        if self.counter.current_input_valid(self.gpu_num):
+            torch.cuda.set_rng_state(self.rng_state, self.device)
+
     def forward(self, *inputs: torch.Tensor) -> Tuple[torch.Tensor, ...]:
         # move the input between devices
         if self.counter.cur_mode is ForwardMode.backward:
             return self.backward_mode(*inputs)
+
+        self.sync_rng_state()
 
         # check if the input that waits for the submodule is relevant (garbage
         # will be propagated before and after data passes through submodule)
