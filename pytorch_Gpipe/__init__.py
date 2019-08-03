@@ -20,13 +20,7 @@ def pipe_model(model: nn.Module, microbatch_size, sample_batch, device_list=None
 
     modified_model, wrappers, counter, _ = result
 
-    in_shape = []
-    if isinstance(sample_batch, torch.Tensor):
-        in_shape.append(sample_batch.shape[1:])
-    else:
-        for t in sample_batch:
-            in_shape.append(t.shape[1:])
-
+    in_shape = sample_batch.shape[1:]
     in_shape = tuple(in_shape)
 
     pipe = PipelineParallel(
