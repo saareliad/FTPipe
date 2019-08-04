@@ -30,7 +30,8 @@ class Graph():
         self._add_shapes(trace_graph)
         self._remove_constant_nodes()
         self._remove_nodes_that_go_nowhere(trace_graph.outputs())
-        self._normalize_indices()
+        for idx,node in enumerate(self.nodes):
+            node.idx=idx
 
     def _add_IO_nodes(self, input_nodes):
         '''
@@ -226,8 +227,8 @@ class Graph():
     def get_nodes(self):
         return self.nodes
 
-    def get_weights(self):
-        return [node.weight for node in self.nodes]
+    def get_weights(self)->Dict:
+        return {node.scope:node.weight for node in self.nodes}
 
     def adjacency_list(self, directed=False)->List[List[int]]:
         '''
@@ -241,9 +242,6 @@ class Graph():
             return [[n.idx for n in node.out_nodes.union(node.in_nodes)] for node in self.nodes]
         return [[n.idx for n in node.out_nodes] for node in self.nodes]
 
-    def _normalize_indices(self):
-        for idx, node in enumerate(self.nodes):
-            node.idx = idx
 
     def build_dot(self, show_buffs_params=False, show_weights=True):
         '''

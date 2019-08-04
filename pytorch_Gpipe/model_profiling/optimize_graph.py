@@ -12,7 +12,9 @@ def optimize_graph(graph: Graph):
     graph.nodes = nodes
     _combine_params_and_buffers_into_OP_nodes(graph)
     _merge_op_chains(graph)
-    graph._normalize_indices()
+
+    for idx, node in enumerate(graph.nodes):
+        node.idx = idx
 
 
 def _combine_OP_nodes_under_the_same_scope(nodes: List[Node]) -> List[Node]:

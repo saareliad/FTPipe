@@ -101,12 +101,12 @@ def cannonize_partition_indices(graph: Graph, node_parts: List[int]):
     num_parts = len(set(node_parts))
     num_taken = 0
     model_inputs = graph.nodes[graph.num_inputs:]
-    open_nodes = deque([(n, 0)for n in model_inputs])
+    open_nodes = deque(model_inputs)
     closed = set()
     cannonical_parts = dict()
 
     while num_taken < num_parts:
-        node, d = open_nodes.popleft()
+        node = open_nodes.popleft()
         if node.part not in cannonical_parts:
             cannonical_parts[node.part] = num_taken
             num_taken += 1
@@ -114,7 +114,7 @@ def cannonize_partition_indices(graph: Graph, node_parts: List[int]):
         closed.add(node)
         edges = node.out_nodes.union(node.in_nodes)
         nodes = edges.difference(closed, set(open_nodes))
-        open_nodes.extend([(n, d) for n in nodes])
+        open_nodes.extend(nodes)
 
     for node in graph.nodes:
         node.part = cannonical_parts[node.part]

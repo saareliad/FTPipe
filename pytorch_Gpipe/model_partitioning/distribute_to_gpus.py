@@ -3,16 +3,11 @@ from ..model_profiling import Graph, NodeTypes
 from ..pipeline.sync_wrapper import ActivationSavingLayer, LayerWrapper, SyncWrapper
 from pytorch_Gpipe.pipeline import CycleCounter
 from ..utils import traverse_model, traverse_params_buffs, find_output_shapes_of_scopes
-from collections import deque, namedtuple
-__all__ = ["distribute_model",
-           "distribute_model_from_config", "partitionConfig"]
+from collections import deque
+__all__ = ["distribute_model"]
 
 
-partitionConfig = namedtuple("partitionConfig",
-                             "nparts scopes_to_device scope_shapes scope_gpu_num part_input_scopes num_inputs")
-
-
-def distribute_model(model: nn.Module, device_lst: list, graph: Graph, *sample_batch, return_config: bool = False):
+def distribute_model(model: nn.Module, device_lst: list, graph: Graph, *sample_batch):
     # TODO refactor and simplify split to sub functions
     '''
     distribute and wraph the model as part of model pipelining\n
@@ -28,9 +23,7 @@ def distribute_model(model: nn.Module, device_lst: list, graph: Graph, *sample_b
         the model's graph that dictates how to distriubte the model
     sample_batch:
         a sample batch used in order to find specific input/output shapes nd their respective ordering
-    return_config:
-        wheter to return a configuration of the partition useful if you wish to do the partitioning process once
-        and use it for multiple instances of the model
+
     '''
     num_inputs = len(sample_batch)
     nparts = len({n.part for n in graph.nodes})
@@ -67,49 +60,6 @@ def distribute_model(model: nn.Module, device_lst: list, graph: Graph, *sample_b
 
     wrappers = extract_wrappers(modified_model)
 
-    result = (modified_model, wrappers, counter)
-    if return_config:
-        config = partitionConfig(nparts, top_scopes_to_device,
-                                 scope_to_shape, top_scopes_to_gpu_num, part_input_scopes, num_inputs)
-
-        return result + (config,)
-
-    return result
-
-
-def distribute_model_from_config(model, device_lst: list, config: partitionConfig):
-    '''
-    distribute and wraph the model as part of model pipelining as specified in the given config\n
-    !!!! this method changes the given model do not use it directly
-
-    Parameters:
-    -----------
-    model:
-        the model to distribute
-    device_lst:
-        the devices which will hold the model parts
-    config:
-        the config object that specifes how to distribute the model
-
-    '''
-    nparts, scopes_to_device, scope_shapes, scope_gpu_num, part_input_scopes, num_inputs = config
-
-    if nparts != len(device_lst):
-        print(
-            f"requested {len(device_lst)} partitions but only {nparts} are present in the partition")
-        print("so no action was taken")
-        return model
-
-    counter = CycleCounter(nparts)
-
-    def is_top_scope(a): return (a[1] in scopes_to_device)
-    relevant_sub_modules = filter(is_top_scope,
-                                  traverse_model(model, full=True))
-
-    modified_model = wrap_model(relevant_sub_modules, scopes_to_device,
-                                device_lst[0], part_input_scopes, counter, model, scope_shapes, scope_gpu_num, num_inputs)
-
-    wrappers = extract_wrappers(modified_model)
     return modified_model, wrappers, counter
 
 
@@ -237,7 +187,7 @@ def _partition_to_device(device_lst, model_inputs):
 
         closed.add(node)
         edges = node.out_nodes.union(node.in_nodes)
-        nodes = edges.difference(closed, set(open_nodes))
+        nodes = edges.difference(closed, set(map(lambda t: t[0], open_nodes)))
         open_nodes.extend([(n, d) for n in nodes])
 
     return part_to_device, part_to_gpu_num

@@ -28,7 +28,7 @@ def partition_graph(graph: Graph, num_partitions: int, weighting_function: Optio
     wfunc = weighting_function if weighting_function != None else default_weight_func
 
     adjlist = graph.adjacency_list()
-    nodew = graph.get_weights()
+    nodew = graph.get_weights().values()
 
     assert(len(adjlist) == len(nodew))
 
