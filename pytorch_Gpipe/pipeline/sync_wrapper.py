@@ -48,6 +48,8 @@ class SyncWrapper(nn.Module):
         # used for garbage-output
         self.output_shapes = output_shapes
 
+        self.rng_state = None
+
     def set_counter(self, counter: CycleCounter):
         assert self.counter is None
 

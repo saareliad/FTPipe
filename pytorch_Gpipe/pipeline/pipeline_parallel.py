@@ -107,6 +107,8 @@ class PipelineParallel(nn.Module):
         microbatches = input.split(self.microbatch_size, dim=0)
         num_runs = len(microbatches)
 
+        rng_states = torch.cuda.get_rng_state_all()
+
         # if self.input_shape is None:
         #     self.input_shape = (1, *input[0].size())
 
@@ -124,21 +126,21 @@ class PipelineParallel(nn.Module):
         # the actual pipeline process of feeding the data and receiving outputs:
         for cycle in range(self.num_devices + num_runs - 1):
             with autograd.no_grad():
+                torch.cuda.set_rng_state_all(rng_states)
+
                 # feeding the module all the microbatches, then, until the forward
                 # propagation process ends needs to feed garbage.
                 if cycle < num_runs:
                     input = microbatches[cycle]
                 else:
-                    input = torch.empty(*self.input_shape,
-                                        device=self.wrappers[0].device)
+                    input = torch.empty(*self.input_shape, device=self.wrappers[0].device)
 
                 result: Tuple[torch.Tensor] = self.model(input)
 
                 # the first microbatch will finish the forward propagation only
                 # after num_devices cycles
                 if cycle >= self.num_devices - 1:
-                    results.append(
-                        result.to(self.main_device, non_blocking=True))
+                    results.append(result.to(self.main_device, non_blocking=True))
 
                 self.counter.tick()
                 # if torch.cuda.is_available():
