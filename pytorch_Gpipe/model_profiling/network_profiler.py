@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import time
 from collections import namedtuple
-from ..utils import traverse_model, get_device, _detach_inputs, _get_size
+from ..utils import traverse_model, get_device, _detach_inputs, _get_size, Tensors
 from typing import List, Optional, Dict
 
 __all__ = ['profileNetwork', 'Profile']
@@ -11,7 +11,7 @@ Profile = namedtuple('Profile',
                      'forward_time backward_time cuda_memory_forward cuda_memory_backward  layer_size')
 
 
-def profileNetwork(net: nn.Module, *sample_batch, basic_blocks: Optional[List[nn.Module]] = None, max_depth=100) -> Dict[str, Profile]:
+def profileNetwork(net: nn.Module, *sample_batch: Tensors, basic_blocks: Optional[List[nn.Module]] = None, max_depth=100) -> Dict[str, Profile]:
     '''
     profiles a network's computation time(forward/backward) and memory consumption
     returns a dictionary from layer_scope to Profile
@@ -69,7 +69,7 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_blocks: Optional[List[nn
     return layers_profile
 
 
-def _perform_forward_backward_pass(net, *sample_batch):
+def _perform_forward_backward_pass(net, *sample_batch: Tensors):
     device = get_device(sample_batch)
     if device.type == "cuda":
         torch.cuda.synchronize(device=device)
@@ -143,7 +143,7 @@ class Wrapper(nn.Module):
 
         return parameters_size, buffers_size
 
-    def forward(self, *inputs):
+    def forward(self, *inputs: Tensors):
         '''
         perform forward and backward pass of the underlying layer and measure metrics
         '''
@@ -151,7 +151,6 @@ class Wrapper(nn.Module):
         # detach inputs from previous history enabling us to measure execution time
         # only for this layer
         device = get_device(inputs)
-        # detached_inputs = map(lambda t: t.detach(), inputs)
         detached_inputs = _detach_inputs(inputs)
 
         self.forward_time, outputs, self.forward_cuda_mem = self._time_op(
@@ -180,7 +179,7 @@ class Wrapper(nn.Module):
 
         return outputs
 
-    def _time_op(self, func, *inputs):
+    def _time_op(self, func, *inputs: Tensors):
         exec_time = 0
         cuda_mem = 0
         device = get_device(inputs)

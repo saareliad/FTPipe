@@ -1,11 +1,18 @@
 import torch.nn as nn
 import torch
-from typing import List, Optional, Iterator, Tuple
+from torch import Tensor
+from typing import List, Optional, Iterator, Iterable, Tuple, Union, Dict
 __all__ = ["traverse_model", "traverse_params_buffs",
-           "find_output_shapes_of_scopes", "model_scopes", "get_device", "_detach_inputs", "_get_size", "_get_shape"]
+           "find_output_shapes_of_scopes", "model_scopes", "get_device", "_detach_inputs", "_get_size", "_get_shape", "Tensors", "Devices"]
+
+# the officialy supported input types
+Tensors = Union[Tensor, List['Tensors'], Tuple['Tensors', ...]]
+
+Device = Union[torch.device, int, str]
+Devices = Union[List[Device], Tuple[Device, ...]]
 
 
-def traverse_model(model: nn.Module, depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None, full=False) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
+def traverse_model(model: nn.Module, depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None, full: Optional[bool] = False) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
     '''
     iterate over model layers yielding the layer,layer_scope,encasing_module
     Parameters:
@@ -23,7 +30,7 @@ def traverse_model(model: nn.Module, depth: int = 1000, basic_blocks: Optional[L
     yield from _traverse_model(model, depth, prefix, basic_blocks, full)
 
 
-def _traverse_model(module: nn.Module, depth, prefix, basic_blocks, full):
+def _traverse_model(module: nn.Module, depth: int, prefix: str, basic_blocks: Optional[Iterable[nn.Module]], full: bool) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
     for name, sub_module in module._modules.items():
         scope = prefix+"/"+type(sub_module).__name__+f"[{name}]"
         if len(list(sub_module.children())) == 0 or (basic_blocks != None and isinstance(sub_module, tuple(basic_blocks))) or depth == 0:
@@ -65,7 +72,7 @@ def traverse_params_buffs(module: nn.Module) -> Iterator[Tuple[torch.tensor, str
     yield from _traverse_params_buffs(module, prefix)
 
 
-def _traverse_params_buffs(module: nn.Module, prefix):
+def _traverse_params_buffs(module: nn.Module, prefix: str) -> Iterator[Tuple[torch.tensor, str]]:
     # params
     for param_name, param in module.named_parameters(recurse=False):
         param_scope = f"{prefix}/{type(param).__name__}[{param_name}]"
@@ -81,7 +88,7 @@ def _traverse_params_buffs(module: nn.Module, prefix):
         yield from _traverse_params_buffs(sub_module, prefix + "/"+type(sub_module).__name__+f"[{name}]")
 
 
-def find_output_shapes_of_scopes(model, scopes, *sample_batch):
+def find_output_shapes_of_scopes(model, scopes, *sample_batch: Tensors) -> Dict:
     '''
     returns a dictionary from scope to input/output shapes without the batch dimention
     by performing a forward pass
@@ -118,6 +125,9 @@ def find_output_shapes_of_scopes(model, scopes, *sample_batch):
     return scope_to_shape
 
 
+INCORRECT_INPUT_TYPE = '''currently supported input types are torch.Tensor, List,Tuple or combination of them found: '''
+
+
 class ShapeWrapper(nn.Module):
     '''
     a wrapper that when it performs forward pass it records the underlying layer's output shape without batch dimention
@@ -129,7 +139,7 @@ class ShapeWrapper(nn.Module):
         self.sub_layer = sub_module
         self.input_shape = []
 
-    def forward(self, *inputs):
+    def forward(self, *inputs: Tensors):
         self.input_shape = _get_shape(inputs)
 
         outs = self.sub_layer(*inputs)
@@ -139,18 +149,17 @@ class ShapeWrapper(nn.Module):
         return outs
 
 
-def get_device(x):
+def get_device(x: Tensors) -> Device:
     if isinstance(x, torch.Tensor):
         return x.device
     if isinstance(x, (list, tuple)):
         return get_device(x[0])
-    raise ValueError(
-        "we only support Tensor,List[Tensor],tuple[Tensor] inputs")
+    raise ValueError(INCORRECT_INPUT_TYPE+f"{type(x)} ")
 
 
 # TODO consolidate
 
-def _detach_inputs(*inputs):
+def _detach_inputs(*inputs: Tensors):
     detached = []
     for x in inputs:
         if isinstance(x, torch.Tensor):
@@ -164,13 +173,12 @@ def _detach_inputs(*inputs):
             else:
                 detached.append(tmp)
         else:
-            raise ValueError(
-                "we only support Tensor,List[Tensor],tuple[Tensor] inputs")
+            raise ValueError(INCORRECT_INPUT_TYPE+f"{type(x)} ")
 
     return detached[0] if len(detached) == 1 else tuple(detached)
 
 
-def _get_shape(*inputs):
+def _get_shape(*inputs: Tensors):
     shapes = []
     for x in inputs:
         if isinstance(x, torch.Tensor):
@@ -184,13 +192,12 @@ def _get_shape(*inputs):
             else:
                 shapes.append(tmp)
         else:
-            raise ValueError(
-                "we only support Tensor,List[Tensor],tuple[Tensor] inputs")
+            raise ValueError(INCORRECT_INPUT_TYPE+f"{type(x)} ")
 
     return shapes[0] if len(shapes) == 1 else tuple(shapes)
 
 
-def _get_size(*inputs):
+def _get_size(*inputs: Tensors) -> int:
     size = 0
     for x in inputs:
         if isinstance(x, torch.Tensor):
@@ -199,6 +206,5 @@ def _get_size(*inputs):
             for a in x:
                 size += _get_size(a)
         else:
-            raise ValueError(
-                "we only support Tensor,List[Tensor],tuple[Tensor] inputs")
+            raise ValueError(INCORRECT_INPUT_TYPE+f"{type(x)} ")
     return size

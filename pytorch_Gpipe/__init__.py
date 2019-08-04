@@ -3,6 +3,7 @@ from .model_partitioning import partition_graph, distribute_model
 from .pipeline import PipelineParallel
 import torch
 import torch.nn as nn
+from .utils import Tensors, Devices
 from typing import Optional, Callable, Any, List
 
 __all__ = ['pipe_model', 'partition_with_profiler', 'distribute_using_profiler', 'distribute_using_custom_weights',
@@ -10,13 +11,13 @@ __all__ = ['pipe_model', 'partition_with_profiler', 'distribute_using_profiler',
 
 
 # TODO this a temp method and will change
-def pipe_model(model: nn.Module, microbatch_size, sample_batch, device_list=None, by_memory=False) -> nn.Module:
+def pipe_model(model: nn.Module, microbatch_size: int, sample_batch: Tensors, devices: Optional[Devices] = None, by_memory=False) -> nn.Module:
     if by_memory:
         result = distribute_by_memory(
-            model, sample_batch, device_list=device_list)
+            model, sample_batch, devices=devices)
     else:
         result = distribute_by_time(
-            model, sample_batch, device_list=device_list)
+            model, sample_batch, devices=devices)
 
     modified_model, wrappers, counter, _ = result
 
@@ -29,11 +30,11 @@ def pipe_model(model: nn.Module, microbatch_size, sample_batch, device_list=None
     return pipe
 
 
-def distribute_by_time(model: nn.Module, *sample_batch, device_list=None):
+def distribute_by_time(model: nn.Module, *sample_batch: Tensors, devices: Optional[Devices] = None):
     '''
     distirbutes a model according to layer's execution time.\n
     this method is a convenience method as is equivalent to:
-    distribute_using_profiler(model: nn.Module, *sample_batch, device_list, max_depth=100, basic_blocks=None, return_config, weighting_function: Optional[Callable[[Any], int]] =w_func)\n
+    distribute_using_profiler(model: nn.Module, *sample_batch, devices, max_depth=100, basic_blocks=None, return_config, weighting_function: Optional[Callable[[Any], int]] =w_func)\n
     where w_func is 100*(layer.forward_time+layer.backward_time)/2
 
     Parameters:
@@ -42,7 +43,7 @@ def distribute_by_time(model: nn.Module, *sample_batch, device_list=None):
         the network we wish to model
     sample_batch:
         a sample input to use for tracing
-    device_list:
+    devices:
         the devices to distribute the model accross each device will hold a partition
     '''
     def w_function(w):
@@ -50,14 +51,14 @@ def distribute_by_time(model: nn.Module, *sample_batch, device_list=None):
             return max(int(100*(w.forward_time+w.backward_time)/2), 1)
         return 1
 
-    return distribute_using_profiler(model, *sample_batch, device_list=device_list, weighting_function=w_function)
+    return distribute_using_profiler(model, *sample_batch, devices=devices, weighting_function=w_function)
 
 
-def distribute_by_memory(model: nn.Module, *sample_batch, device_list=None):
+def distribute_by_memory(model: nn.Module, *sample_batch: Tensors, devices: Optional[Devices] = None):
     '''
     distirbutes a model according to layer's peak memory consumption as recoreded by CUDA in GB.\n
     this method is a convenience method as is equivalent to:
-    distribute_using_profiler(model: nn.Module, *sample_batch, device_list, max_depth=100, basic_blocks=None, return_config, weighting_function: Optional[Callable[[Any], int]] =w_func)\n
+    distribute_using_profiler(model: nn.Module, *sample_batch, devices, max_depth=100, basic_blocks=None, return_config, weighting_function: Optional[Callable[[Any], int]] =w_func)\n
     where w_func is 100*(layer.cuda_memory_forward+layer.cuda_memory_backward)/2
 
     Parameters:
@@ -66,7 +67,7 @@ def distribute_by_memory(model: nn.Module, *sample_batch, device_list=None):
         the network we wish to model
     sample_batch:
         a sample input to use for tracing
-    device_list:
+    devices:
         the devices to distribute the model accross each device will hold a partition
     '''
     def w_function(w):
@@ -74,10 +75,10 @@ def distribute_by_memory(model: nn.Module, *sample_batch, device_list=None):
             return max(int(100*(w.cuda_memory_forward+w.cuda_memory_backward)/2), 1)
         return 1
 
-    return distribute_using_profiler(model, *sample_batch, device_list=device_list, weighting_function=w_function)
+    return distribute_using_profiler(model, *sample_batch, devices=devices, weighting_function=w_function)
 
 
-def partition_with_profiler(model: nn.Module, *sample_batch, nparts=4, max_depth=100, basic_blocks: Optional[List[nn.Module]] = None, weighting_function: Optional[Callable[[Any], int]] = None) -> Graph:
+def partition_with_profiler(model: nn.Module, *sample_batch: Tensors, nparts=4, max_depth=100, basic_blocks: Optional[List[nn.Module]] = None, weighting_function: Optional[Callable[[Any], int]] = None) -> Graph:
     '''
     return a graph representing the partitioned model with the weights given by the profiler
     this method does not distribute the model accross devices
@@ -105,7 +106,7 @@ def partition_with_profiler(model: nn.Module, *sample_batch, nparts=4, max_depth
     return graph
 
 
-def distribute_using_profiler(model: nn.Module, *sample_batch, device_list=None, max_depth=100, basic_blocks: Optional[List[nn.Module]] = None, weighting_function: Optional[Callable[[Any], int]] = None):
+def distribute_using_profiler(model: nn.Module, *sample_batch: Tensors, devices: Optional[Devices] = None, max_depth=100, basic_blocks: Optional[List[nn.Module]] = None, weighting_function: Optional[Callable[[Any], int]] = None):
     '''
     distributes a model accross the given devices in accordance to given specifications and data from the profiler\n
     !!!this method changes the the given model and is part of the internal API
@@ -115,7 +116,7 @@ def distribute_using_profiler(model: nn.Module, *sample_batch, device_list=None,
         the network we wish to model
     sample_batch:
         a sample input to use for tracing
-    device_list:
+    devices:
         the devices to distribute the model accross each device will hold a partition
     max_depth:
         how far down we go in the model tree determines the detail level of the graph
@@ -125,22 +126,22 @@ def distribute_using_profiler(model: nn.Module, *sample_batch, device_list=None,
         an optional function from node weights to non negative integers if not provided a defualt function will be used
     '''
 
-    if device_list is None:
+    if devices is None:
         if torch.cuda.is_available():
-            device_list = list(range(torch.cuda.device_count()))
+            devices = list(range(torch.cuda.device_count()))
         else:
             raise ValueError('CUDA is required but is not available')
 
-    graph = partition_with_profiler(model, *sample_batch, nparts=len(device_list),
+    graph = partition_with_profiler(model, *sample_batch, nparts=len(devices),
                                     max_depth=max_depth, basic_blocks=basic_blocks, weighting_function=weighting_function)
 
-    result = distribute_model(model, device_list, graph,
+    result = distribute_model(model, devices, graph,
                               *sample_batch)
 
     return result+(graph,)
 
 
-def distribute_using_custom_weights(model: nn.Module, weights, *sample_batch, device_list=None, max_depth=100, basic_blocks: Optional[List[nn.Module]] = None, weighting_function: Optional[Callable[[Any], int]] = None):
+def distribute_using_custom_weights(model: nn.Module, weights, *sample_batch: Tensors, devices: Optional[Devices] = None, max_depth=100, basic_blocks: Optional[List[nn.Module]] = None, weighting_function: Optional[Callable[[Any], int]] = None):
     '''
     distributes a model accross the given devices in accordance to given specifications and custom node weights\n
     !!!this method changes the the given model and is part of the internal API
@@ -152,7 +153,7 @@ def distribute_using_custom_weights(model: nn.Module, weights, *sample_batch, de
         a dictionary from scopeNames to a weight object
     sample_batch:
         a sample input to use for tracing
-    device_list:
+    devices:
         the devices to distribute the model accross each device will hold a partition
     max_depth:
         how far down we go in the model tree determines the detail level of the graph
@@ -161,19 +162,19 @@ def distribute_using_custom_weights(model: nn.Module, weights, *sample_batch, de
     weighting_function:
         an optional function from node weights to non negative integers if not provided a defualt function will be used
     '''
-    if device_list is None:
+    if devices is None:
         if torch.cuda.is_available():
-            device_list = list(range(torch.cuda.device_count()))
+            devices = list(range(torch.cuda.device_count()))
         else:
-            device_list = ["cpu"]
+            devices = ["cpu"]
 
     graph = graph_builder(model, *sample_batch, max_depth=max_depth,
                           basic_blocks=basic_blocks, weights=weights)
 
-    graph = partition_graph(graph, len(device_list),
+    graph = partition_graph(graph, len(devices),
                             weighting_function=weighting_function if weighting_function != None else lambda w: w)
 
-    res = distribute_model(model, device_list, graph,
+    res = distribute_model(model, devices, graph,
                            *sample_batch)
 
     return res+(graph,)

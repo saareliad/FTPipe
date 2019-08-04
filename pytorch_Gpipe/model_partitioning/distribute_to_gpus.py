@@ -2,12 +2,12 @@ import torch.nn as nn
 from ..model_profiling import Graph, NodeTypes
 from ..pipeline.sync_wrapper import ActivationSavingLayer, LayerWrapper, SyncWrapper
 from pytorch_Gpipe.pipeline import CycleCounter
-from ..utils import traverse_model, traverse_params_buffs, find_output_shapes_of_scopes
+from ..utils import traverse_model, traverse_params_buffs, find_output_shapes_of_scopes, Tensors, Devices
 from collections import deque
 __all__ = ["distribute_model"]
 
 
-def distribute_model(model: nn.Module, device_lst: list, graph: Graph, *sample_batch):
+def distribute_model(model: nn.Module, device_lst: Devices, graph: Graph, *sample_batch: Tensors):
     # TODO refactor and simplify split to sub functions
     '''
     distribute and wraph the model as part of model pipelining\n

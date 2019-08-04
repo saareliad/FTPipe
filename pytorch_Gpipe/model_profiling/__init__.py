@@ -1,7 +1,7 @@
 from .control_flow_graph import Graph, NodeTypes
 from .optimize_graph import optimize_graph
 from .network_profiler import profileNetwork
-from ..utils import traverse_model, traverse_params_buffs
+from ..utils import traverse_model, traverse_params_buffs, Tensors
 from typing import Optional, List, Dict, Any
 import torch.nn as nn
 import torch
@@ -9,7 +9,7 @@ import torch
 __all__ = ['graph_builder', 'profileNetwork']
 
 
-def graph_builder(model: nn.Module, *sample_batch, max_depth: int = 1000, weights: Optional[Dict[str, Any]] = None, basic_blocks: Optional[List[nn.Module]] = None, use_profiler=False) -> Graph:
+def graph_builder(model: nn.Module, *sample_batch: Tensors, max_depth: int = 1000, weights: Optional[Dict[str, Any]] = None, basic_blocks: Optional[List[nn.Module]] = None, use_profiler=False) -> Graph:
     '''
     returns a graph that models the control flow of the given network by tracing it's forward pass
 

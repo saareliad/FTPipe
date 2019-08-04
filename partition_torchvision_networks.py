@@ -60,19 +60,19 @@ def distribute_torchvision(nruns=1, nparts=4, save_graph=False):
                 model = net().to(device)
                 if net.__name__.find("inception") != -1:
                     _, _, _, graph = distribute_using_profiler(model, torch.zeros(
-                        4, 3, 299, 299, device=device), device_list=devices, max_depth=d, basic_blocks=None)
+                        4, 3, 299, 299, device=device), devices=devices, max_depth=d, basic_blocks=None)
 
                 elif net.__name__.find("GoogLeNet") != -1:
                     _, _, _, graph = distribute_using_profiler(model, torch.zeros(
-                        4, 3, 32, 32, device=device), device_list=devices, max_depth=d, basic_blocks=None)
+                        4, 3, 32, 32, device=device), devices=devices, max_depth=d, basic_blocks=None)
 
                 elif net.__name__.find("LeNet") != -1:
                     _, _, _, graph = distribute_using_profiler(model, torch.zeros(
-                        4, 3, 32, 32, device=device), device_list=devices, max_depth=d, basic_blocks=None)
+                        4, 3, 32, 32, device=device), devices=devices, max_depth=d, basic_blocks=None)
 
                 else:
                     _, _, _, graph = distribute_using_profiler(model, torch.zeros(
-                        4, 3, 224, 224, device=device), device_list=devices, max_depth=d, basic_blocks=None)
+                        4, 3, 224, 224, device=device), devices=devices, max_depth=d, basic_blocks=None)
                 if save_graph:
                     graph.save(directory=out_dir, file_name=filename,
                                show_buffs_params=False, show_weights=False)
@@ -173,7 +173,7 @@ def integration():
     devices = ['cuda:0', 'cuda:1']
     x = torch.randn(16, 3, 224, 224, device=device)
     net = alexnet().to(device)
-    pipe_net = pipe_model(net,  8, x, device_list=devices)
+    pipe_net = pipe_model(net,  8, x, devices=devices)
     pipe_net(x)
 
 

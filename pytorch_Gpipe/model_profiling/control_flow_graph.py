@@ -227,7 +227,7 @@ class Graph():
     def get_nodes(self):
         return self.nodes
 
-    def get_weights(self)->Dict:
+    def get_weights(self)->Dict[str,Any]:
         return {node.scope:node.weight for node in self.nodes}
 
     def adjacency_list(self, directed=False)->List[List[int]]:
