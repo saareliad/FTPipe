@@ -1,10 +1,12 @@
 import torch
 import torch.nn as nn
 from typing import Tuple
+from pytorch_Gpipe.utils import Tensors, TensorsShape
 
 from .forward_mode import ForwardMode
 from .cycle_counter import CycleCounter
 from .device_agnostic_stream import DeviceAgnosticStream
+from .utils import *
 
 
 class SyncWrapper(nn.Module):
@@ -13,7 +15,7 @@ class SyncWrapper(nn.Module):
     from layers that placed on different GPUs.
     """
 
-    def __init__(self, module: nn.Module, device: str, gpu_num: int, output_shapes: Tuple[Tuple[int, ...], ...],
+    def __init__(self, module: nn.Module, device: str, gpu_num: int, output_shapes: TensorsShape,
                  num_inputs=1, counter: CycleCounter = None):
 
         super(SyncWrapper, self).__init__()
@@ -22,31 +24,28 @@ class SyncWrapper(nn.Module):
         self.device = torch.device(device)
         self.input_devices = None
 
-        # self.pipe_stream = DeviceAgnosticStream(device=self.input_devices)
+        # self.pipe_stream = DeviceAgnosticStream(device=self.input_device)
         self.pipe_stream = torch.cuda.Stream(device=self.device)
 
         # number of GPU in order of pipeline
         self.gpu_num = gpu_num
-
-        # amount of inputs that will be gotten from the preceding layer
-        self.num_inputs = num_inputs
 
         # saved activations of the previous microbatches
         self.activations = []
 
         # the inputs saved at the previous cycle, to be passed and switched at the
         # current cycle
-        self.prev_inputs = [None for _ in range(num_inputs)]
+        self.prev_inputs = None
 
         # the grads saved at the previous backward cycle, to be passed and switched
         # at the current cycle
-        self.grads = [None for _ in range(num_inputs)]
+        self.grads = None
 
         # the cycle counter to check for input validity (garbage vs. actual data)
         self.counter = counter
 
         # used for garbage-output
-        self.output_shapes = output_shapes
+        self.output_shapes: TensorsShape = output_shapes
 
         self.rng_state = None
 
@@ -56,10 +55,7 @@ class SyncWrapper(nn.Module):
         self.counter = counter
 
     def has_grads(self):
-        for act in self.prev_inputs:
-            if act is None:
-                return False
-        return True
+        return self.prev_inputs is not None
 
     def pop_activation(self):
         if self.counter.prev_input_valid(self.gpu_num):
@@ -68,47 +64,45 @@ class SyncWrapper(nn.Module):
     def update_grads(self):
         if self.counter.current_input_valid(self.gpu_num) and self.has_grads():
             with torch.cuda.stream(self.pipe_stream):
-                acts = self.prev_inputs
-                self.grads = tuple(act.grad.to(dev, non_blocking=True) for act, dev in zip(acts, self.input_devices))
+                self.grads = tensors_map(self.prev_inputs, lambda act: act.grad)
+                self.grads = tensors_to(self.grads, self.input_devices)
 
     def finished_prop(self):
         """resets data after propagation"""
 
-        self.prev_inputs = [None for _ in range(self.num_inputs)]
-        self.grads = [None for _ in range(self.num_inputs)]
+        self.prev_inputs = None
+        self.grads = None
 
-    def backward_mode(self, *inputs: torch.Tensor) -> Tuple[torch.Tensor, ...]:
+    def backward_mode(self, *inputs: Tensors) -> Tensors:
         """
         function for backward propagation iteration
         """
         # if we were given a gradient to pass back
         if self.counter.current_input_valid(self.gpu_num):
-            for input, grad in zip(inputs, self.grads):
-                input.backward(grad)
+            tensors_bi_map(inputs, self.grads, lambda input, grad: input.backward(grad))
 
             torch.set_grad_enabled(True)
 
         # if we have an activation to pass
         if self.counter.prev_input_valid(self.gpu_num):
-            for activation in self.prev_inputs:
-                activation.requires_grad_(True)
+            tensors_map(self.prev_inputs, lambda activation: activation.requires_grad_(True))
 
             output = self.module(*self.prev_inputs)
         else:
-            output = tuple(torch.empty((inputs[0].size(0), *shape), device=self.device)
-                           for shape in self.output_shapes)
+            output = gen_garbage_output(self.output_shapes, batch_dim(inputs), self.device)
+
             if len(output) == 1:
                 output = output[0]
 
         return output
 
-    def save_activation(self, *moved_inputs: torch.Tensor):
+    def save_activation(self, *moved_inputs: Tensors):
         """saves the activation of the current input"""
 
         # TODO: check if detach needed, shouldn't have a graph as we work with no_grad in forward mode
-        self.activations.append(tuple(moved_input.clone().detach() for moved_input in moved_inputs))
+        self.activations.append(tensors_map(moved_inputs, lambda input: input.clone().detach()))
 
-    def forward(self, *inputs: torch.Tensor) -> Tuple[torch.Tensor, ...]:
+    def forward(self, *inputs: Tensors) -> Tensors:
         # move the input between devices
         if self.counter.cur_mode is ForwardMode.backward:
             return self.backward_mode(*inputs)
@@ -120,8 +114,8 @@ class SyncWrapper(nn.Module):
             output = self.module(*self.prev_inputs)
         else:
             # the input is garbage
-            output = tuple(torch.empty((inputs[0].size(0), *shape), device=self.device)
-                           for shape in self.output_shapes)
+            output = gen_garbage_output(self.output_shapes, batch_dim(inputs), self.device)
+
             if len(output) == 1:
                 output = output[0]
 
@@ -131,16 +125,16 @@ class SyncWrapper(nn.Module):
             with torch.cuda.stream(self.pipe_stream):
                 # set the input devices when first actual data is received
                 if self.counter.get_count() == self.gpu_num:
-                    self.input_devices = [input.device for input in inputs]
+                    self.input_devices = get_devices(inputs)
 
-                moved_inputs = tuple(input.to(self.device, non_blocking=True) for input in inputs)
+                moved_inputs = tensors_map(inputs, lambda tensor: tensor.to(self.device, non_blocking=True))
 
                 if self.counter.cur_mode is ForwardMode.train:
                     self.save_activation(*moved_inputs)
 
                 self.prev_inputs = moved_inputs
         else:
-            self.prev_inputs = [None for _ in range(self.num_inputs)]
+            self.prev_inputs = tensors_map(inputs, lambda _: None)
 
         return output
 
@@ -163,8 +157,7 @@ class ActivationSavingLayer(nn.Module):
 
         # the inputs saved at the previous cycle, to be passed and switched at the
         # current cycle
-        self.prev_inputs = [None for _ in range(num_inputs)]
-        self.num_inputs = num_inputs
+        self.prev_inputs = None
 
         # the cycle counter to check for input validity (garbage vs. actual data)
         self.counter = counter
@@ -186,7 +179,7 @@ class ActivationSavingLayer(nn.Module):
     def finished_prop(self):
         """reset data after propagation"""
 
-        self.prev_inputs = [None for _ in range(self.num_inputs)]
+        self.prev_inputs = None
 
     def backward_mode(self, *inputs: torch.Tensor) -> Tuple[torch.Tensor, ...]:
         """
@@ -194,10 +187,10 @@ class ActivationSavingLayer(nn.Module):
         """
         # if we have an activation to pass
         if self.counter.prev_input_valid(0):
-            output = tuple(self.prev_inputs)
+            output = self.prev_inputs
         else:
             # this iteration is one we should not work in
-            output = tuple(torch.empty_like(input, device=self.device) for input in inputs)
+            output = tensors_map(inputs, lambda input: torch.empty_like(input))
 
         if len(output) == 1:
             output = output[0]
@@ -208,13 +201,13 @@ class ActivationSavingLayer(nn.Module):
         """
         function for saving layer activations
         """
-        self.activations.append(tuple(moved_input.clone() for moved_input in moved_inputs))
+        self.activations.append(tensors_map(moved_inputs, lambda input: input.clone()))
 
     def forward(self, *inputs: torch.Tensor) -> Tuple[torch.Tensor, ...]:
         if self.counter.cur_mode is ForwardMode.backward:
             return self.backward_mode(*inputs)
 
-        moved_inputs = tuple(input.to(self.device, non_blocking=True) for input in inputs)
+        moved_inputs = tensors_map(inputs, lambda tensor: tensor.to(self.device, non_blocking=True))
 
         if self.counter.cur_mode is ForwardMode.train and self.counter.current_input_valid(self.gpu_num):
             with torch.cuda.stream(self.pipe_stream):
@@ -227,7 +220,7 @@ class ActivationSavingLayer(nn.Module):
 
 
 class LayerWrapper(nn.Module):
-    def __init__(self, module: nn.Module, gpu_num: int, device: str, output_shapes: Tuple[Tuple[int, ...], ...],
+    def __init__(self, module: nn.Module, gpu_num: int, device: str, output_shapes: TensorsShape,
                  counter: CycleCounter = None):
         super(LayerWrapper, self).__init__()
 
@@ -241,8 +234,8 @@ class LayerWrapper(nn.Module):
         if self.counter.current_input_valid(self.gpu_num):
             return self.module(*inputs)
         else:
-            out = tuple(torch.empty((inputs[0].size(0), *shape), device=self.device)
-                        for shape in self.output_shapes)
+            out = gen_garbage_output(self.output_shapes, batch_dim(inputs), self.device)
+
             if len(out) == 1:
                 out = out[0]
             return out

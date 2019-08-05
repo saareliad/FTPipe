@@ -3,10 +3,12 @@ import torch
 from torch import Tensor
 from typing import List, Optional, Iterator, Iterable, Tuple, Union, Dict
 __all__ = ["traverse_model", "traverse_params_buffs",
-           "find_output_shapes_of_scopes", "model_scopes", "get_device", "_detach_inputs", "_get_size", "_get_shape", "Tensors", "Devices"]
+           "find_output_shapes_of_scopes", "model_scopes", "get_device", "_detach_inputs", "_get_size", "_get_shape",
+           "Tensors", "TensorsShape", "Devices"]
 
-# the officialy supported input types
+# the officially supported input types
 Tensors = Union[Tensor, List['Tensors'], Tuple['Tensors', ...]]
+TensorsShape = Union[Tuple[int], Tuple['TensorsShape'], List['TensorsShape']]
 
 Device = Union[torch.device, int, str]
 Devices = Union[List[Device], Tuple[Device, ...]]

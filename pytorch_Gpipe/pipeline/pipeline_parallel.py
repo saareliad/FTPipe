@@ -3,6 +3,8 @@ from torch import nn, autograd
 import torch
 from typing import List, Tuple
 
+from .utils import Tensors, TensorsShape
+
 
 class PipelineParallel(nn.Module):
     """
@@ -34,7 +36,7 @@ class PipelineParallel(nn.Module):
     """
 
     def __init__(self, model: nn.Module, microbatch_size: int,
-                 input_shape: Tuple[int, ...], wrappers, counter, main_device: str = None):
+                 input_shape: TensorsShape, wrappers, counter, main_device: str = None):
         super(PipelineParallel, self).__init__()
         self.model = model
         self.wrappers = wrappers
@@ -85,11 +87,6 @@ class PipelineParallel(nn.Module):
         for dev in self.module_devices:
             with torch.cuda.device(torch.device(dev)):
                 torch.cuda.synchronize()
-
-    # updates the microbatches sizes for each wrapper
-    def set_wrappers_mb_size(self):
-        for wrapper in self.wrappers:
-            wrapper.set_mb_size(self.microbatch_size)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         """
