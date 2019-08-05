@@ -178,23 +178,25 @@ def _detach_inputs(*inputs: Tensors):
     return detached[0] if len(detached) == 1 else tuple(detached)
 
 
+# for example
+# ((5,10,5),(5,55,4)) => ((10,5),(55,4))
 def _get_shape(*inputs: Tensors):
     shapes = []
     for x in inputs:
         if isinstance(x, torch.Tensor):
-            shapes.append(x.shape[1:])
+            shapes.append((x.shape[1:],))
         elif isinstance(x, (list, tuple)):
             tmp = []
             for a in x:
-                tmp.append(_get_shape(a))
+                tmp.append(*_get_shape(a))
             if isinstance(x, tuple):
                 shapes.append(tuple(tmp))
             else:
                 shapes.append(tmp)
         else:
-            raise ValueError(INCORRECT_INPUT_TYPE+f"{type(x)} ")
+            raise ValueError(INCORRECT_INPUT_TYPE+f"{type(x)} {x}")
 
-    return shapes[0] if len(shapes) == 1 else tuple(shapes)
+    return tuple(shapes)
 
 
 def _get_size(*inputs: Tensors) -> int:
