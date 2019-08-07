@@ -40,15 +40,13 @@ def tensors_to(tensors: Tensors, devices):
         for device in devices:
             yield tensor.to(device, non_blocking=True)
 
-    tensors_map(tensors, move_tensor)
+    return tensors_map(tensors, move_tensor)
 
 
 def tensors_split(tensors: Tensors, size):
     """splits Tensors to a tuple of Tensors, each of batch size - size"""
     batch_size = batch_dim(tensors)
     num_splits = batch_size // size
-
-    assert batch_size % size == 0
 
     return tuple(
         tensors_map(tensors, lambda tensor: tensor[i * size: (i+1) * size])

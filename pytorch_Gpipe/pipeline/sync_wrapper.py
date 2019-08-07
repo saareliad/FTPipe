@@ -64,7 +64,8 @@ class SyncWrapper(nn.Module):
     def update_grads(self):
         if self.counter.current_input_valid(self.gpu_num) and self.has_grads():
             with torch.cuda.stream(self.pipe_stream):
-                self.grads = tensors_map(self.prev_inputs, lambda act: act.grad)
+                self.grads = tensors_map(
+                    self.prev_inputs, lambda act: act.grad)
                 self.grads = tensors_to(self.grads, self.input_devices)
 
     def finished_prop(self):
@@ -79,17 +80,20 @@ class SyncWrapper(nn.Module):
         """
         # if we were given a gradient to pass back
         if self.counter.current_input_valid(self.gpu_num):
-            tensors_bi_map(inputs, self.grads, lambda input, grad: input.backward(grad))
+            tensors_bi_map(inputs, self.grads, lambda input,
+                           grad: input.backward(grad))
 
             torch.set_grad_enabled(True)
 
         # if we have an activation to pass
         if self.counter.prev_input_valid(self.gpu_num):
-            tensors_map(self.prev_inputs, lambda activation: activation.requires_grad_(True))
+            tensors_map(self.prev_inputs,
+                        lambda activation: activation.requires_grad_(True))
 
             output = self.module(*self.prev_inputs)
         else:
-            output = gen_garbage_output(self.output_shapes, batch_dim(inputs), self.device)
+            output = gen_garbage_output(
+                self.output_shapes, batch_dim(inputs), self.device)
 
             if len(output) == 1:
                 output = output[0]
@@ -100,7 +104,8 @@ class SyncWrapper(nn.Module):
         """saves the activation of the current input"""
 
         # TODO: check if detach needed, shouldn't have a graph as we work with no_grad in forward mode
-        self.activations.append(tensors_map(moved_inputs, lambda input: input.clone().detach()))
+        self.activations.append(tensors_map(
+            moved_inputs, lambda input: input.clone().detach()))
 
     def forward(self, *inputs: Tensors) -> Tensors:
         # move the input between devices
@@ -114,7 +119,8 @@ class SyncWrapper(nn.Module):
             output = self.module(*self.prev_inputs)
         else:
             # the input is garbage
-            output = gen_garbage_output(self.output_shapes, batch_dim(inputs), self.device)
+            output = gen_garbage_output(
+                self.output_shapes, batch_dim(inputs), self.device)
 
             if len(output) == 1:
                 output = output[0]
@@ -127,7 +133,8 @@ class SyncWrapper(nn.Module):
                 if self.counter.get_count() == self.gpu_num:
                     self.input_devices = get_devices(inputs)
 
-                moved_inputs = tensors_map(inputs, lambda tensor: tensor.to(self.device, non_blocking=True))
+                moved_inputs = tensors_map(
+                    inputs, lambda tensor: tensor.to(self.device, non_blocking=True))
 
                 if self.counter.cur_mode is ForwardMode.train:
                     self.save_activation(*moved_inputs)
@@ -201,13 +208,15 @@ class ActivationSavingLayer(nn.Module):
         """
         function for saving layer activations
         """
-        self.activations.append(tensors_map(moved_inputs, lambda input: input.clone()))
+        self.activations.append(tensors_map(
+            moved_inputs, lambda input: input.clone()))
 
     def forward(self, *inputs: torch.Tensor) -> Tuple[torch.Tensor, ...]:
         if self.counter.cur_mode is ForwardMode.backward:
             return self.backward_mode(*inputs)
 
-        moved_inputs = tensors_map(inputs, lambda tensor: tensor.to(self.device, non_blocking=True))
+        moved_inputs = tensors_map(
+            inputs, lambda tensor: tensor.to(self.device, non_blocking=True))
 
         if self.counter.cur_mode is ForwardMode.train and self.counter.current_input_valid(self.gpu_num):
             with torch.cuda.stream(self.pipe_stream):
@@ -234,7 +243,8 @@ class LayerWrapper(nn.Module):
         if self.counter.current_input_valid(self.gpu_num):
             return self.module(*inputs)
         else:
-            out = gen_garbage_output(self.output_shapes, batch_dim(inputs), self.device)
+            out = gen_garbage_output(
+                self.output_shapes, batch_dim(inputs), self.device)
 
             if len(out) == 1:
                 out = out[0]

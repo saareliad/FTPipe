@@ -170,10 +170,7 @@ def _detach_inputs(*inputs: Tensors):
             tmp = []
             for a in x:
                 tmp.append(_detach_inputs(a))
-            if isinstance(x, tuple):
-                detached.append(tuple(tmp))
-            else:
-                detached.append(tmp)
+            detached.append(type(tmp))
         else:
             raise ValueError(INCORRECT_INPUT_TYPE+f"{type(x)} ")
 
@@ -183,11 +180,17 @@ def _detach_inputs(*inputs: Tensors):
 # for example
 # ((5,10,5),(5,55,4)) => ((10,5),(55,4))
 def _get_shape(*inputs: Tensors) -> TensorsShape:
-    return tuple(
-        input.shape[1:] if isinstance(input, torch.Tensor)
-        else type(input)(_get_shape(*input))
-        for input in inputs
-    )
+
+    shapes = []
+    for x in inputs:
+        if isinstance(x, torch.Tensor):
+            shapes.append(x.shape[1:])
+        elif isinstance(x, (list, tuple)):
+            shapes.append(type(x)(_get_shape(*x)))
+        else:
+            raise ValueError(INCORRECT_INPUT_TYPE+f"{type(x)} ")
+
+    return tuple(shapes)
 
 
 def _get_size(*inputs: Tensors) -> int:
