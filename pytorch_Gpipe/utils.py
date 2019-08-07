@@ -170,7 +170,7 @@ def _detach_inputs(*inputs: Tensors):
             tmp = []
             for a in x:
                 tmp.append(_detach_inputs(a))
-            detached.append(type(tmp))
+            detached.append(type(x)(tmp))
         else:
             raise ValueError(INCORRECT_INPUT_TYPE+f"{type(x)} ")
 
