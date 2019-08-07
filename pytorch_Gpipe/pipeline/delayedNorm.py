@@ -36,10 +36,11 @@ class DelayedBatchNorm(_BatchNorm):
             self._reset_running_stats()
 
     def _reset_running_stats(self):
-        self.running_micro_sum.zero_()
-        self.running_micro_sum_squares.zero_()
-        self.recorded_micro_batches_size.zero_()
-        self.num_micro_batches_tracked.zero_()
+        if hasattr(self, 'running_micro_sum'):
+            self.running_micro_sum.zero_()
+            self.running_micro_sum_squares.zero_()
+            self.recorded_micro_batches_size.zero_()
+            self.num_micro_batches_tracked.zero_()
 
     def _record_mini_batch(self):
         ''' update statistics for the minibatch'''
@@ -49,7 +50,7 @@ class DelayedBatchNorm(_BatchNorm):
         if self.momentum != None:  # use exponential moving average
             exponential_average_factor = self.momentum
 
-        if self.training and self.track_running_stats:
+        if self.training:
             self.num_batches_tracked += 1
             if self.momentum is None:  # use cumulative moving average
                 exponential_average_factor = 1.0 / \
@@ -102,7 +103,7 @@ class DelayedBatchNorm(_BatchNorm):
                 eps=self.eps,
             )
 
-        if not self._is_recomputing():
+        if not self._is_recomputing() and self.track_running_stats:
             # Track a micro batch on the training mode
             # but not under a recomputation.
             self._record_micro_batch(x)
@@ -154,4 +155,5 @@ class DelayedBatchNorm(_BatchNorm):
             module_output.add_module(
                 name, cls.convert(child, num_micro_batches))
 
+        del module
         return module_output
