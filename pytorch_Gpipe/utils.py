@@ -8,7 +8,7 @@ __all__ = ["traverse_model", "traverse_params_buffs",
 
 # the officially supported input types
 Tensors = Union[Tensor, List['Tensors'], Tuple['Tensors', ...]]
-TensorsShape = Union[Tuple[int], Tuple['TensorsShape'], List['TensorsShape']]
+TensorsShape = Union[torch.Size, Tuple['TensorsShape'], List['TensorsShape']]
 
 Device = Union[torch.device, int, str]
 Devices = Union[List[Device], Tuple[Device, ...]]
@@ -182,23 +182,12 @@ def _detach_inputs(*inputs: Tensors):
 
 # for example
 # ((5,10,5),(5,55,4)) => ((10,5),(55,4))
-def _get_shape(*inputs: Tensors):
-    shapes = []
-    for x in inputs:
-        if isinstance(x, torch.Tensor):
-            shapes.append((x.shape[1:],))
-        elif isinstance(x, (list, tuple)):
-            tmp = []
-            for a in x:
-                tmp.append(*_get_shape(a))
-            if isinstance(x, tuple):
-                shapes.append(tuple(tmp))
-            else:
-                shapes.append(tmp)
-        else:
-            raise ValueError(INCORRECT_INPUT_TYPE+f"{type(x)} {x}")
-
-    return tuple(shapes)
+def _get_shape(*inputs: Tensors) -> TensorsShape:
+    return tuple(
+        input.shape[1:] if isinstance(input, torch.Tensor)
+        else type(input)(_get_shape(*input))
+        for input in inputs
+    )
 
 
 def _get_size(*inputs: Tensors) -> int:

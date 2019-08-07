@@ -53,7 +53,7 @@ def gen_garbage_output(shape: TensorsShape, batch_dim, device) -> Tensors:
     :return: empty Tensors that match requested structure
     """
     # got to the inner-most shape, output is a tensor
-    if isinstance(shape[0], int):
+    if isinstance(shape, torch.Size):
         return torch.empty(batch_dim, *shape, device=device)
 
     # choosing wrapper (tuple/list)
