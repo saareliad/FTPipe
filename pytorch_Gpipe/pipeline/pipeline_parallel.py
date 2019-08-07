@@ -3,7 +3,7 @@ from torch import nn, autograd
 import torch
 from typing import List, Tuple
 
-from .utils import Tensors, TensorsShape
+from .utils import *
 
 
 class PipelineParallel(nn.Module):
@@ -50,7 +50,7 @@ class PipelineParallel(nn.Module):
 
         self.microbatch_size = microbatch_size
         self.num_devices = len(set(devices))
-        self.input_shape = (microbatch_size, *input_shape)
+        self.input_shape = input_shape
         self.module_devices = set(devices + [self.main_device])
         self.mode = None
         self.set_mode('train')
@@ -88,7 +88,7 @@ class PipelineParallel(nn.Module):
             with torch.cuda.device(torch.device(dev)):
                 torch.cuda.synchronize()
 
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
+    def forward(self, *inputs: Tensors) -> Tensors:
         """
         forward propagation of the entire model
         will run in a pipeline using the cuda kernels and the prod_line function
@@ -98,10 +98,11 @@ class PipelineParallel(nn.Module):
         so if you want to use backward with some results, do it before running the model again
         on other inputs
 
-        :param input: inputted batch
+        :param inputs: inputted batch
         :return: results of forward propagation on the batch
         """
-        microbatches = input.split(self.microbatch_size, dim=0)
+
+        microbatches = tensors_split(inputs, size=self.microbatch_size)
         num_runs = len(microbatches)
 
         rng_states = torch.cuda.get_rng_state_all()
@@ -128,11 +129,14 @@ class PipelineParallel(nn.Module):
                 # feeding the module all the microbatches, then, until the forward
                 # propagation process ends needs to feed garbage.
                 if cycle < num_runs:
-                    input = microbatches[cycle]
+                    inputs = microbatches[cycle]
                 else:
-                    input = torch.empty(*self.input_shape, device=self.wrappers[0].device)
+                    inputs = gen_garbage_output(self.input_shape, self.microbatch_size, self.wrappers[0].device)
 
-                result: Tuple[torch.Tensor] = self.model(input)
+                if isinstance(inputs, torch.Tensor):
+                    inputs = (inputs,)
+
+                result: Tensors = self.model(*inputs)
 
                 # the first microbatch will finish the forward propagation only
                 # after num_devices cycles
@@ -146,8 +150,10 @@ class PipelineParallel(nn.Module):
         # make sure that the counter and wrappers are returned to default mode
         self.finished_prop()
 
-        output = torch.cat(tuple(results), dim=0).detach_()
-        if self.training:
+        output = tensors_cat(tuple(results))
+        tensors_map(output, lambda tensor: tensor.detach_())
+
+        if self.training and isinstance(output, torch.Tensor):
             output.requires_grad_()
             output.register_hook(lambda grad: self.backward(grad, results))
         return output

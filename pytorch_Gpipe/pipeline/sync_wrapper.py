@@ -91,8 +91,8 @@ class SyncWrapper(nn.Module):
         else:
             output = gen_garbage_output(self.output_shapes, batch_dim(inputs), self.device)
 
-        if len(output) == 1:
-            output = output[0]
+            if len(output) == 1:
+                output = output[0]
 
         return output
 
@@ -116,6 +116,9 @@ class SyncWrapper(nn.Module):
             # the input is garbage
             output = gen_garbage_output(self.output_shapes, batch_dim(inputs), self.device)
 
+            if len(output) == 1:
+                output = output[0]
+
         # check if the input to be replaced and scheduled to run on the next cycle
         # is relevant or garbage
         if self.counter.current_input_valid(self.gpu_num):
@@ -132,9 +135,6 @@ class SyncWrapper(nn.Module):
                 self.prev_inputs = moved_inputs
         else:
             self.prev_inputs = tensors_map(inputs, lambda _: None)
-
-        if len(output) == 1:
-            output = output[0]
 
         return output
 
@@ -192,8 +192,8 @@ class ActivationSavingLayer(nn.Module):
             # this iteration is one we should not work in
             output = tensors_map(inputs, lambda input: torch.empty_like(input))
 
-        if len(output) == 1:
-            output = output[0]
+            if len(output) == 1:
+                output = output[0]
 
         return output
 

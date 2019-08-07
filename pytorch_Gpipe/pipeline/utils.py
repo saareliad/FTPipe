@@ -1,5 +1,5 @@
 
-from typing import Callable, Any
+from typing import Tuple, Callable, Any
 import torch
 
 from pytorch_Gpipe.utils import Tensors, TensorsShape
@@ -43,6 +43,27 @@ def tensors_to(tensors: Tensors, devices):
     tensors_map(tensors, move_tensor)
 
 
+def tensors_split(tensors: Tensors, size):
+    """splits Tensors to a tuple of Tensors, each of batch size - size"""
+    batch_size = batch_dim(tensors)
+    num_splits = batch_size // size
+
+    assert batch_size % size == 0
+
+    return tuple(
+        tensors_map(tensors, lambda tensor: tensor[i * size: (i+1) * size])
+        for i in range(num_splits)
+    )
+
+
+def tensors_cat(tensors: Tuple[Tensors, ...]):
+    if isinstance(tensors[0], torch.Tensor):
+        return torch.cat(tuple(tensors), dim=0)
+
+    container = type(tensors[0])
+    return container([tensors_cat(tensors) for tensors in zip(*tensors)])
+
+
 def gen_garbage_output(shape: TensorsShape, batch_dim, device) -> Tensors:
     """
     Generates empty Tensors.
@@ -53,7 +74,7 @@ def gen_garbage_output(shape: TensorsShape, batch_dim, device) -> Tensors:
     :return: empty Tensors that match requested structure
     """
     # got to the inner-most shape, output is a tensor
-    if isinstance(shape, torch.Size):
+    if isinstance(shape[0], int):
         return torch.empty(batch_dim, *shape, device=device)
 
     # choosing wrapper (tuple/list)
