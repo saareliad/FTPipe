@@ -14,7 +14,7 @@ Device = Union[torch.device, int, str]
 Devices = Union[List[Device], Tuple[Device, ...]]
 
 
-def traverse_model(model: nn.Module, depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None, full: Optional[bool] = False) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
+def traverse_model(model: nn.Module, depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None, full: bool = False) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
     '''
     iterate over model layers yielding the layer,layer_scope,encasing_module
     Parameters:
@@ -33,7 +33,7 @@ def traverse_model(model: nn.Module, depth: int = 1000, basic_blocks: Optional[L
 
 
 def _traverse_model(module: nn.Module, depth: int, prefix: str, basic_blocks: Optional[Iterable[nn.Module]], full: bool) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
-    for name, sub_module in module._modules.items():
+    for name, sub_module in module.named_children():
         scope = prefix+"/"+type(sub_module).__name__+f"[{name}]"
         if len(list(sub_module.children())) == 0 or (basic_blocks != None and isinstance(sub_module, tuple(basic_blocks))) or depth == 0:
             yield sub_module, scope, module
@@ -86,7 +86,7 @@ def _traverse_params_buffs(module: nn.Module, prefix: str) -> Iterator[Tuple[tor
         yield buffer, buffer_scope
 
     # recurse
-    for name, sub_module in module._modules.items():
+    for name, sub_module in module.named_children():
         yield from _traverse_params_buffs(sub_module, prefix + "/"+type(sub_module).__name__+f"[{name}]")
 
 
@@ -109,7 +109,7 @@ def find_output_shapes_of_scopes(model, scopes, *sample_batch: Tensors) -> Dict:
     for layer, scope, parent in traverse_model(model, full=True):
         if scope in scopes:
             name = scope[scope.rfind('[')+1:-1]
-            parent._modules[name] = ShapeWrapper(layer)
+            parent.add_module(name, ShapeWrapper(layer))
 
             new_scope = scope[:scope.rfind('/')+1]+f"ShapeWrapper[{name}]"
             backup[new_scope] = (scope, name)
@@ -122,7 +122,7 @@ def find_output_shapes_of_scopes(model, scopes, *sample_batch: Tensors) -> Dict:
         if isinstance(layer, ShapeWrapper):
             old_scope, name = backup[scope]
             scope_to_shape[old_scope] = (layer.input_shape, layer.output_shape)
-            parent._modules[name] = layer.sub_layer
+            parent.add_module(name, layer.sub_layer)
 
     return scope_to_shape
 

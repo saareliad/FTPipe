@@ -25,7 +25,7 @@ def test_every_layer_has_a_partition():
     before_partition = {n.part for n in graph.nodes}
     assert before_partition == {-1}
 
-    parts, _ = partition_graph(
+    parts = partition_graph(
         graph, num_partitions=4, weighting_function=lambda w: w)
 
     after = {n.part for n in graph.nodes}

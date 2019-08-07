@@ -86,16 +86,17 @@ def _wrap_profiled_layers(module: nn.Module, depth, basic_blocks: List[nn.Module
 
     for sub_layer, scope, parent in traverse_model(module, depth, basic_blocks):
         name = scope[scope.rfind('[')+1:-1]
-        parent._modules[name] = Wrapper(sub_layer)
-        layers_dict[scope] = parent._modules[name]
+        wrapper = Wrapper(sub_layer)
+        parent.add_module(name, wrapper)
+        layers_dict[scope] = wrapper
 
     return layers_dict
 
 
 def _unwrap_layers(module: nn.Module):
-    for name, sub_module in module._modules.items():
+    for name, sub_module in module.named_children():
         if isinstance(sub_module, Wrapper):
-            module._modules[name] = sub_module.layer
+            module.add_module(name, sub_module.layer)
         else:
             _unwrap_layers(sub_module)
 
@@ -147,7 +148,6 @@ class Wrapper(nn.Module):
         '''
         perform forward and backward pass of the underlying layer and measure metrics
         '''
-
         # detach inputs from previous history enabling us to measure execution time
         # only for this layer
         device = get_device(inputs)
@@ -186,7 +186,10 @@ class Wrapper(nn.Module):
         if(device.type == 'cuda'):
             # milliseconds
             torch.cuda.reset_max_memory_allocated(device=device)
+            # TODO this does not work it appears that it does not return to zero
+            # assert (torch.cuda.max_memory_allocated(device=device) == 0)
             torch.cuda.synchronize(device=device)
+
             start = torch.cuda.Event(enable_timing=True)
             end = torch.cuda.Event(enable_timing=True)
             start.record()
