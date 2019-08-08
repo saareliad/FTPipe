@@ -38,7 +38,7 @@ def distribute_model(model: nn.Module, device_lst: Devices, graph: Graph, *sampl
     top_scopes_to_gpu_num = {scope: part_to_gpu_num[node.part]
                              for node, scope in nodes_to_top_scopes.items()}
 
-    part_input_nodes = _partition_input_nodes(graph.nodes)
+    part_input_nodes = _partition_input_nodes(graph)
     part_input_scopes = set(
         map(lambda n: nodes_to_top_scopes[n], part_input_nodes))
 
@@ -200,8 +200,13 @@ def _move_buffers_params_to_devices(module: nn.Module, buffer_and_params_scopes_
 
 
 # return list of all nodes who are inputs of a partition
-def _partition_input_nodes(nodes):
+def _partition_input_nodes(graph):
     def is_input_node(node):
-        return not node.in_nodes or any(in_node.part != node.part for in_node in node.in_nodes)
+        model_input_layer = not node.in_nodes
+        partition_input = any(in_node.part != node.part
+                              for in_node in node.in_nodes)
+        has_op_input_which_is_a_part_input = any(in_node.type == NodeTypes.OP and is_input_node(in_node)
+                                                 for in_node in node.in_nodes)
+        return model_input_layer or partition_input or has_op_input_which_is_a_part_input
 
-    return list(filter(is_input_node, nodes))
+    return list(filter(is_input_node, graph.nodes))
