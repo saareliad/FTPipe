@@ -1,5 +1,6 @@
 
 from typing import Tuple, Callable, Any
+import math
 import torch
 
 from pytorch_Gpipe.utils import Tensors, TensorsShape
@@ -46,7 +47,7 @@ def tensors_to(tensors: Tensors, devices):
 def tensors_split(tensors: Tensors, size):
     """splits Tensors to a tuple of Tensors, each of batch size - size"""
     batch_size = batch_dim(tensors)
-    num_splits = batch_size // size
+    num_splits = math.ceil(batch_size / size)
 
     return tuple(
         tensors_map(tensors, lambda tensor: tensor[i * size: (i+1) * size])
