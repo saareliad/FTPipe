@@ -1,7 +1,5 @@
-import torch
+
 import torch.nn as nn
-from typing import Tuple
-from pytorch_Gpipe.utils import Tensors, TensorsShape
 
 from .forward_mode import ForwardMode
 from .cycle_counter import CycleCounter
@@ -58,11 +56,11 @@ class SyncWrapper(nn.Module):
         return self.prev_inputs is not None
 
     def pop_activation(self):
-        if self.counter.prev_input_valid(self.gpu_num):
+        if self.counter.input_valid(self.gpu_num, -1):
             self.prev_inputs = self.activations.pop(0)
 
     def update_grads(self):
-        if self.counter.current_input_valid(self.gpu_num) and self.has_grads():
+        if self.counter.input_valid(self.gpu_num) and self.has_grads():
             with torch.cuda.stream(self.pipe_stream):
                 self.grads = tensors_map(self.prev_inputs, lambda act: act.grad)
                 self.grads = tensors_to(self.grads, self.input_devices)
@@ -78,13 +76,13 @@ class SyncWrapper(nn.Module):
         function for backward propagation iteration
         """
         # if we were given a gradient to pass back
-        if self.counter.current_input_valid(self.gpu_num):
+        if self.counter.input_valid(self.gpu_num):
             tensors_bi_map(inputs, self.grads, lambda input, grad: input.backward(grad))
 
             torch.set_grad_enabled(True)
 
         # if we have an activation to pass
-        if self.counter.prev_input_valid(self.gpu_num):
+        if self.counter.input_valid(self.gpu_num, -1):
             tensors_map(self.prev_inputs, lambda activation: activation.requires_grad_(True))
 
             output = self.module(*self.prev_inputs)
@@ -103,15 +101,15 @@ class SyncWrapper(nn.Module):
         self.activations.append(tensors_map(moved_inputs, lambda input: input.clone().detach()))
 
     def sync_rng_state(self):
-        """syncs the RNG state to the the state present on original valid data arrival"""
+        """syncs the RNG state to the state present on original valid data arrival"""
         # on the first valid input arrival set the RNG state
-        if self.counter.current_input_valid(self.gpu_num) and \
-                not self.counter.prev_input_valid(self.gpu_num) \
+        if self.counter.input_valid(self.gpu_num) \
+                and not self.counter.input_valid(self.gpu_num, -1) \
                 and self.counter.cur_mode is not ForwardMode.backward:
             self.rng_state = torch.cuda.get_rng_state(self.device)
 
         # with every valid input arrival need to re-sync the RNG state
-        if self.counter.current_input_valid(self.gpu_num):
+        if self.counter.input_valid(self.gpu_num):
             torch.cuda.set_rng_state(self.rng_state, self.device)
 
     def forward(self, *inputs: Tensors) -> Tensors:
@@ -123,7 +121,7 @@ class SyncWrapper(nn.Module):
 
         # check if the input that waits for the submodule is relevant (garbage
         # will be propagated before and after data passes through submodule)
-        if self.counter.prev_input_valid(self.gpu_num):
+        if self.counter.output_valid(self.gpu_num):
             # the input is relevant.
             output = self.module(*self.prev_inputs)
         else:
@@ -135,7 +133,7 @@ class SyncWrapper(nn.Module):
 
         # check if the input to be replaced and scheduled to run on the next cycle
         # is relevant or garbage
-        if self.counter.current_input_valid(self.gpu_num):
+        if self.counter.input_valid(self.gpu_num):
             with torch.cuda.stream(self.pipe_stream):
                 # set the input devices when first actual data is received
                 if self.counter.get_count() == self.gpu_num:
@@ -186,7 +184,7 @@ class ActivationSavingLayer(nn.Module):
         self.counter = counter
 
     def pop_activation(self):
-        if self.counter.prev_input_valid(self.gpu_num):
+        if self.counter.input_valid(self.gpu_num, -1):
             self.prev_inputs = self.activations.pop(0)
 
     def update_grads(self):
@@ -202,7 +200,7 @@ class ActivationSavingLayer(nn.Module):
         function for backward propagation iteration
         """
         # if we have an activation to pass
-        if self.counter.prev_input_valid(0):
+        if self.counter.input_valid(0, -1):
             output = self.prev_inputs
         else:
             # this iteration is one we should not work in
@@ -222,13 +220,13 @@ class ActivationSavingLayer(nn.Module):
     def sync_rng_state(self):
         """syncs the RNG state to the the state present on original valid data arrival"""
         # on the first valid input arrival set the RNG state
-        if self.counter.current_input_valid(self.gpu_num) and \
-                not self.counter.prev_input_valid(self.gpu_num) \
+        if self.counter.input_valid(self.gpu_num) and \
+                not self.counter.input_valid(self.gpu_num, -1) \
                 and self.counter.cur_mode is not ForwardMode.backward:
             self.rng_state = torch.cuda.get_rng_state(self.device)
 
         # with every valid input arrival need to re-sync the RNG state
-        if self.counter.current_input_valid(self.gpu_num):
+        if self.counter.input_valid(self.gpu_num):
             torch.cuda.set_rng_state(self.rng_state, self.device)
 
     def forward(self, *inputs: torch.Tensor) -> Tuple[torch.Tensor, ...]:
@@ -239,7 +237,7 @@ class ActivationSavingLayer(nn.Module):
 
         moved_inputs = tensors_map(inputs, lambda tensor: tensor.to(self.device, non_blocking=True))
 
-        if self.counter.cur_mode is ForwardMode.train and self.counter.current_input_valid(self.gpu_num):
+        if self.counter.cur_mode is ForwardMode.train and self.counter.input_valid(self.gpu_num):
             with torch.cuda.stream(self.pipe_stream):
                 self.save_activation(*moved_inputs)
 
@@ -261,11 +259,11 @@ class LayerWrapper(nn.Module):
         self.device = torch.device(device)
 
     def forward(self, *inputs):
-        if self.counter.current_input_valid(self.gpu_num):
+        if self.counter.output_valid(self.gpu_num):
             return self.module(*inputs)
-        else:
-            out = gen_garbage_output(self.output_shapes, batch_dim(inputs), self.device)
 
-            if len(out) == 1:
-                out = out[0]
-            return out
+        out = gen_garbage_output(self.output_shapes, batch_dim(inputs), self.device)
+
+        if len(out) == 1:
+            out = out[0]
+        return out

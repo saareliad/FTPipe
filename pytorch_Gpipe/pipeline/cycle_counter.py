@@ -48,29 +48,33 @@ class CycleCounter:
     def get_count(self):
         return self.__counter
 
-    def current_input_valid(self, gpu_num: int):
+    def input_valid(self, gpu_num, cycle=0):
         """
-        Current input is considered valid in forward mode in cycles:
-            [gpu_num, ..., gpu_num + num_runs]
-        And in backward mode in cycles:
-            [num_gpus - gpu_num - 1, ..., num_gpus - gpu_num - 1 + num_runs]
+        Checks if the input of the GPU is valid.
 
-        So, for GPU #0 input will be valid for the first num_runs cycles.
+        :param gpu_num: the index of the wanted GPU
+        :param cycle: specify at which cycle (relative to the current) to check
         """
         if gpu_num is 0:
-            return self.current_input_valid(1)
+            return self.input_valid(1, cycle)
 
         if self.cur_mode is ForwardMode.backward:
             first_valid_iter = self.num_gpus - gpu_num - 1
         else:
             first_valid_iter = gpu_num - 1
 
-        return first_valid_iter <= self.__counter < first_valid_iter + self.num_runs
+        return first_valid_iter <= self.__counter + cycle < first_valid_iter + self.num_runs
 
-    def prev_input_valid(self, gpu_num: int):
-        """Checks if the input was valid one clock cycle ago"""
-        if gpu_num is 0:
-            return self.prev_input_valid(1)
+    def output_valid(self, gpu_num, cycle=0):
+        """
+        Checks if the GPU should output a valid output.
 
-        # it is equivalent to checking if the input is valid at the next GPU
-        return self.current_input_valid(gpu_num + 1)
+        :param gpu_num: the index of the wanted GPU
+        :param cycle: specify at which cycle (relative to the current) to check
+        """
+        if self.cur_mode is ForwardMode.backward:
+            first_valid_iter = self.num_gpus - gpu_num
+        else:
+            first_valid_iter = gpu_num
+
+        return first_valid_iter <= self.__counter + cycle < first_valid_iter + self.num_runs
