@@ -184,12 +184,11 @@ class Wrapper(nn.Module):
         cuda_mem = 0
         device = get_device(inputs)
         if(device.type == 'cuda'):
-            # milliseconds
             torch.cuda.reset_max_memory_allocated(device=device)
-            # TODO this does not work it appears that it does not return to zero
-            # assert (torch.cuda.max_memory_allocated(device=device) == 0)
-            torch.cuda.synchronize(device=device)
+            base_mem = torch.cuda.max_memory_allocated(device=device)
 
+            # measure execution time
+            torch.cuda.synchronize(device=device)
             start = torch.cuda.Event(enable_timing=True)
             end = torch.cuda.Event(enable_timing=True)
             start.record()
@@ -197,7 +196,10 @@ class Wrapper(nn.Module):
             end.record()
             torch.cuda.synchronize(device=device)
             exec_time = (start.elapsed_time(end))
-            cuda_mem = torch.cuda.max_memory_allocated(device=device)
+
+            # record memory usage
+            peak_usage = torch.cuda.max_memory_allocated(device=device)
+            cuda_mem = peak_usage-base_mem
         else:
             # convert seconds to milliseconds
             start = time.time()
