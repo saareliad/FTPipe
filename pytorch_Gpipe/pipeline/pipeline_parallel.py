@@ -133,7 +133,6 @@ class PipelineParallel(nn.Module):
                     inputs = (inputs,)
 
                 result: Tensors = self.model(*inputs)
-                print(result.shape)
 
                 # the first microbatch will finish the forward propagation only
                 # after num_devices cycles
