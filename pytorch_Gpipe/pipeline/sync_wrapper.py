@@ -102,7 +102,21 @@ class SyncWrapper(nn.Module):
         # TODO: check if detach needed, shouldn't have a graph as we work with no_grad in forward mode
         self.activations.append(tensors_map(moved_inputs, lambda input: input.clone().detach()))
 
+    def sync_rng_state(self):
+        """syncs the RNG state to the the state present on original valid data arrival"""
+        # on the first valid input arrival set the RNG state
+        if self.counter.current_input_valid(self.gpu_num) and \
+                not self.counter.prev_input_valid(self.gpu_num) \
+                and self.counter.cur_mode is not ForwardMode.backward:
+            self.rng_state = torch.cuda.get_rng_state(self.device)
+
+        # with every valid input arrival need to re-sync the RNG state
+        if self.counter.current_input_valid(self.gpu_num):
+            torch.cuda.set_rng_state(self.rng_state, self.device)
+
     def forward(self, *inputs: Tensors) -> Tensors:
+        self.sync_rng_state()
+
         # move the input between devices
         if self.counter.cur_mode is ForwardMode.backward:
             return self.backward_mode(*inputs)
@@ -164,6 +178,8 @@ class ActivationSavingLayer(nn.Module):
 
         self.gpu_num = 0
 
+        self.rng_state = None
+
     def set_counter(self, counter: CycleCounter):
         assert self.counter is None
 
@@ -203,7 +219,21 @@ class ActivationSavingLayer(nn.Module):
         """
         self.activations.append(tensors_map(moved_inputs, lambda input: input.clone()))
 
+    def sync_rng_state(self):
+        """syncs the RNG state to the the state present on original valid data arrival"""
+        # on the first valid input arrival set the RNG state
+        if self.counter.current_input_valid(self.gpu_num) and \
+                not self.counter.prev_input_valid(self.gpu_num) \
+                and self.counter.cur_mode is not ForwardMode.backward:
+            self.rng_state = torch.cuda.get_rng_state(self.device)
+
+        # with every valid input arrival need to re-sync the RNG state
+        if self.counter.current_input_valid(self.gpu_num):
+            torch.cuda.set_rng_state(self.rng_state, self.device)
+
     def forward(self, *inputs: torch.Tensor) -> Tuple[torch.Tensor, ...]:
+        self.sync_rng_state()
+
         if self.counter.cur_mode is ForwardMode.backward:
             return self.backward_mode(*inputs)
 
