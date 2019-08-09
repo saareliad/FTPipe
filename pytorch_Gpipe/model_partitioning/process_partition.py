@@ -1,6 +1,7 @@
+from collections import Counter, deque
+from typing import Dict, List
+
 from ..model_profiling import Graph
-from typing import List, Dict
-from collections import deque, Counter
 
 __all__ = ["post_process_partition"]
 

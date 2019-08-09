@@ -1,7 +1,9 @@
-import torch.nn as nn
+from typing import Dict, Iterable, Iterator, List, Optional, Tuple, Union
+
 import torch
+import torch.nn as nn
 from torch import Tensor
-from typing import List, Optional, Iterator, Iterable, Tuple, Union, Dict
+
 __all__ = ["traverse_model", "traverse_params_buffs",
            "find_output_shapes_of_scopes", "model_scopes", "get_device", "_detach_inputs", "_get_size", "_get_shape",
            "Tensors", "TensorsShape", "Devices"]

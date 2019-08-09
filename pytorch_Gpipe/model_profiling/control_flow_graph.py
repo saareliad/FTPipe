@@ -1,6 +1,8 @@
-from enum import Enum
 from copy import copy
-from typing import List,Dict,Any
+from enum import Enum
+from typing import Any, Dict, List
+
+
 class Graph():
     '''
     a Graph data structure that model a pytorch network built from a pytorch trace\n

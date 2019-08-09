@@ -1,8 +1,9 @@
 
+from typing import Any, Callable, Optional
+
 from ..METIS import METIS_partition
-from .process_partition import post_process_partition
 from ..model_profiling import Graph
-from typing import Optional, Callable, Any, List
+from .process_partition import post_process_partition
 
 __all__ = ["partition_graph"]
 

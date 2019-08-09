@@ -1,10 +1,12 @@
+from typing import Tuple
 
+import torch
 import torch.nn as nn
 
-from .forward_mode import ForwardMode
+from ..utils import Tensors, TensorsShape
 from .cycle_counter import CycleCounter
-from .device_agnostic_stream import DeviceAgnosticStream
-from .utils import *
+from .forward_mode import ForwardMode
+from .utils import batch_dim, gen_garbage_output, get_devices, tensors_bi_map, tensors_map, tensors_to
 
 
 class SyncWrapper(nn.Module):
@@ -13,6 +15,7 @@ class SyncWrapper(nn.Module):
     from layers that placed on different GPUs.
     """
 
+    # TODO is num inputs necessary
     def __init__(self, module: nn.Module, device: str, gpu_num: int, output_shapes: TensorsShape,
                  num_inputs=1, counter: CycleCounter = None):
 
@@ -22,7 +25,6 @@ class SyncWrapper(nn.Module):
         self.device = torch.device(device)
         self.input_devices = None
 
-        # self.pipe_stream = DeviceAgnosticStream(device=self.input_device)
         self.pipe_stream = torch.cuda.Stream(device=self.device)
 
         # number of GPU in order of pipeline
@@ -162,13 +164,13 @@ class ActivationSavingLayer(nn.Module):
     """
     This class should be put in the very start of the module (i.e Sequential(ActivationSavingLayer, Module))
     """
+    # TODO is num inputs necessary
 
     def __init__(self, device: str, num_inputs=1, counter: CycleCounter = None):
         super(ActivationSavingLayer, self).__init__()
 
         self.device = torch.device(device)
 
-        # self.pipe_stream = DeviceAgnosticStream(device=self.input_devices)
         self.pipe_stream = torch.cuda.Stream(device=self.device)
 
         # saved activations of the previous microbatches
@@ -211,7 +213,7 @@ class ActivationSavingLayer(nn.Module):
             output = self.prev_inputs
         else:
             # this iteration is one we should not work in
-            output = tensors_map(inputs, lambda input: torch.empty_like(input))
+            output = tensors_map(inputs, torch.empty_like)
 
             if len(output) == 1:
                 output = output[0]

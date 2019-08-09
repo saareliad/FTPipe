@@ -1,9 +1,11 @@
-import torch
-import torch.nn as nn
 import time
 from collections import namedtuple
-from ..utils import traverse_model, get_device, _detach_inputs, _get_size, Tensors
-from typing import List, Optional, Dict
+from typing import Dict, List, Optional
+
+import torch
+import torch.nn as nn
+
+from ..utils import Tensors, _detach_inputs, _get_size, get_device, traverse_model
 
 __all__ = ['profileNetwork', 'Profile']
 
@@ -169,13 +171,13 @@ class Wrapper(nn.Module):
         self.input_size = _get_size(inputs)
         self.output_size = _get_size(outputs)
 
-        #size in Gigabaytes
-        self.backward_cuda_mem /= 1e9
-        self.forward_cuda_mem /= 1e9
-        self.input_size /= 1e9
-        self.output_size /= 1e9
-        self.parameters_size /= 1e9
-        self.buffers_size /= 1e9
+        #size in MegaBytes
+        self.backward_cuda_mem /= 1e6
+        self.forward_cuda_mem /= 1e6
+        self.input_size /= 1e6
+        self.output_size /= 1e6
+        self.parameters_size /= 1e6
+        self.buffers_size /= 1e6
 
         return outputs
 

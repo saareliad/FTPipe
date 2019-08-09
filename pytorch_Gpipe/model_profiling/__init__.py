@@ -1,10 +1,12 @@
-from .control_flow_graph import Graph, NodeTypes
-from .optimize_graph import optimize_graph
-from .network_profiler import profileNetwork
-from ..utils import traverse_model, traverse_params_buffs, Tensors
-from typing import Optional, List, Dict, Any
-import torch.nn as nn
+from typing import Any, Dict, List, Optional
+
 import torch
+import torch.nn as nn
+
+from ..utils import Tensors, traverse_model, traverse_params_buffs
+from .control_flow_graph import Graph, NodeTypes
+from .network_profiler import profileNetwork
+from .optimize_graph import optimize_graph
 
 __all__ = ['graph_builder', 'profileNetwork']
 

@@ -1,9 +1,9 @@
+from typing import Optional
+
 import torch
 from torch import Tensor
 from torch.nn.functional import batch_norm as BatchNorm
-from torch.nn.modules.batchnorm import _BatchNorm, Module
-
-from typing import Optional
+from torch.nn.modules.batchnorm import Module, _BatchNorm
 
 
 class DelayedBatchNorm(_BatchNorm):
@@ -128,9 +128,11 @@ class DelayedBatchNorm(_BatchNorm):
     def convert(cls, module: Module, num_micro_batches: int = 1) -> Module:
         """Converts a :class:`nn.BatchNorm` or underlying
         :class:`nn.BatchNorm`s into :class:`DelayedBatchNorm`::
+            eg.
             from torchvision.models.resnet import resnet101
-            from pytorchGpipe import DelayedBatchNorm
+            from pytorchGpipe import pipe_model,DelayedBatchNorm
             model = resnet101()
+            model = pipe_model(model,microbatch_size,sample_batch,...)
             model = DelayedBatchNorm.convert(model)
         """
 

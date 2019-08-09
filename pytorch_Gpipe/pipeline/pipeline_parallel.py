@@ -1,9 +1,10 @@
 
-from torch import nn, autograd
-import torch
-from typing import List, Tuple
+from typing import List
 
-from .utils import *
+import torch
+from torch import autograd, nn
+
+from .utils import Tensors, TensorsShape, gen_garbage_output, tensors_cat, tensors_map, tensors_split
 
 
 class PipelineParallel(nn.Module):
@@ -105,9 +106,6 @@ class PipelineParallel(nn.Module):
         microbatches = tensors_split(inputs, size=self.microbatch_size)
         num_runs = len(microbatches)
 
-        # if self.input_shape is None:
-        #     self.input_shape = (1, *input[0].size())
-
         # make sure that the counter knows how many microbatches there are
         self.counter.reset()
         self.counter.set_num_runs(num_runs)
@@ -127,7 +125,8 @@ class PipelineParallel(nn.Module):
                 if cycle < num_runs:
                     inputs = microbatches[cycle]
                 else:
-                    inputs = gen_garbage_output(self.input_shape, self.microbatch_size, self.wrappers[0].device)
+                    inputs = gen_garbage_output(
+                        self.input_shape, self.microbatch_size, self.wrappers[0].device)
 
                 if isinstance(inputs, torch.Tensor):
                     inputs = (inputs,)
@@ -137,11 +136,10 @@ class PipelineParallel(nn.Module):
                 # the first microbatch will finish the forward propagation only
                 # after num_devices cycles
                 if cycle >= self.num_devices - 1:
-                    results.append(result.to(self.main_device, non_blocking=True))
+                    results.append(
+                        result.to(self.main_device, non_blocking=True))
 
                 self.counter.tick()
-                # if torch.cuda.is_available():
-                #     self.synchronize_streams()
 
         # make sure that the counter and wrappers are returned to default mode
         self.finished_prop()
@@ -175,9 +173,6 @@ class PipelineParallel(nn.Module):
             with torch.set_grad_enabled(True):
                 self.init_backwards_cycle()
 
-                # if torch.cuda.is_available():
-                #     self.synchronize_streams()
-
                 out = self.model(torch.empty(*self.input_shape))
                 out.backward(grad)
                 self.counter.tick()
@@ -187,14 +182,8 @@ class PipelineParallel(nn.Module):
             with torch.set_grad_enabled(True):
                 self.init_backwards_cycle()
 
-                # if torch.cuda.is_available():
-                #     self.synchronize_streams()
-
                 self.model(torch.empty(*self.input_shape))
                 self.counter.tick()
-
-        # if torch.cuda.is_available():
-        #     self.synchronize_streams()
 
         # make sure that the counter and wrappers are returned to default mode
         self.finished_prop()

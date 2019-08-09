@@ -1,5 +1,6 @@
-from .control_flow_graph import Graph, Node, NodeTypes
 from typing import List
+
+from .control_flow_graph import Graph, Node, NodeTypes
 
 
 def optimize_graph(graph: Graph):

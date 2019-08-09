@@ -1,9 +1,13 @@
+from collections import deque
+
 import torch.nn as nn
+
+from pytorch_Gpipe.pipeline import CycleCounter
+
 from ..model_profiling import Graph, NodeTypes
 from ..pipeline.sync_wrapper import ActivationSavingLayer, LayerWrapper, SyncWrapper
-from pytorch_Gpipe.pipeline import CycleCounter
-from ..utils import traverse_model, traverse_params_buffs, find_output_shapes_of_scopes, Tensors, Devices
-from collections import deque
+from ..utils import Devices, Tensors, find_output_shapes_of_scopes, traverse_model, traverse_params_buffs
+
 __all__ = ["distribute_model"]
 
 

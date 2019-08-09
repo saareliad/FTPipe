@@ -1,12 +1,13 @@
-from collections import namedtuple
-from functools import reduce
-import operator as op
 import ctypes
-from enum import IntEnum
-from ctypes import POINTER as ptr, byref
+import operator as op
 import os
-from typing import List, Tuple
 import platform
+from collections import namedtuple
+from ctypes import POINTER as ptr
+from ctypes import byref
+from enum import IntEnum
+from functools import reduce
+from typing import List, Tuple
 
 # metis lib loading
 if 'Win' in platform.system():
