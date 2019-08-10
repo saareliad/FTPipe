@@ -5,9 +5,13 @@ from torch.nn.modules.batchnorm import _BatchNorm, Module
 
 from typing import Optional
 
+from pytorch_Gpipe.pipeline import PipelineParallel, CycleCounter, ForwardMode
+
 
 class DelayedBatchNorm(_BatchNorm):
-    def __init__(self, num_features: int, eps: float = 1e-5, momentum: Optional[float] = 0.1, affine: bool = True, track_running_stats: bool = True, num_micro_batches: int = 1):
+    def __init__(self, num_features: int, eps: float = 1e-5, momentum: Optional[float] = 0.1,
+                 affine: bool = True, track_running_stats: bool = True, num_micro_batches: int = 1,
+                 counter: CycleCounter = None):
         super().__init__(num_features, eps=eps, momentum=momentum,
                          affine=affine, track_running_stats=track_running_stats)
 
@@ -24,6 +28,8 @@ class DelayedBatchNorm(_BatchNorm):
                                  torch.zeros_like(self.running_mean))
             self.register_buffer("running_micro_sum_squares",
                                  torch.zeros_like(self.running_var))
+
+        self.counter = counter
 
     def _check_input_dim(self, x: Tensor):
         if x.dim() <= 2:
@@ -47,7 +53,7 @@ class DelayedBatchNorm(_BatchNorm):
 
         # taken from the implementation of _batchNorm.forward
         exponential_average_factor = 0.0
-        if self.momentum != None:  # use exponential moving average
+        if self.momentum is not None:  # use exponential moving average
             exponential_average_factor = self.momentum
 
         if self.training:
@@ -86,8 +92,10 @@ class DelayedBatchNorm(_BatchNorm):
         self.num_micro_batches_tracked += 1
 
     def _is_recomputing(self):
-        # TODO need to know if it's a recomputation or not
-        raise NotImplementedError()
+        if self.counter is None:
+            return False
+
+        return self.counter.cur_mode is ForwardMode.backward
 
     def forward(self, x: Tensor):
         if not self.training:
@@ -133,27 +141,32 @@ class DelayedBatchNorm(_BatchNorm):
             model = resnet101()
             model = DelayedBatchNorm.convert(model)
         """
+        counter = module.counter if isinstance(module, PipelineParallel) else None
 
-        module_output = module
+        def convert_aux(module: Module, num_micro_batches: int) -> Module:
+            module_output = module
 
-        if isinstance(module, _BatchNorm) and module.track_running_stats:
-            module_output = DelayedBatchNorm(module.num_features,
-                                             module.eps,
-                                             module.momentum,
-                                             module.affine,
-                                             num_micro_batches)
+            if isinstance(module, _BatchNorm) and module.track_running_stats:
+                module_output = DelayedBatchNorm(module.num_features,
+                                                 module.eps,
+                                                 module.momentum,
+                                                 module.affine,
+                                                 num_micro_batches=num_micro_batches,
+                                                 counter=counter)
 
-            # use the original buffers and parameters
-            if module.affine:
-                module_output.register_parameter('weight', module.weight)
-                module_output.register_parameter('bias', module.bias)
-            module_output.running_mean = module.running_mean
-            module_output.running_var = module.running_var
-            module_output.num_batches_tracked = module.num_batches_tracked
+                # use the original buffers and parameters
+                if module.affine:
+                    module_output.register_parameter('weight', module.weight)
+                    module_output.register_parameter('bias', module.bias)
+                module_output.running_mean = module.running_mean
+                module_output.running_var = module.running_var
+                module_output.num_batches_tracked = module.num_batches_tracked
 
-        for name, child in module.named_children():
-            module_output.add_module(
-                name, cls.convert(child, num_micro_batches))
+            for name, child in module.named_children():
+                module_output.add_module(
+                    name, cls.convert(child, num_micro_batches))
 
-        del module
-        return module_output
+            del module
+            return module_output
+
+        return convert_aux(module, num_micro_batches)
