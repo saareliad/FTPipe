@@ -152,7 +152,8 @@ class DelayedBatchNorm(_BatchNorm):
                                                  module.momentum,
                                                  module.affine,
                                                  num_micro_batches=num_micro_batches,
-                                                 counter=counter)
+                                                 counter=counter)\
+                                                 .to(device=module.weight.device)
 
                 # use the original buffers and parameters
                 if module.affine:
