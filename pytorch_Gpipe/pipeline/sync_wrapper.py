@@ -102,14 +102,14 @@ class SyncWrapper(nn.Module):
 
     def sync_rng_state(self):
         """syncs the RNG state to the state present on original valid data arrival"""
-        # on the first valid input arrival set the RNG state
-        if self.counter.input_valid(self.gpu_num) \
-                and not self.counter.input_valid(self.gpu_num, -1) \
+        # on the first valid output set the RNG state
+        if self.counter.output_valid(self.gpu_num) \
+                and not self.counter.output_valid(self.gpu_num, -1) \
                 and self.counter.cur_mode is not ForwardMode.backward:
             self.rng_state = torch.cuda.get_rng_state(self.device)
 
         # with every valid input arrival need to re-sync the RNG state
-        if self.counter.input_valid(self.gpu_num):
+        if self.counter.output_valid(self.gpu_num):
             torch.cuda.set_rng_state(self.rng_state, self.device)
 
     def forward(self, *inputs: Tensors) -> Tensors:
@@ -220,13 +220,13 @@ class ActivationSavingLayer(nn.Module):
     def sync_rng_state(self):
         """syncs the RNG state to the the state present on original valid data arrival"""
         # on the first valid input arrival set the RNG state
-        if self.counter.input_valid(self.gpu_num) and \
-                not self.counter.input_valid(self.gpu_num, -1) \
+        if self.counter.output_valid(self.gpu_num) \
+                and not self.counter.output_valid(self.gpu_num, -1) \
                 and self.counter.cur_mode is not ForwardMode.backward:
             self.rng_state = torch.cuda.get_rng_state(self.device)
 
         # with every valid input arrival need to re-sync the RNG state
-        if self.counter.input_valid(self.gpu_num):
+        if self.counter.output_valid(self.gpu_num):
             torch.cuda.set_rng_state(self.rng_state, self.device)
 
     def forward(self, *inputs: torch.Tensor) -> Tuple[torch.Tensor, ...]:
