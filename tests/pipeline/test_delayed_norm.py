@@ -193,5 +193,5 @@ def test_x_requiring_grad():
 
     chunked_forward(dbn, x)
 
-    assert not dbn.sum.requires_grad
-    assert dbn.sum.grad_fn is None
+    assert not dbn.running_micro_sum.requires_grad
+    assert dbn.running_micro_sum.grad_fn is None

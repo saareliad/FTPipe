@@ -161,8 +161,6 @@ def get_device(x: Tensors) -> Device:
     raise ValueError(INCORRECT_INPUT_TYPE+f"{type(x)} ")
 
 
-# TODO consolidate
-
 def _detach_inputs(*inputs: Tensors):
     detached = []
     for x in inputs:

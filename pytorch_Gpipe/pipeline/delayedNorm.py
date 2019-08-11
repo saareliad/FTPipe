@@ -5,7 +5,9 @@ from torch import Tensor
 from torch.nn.functional import batch_norm as BatchNorm
 from torch.nn.modules.batchnorm import Module, _BatchNorm
 
-from pytorch_Gpipe.pipeline import PipelineParallel, CycleCounter, ForwardMode
+from .pipeline_parallel import PipelineParallel
+from .cycle_counter import CycleCounter
+from .forward_mode import ForwardMode
 
 
 class DelayedBatchNorm(_BatchNorm):
@@ -138,12 +140,13 @@ class DelayedBatchNorm(_BatchNorm):
         :class:`nn.BatchNorm`s into :class:`DelayedBatchNorm`::
             eg.
             from torchvision.models.resnet import resnet101
-            from pytorchGpipe import pipe_model,DelayedBatchNorm
+            from pytorch_Gpipe import pipe_model,DelayedBatchNorm
             model = resnet101()
             model = pipe_model(model,microbatch_size,sample_batch,...)
             model = DelayedBatchNorm.convert(model)
         """
-        counter = module.counter if isinstance(module, PipelineParallel) else None
+        counter = module.counter if isinstance(
+            module, PipelineParallel) else None
 
         def convert_aux(module: Module, num_micro_batches: int) -> Module:
             module_output = module
@@ -155,7 +158,7 @@ class DelayedBatchNorm(_BatchNorm):
                                                  module.affine,
                                                  num_micro_batches=num_micro_batches,
                                                  counter=counter)\
-                                                 .to(device=module.weight.device)
+                    .to(device=module.weight.device)
 
                 # use the original buffers and parameters
                 if module.affine:

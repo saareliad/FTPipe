@@ -6,7 +6,7 @@ import torch.nn as nn
 from ..utils import Tensors, TensorsShape
 from .cycle_counter import CycleCounter
 from .forward_mode import ForwardMode
-from .utils import batch_dim, gen_garbage_output, get_devices, tensors_bi_map, tensors_map, tensors_to
+from .utils import gen_garbage_output, get_devices, tensors_bi_map, tensors_map, tensors_to
 
 
 class SyncWrapper(nn.Module):
@@ -93,8 +93,7 @@ class SyncWrapper(nn.Module):
 
             output = self.module(*self.prev_inputs)
         else:
-            output = gen_garbage_output(
-                self.output_shapes, batch_dim(inputs), self.device)
+            output = gen_garbage_output(self.output_shapes, self.device)
 
             if len(output) == 1:
                 output = output[0]
@@ -120,8 +119,7 @@ class SyncWrapper(nn.Module):
             output = self.module(*self.prev_inputs)
         else:
             # the input is garbage
-            output = gen_garbage_output(
-                self.output_shapes, batch_dim(inputs), self.device)
+            output = gen_garbage_output(self.output_shapes, self.device)
 
             if len(output) == 1:
                 output = output[0]
@@ -248,8 +246,7 @@ class LayerWrapper(nn.Module):
         if self.counter.output_valid(self.gpu_num):
             return self.module(*inputs)
 
-        out = gen_garbage_output(
-            self.output_shapes, batch_dim(inputs), self.device)
+        out = gen_garbage_output(self.output_shapes, self.device)
 
         if len(out) == 1:
             out = out[0]

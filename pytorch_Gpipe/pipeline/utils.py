@@ -63,22 +63,21 @@ def tensors_cat(tensors: Tuple[Tensors, ...]):
     return container([tensors_cat(tensors) for tensors in zip(*tensors)])
 
 
-def gen_garbage_output(shape: TensorsShape, batch_dim, device) -> Tensors:
+def gen_garbage_output(shape: TensorsShape, device) -> Tensors:
     """
     Generates empty Tensors.
 
     :param shape: the structure of the output Tensors
-    :param batch_dim: The extra batch dimension to add the the contained tensors
     :param device: onto which to place the output
     :return: empty Tensors that match requested structure
     """
     # got to the inner-most shape, output is a tensor
     if isinstance(shape[0], int):
-        return torch.empty(batch_dim, *shape, device=device)
+        return torch.empty(1, *shape, device=device)
 
     # choosing wrapper (tuple/list)
     container = type(shape)
-    return container([gen_garbage_output(inner_shape, batch_dim, device) for inner_shape in shape])
+    return container([gen_garbage_output(inner_shape, device) for inner_shape in shape])
 
 
 def batch_dim(tensors: Tensors):
