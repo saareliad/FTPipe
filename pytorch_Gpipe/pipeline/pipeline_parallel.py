@@ -126,7 +126,7 @@ class PipelineParallel(nn.Module):
                     inputs = microbatches[cycle]
                 else:
                     inputs = gen_garbage_output(
-                        self.input_shape, self.microbatch_size, self.wrappers[0].device)
+                        self.input_shape, self.wrappers[0].device)
 
                 if isinstance(inputs, torch.Tensor):
                     inputs = (inputs,)
