@@ -12,7 +12,6 @@ __all__ = ["distribute_model"]
 
 
 def distribute_model(model: nn.Module, device_lst: Devices, graph: Graph, *sample_batch: Tensors):
-    # TODO refactor and simplify split to sub functions
     '''
     distribute and wraph the model as part of model pipelining\n
     !!!! this method changes the given model do not use it directly

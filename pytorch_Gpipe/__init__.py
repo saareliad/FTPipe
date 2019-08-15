@@ -12,17 +12,13 @@ __all__ = ['pipe_model', 'partition_with_profiler', 'distribute_using_profiler',
            'partition_graph', 'distribute_model', 'distribute_by_memory', 'distribute_by_time']
 
 
-# TODO this a temp method and will change
-def pipe_model(model: nn.Module, microbatch_size: int, sample_batch: Tensors, devices: Optional[Devices] = None, by_memory=False) -> nn.Module:
+def pipe_model(model: nn.Module, microbatch_size: int, sample_batch: Tensors, devices: Optional[Devices] = None, by_memory: bool = False, depth: int = 100) -> nn.Module:
+    partition_policy = distribute_by_time
     if by_memory:
-        result = distribute_by_memory(
-            model, sample_batch, devices=devices)
-    else:
-        result = distribute_by_time(
-            model, sample_batch, devices=devices)
+        partition_policy = distribute_by_memory
 
-    modified_model, wrappers, counter, _ = result
-
+    modified_model, wrappers, counter, _ = partition_policy(model, sample_batch,
+                                                            devices=devices, depth=depth)
     in_shape = sample_batch.shape[1:]
     in_shape = tuple(in_shape)
 
@@ -32,7 +28,7 @@ def pipe_model(model: nn.Module, microbatch_size: int, sample_batch: Tensors, de
     return pipe
 
 
-def distribute_by_time(model: nn.Module, *sample_batch: Tensors, devices: Optional[Devices] = None):
+def distribute_by_time(model: nn.Module, *sample_batch: Tensors, devices: Optional[Devices] = None, depth: int = 100):
     '''
     distirbutes a model according to layer's execution time.\n
     this method is a convenience method as is equivalent to:
@@ -47,16 +43,19 @@ def distribute_by_time(model: nn.Module, *sample_batch: Tensors, devices: Option
         a sample input to use for tracing
     devices:
         the devices to distribute the model accross each device will hold a partition
+    depth:
+        how far down we go in the model tree determines the detail level of the graph
+
     '''
     def w_function(w):
         if hasattr(w, 'forward_time') and hasattr(w, 'backward_time'):
             return max(int(100*(w.forward_time+w.backward_time)/2), 1)
         return 1
 
-    return distribute_using_profiler(model, *sample_batch, devices=devices, weighting_function=w_function)
+    return distribute_using_profiler(model, *sample_batch, devices=devices, weighting_function=w_function, max_depth=depth)
 
 
-def distribute_by_memory(model: nn.Module, *sample_batch: Tensors, devices: Optional[Devices] = None):
+def distribute_by_memory(model: nn.Module, *sample_batch: Tensors, devices: Optional[Devices] = None, depth=100):
     '''
     distirbutes a model according to layer's peak memory consumption as recoreded by CUDA in GB.\n
     this method is a convenience method as is equivalent to:
@@ -71,13 +70,15 @@ def distribute_by_memory(model: nn.Module, *sample_batch: Tensors, devices: Opti
         a sample input to use for tracing
     devices:
         the devices to distribute the model accross each device will hold a partition
+    depth:
+        how far down we go in the model tree determines the detail level of the graph
     '''
     def w_function(w):
         if hasattr(w, 'cuda_memory_forward') and hasattr(w, 'cuda_memory_backward'):
             return max(int(100*(w.cuda_memory_forward+w.cuda_memory_backward)/2), 1)
         return 1
 
-    return distribute_using_profiler(model, *sample_batch, devices=devices, weighting_function=w_function)
+    return distribute_using_profiler(model, *sample_batch, devices=devices, weighting_function=w_function, max_depth=depth)
 
 
 def partition_with_profiler(model: nn.Module, *sample_batch: Tensors, nparts=4, max_depth=100, basic_blocks: Optional[List[nn.Module]] = None, weighting_function: Optional[Callable[[Any], int]] = None) -> Graph:

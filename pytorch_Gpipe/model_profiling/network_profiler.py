@@ -109,12 +109,12 @@ class Wrapper(nn.Module):
     when the wrapper performs forward propagation it records the following metrics:\n
         forward_time: the execution time of a forward pass of the underlying layer in milliseconds\n
         backward_time: the execution time of a backward pass of the underlying layer in milliseconds\n
-        input_size: the input size in GB
-        output_size: the layer output size in GB
-        parameters_size: the size of parameters of the layer in GB
-        buffers_size: the size of buffers of the layer in GB
-        forward_cuda_mem: the peak CUDA memory usage during the forward pass in GB
-        backward_cuda_mem: the peak CUDA memory usage during the backward pass in GB
+        input_size: the input size in MB
+        output_size: the layer output size in MB
+        parameters_size: the size of parameters of the layer in MB
+        buffers_size: the size of buffers of the layer in MB
+        forward_cuda_mem: the peak CUDA memory usage during the forward pass in MB
+        backward_cuda_mem: the peak CUDA memory usage during the backward pass in MB
 
     Parameters
     ----------
