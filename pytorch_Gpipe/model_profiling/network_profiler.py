@@ -79,7 +79,7 @@ def _perform_forward_backward_pass(net, *sample_batch: Tensors):
         torch.cuda.synchronize(device=device)
     else:
         out = net(*sample_batch)
-
+    net.zero_grad()
     return out
 
 

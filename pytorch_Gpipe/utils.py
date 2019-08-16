@@ -118,7 +118,7 @@ def find_output_shapes_of_scopes(model, scopes, *sample_batch: Tensors) -> Dict:
 
     with torch.no_grad():
         model(*sample_batch)
-
+        model.zero_grad()
     scope_to_shape = {}
     for layer, scope, parent in traverse_model(model, full=True):
         if isinstance(layer, ShapeWrapper):
