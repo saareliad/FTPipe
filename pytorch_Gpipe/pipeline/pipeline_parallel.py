@@ -162,13 +162,12 @@ class PipelineParallel(nn.Module):
         :param grads: the gradient of the model outputs
         :param results: the results tensor that is doing a backward pass
         """
-        num_runs = len(results)
-
-        # make sure that the counter knows how many microbatches there are
-        self.counter.set_num_runs(num_runs)
-
         # make sure that we are on backward mode
         self.set_mode('backward')
+
+        num_runs = len(results)
+        # make sure that the counter knows how many microbatches there are
+        self.counter.set_num_runs(num_runs)
 
         # do a backward run for each gradient
         for grad in grads.split(self.microbatch_size, dim=0):

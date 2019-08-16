@@ -41,7 +41,7 @@ def tensors_to(tensors: Tensors, devices):
         for device in devices:
             yield tensor.to(device, non_blocking=True)
 
-    tensors_map(tensors, move_tensor)
+    return tensors_map(tensors, move_tensor)
 
 
 def tensors_split(tensors: Tensors, size):

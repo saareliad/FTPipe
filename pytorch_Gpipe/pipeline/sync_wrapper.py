@@ -56,7 +56,7 @@ class SyncWrapper(nn.Module):
         return self.prev_inputs is not None
 
     def pop_activation(self):
-        if self.counter.input_valid(self.gpu_num, -1):
+        if self.counter.output_valid(self.gpu_num):
             torch.cuda.set_rng_state(self.rng_states.pop(0), self.device)
             self.prev_inputs = self.activations.pop(0)
 
@@ -80,11 +80,14 @@ class SyncWrapper(nn.Module):
         if self.counter.input_valid(self.gpu_num):
             tensors_bi_map(inputs, self.grads, lambda input, grad: input.backward(grad))
 
-            torch.set_grad_enabled(True)
-
         # if we have an activation to pass
-        if self.counter.input_valid(self.gpu_num, -1):
-            tensors_map(self.prev_inputs, lambda activation: activation.requires_grad_(True))
+        if self.counter.output_valid(self.gpu_num):
+            def prepare_activation(act):
+                clone = act.requires_grad_().clone()
+                clone.retain_grad()
+                return clone
+
+            self.prev_inputs = tensors_map(self.prev_inputs, prepare_activation)
 
             output = self.module(*self.prev_inputs)
         else:
@@ -98,7 +101,7 @@ class SyncWrapper(nn.Module):
     def save_activation(self, *moved_inputs: Tensors):
         """saves the activation of the current input"""
         self.rng_states.append(torch.cuda.get_rng_state(self.device))
-        self.activations.append(tensors_map(moved_inputs, lambda input: input.clone().detach()))
+        self.activations.append(tensors_map(moved_inputs, lambda input: input.clone()))
 
     def forward(self, *inputs: Tensors) -> Tensors:
         # move the input between devices
@@ -171,7 +174,7 @@ class ActivationSavingLayer(nn.Module):
         self.counter = counter
 
     def pop_activation(self):
-        if self.counter.input_valid(self.gpu_num, -1):
+        if self.counter.output_valid(self.gpu_num):
             torch.cuda.set_rng_state(self.rng_states.pop(0), self.device)
             self.prev_inputs = self.activations.pop(0)
 
@@ -188,14 +191,14 @@ class ActivationSavingLayer(nn.Module):
         function for backward propagation iteration
         """
         # if we have an activation to pass
-        if self.counter.input_valid(0, -1):
+        if self.counter.output_valid(0):
             output = self.prev_inputs
         else:
             # this iteration is one we should not work in
             output = tensors_map(inputs, lambda input: torch.empty_like(input))
 
-            if len(output) == 1:
-                output = output[0]
+        if len(output) == 1:
+            output = output[0]
 
         return output
 

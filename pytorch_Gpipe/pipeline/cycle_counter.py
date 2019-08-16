@@ -59,7 +59,7 @@ class CycleCounter:
             return self.input_valid(1, cycle)
 
         if self.cur_mode is ForwardMode.backward:
-            first_valid_iter = self.num_gpus - gpu_num - 1
+            first_valid_iter = self.num_gpus - gpu_num
         else:
             first_valid_iter = gpu_num - 1
 
@@ -73,7 +73,7 @@ class CycleCounter:
         :param cycle: specify at which cycle (relative to the current) to check
         """
         if self.cur_mode is ForwardMode.backward:
-            first_valid_iter = self.num_gpus - gpu_num
+            first_valid_iter = self.num_gpus - gpu_num - 1
         else:
             first_valid_iter = gpu_num
 
