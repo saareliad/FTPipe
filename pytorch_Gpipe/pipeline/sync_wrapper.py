@@ -109,44 +109,46 @@ class SyncWrapper(nn.Module):
         self.activations.append(tensors_map(moved_inputs,
                                             lambda input: input.clone()))
 
+    def forward(self, *inputs: Tensors) -> Tensors:
+            # move the input between devices
+        if self.counter.cur_mode is ForwardMode.backward:
+            return self.backward_mode(*inputs)
 
-def forward(self, *inputs: Tensors) -> Tensors:
-        # move the input between devices
-    if self.counter.cur_mode is ForwardMode.backward:
-        return self.backward_mode(*inputs)
+        # check if the input that waits for the submodule is relevant (garbage
+        # will be propagated before and after data passes through submodule)
+        if self.counter.output_valid(self.gpu_num):
 
-    # check if the input that waits for the submodule is relevant (garbage
-    # will be propagated before and after data passes through submodule)
-    if self.counter.output_valid(self.gpu_num):
+            # the input is relevant.
+            output = self.module(*self.prev_inputs)
+        else:
+            # the input is garbage
+            output = gen_garbage_output(self.output_shapes, self.device)
 
-        # the input is relevant.
-        output = self.module(*self.prev_inputs)
-    else:
-        # the input is garbage
-        output = gen_garbage_output(self.output_shapes, self.device)
+            if len(output) == 1:
+                output = output[0]
 
-        if len(output) == 1:
-            output = output[0]
+        # check if the input to be replaced and scheduled to run on the next cycle
+        # is relevant or garbage
+        if self.counter.input_valid(self.gpu_num):
+            with torch.cuda.stream(self.pipe_stream):
+                # set the input devices when first actual data is received
+                if self.counter.get_count() == self.gpu_num:
+                    self.input_devices = get_devices(inputs)
 
-    # check if the input to be replaced and scheduled to run on the next cycle
-    # is relevant or garbage
-    if self.counter.input_valid(self.gpu_num):
-        with torch.cuda.stream(self.pipe_stream):
-            # set the input devices when first actual data is received
-            if self.counter.get_count() == self.gpu_num:
-                self.input_devices = get_devices(inputs)
+                moved_inputs = tensors_map(
+                    inputs, lambda tensor: tensor.to(self.device, non_blocking=True))
 
-            moved_inputs = tensors_map(
-                inputs, lambda tensor: tensor.to(self.device, non_blocking=True))
+                if self.counter.cur_mode is ForwardMode.train:
+                    self.save_activation(*moved_inputs)
 
-            if self.counter.cur_mode is ForwardMode.train:
-                self.save_activation(*moved_inputs)
+                self.prev_inputs = moved_inputs
+        else:
+            self.prev_inputs = tensors_map(inputs, lambda _: None)
 
-            self.prev_inputs = moved_inputs
-    else:
-        self.prev_inputs = tensors_map(inputs, lambda _: None)
+        return output
 
-    return output
+    def __iter__(self):
+        return iter(self.module)
 
 
 class ActivationSavingLayer(nn.Module):
@@ -255,3 +257,6 @@ class LayerWrapper(nn.Module):
         if len(out) == 1:
             out = out[0]
         return out
+
+    def __iter(self):
+        return iter(self.module)

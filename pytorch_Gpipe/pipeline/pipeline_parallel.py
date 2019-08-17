@@ -186,3 +186,6 @@ class PipelineParallel(nn.Module):
 
         # make sure that the counter and wrappers are returned to default mode
         self.finished_prop()
+
+    def __iter__(self):
+        return iter(self.model)

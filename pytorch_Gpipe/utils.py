@@ -152,6 +152,9 @@ class ShapeWrapper(nn.Module):
 
         return outs
 
+    def __iter__(self):
+        return iter(self.sub_layer)
+
 
 def get_device(x: Tensors) -> Device:
     if isinstance(x, torch.Tensor):

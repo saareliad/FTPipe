@@ -210,3 +210,6 @@ class Wrapper(nn.Module):
             exec_time = 1000*(end - start)
 
         return exec_time, out, cuda_mem
+
+    def __iter__(self):
+        return iter(self.layer)
