@@ -8,3 +8,4 @@ from .GoogleNet import *
 from .WideResNet import *
 from .Inception import *
 from .SqueezeNet import *
+from .amoebaNet import AmoebaNet_D

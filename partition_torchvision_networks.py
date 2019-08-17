@@ -2,16 +2,17 @@ from collections import OrderedDict
 import os
 from pytorch_Gpipe import partition_with_profiler, profileNetwork, distribute_by_memory, distribute_by_time, distribute_using_profiler, pipe_model
 import torch
-from sample_models import alexnet, resnet152, vgg19_bn, squeezenet1_1, inception_v3, densenet201, GoogLeNet, LeNet, WideResNet
+from sample_models import AmoebaNet_D, alexnet, resnet152, vgg19_bn, squeezenet1_1, inception_v3, densenet201, GoogLeNet, LeNet, WideResNet
 import torch.nn as nn
+from pytorch_Gpipe.utils import model_scopes
+from experiments.torchGpipe_ref_models import amoebanetd
 
 
 def partition_torchvision(nparts=4, save_graph=False):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    networks = [alexnet, resnet152, vgg19_bn, squeezenet1_1,
+    networks = [amoebanetd, AmoebaNet_D, alexnet, resnet152, vgg19_bn, squeezenet1_1,
                 inception_v3, densenet201, GoogLeNet, LeNet, WideResNet]
     depth = [0, 1, 100]
-    networks = [alexnet]
     for net in networks:
         model = net().to(device)
         for d in depth:
@@ -27,7 +28,7 @@ def partition_torchvision(nparts=4, save_graph=False):
                     model, torch.zeros(16, 3, 32, 32, device=device), nparts=nparts, max_depth=d)
             else:
                 graph = partition_with_profiler(
-                    model, torch.zeros(16, 3, 224, 224, device=device), nparts=nparts, max_depth=d)
+                    model, torch.zeros(4, 3, 224, 224, device=device), nparts=nparts, max_depth=d)
 
             filename = f"{net.__name__} attempted {nparts} partitions at depth {d}"
 
@@ -37,6 +38,11 @@ def partition_torchvision(nparts=4, save_graph=False):
                 graph.save(directory=out_dir, file_name=filename,
                            show_buffs_params=False, show_weights=False)
             print(filename)
+
+            scopes = set(model_scopes(model, depth=d))
+            graph_scopes = set(graph.scopes())
+
+            print(len(scopes.difference(graph_scopes)))
 
 
 def distribute_torchvision(nruns=1, nparts=4, save_graph=False):
@@ -179,5 +185,5 @@ def integration():
 
 if __name__ == "__main__":
     # integration()
-    distribute_torchvision()
+    partition_torchvision(nparts=2)
     # compare_exec_time()
