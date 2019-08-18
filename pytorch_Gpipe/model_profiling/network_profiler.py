@@ -211,5 +211,22 @@ class Wrapper(nn.Module):
 
         return exec_time, out, cuda_mem
 
+    # just in case those operations are required we pass them to the profiled layer
+
     def __iter__(self):
         return iter(self.layer)
+
+    def __getitem__(self, key):
+        return self.layer[key]
+
+    def __setitem__(self, key, value):
+        self.layer[key] = value
+
+    def __delitem__(self, idx):
+        delattr(self.layer, idx)
+
+    def __len__(self):
+        return len(self.layer)
+
+    def __contains__(self, key):
+        return key in self.layer

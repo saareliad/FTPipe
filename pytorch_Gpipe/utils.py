@@ -140,20 +140,37 @@ class ShapeWrapper(nn.Module):
     def __init__(self, sub_module: nn.Module):
         super(ShapeWrapper, self).__init__()
         self.output_shape = []
-        self.sub_layer = sub_module
+        self.layer = sub_module
         self.input_shape = []
 
     def forward(self, *inputs: Tensors):
         self.input_shape = _get_shape(inputs)
 
-        outs = self.sub_layer(*inputs)
+        outs = self.layer(*inputs)
 
         self.output_shape = _get_shape(outs)
 
         return outs
 
+    # just in case those operations are required we pass them to the profiled layer
+
     def __iter__(self):
-        return iter(self.sub_layer)
+        return iter(self.layer)
+
+    def __getitem__(self, key):
+        return self.layer[key]
+
+    def __setitem__(self, key, value):
+        self.layer[key] = value
+
+    def __delitem__(self, idx):
+        delattr(self.layer, idx)
+
+    def __len__(self):
+        return len(self.layer)
+
+    def __contains__(self, key):
+        return key in self.layer
 
 
 def get_device(x: Tensors) -> Device:
