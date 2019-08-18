@@ -11,13 +11,4 @@ ideas/*
 playground/**
 model_partition/graph/__pycache__/
 *.pyc
-amoebanet-d.txt
 main.py
-experiments/torchGpipe_ref_models/__init__.py
-experiments/torchGpipe_ref_models/amoebanet_d/__init__.py
-experiments/torchGpipe_ref_models/amoebanet_d/flatten_sequential.py
-experiments/torchGpipe_ref_models/amoebanet_d/genotype.py
-experiments/torchGpipe_ref_models/amoebanet_d/surgery.py
-experiments/torchGpipe_ref_models/resnet/__init__.py
-experiments/torchGpipe_ref_models/resnet/bottleneck.py
-experiments/torchGpipe_ref_models/resnet/flatten_sequential.py
