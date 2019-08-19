@@ -224,3 +224,16 @@ def _get_size(*inputs: Tensors) -> int:
         else:
             raise ValueError(INCORRECT_INPUT_TYPE+f"{type(x)} ")
     return size
+
+
+def _count_elements(*inputs: Tensors) -> int:
+    c = 0
+    for x in inputs:
+        if isinstance(x, torch.Tensor):
+            c += 1
+        elif isinstance(x, (list, tuple)):
+            c += _count_elements(*x)
+        else:
+            raise ValueError(INCORRECT_INPUT_TYPE+f"{type(x)} ")
+
+    return c

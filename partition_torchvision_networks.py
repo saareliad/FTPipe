@@ -2,15 +2,15 @@ from collections import OrderedDict
 import os
 from pytorch_Gpipe import partition_with_profiler, profileNetwork, distribute_by_memory, distribute_by_time, distribute_using_profiler, pipe_model
 import torch
-from sample_models import AmoebaNet_D, alexnet, resnet152, vgg19_bn, squeezenet1_1, inception_v3, densenet201, GoogLeNet, LeNet, WideResNet
+from sample_models import alexnet, resnet152, vgg19_bn, squeezenet1_1, inception_v3, densenet201, GoogLeNet, LeNet, WideResNet
 import torch.nn as nn
 from pytorch_Gpipe.utils import model_scopes
-from experiments.torchGpipe_ref_models import amoebanetd
+from sample_models import AmoebaNet_D as my_amoeaba, amoebanetd as ref_amoeba, torchgpipe_resnet101
 
 
 def partition_torchvision(nparts=4, save_graph=False):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    networks = [amoebanetd, AmoebaNet_D, alexnet, resnet152, vgg19_bn, squeezenet1_1,
+    networks = [my_amoeaba, ref_amoeba, alexnet, resnet152, torchgpipe_resnet101, vgg19_bn, squeezenet1_1,
                 inception_v3, densenet201, GoogLeNet, LeNet, WideResNet]
     depth = [0, 1, 100]
     for net in networks:
@@ -38,11 +38,6 @@ def partition_torchvision(nparts=4, save_graph=False):
                 graph.save(directory=out_dir, file_name=filename,
                            show_buffs_params=False, show_weights=False)
             print(filename)
-
-            scopes = set(model_scopes(model, depth=d))
-            graph_scopes = set(graph.scopes())
-
-            print(len(scopes.difference(graph_scopes)))
 
 
 def distribute_torchvision(nruns=1, nparts=4, save_graph=False):
@@ -183,7 +178,70 @@ def integration():
     pipe_net(x)
 
 
+def tuple_problem():
+
+    class dummy(nn.Module):
+        def __init__(self, first=True):
+            super(dummy, self).__init__()
+            self.layer = nn.Linear(10, 10)
+            self.first = first
+
+        def forward(self, *xs):
+            if isinstance(xs[0], tuple):
+                return self.t_forward(xs[0])
+            return self.m_forward(*xs)
+
+        def t_forward(self, xs):
+            x0, x1 = xs
+            return self.m_forward(x0, x1)
+
+        def m_forward(self, x0, x1):
+            if self.first:
+                return self.layer(x0), x1
+            return x0, self.layer(x1)
+
+    class seqDummy(nn.Module):
+        def __init__(self, tupled):
+            super(seqDummy, self).__init__()
+            self.tupled = tupled
+
+            self.t0 = dummy()
+            self.t1 = dummy(first=False)
+
+        def forward(self, *xs):
+            if self.tupled:
+                return self.t_forward(xs[0])
+            return self.m_forward(*xs)
+
+        def t_forward(self, xs):
+            x0, x1 = xs
+            return self.m_forward(x0, x1)
+
+        def m_forward(self, x0, x1):
+            a, b = self.t0(x0, x1)
+            return self.t1(a, b)
+
+    tupled = seqDummy(True)
+    multi = seqDummy(False)
+
+    g1 = partition_with_profiler(
+        tupled, (torch.zeros(4, 10), torch.zeros(10, 10)), nparts=2)
+
+    g2 = partition_with_profiler(
+        multi, torch.zeros(4, 10), torch.zeros(10, 10), nparts=2)
+
+    curr_dir = os.path.dirname(os.path.realpath(__file__))
+    out_dir = f"{curr_dir}\\partition_visualization"
+
+    g1.save(directory=out_dir, file_name="tupled",
+            show_buffs_params=False, show_weights=False)
+    g2.save(directory=out_dir, file_name="multi",
+            show_buffs_params=False, show_weights=False)
+
+
 if __name__ == "__main__":
     # integration()
-    partition_torchvision(nparts=2)
+    # partition_torchvision(nparts=2)
     # compare_exec_time()
+
+    tuple_problem()

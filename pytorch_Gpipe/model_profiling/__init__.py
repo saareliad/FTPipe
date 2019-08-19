@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 import torch
 import torch.nn as nn
 
-from ..utils import Tensors, traverse_model, traverse_params_buffs
+from ..utils import Tensors, traverse_model, traverse_params_buffs, model_scopes, _count_elements
 from .control_flow_graph import Graph, NodeTypes
 from .network_profiler import profileNetwork
 from .optimize_graph import optimize_graph
@@ -39,8 +39,8 @@ def graph_builder(model: nn.Module, *sample_batch: Tensors, max_depth: int = 100
     buffer_param_names = map(lambda t: t[1], traverse_params_buffs(model))
     buffer_param_names = list(buffer_param_names)
 
-    layerNames = map(lambda t: t[1], traverse_model(
-        model, depth=max_depth, basic_blocks=basic_blocks))
+    layerNames = model_scopes(model, depth=max_depth,
+                              basic_blocks=basic_blocks)
     layerNames = list(layerNames)
 
     # trace the model and build a graph
@@ -49,7 +49,7 @@ def graph_builder(model: nn.Module, *sample_batch: Tensors, max_depth: int = 100
             model, sample_batch)
         trace_graph = trace_graph.graph()
 
-    num_inputs = len(sample_batch)
+    num_inputs = _count_elements(*sample_batch)
 
     graph = Graph(layerNames, num_inputs, buffer_param_names,
                   trace_graph, weights, basic_blocks, max_depth)

@@ -12,7 +12,13 @@ __all__ = ['Concat', 'FirstAnd', 'InputOne',
 Tensors = Tuple[torch.Tensor, ...]
 
 
-class Twin(nn.Module):
+class Hack(nn.Module):
+
+    def forward(self, *args, **kwargs):
+        raise NotImplementedError()
+
+
+class Twin(Hack):
     """Duplicates the tensor::
          ┌──────┐
      a --│ Twin │--> a
@@ -24,7 +30,7 @@ class Twin(nn.Module):
         return tensor, tensor
 
 
-class TwinLast(nn.Module):
+class TwinLast(Hack):
     """Duplicates the last tensor::
         a -----> a
         b -----> b
@@ -36,7 +42,7 @@ class TwinLast(nn.Module):
         return tensors + (tensors[-1],)
 
 
-class InputOne(nn.Module):
+class InputOne(Hack):
     """Picks one tensor for the underlying module input::
         a -----> a
         b --f--> f(b)
@@ -68,7 +74,7 @@ class InputOne(nn.Module):
         return tensors[:self.insert] + output + tensors[self.insert:]
 
 
-class Shift(nn.Module):
+class Shift(Hack):
     """Moves the last tensor ahead of the tensors::
             +--> c
         a --|--> a
@@ -80,7 +86,7 @@ class Shift(nn.Module):
         return (tensors[-1],) + tensors[:-1]
 
 
-class MergeTwo(nn.Module):
+class MergeTwo(Hack):
     """Merges the last two tensors and replace them with the result::
         a -----> a
         b --+--> b+c
@@ -103,7 +109,7 @@ class MergeTwo(nn.Module):
         return tensors[:i] + (merged,) + tensors[j+1:]
 
 
-class FirstAnd(nn.Module):
+class FirstAnd(Hack):
     """Skips the first tensor, executes the underlying module by the remaining
     tensors::
         a -----> a
@@ -122,7 +128,7 @@ class FirstAnd(nn.Module):
         return (tensors[0],) + output
 
 
-class Concat(nn.Module):
+class Concat(Hack):
     """Concat all tensors::
         a --+
         b --+--> concat(a, b, c)

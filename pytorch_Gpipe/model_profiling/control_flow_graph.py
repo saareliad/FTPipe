@@ -12,11 +12,12 @@ class Graph():
     the graph can have weighted nodes
     do not instanciate this class directly use the graph_builder method provided with this module
     '''
-
+    #TODO tuple inputs do not count as one graph cant distinguish between a tuple input/output and multiple input/outputs
     def __init__(self, profiled_layers: List[str], num_inputs: int, buffer_param_names: List[str], trace_graph, weights: Dict[str, Any],basic_blocks:List,depth:int):
         self.nodes = []
         self.profiled_layers = profiled_layers
         self.num_inputs_buffs_params = 0
+        #TODO tuple inputs do not count as one
         self.num_inputs = num_inputs
         self.buffer_param_names = buffer_param_names
         self._build_graph(trace_graph)

@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
 
 import torch
 from torch import nn
@@ -48,9 +48,9 @@ class Stem(nn.Module):
         super(Stem, self).__init__()
         self.conv_cell = Conv_Cell(3, channel, 3, 2, 1, False)
 
-    def forward(self, x: Tensor) -> Tuple[Tensor, Tensor]:
+    def forward(self, x: Tensor) -> Tuple[Tensor]:
         out = self.conv_cell(x)
-        return out, out
+        return out
 
 
 OPS = {
@@ -67,8 +67,7 @@ OPS = {
 class AmoebaNet_D(nn.Module):
     """an AmoebaNet-D model for ImageNet."""
 
-    def __init__(self, num_classes: int = 10,
-                 num_layers: int = 1,
+    def __init__(self, num_classes: int = 10, num_layers: int = 4,
                  num_filters: int = 512,
                  genotype: Optional[Genotype] = None):
         super(AmoebaNet_D, self).__init__()
@@ -154,14 +153,14 @@ class AmoebaNet_D(nn.Module):
             reduction_prev = False
 
         self.stem = Stem(channel)
+        self.twin = Twin()
         self.cells = nn.Sequential(*cells)
         self.classifier = Classifier(channel_prev, num_classes)
 
     def forward(self, x: Tensor) -> Tensor:
         out = self.stem(x)
-        out = self.cells(out)
-        out = out[0]+out[1]
-        return self.classifier(out)
+        out = self.cells(self.twin(out))
+        return self.classifier(out[1])
 
 
 class Amoeba_Cell(nn.Module):
@@ -170,14 +169,14 @@ class Amoeba_Cell(nn.Module):
                  reduction: bool, reduction_prev: bool):
         super(Amoeba_Cell, self).__init__()
 
-        preprocess0 = nn.Identity()
+        preprocess0 = nn.Sequential()
         if reduction_prev:
             preprocess0 = FactorizedReduce(channel_prev_prev, channel)
         elif channel_prev_prev != channel:
             preprocess0 = Conv_Cell(channel_prev_prev, channel, 1, 1, 0, True)
 
-        self.preprocess0: nn.Module = preprocess0
-        self.preprocess1 = Conv_Cell(channel_prev, channel, 1, 1, 0, True)
+        preprocess0: nn.Module = preprocess0
+        preprocess1 = Conv_Cell(channel_prev, channel, 1, 1, 0, True)
 
         if reduction:
             op_names, indices = zip(*genotype.reduce)
@@ -197,53 +196,178 @@ class Amoeba_Cell(nn.Module):
 
         layers = []
         indices = []
+
+        layers = [
+            InputOne(preprocess0, i=0),
+            TwinLast(),
+            InputOne(preprocess1, i=1),
+            # Output: (preprocess0(x[0]), preprocess1(x[1]), x[1])
+            # The last tensor x[1] is passed until the cell output.
+            # The comments below call x[1] "skip".
+        ]
+
         for i in range(len(ops) // 2):
             op0, i0 = ops[i*2]
             op1, i1 = ops[i*2 + 1]
-            indices.extend([i0, i1])
-            layers.extend([op0, op1])
 
-        self.layers = nn.ModuleList(layers)
+            layers.extend([
+                InputOne(op0, i=i0, insert=2+i),
+                # Output: x..., op0(x[i0]), skip]
+
+                InputOne(op1, i=i1, insert=2 + i + 1),
+                # Output: x..., op0(x[i0]), op1(x[i1]), skip
+
+                MergeTwo(2 + i, 2 + i + 1),
+                # Output: x..., op0(x[i0]) + op1(x[i1]), skip
+            ])
+
+        layers.extend([
+            # Move skip to the head.
+            Shift(),
+            # Output: skip, x...
+
+            FirstAnd(Concat(concat)),
+            # Output: skip, concat(x...)
+        ])
+
+        self.layers = nn.Sequential(*layers)
         self.indices = indices
         self.concat_indices = concat
 
-        self.called = False
+    def forward(self, xs):
+        out = self.layers(xs)
+        return out
 
-    def forward(self, xs: Tuple[Tensor, Tensor]) -> Tuple[Tensor, Tensor]:
-        x0, x1 = xs
-        branch1 = self.preprocess0(x0)
-        branch2 = self.preprocess1(x1)
 
-        out = (branch1, branch2, x1)
+Tensors = Tuple[Tensor, ...]
 
-        for idx, (op0, op1) in enumerate(zip(self.layers[::2], self.layers[1::2])):
-            i0, i1 = self.indices[2*idx], self.indices[2*idx+1]
-            i = idx+2
-            j = i+1
-            # operate on input i0 place result at index i
-            out0 = op0(out[i0])
-            if not isinstance(out0, tuple):
-                out0 = (out0,)
-            out = out[:i] + out0 + out[i:]
 
-            # operate on input i1 place result at index j
-            out1 = op1(out[i1])
-            if not isinstance(out1, tuple):
-                out1 = (out1,)
-            out = out[:j] + out1 + out[j:]
+class Hack(nn.Module):
 
-            # replace indices i,j with their sum (removes one index)
-            summed = out[i]+out[j]
-            out = out[:i] + (summed,) + out[j+1:]
+    def forward(self, *args, **kwargs):
+        raise NotImplementedError()
 
-        # move last output to start
-        shifted = (out[-1],)+out[:-1]
-        # Output: skip, x...
 
-        stacked = torch.cat([shifted[k]
-                             for k in self.concat_indices], dim=1)
-        # stacked:concat(x...)
+class Twin(Hack):
+    """Duplicates the tensor::
+         ┌──────┐
+     a --│ Twin │--> a
+         │   '--│--> a
+         └──────┘
+    """
 
-        self.called = True
-        # Output: skip, concat(x...)
-        return shifted[0], stacked
+    def forward(self, tensor: torch.Tensor) -> Tensors:  # type: ignore
+        return tensor, tensor
+
+
+class TwinLast(Hack):
+    """Duplicates the last tensor::
+        a -----> a
+        b -----> b
+        c --+--> c
+            +--> c'
+    """
+
+    def forward(self, tensors: Tensors) -> Tensors:  # type: ignore
+        return tensors + (tensors[-1],)
+
+
+class InputOne(Hack):
+    """Picks one tensor for the underlying module input::
+        a -----> a
+        b --f--> f(b)
+        c -----> c
+    """
+
+    def __init__(self, module: nn.Module, i: int, insert: Optional[int] = None):
+        super().__init__()
+        self.module = module
+        self.i = i
+        self.insert = insert
+
+    def forward(self, tensors: Tensors) -> Tensors:  # type: ignore
+        i = self.i
+
+        # for t in tensors:
+        #     print(t.shape[1:])
+        # print("\n")
+        input = tensors[i]
+        output = self.module(input)
+
+        if not isinstance(output, tuple):
+            output = (output,)
+
+        if self.insert is None:
+            # Replace with the input.
+            return tensors[:i] + output + tensors[i+1:]
+
+        return tensors[:self.insert] + output + tensors[self.insert:]
+
+
+class Shift(Hack):
+    """Moves the last tensor ahead of the tensors::
+            +--> c
+        a --|--> a
+        b --|--> b
+        c --+
+    """
+
+    def forward(self, tensors: Tensors) -> Tensors:  # type: ignore
+        return (tensors[-1],) + tensors[:-1]
+
+
+class MergeTwo(Hack):
+    """Merges the last two tensors and replace them with the result::
+        a -----> a
+        b --+--> b+c
+        c --+
+    """
+
+    def __init__(self, i: int, j: int):
+        super().__init__()
+        self.i = i
+        self.j = j
+
+    def forward(self, tensors: Tensors) -> Tensors:  # type: ignore
+        i = self.i
+        j = self.j
+
+        # Set the initial value as the first tensor
+        # to type as 'Tensor' instead of 'Union[Tensor, int]'.
+        merged = sum(tensors[i+1:j+1], tensors[i])
+
+        return tensors[:i] + (merged,) + tensors[j+1:]
+
+
+class FirstAnd(Hack):
+    """Skips the first tensor, executes the underlying module by the remaining
+    tensors::
+        a -----> a
+        b --+--> f(b, c)
+        c --+
+    """
+
+    def __init__(self, module: nn.Module):
+        super().__init__()
+        self.module = module
+
+    def forward(self, tensors: Tensors) -> Tensors:  # type: ignore
+        output = self.module(tensors[1:])
+        if not isinstance(output, tuple):
+            output = (output,)
+        return (tensors[0],) + output
+
+
+class Concat(Hack):
+    """Concat all tensors::
+        a --+
+        b --+--> concat(a, b, c)
+        c --+
+    """
+
+    def __init__(self, indices: List):
+        super().__init__()
+        self.indices = indices
+
+    def forward(self, tensors: Tensors) -> torch.Tensor:  # type: ignore
+        return torch.cat([tensors[i] for i in self.indices], dim=1)
