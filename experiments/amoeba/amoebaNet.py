@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-import experiments.amoebaNet_utils as au
+import amoebaNet_utils as au
 import math
 
 
@@ -31,7 +31,8 @@ class AmoebaNet(nn.Module):
             hparams.num_cells + 4,
             hparams.num_total_steps
         )
-        self.image_stem = imagenet_stem(inputs, hparams, self.reduction_cell_factory, 2)
+        self.image_stem = imagenet_stem(
+            inputs, hparams, self.reduction_cell_factory, 2)
         cell_outputs = self.image_stem.get_shape()
         self.red = []
         self.norm = []
@@ -40,7 +41,8 @@ class AmoebaNet(nn.Module):
         filter_scaling = 1.0
         # true_cell_num accounts for the stem cells
         true_cell_num = 2
-        reduction_indices = au.calc_reduction_layers(self.hparams.num_cells, self.hparams.num_reduction_layers)
+        reduction_indices = au.calc_reduction_layers(
+            self.hparams.num_cells, self.hparams.num_reduction_layers)
         aux_head_cell_idxes = []
         if len(reduction_indices) >= 2:
             aux_head_cell_idxes.append(reduction_indices[1] - 1)
@@ -67,12 +69,14 @@ class AmoebaNet(nn.Module):
 
             if hparams.use_aux_head and cell_num in aux_head_cell_idxes and num_classes and is_training:
                 self.aux.append(nn.ReLU())
-                self.aux.append(aux_head(torch.randn(out_shape), num_classes, hparams))
+                self.aux.append(aux_head(torch.randn(
+                    out_shape), num_classes, hparams))
 
         self.layers = [
             nn.ReLU(),
             nn.Dropout(p=hparams.dense_dropout_keep_prob),
-            nn.Linear(in_features=cell_outputs[-1].shape[1], out_features=num_classes)
+            nn.Linear(
+                in_features=cell_outputs[-1].shape[1], out_features=num_classes)
         ]
 
         self.soft = nn.Softmax()
@@ -80,7 +84,8 @@ class AmoebaNet(nn.Module):
     def forward(self, x):
         end_points = {"aux_logits": []}
         filter_scaling_rate = 2
-        reduction_indices = au.calc_reduction_layers(self.hparams.num_cells, self.hparams.num_reduction_layers)
+        reduction_indices = au.calc_reduction_layers(
+            self.hparams.num_cells, self.hparams.num_reduction_layers)
         aux_head_cell_idxes = []
         if len(reduction_indices) >= 2:
             aux_head_cell_idxes.append(reduction_indices[1] - 1)
@@ -134,7 +139,8 @@ class imagenet_stem(nn.Module):
         self.layers = []
 
         track_shape = list(inputs.shape)
-        self.conv = nn.Conv2d(inputs.shape[1], num_stem_filters, kernel_size=3, stride=2)
+        self.conv = nn.Conv2d(
+            inputs.shape[1], num_stem_filters, kernel_size=3, stride=2)
         self.BN = nn.BatchNorm2d(num_stem_filters)
         track_shape[1] = num_stem_filters
         track_shape[2] = int(((track_shape[2] - 3) / 2) + 1)
@@ -144,7 +150,8 @@ class imagenet_stem(nn.Module):
 
         self.cell_outputs = [None, torch.randn(track_shape)]
         for cell_num in range(num_stem_cells):
-            stem_cell = stem_cell_factory(self.cell_outputs[-1], self.cell_outputs[-2], filter_scaling, 2, cell_num)
+            stem_cell = stem_cell_factory(
+                self.cell_outputs[-1], self.cell_outputs[-2], filter_scaling, 2, cell_num)
             self.layers.append(stem_cell)
             self.cell_outputs.append(torch.randn(stem_cell.get_shape()))
             filter_scaling *= filter_scaling_rate
@@ -174,10 +181,12 @@ class aux_head(nn.Module):
         if hasattr(hparams, 'aux_scaling'):
             aux_scaling = hparams.aux_scaling
 
-        self.layers.append(nn.AvgPool2d(kernel_size=5, stride=3, padding=0, ceil_mode=True))
+        self.layers.append(nn.AvgPool2d(
+            kernel_size=5, stride=3, padding=0, ceil_mode=True))
         track_shape[2] = math.ceil(((track_shape[2] - 5) / 3) + 1)
         track_shape[3] = math.ceil(((track_shape[3] - 5) / 3) + 1)
-        self.layers.append(nn.Conv2d(track_shape[1], int(128 * aux_scaling), 1))
+        self.layers.append(
+            nn.Conv2d(track_shape[1], int(128 * aux_scaling), 1))
         track_shape[1] = int(128 * aux_scaling)
         self.layers.append(nn.BatchNorm2d(track_shape[1]))
         self.layers.append(nn.ReLU())
@@ -190,7 +199,8 @@ class aux_head(nn.Module):
         self.layers.append(nn.BatchNorm2d(track_shape[1]))
         self.layers.append(nn.ReLU())
         self.layers.append(Flatten())
-        self.layer.append(nn.Linear(in_features=track_shape[1], out_features=num_classes))
+        self.layer.append(
+            nn.Linear(in_features=track_shape[1], out_features=num_classes))
 
     def forward(self, x):
         for layer in self.layers:
