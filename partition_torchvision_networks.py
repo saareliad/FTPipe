@@ -13,22 +13,26 @@ def partition_torchvision(nparts=4, save_graph=False):
     networks = [my_amoeaba, ref_amoeba, alexnet, resnet152, torchgpipe_resnet101, vgg19_bn, squeezenet1_1,
                 inception_v3, densenet201, GoogLeNet, LeNet, WideResNet]
     depth = [0, 1, 100]
+    depth = [100]
+    networks = [my_amoeaba]
     for net in networks:
         model = net().to(device)
+        print("model built")
+        basic_blocks = None
         for d in depth:
             print(f"current net is {net.__name__}")
             if net.__name__.find("inception") != -1:
                 graph = partition_with_profiler(
-                    model, torch.zeros(16, 3, 299, 299, device=device), nparts=nparts, max_depth=d)
+                    model, torch.zeros(16, 3, 299, 299, device=device), nparts=nparts, max_depth=d, basic_blocks=basic_blocks)
             elif net.__name__.find("GoogLeNet") != -1:
                 graph = partition_with_profiler(
-                    model, torch.zeros(16, 3, 32, 32, device=device), nparts=nparts, max_depth=d)
+                    model, torch.zeros(16, 3, 32, 32, device=device), nparts=nparts, max_depth=d, basic_blocks=basic_blocks)
             elif net.__name__.find("LeNet") != -1:
                 graph = partition_with_profiler(
-                    model, torch.zeros(16, 3, 32, 32, device=device), nparts=nparts, max_depth=d)
+                    model, torch.zeros(16, 3, 32, 32, device=device), nparts=nparts, max_depth=d, basic_blocks=basic_blocks)
             else:
                 graph = partition_with_profiler(
-                    model, torch.zeros(4, 3, 224, 224, device=device), nparts=nparts, max_depth=d)
+                    model, torch.zeros(4, 3, 224, 224, device=device), nparts=nparts, max_depth=d, basic_blocks=basic_blocks)
 
             filename = f"{net.__name__} attempted {nparts} partitions at depth {d}"
 
@@ -37,6 +41,15 @@ def partition_torchvision(nparts=4, save_graph=False):
             if save_graph:
                 graph.save(directory=out_dir, file_name=filename,
                            show_buffs_params=False, show_weights=False)
+
+            scopes = set(model_scopes(
+                model, depth=d, basic_blocks=basic_blocks))
+
+            diff = scopes.difference(graph.scopes())
+            print(f"scope diff {len(diff)}\n")
+            for s in sorted(diff):
+                print(s)
+            print("\n")
             print(filename)
 
 
@@ -188,7 +201,10 @@ def tuple_problem():
 
         def forward(self, *xs):
             if isinstance(xs[0], tuple):
+                assert len(xs) == 1 and len(xs[0]) == 2
                 return self.t_forward(xs[0])
+
+            assert len(xs) == 2
             return self.m_forward(*xs)
 
         def t_forward(self, xs):
@@ -197,8 +213,8 @@ def tuple_problem():
 
         def m_forward(self, x0, x1):
             if self.first:
-                return self.layer(x0), x1
-            return x0, self.layer(x1)
+                return self.layer(x0), x1+1e-5
+            return x0+1e-5, self.layer(x1)
 
     class seqDummy(nn.Module):
         def __init__(self, tupled):
@@ -210,12 +226,15 @@ def tuple_problem():
 
         def forward(self, *xs):
             if self.tupled:
+                assert len(xs) == 1 and len(xs[0]) == 2
                 return self.t_forward(xs[0])
+
+            assert len(xs) == 2
             return self.m_forward(*xs)
 
         def t_forward(self, xs):
-            x0, x1 = xs
-            return self.m_forward(x0, x1)
+            a = self.t0(xs)
+            return self.t1(a)
 
         def m_forward(self, x0, x1):
             a, b = self.t0(x0, x1)
@@ -223,12 +242,12 @@ def tuple_problem():
 
     tupled = seqDummy(True)
     multi = seqDummy(False)
-
+    sample = (torch.zeros(4, 10), torch.zeros(10, 10))
     g1 = partition_with_profiler(
-        tupled, (torch.zeros(4, 10), torch.zeros(10, 10)), nparts=2)
+        tupled, sample, nparts=2)
 
     g2 = partition_with_profiler(
-        multi, torch.zeros(4, 10), torch.zeros(10, 10), nparts=2)
+        multi, *sample, nparts=2)
 
     curr_dir = os.path.dirname(os.path.realpath(__file__))
     out_dir = f"{curr_dir}\\partition_visualization"
@@ -238,6 +257,20 @@ def tuple_problem():
     g2.save(directory=out_dir, file_name="multi",
             show_buffs_params=False, show_weights=False)
 
+    with torch.no_grad():
+        trace_graph, _ = torch.jit.get_trace_graph(
+            tupled, (sample,))
+        tupled_trace = trace_graph.graph()
+
+        trace_graph, _ = torch.jit.get_trace_graph(
+            multi, sample)
+        multi_trace = trace_graph.graph()
+
+    print(tupled_trace)
+
+    print("\n")
+    print(multi_trace)
+
 
 if __name__ == "__main__":
     # integration()
@@ -245,3 +278,64 @@ if __name__ == "__main__":
     # compare_exec_time()
 
     tuple_problem()
+
+# tuple
+
+# graph(%input.1: Float(4, 10),
+#       % x1 : Float(10, 10),
+#       % 2: Float(10, 10),
+#       % 3: Float(10),
+#       % 4: Float(10, 10),
+#       % 5: Float(10)):
+#   %6: Float(4, 10) = aten: : clone(%input.1)
+#   %7: Float(10, 10) = aten: : clone(%x1)
+#   %8: Float(10, 10) = aten: : clone(%2)
+#   %9: Float(10) = aten: : clone(%3)
+#   %10: Float(10, 10) = aten: : clone(%4)
+#   %11: Float(10) = aten: : clone(%5)
+#   %12: Float(10!, 10!) = aten: : t(%2), scope: seqDummy/dummy[t0]/Linear[layer]
+#   %13: int = prim: : Constant[value = 1](), scope: seqDummy/dummy[t0]/Linear[layer]
+#   %14: int = prim: : Constant[value = 1](), scope: seqDummy/dummy[t0]/Linear[layer]
+#   %x0: Float(4, 10) = aten: : addmm(%3, % input.1, % 12, % 13, % 14), scope: seqDummy/dummy[t0]/Linear[layer]
+#   %16: Double() = prim: : Constant[value = {1e-05}](), scope: seqDummy/dummy[t0]
+#   %17: int = prim: : Constant[value = 1](), scope: seqDummy/dummy[t0]
+#   %input: Float(10, 10) = aten: : add(%x1, % 16, % 17), scope: seqDummy/dummy[t0]
+#   %19: Double() = prim: : Constant[value = {1e-05}](), scope: seqDummy/dummy[t1]
+#   %20: int = prim: : Constant[value = 1](), scope: seqDummy/dummy[t1]
+#   %21: Float(4, 10) = aten: : add(%x0, % 19, % 20), scope: seqDummy/dummy[t1]
+#   %22: Float(10!, 10!) = aten: : t(%4), scope: seqDummy/dummy[t1]/Linear[layer]
+#   %23: int = prim: : Constant[value = 1](), scope: seqDummy/dummy[t1]/Linear[layer]
+#   %24: int = prim: : Constant[value = 1](), scope: seqDummy/dummy[t1]/Linear[layer]
+#   %25: Float(10, 10) = aten: : addmm(%5, % input, % 22, % 23, % 24), scope: seqDummy/dummy[t1]/Linear[layer]
+#   return ( % 21, % 25)
+
+
+# multi
+
+# graph( % input.1: Float(4, 10),
+#       % 1: Float(10, 10),
+#       % 2: Float(10, 10),
+#       % 3: Float(10),
+#       % 4: Float(10, 10),
+#       % 5: Float(10)):
+#   %6: Float(4, 10) = aten: : clone(%input.1)
+#   %7: Float(10, 10) = aten: : clone(%1)
+#   %8: Float(10, 10) = aten: : clone(%2)
+#   %9: Float(10) = aten: : clone(%3)
+#   %10: Float(10, 10) = aten: : clone(%4)
+#   %11: Float(10) = aten: : clone(%5)
+#   %12: Float(10!, 10!) = aten: : t(%2), scope: seqDummy/dummy[t0]/Linear[layer]
+#   %13: int = prim: : Constant[value = 1](), scope: seqDummy/dummy[t0]/Linear[layer]
+#   %14: int = prim: : Constant[value = 1](), scope: seqDummy/dummy[t0]/Linear[layer]
+#   %15: Float(4, 10) = aten: : addmm(%3, % input.1, % 12, % 13, % 14), scope: seqDummy/dummy[t0]/Linear[layer]
+#   %16: Double() = prim: : Constant[value = {1e-05}](), scope: seqDummy/dummy[t0]
+#   %17: int = prim: : Constant[value = 1](), scope: seqDummy/dummy[t0]
+#   %input: Float(10, 10) = aten: : add(%1, % 16, % 17), scope: seqDummy/dummy[t0]
+#   %19: Double() = prim: : Constant[value = {1e-05}](), scope: seqDummy/dummy[t1]
+#   %20: int = prim: : Constant[value = 1](), scope: seqDummy/dummy[t1]
+#   %21: Float(4, 10) = aten: : add(%15, % 19, % 20), scope: seqDummy/dummy[t1]
+#   %22: Float(10!, 10!) = aten: : t(%4), scope: seqDummy/dummy[t1]/Linear[layer]
+#   %23: int = prim: : Constant[value = 1](), scope: seqDummy/dummy[t1]/Linear[layer]
+#   %24: int = prim: : Constant[value = 1](), scope: seqDummy/dummy[t1]/Linear[layer]
+#   %25: Float(10, 10) = aten: : addmm(%5, % input, % 22, % 23, % 24), scope: seqDummy/dummy[t1]/Linear[layer]
+#   return ( % 21, % 25)

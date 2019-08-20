@@ -194,10 +194,8 @@ class Amoeba_Cell(nn.Module):
             op = OPS[name](channel, stride, True)
             ops.append((op, index))
 
-        layers = []
         indices = []
-
-        layers = [
+        preprocess = [
             InputOne(preprocess0, i=0),
             TwinLast(),
             InputOne(preprocess1, i=1),
@@ -206,10 +204,13 @@ class Amoeba_Cell(nn.Module):
             # The comments below call x[1] "skip".
         ]
 
+        layers = []
+        inserts = []
+        assert (len(ops) % 2) == 0
         for i in range(len(ops) // 2):
             op0, i0 = ops[i*2]
             op1, i1 = ops[i*2 + 1]
-
+            inserts.append((i0, i1))
             layers.extend([
                 InputOne(op0, i=i0, insert=2+i),
                 # Output: x..., op0(x[i0]), skip]
@@ -221,22 +222,50 @@ class Amoeba_Cell(nn.Module):
                 # Output: x..., op0(x[i0]) + op1(x[i1]), skip
             ])
 
-        layers.extend([
+        reduce_phase = [
             # Move skip to the head.
             Shift(),
             # Output: skip, x...
 
             FirstAnd(Concat(concat)),
             # Output: skip, concat(x...)
-        ])
-
+        ]
+        self.preprocess = nn.Sequential(*preprocess)
         self.layers = nn.Sequential(*layers)
-        self.indices = indices
+        self.reduce_phase = nn.Sequential(*reduce_phase)
+        self.inserts = inserts
         self.concat_indices = concat
 
+        assert len(concat) > 0 and all(i < (3+(len(ops)//2)-1) for i in concat)
+
     def forward(self, xs):
-        out = self.layers(xs)
-        return out
+        preprocessed = self.preprocess(xs)
+
+        out = preprocessed
+        out = self.layers(preprocessed)
+        reduced = self.reduce_phase(out)
+        return reduced
+
+    def op(self, layer, i, insert, xs):
+        # i=3,insert=5
+        # x0,x1,x2,x3,x4,x5,x6,x7
+        # x0,x1,x2,x3,x4,layer(x3),x5,x6,x7
+        res = layer(xs[i])
+        return xs[:insert]+(res,)+xs[insert:]
+
+    def merge(self, i, xs):
+        # i=2
+        # x0,x1,x2,x3,x4,x5,x6,x7
+        # x0,x1,x2+x3,x4,x5,x6,x7
+        res = xs[i]+xs[i+1]
+        return xs[:i]+(res,)+xs[i+1:]
+
+    def reduce_channels(self, indices, xs):
+        # indices = 4,5,6
+        # x0,x1,x2,x3,x4,x5,x6,x7
+        # x7,x0,x1,x2,x3,x4,x5,x6
+        # x7,concat(x4,x5,x6)
+        return xs[-1], torch.cat([xs[i] for i in indices], dim=1)
 
 
 Tensors = Tuple[Tensor, ...]
