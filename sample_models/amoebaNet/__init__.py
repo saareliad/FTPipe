@@ -63,7 +63,6 @@ OPS = {
 }
 
 
-# TODO there is a big difference between the traced layers and what is expected
 class AmoebaNet_D(nn.Module):
     """an AmoebaNet-D model for ImageNet."""
 
@@ -153,13 +152,12 @@ class AmoebaNet_D(nn.Module):
             reduction_prev = False
 
         self.stem = Stem(channel)
-        self.twin = Twin()
         self.cells = nn.Sequential(*cells)
         self.classifier = Classifier(channel_prev, num_classes)
 
     def forward(self, x: Tensor) -> Tensor:
         out = self.stem(x)
-        out = self.cells(self.twin(out))
+        out = self.cells((out, out))
         return self.classifier(out[1])
 
 
@@ -194,23 +192,14 @@ class Amoeba_Cell(nn.Module):
             op = OPS[name](channel, stride, True)
             ops.append((op, index))
 
-        indices = []
-        preprocess = [
-            InputOne(preprocess0, i=0),
-            TwinLast(),
-            InputOne(preprocess1, i=1),
-            # Output: (preprocess0(x[0]), preprocess1(x[1]), x[1])
-            # The last tensor x[1] is passed until the cell output.
-            # The comments below call x[1] "skip".
-        ]
+        self.preprocess0 = preprocess0
+        self.preprocess1 = preprocess1
 
         layers = []
-        inserts = []
         assert (len(ops) % 2) == 0
         for i in range(len(ops) // 2):
             op0, i0 = ops[i*2]
             op1, i1 = ops[i*2 + 1]
-            inserts.append((i0, i1))
             layers.extend([
                 InputOne(op0, i=i0, insert=2+i),
                 # Output: x..., op0(x[i0]), skip]
@@ -221,44 +210,25 @@ class Amoeba_Cell(nn.Module):
                 MergeTwo(2 + i, 2 + i + 1),
                 # Output: x..., op0(x[i0]) + op1(x[i1]), skip
             ])
-
-        reduce_phase = [
-            # Move skip to the head.
-            Shift(),
-            # Output: skip, x...
-
-            FirstAnd(Concat(concat)),
-            # Output: skip, concat(x...)
-        ]
-        self.preprocess = nn.Sequential(*preprocess)
         self.layers = nn.Sequential(*layers)
-        self.reduce_phase = nn.Sequential(*reduce_phase)
-        self.inserts = inserts
+
         self.concat_indices = concat
 
         assert len(concat) > 0 and all(i < (3+(len(ops)//2)-1) for i in concat)
 
     def forward(self, xs):
         preprocessed = self.preprocess(xs)
-
+        # preprocess(x0),preprocess(x1),x1
         out = preprocessed
-        out = self.layers(preprocessed)
-        reduced = self.reduce_phase(out)
+        out = self.layers(out)
+        # x,........,skip
+        reduced = self.reduce_channels(self.concat_indices, out)
+        # skip,concat
         return reduced
 
-    def op(self, layer, i, insert, xs):
-        # i=3,insert=5
-        # x0,x1,x2,x3,x4,x5,x6,x7
-        # x0,x1,x2,x3,x4,layer(x3),x5,x6,x7
-        res = layer(xs[i])
-        return xs[:insert]+(res,)+xs[insert:]
-
-    def merge(self, i, xs):
-        # i=2
-        # x0,x1,x2,x3,x4,x5,x6,x7
-        # x0,x1,x2+x3,x4,x5,x6,x7
-        res = xs[i]+xs[i+1]
-        return xs[:i]+(res,)+xs[i+1:]
+    def preprocess(self, xs):
+        x0, x1 = xs
+        return self.preprocess0(x0), self.preprocess1(x1), x1
 
     def reduce_channels(self, indices, xs):
         # indices = 4,5,6
@@ -275,30 +245,6 @@ class Hack(nn.Module):
 
     def forward(self, *args, **kwargs):
         raise NotImplementedError()
-
-
-class Twin(Hack):
-    """Duplicates the tensor::
-         ┌──────┐
-     a --│ Twin │--> a
-         │   '--│--> a
-         └──────┘
-    """
-
-    def forward(self, tensor: torch.Tensor) -> Tensors:  # type: ignore
-        return tensor, tensor
-
-
-class TwinLast(Hack):
-    """Duplicates the last tensor::
-        a -----> a
-        b -----> b
-        c --+--> c
-            +--> c'
-    """
-
-    def forward(self, tensors: Tensors) -> Tensors:  # type: ignore
-        return tensors + (tensors[-1],)
 
 
 class InputOne(Hack):
@@ -333,18 +279,6 @@ class InputOne(Hack):
         return tensors[:self.insert] + output + tensors[self.insert:]
 
 
-class Shift(Hack):
-    """Moves the last tensor ahead of the tensors::
-            +--> c
-        a --|--> a
-        b --|--> b
-        c --+
-    """
-
-    def forward(self, tensors: Tensors) -> Tensors:  # type: ignore
-        return (tensors[-1],) + tensors[:-1]
-
-
 class MergeTwo(Hack):
     """Merges the last two tensors and replace them with the result::
         a -----> a
@@ -366,37 +300,3 @@ class MergeTwo(Hack):
         merged = sum(tensors[i+1:j+1], tensors[i])
 
         return tensors[:i] + (merged,) + tensors[j+1:]
-
-
-class FirstAnd(Hack):
-    """Skips the first tensor, executes the underlying module by the remaining
-    tensors::
-        a -----> a
-        b --+--> f(b, c)
-        c --+
-    """
-
-    def __init__(self, module: nn.Module):
-        super().__init__()
-        self.module = module
-
-    def forward(self, tensors: Tensors) -> Tensors:  # type: ignore
-        output = self.module(tensors[1:])
-        if not isinstance(output, tuple):
-            output = (output,)
-        return (tensors[0],) + output
-
-
-class Concat(Hack):
-    """Concat all tensors::
-        a --+
-        b --+--> concat(a, b, c)
-        c --+
-    """
-
-    def __init__(self, indices: List):
-        super().__init__()
-        self.indices = indices
-
-    def forward(self, tensors: Tensors) -> torch.Tensor:  # type: ignore
-        return torch.cat([tensors[i] for i in self.indices], dim=1)

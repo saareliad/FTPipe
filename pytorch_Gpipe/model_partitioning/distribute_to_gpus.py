@@ -11,7 +11,7 @@ from ..utils import Devices, Tensors, find_output_shapes_of_scopes, traverse_mod
 __all__ = ["distribute_model"]
 
 
-def distribute_model(model: nn.Module, device_lst: Devices, graph: Graph, *sample_batch: Tensors):
+def distribute_model(model: nn.Module, device_lst: Devices, graph: Graph, *sample_batch: Tensors, optimize_pipeline_wrappers: bool = True):
     '''
     distribute and wraph the model as part of model pipelining\n
     !!!! this method changes the given model do not use it directly
@@ -26,6 +26,9 @@ def distribute_model(model: nn.Module, device_lst: Devices, graph: Graph, *sampl
         the model's graph that dictates how to distriubte the model
     sample_batch:
         a sample batch used in order to find specific input/output shapes nd their respective ordering
+    optimize_pipeline_wrappers:
+        whether to attempt to minimize the number of wrappers inserted by us defualt=True
+        you will possibly want to set this to false if your layers have tuple input/output
 
     '''
     num_inputs = len(sample_batch)
@@ -35,8 +38,13 @@ def distribute_model(model: nn.Module, device_lst: Devices, graph: Graph, *sampl
     partition_to_device, part_to_gpu_num = _partition_to_device(
         used_devices, model_inputs)
 
-    top_scopes_to_device, nodes_to_top_scopes = optimize_wrappers(
-        graph, partition_to_device)
+    if optimize_pipeline_wrappers:
+        top_scopes_to_device, nodes_to_top_scopes = optimize_wrappers(
+            graph, partition_to_device)
+    else:
+        top_scopes_to_device = {
+            node.scope: partition_to_device[node.part] for node in graph.nodes}
+        nodes_to_top_scopes = {node: node.scope for node in graph.nodes}
 
     top_scopes_to_gpu_num = {scope: part_to_gpu_num[node.part]
                              for node, scope in nodes_to_top_scopes.items()}

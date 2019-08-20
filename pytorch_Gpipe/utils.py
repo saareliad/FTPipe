@@ -124,7 +124,7 @@ def find_output_shapes_of_scopes(model, scopes, *sample_batch: Tensors) -> Dict:
         if isinstance(layer, ShapeWrapper):
             old_scope, name = backup[scope]
             scope_to_shape[old_scope] = (layer.input_shape, layer.output_shape)
-            parent.add_module(name, layer.sub_layer)
+            parent.add_module(name, layer.layer)
 
     return scope_to_shape
 
