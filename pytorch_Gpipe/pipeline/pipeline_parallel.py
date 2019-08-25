@@ -162,6 +162,7 @@ class PipelineParallel(nn.Module):
         :param grads: the gradient of the model outputs
         :param results: the results tensor that is doing a backward pass
         """
+        prev_mode = self.mode
         # make sure that we are on backward mode
         self.set_mode('backward')
 
@@ -197,3 +198,4 @@ class PipelineParallel(nn.Module):
 
         # make sure that the counter and wrappers are returned to default mode
         self.finished_prop()
+        self.set_mode(prev_mode)
