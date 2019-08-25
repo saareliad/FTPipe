@@ -1,4 +1,3 @@
-from collections import OrderedDict
 import os
 from pytorch_Gpipe import partition_with_profiler, profileNetwork, distribute_by_memory, distribute_by_time, distribute_using_profiler, pipe_model
 import torch
@@ -8,14 +7,14 @@ from pytorch_Gpipe.utils import model_scopes
 from sample_models import AmoebaNet_D as my_amoeaba, amoebanetd as ref_amoeba, torchgpipe_resnet101
 
 
-def partition_torchvision(networks=None, nparts=4, depth=100, save_graph=False):
+def partition_torchvision(networks=None, nparts=4, depth=100, save_graph=False, show_scope_diff=False):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     if networks != None and not isinstance(networks, (list, tuple)):
         networks = [networks]
 
     if networks is None:
-        networks = [my_amoeaba, ref_amoeba, alexnet, resnet152, torchgpipe_resnet101, vgg19_bn, squeezenet1_1,
+        networks = [alexnet, resnet152, torchgpipe_resnet101, vgg19_bn, squeezenet1_1,
                     inception_v3, densenet201, GoogLeNet, LeNet, WideResNet]
 
     if not isinstance(nparts, (list, tuple)):
@@ -53,17 +52,18 @@ def partition_torchvision(networks=None, nparts=4, depth=100, save_graph=False):
                                show_buffs_params=False, show_weights=False)
                 print(filename)
 
-                scopes = set(model_scopes(model, depth=d,
-                                          basic_blocks=basic_blocks))
-                graph_scopes = graph.scopes()
-                diff = scopes.difference(graph_scopes)
-                print(f"scope diff {len(diff)}")
-                for s in diff:
-                    print(s)
+                if show_scope_diff:
+                    scopes = set(model_scopes(model, depth=d,
+                                              basic_blocks=basic_blocks))
+                    graph_scopes = graph.scopes()
+                    diff = scopes.difference(graph_scopes)
+                    print(f"scope diff {len(diff)}")
+                    for s in diff:
+                        print(s)
                 print("\n")
 
 
-def distribute_torchvision(networks=None, nparts=4, depth=100, fake_gpus=False, save_graph=False, optimize_pipeline_wrappers=True):
+def distribute_torchvision(networks=None, nparts=4, depth=100, fake_gpus=False, save_graph=False, show_scope_diff=False, optimize_pipeline_wrappers=True):
     if not torch.cuda.is_available():
         raise ValueError("CUDA is required")
 
@@ -113,6 +113,16 @@ def distribute_torchvision(networks=None, nparts=4, depth=100, fake_gpus=False, 
                 if save_graph:
                     graph.save(directory=out_dir, file_name=filename,
                                show_buffs_params=False, show_weights=False)
+
+                if show_scope_diff:
+                    scopes = set(model_scopes(model, depth=d,
+                                              basic_blocks=basic_blocks))
+                    graph_scopes = graph.scopes()
+                    diff = scopes.difference(graph_scopes)
+                    print(f"scope diff {len(diff)}")
+                    for s in diff:
+                        print(s)
+                print("\n")
 
 
 def tuple_problem():
@@ -197,4 +207,5 @@ def tuple_problem():
 
 
 if __name__ == "__main__":
-    partition_torchvision(nparts=2, save_graph=True, networks=my_amoeaba)
+    distribute_torchvision(nparts=2, save_graph=False,
+                           networks=my_amoeaba, fake_gpus=True)
