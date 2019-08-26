@@ -1,8 +1,6 @@
 from copy import copy
 from enum import Enum
 from typing import Any, Dict, List
-
-
 class Graph():
     '''
     a Graph data structure that model a pytorch network built from a pytorch trace\n
@@ -173,8 +171,21 @@ class Graph():
         '''remove nodes without out edges that are not outputs of the model'''
         #necessary because the trace can contain such nodes for certain ops
         #those nodes provide no additional info to the graph
-        out_list = list(trace_outputs)
-        out_indices = list(map(lambda n: int(n.uniqueName()),out_list))
+        
+        #we need this method for compatibility issues
+        #in pytorch 1.2.0 the API changed the method name from uniqueName to debugName
+        #maybe it's a sign that we should not relay on it but it's simple and effective...
+        def get_id(out):
+            if hasattr(out,'debugName'):
+                #1.2.0 and onward
+                n=out.debugName()
+            else:
+                #before 1.2.0
+                assert hasattr(out,'uniqueName')
+                n=out.uniqueName()
+            return int(n)
+
+        out_indices=[get_id(out) for out in trace_outputs]
 
         def going_nowhere(node):
             return (not node.out_nodes) and (not node.idx in out_indices)

@@ -7,7 +7,7 @@ from pytorch_Gpipe.utils import model_scopes
 from sample_models import AmoebaNet_D as my_amoeaba, amoebanetd as ref_amoeba, torchgpipe_resnet101
 
 
-def partition_torchvision(networks=None, nparts=4, depth=100, save_graph=False, show_scope_diff=False):
+def partition_torchvision(networks=None, nparts=4, depth=100, nruns=4, save_graph=False, show_scope_diff=False):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     if networks != None and not isinstance(networks, (list, tuple)):
@@ -23,47 +23,48 @@ def partition_torchvision(networks=None, nparts=4, depth=100, save_graph=False, 
     if not isinstance(depth, (list, tuple)):
         depth = [depth]
 
-    for net in networks:
-        model = net().to(device)
-        print("model built")
-        basic_blocks = None
-        for p in nparts:
-            for d in depth:
-                print(f"current net is {net.__name__}")
-                if net.__name__.find("inception") != -1:
-                    graph = partition_with_profiler(
-                        model, torch.zeros(16, 3, 299, 299, device=device), nparts=p, max_depth=d, basic_blocks=basic_blocks)
-                elif net.__name__.find("GoogLeNet") != -1:
-                    graph = partition_with_profiler(
-                        model, torch.zeros(16, 3, 32, 32, device=device), nparts=p, max_depth=d, basic_blocks=basic_blocks)
-                elif net.__name__.find("LeNet") != -1:
-                    graph = partition_with_profiler(
-                        model, torch.zeros(16, 3, 32, 32, device=device), nparts=p, max_depth=d, basic_blocks=basic_blocks)
-                else:
-                    graph = partition_with_profiler(
-                        model, torch.zeros(4, 3, 224, 224, device=device), nparts=p, max_depth=d, basic_blocks=basic_blocks)
+    for i in range(nruns):
+        for net in networks:
+            model = net().to(device)
+            print("model built")
+            basic_blocks = None
+            for p in nparts:
+                for d in depth:
+                    print(f"current net is {net.__name__}")
+                    if net.__name__.find("inception") != -1:
+                        graph = partition_with_profiler(
+                            model, torch.zeros(16, 3, 299, 299, device=device), nparts=p, max_depth=d, basic_blocks=basic_blocks)
+                    elif net.__name__.find("GoogLeNet") != -1:
+                        graph = partition_with_profiler(
+                            model, torch.zeros(16, 3, 32, 32, device=device), nparts=p, max_depth=d, basic_blocks=basic_blocks)
+                    elif net.__name__.find("LeNet") != -1:
+                        graph = partition_with_profiler(
+                            model, torch.zeros(16, 3, 32, 32, device=device), nparts=p, max_depth=d, basic_blocks=basic_blocks)
+                    else:
+                        graph = partition_with_profiler(
+                            model, torch.zeros(4, 3, 224, 224, device=device), nparts=p, max_depth=d, basic_blocks=basic_blocks)
 
-                filename = f"{net.__name__} attempted_{p}_partitions_at_depth_{d}"
+                    filename = f"{net.__name__}_run{i}_attempted_{p}_partitions_at_depth_{d}"
 
-                curr_dir = os.path.dirname(os.path.realpath(__file__))
-                out_dir = f"{curr_dir}\\partition_visualization"
-                if save_graph:
-                    graph.save(directory=out_dir, file_name=filename,
-                               show_buffs_params=False, show_weights=False)
-                print(filename)
+                    curr_dir = os.path.dirname(os.path.realpath(__file__))
+                    out_dir = f"{curr_dir}\\partition_visualization"
+                    if save_graph:
+                        graph.save(directory=out_dir, file_name=filename,
+                                   show_buffs_params=False, show_weights=False)
+                    print(filename)
 
-                if show_scope_diff:
-                    scopes = set(model_scopes(model, depth=d,
-                                              basic_blocks=basic_blocks))
-                    graph_scopes = graph.scopes()
-                    diff = scopes.difference(graph_scopes)
-                    print(f"scope diff {len(diff)}")
-                    for s in diff:
-                        print(s)
-                print("\n")
+                    if show_scope_diff:
+                        scopes = set(model_scopes(model, depth=d,
+                                                  basic_blocks=basic_blocks))
+                        graph_scopes = graph.scopes()
+                        diff = scopes.difference(graph_scopes)
+                        print(f"scope diff {len(diff)}")
+                        for s in diff:
+                            print(s)
+                    print("\n")
 
 
-def distribute_torchvision(networks=None, nparts=4, depth=100, fake_gpus=False, save_graph=False, show_scope_diff=False, optimize_pipeline_wrappers=True):
+def distribute_torchvision(networks=None, nparts=4, depth=100, nruns=4, fake_gpus=False, save_graph=False, show_scope_diff=False, optimize_pipeline_wrappers=True):
     if not torch.cuda.is_available():
         raise ValueError("CUDA is required")
 
@@ -81,48 +82,49 @@ def distribute_torchvision(networks=None, nparts=4, depth=100, fake_gpus=False, 
     if not isinstance(depth, (list, tuple)):
         depth = [depth]
 
-    for net in networks:
-        model = net().to(device)
-        print("model built")
-        basic_blocks = None
-        for p in nparts:
-            if fake_gpus:
-                devices = [f'cuda:0' for _ in range(p)]
-            else:
-                assert torch.cuda.device_count() == p
-                devices = [f'cuda:{i}' for i in range(p)]
-            for d in depth:
-                print(f"current net is {net.__name__}")
-                if net.__name__.find("inception") != -1:
-                    model, _, _, graph = distribute_using_profiler(
-                        model, torch.zeros(16, 3, 299, 299, device=device), optimize_pipeline_wrappers=optimize_pipeline_wrappers, devices=devices, max_depth=d, basic_blocks=basic_blocks)
-                elif net.__name__.find("GoogLeNet") != -1:
-                    model, _, _, graph = distribute_using_profiler(
-                        model, torch.zeros(16, 3, 32, 32, device=device), optimize_pipeline_wrappers=optimize_pipeline_wrappers, devices=devices, max_depth=d, basic_blocks=basic_blocks)
-                elif net.__name__.find("LeNet") != -1:
-                    model, _, _, graph = distribute_using_profiler(
-                        model, torch.zeros(16, 3, 32, 32, device=device), optimize_pipeline_wrappers=optimize_pipeline_wrappers, devices=devices, max_depth=d, basic_blocks=basic_blocks)
+    for i in range(nruns):
+        for net in networks:
+            model = net().to(device)
+            print("model built")
+            basic_blocks = None
+            for p in nparts:
+                if fake_gpus:
+                    devices = [f'cuda:0' for _ in range(p)]
                 else:
-                    model, _, _, graph = distribute_using_profiler(
-                        model, torch.zeros(16, 3, 224, 224, device=device), optimize_pipeline_wrappers=optimize_pipeline_wrappers, devices=devices, max_depth=d, basic_blocks=basic_blocks)
+                    assert torch.cuda.device_count() == p
+                    devices = [f'cuda:{i}' for i in range(p)]
+                for d in depth:
+                    print(f"current net is {net.__name__}")
+                    if net.__name__.find("inception") != -1:
+                        model, _, _, graph = distribute_using_profiler(
+                            model, torch.zeros(16, 3, 299, 299, device=device), optimize_pipeline_wrappers=optimize_pipeline_wrappers, devices=devices, max_depth=d, basic_blocks=basic_blocks)
+                    elif net.__name__.find("GoogLeNet") != -1:
+                        model, _, _, graph = distribute_using_profiler(
+                            model, torch.zeros(16, 3, 32, 32, device=device), optimize_pipeline_wrappers=optimize_pipeline_wrappers, devices=devices, max_depth=d, basic_blocks=basic_blocks)
+                    elif net.__name__.find("LeNet") != -1:
+                        model, _, _, graph = distribute_using_profiler(
+                            model, torch.zeros(16, 3, 32, 32, device=device), optimize_pipeline_wrappers=optimize_pipeline_wrappers, devices=devices, max_depth=d, basic_blocks=basic_blocks)
+                    else:
+                        model, _, _, graph = distribute_using_profiler(
+                            model, torch.zeros(16, 3, 224, 224, device=device), optimize_pipeline_wrappers=optimize_pipeline_wrappers, devices=devices, max_depth=d, basic_blocks=basic_blocks)
 
-                filename = f"{net.__name__} attempted_{p}_partitions_at_depth_{d}"
+                    filename = f"{net.__name__}_run{i}_attempted_{p}_partitions_at_depth_{d}"
 
-                curr_dir = os.path.dirname(os.path.realpath(__file__))
-                out_dir = f"{curr_dir}\\distributed_models"
-                if save_graph:
-                    graph.save(directory=out_dir, file_name=filename,
-                               show_buffs_params=False, show_weights=False)
+                    curr_dir = os.path.dirname(os.path.realpath(__file__))
+                    out_dir = f"{curr_dir}\\distributed_models"
+                    if save_graph:
+                        graph.save(directory=out_dir, file_name=filename,
+                                   show_buffs_params=False, show_weights=False)
 
-                if show_scope_diff:
-                    scopes = set(model_scopes(model, depth=d,
-                                              basic_blocks=basic_blocks))
-                    graph_scopes = graph.scopes()
-                    diff = scopes.difference(graph_scopes)
-                    print(f"scope diff {len(diff)}")
-                    for s in diff:
-                        print(s)
-                print("\n")
+                    if show_scope_diff:
+                        scopes = set(model_scopes(model, depth=d,
+                                                  basic_blocks=basic_blocks))
+                        graph_scopes = graph.scopes()
+                        diff = scopes.difference(graph_scopes)
+                        print(f"scope diff {len(diff)}")
+                        for s in diff:
+                            print(s)
+                    print("\n")
 
 
 def tuple_problem():
@@ -207,5 +209,5 @@ def tuple_problem():
 
 
 if __name__ == "__main__":
-    distribute_torchvision(nparts=2, save_graph=False,
-                           networks=my_amoeaba, fake_gpus=True)
+    distribute_torchvision(networks=my_amoeaba, nparts=2,
+                           save_graph=False, fake_gpus=True, nruns=1)
