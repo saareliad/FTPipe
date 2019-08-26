@@ -3,7 +3,7 @@ from experiments.graph_serialization import serialize_graph, deserialize_graph
 import torch
 from pytorch_Gpipe import distribute_using_profiler
 from pytorch_Gpipe.pipeline.pipeline_parallel import PipelineParallel
-from pytorch_Gpipe import distribute_by_time
+from pytorch_Gpipe import distribute_by_time, pipe_model
 
 
 def check_shape(model_class, num_parts, num_runs=2, **kwargs):
@@ -22,15 +22,8 @@ def check_shape(model_class, num_parts, num_runs=2, **kwargs):
             print(f"check shape {n_parts} run {i}")
             net = model_class(**kwargs).to(devices[0])
 
-            modified_model, wrappers, counter, graph = distribute_by_time(net, x,
-                                                                          devices=devices, depth=100,
-                                                                          optimize_pipeline_wrappers=True)
-            in_shape = x.shape[1:]
-            in_shape = tuple(in_shape)
-
-            pipe = PipelineParallel(
-                modified_model, 1, in_shape, wrappers, counter)
-
+            pipe, graph = pipe_model(net, 1, x, devices=devices, depth=100,
+                                     optimize_pipeline_wrappers=True, return_graph=True)
             try:
                 y = pipe(x)
 
@@ -58,14 +51,8 @@ def check_backward(model_class, num_parts, num_runs=2, **kwargs):
             try:
                 net = model_class(**kwargs).to(devices[0])
 
-                modified_model, wrappers, counter, graph = distribute_by_time(net, x,
-                                                                              devices=devices, depth=100,
-                                                                              optimize_pipeline_wrappers=True)
-                in_shape = x.shape[1:]
-                in_shape = tuple(in_shape)
-
-                pipe = PipelineParallel(
-                    modified_model, 1, in_shape, wrappers, counter)
+                pipe, graph = pipe_model(net, 1, x, devices=devices, depth=100,
+                                         optimize_pipeline_wrappers=True, return_graph=True)
                 y = pipe(x)
                 y.backward()
             except Exception as _:
