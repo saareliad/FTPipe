@@ -25,6 +25,46 @@ def post_process_partition(graph: Graph, part: List[int]):
     # make sure every scc in the graph is not splitted between different parts
     scc_partition_correction(graph)
 
+    print("hi")
+    insure_dag(graph, part)
+    print("bye")
+
+
+def insure_dag(graph: Graph, node_parts: List[int]):
+    flag = True
+    while flag:
+        flag, prob_edge = not_dag(graph, node_parts)
+
+        if flag:
+            fix_problem_node(graph, prob_edge)
+
+
+def not_dag(graph: Graph, node_parts):
+    part_edges = []
+    num_parts = len(set(node_parts))
+    for node in graph.nodes:
+        for out_node in node.out_nodes:
+            if node.part != out_node.part:
+                part_edge = (node.part, out_node.part)
+                if part_edge not in part_edges:
+                    part_edges.append(part_edge)
+
+    for num_part1 in range(num_parts):
+        for num_part2 in range(num_parts):
+            if (num_part1, num_part2) in part_edges and (num_part2, num_part1) in part_edges and num_part1 < num_part2:
+                return True, (num_part1, num_part2)
+
+    return False, (-1, -1)
+
+
+def fix_problem_node(graph: Graph, prob_edge: tuple):
+    first_part, second_part = prob_edge
+    for node in graph.nodes:
+        if node.part == second_part:
+            for o_node in node.out_nodes:
+                if o_node.part == first_part:
+                    node.part = first_part
+
 
 def scc_partition_correction(graph: Graph):
     # create the scc graph
@@ -128,17 +168,18 @@ def make_partitions_change_only_at_end_of_scope(graph: Graph):
     first_nodes_of_partition = filter(is_first_in_partition, graph.nodes)
 
     for node in first_nodes_of_partition:
-        scope_depth = node.scope.count('/')-1
+        scope_depth = node.scope.count('/') - 1
         # dont do it too shallow
         if scope_depth >= 2:  # TODO think about threshold
             parent_scope = node.scope.rsplit('/', 1)[0]
 
             def in_scope(n):
                 return parent_scope == n.scope.rsplit('/', 1)[0]
+
             scope_nodes = list(filter(in_scope, graph.nodes))
             parts = [n.part for n in scope_nodes]
             part_histogram = Counter(parts)
             most_common, num_layers = part_histogram.most_common(1)[0]
-            if num_layers >= len(parts)//2:
+            if num_layers >= len(parts) // 2:
                 for other in scope_nodes:
                     other.part = most_common

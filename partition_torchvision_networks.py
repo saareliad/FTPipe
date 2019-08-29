@@ -1,7 +1,9 @@
 import os
-from pytorch_Gpipe import partition_with_profiler, profileNetwork, distribute_by_memory, distribute_by_time, distribute_using_profiler, pipe_model
+from pytorch_Gpipe import partition_with_profiler, profileNetwork, distribute_by_memory, distribute_by_time, \
+    distribute_using_profiler, pipe_model
 import torch
-from sample_models import alexnet, resnet152, vgg19_bn, squeezenet1_1, inception_v3, densenet201, GoogLeNet, LeNet, WideResNet
+from sample_models import alexnet, resnet152, vgg19_bn, squeezenet1_1, inception_v3, densenet201, GoogLeNet, LeNet, \
+    WideResNet
 import torch.nn as nn
 from pytorch_Gpipe.utils import model_scopes
 from sample_models import AmoebaNet_D as my_amoeaba, amoebanetd as ref_amoeba, torchgpipe_resnet101
@@ -33,16 +35,20 @@ def partition_torchvision(networks=None, nparts=4, depth=100, nruns=4, save_grap
                     print(f"current net is {net.__name__}")
                     if net.__name__.find("inception") != -1:
                         graph = partition_with_profiler(
-                            model, torch.zeros(16, 3, 299, 299, device=device), nparts=p, max_depth=d, basic_blocks=basic_blocks)
+                            model, torch.zeros(16, 3, 299, 299, device=device), nparts=p, max_depth=d,
+                            basic_blocks=basic_blocks)
                     elif net.__name__.find("GoogLeNet") != -1:
                         graph = partition_with_profiler(
-                            model, torch.zeros(16, 3, 32, 32, device=device), nparts=p, max_depth=d, basic_blocks=basic_blocks)
+                            model, torch.zeros(16, 3, 32, 32, device=device), nparts=p, max_depth=d,
+                            basic_blocks=basic_blocks)
                     elif net.__name__.find("LeNet") != -1:
                         graph = partition_with_profiler(
-                            model, torch.zeros(16, 3, 32, 32, device=device), nparts=p, max_depth=d, basic_blocks=basic_blocks)
+                            model, torch.zeros(16, 3, 32, 32, device=device), nparts=p, max_depth=d,
+                            basic_blocks=basic_blocks)
                     else:
                         graph = partition_with_profiler(
-                            model, torch.zeros(4, 3, 224, 224, device=device), nparts=p, max_depth=d, basic_blocks=basic_blocks)
+                            model, torch.zeros(4, 3, 224, 224, device=device), nparts=p, max_depth=d,
+                            basic_blocks=basic_blocks)
 
                     filename = f"{net.__name__}_run{i}_attempted_{p}_partitions_at_depth_{d}"
 
@@ -64,7 +70,8 @@ def partition_torchvision(networks=None, nparts=4, depth=100, nruns=4, save_grap
                     print("\n")
 
 
-def distribute_torchvision(networks=None, nparts=4, depth=100, nruns=4, fake_gpus=False, save_graph=False, show_scope_diff=False, optimize_pipeline_wrappers=True):
+def distribute_torchvision(networks=None, nparts=4, depth=100, nruns=4, fake_gpus=False, save_graph=False,
+                           show_scope_diff=False, optimize_pipeline_wrappers=True):
     if not torch.cuda.is_available():
         raise ValueError("CUDA is required")
 
@@ -97,16 +104,24 @@ def distribute_torchvision(networks=None, nparts=4, depth=100, nruns=4, fake_gpu
                     print(f"current net is {net.__name__}")
                     if net.__name__.find("inception") != -1:
                         model, _, _, graph = distribute_using_profiler(
-                            model, torch.zeros(16, 3, 299, 299, device=device), optimize_pipeline_wrappers=optimize_pipeline_wrappers, devices=devices, max_depth=d, basic_blocks=basic_blocks)
+                            model, torch.zeros(16, 3, 299, 299, device=device),
+                            optimize_pipeline_wrappers=optimize_pipeline_wrappers, devices=devices, max_depth=d,
+                            basic_blocks=basic_blocks)
                     elif net.__name__.find("GoogLeNet") != -1:
                         model, _, _, graph = distribute_using_profiler(
-                            model, torch.zeros(16, 3, 32, 32, device=device), optimize_pipeline_wrappers=optimize_pipeline_wrappers, devices=devices, max_depth=d, basic_blocks=basic_blocks)
+                            model, torch.zeros(16, 3, 32, 32, device=device),
+                            optimize_pipeline_wrappers=optimize_pipeline_wrappers, devices=devices, max_depth=d,
+                            basic_blocks=basic_blocks)
                     elif net.__name__.find("LeNet") != -1:
                         model, _, _, graph = distribute_using_profiler(
-                            model, torch.zeros(16, 3, 32, 32, device=device), optimize_pipeline_wrappers=optimize_pipeline_wrappers, devices=devices, max_depth=d, basic_blocks=basic_blocks)
+                            model, torch.zeros(16, 3, 32, 32, device=device),
+                            optimize_pipeline_wrappers=optimize_pipeline_wrappers, devices=devices, max_depth=d,
+                            basic_blocks=basic_blocks)
                     else:
                         model, _, _, graph = distribute_using_profiler(
-                            model, torch.zeros(16, 3, 224, 224, device=device), optimize_pipeline_wrappers=optimize_pipeline_wrappers, devices=devices, max_depth=d, basic_blocks=basic_blocks)
+                            model, torch.zeros(16, 3, 224, 224, device=device),
+                            optimize_pipeline_wrappers=optimize_pipeline_wrappers, devices=devices, max_depth=d,
+                            basic_blocks=basic_blocks)
 
                     filename = f"{net.__name__}_run{i}_attempted_{p}_partitions_at_depth_{d}"
 
@@ -128,7 +143,6 @@ def distribute_torchvision(networks=None, nparts=4, depth=100, nruns=4, fake_gpu
 
 
 def tuple_problem():
-
     class dummy(nn.Module):
         def __init__(self, first=True):
             super(dummy, self).__init__()
@@ -149,8 +163,8 @@ def tuple_problem():
 
         def m_forward(self, x0, x1):
             if self.first:
-                return self.layer(x0), x1+1e-5
-            return x0+1e-5, self.layer(x1)
+                return self.layer(x0), x1 + 1e-5
+            return x0 + 1e-5, self.layer(x1)
 
     class seqDummy(nn.Module):
         def __init__(self, tupled):
@@ -209,5 +223,6 @@ def tuple_problem():
 
 
 if __name__ == "__main__":
-    distribute_torchvision(networks=my_amoeaba, nparts=2,
-                           save_graph=False, fake_gpus=True, nruns=1)
+    # distribute_torchvision(networks=my_amoeaba, nparts=2,
+    #                      save_graph=False, fake_gpus=True, nruns=1)
+    partition_torchvision(networks=my_amoeaba, nparts=4, depth=100, nruns=1, save_graph=True, show_scope_diff=False)
