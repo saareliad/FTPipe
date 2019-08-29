@@ -25,9 +25,7 @@ def post_process_partition(graph: Graph, part: List[int]):
     # make sure every scc in the graph is not splitted between different parts
     scc_partition_correction(graph)
 
-    print("hi")
     insure_dag(graph, part)
-    print("bye")
 
 
 def insure_dag(graph: Graph, node_parts: List[int]):
