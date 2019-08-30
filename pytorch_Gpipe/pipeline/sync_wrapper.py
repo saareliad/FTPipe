@@ -16,8 +16,8 @@ class SyncWrapper(nn.Module):
     """
 
     # TODO is num inputs necessary
-    def __init__(self, module: nn.Module, device: str, gpu_num: int, output_shapes: TensorsShape,
-                 num_inputs=1, counter: CycleCounter = None):
+    def __init__(self, module: nn.Module, device: str, gpu_num: int, output_shapes: TensorsShape, num_inputs=1,
+                 counter: CycleCounter = None):
 
         super(SyncWrapper, self).__init__()
 
@@ -66,7 +66,7 @@ class SyncWrapper(nn.Module):
         if self.counter.input_valid(self.gpu_num) and self.has_grads():
             with torch.cuda.stream(self.pipe_stream):
                 self.grads = tensors_map(
-                    self.prev_inputs, lambda act: act.grad)
+                    self.prev_inputs, lambda act: None if act is None else act.grad)
                 self.grads = tensors_to(self.grads, self.input_devices)
 
     def finished_prop(self):
@@ -81,20 +81,23 @@ class SyncWrapper(nn.Module):
         """
         # if we were given a gradient to pass back
         if self.counter.input_valid(self.gpu_num):
-            tensors_bi_map(inputs, self.grads, lambda input,
-                           grad: input.backward(grad))
+            tensors_bi_map(inputs, self.grads, lambda input, grad: None if grad is None else input.backward(grad))
 
         # if we have an activation to pass
         if self.counter.output_valid(self.gpu_num):
             def prepare_activation(act):
+                if act is None:
+                    return None
+
                 clone = act.requires_grad_().clone()
                 clone.retain_grad()
                 return clone
 
-            self.prev_inputs = tensors_map(self.prev_inputs,
-                                           prepare_activation)
+            self.prev_inputs = tensors_map(self.prev_inputs, prepare_activation)
 
-            output = self.module(*self.prev_inputs)
+            used_inputs = tensors_bi_map(self.prev_inputs, inputs, lambda t1, t2: t2 if t1 is None else t1)
+
+            output = self.module(*used_inputs)
         else:
             output = gen_garbage_output(self.output_shapes, self.device)
 
@@ -106,11 +109,10 @@ class SyncWrapper(nn.Module):
     def save_activation(self, *moved_inputs: Tensors):
         """saves the activation of the current input"""
         self.rng_states.append(torch.cuda.get_rng_state(self.device))
-        self.activations.append(tensors_map(moved_inputs,
-                                            lambda input: input.clone()))
+        self.activations.append(tensors_map(moved_inputs, lambda input: None if input is None else input.clone()))
 
     def forward(self, *inputs: Tensors) -> Tensors:
-            # move the input between devices
+        # move the input between devices
         if self.counter.cur_mode is ForwardMode.backward:
             return self.backward_mode(*inputs)
 
@@ -118,8 +120,10 @@ class SyncWrapper(nn.Module):
         # will be propagated before and after data passes through submodule)
         if self.counter.output_valid(self.gpu_num):
 
+            used_inputs = tensors_bi_map(self.prev_inputs, inputs, lambda t1, t2: t2 if t1 is None else t1)
+
             # the input is relevant.
-            output = self.module(*self.prev_inputs)
+            output = self.module(*used_inputs)
         else:
             # the input is garbage
             output = gen_garbage_output(self.output_shapes, self.device)
@@ -135,8 +139,8 @@ class SyncWrapper(nn.Module):
                 if self.counter.get_count() == self.gpu_num:
                     self.input_devices = get_devices(inputs)
 
-                moved_inputs = tensors_map(
-                    inputs, lambda tensor: tensor.to(self.device, non_blocking=True))
+                moved_inputs = tensors_map(inputs, lambda tensor: None if tensor.device is self.device else tensor.to(
+                    self.device, non_blocking=True))
 
                 if self.counter.cur_mode is ForwardMode.train:
                     self.save_activation(*moved_inputs)
@@ -155,6 +159,7 @@ class ActivationSavingLayer(nn.Module):
     """
     This class should be put in the very start of the module (i.e Sequential(ActivationSavingLayer, Module))
     """
+
     # TODO is num inputs necessary
 
     def __init__(self, device: str, num_inputs=1, counter: CycleCounter = None):

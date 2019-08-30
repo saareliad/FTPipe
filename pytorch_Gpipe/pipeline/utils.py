@@ -9,7 +9,7 @@ from pytorch_Gpipe.utils import Tensors, TensorsShape
 def tensors_map(tensors: Tensors, f: Callable[[Tensors], Any]):
     """maps each tensor using the f function while keeping the same structure"""
 
-    if isinstance(tensors, torch.Tensor):
+    if tensors is None or isinstance(tensors, torch.Tensor):
         return f(tensors)
 
     container = type(tensors)
@@ -19,7 +19,7 @@ def tensors_map(tensors: Tensors, f: Callable[[Tensors], Any]):
 def tensors_bi_map(t1: Tensors, t2: Tensors, f: Callable[[Tensors, Tensors], Any]):
     """maps each pair of tensors using the f function"""
 
-    if isinstance(t1, torch.Tensor):
+    if t1 is None or isinstance(t1, torch.Tensor):
         return f(t1, t2)
 
     container = type(t1)
@@ -39,7 +39,10 @@ def tensors_to(tensors: Tensors, devices):
 
     def move_tensor(tensor):
         for device in devices:
-            yield tensor.to(device, non_blocking=True)
+            if tensor is None:
+                yield None
+            else:
+                yield tensor.to(device, non_blocking=True)
 
     return tensors_map(tensors, move_tensor)
 
