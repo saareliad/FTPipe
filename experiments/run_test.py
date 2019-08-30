@@ -1,5 +1,5 @@
 from experiments.test_time import test_resnet50_time
-from experiments.test_loss import test_resnet50_loss
+from experiments.test_loss import test_loss
 
 """
 **ADD TESTS FOR THE FOLLOWING**
@@ -31,8 +31,8 @@ image_h = 224
 
 
 def run_pipeline_tests():
-    test_resnet50_time()
-    test_resnet50_loss()
+    # test_resnet50_time()
+    test_loss()
 
 
 if __name__ == '__main__':

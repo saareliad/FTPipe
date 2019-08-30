@@ -3,24 +3,27 @@ import torch
 from torch.utils.data import DataLoader
 import torch.nn as nn
 import torchvision.transforms as transforms
-from torchvision.models import resnet50
-from torchvision.datasets import CIFAR10
+from torchvision.datasets import FakeData
 import matplotlib.pyplot as plt
-
 import torch.optim as optim
 
-from .model_parallel_resnet50 import make_pipeline_resnet
+from sample_models.AlexNet import alexnet
+from pytorch_Gpipe import pipe_model
 
-num_classes = 1000
+num_classes = 10
 num_batches = 3
-batch_size = 120
+batch_size = 10
+mb_size = 5
 image_w = 224
 image_h = 224
+
+epochs = 500
 
 # using constant seed for reproducibility purposes
 seed = 42
 
 device_single = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+gpus = ['cuda:0', 'cuda:1']
 
 transform = transforms.Compose(
     [transforms.ToTensor(),
@@ -28,29 +31,33 @@ transform = transforms.Compose(
 )
 
 # fixed data-sets
-train_set = CIFAR10(root='./data', train=True,
-                    download=True, transform=transform)
-test_set = CIFAR10(root='./data', train=False,
-                   download=True, transform=transform)
+fake_data = FakeData(size=40, transform=transform)
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer',
            'dog', 'frog', 'horse', 'ship', 'truck')
 
 
-def test_resnet50_loss():
+def test_loss():
     # the models to compare
-    model_single = resnet50(num_classes=len(classes)).to(device_single)
-    model_pipe = make_pipeline_resnet(microbatch_size=20, num_classes=num_classes)
+    model_single = alexnet(num_classes=10).to(device_single)
 
-    print(f"Training resnet50 on {device_single}")
-    stats_single = train_with_stats_saved(model_single)
+    sample_batch = torch.rand(batch_size, 3, image_h, image_w)
+    model_pipe = alexnet(num_classes=10)
+    model_pipe = pipe_model(model_pipe, mb_size, sample_batch, devices=gpus)
+    model_pipe.zero_grad()
 
-    print("Training resnet50 using model-parallelism")
+    print(f"Training model on {device_single}")
+    stats_single = train_with_stats_saved(model_single, 'cuda:0')
+
+    print("Training model using model-parallelism")
     stats_pipe = train_with_stats_saved(model_pipe)
 
-    plot(stats_single, stats_pipe)
+    # plot(stats_single, stats_pipe)
 
-    accuracy_single = test(model_single)
+    print(stats_single)
+    print(stats_pipe)
+
+    accuracy_single = test(model_single, 'cuda:0')
     accuracy_pipe = test(model_pipe)
 
     print(f"Test accuracy on single device: {accuracy_single}")
@@ -60,11 +67,11 @@ def test_resnet50_loss():
     assert accuracy_single * 0.95 < accuracy_pipe < accuracy_single * 1.05
 
 
-def train_with_stats_saved(model):
-    # using fixed seed to endure same train-set loader
+def train_with_stats_saved(model, input_device='cpu'):
+    # using fixed seed to ensure same train-set loader
     torch.manual_seed(seed)
     train_loader = DataLoader(
-        train_set, batch_size=batch_size, shuffle=True, num_workers=2)
+        fake_data, batch_size=batch_size, shuffle=True, num_workers=2)
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
@@ -73,33 +80,39 @@ def train_with_stats_saved(model):
     total_accuracy = 0.
     losses = []
     accuracies = []
-    for i, (inputs, labels) in enumerate(train_loader):
-        optimizer.zero_grad()
 
-        outputs = model(inputs)
-        loss = criterion(outputs, labels)
-        loss.backwarod()
-        optimizer.step()
+    for epoch in range(epochs):
+        if epoch % 5 == 0:
+            print(f"epoch number {epoch}:")
 
-        # saving statistics every 25 batches
-        total_loss += loss.item()
-        total_accuracy += get_accuracy(outputs, labels)
-        if i % 25 == 24:
-            # average loss so far
-            losses.append(total_loss / 25)
-            total_loss = 0.
+        for i, (inputs, labels) in enumerate(train_loader):
+            optimizer.zero_grad()
 
-            # average accuracy so far
-            accuracies.append(total_accuracy / 25)
-            total_accuracy = 0.
+            outputs = model(inputs.to(input_device))
+            loss = criterion(outputs.to('cpu'), labels)
+            loss.backward()
+            optimizer.step()
+
+            # saving statistics every 25 batches
+            total_loss += loss.item()
+            total_accuracy += get_accuracy(outputs.to('cpu'), labels)
+
+            if i % 25 == 24:
+                # average loss so far
+                losses.append(total_loss / 25)
+                total_loss = 0.
+
+                # average accuracy so far
+                accuracies.append(total_accuracy / 25)
+                total_accuracy = 0.
 
     return losses, accuracies
 
 
-def test(model):
+def test(model, input_device='cpu'):
     # always using same test-set loader
     test_loader = DataLoader(
-        test_set, batch_size=batch_size, shuffle=False, num_workers=2)
+        fake_data, batch_size=batch_size, shuffle=False, num_workers=2)
 
     total_accuracy = 0.
     counter = 0
@@ -107,9 +120,9 @@ def test(model):
         for data in test_loader:
             counter += 1
             inputs, labels = data
-            outputs = model(inputs)
+            outputs = model(inputs.to(input_device))
 
-            total_accuracy += get_accuracy(outputs, labels)
+            total_accuracy += get_accuracy(outputs.to('cpu'), labels)
 
     return total_accuracy / counter
 
