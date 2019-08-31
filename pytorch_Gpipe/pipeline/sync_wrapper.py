@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Dict, List
 
 import torch
 import torch.nn as nn
@@ -16,7 +16,7 @@ class SyncWrapper(nn.Module):
     """
 
     # TODO is num inputs necessary
-    def __init__(self, module: nn.Module, device: str, gpu_num: int, output_shapes: TensorsShape, num_inputs=1,
+    def __init__(self, module: nn.Module, device: str, gpu_num: int, output_shapes: TensorsShape,
                  counter: CycleCounter = None):
 
         super(SyncWrapper, self).__init__()
@@ -109,7 +109,11 @@ class SyncWrapper(nn.Module):
     def save_activation(self, *moved_inputs: Tensors):
         """saves the activation of the current input"""
         self.rng_states.append(torch.cuda.get_rng_state(self.device))
-        self.activations.append(tensors_map(moved_inputs, lambda input: None if input is None else input.clone()))
+        self.activations.append(
+            tensors_map(moved_inputs, lambda input: None if input is None else input.clone().detach()))
+
+    def delay_device(self, tensor):
+        return tensor.device is not self.device
 
     def forward(self, *inputs: Tensors) -> Tensors:
         # move the input between devices
@@ -139,7 +143,7 @@ class SyncWrapper(nn.Module):
                 if self.counter.get_count() == self.gpu_num:
                     self.input_devices = get_devices(inputs)
 
-                moved_inputs = tensors_map(inputs, lambda tensor: None if tensor.device is self.device else tensor.to(
+                moved_inputs = tensors_map(inputs, lambda tensor: None if not self.delay_device(tensor) else tensor.to(
                     self.device, non_blocking=True))
 
                 if self.counter.cur_mode is ForwardMode.train:
@@ -265,3 +269,59 @@ class LayerWrapper(nn.Module):
 
     def __iter(self):
         return iter(self.module)
+
+
+class Identity(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return x
+
+
+class DeviceDelayerBlock(SyncWrapper):
+    def __init__(self, device: str, delay_devices: List[str], gpu_num: int, output_shapes: TensorsShape, counter: CycleCounter = None):
+        super().__init__(Identity(), device, gpu_num, output_shapes, counter)
+
+        self.delay_devices = [torch.device(device) for device in delay_devices]
+
+    def delay_device(self, tensor):
+        return tensor.device in self.delay_devices
+
+
+class DeviceDelayer(nn.Module):
+    def __init__(self, device: str, device_delays: Dict[str, int], gpu_num: int, output_shapes: TensorsShape, num_inputs=1,
+                 counter: CycleCounter = None):
+        super().__init__()
+        self.device_delays = device_delays.copy()
+
+        self.delay_blocks = []
+        num_blocks = max(device_delays.values())
+
+        for idx in range(num_blocks):
+            cur_block_devs = [device for device, delay in device_delays.items() if idx < delay]
+            self.delay_blocks.append(DeviceDelayerBlock(device, cur_block_devs, gpu_num, output_shapes, counter))
+
+        self.delayer = nn.Sequential(*self.delay_blocks)
+
+    def set_counter(self, counter: CycleCounter):
+        for block in self.delay_blocks:
+            block.set_counter(counter)
+
+    def forward(self, *inputs):
+        return self.delayer(inputs)
+
+    def pop_activation(self):
+        for block in self.delay_blocks:
+            block.pop_activation()
+
+    def finished_prop(self):
+        for block in self.delay_blocks:
+            block.finished_prop()
+
+    def update_grads(self):
+        for block in self.delay_blocks:
+            block.update_grads()
+
+    def __iter__(self):
+        return iter(self.delayer)
