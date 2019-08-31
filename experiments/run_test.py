@@ -1,4 +1,4 @@
-from experiments.test_time import test_resnet50_time
+
 from experiments.test_loss import test_loss
 
 """
