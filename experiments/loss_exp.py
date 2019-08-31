@@ -150,7 +150,7 @@ def plot_loss(stats_single, stats_pipe, stats_dp, training=True):
 
     plt.xlabel('epoch')
     plt.ylabel('accuracy')
-    plt.title('Accuracy')
+    plt.title(f'{"train set" if training else "test set"} Accuracy')
     plt.legend()
 
     plt.show()
