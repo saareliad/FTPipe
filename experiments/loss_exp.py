@@ -10,7 +10,7 @@ from sample_models.AlexNet import alexnet
 from pytorch_Gpipe import pipe_model
 
 
-def קספ_loss(model_class, num_devices: int, batch_size: int, model_params: dict, pipeline_params: dict,
+def loss_exp(model_class, num_devices: int, batch_size: int, model_params: dict, pipeline_params: dict,
              dataset: torch.utils.data.Dataset, train_ratio: float = 0.8, num_epochs=500):
     device_single = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
