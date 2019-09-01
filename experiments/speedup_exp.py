@@ -42,8 +42,9 @@ def exp_model_time(model_class, num_devices: int, num_classes: int, batch_shape:
     plot([mp_mean, rn_mean],
          [mp_std, rn_std],
          ['Model Parallel', 'Single GPU'],
-         'mp_vs_rn.png')
+         'mp_vs_rn.png', 'ResNet50 Execution Time (Second)')
 
+    dp_mean, dp_std = 0., 0.
     if torch.cuda.is_available():
         setup = f"model = nn.DataParallel({model_init_stmt}).to({device_str})"
         dp_run_times = timeit.repeat(
@@ -63,3 +64,5 @@ def exp_model_time(model_class, num_devices: int, num_classes: int, batch_shape:
     assert mp_mean < rn_mean
     # assert that the speedup is at least 30%
     assert rn_mean / mp_mean - 1 >= 0.3
+
+    return (rn_mean, rn_std), (mp_mean, mp_std), (dp_mean, dp_std)
