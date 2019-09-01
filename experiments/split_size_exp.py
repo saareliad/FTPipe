@@ -27,7 +27,7 @@ def exp_split_size(model_class, num_devices: int, num_classes: int, batch_shape:
 
     for split_size in split_sizes:
         pipeline_params['microbatch_size'] = split_size
-        setup = f"model = {call_func_stmt(create_pipline, model_init_stmt, batch_shape, **pipeline_params)}"
+        setup = f"model = {call_func_stmt(create_pipeline, model_init_stmt, batch_shape, **pipeline_params)}"
         pp_run_times = timeit.repeat(
             stmt, setup, number=1, repeat=num_repeat, globals=globals())
         means.append(np.mean(pp_run_times))

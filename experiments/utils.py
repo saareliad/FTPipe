@@ -64,5 +64,5 @@ def plot(means, stds, labels, fig_name, fig_label):
     plt.close(fig)
 
 
-def create_pipline(model, batch_shape, **kwargs):
+def create_pipeline(model, batch_shape, **kwargs):
     return pipe_model(model, sample_batch=torch.randn(*batch_shape), **kwargs)

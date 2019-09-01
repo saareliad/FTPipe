@@ -32,7 +32,7 @@ def exp_model_time(model_class, num_devices: int, num_classes: int, batch_shape:
 
     print('finished single gpu')
 
-    setup = f"model = {call_func_stmt(create_pipline, model_init_stmt, batch_shape, **pipeline_params)}"
+    setup = f"model = {call_func_stmt(create_pipeline, model_init_stmt, batch_shape, **pipeline_params)}"
     mp_run_times = timeit.repeat(
         stmt, setup, number=1, repeat=num_repeat, globals=globals())
     mp_mean, mp_std = np.mean(mp_run_times), np.std(mp_run_times)
@@ -46,7 +46,7 @@ def exp_model_time(model_class, num_devices: int, num_classes: int, batch_shape:
 
     dp_mean, dp_std = 0., 0.
     if torch.cuda.is_available():
-        setup = f"model = nn.DataParallel({model_init_stmt}).to({device_str})"
+        setup = f"model = nn.DataParallel({model_init_stmt}, device_ids={pipeline_params['devices']}).to({device_str})"
         dp_run_times = timeit.repeat(
             stmt, setup, number=1, repeat=num_repeat, globals=globals())
         dp_mean, dp_std = np.mean(dp_run_times), np.std(dp_run_times)
