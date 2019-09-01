@@ -10,7 +10,6 @@ class Graph():
     the graph can have weighted nodes
     do not instanciate this class directly use the graph_builder method provided with this module
     '''
-    #TODO tuple inputs do not count as one graph cant distinguish between a tuple input/output and multiple input/outputs
     def __init__(self, profiled_layers: List[str], num_inputs: int, buffer_param_names: List[str], trace_graph, weights: Dict[str, Any],basic_blocks:List,depth:int):
         self.nodes = []
         self.profiled_layers = profiled_layers
@@ -359,7 +358,7 @@ class Graph():
 
     def save(self, file_name,directory, show_buffs_params=False,show_weights=True):
         '''
-        save the graph to a file
+        save the rendered graph to a file
 
         Parameters
         ----------
@@ -375,6 +374,13 @@ class Graph():
             os.remove(f"{directory}/{file_name}.pdf")
         dot.render(file_name, directory=directory, cleanup=True)
 
+    def serialize(self, file_name):
+        import sys
+        import pickle
+        rec=sys.getrecursionlimit()
+        sys.setrecursionlimit(10000)
+        pickle.dump(self, open(file_name, "wb"))
+        sys.setrecursionlimit(rec)
 
 class NodeTypes(Enum):
     '''
