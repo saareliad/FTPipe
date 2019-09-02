@@ -152,5 +152,5 @@ def distribute_torchvision(networks=None, nparts=4, depth=100, nruns=4,
 
 
 if __name__ == "__main__":
-    partition_torchvision(networks=[my_amoeaba, ref_amoeba], nparts=8,
-                          save_graph=True, nruns=2, num_layers=5)
+    distribute_torchvision(networks=[my_amoeaba, ref_amoeba], nparts=8,
+                           fake_gpus=True, save_graph=True, nruns=2, num_layers=5)
