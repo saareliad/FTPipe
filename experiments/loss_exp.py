@@ -5,6 +5,7 @@ import torch.nn as nn
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 import torch.optim as optim
+from .utils import ExpParser
 
 from sample_models.AlexNet import alexnet
 from pytorch_Gpipe import pipe_model
@@ -160,3 +161,9 @@ def get_accuracy(outputs, labels):
     _, predictions = torch.max(outputs.data, 1)
 
     return (predictions == labels).sum().item() / labels.size(0)
+
+
+if __name__ == '__main__':
+    parser = ExpParser(description='Run the speedup experiment.')
+    args = parser.parse_args()
+    loss_exp(**args)

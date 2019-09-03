@@ -39,11 +39,6 @@ def exp_model_time(model_class, num_devices: int, num_classes: int, batch_shape:
 
     print('finished pipeline')
 
-    plot([mp_mean, rn_mean],
-         [mp_std, rn_std],
-         ['Model Parallel', 'Single GPU'],
-         'mp_vs_rn.png', 'ResNet50 Execution Time (Second)')
-
     dp_mean, dp_std = 0., 0.
     if torch.cuda.is_available():
         setup = f"model = nn.DataParallel({model_init_stmt}, device_ids={pipeline_params['devices']}).to({device_str})"
@@ -58,6 +53,11 @@ def exp_model_time(model_class, num_devices: int, num_classes: int, batch_shape:
              [mp_std, rn_std, dp_std],
              ['Model Parallel', 'Single GPU', 'Data Parallel'],
              'mp_vs_rn_vs_dp.png', 'ResNet50 Execution Time (Second)')
+    else:
+        plot([mp_mean, rn_mean],
+             [mp_std, rn_std],
+             ['Model Parallel', 'Single GPU'],
+             'mp_vs_rn.png', 'ResNet50 Execution Time (Second)')
 
     print(
         f'pipeline has speedup of {(rn_mean / mp_mean - 1) * 100}% relative to single gpu')
@@ -66,3 +66,9 @@ def exp_model_time(model_class, num_devices: int, num_classes: int, batch_shape:
     assert rn_mean / mp_mean - 1 >= 0.3
 
     return (rn_mean, rn_std), (mp_mean, mp_std), (dp_mean, dp_std)
+
+
+if __name__ == '__main__':
+    parser = ExpParser(uses_dataset=False, description='Run the speedup experiment.')
+    args = parser.parse_args()
+    exp_model_time(**args)

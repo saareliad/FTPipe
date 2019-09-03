@@ -45,3 +45,9 @@ def exp_split_size(model_class, num_devices: int, num_classes: int, batch_shape:
     plt.tight_layout()
     plt.savefig("split_size_tradeoff.png")
     plt.close(fig)
+
+
+if __name__ == '__main__':
+    parser = ExpParser(uses_dataset=False, description='Run the speedup experiment.')
+    args = parser.parse_args()
+    exp_split_size(**args)

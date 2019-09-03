@@ -4,6 +4,10 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 import numpy as np
 from pytorch_Gpipe import pipe_model
+import argparse
+import sample_models
+import torchvision
+import sys
 
 
 def kwargs_string(*pos_strings, **kwargs):
@@ -66,3 +70,57 @@ def plot(means, stds, labels, fig_name, fig_label):
 
 def create_pipeline(model, batch_shape, **kwargs):
     return pipe_model(model, sample_batch=torch.randn(*batch_shape), **kwargs)
+
+
+class StoreDict(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        kv = {}
+        if not isinstance(values, (list,)):
+            values = (values,)
+        for value in values:
+            n, v = value.split('=')
+            kv[n] = v
+        setattr(namespace, self.dest, kv)
+
+
+class ExpParser(argparse.ArgumentParser):
+    def __init__(self, *args, uses_dataset=True, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.uses_dataset = uses_dataset
+
+        models = [
+            'AlexNet', 'alexnet', 'DenseNet', 'densenet121', 'densenet161', 'densenet169', 'densenet201', 'GoogLeNet',
+            'Inception3', 'inception_v3', 'LeNet', 'ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
+            'resnet152', 'SqueezeNet', 'squeezenet1_0', 'squeezenet1_1', 'VGG', 'vgg11', 'vgg11_bn', 'vgg13',
+            'vgg13_bn', 'vgg16', 'vgg16_bn', 'vgg19', 'vgg19_bn', 'WideResNet', 'AmoebaNet_D', 'amoebanetd',
+            'resnet101', 'torchgpipe_resnet101'
+        ]
+
+        self.add_argument('--model', '-m', help='The model we want to run the experiment on.', choices=models,
+                          required=True)
+        self.add_argument('--devices', '-d', help='The number of devices to use in the experiment.', type=int,
+                          required=True)
+        self.add_argument('--classes', '-c', help='The number of classes in the prediction problem.', type=int,
+                          required=True)
+        self.add_argument('--model_params', help='The parameters for the model', nargs='*', action=StoreDict,
+                          default={})
+        self.add_argument('--pipeline_params', help='Parameters for the pipeline itself other then devices', nargs='*',
+                          action=StoreDict, default={})
+
+        if uses_dataset:
+            self.add_argument('--dataset', '-s', choices=list(torchvision.datasets.__all__), required=True)
+            self.add_argument('--ds_root', '-r', type=str, required=True)
+        else:
+            self.add_argument('--batch_shape', '-s', help='The shape of one batch.', nargs='*', type=int, required=True)
+            self.add_argument('--tests_config', help='Any other config kwargs for the test', nargs='*',
+                              action=StoreDict, default={})
+
+    def parse_args(self, *args, **kwargs):
+        res = vars(super().parse_args(*args, **kwargs))
+
+        res['model'] = getattr(sys.modules['sample_models'], res['model'])
+        if self.uses_dataset:
+            ds_class = getattr(sys.modules['torchvision.datasets'], res['dataset'])
+            res['dataset'] = ds_class(res['ds_root'])
+
+        return res
