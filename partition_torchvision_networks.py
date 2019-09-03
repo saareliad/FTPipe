@@ -8,7 +8,6 @@ import torch.nn as nn
 from pytorch_Gpipe.utils import model_scopes
 from sample_models import AmoebaNet_D as my_amoeaba, amoebanetd as ref_amoeba, torchgpipe_resnet101
 import datetime
-from experiments.graph_serialization import serialize_graph
 
 
 def partition_torchvision(networks=None, nparts=4, depth=100, nruns=4,
@@ -59,8 +58,7 @@ def partition_torchvision(networks=None, nparts=4, depth=100, nruns=4,
                     out_dir = f"{curr_dir}\\partition_visualization"
 
                     if dump_graph:
-                        serialize_graph(graph,
-                                        f"{curr_dir}\\graph_dump\\{filename}")
+                        graph.serialize(f"{curr_dir}\\graph_dump\\{filename}")
                     if save_graph:
                         graph.save(directory=out_dir, file_name=filename,
                                    show_buffs_params=False, show_weights=False)
@@ -137,8 +135,7 @@ def distribute_torchvision(networks=None, nparts=4, depth=100, nruns=4,
                     curr_dir = os.path.dirname(os.path.realpath(__file__))
                     out_dir = f"{curr_dir}\\distributed_models"
                     if dump_graph:
-                        serialize_graph(graph,
-                                        f"{curr_dir}\\graph_dump\\{filename}")
+                        graph.serialize(f"{curr_dir}\\graph_dump\\{filename}")
                     if save_graph:
                         graph.save(directory=out_dir, file_name=filename,
                                    show_buffs_params=False, show_weights=False)
@@ -155,5 +152,5 @@ def distribute_torchvision(networks=None, nparts=4, depth=100, nruns=4,
 
 
 if __name__ == "__main__":
-    partition_torchvision(
-        networks=[my_amoeaba, ref_amoeba], nparts=8, save_graph=True, nruns=2, num_layers=5)
+    distribute_torchvision(networks=[my_amoeaba, ref_amoeba], nparts=8,
+                           fake_gpus=True, save_graph=True, nruns=2, num_layers=5)

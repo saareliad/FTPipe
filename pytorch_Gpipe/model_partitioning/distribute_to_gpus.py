@@ -118,7 +118,7 @@ def wrap_layers(layers, top_scopes_to_device, part_input_scopes, counter, scope_
         if layer_scope in part_input_scopes and gpu_num != 0:
             # syncWrap all first nodes of a partition except the first one
             wrapper = SyncWrapper(sub_layer, layer_device,
-                                  gpu_num, output_shape, num_inputs=len(input_shape), counter=counter)
+                                  gpu_num, output_shape, counter=counter)
         else:
             wrapper = LayerWrapper(
                 sub_layer, gpu_num, layer_device, output_shape, counter=counter)

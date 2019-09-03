@@ -25,10 +25,10 @@ def post_process_partition(graph: Graph, part: List[int]):
     # make sure every scc in the graph is not splitted between different parts
     scc_partition_correction(graph)
 
-    insure_dag(graph, part)
+    ensure_dag(graph, part)
 
 
-def insure_dag(graph: Graph, node_parts: List[int]):
+def ensure_dag(graph: Graph, node_parts: List[int]):
     flag = True
     while flag:
         flag, prob_edge = not_dag(graph, node_parts)
