@@ -97,11 +97,11 @@ class ExpParser(argparse.ArgumentParser):
         ]
 
         self.add_argument('--model', '-m', help='The model we want to run the experiment on.', choices=models,
-                          required=True)
+                          required=True, dest='model_class')
         self.add_argument('--devices', '-d', help='The number of devices to use in the experiment.', type=int,
-                          required=True)
+                          required=True, dest='num_devices')
         self.add_argument('--classes', '-c', help='The number of classes in the prediction problem.', type=int,
-                          required=True)
+                          required=True, dest='num_classes')
         self.add_argument('--model_params', help='The parameters for the model', nargs='*', action=StoreDict,
                           default={})
         self.add_argument('--pipeline_params', help='Parameters for the pipeline itself other then devices', nargs='*',
@@ -118,7 +118,10 @@ class ExpParser(argparse.ArgumentParser):
     def parse_args(self, *args, **kwargs):
         res = vars(super().parse_args(*args, **kwargs))
 
+        res['model_params']['num_classes'] = res['num_classes']
+
         res['model'] = getattr(sys.modules['sample_models'], res['model'])
+
         if self.uses_dataset:
             ds_class = getattr(sys.modules['torchvision.datasets'], res['dataset'])
             res['dataset'] = ds_class(res['ds_root'])

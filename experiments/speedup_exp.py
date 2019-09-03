@@ -15,8 +15,6 @@ def exp_model_time(model_class, num_devices: int, num_classes: int, batch_shape:
     tests_config['num_classes'] = num_classes
     tests_config['batch_shape'] = batch_shape
 
-    model_params['num_classes'] = num_classes
-
     pipeline_params['devices'] = list(range(num_devices))
 
     stmt = call_func_stmt(train, 'model', **tests_config)
