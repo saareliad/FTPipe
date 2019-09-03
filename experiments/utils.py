@@ -120,7 +120,7 @@ class ExpParser(argparse.ArgumentParser):
 
         res['model_params']['num_classes'] = res['num_classes']
 
-        res['model'] = getattr(sys.modules['sample_models'], res['model_class'])
+        res['model_class'] = getattr(sys.modules['sample_models'], res['model_class'])
 
         if self.uses_dataset:
             ds_class = getattr(sys.modules['torchvision.datasets'], res['dataset'])
