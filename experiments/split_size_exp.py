@@ -1,6 +1,7 @@
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
+from sample_models import *
 from typing import Tuple
 import timeit
 from .utils import *

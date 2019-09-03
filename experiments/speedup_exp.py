@@ -3,6 +3,7 @@ import torch.nn as nn
 import numpy as np
 from typing import Tuple
 import timeit
+from sample_models import *
 from .utils import *
 
 plt.switch_backend('Agg')

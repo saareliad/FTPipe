@@ -3,6 +3,8 @@ import numpy as np
 from torch.utils.data import DataLoader
 import torch.nn as nn
 import torchvision.transforms as transforms
+from sample_models import *
+import torchvision
 import matplotlib.pyplot as plt
 import torch.optim as optim
 from .utils import ExpParser
