@@ -50,7 +50,7 @@ def exp_model_time(model_class, num_devices: int, num_classes: int, batch_shape:
         print(f'Data parallel mean is {dp_mean}')
 
         print(f'data parallel has speedup of {(rn_mean / dp_mean - 1) * 100}% relative to single gpu')
-        print(f'data parallel uses {dp_max_mem / rn_max_mem}% of memory per gpu at its highest compared to single gpu')
+        print(f'data parallel uses {(dp_max_mem / rn_max_mem) * 100}% of memory per gpu at its highest compared to single gpu')
 
         plot([mp_mean, rn_mean, dp_mean],
              [mp_std, rn_std, dp_std],
@@ -63,7 +63,7 @@ def exp_model_time(model_class, num_devices: int, num_classes: int, batch_shape:
              'mp_vs_rn.png', 'ResNet50 Execution Time (Second)')
 
     print(f'pipeline has speedup of {(rn_mean / mp_mean - 1) * 100}% relative to single gpu')
-    print(f'pipeline uses {mp_max_mem / rn_max_mem}% of memory per gpu at its highest compared to single gpu')
+    print(f'pipeline uses {(mp_max_mem / rn_max_mem) * 100}% of memory per gpu at its highest compared to single gpu')
 
     return (rn_mean, rn_std), (mp_mean, mp_std), (dp_mean, dp_std)
 
