@@ -14,6 +14,21 @@ def kwargs_string(*pos_strings, **kwargs):
     return ', '.join(list(pos_strings) + [f'{key}={val}' for key, val in kwargs.items()])
 
 
+def reset_mex_memory_allocated():
+    for i in range(torch.cuda.device_count()):
+        torch.cuda.reset_max_memory_allocated(i)
+
+
+def get_max_memory_allocated():
+    max_mem = -1
+
+    for i in range(torch.cuda.device_count()):
+        mem_alloc = torch.cuda.max_memory_allocated(i)
+        max_mem = max(max_mem, mem_alloc)
+
+    return max_mem
+
+
 def call_func_stmt(func, *params, **kwargs):
     if isinstance(func, str):
         func_name = func
@@ -26,6 +41,8 @@ def call_func_stmt(func, *params, **kwargs):
 
 
 def train(model, num_classes, num_batches, batch_shape):
+    reset_mex_memory_allocated()
+
     model.train(True)
     loss_fn = nn.MSELoss()
     optimizer = optim.SGD(model.parameters(), lr=0.001)

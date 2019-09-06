@@ -28,6 +28,7 @@ def exp_model_time(model_class, num_devices: int, num_classes: int, batch_shape:
     rn_run_times = timeit.repeat(
         stmt, setup, number=1, repeat=num_repeat, globals=globals())
     rn_mean, rn_std = np.mean(rn_run_times), np.std(rn_run_times)
+    rn_max_mem = get_max_memory_allocated()
 
     print('finished single gpu')
 
@@ -35,6 +36,7 @@ def exp_model_time(model_class, num_devices: int, num_classes: int, batch_shape:
     mp_run_times = timeit.repeat(
         stmt, setup, number=1, repeat=num_repeat, globals=globals())
     mp_mean, mp_std = np.mean(mp_run_times), np.std(mp_run_times)
+    mp_max_mem = get_max_memory_allocated()
 
     print('finished pipeline')
 
@@ -44,10 +46,12 @@ def exp_model_time(model_class, num_devices: int, num_classes: int, batch_shape:
         dp_run_times = timeit.repeat(
             stmt, setup, number=1, repeat=num_repeat, globals=globals())
         dp_mean, dp_std = np.mean(dp_run_times), np.std(dp_run_times)
+        dp_max_mem = get_max_memory_allocated()
         print(f'Data parallel mean is {dp_mean}')
 
-        print(
-            f'data parallel has speedup of {(rn_mean / dp_mean - 1) * 100}% relative to single gpu')
+        print(f'data parallel has speedup of {(rn_mean / dp_mean - 1) * 100}% relative to single gpu')
+        print(f'data parallel uses {dp_max_mem / rn_max_mem}% of memory per gpu at its highest compared to single gpu')
+
         plot([mp_mean, rn_mean, dp_mean],
              [mp_std, rn_std, dp_std],
              ['Model Parallel', 'Single GPU', 'Data Parallel'],
@@ -58,11 +62,8 @@ def exp_model_time(model_class, num_devices: int, num_classes: int, batch_shape:
              ['Model Parallel', 'Single GPU'],
              'mp_vs_rn.png', 'ResNet50 Execution Time (Second)')
 
-    print(
-        f'pipeline has speedup of {(rn_mean / mp_mean - 1) * 100}% relative to single gpu')
-    assert mp_mean < rn_mean
-    # assert that the speedup is at least 30%
-    assert rn_mean / mp_mean - 1 >= 0.3
+    print(f'pipeline has speedup of {(rn_mean / mp_mean - 1) * 100}% relative to single gpu')
+    print(f'pipeline uses {mp_max_mem / rn_max_mem}% of memory per gpu at its highest compared to single gpu')
 
     return (rn_mean, rn_std), (mp_mean, mp_std), (dp_mean, dp_std)
 
