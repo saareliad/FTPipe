@@ -110,7 +110,7 @@ class SyncWrapper(nn.Module):
         """saves the activation of the current input"""
         self.rng_states.append(torch.cuda.get_rng_state(self.device))
         self.activations.append(
-            tensors_map(moved_inputs, lambda input: None if input is None else input.clone().detach()))
+            tensors_map(moved_inputs, lambda input: None if input is None else input.clone()))
 
     def delay_device(self, tensor):
         return tensor.device is not self.device

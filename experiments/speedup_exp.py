@@ -11,7 +11,8 @@ plt.switch_backend('Agg')
 
 def exp_model_time(model_class, num_devices: int, num_classes: int, batch_shape: Tuple[int, ...], model_params: dict,
                    tests_config: dict, pipeline_params: dict):
-    num_repeat = 10
+    num_repeat = 1
+    per_repeat = 10
 
     tests_config['num_classes'] = num_classes
     tests_config['batch_shape'] = batch_shape
@@ -25,16 +26,14 @@ def exp_model_time(model_class, num_devices: int, num_classes: int, batch_shape:
     device_str = """'cuda:0' if torch.cuda.is_available() else 'cpu'"""
 
     setup = f"model = {model_init_stmt}.to({device_str})"
-    rn_run_times = timeit.repeat(
-        stmt, setup, number=1, repeat=num_repeat, globals=globals())
+    rn_run_times = timeit.repeat(stmt, setup, number=per_repeat, repeat=num_repeat, globals=globals())
     rn_mean, rn_std = np.mean(rn_run_times), np.std(rn_run_times)
     rn_max_mem = get_max_memory_allocated()
 
     print('finished single gpu')
 
     setup = f"model = {call_func_stmt(create_pipeline, model_init_stmt, batch_shape, **pipeline_params)}"
-    mp_run_times = timeit.repeat(
-        stmt, setup, number=1, repeat=num_repeat, globals=globals())
+    mp_run_times = timeit.repeat(stmt, setup, number=per_repeat, repeat=num_repeat, globals=globals())
     mp_mean, mp_std = np.mean(mp_run_times), np.std(mp_run_times)
     mp_max_mem = get_max_memory_allocated()
 
@@ -43,8 +42,7 @@ def exp_model_time(model_class, num_devices: int, num_classes: int, batch_shape:
     dp_mean, dp_std = 0., 0.
     if torch.cuda.is_available():
         setup = f"model = nn.DataParallel({model_init_stmt}, device_ids={pipeline_params['devices']}).to({device_str})"
-        dp_run_times = timeit.repeat(
-            stmt, setup, number=1, repeat=num_repeat, globals=globals())
+        dp_run_times = timeit.repeat(stmt, setup, number=per_repeat, repeat=num_repeat, globals=globals())
         dp_mean, dp_std = np.mean(dp_run_times), np.std(dp_run_times)
         dp_max_mem = get_max_memory_allocated()
         print(f'Data parallel mean is {dp_mean}')

@@ -86,7 +86,8 @@ def plot(means, stds, labels, fig_name, fig_label):
 
 
 def create_pipeline(model, batch_shape, **kwargs):
-    return pipe_model(model, sample_batch=torch.randn(*batch_shape), **kwargs)
+    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    return pipe_model(model.to(device), sample_batch=torch.randn(*batch_shape, device=device), **kwargs)
 
 
 class StoreDict(argparse.Action):
