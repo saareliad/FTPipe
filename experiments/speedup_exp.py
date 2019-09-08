@@ -9,62 +9,53 @@ from .utils import *
 plt.switch_backend('Agg')
 
 
-def exp_model_time(model_class, num_devices: int, num_classes: int, batch_shape: Tuple[int, ...], model_params: dict,
-                   tests_config: dict, pipeline_params: dict):
-    num_repeat = 10
-    per_repeat = 1
-    num_warmup = 5
+def exp_model_time(run_type, model_class, num_classes, batch_shape: Tuple[int, ...], num_repeats, num_warmups,
+                   model_params: dict, tests_config: dict, pipeline_params: dict = None, num_devices=None):
 
     tests_config['num_classes'] = num_classes
     tests_config['batch_shape'] = batch_shape
-
-    pipeline_params['devices'] = list(range(num_devices))
 
     stmt = call_func_stmt(train, 'model', **tests_config)
 
     model_init_stmt = call_func_stmt(model_class, **model_params)
 
-    device_str = """'cuda:0' if torch.cuda.is_available() else 'cpu'"""
+    device_str = "'cuda:0' if torch.cuda.is_available() else 'cpu'"
 
-    setup = f"model = {model_init_stmt}.to({device_str})"
-    rn_run_times = timeit.repeat(stmt, setup, number=per_repeat, repeat=num_warmup + num_repeat, globals=globals())
-    rn_mean, rn_std = np.mean(rn_run_times[num_warmup:]), np.std(rn_run_times[num_warmup:])
-    rn_max_mem = get_max_memory_allocated()
+    if run_type in ['S', 'Single']:
+        setup = f"model = {model_init_stmt}.to({device_str})"
 
-    print('finished single gpu')
+        run_times = timeit.repeat(stmt, setup, number=1, repeat=num_warmups + num_repeats, globals=globals())
 
-    setup = f"model = {call_func_stmt(create_pipeline, model_init_stmt, batch_shape, **pipeline_params)}"
-    mp_run_times = timeit.repeat(stmt, setup, number=per_repeat, repeat=num_warmup + num_repeat, globals=globals())
-    mp_mean, mp_std = np.mean(mp_run_times[num_warmup:]), np.std(mp_run_times[num_warmup:])
-    mp_max_mem = get_max_memory_allocated()
+        rt_mean, rt_std = np.mean(run_times[num_warmups:]), np.std(run_times[num_warmups:])
+        max_mem = get_max_memory_allocated()
+        print('Single GPU:')
 
-    print('finished pipeline')
+    elif run_type in ['P', 'Pipeline-Parallel']:
+        pipeline_params['devices'] = list(range(num_devices))
+        setup = f"model = {call_func_stmt(create_pipeline, model_init_stmt, batch_shape, **pipeline_params)}"
 
-    dp_mean, dp_std = 0., 0.
-    if torch.cuda.is_available():
-        setup = f"model = nn.DataParallel({model_init_stmt}, device_ids={pipeline_params['devices']}).to({device_str})"
-        dp_run_times = timeit.repeat(stmt, setup, number=per_repeat, repeat=num_warmup + num_repeat, globals=globals())
-        dp_mean, dp_std = np.mean(dp_run_times[num_warmup:]), np.std(dp_run_times[num_warmup:])
-        dp_max_mem = get_max_memory_allocated()
-        print(f'Data parallel mean is {dp_mean}')
+        run_times = timeit.repeat(stmt, setup, number=1, repeat=num_warmups + num_repeats, globals=globals())
 
-        print(f'data parallel has speedup of {(rn_mean / dp_mean - 1) * 100}% relative to single gpu')
-        print(f'data parallel uses {(dp_max_mem / rn_max_mem) * 100}% of memory per gpu at its highest compared to single gpu')
+        rt_mean, rt_std = np.mean(run_times[num_warmups:]), np.std(run_times[num_warmups:])
+        max_mem = get_max_memory_allocated()
+        print('Pipeline-Parallel:')
 
-        plot([mp_mean, rn_mean, dp_mean],
-             [mp_std, rn_std, dp_std],
-             ['Model Parallel', 'Single GPU', 'Data Parallel'],
-             'mp_vs_rn_vs_dp.png', 'ResNet50 Execution Time (Second)')
+    elif run_type in ['D', 'Data-Parallel']:
+        devices_ids = list(range(num_devices))
+        setup = f"model = nn.DataParallel({model_init_stmt}, device_ids={devices_ids}).to({device_str})"
+
+        dp_run_times = timeit.repeat(stmt, setup, number=1, repeat=num_warmups + num_repeats, globals=globals())
+
+        rt_mean, rt_std = np.mean(dp_run_times[num_warmups:]), np.std(dp_run_times[num_warmups:])
+        max_mem = get_max_memory_allocated()
+        print('Data-Parallel:')
+
     else:
-        plot([mp_mean, rn_mean],
-             [mp_std, rn_std],
-             ['Model Parallel', 'Single GPU'],
-             'mp_vs_rn.png', 'ResNet50 Execution Time (Second)')
+        raise ValueError('Not a valid run type')
 
-    print(f'pipeline has speedup of {(rn_mean / mp_mean - 1) * 100}% relative to single gpu')
-    print(f'pipeline uses {(mp_max_mem / rn_max_mem) * 100}% of memory per gpu at its highest compared to single gpu')
-
-    return (rn_mean, rn_std), (mp_mean, mp_std), (dp_mean, dp_std)
+    print(f'\trun time mean - {rt_mean}')
+    print(f'\trun time std - {rt_std}')
+    print(f'\tmax memory usage - {max_mem}')
 
 
 if __name__ == '__main__':

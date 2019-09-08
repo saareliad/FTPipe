@@ -69,8 +69,6 @@ def train(model, num_classes, num_batches, batch_shape):
         loss_fn(outputs, labels).backward()
         optimizer.step()
 
-    print('.', end='')
-
 
 def plot(means, stds, labels, fig_name, fig_label):
     fig, ax = plt.subplots()
@@ -114,14 +112,21 @@ class ExpParser(argparse.ArgumentParser):
             'resnet101', 'torchgpipe_resnet101'
         ]
 
+        self.add_argument('--run_type', '-r', help='The way to run the model.',
+                          choices=['Single', 'Data-Parallel', 'Pipeline-Parallel', 'S', 'D', 'P'],
+                          required=True, dest='run_type')
         self.add_argument('--model', '-m', help='The model we want to run the experiment on.', choices=models,
                           required=True, dest='model_class')
-        self.add_argument('--devices', '-d', help='The number of devices to use in the experiment.', type=int,
-                          required=True, dest='num_devices')
         self.add_argument('--classes', '-c', help='The number of classes in the prediction problem.', type=int,
                           required=True, dest='num_classes')
+        self.add_argument('--repeats', '-n', help='amount of times to repeat the experiments.', type=int,
+                          default=10, dest='num_repeats')
+        self.add_argument('--warmups', '-w', help='amount of times to run the experiments before tracking results.',
+                          default=5, dest='num_warmups')
         self.add_argument('--model_params', help='The parameters for the model', nargs='*', action=StoreDict,
                           default={})
+        self.add_argument('--devices', '-d', help='The number of devices to use in the experiment.', type=int,
+                          dest='num_devices')
         self.add_argument('--pipeline_params', help='Parameters for the pipeline itself other then devices', nargs='*',
                           action=StoreDict, default={})
 
