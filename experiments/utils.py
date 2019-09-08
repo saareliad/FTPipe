@@ -40,9 +40,29 @@ def call_func_stmt(func, *params, **kwargs):
     return f'{func_name}({kwargs_string(*params_str, **kwargs)})'
 
 
-def train(model, num_classes, num_batches, batch_shape):
-    reset_mex_memory_allocated()
+def track_train(num_repeats, model, num_classes, num_batches, batch_shape):
+    num_batches = int(num_batches)
 
+    run_times = []
+    mem_uses = []
+    for _ in range(num_repeats):
+        reset_mex_memory_allocated()
+        start = torch.cuda.Event(enable_timing=True)
+        end = torch.cuda.Event(enable_timing=True)
+
+        start.record()
+        train(model, num_classes, num_batches, batch_shape)
+        end.record()
+
+        torch.cuda.synchronize()
+        run_times.append(start.elapsed_time(end))
+        mem_uses.append(get_max_memory_allocated())
+        print('.', end='')
+
+    return run_times, mem_uses
+
+
+def train(model, num_classes, num_batches, batch_shape):
     model.train(True)
     loss_fn = nn.MSELoss()
     optimizer = optim.SGD(model.parameters(), lr=0.001)
@@ -83,9 +103,10 @@ def plot(means, stds, labels, fig_name, fig_label):
     plt.close(fig)
 
 
-def create_pipeline(model, batch_shape, **kwargs):
+def create_pipeline(model, batch_shape, microbatch_size, **kwargs):
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-    return pipe_model(model.to(device), sample_batch=torch.randn(*batch_shape, device=device), **kwargs)
+    microbatch_size = int(microbatch_size)
+    return pipe_model(model.to(device), microbatch_size, torch.randn(*batch_shape, device=device), **kwargs)
 
 
 class StoreDict(argparse.Action):
@@ -122,7 +143,7 @@ class ExpParser(argparse.ArgumentParser):
         self.add_argument('--repeats', '-n', help='amount of times to repeat the experiments.', type=int,
                           default=10, dest='num_repeats')
         self.add_argument('--warmups', '-w', help='amount of times to run the experiments before tracking results.',
-                          default=5, dest='num_warmups')
+                          type=int, default=1, dest='num_warmups')
         self.add_argument('--model_params', help='The parameters for the model', nargs='*', action=StoreDict,
                           default={})
         self.add_argument('--devices', '-d', help='The number of devices to use in the experiment.', type=int,

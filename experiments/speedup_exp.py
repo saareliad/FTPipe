@@ -15,43 +15,34 @@ def exp_model_time(run_type, model_class, num_classes, batch_shape: Tuple[int, .
     tests_config['num_classes'] = num_classes
     tests_config['batch_shape'] = batch_shape
 
-    stmt = call_func_stmt(train, 'model', **tests_config)
-
-    model_init_stmt = call_func_stmt(model_class, **model_params)
-
-    device_str = "'cuda:0' if torch.cuda.is_available() else 'cpu'"
+    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
     if run_type in ['S', 'Single']:
-        setup = f"model = {model_init_stmt}.to({device_str})"
+        tests_config['model'] = model_class(**model_params).to(device)
 
-        run_times = timeit.repeat(stmt, setup, number=1, repeat=num_warmups + num_repeats, globals=globals())
-
-        rt_mean, rt_std = np.mean(run_times[num_warmups:]), np.std(run_times[num_warmups:])
-        max_mem = get_max_memory_allocated()
         print('Single GPU:')
 
     elif run_type in ['P', 'Pipeline-Parallel']:
         pipeline_params['devices'] = list(range(num_devices))
-        setup = f"model = {call_func_stmt(create_pipeline, model_init_stmt, batch_shape, **pipeline_params)}"
+        model = model_class(**model_params).to(device)
+        tests_config['model'] = create_pipeline(model, batch_shape, **pipeline_params)
 
-        run_times = timeit.repeat(stmt, setup, number=1, repeat=num_warmups + num_repeats, globals=globals())
-
-        rt_mean, rt_std = np.mean(run_times[num_warmups:]), np.std(run_times[num_warmups:])
-        max_mem = get_max_memory_allocated()
         print('Pipeline-Parallel:')
 
     elif run_type in ['D', 'Data-Parallel']:
         devices_ids = list(range(num_devices))
-        setup = f"model = nn.DataParallel({model_init_stmt}, device_ids={devices_ids}).to({device_str})"
+        model = model_class(**model_params).to(device)
+        tests_config['model'] = nn.DataParallel(model, device_ids=devices_ids).to(device)
 
-        dp_run_times = timeit.repeat(stmt, setup, number=1, repeat=num_warmups + num_repeats, globals=globals())
-
-        rt_mean, rt_std = np.mean(dp_run_times[num_warmups:]), np.std(dp_run_times[num_warmups:])
-        max_mem = get_max_memory_allocated()
         print('Data-Parallel:')
 
     else:
         raise ValueError('Not a valid run type')
+
+    run_times, mem_uses = track_train(num_repeats + num_warmups, **tests_config)
+    run_times, mem_uses = run_times[num_warmups:], mem_uses[num_warmups:]
+    rt_mean, rt_std = np.mean(run_times), np.std(run_times)
+    max_mem = np.mean(mem_uses)
 
     print(f'\trun time mean - {rt_mean}')
     print(f'\trun time std - {rt_std}')
