@@ -37,11 +37,12 @@ class PipelineParallel(nn.Module):
     """
 
     def __init__(self, model: nn.Module, microbatch_size: int,
-                 input_shape: TensorsShape, wrappers, counter, main_device: str = None):
+                 input_shape: TensorsShape, wrappers, counter, main_device: str = None, graph=None):
         super(PipelineParallel, self).__init__()
         self.model = model
         self.wrappers = wrappers
         self.counter = counter
+        self.graph = graph
         devices = [wrapper.device for wrapper in self.wrappers]
 
         if main_device is None:

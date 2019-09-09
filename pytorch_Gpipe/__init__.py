@@ -12,7 +12,7 @@ __all__ = ['pipe_model', 'partition_with_profiler', 'distribute_using_profiler',
            'partition_graph', 'distribute_model', 'distribute_by_memory', 'distribute_by_time']
 
 
-def pipe_model(model: nn.Module, microbatch_size: int, sample_batch: Tensors, devices: Optional[Devices] = None, by_memory: bool = False, depth: int = 100, optimize_pipeline_wrappers: bool = True, return_graph: bool = False) -> nn.Module:
+def pipe_model(model: nn.Module, microbatch_size: int, sample_batch: Tensors, devices: Optional[Devices] = None, by_memory: bool = False, depth: int = 100, optimize_pipeline_wrappers: bool = True, return_graph: bool = False) -> PipelineParallel:
     partition_policy = distribute_by_time
     if by_memory:
         partition_policy = distribute_by_memory
@@ -22,11 +22,11 @@ def pipe_model(model: nn.Module, microbatch_size: int, sample_batch: Tensors, de
     in_shape = sample_batch.shape[1:]
     in_shape = tuple(in_shape)
 
-    pipe = PipelineParallel(
-        modified_model, microbatch_size, in_shape, wrappers, counter)
+    if not return_graph:
+        graph = None
 
-    if return_graph:
-        return pipe, graph
+    pipe = PipelineParallel(
+        modified_model, microbatch_size, in_shape, wrappers, counter, graph=graph)
 
     return pipe
 
