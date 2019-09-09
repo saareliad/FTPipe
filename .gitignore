@@ -12,3 +12,4 @@ playground/**
 model_partition/graph/__pycache__/
 *.pyc
 main.py
+experiment/stanford_car_dataset_images_in_224x224/**
