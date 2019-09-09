@@ -12,3 +12,4 @@ playground/**
 model_partition/graph/__pycache__/
 *.pyc
 main.py
+experiments/stanford-car-dataset-by-classes-folder-224/*
