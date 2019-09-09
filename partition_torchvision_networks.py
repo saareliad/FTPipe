@@ -2,11 +2,12 @@ import os
 from pytorch_Gpipe import partition_with_profiler, profileNetwork, distribute_by_memory, distribute_by_time, \
     distribute_using_profiler, pipe_model
 import torch
-from sample_models import alexnet, resnet152, vgg19_bn, squeezenet1_1, inception_v3, densenet201, GoogLeNet, LeNet, \
+from sample_models import alexnet, resnet101, vgg19_bn, squeezenet1_1, inception_v3, densenet201, GoogLeNet, LeNet, \
     WideResNet
+from sample_models import AmoebaNet_D as my_amoeaba, amoebanetd as ref_amoeba, torchgpipe_resnet101
+
 import torch.nn as nn
 from pytorch_Gpipe.utils import model_scopes
-from sample_models import AmoebaNet_D as my_amoeaba, amoebanetd as ref_amoeba, torchgpipe_resnet101
 import datetime
 
 
@@ -18,7 +19,7 @@ def partition_torchvision(networks=None, nparts=4, depth=100, nruns=4,
         networks = [networks]
 
     if networks is None:
-        networks = [alexnet, resnet152, torchgpipe_resnet101, vgg19_bn, squeezenet1_1,
+        networks = [my_amoeaba, ref_amoeba, alexnet, resnet101, torchgpipe_resnet101, vgg19_bn, squeezenet1_1,
                     inception_v3, densenet201, GoogLeNet, LeNet, WideResNet]
 
     if not isinstance(nparts, (list, tuple)):
@@ -86,7 +87,7 @@ def distribute_torchvision(networks=None, nparts=4, depth=100, nruns=4,
         networks = [networks]
 
     if networks is None:
-        networks = [my_amoeaba, ref_amoeba, alexnet, resnet152, torchgpipe_resnet101, vgg19_bn, squeezenet1_1,
+        networks = [my_amoeaba, ref_amoeba, alexnet, resnet101, torchgpipe_resnet101, vgg19_bn, squeezenet1_1,
                     inception_v3, densenet201, GoogLeNet, LeNet, WideResNet]
 
     if not isinstance(nparts, (list, tuple)):
