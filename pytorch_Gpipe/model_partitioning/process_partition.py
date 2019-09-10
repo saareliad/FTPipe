@@ -1,7 +1,7 @@
 from collections import Counter, deque
 from typing import Dict, List
 
-from ..model_profiling import Graph
+from ..model_profiling import Graph, NodeTypes
 
 __all__ = ["post_process_partition"]
 
@@ -26,6 +26,21 @@ def post_process_partition(graph: Graph, part: List[int]):
     scc_partition_correction(graph)
 
     ensure_dag(graph, part)
+
+    fix_arithmetic_inputs(graph)
+
+
+def fix_arithmetic_inputs(graph: Graph):
+    while True:
+        changed = False
+        for node in graph.nodes:
+            if node.type is NodeTypes.OP:
+                for n in node.in_nodes:
+                    if n.part != node.part:
+                        n.part = node.part
+                        changed = True
+        if not changed:
+            break
 
 
 def ensure_dag(graph: Graph, node_parts: List[int]):

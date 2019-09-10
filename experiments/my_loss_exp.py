@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import time
-
+import numpy as np
 # add our code to the path so we could import it
 import sys
 import os
@@ -10,8 +10,11 @@ sys.path.append(os.path.join(os.getcwd(), '..'))
 from pytorch_Gpipe import pipe_model
 import torch.nn.functional as F
 from torch.optim import SGD
+from torch.utils.data import DataLoader
+import torchvision
+from torchvision import transforms as transforms
 import argparse
-from sample_models import alexnet, resnet101, vgg19_bn, squeezenet1_1, inception_v3, densenet201, GoogLeNet, LeNet, \
+from sample_models import alexnet, resnet101, vgg19_bn, squeezenet1_1, densenet201, \
     WideResNet, AmoebaNet_D as amoebanet, amoebanetd as torchgpipe_amoebanet, torchgpipe_resnet101
 import platform
 
@@ -20,36 +23,37 @@ MODELS = {
     "resnet101": resnet101,
     "vgg19_bn": vgg19_bn,
     "squeezenet1_1": squeezenet1_1,
-    "inception_v3": inception_v3,
     "densenet201": densenet201,
-    "GoogLeNet": GoogLeNet,
-    "LeNet": LeNet,
     "WideResNet": WideResNet,
     "amoebanet": amoebanet,
     "torchgpipe_amoebanet": torchgpipe_amoebanet,
     "torchgpipe_resnet101": torchgpipe_resnet101
 }
 
+# TODO replace classifier to 196 classes
 # setups
 
 
 def single_gpu(model_class: nn.Module, devices, *model_args, **model_kwargs):
-    return model_class(*model_args, **model_kwargs).to(devices[0]), [devices[0]]
+    model = model_class(*model_args, **model_kwargs).to(devices[0])
+    used_devices = [devices[0]]
+
+    return model, used_devices
 
 
 def pipeLine(model_class: nn.Module, devices, pipe_sample, model_args, model_kwargs, pipeline_args, pipeline_kwargs):
-    net = model_class(*model_args, **model_kwargs).to(devices[0])
+    net = model_class(*model_args, **model_kwargs,
+                      num_classes=196).to(devices[0])
     net(pipe_sample)
     torch.cuda.synchronize()
 
     piped = pipe_model(net, pipe_sample.shape[0], pipe_sample, *pipeline_args,
                        devices=devices, **pipeline_kwargs)
-    # TODO assumes first is input_device and last is output device
     return piped, piped.module_devices
 
 
 def dataParallel(model_class: nn.Module, devices, *model_args, **model_kwargs):
-    return nn.DataParallel(model_class(*model_args, **model_kwargs), devices).to(devices[0]), devices
+    return nn.DataParallel(model_class(*model_args, **model_kwargs, num_classes=196), devices).to(devices[0]), devices
 
 
 SETUPS = {
@@ -59,9 +63,34 @@ SETUPS = {
 }
 
 # the experiment itself
+img_size = (224, 224)
 
 
-def throughput_exp(config):
+def create_dataloaders(batch_train, batch_test):
+    dataset_dir = "stanford-car-dataset-by-classes-folder-224/car_data/"
+    train_tfms = transforms.Compose([transforms.Resize(img_size),
+                                     transforms.RandomHorizontalFlip(),
+                                     transforms.RandomRotation(15),
+                                     transforms.ToTensor(),
+                                     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+    test_tfms = transforms.Compose([transforms.Resize(img_size),
+                                    transforms.ToTensor(),
+                                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+
+    dataset = torchvision.datasets.ImageFolder(
+        root=dataset_dir + "train", transform=train_tfms)
+    trainloader = DataLoader(
+        dataset, batch_size=batch_train, shuffle=True, num_workers=2)
+
+    dataset2 = torchvision.datasets.ImageFolder(
+        root=dataset_dir + "test", transform=test_tfms)
+    testloader = DataLoader(
+        dataset2, batch_size=batch_test, shuffle=False, num_workers=2)
+
+    return trainloader, testloader
+
+
+def loss_exp(config):
     assert torch.cuda.is_available(), "gpus are required"
     devices = [torch.device('cuda', i)
                for i in range(torch.cuda.device_count())]
@@ -70,6 +99,7 @@ def throughput_exp(config):
     model_class = config['model']
     model_args = config['model_args']
     model_kwargs = config['model_kwargs']
+    model_kwargs['num_classes'] = 196
     batch_size = config['batch_size']
     pipeLine_kwargs = config['pipeLine_kwargs']
     pipeLine_args = config['pipeLine_args']
@@ -93,15 +123,15 @@ def throughput_exp(config):
     in_device = used_devices[0]
     out_device = used_devices[-1]
     batch_size = batch_shape[0]
-    optimizer = SGD(model.parameters(), lr=0.1)
-    # This experiment cares about only training performance, rather than
-    # accuracy. To eliminate any overhead due to data loading, we use fake data
-    batch = torch.randn(batch_shape, device=in_device)
-    target = torch.randint(10, (batch_size,))
+    optimizer = SGD(model.parameters(), lr=0.01, momentum=0.9)
+
+    train_loader, test_loader = create_dataloaders(batch_size, batch_size)
 
     throughputs = []
     elapsed_times = []
     memory_consumptions = {device: [] for device in used_devices}
+    losses = []
+    accuracies = []
 
     # run one epoch and gather statistics
     def run_epoch(epoch):
@@ -109,11 +139,12 @@ def throughput_exp(config):
         tick = time.time()
 
         data_trained = 0
-        steps = 50000 // batch_size
-        for i in range(steps):
-            data_trained += batch_size
+        steps = len(train_loader)
+        for i, data in enumerate(train_loader):
+            batch, target = data
+            data_trained += batch.shape[0]
 
-            output = model(batch)
+            output = model(batch.to(in_device))
             gt = target.to(output.device)
             loss = F.cross_entropy(output, gt)
             loss.backward()
@@ -134,16 +165,19 @@ def throughput_exp(config):
         tock = time.time()
 
         # calculate exact statistics after epoch is finished
+        test_accuracy, test_loss = test(model, test_loader, used_devices[0])
+        losses.append(test_loss)
+        accuracies.append(test_accuracy)
 
         elapsed_time = tock - tick
         throughput = batch_size * steps / elapsed_time
         print(
-            f"{epoch+1}/{epochs} epochs | {throughput:.2f} samples/sec, {elapsed_time:.2f} sec/epoch")
+            f"{epoch+1}/{epochs} epochs | {throughput:.2f} samples/sec, {elapsed_time:.2f} sec/epoch, test_accuracy {test_accuracy:.2f}, test loss {test_loss:.2f}")
 
         return throughput, elapsed_time
 
     exp = setup.__name__
-    title = f'throughput experiment\n config: {exp}\n used_gpus: {len(used_devices)}\n epochs: {epochs}\n'
+    title = f'loss experiment\n config: {exp}\n used_gpus: {len(used_devices)}\n epochs: {epochs}\n'
     print(title)
 
     gpus = [torch.cuda.get_device_name(device) for device in used_devices]
@@ -182,6 +216,32 @@ def throughput_exp(config):
 
     print(
         f'{title} {throughput:.2f} samples/sec\n{elapsed_time:.2f} sec/epoch (average)\n max memory consumption on device: {maximum} {(avg_mem_per_epoch[maximum]/1e6):.2f} MB')
+    print(f"final loss {losses[-1]:.2f} final accuracy {accuracies[-1]:.2f}")
+
+
+def test(model, test_loader, input_device):
+    criterion = F.cross_entropy
+
+    losses, accuracies = [], []
+
+    with torch.no_grad():
+        for batch in test_loader:
+            inputs, labels = batch
+            outputs = model(inputs.to(input_device))
+            labels = labels.to(outputs.device)
+
+            loss = criterion(outputs, labels)
+
+            losses.append(loss.item())
+            accuracies.append(get_accuracy(outputs, labels))
+
+    return np.mean(losses), np.mean(accuracies)
+
+
+def get_accuracy(outputs, labels):
+    _, predictions = torch.max(outputs.data, 1)
+
+    return (predictions == labels).sum().item() / labels.size(0)
 
 
 class StoreDict(argparse.Action):
@@ -242,18 +302,10 @@ class ExpParser(argparse.ArgumentParser):
 
 
 if __name__ == "__main__":
-    # TODO all var/kw args are treated as strings the following are all strings
+    # TODO all var/kw args are treated as strings
     # throuput_exp.py - s single_gpu - m amoebanet - -model_args 10 - -model_kwargs kw0 = 1 kw1 = hello
-
-    # run as follows from the experiments folder for eg.
-    # will check throuput, execution time and memory consumption of amoebanet
-    # accross 10 training epochs each with 50000//batch_size batches
-    # the first epoch is a warmpu and will not affect results
-    # with batch size 64
-    # the partition will be done using a batch size of 32
-    # python throuput_exp.py --epochs 10 --setup pipeLine - m amoebanet --microbatch_size 64 --profile_sample_size 32
 
     parser = ExpParser()
     args = parser.parse_args()
 
-    throughput_exp(args)
+    loss_exp(args)
