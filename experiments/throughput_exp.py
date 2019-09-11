@@ -45,7 +45,7 @@ def pipeLine(model_class: nn.Module, devices, pipe_sample, model_args, model_kwa
     piped = pipe_model(net, pipe_sample.shape[0], pipe_sample, *pipeline_args,
                        devices=devices, **pipeline_kwargs)
     # TODO assumes first is input_device and last is output device
-    return piped, piped.module_devices
+    return piped, list(piped.module_devices)
 
 
 def dataParallel(model_class: nn.Module, devices, *model_args, **model_kwargs):

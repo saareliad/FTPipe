@@ -67,27 +67,32 @@ img_size = (224, 224)
 
 
 def create_dataloaders(batch_train, batch_test):
-    dataset_dir = "stanford-car-dataset-by-classes-folder-224/car_data/"
-    train_tfms = transforms.Compose([transforms.Resize(img_size),
-                                     transforms.RandomHorizontalFlip(),
-                                     transforms.RandomRotation(15),
-                                     transforms.ToTensor(),
-                                     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-    test_tfms = transforms.Compose([transforms.Resize(img_size),
-                                    transforms.ToTensor(),
-                                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+    """
+    Assumes the following folder structures:
+        cats_dogs/cat/<img>
+        cats_dogs/cat/<img>
 
-    dataset = torchvision.datasets.ImageFolder(
-        root=dataset_dir + "train", transform=train_tfms)
-    trainloader = DataLoader(
-        dataset, batch_size=batch_train, shuffle=True, num_workers=2)
+        ...
 
-    dataset2 = torchvision.datasets.ImageFolder(
-        root=dataset_dir + "test", transform=test_tfms)
-    testloader = DataLoader(
-        dataset2, batch_size=batch_test, shuffle=False, num_workers=2)
+        cats_dogs/dog/<img>
+        cats_dogs/dog/<img>
+    """
+    dataset_dir = "cats_dogs"
+    tfms = transforms.Compose([
+        transforms.Resize(img_size),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomRotation(15),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
 
-    return trainloader, testloader
+    dataset = torchvision.datasets.ImageFolder(root=dataset_dir, transform=tfms)
+    train_set, test_set = torch.utils.data.random_split(dataset, [20000, 5000])
+
+    train_loader = DataLoader(train_set, batch_size=batch_train, shuffle=True, num_workers=2)
+    test_loader = DataLoader(test_set, batch_size=batch_test, shuffle=False, num_workers=2)
+
+    return train_loader, test_loader
 
 
 def loss_exp(config):
