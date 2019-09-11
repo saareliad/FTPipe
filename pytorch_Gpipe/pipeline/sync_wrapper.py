@@ -143,7 +143,7 @@ class SyncWrapper(nn.Module):
                 if self.counter.get_count() == self.gpu_num:
                     self.input_devices = get_devices(inputs)
 
-                moved_inputs = tensors_map(inputs, lambda tensor: None if not self.delay_device(tensor) else tensor.to(
+                moved_inputs = tensors_map(inputs, lambda tensor: None if tensor.device is self.device else tensor.to(
                     self.device, non_blocking=True))
 
                 if self.counter.cur_mode is ForwardMode.train:

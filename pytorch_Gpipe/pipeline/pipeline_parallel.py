@@ -53,7 +53,7 @@ class PipelineParallel(nn.Module):
         self.microbatch_size = microbatch_size
         self.num_devices = len(set(devices))
         self.input_shape = input_shape
-        self.module_devices = set(devices + [self.main_device])
+        self.module_devices = list(devices + [self.main_device])
         self.mode = None
         self.set_mode('train')
 

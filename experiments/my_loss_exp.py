@@ -30,7 +30,6 @@ MODELS = {
     "torchgpipe_resnet101": torchgpipe_resnet101
 }
 
-# TODO replace classifier to 196 classes
 # setups
 
 
@@ -42,8 +41,7 @@ def single_gpu(model_class: nn.Module, devices, *model_args, **model_kwargs):
 
 
 def pipeLine(model_class: nn.Module, devices, pipe_sample, model_args, model_kwargs, pipeline_args, pipeline_kwargs):
-    net = model_class(*model_args, **model_kwargs,
-                      num_classes=196).to(devices[0])
+    net = model_class(*model_args, **model_kwargs).to(devices[0])
     net(pipe_sample)
     torch.cuda.synchronize()
 
@@ -53,7 +51,7 @@ def pipeLine(model_class: nn.Module, devices, pipe_sample, model_args, model_kwa
 
 
 def dataParallel(model_class: nn.Module, devices, *model_args, **model_kwargs):
-    return nn.DataParallel(model_class(*model_args, **model_kwargs, num_classes=196), devices).to(devices[0]), devices
+    return nn.DataParallel(model_class(*model_args, **model_kwargs), devices).to(devices[0]), devices
 
 
 SETUPS = {
@@ -104,7 +102,7 @@ def loss_exp(config):
     model_class = config['model']
     model_args = config['model_args']
     model_kwargs = config['model_kwargs']
-    model_kwargs['num_classes'] = 196
+    model_kwargs['num_classes'] = 2
     batch_size = config['batch_size']
     pipeLine_kwargs = config['pipeLine_kwargs']
     pipeLine_args = config['pipeLine_args']
@@ -125,6 +123,7 @@ def loss_exp(config):
         model, used_devices = setup(
             model_class, devices, *model_args, **model_kwargs)
 
+    used_devices = list(used_devices)
     in_device = used_devices[0]
     out_device = used_devices[-1]
     batch_size = batch_shape[0]
@@ -170,7 +169,7 @@ def loss_exp(config):
         tock = time.time()
 
         # calculate exact statistics after epoch is finished
-        test_accuracy, test_loss = test(model, test_loader, used_devices[0])
+        test_loss, test_accuracy = test(model, test_loader, used_devices[0])
         losses.append(test_loss)
         accuracies.append(test_accuracy)
 
