@@ -40,13 +40,14 @@ def single_gpu(model_class: nn.Module, devices, *model_args, **model_kwargs):
     return model, used_devices
 
 
-def pipeLine(model_class: nn.Module, devices, pipe_sample, model_args, model_kwargs, pipeline_args, pipeline_kwargs):
+def pipeLine(model_class: nn.Module, devices, microbatch_size, pipe_sample, model_args, model_kwargs, pipeline_args,
+             pipeline_kwargs):
     net = model_class(*model_args, **model_kwargs).to(devices[0])
     net(pipe_sample)
     torch.cuda.synchronize()
 
-    piped = pipe_model(net, pipe_sample.shape[0], pipe_sample, *pipeline_args,
-                       devices=devices, **pipeline_kwargs)
+    piped = pipe_model(net, microbatch_size, pipe_sample, *pipeline_args,
+                       devices=devices, **pipeline_kwargs, return_graph=True)
     return piped, piped.module_devices
 
 
@@ -117,7 +118,7 @@ def loss_exp(config):
         assert len(devices) > 1, "automatic partitioning does not work for 1 gpu"
         pipe_sample = torch.randn(
             (profile_sample_size,) + batch_shape[1:]).to(devices[0])
-        model, used_devices = pipeLine(model_class, devices, pipe_sample, model_args,
+        model, used_devices = pipeLine(model_class, devices, microbatch_size, pipe_sample, model_args,
                                        model_kwargs, pipeLine_args, pipeLine_kwargs)
     else:
         model, used_devices = setup(
@@ -141,6 +142,7 @@ def loss_exp(config):
     def run_epoch(epoch):
         torch.cuda.synchronize(in_device)
         tick = time.time()
+        model.train()
 
         data_trained = 0
         steps = len(train_loader)
@@ -226,6 +228,7 @@ def loss_exp(config):
 def test(model, test_loader, input_device):
     criterion = F.cross_entropy
 
+    model.train(mode=False)
     losses, accuracies = [], []
 
     with torch.no_grad():
