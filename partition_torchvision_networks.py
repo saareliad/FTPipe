@@ -11,7 +11,7 @@ from pytorch_Gpipe.utils import model_scopes
 import datetime
 
 
-def partition_torchvision(networks=None, nparts=4, depth=100, nruns=4,
+def partition_torchvision(networks=None, nparts=4, depth=100, nruns=4, blocks=None,
                           save_graph=False, show_scope_diff=False,
                           dump_graph=False, **model_kwargs):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -32,7 +32,7 @@ def partition_torchvision(networks=None, nparts=4, depth=100, nruns=4,
         for net in networks:
             model = net(**model_kwargs).to(device)
             print("model built")
-            basic_blocks = None
+            basic_blocks = blocks
             for p in nparts:
                 for d in depth:
                     print(f"current net is {net.__name__}")
@@ -48,6 +48,9 @@ def partition_torchvision(networks=None, nparts=4, depth=100, nruns=4,
                         graph = partition_with_profiler(
                             model, torch.zeros(16, 3, 32, 32, device=device), nparts=p, max_depth=d,
                             basic_blocks=basic_blocks)
+                    elif net.__name__.find("moeba") != -1:
+                        graph = partition_with_profiler(
+                            model, torch.zeros(4, 3, 224, 224, device=device), nparts=p, max_depth=d, basic_blocks=basic_blocks)
                     else:
                         graph = partition_with_profiler(
                             model, torch.zeros(16, 3, 224, 224, device=device), nparts=p, max_depth=d, basic_blocks=basic_blocks)
@@ -124,6 +127,11 @@ def distribute_torchvision(networks=None, nparts=4, depth=100, nruns=4,
                             model, torch.zeros(16, 3, 32, 32, device=device),
                             optimize_pipeline_wrappers=optimize_pipeline_wrappers, devices=devices, max_depth=d,
                             basic_blocks=basic_blocks)
+                    elif net.__name__.find("moeba") != -1:
+                        model, _, _, graph = distribute_using_profiler(
+                            model, torch.zeros(8, 3, 224, 224, device=device),
+                            optimize_pipeline_wrappers=optimize_pipeline_wrappers, devices=devices, max_depth=d,
+                            basic_blocks=basic_blocks)
                     else:
                         model, _, _, graph = distribute_using_profiler(
                             model, torch.zeros(16, 3, 224, 224, device=device),
@@ -153,5 +161,9 @@ def distribute_torchvision(networks=None, nparts=4, depth=100, nruns=4,
 
 
 if __name__ == "__main__":
-    distribute_torchvision(networks=[my_amoeaba, ref_amoeba], nparts=8,
-                           fake_gpus=True, save_graph=True, nruns=2, num_layers=5)
+    # distribute_torchvision(networks=[my_amoeaba, ref_amoeba], nparts=8,
+    #                        fake_gpus=True, save_graph=True, nruns=2, num_layers=5)
+
+    from sample_models.Inception import BasicConv2d, InceptionA, InceptionB, InceptionC, InceptionD, InceptionE
+    partition_torchvision(networks=inception_v3, save_graph=True, depth=[0, 1, 100], blocks=[
+                          BasicConv2d, InceptionA, InceptionB, InceptionC, InceptionD, InceptionE], nruns=2)
