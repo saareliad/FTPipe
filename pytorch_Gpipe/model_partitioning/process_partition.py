@@ -1,59 +1,82 @@
+from collections import Counter, deque
+from typing import Dict, List
+
 from ..model_profiling import Graph, NodeTypes
-from typing import List
+
+__all__ = ["post_process_partition"]
 
 
 def post_process_partition(graph: Graph, part: List[int]):
-    set_partition(graph, part)
+    '''
+    process the partition and optimize it
+    called as part of partition_graph method
 
-    ensure_graph_validity(graph)
+    Parameters:
+    ----------
+    graph:
+        the Graph object that was partitioned
+    part:
+        a list of the nodes partition indices
+    '''
+    cannonize_partition_indices(graph, part)
 
-    nparts = len({n.part for n in graph.nodes})
-    # make sure the inputs to an OP type node are all in the same part
-    OP_inputs_partition_correction(graph, nparts)
+    make_partitions_change_only_at_end_of_scope(graph)
+
     # make sure every scc in the graph is not splitted between different parts
     scc_partition_correction(graph)
 
+    ensure_dag(graph, part)
 
-# TODO still does wierd things
-def OP_inputs_partition_correction(graph: Graph, nparts):
-    groups = []
-    for v in graph.nodes:
-        if v.type == NodeTypes.OP:
-            group = {u for u in v.in_nodes}
-            group.add(v)
-
-            if len({u.part for u in group}) > 1:
-                groups.append(group)
-
-    nodes_left = [v for v in graph.nodes]
-    # check and update for every group
-    for group in groups:
-        min_comunication = float("inf")
-        best_part = -1
-        for part in range(nparts):
-            # try a part
-            for u in group:
-                graph.nodes[u.idx].part = part
-            # compute how good it is
-            comunication = compute_comunication(graph)
-            # update part if he is better
-            if comunication < min_comunication:
-                min_comunication = comunication
-                best_part = part
-        # update part to the best part and remove it from nodes to check
-        for u in group:
-            if u in nodes_left:
-                graph.nodes[u.idx].part = best_part
-                nodes_left.remove(u)
+    fix_arithmetic_inputs(graph)
 
 
-def compute_comunication(graph: Graph):
-    count = 0
-    for v in graph.nodes:
-        for u in v.in_nodes:
-            if u.part != v.part:
-                count += 1
-    return count
+def fix_arithmetic_inputs(graph: Graph):
+    while True:
+        changed = False
+        for node in graph.nodes:
+            if node.type is NodeTypes.OP:
+                for n in node.in_nodes:
+                    if n.part != node.part:
+                        n.part = node.part
+                        changed = True
+        if not changed:
+            break
+
+
+def ensure_dag(graph: Graph, node_parts: List[int]):
+    flag = True
+    while flag:
+        flag, prob_edge = not_dag(graph, node_parts)
+
+        if flag:
+            fix_problem_node(graph, prob_edge)
+
+
+def not_dag(graph: Graph, node_parts):
+    part_edges = []
+    num_parts = len(set(node_parts))
+    for node in graph.nodes:
+        for out_node in node.out_nodes:
+            if node.part != out_node.part:
+                part_edge = (node.part, out_node.part)
+                if part_edge not in part_edges:
+                    part_edges.append(part_edge)
+
+    for num_part1 in range(num_parts):
+        for num_part2 in range(num_parts):
+            if (num_part1, num_part2) in part_edges and (num_part2, num_part1) in part_edges and num_part1 < num_part2:
+                return True, (num_part1, num_part2)
+
+    return False, (-1, -1)
+
+
+def fix_problem_node(graph: Graph, prob_edge: tuple):
+    first_part, second_part = prob_edge
+    for node in graph.nodes:
+        if node.part == second_part:
+            for o_node in node.out_nodes:
+                if o_node.part == first_part:
+                    node.part = first_part
 
 
 def scc_partition_correction(graph: Graph):
@@ -88,7 +111,7 @@ def scc_partition_correction(graph: Graph):
                 graph.nodes[v].part = output_part
 
 
-def strongly_connected_components_iterative(vertices, edges):
+def strongly_connected_components_iterative(vertices: List[int], edges: Dict[int, List[int]]):
     identified = set()
     stack = []
     index = {}
@@ -125,18 +148,51 @@ def strongly_connected_components_iterative(vertices, edges):
                         yield scc
 
 
-def set_partition(graph: Graph, parts: List[int]):
-    for node, part in zip(graph.nodes, parts):
+def cannonize_partition_indices(graph: Graph, node_parts: List[int]):
+    for node, part in zip(graph.nodes, node_parts):
         node.part = part
 
+    num_parts = len(set(node_parts))
+    num_taken = 0
+    model_inputs = graph.nodes[graph.num_inputs:]
+    open_nodes = deque(model_inputs)
+    closed = set()
+    cannonical_parts = dict()
 
-def ensure_graph_validity(graph: Graph):
-    op_nodes = filter(lambda n: n.type == NodeTypes.OP, graph.nodes)
+    while num_taken < num_parts:
+        node = open_nodes.popleft()
+        if node.part not in cannonical_parts:
+            cannonical_parts[node.part] = num_taken
+            num_taken += 1
 
-    for node in op_nodes:
-        parent_scope = node.scope.rsplit('/', 1)[0]
-        for other in filter(lambda n: n.type == NodeTypes.OP, node.out_nodes):
-            other_parent_scope = other.scope.rsplit('/', 1)[0]
-            if other.part != node.part and parent_scope == other_parent_scope:
-                print("we have discovered 2 consecutive arithmetic ops that reside on different devices\n we recommend using a smaller depth or using more general basic blocks")
-                return
+        closed.add(node)
+        edges = node.out_nodes.union(node.in_nodes)
+        nodes = edges.difference(closed, set(open_nodes))
+        open_nodes.extend(nodes)
+
+    for node in graph.nodes:
+        node.part = cannonical_parts[node.part]
+
+
+def make_partitions_change_only_at_end_of_scope(graph: Graph):
+    def is_first_in_partition(node):
+        return any(other.part != node.part for other in node.in_nodes)
+
+    first_nodes_of_partition = filter(is_first_in_partition, graph.nodes)
+
+    for node in first_nodes_of_partition:
+        scope_depth = node.scope.count('/') - 1
+        # dont do it too shallow
+        if scope_depth >= 2:  # TODO think about threshold
+            parent_scope = node.scope.rsplit('/', 1)[0]
+
+            def in_scope(n):
+                return parent_scope == n.scope.rsplit('/', 1)[0]
+
+            scope_nodes = list(filter(in_scope, graph.nodes))
+            parts = [n.part for n in scope_nodes]
+            part_histogram = Counter(parts)
+            most_common, num_layers = part_histogram.most_common(1)[0]
+            if num_layers >= len(parts) // 2:
+                for other in scope_nodes:
+                    other.part = most_common

@@ -1,38 +1,46 @@
-from .control_flow_graph import Graph, NodeTypes
-from .optimize_graph import optimize_graph
-from .network_profiler import profileNetwork
-from ..utils import *
-from typing import Optional, List, Dict, Any
-import torch.nn as nn
+from typing import Any, Dict, List, Optional
+
 import torch
+import torch.nn as nn
 
-__all__ = ['visualize', 'visualize_with_profiler', 'profileNetwork']
+from ..utils import Tensors, traverse_model, traverse_params_buffs, model_scopes, _count_elements
+from .control_flow_graph import Graph, NodeTypes
+from .network_profiler import profileNetwork
+from .optimize_graph import optimize_graph
 
-
-def visualize(model: nn.Module, *sample_batch, max_depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None, weights: Optional[Dict[str, Any]] = None)->Graph:
-    graph = graph_builder(
-        model, *sample_batch, max_depth=max_depth, basic_block=basic_blocks, weights=weights)
-
-    optimize_graph(graph)
-
-    return graph
+__all__ = ['graph_builder', 'profileNetwork']
 
 
-def visualize_with_profiler(model: nn.Module, *sample_batch, max_depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None, num_iter: int = 1)->Graph:
-    layers_profile = profileNetwork(model, *sample_batch, max_depth=max_depth,
-                                    basic_block=basic_blocks, num_iter=num_iter)
+def graph_builder(model: nn.Module, *sample_batch: Tensors, max_depth: int = 1000, weights: Optional[Dict[str, Any]] = None, basic_blocks: Optional[List[nn.Module]] = None, use_profiler=False) -> Graph:
+    '''
+    returns a graph that models the control flow of the given network by tracing it's forward pass
 
-    return visualize(model, *sample_batch, max_depth=max_depth, basic_blocks=basic_blocks, weights=layers_profile)
-
-
-def graph_builder(model: nn.Module, *sample_batch, max_depth: int = 1000, weights: Optional[Dict[str, Any]] = None, basic_block: Optional[List[nn.Module]] = None)->Graph:
+    Parameters:
+    model:
+        the network we wish to model
+    sample_batch:
+        a sample input to use for tracing
+    max_depth:
+        how far down we go in the model tree determines the detail level of the graph
+    basic_blocks:
+        an optional list of modules that if encountered will not be broken down
+    weights:
+        an optional dictionary from scopes to Node weights
+    use_profiler:
+        wether to use weights given by our profiler
+        this option supersedes the wieghts option defaults to False
+    '''
     weights = weights if weights != None else {}
+
+    if use_profiler:
+        weights = profileNetwork(model, *sample_batch, max_depth=max_depth,
+                                 basic_blocks=basic_blocks)
 
     buffer_param_names = map(lambda t: t[1], traverse_params_buffs(model))
     buffer_param_names = list(buffer_param_names)
 
-    layerNames = map(lambda t: t[1], traverse_model(
-        model, max_depth, basic_block))
+    layerNames = model_scopes(model, depth=max_depth,
+                              basic_blocks=basic_blocks)
     layerNames = list(layerNames)
 
     # trace the model and build a graph
@@ -41,5 +49,10 @@ def graph_builder(model: nn.Module, *sample_batch, max_depth: int = 1000, weight
             model, sample_batch)
         trace_graph = trace_graph.graph()
 
-    num_inputs = len(sample_batch)
-    return Graph(layerNames, num_inputs, buffer_param_names, trace_graph, weights)
+    num_inputs = _count_elements(*sample_batch)
+
+    graph = Graph(layerNames, num_inputs, buffer_param_names,
+                  trace_graph, weights, basic_blocks, max_depth)
+    optimize_graph(graph)
+
+    return graph

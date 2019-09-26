@@ -1,4 +1,9 @@
-# TODO maybe replace uses of torch.zeros with torch.empty
 
+from .cycle_counter import CycleCounter
+from .delayedNorm import DelayedBatchNorm
 from .pipeline_parallel import PipelineParallel
-from .sync_wrapper import ActivationSavingLayer, SyncWrapper, LayerWrapper, CycleCounter
+from .sync_wrapper import ActivationSavingLayer, LayerWrapper, SyncWrapper
+
+__all__ = ['PipelineParallel', 'ActivationSavingLayer',
+           'LayerWrapper', 'SyncWrapper', 'DelayedBatchNorm',
+           'CycleCounter', 'ForwardMode']

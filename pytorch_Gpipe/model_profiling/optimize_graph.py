@@ -1,17 +1,24 @@
-from .control_flow_graph import Graph, Node, NodeTypes
 from typing import List
+
+from .control_flow_graph import Graph, Node, NodeTypes
 
 
 def optimize_graph(graph: Graph):
+    '''
+    this module takes the raw Graph and removes/merges nodes in order to get the requested graph.
+    this method is called as part of graph_builder method
+    '''
     nodes = graph.nodes
     nodes = _combine_OP_nodes_under_the_same_scope(nodes)
     graph.nodes = nodes
     _combine_params_and_buffers_into_OP_nodes(graph)
     _merge_op_chains(graph)
-    graph._normalize_indices()
+
+    for idx, node in enumerate(graph.nodes):
+        node.idx = idx
 
 
-def _combine_OP_nodes_under_the_same_scope(nodes: List[Node]):
+def _combine_OP_nodes_under_the_same_scope(nodes: List[Node]) -> List[Node]:
     # optimization that reduces number of nodes in the graph
     # combine nodes that have a commom scope we do this because\n
     # if nodes have the same scopeName than they were profiled together

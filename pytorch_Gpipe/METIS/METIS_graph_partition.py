@@ -1,34 +1,31 @@
-from collections import namedtuple
-from functools import reduce
-import operator as op
 import ctypes
-from enum import IntEnum
-from ctypes import POINTER as ptr, byref
+import operator as op
 import os
-import typing
-from typing import List, Tuple, Dict, Union, Callable
 import platform
-import warnings
-# create a dynamic lib that exposes what we need compile it like this with metis.h and libmetis.lib in the same folder
-# g++ -fPIC - shared - L. -o libmetis.so test.c - llibmetis
-
-# then load it using ctypes and use it
+from collections import namedtuple
+from ctypes import POINTER as ptr
+from ctypes import byref
+from enum import IntEnum
+from functools import reduce
+from typing import List, Tuple
 
 # metis lib loading
 if 'Win' in platform.system():
-    metis_path = os.path.dirname(os.path.realpath(__file__))+"/Wlibmetis.so"
+    metis_path = os.path.dirname(os.path.realpath(__file__))+"/libmetis.dll"
 elif 'Lin' in platform.system():
-    metis_path = os.path.dirname(os.path.realpath(__file__))+"/Llibmetis.so"
-else:
-    warnings.warn("unsuported os for METIS supported for windows and linux")
+    metis_path = os.path.dirname(os.path.realpath(__file__))+"/libmetis.so"
+
+if not os.path.exists(metis_path):
+    raise FileNotFoundError(
+        "the metis library could not be found please follow the build notes for further instructions")
 
 metisLib = ctypes.CDLL(metis_path)
 
 # -------------------------------------------------------------------------
 # type declarations and constants
 # -------------------------------------------------------------------------
-idx_t = ctypes.c_int32
-real_t = ctypes.c_float
+idx_t = ctypes.c_int64
+real_t = ctypes.c_double
 METIS_NOPTIONS = 40
 METIS_Graph = namedtuple('METIS_Graph',
                          'nvtxs ncon xadj adjncy vwgt vsize adjwgt')
@@ -206,7 +203,7 @@ _SetDefaultOptions.argtypes = METIS_SetDefaultOptions_args
 # -------------------------------------------------------------------------
 # help functions
 # -------------------------------------------------------------------------
-def _adjlist_to_metis(adjlist, nodew=None, nodesz=None):
+def _adjlist_to_metis(adjlist: List[List[int]], nodew=None, nodesz=None):
     """
     :param adjlist: A list of tuples. Each list element represents a node or vertex
       in the graph. Each item in the tuples represents an edge. These items may be
@@ -292,11 +289,11 @@ def _set_options(**options):
 # -------------------------------------------------------------------------
 # python API
 # -------------------------------------------------------------------------
-def METIS_partition(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis', **opts)->Tuple[int, List[int]]:
+def METIS_partition(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis', **opts) -> Tuple[List[int], int]:
     """
     Perform graph partitioning using k-way or recursive methods.
 
-    Returns a 2-tuple `(objval, parts)`, where `parts` is a list of
+    Returns a 2-tuple `(parts,objval)`, where `parts` is a list of
     partition indices corresponding and `objval` is the value of
     the objective function that was minimized (either the edge cuts
     or the total volume).
@@ -327,9 +324,12 @@ def METIS_partition(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis
     Any additional METIS options may be specified as keyword parameters.
     See the METIS manual for specific meaning of each option.
     """
+    if(nparts <= 1):
+        raise ValueError("nparts must be greater than 1")
+
     nodesz = opts.pop('nodesz', None)
     nodew = opts.pop('nodew', None)
-    graph = _adjlist_to_metis(adjlist, nodew, nodesz)
+    graph = _adjlist_to_metis(adjlist, nodew=nodew, nodesz=nodesz)
 
     options = _set_options(**opts)
     if tpwgts and not isinstance(tpwgts, ctypes.Array):
@@ -362,4 +362,4 @@ def METIS_partition(adjlist, nparts=2, tpwgts=None, ubvec=None, algorithm='metis
         raise NotImplementedError("bad algorithm")
     _error_handler(res)
 
-    return objval.value, list(partition)
+    return list(partition), objval.value

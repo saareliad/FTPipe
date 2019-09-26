@@ -1,48 +1,80 @@
-import torch.nn as nn
-from ..model_profiling import Graph, NodeTypes
-from ..pipeline import ActivationSavingLayer, LayerWrapper, SyncWrapper, CycleCounter
-from ..utils import traverse_model, traverse_params_buffs, find_output_shapes_of_scopes
 from collections import deque
-from typing import List
-__all__ = ["wrap_and_move"]
+
+import torch.nn as nn
+
+from pytorch_Gpipe.pipeline import CycleCounter
+
+from ..model_profiling import Graph, NodeTypes
+from ..pipeline.sync_wrapper import ActivationSavingLayer, LayerWrapper, SyncWrapper
+from ..utils import Devices, Tensors, find_output_shapes_of_scopes, traverse_model, traverse_params_buffs
+
+__all__ = ["distribute_model"]
 
 
-def wrap_and_move(model: nn.Module, basic_block: List[nn.Module], device_lst: list, graph: Graph, *inputs):
+def distribute_model(model: nn.Module, device_lst: Devices, graph: Graph, *sample_batch: Tensors, optimize_pipeline_wrappers: bool = True):
+    '''
+    distribute and wraph the model as part of model pipelining\n
+    !!!! this method changes the given model do not use it directly
+
+    Parameters:
+    -----------
+    model:
+        the model to distribute
+    device_lst:
+        the devices which will hold the model parts
+    graph:
+        the model's graph that dictates how to distriubte the model
+    sample_batch:
+        a sample batch used in order to find specific input/output shapes nd their respective ordering
+    optimize_pipeline_wrappers:
+        whether to attempt to minimize the number of wrappers inserted by us defualt=True
+        you will possibly want to set this to false if your layers have tuple input/output
+
+    '''
+    num_inputs = len(sample_batch)
     nparts = len({n.part for n in graph.nodes})
     used_devices = device_lst[:nparts]
     model_inputs = filter(lambda n: n.type == NodeTypes.IN, graph.nodes)
     partition_to_device, part_to_gpu_num = _partition_to_device(
         used_devices, model_inputs)
 
-    top_scopes_to_device, nodes_to_top_scopes = optimize_wrappers(
-        graph, partition_to_device)
+    if optimize_pipeline_wrappers:
+        top_scopes_to_device, nodes_to_top_scopes = optimize_wrappers(
+            graph, partition_to_device)
+    else:
+        top_scopes_to_device = {
+            node.scope: partition_to_device[node.part] for node in graph.nodes}
+        nodes_to_top_scopes = {node: node.scope for node in graph.nodes}
 
     top_scopes_to_gpu_num = {scope: part_to_gpu_num[node.part]
                              for node, scope in nodes_to_top_scopes.items()}
 
-    part_inputs_nodes = _partition_input_nodes(graph.nodes)
-    part_inputs = set(map(lambda n: nodes_to_top_scopes[n], part_inputs_nodes))
+    part_input_nodes = _partition_input_nodes(graph)
+    part_input_scopes = set(
+        map(lambda n: nodes_to_top_scopes[n], part_input_nodes))
 
-    effective_depth = max(map(lambda k: k.count(
-        '/')-1, top_scopes_to_device.keys()))
+    effective_depth = max(map(lambda k: k.count('/')-1,
+                              top_scopes_to_device.keys()))
 
     top_scopes = list(top_scopes_to_device.keys())
 
     counter = CycleCounter(len(used_devices))
 
     relevant_sub_modules = modules_of_top_scopes(
-        top_scopes, model, effective_depth, basic_block)
+        top_scopes, model, effective_depth, graph.basic_blocks)
 
-    scope_to_shape = find_output_shapes_of_scopes(model, top_scopes, *inputs)
+    scope_to_shape = find_output_shapes_of_scopes(model, top_scopes,
+                                                  *sample_batch)
 
     modified_model = wrap_model(relevant_sub_modules, top_scopes_to_device,
-                                used_devices[0], part_inputs, counter, model, scope_to_shape, top_scopes_to_gpu_num)
+                                used_devices[0], part_input_scopes, counter, model, scope_to_shape, top_scopes_to_gpu_num, num_inputs)
 
     wrappers = extract_wrappers(modified_model)
 
     return modified_model, wrappers, counter
 
 
+# return a list of all the wrappers added to to the model
 def extract_wrappers(modified_model):
     def isWrapper(module):
         return isinstance(module, (ActivationSavingLayer, SyncWrapper))
@@ -52,40 +84,45 @@ def extract_wrappers(modified_model):
     return wrappers
 
 
-def modules_of_top_scopes(top_scopes, model, effective_depth, basic_block):
+# return the layers that correspond to the given scopes
+def modules_of_top_scopes(top_scopes, model, effective_depth, basic_blocks):
     def is_top_scope(a): return (a[1] in top_scopes)
     relevant_sub_modules = filter(is_top_scope, traverse_model(
-        model, effective_depth, basic_block, full=True))
+        model, effective_depth, basic_blocks, full=True))
 
     return list(relevant_sub_modules)
 
 
-def wrap_model(relevant_sub_modules, top_scopes_to_device, input_device, part_inputs, counter, model, scope_to_shape, top_scopes_to_gpu_num):
+# wraps the model and move parameters and buffers to their designated devices
+def wrap_model(relevant_sub_modules, top_scopes_to_device, input_device, part_input_scopes, counter, model, scope_to_shape, top_scopes_to_gpu_num, num_inputs):
     wrap_layers(relevant_sub_modules, top_scopes_to_device,
-                part_inputs, counter, scope_to_shape, top_scopes_to_gpu_num)
+                part_input_scopes, counter, scope_to_shape, top_scopes_to_gpu_num)
 
     _move_buffers_params_to_devices(model, top_scopes_to_device)
 
     modified_model = nn.Sequential(ActivationSavingLayer(
-        input_device, counter=counter), model)
+        input_device, num_inputs=num_inputs, counter=counter), model)
 
     return modified_model
 
 
-def wrap_layers(layers, top_scopes_to_device, part_inputs, counter, scope_to_shape, top_scopes_to_gpu_num):
+# wrap the layers of the model with the sync and layer wrappers
+# sync wrappers for the input layers of partitions
+# layer wrappers for all other layers
+def wrap_layers(layers, top_scopes_to_device, part_input_scopes, counter, scope_to_shape, top_scopes_to_gpu_num):
     for sub_layer, layer_scope, parent in layers:
         name = layer_scope[layer_scope.rfind('[')+1:-1]
         layer_device = top_scopes_to_device[layer_scope]
         gpu_num = top_scopes_to_gpu_num[layer_scope]
-        output_shape = scope_to_shape[layer_scope]
-        if layer_scope in part_inputs and gpu_num != 0:
+        input_shape, output_shape = scope_to_shape[layer_scope]
+        if layer_scope in part_input_scopes and gpu_num != 0:
             # syncWrap all first nodes of a partition except the first one
             wrapper = SyncWrapper(sub_layer, layer_device,
                                   gpu_num, output_shape, counter=counter)
         else:
             wrapper = LayerWrapper(
-                sub_layer, layer_device, gpu_num, output_shape, counter)
-        parent._modules[name] = wrapper.to(layer_device)
+                sub_layer, gpu_num, layer_device, output_shape, counter=counter)
+        parent.add_module(name, wrapper.to(layer_device))
 
 
 # an optimization:
@@ -144,7 +181,7 @@ def _group_by_scope(nodes):
 
 # map a partition index to actual device using bfs from inputs
 def _partition_to_device(device_lst, model_inputs):
-    part_to_device = dict()
+    part_to_device = {i: d for i, d in enumerate(device_lst)}
     num_taken = 0
     open_nodes = deque([(n, 0)for n in model_inputs])
     closed = set()
@@ -154,7 +191,6 @@ def _partition_to_device(device_lst, model_inputs):
     while num_taken < len(device_lst):
         node, d = open_nodes.popleft()
         if node.part not in seen_parts:
-            part_to_device[node.part] = device_lst[num_taken]
             part_to_gpu_num[node.part] = d
             num_taken += 1
             seen_parts.add(node.part)
@@ -162,7 +198,7 @@ def _partition_to_device(device_lst, model_inputs):
 
         closed.add(node)
         edges = node.out_nodes.union(node.in_nodes)
-        nodes = edges.difference(closed, set(open_nodes))
+        nodes = edges.difference(closed, set(map(lambda t: t[0], open_nodes)))
         open_nodes.extend([(n, d) for n in nodes])
 
     return part_to_device, part_to_gpu_num
@@ -175,8 +211,13 @@ def _move_buffers_params_to_devices(module: nn.Module, buffer_and_params_scopes_
 
 
 # return list of all nodes who are inputs of a partition
-def _partition_input_nodes(nodes):
+def _partition_input_nodes(graph):
     def is_input_node(node):
-        return not node.in_nodes or any(in_node.part != node.part for in_node in node.in_nodes)
+        model_input_layer = not node.in_nodes
+        partition_input = any(in_node.part != node.part
+                              for in_node in node.in_nodes)
+        has_op_input_which_is_a_part_input = any(in_node.type == NodeTypes.OP and is_input_node(in_node)
+                                                 for in_node in node.in_nodes)
+        return model_input_layer or partition_input or has_op_input_which_is_a_part_input
 
-    return list(filter(is_input_node, nodes))
+    return list(filter(is_input_node, graph.nodes))

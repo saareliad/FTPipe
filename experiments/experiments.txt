@@ -12,5 +12,5 @@ effects of partition on performence:
 
 reproduce paper results:
     1. resnet 101
-    2. AmoebaNet-D
+    2. AmoebaNet-D https://github.com/tensorflow/tpu/tree/e5c126d66aa3d25e0cb066bdf7fc46f98fe59901/models/experimental/amoeba_net
 

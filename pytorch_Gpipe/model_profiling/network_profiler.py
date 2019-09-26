@@ -1,21 +1,22 @@
+import time
+from collections import namedtuple
+from typing import Dict, List, Optional
+
 import torch
 import torch.nn as nn
-import timeit
-from torch.autograd import Variable
-from collections import namedtuple
-from ..utils import traverse_model
-from typing import List, Optional, Dict
 
-__all__ = ['profileNetwork']
+from ..utils import Tensors, _detach_inputs, _get_size, get_device, traverse_model
 
-Profile = namedtuple(
-    'Profile', 'forward_time backward_time param_size buffer_size input_size output_size')
+__all__ = ['profileNetwork', 'Profile']
+
+Profile = namedtuple('Profile',
+                     'forward_time backward_time cuda_memory_forward cuda_memory_backward  layer_size')
 
 
-def profileNetwork(net: nn.Module, *sample_batch, basic_block: Optional[List[nn.Module]] = None, max_depth=100, num_iter=1)->Dict[str, Profile]:
+def profileNetwork(net: nn.Module, *sample_batch: Tensors, basic_blocks: Optional[List[nn.Module]] = None, max_depth=100) -> Dict[str, Profile]:
     '''
     profiles a network's computation time(forward/backward) and memory consumption
-    done via wrapping all layers of the network with a special Wrapper module
+    returns a dictionary from layer_scope to Profile
 
     Parameters
     ----------
@@ -26,113 +27,94 @@ def profileNetwork(net: nn.Module, *sample_batch, basic_block: Optional[List[nn.
         a sample batch that will be used to measure executation time of network
         can be single/multiple inputs
 
+    basic_blocks:
+        a tuple of nn.Module classes that the profiler will regard as a cohesive unit
+        for eg. if basic_blocks = nn.Sequential then the profiler will break it down to its components
+
     max_depth:
         determins how far the profiler will go in the model tree
 
-    basic_block:
-        a tuple of nn.Module classes that the profiler will regard as a cohesive unit
-        for eg. if basic_block = nn.Sequential then the profiler will break it down to its components
 
-    num_iter:
-        number of runs the profiler will perform in order to get time measurments
 
     '''
     # wrap all individula layers for profiling
-    layers_dict = _wrap_profiled_layers(net, max_depth, basic_block)
+    layers_dict = _wrap_profiled_layers(net, max_depth, basic_blocks)
 
-    # gather all individual layer sizes
-    param_sizes = [layer.param_size for layer in layers_dict.values()]
-    buffer_sizes = [layer.buffer_size for layer in layers_dict.values()]
-
-    # perform symbolic forward backward run
-    for _ in range(num_iter):
-        _perform_forward_backward_pass(net, *sample_batch)
+    # perform 2 symbolic forward backward run first one is warmup as we have seen the first time measurements are higher
+    _perform_forward_backward_pass(net, *sample_batch)
+    _perform_forward_backward_pass(net, *sample_batch)
 
     # gather forward and backward execution times
-    backward_times = [layer.backward_time / num_iter
+    backward_times = [layer.backward_time
                       for layer in layers_dict.values()]
-    forward_times = [layer.forward_time/num_iter
+    forward_times = [layer.forward_time
                      for layer in layers_dict.values()]
 
     # gather input and output sizes
     layer_input_sizes = [layer.input_size for layer in layers_dict.values()]
     layer_output_sizes = [layer.output_size for layer in layers_dict.values()]
 
+    # gather all individual layer sizes
+    param_sizes = [layer.parameters_size for layer in layers_dict.values()]
+    buffer_sizes = [layer.buffers_size for layer in layers_dict.values()]
+
+    # gather cuda memory consumption
+    cuda_memory = [(layer.forward_cuda_mem, layer.backward_cuda_mem)
+                   for layer in layers_dict.values()]
+
     # prepare profiling results
-    layers_profile = {name: Profile(forward, backward, param_size, buffer_size, in_size, out_size) for name, forward, backward, param_size, buffer_size, in_size, out_size in zip(
-        layers_dict.keys(), forward_times, backward_times, param_sizes, buffer_sizes, layer_input_sizes, layer_output_sizes)}
+    layers_profile = {name: Profile(forward, backward, *cuda_mem, param_size+buffer_size+in_size+out_size) for name, forward, backward, param_size, buffer_size, in_size, out_size, cuda_mem in zip(
+        layers_dict.keys(), forward_times, backward_times, param_sizes, buffer_sizes, layer_input_sizes, layer_output_sizes, cuda_memory)}
 
     _unwrap_layers(net)
-
-    # fix a weird behaviour where the first layer has overly large measured exec time
-    max_node = list(layers_profile.items())[0]
-    for name, node in layers_profile.items():
-        if node.forward_time > max_node[1].forward_time:
-            max_node = (name, node)
-
-    max_name, p = max_node
-
-    exec_times = map(lambda profile: (profile.forward_time,
-                                      profile.backward_time), layers_profile.values())
-    f_time, b_time = map(sum, zip(*exec_times))
-    f_time /= len(layers_profile)
-    b_time /= len(layers_profile)
-    imputed_profile = Profile(f_time, b_time, p.param_size,
-                              p.buffer_size, p.input_size, p.output_size)
-    layers_profile[max_name] = imputed_profile
 
     return layers_profile
 
 
-def _perform_forward_backward_pass(net, *inputs):
-    # move all inputs and outputs to specified device
-    # warmup
-    device = inputs[0].device
-    a = torch.randn(1000, 2000).to(device)
-    b = torch.randn(2000, 1000).to(device)
-    a.mm(b)
-    if device == "cuda":
-        torch.cuda.synchronize()
-
-    out = net(*inputs)
-
-    if device == "cuda":
-        torch.cuda.synchronize()
-
+def _perform_forward_backward_pass(net, *sample_batch: Tensors):
+    device = get_device(sample_batch)
+    if device.type == "cuda":
+        torch.cuda.synchronize(device=device)
+        out = net(*sample_batch)
+        torch.cuda.synchronize(device=device)
+    else:
+        out = net(*sample_batch)
+    net.zero_grad()
     return out
 
 
-def _wrap_profiled_layers(module: nn.Module, depth, basic_block: List[nn.Module]):
-    '''
-    wraps all layers specified by depth and basic blocks of module by changing the binding in the network module dictionary
-    '''
+def _wrap_profiled_layers(module: nn.Module, depth, basic_blocks: List[nn.Module]):
     layers_dict = {}
 
-    for sub_layer, scope, parent in traverse_model(module, depth, basic_block):
+    for sub_layer, scope, parent in traverse_model(module, depth, basic_blocks):
         name = scope[scope.rfind('[')+1:-1]
-        parent._modules[name] = Wrapper(sub_layer)
-        layers_dict[scope] = parent._modules[name]
+        wrapper = Wrapper(sub_layer)
+        parent.add_module(name, wrapper)
+        layers_dict[scope] = wrapper
 
     return layers_dict
 
 
 def _unwrap_layers(module: nn.Module):
-    '''
-    return all binding to what they were originally, removes all Wrappers from self.network
-    '''
-    for name, sub_module in module._modules.items():
-        # assume no cyclic routes in the network
-        # a module with no children is a layer
+    for name, sub_module in module.named_children():
         if isinstance(sub_module, Wrapper):
-            module._modules[name] = sub_module.layer
+            module.add_module(name, sub_module.layer)
         else:
             _unwrap_layers(sub_module)
 
 
 class Wrapper(nn.Module):
     '''
-    a module whose purpose is to profile a given layer,
-    measuring forward/backward computation time, and estimated memory consumption
+    a module whose purpose is to profile a given layer\n
+    when the wrapper performs forward propagation it records the following metrics:\n
+        forward_time: the execution time of a forward pass of the underlying layer in milliseconds\n
+        backward_time: the execution time of a backward pass of the underlying layer in milliseconds\n
+        input_size: the input size in MB
+        output_size: the layer output size in MB
+        parameters_size: the size of parameters of the layer in MB
+        buffers_size: the size of buffers of the layer in MB
+        forward_cuda_mem: the peak CUDA memory usage during the forward pass in MB
+        backward_cuda_mem: the peak CUDA memory usage during the backward pass in MB
 
     Parameters
     ----------
@@ -148,35 +130,33 @@ class Wrapper(nn.Module):
         self.backward_time = 0
         self.input_size = 0
         self.output_size = 0
-        self.param_size, self.buffer_size = self._layer_size()
+        self.parameters_size, self.buffers_size = self._layer_size()
+        self.forward_cuda_mem = 0
+        self.backward_cuda_mem = 0
 
     def _layer_size(self):
         '''
         return the size of the layer considering parameters and buffers
         '''
-        param_size = buffer_size = 0
+        parameters_size = buffers_size = 0
         for param in self.layer.parameters():
-            param_size += param.nelement() * param.element_size()
+            parameters_size += param.nelement() * param.element_size()
         for buffer in self.layer.buffers():
-            buffer_size += buffer.nelement() * buffer.element_size()
+            buffers_size += buffer.nelement() * buffer.element_size()
 
-        return param_size, buffer_size
+        return parameters_size, buffers_size
 
-    def forward(self, *inputs):
+    def forward(self, *inputs: Tensors):
         '''
-        measures the time in milliseconds it took for the module to complete forward computation
+        perform forward and backward pass of the underlying layer and measure metrics
         '''
         # detach inputs from previous history enabling us to measure execution time
         # only for this layer
+        device = get_device(inputs)
+        detached_inputs = _detach_inputs(inputs)
 
-        device = inputs[0].device
-        detached_inputs = map(
-            lambda t: Variable(t.data, requires_grad=True).to(device).clone(), inputs)
-
-        forward_time, outputs = self._time_op(
+        self.forward_time, outputs, self.forward_cuda_mem = self._time_op(
             self.layer, *detached_inputs)
-
-        self.forward_time += forward_time
 
         # reduce outputs to calculate dummy loss
         loss = torch.zeros(1, requires_grad=True, device=device)
@@ -184,36 +164,69 @@ class Wrapper(nn.Module):
             loss = loss + out.norm()
 
         # measure backward execution time
-        backward_time, _ = self._time_op(torch.autograd.backward, loss)
-        self.backward_time += backward_time
+        self.backward_time, _,  self.backward_cuda_mem = self._time_op(
+            torch.autograd.backward, loss)
 
         # input and output size
-        self.input_size = 0
-        self.output_size = 0
-        for t in inputs:
-            self.input_size += t.numel()
-        for o in outputs:
-            self.output_size += o.numel()
+        self.input_size = _get_size(inputs)
+        self.output_size = _get_size(outputs)
+
+        #size in MegaBytes
+        self.backward_cuda_mem /= 1e6
+        self.forward_cuda_mem /= 1e6
+        self.input_size /= 1e6
+        self.output_size /= 1e6
+        self.parameters_size /= 1e6
+        self.buffers_size /= 1e6
 
         return outputs
 
-    def _time_op(self, func, *inputs):
+    def _time_op(self, func, *inputs: Tensors):
         exec_time = 0
-        if(inputs[0].device == 'cuda'):
-            # milliseconds
-            torch.cuda.synchronize()
+        cuda_mem = 0
+        device = get_device(inputs)
+        if(device.type == 'cuda'):
+            torch.cuda.reset_max_memory_allocated(device=device)
+            base_mem = torch.cuda.max_memory_allocated(device=device)
+
+            # measure execution time
+            torch.cuda.synchronize(device=device)
             start = torch.cuda.Event(enable_timing=True)
             end = torch.cuda.Event(enable_timing=True)
             start.record()
             out = func(*inputs)
             end.record()
-            torch.cuda.synchronize()
+            torch.cuda.synchronize(device=device)
             exec_time = (start.elapsed_time(end))
+
+            # record memory usage
+            peak_usage = torch.cuda.max_memory_allocated(device=device)
+            cuda_mem = peak_usage-base_mem
         else:
-            # convert to milliseconds
-            start = timeit.time.time()
+            # convert seconds to milliseconds
+            start = time.time()
             out = func(*inputs)
-            end = timeit.time.time()
+            end = time.time()
             exec_time = 1000*(end - start)
 
-        return exec_time, out
+        return exec_time, out, cuda_mem
+
+    # just in case those operations are required we pass them to the profiled layer
+
+    def __iter__(self):
+        return iter(self.layer)
+
+    def __getitem__(self, key):
+        return self.layer[key]
+
+    def __setitem__(self, key, value):
+        self.layer[key] = value
+
+    def __delitem__(self, idx):
+        delattr(self.layer, idx)
+
+    def __len__(self):
+        return len(self.layer)
+
+    def __contains__(self, key):
+        return key in self.layer

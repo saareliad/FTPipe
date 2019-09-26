@@ -1,40 +1,61 @@
+
+from typing import List
+
 import torch
-import torch.nn as nn
-from torch import autograd
-from typing import Iterable, List, Tuple
-from .sync_wrapper import *
+from torch import autograd, nn
+
+from .utils import Tensors, TensorsShape, gen_garbage_output, tensors_cat, tensors_map, tensors_split
 
 
 class PipelineParallel(nn.Module):
     """
-    class that gets submodules of one large model and the devices they should be on (+ microbatch size)
-    and makes the large model that they consist as a pipeline with each submodule being a station
-    **IMPORTANT** this is functionally like 'Sequential(submodules)', so be aware of that and make sure that
-    the list submodules reflects what you want
+    This class is used to accelerate the performance of a given pytorch neural-network
+    model using multiple GPUs. This is done using a model parallelism approach, and
+    more specifically, in a pipeline-like fashion.
+
+    The given model will be partitioned into multiple 'stations'.
+    Every batch of data that is used as input for the model will be divided into 'micro-
+    batches' that will be forwarded through different stations at the same time in a
+    way that resembles a pipeline.
+
+    In contrast to DataParallel, the output of PipelineParallel should be exactly the
+    same as the output of the original model (obviously, within a certain degree of
+    numerical error).
+    Because of this, using any number of GPUs will not damage the training performance
+    of the model.
+
+    :param model: the model to be accelerated.
+    :param microbatch_size: the size of each micro-batch, to which the input batches
+        will be divided.
+    :param input_shape: the shape of each individual data entry (not including the
+        batch dimension).
+    :param devices: a list of devices onto which the submodule will be saved.
+        default: all available CUDA GPUs, or just the cpu if none are.
+    :param depth: TODO: explain
+    :param main_device: the devices onto which the output of the model will be placed.
+        default: 'cpu'.
     """
 
-    def __init__(self, module: nn.Module, microbatch_size: int, num_gpus: int, input_shape: Tuple[int, ...] = None,
-                 mode: str = 'train', counter: CycleCounter = None, main_device: str = 'cpu', wrappers=None):
+    def __init__(self, model: nn.Module, microbatch_size: int,
+                 input_shape: TensorsShape, wrappers, counter, main_device: str = None, graph=None):
         super(PipelineParallel, self).__init__()
-
-        self.main_device = main_device
-        self.microbatch_size = microbatch_size
-        self.num_gpus = num_gpus
-
-        self.module = module
-        self.wrappers = module.wrappers if wrappers is None else wrappers
-        self.input_shape = input_shape
-        self.module_devices = set([wrapper.device for wrapper in wrappers] + [main_device])
-
-        if counter is None:
-            counter = CycleCounter(ForwardMode[mode], num_gpus)
-            for wrapper in self.wrappers:
-                wrapper.set_counter(counter)
-
+        self.model = model
+        self.wrappers = wrappers
         self.counter = counter
+        self.graph = graph
+        devices = [wrapper.device for wrapper in self.wrappers]
 
+        if main_device is None:
+            self.main_device = devices[-1]
+        else:
+            self.main_device = main_device
+
+        self.microbatch_size = microbatch_size
+        self.num_devices = len(set(devices))
+        self.input_shape = input_shape
+        self.module_devices = list(devices + [self.main_device])
         self.mode = None
-        self.set_mode(mode)
+        self.set_mode('train')
 
     def train(self, mode=True):
         if mode:
@@ -69,7 +90,7 @@ class PipelineParallel(nn.Module):
             with torch.cuda.device(torch.device(dev)):
                 torch.cuda.synchronize()
 
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
+    def forward(self, *inputs: Tensors) -> Tensors:
         """
         forward propagation of the entire model
         will run in a pipeline using the cuda kernels and the prod_line function
@@ -79,14 +100,12 @@ class PipelineParallel(nn.Module):
         so if you want to use backward with some results, do it before running the model again
         on other inputs
 
-        :param input: inputted batch
+        :param inputs: inputted batch
         :return: results of forward propagation on the batch
         """
-        microbatches = input.split(self.microbatch_size, dim=0)
-        num_runs = len(microbatches)
 
-        if self.input_shape is None:
-            self.input_shape = (1, *input[0].size())
+        microbatches = tensors_split(inputs, size=self.microbatch_size)
+        num_runs = len(microbatches)
 
         # make sure that the counter knows how many microbatches there are
         self.counter.reset()
@@ -100,31 +119,36 @@ class PipelineParallel(nn.Module):
 
         results = []
         # the actual pipeline process of feeding the data and receiving outputs:
-        for cycle in range(self.num_gpus + num_runs - 1):
+        for cycle in range(self.num_devices + num_runs - 1):
             with autograd.no_grad():
                 # feeding the module all the microbatches, then, until the forward
                 # propagation process ends needs to feed garbage.
                 if cycle < num_runs:
-                    input = microbatches[cycle]
+                    inputs = microbatches[cycle]
                 else:
-                    input = torch.empty(*self.input_shape, device=self.wrappers[0].device)
+                    inputs = gen_garbage_output(
+                        self.input_shape, self.wrappers[0].device)
 
-                result: Tuple[torch.Tensor] = self.module(input)
+                if isinstance(inputs, torch.Tensor):
+                    inputs = (inputs,)
+
+                result: Tensors = self.model(*inputs)
 
                 # the first microbatch will finish the forward propagation only
-                # after num_gpus cycles.
-                if cycle >= self.num_gpus - 1:
-                    results.append(result.to(self.main_device, non_blocking=True))
+                # after num_devices cycles
+                if cycle >= self.num_devices - 1:
+                    results.append(
+                        result.to(self.main_device, non_blocking=True))
 
-                self.counter.increase()
-                # if torch.cuda.is_available():
-                #     self.synchronize_streams()
+                self.counter.tick()
 
         # make sure that the counter and wrappers are returned to default mode
         self.finished_prop()
 
-        output = torch.cat(tuple(results), dim=0).detach_()
-        if self.training:
+        output = tensors_cat(tuple(results))
+        tensors_map(output, lambda tensor: tensor.detach_())
+
+        if self.training and isinstance(output, torch.Tensor):
             output.requires_grad_()
             output.register_hook(lambda grad: self.backward(grad, results))
         return output
@@ -137,39 +161,34 @@ class PipelineParallel(nn.Module):
         :param grads: the gradient of the model outputs
         :param results: the results tensor that is doing a backward pass
         """
-        num_runs = len(results)
-
-        # make sure that the counter knows how many microbatches there are
-        self.counter.set_num_runs(num_runs)
-
+        prev_mode = self.mode
         # make sure that we are on backward mode
         self.set_mode('backward')
+
+        num_runs = len(results)
+        # make sure that the counter knows how many microbatches there are
+        self.counter.set_num_runs(num_runs)
 
         # do a backward run for each gradient
         for grad in grads.split(self.microbatch_size, dim=0):
             with torch.set_grad_enabled(True):
                 self.init_backwards_cycle()
 
-                # if torch.cuda.is_available():
-                #     self.synchronize_streams()
-
-                out = self.module(torch.empty(*self.input_shape))
+                out = self.model(torch.empty(*self.input_shape))
                 out.backward(grad)
-                self.counter.increase()
+                self.counter.tick()
 
         # make sure that all backward passes are done
-        for _ in range(self.num_gpus - 1):
+        for _ in range(self.num_devices - 1):
             with torch.set_grad_enabled(True):
                 self.init_backwards_cycle()
 
-                # if torch.cuda.is_available():
-                #     self.synchronize_streams()
-
-                self.module(torch.empty(*self.input_shape))
-                self.counter.increase()
-
-        # if torch.cuda.is_available():
-        #     self.synchronize_streams()
+                self.model(torch.empty(*self.input_shape))
+                self.counter.tick()
 
         # make sure that the counter and wrappers are returned to default mode
         self.finished_prop()
+        self.set_mode(prev_mode)
+
+    def __iter__(self):
+        return iter(self.model)

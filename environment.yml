@@ -1,0 +1,12 @@
+name: pytorch_Gpipe
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - graphviz
+  - pytest
+  - python=3.7
+  - python-graphviz
+  - pytorch=1.1.0
+  - torchvision=0.3.0
