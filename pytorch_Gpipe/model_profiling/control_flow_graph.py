@@ -1,6 +1,11 @@
 from copy import copy
 from enum import Enum
 from typing import Any, Dict, List
+from ..utils import OrderedSet
+from pprint import pprint
+from inspect import getmembers
+
+
 class Graph():
     '''
     a Graph data structure that model a pytorch network built from a pytorch trace\n
@@ -63,8 +68,8 @@ class Graph():
         num_extra_nodes = 0
         for idx, trace_node in enumerate(OP_nodes):
             node_scope = self._find_encasing_layer(trace_node.scopeName())
-            input_nodes = {self.nodes[i.unique()]
-                           for i in trace_node.inputs()}
+            input_nodes = OrderedSet([self.nodes[i.unique()]
+                           for i in trace_node.inputs()])
             node_idx = self.num_inputs_buffs_params+idx+num_extra_nodes
 
             new_node = None
@@ -73,15 +78,32 @@ class Graph():
             if node_scope != "":
                 new_node = Node(node_scope, node_idx,
                                 NodeTypes.LAYER, input_nodes)
-            # unprofiled OP
-            else:
+
+            # unprofiled constant value
+            elif 'prim::Constant' in trace_node.kind():
                 node_scope = trace_node.scopeName() + \
                     "/"+trace_node.kind() + str(idx)
+                value = trace_node.output().toIValue()
                 new_node = Node(node_scope, node_idx,
-                                NodeTypes.OP, input_nodes)
+                                NodeTypes.CONSTANT, input_nodes,value=value)
+                
+            # unprofiled List 
+            else:
+                if 'prim::ListConstruct' in trace_node.kind():
+                    node_type=NodeTypes.PYTHON_PRIMITIVE
+                elif 'aten::' in trace_node.kind():   
+                    node_type=NodeTypes.OP
+                else:
+                    node_type = NodeTypes.OP
+                    print(f"unknown scope {node_scope}")
+                new_node = Node(node_scope, node_idx,
+                                node_type, input_nodes)
+
 
             # add incoming edges
             for node in input_nodes:
+                if node is None:
+                    print(new_node.scope)
                 node.add_out_node(new_node)
 
             self.nodes.append(new_node)
@@ -91,10 +113,11 @@ class Graph():
                 if i != 0:
                     out_node: Node = copy(new_node)
                     # it appears those are dummpy outputs so we just add them for bookkeeping and remove them later
-                    out_node.out_nodes = set()
+                    out_node.out_nodes = OrderedSet()
                     out_node.idx += i
                     self.nodes.append(out_node)
                     num_extra_nodes += 1
+
 
     def _add_shapes(self, trace_graph):
         '''
@@ -119,7 +142,7 @@ class Graph():
             u = self.nodes[idx]
             layer_out = LayerOutput(output_idx, u.scope, get_shape(node))
             u.outputs.add(layer_out)
-            out_scopes=set()
+            out_scopes=OrderedSet()
 
             for use in node.uses():
                 target_node = use.user
@@ -138,7 +161,7 @@ class Graph():
                 u = self.nodes[idx]
                 layer_out = LayerOutput(output_idx, u.scope, get_shape(out))
                 u.outputs.add(layer_out)
-                out_scopes=set()
+                out_scopes=OrderedSet()
                 for use in out.uses():
                     target_node = use.user
                     for target_out in target_node.outputs():
@@ -426,34 +449,35 @@ class Node():
      parallel edges in the same direction are not allowed
     '''
 
-    def __init__(self, scope:str, idx:int, node_type: NodeTypes, incoming_nodes=None, weight=0, part=-1):
+    def __init__(self, scope:str, idx:int, node_type: NodeTypes, incoming_nodes=None, weight=0, part=-1,value=None):
         self.scope = scope
         self.idx = idx
         self.type = node_type
-        self.out_nodes = set()
+        self.out_nodes = OrderedSet()
         self.weight = weight
         self.part = part
         self.in_nodes = incoming_nodes if isinstance(
-            incoming_nodes, set) else set()
-        self.outputs = set()
-        self.inputs = set()
+            incoming_nodes, OrderedSet) else OrderedSet()
+        self.outputs = OrderedSet()
+        self.inputs = OrderedSet()
+        self.value=value
 
     def add_out_node(self, node):
         if isinstance(node, Node):
             self.out_nodes.add(node)
-        if isinstance(node, set):
+        if isinstance(node, OrderedSet):
             self.out_nodes.update(node)
 
     def add_in_node(self, node):
         if isinstance(node, Node):
             self.in_nodes.add(node)
-        if isinstance(node, set):
+        if isinstance(node, OrderedSet):
             self.in_nodes.update(node)
 
     def remove_in_node(self, node):
         if isinstance(node, Node):
             self.in_nodes.discard(node)
-        if isinstance(node, set):
+        if isinstance(node, OrderedSet):
             self.in_nodes.difference_update(node)
 
     def remove_out_node(self, node):
