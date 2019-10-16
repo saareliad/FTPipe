@@ -12,7 +12,8 @@ def optimize_graph(graph: Graph):
     nodes = _combine_OP_nodes_under_the_same_scope(nodes)
     graph.nodes = nodes
     _combine_params_and_buffers_into_OP_nodes(graph)
-    _merge_op_chains(graph)
+    # TODO we disabled op chain merges
+    # _merge_op_chains(graph)
 
     for idx, node in enumerate(graph.nodes):
         node.idx = idx

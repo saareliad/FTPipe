@@ -28,7 +28,8 @@ class Graph():
         self._add_IO_nodes(trace_graph.inputs())
         self._add_OP_nodes(trace_graph.nodes())
         self._add_shapes(trace_graph)
-        self._remove_constant_nodes()
+        #TODO we disabled removal of constants
+        # self._remove_constant_nodes()
         self._remove_nodes_that_go_nowhere(trace_graph.outputs())
         for idx,node in enumerate(self.nodes):
             node.idx=idx
@@ -390,6 +391,8 @@ class NodeTypes(Enum):
     BUFF_PARAM = 2
     LAYER = 3
     OP = 4
+    CONSTANT=5
+    PYTHON_PRIMITIVE=6
 
     def __repr__(self):
         return self.name

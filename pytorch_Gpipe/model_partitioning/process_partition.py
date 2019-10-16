@@ -20,7 +20,8 @@ def post_process_partition(graph: Graph, part: List[int]):
     '''
     cannonize_partition_indices(graph, part)
 
-    make_partitions_change_only_at_end_of_scope(graph)
+    # TODO we disabled this optimization
+    # make_partitions_change_only_at_end_of_scope(graph)
 
     # make sure every scc in the graph is not splitted between different parts
     scc_partition_correction(graph)
