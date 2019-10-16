@@ -78,20 +78,21 @@ def generate_forward_function_body(partition, root_nodes, scope_to_id):
             continue
 
         if node.type == NodeTypes.LAYER:
-            statements.append(generate_layer_activation(
-                scope_to_id, node, arg_gen))
-            open_nodes.update([n for n in node.out_nodes if n in partition])
+            statements.append(generate_layer_activation(scope_to_id,
+                                                        node, arg_gen))
+            open_nodes.update([n for n in node.out_nodes
+                               if n.part == node.part])
         elif node.type == NodeTypes.PYTHON_PRIMITIVE:
-            statements.append(generate_list_creation_statement(
-                scope_to_id, node, arg_gen))
-            open_nodes.update([n for n in node.out_nodes if n in partition])
+            generate_list_creation_statement(scope_to_id, node, arg_gen)
+            open_nodes.update([n for n in node.out_nodes
+                               if n.part == node.part])
         elif node.type == NodeTypes.CONSTANT:
-            statements.append(generate_constant_declaration(
-                scope_to_id, node, arg_gen))
+            generate_constant_declaration(scope_to_id, node, arg_gen)
         elif node.type == NodeTypes.OP:
-            statements.append(generate_function_call_statement(
-                scope_to_id, node, arg_gen))
-            open_nodes.update([n for n in node.out_nodes if n in partition])
+            statements.append(generate_function_call_statement(scope_to_id,
+                                                               node, arg_gen))
+            open_nodes.update([n for n in node.out_nodes
+                               if n.part == node.part])
 
         close_nodes.add(node)
 
@@ -147,21 +148,14 @@ def generate_layer_activation(scope_to_id, node, arg_gen):
 
 def generate_list_creation_statement(scope_to_id, node, arg_gen):
     assert 'ListConstruct' in node.scope, 'expecting list construction'
-    # TODO embed this at use site
-    t = next(arg_gen)
-    scope_to_id[node.scope] = t
-
     args = [scope_to_id[n.scope] for n in node.in_nodes]
-
-    return f'{t} = [' + ', '.join(args) + ']'
+    scope_to_id[node.scope] = '[' + ', '.join(args) + ']'
 
 
 def generate_constant_declaration(scope_to_id, node, arg_gen):
-    # TODO embed in use site
-    t = next(arg_gen)
-    scope_to_id[node.scope] = t
+    assert 'prim::Constant' in node.scope, f'we expected a constant got {node.scope}'
     assert node.value != None, 'constant must have non None value'
-    return f'{t} = {node.value}'
+    scope_to_id[node.scope] = f'{node.value}'
 
 
 def generate_function_call_statement(scope_to_id, node, arg_gen):
