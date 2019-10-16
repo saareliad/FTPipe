@@ -78,24 +78,28 @@ class Graph():
             if node_scope != "":
                 new_node = Node(node_scope, node_idx,
                                 NodeTypes.LAYER, input_nodes)
-
             # unprofiled constant value
             elif 'prim::Constant' in trace_node.kind():
                 node_scope = trace_node.scopeName() + \
                     "/"+trace_node.kind() + str(idx)
                 value = trace_node.output().toIValue()
                 new_node = Node(node_scope, node_idx,
-                                NodeTypes.CONSTANT, input_nodes,value=value)
-                
-            # unprofiled List 
+                                NodeTypes.CONSTANT, input_nodes,value=value)      
             else:
+                # unprofiled List
                 if 'prim::ListConstruct' in trace_node.kind():
                     node_type=NodeTypes.PYTHON_PRIMITIVE
+                # unprofiled torch op 
+                # TODO should we specialize the aten:: and prim:: cases   
                 elif 'aten::' in trace_node.kind():   
                     node_type=NodeTypes.OP
                 else:
+                    #unprofiled other
                     node_type = NodeTypes.OP
                     print(f"unknown scope {node_scope}")
+
+                node_scope = trace_node.scopeName() + \
+                    "/" + trace_node.kind() + str(idx)
                 new_node = Node(node_scope, node_idx,
                                 node_type, input_nodes)
 

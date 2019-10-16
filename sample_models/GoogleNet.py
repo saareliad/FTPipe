@@ -62,16 +62,16 @@ class GoogLeNet(nn.Module):
             nn.ReLU(True),
         )
 
-        self.a3 = Inception(192,  64,  96, 128, 16, 32, 32)
+        self.a3 = Inception(192, 64, 96, 128, 16, 32, 32)
         self.b3 = Inception(256, 128, 128, 192, 32, 96, 64)
 
         self.max_pool1 = nn.MaxPool2d(3, stride=2, padding=1)
         self.max_pool2 = nn.MaxPool2d(3, stride=2, padding=1)
 
-        self.a4 = Inception(480, 192,  96, 208, 16,  48,  64)
-        self.b4 = Inception(512, 160, 112, 224, 24,  64,  64)
-        self.c4 = Inception(512, 128, 128, 256, 24,  64,  64)
-        self.d4 = Inception(512, 112, 144, 288, 32,  64,  64)
+        self.a4 = Inception(480, 192, 96, 208, 16, 48, 64)
+        self.b4 = Inception(512, 160, 112, 224, 24, 64, 64)
+        self.c4 = Inception(512, 128, 128, 256, 24, 64, 64)
+        self.d4 = Inception(512, 112, 144, 288, 32, 64, 64)
         self.e4 = Inception(528, 256, 160, 320, 32, 128, 128)
 
         self.a5 = Inception(832, 256, 160, 320, 32, 128, 128)
@@ -94,6 +94,6 @@ class GoogLeNet(nn.Module):
         x = self.a5(x)
         x = self.b5(x)
         x = self.avgpool(x)
-        x = x.view(x.size(0), -1)
+        x = torch.flatten(x, 1)
         x = self.linear(x)
         return x

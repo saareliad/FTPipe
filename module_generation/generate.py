@@ -1,24 +1,23 @@
 
 import torch
-from pytorch_Gpipe.model_profiling import NodeTypes, graph_builder
+from torch import Tensor
+import torch.nn.functional as F
+from pytorch_Gpipe.model_profiling import NodeTypes
 from pytorch_Gpipe import partition_with_profiler
-from pytorch_Gpipe.utils import traverse_model
 import string
-from .forward import forward_function
-tab = '    '
-dtab = tab + tab
+from .forward import generate_forward_function
+from .constructor import generate_constructor
+from pprint import pprint
 
 
 def generate_modules(model: torch.nn.Module, *sample_batch, depth=0):
+    # TODO the graph should be a parameter
     graph = partition_with_profiler(model, *sample_batch,
-                                    max_depth=depth, nparts=2)
+                                    max_depth=depth, nparts=4)
 
     model_name = type(model).__name__
     graph.save(model_name, '.', show_buffs_params=True, show_weights=True)
-    layer_dict = {n: m for m, n, _ in traverse_model(model, depth=depth)}
-
-    parts, part_modules = group_layers_and_nodes_by_partition(layer_dict,
-                                                              graph.nodes)
+    parts = group_by_partition(graph.nodes)
 
     # import torch torch.nn as nn import torch.nn.functional as F
     torch_import = generate_imports()
@@ -27,71 +26,74 @@ def generate_modules(model: torch.nn.Module, *sample_batch, depth=0):
 
     # the main code generation loop generating a class decl
     # and forward function
-    for idx, (part, layers) in enumerate(zip(parts, part_modules)):
+    for idx, part in enumerate(parts):
+        # TODO there are empty partitions which is obviously not good
         class_name = f'{model_name}Partition{idx}'
-        names = [n.scope for n in part]
-        class_decl, scope_to_id = class_init_decl(class_name, names)
-        forward = forward_function(part, layers, scope_to_id)
+        names = [n.scope for n in part if n.type == NodeTypes.LAYER]
+        class_decl, scope_to_id = generate_constructor(class_name, names)
+        forward, partitionIO = generate_forward_function(part, scope_to_id)
+
+        print("inputs")
+        pprint(partitionIO.inputs)
+        print()
+
+        print("outputs")
+        pprint(partitionIO.outputs)
+        print()
         lines.extend([class_decl, forward])
 
     return lines
 
 
-# generate a class decl and __init__ method
-def class_init_decl(class_name, full_names):
-    class_decl = f"class {class_name}(nn.Module):"
-    layer_names = [f'self.l_{idx}' for idx, _ in enumerate(full_names)]
-    scope_to_id = dict(zip(full_names, layer_names))
-    init_dec = f"{tab}def __init__(self, *layers):"
-    super_init = f'{dtab}super({class_name}, self).__init__()'
-    assert_statements = __init__assert_guards(len(full_names))
-    layers_init = __init__layers_statements(layer_names, full_names)
-    return '\n'.join([class_decl, init_dec, super_init, assert_statements, layers_init]) + '\n', scope_to_id
-
-
-def __init__assert_guards(nlayers):
-    assert_statements = f"\n{dtab}# protection against bad initialization\n"
-    assert_statements += f"{dtab}assert(len(layers) == {nlayers})\n"
-    assert_statements += f"{dtab}assert(all(isinstance(l,nn.Module) for l in layers))\n"
-    return assert_statements
-
-
-def __init__layers_statements(layer_names, full_names):
-    statements = [f'{dtab}# initializing partition layers\n']
-
-    for idx, (field, full_name) in enumerate(zip(layer_names, full_names)):
-        statements.append(
-            f"# {full_name}\n{dtab}{field} = layers[{idx}]")
-
-    return f'\n{dtab}'.join(statements)
-
-
-def group_layers_and_nodes_by_partition(layers, nodes):
+def group_by_partition(nodes):
     # groups layers and their respective nodes according to their partition
     # TODO if we have less partitions not all indices will appear
     parts = [[] for i in range(len({n.part for n in nodes}))]
-    part_modules = [[] for i in range(len({n.part for n in nodes}))]
     for n in nodes:
+        if n.type == NodeTypes.IN or n.type == NodeTypes.BUFF_PARAM:
+            # TODO handle in buff param
+            continue
         if n.type == NodeTypes.LAYER:
-            parts[n.part].append(n)
-            part_modules[n.part].append(layers[n.scope])
+            try:
+                parts[n.part].append(n)
+            except Exception as _:
+                print(
+                    f'when adding layer {scope} invalid partition idx {n.part}')
         elif n.type == NodeTypes.OP:
             scope = n.scope
-            if 'aten::' in scope:
-                # TODO handle torch functions
-                func_name = scope.split('aten::')[1].rstrip(string.digits)
-                print(func_name)
-                assert hasattr(torch, func_name), 'non torch.FuncName function'
-            elif 'prim::' in scope:
-                if 'Constant' in scope:
-                    print(f'constant {scope}')
-                elif 'ListConstruct' in scope:
-                    print(f'list building {scope}')
-    return parts, part_modules
+            # we handle torch,Tensor and torch.nn.functional nameSpaces
+            func_name = scope.split('aten::')[1].rstrip(string.digits)
+            if hasattr(torch, func_name) or hasattr(F, func_name) or hasattr(Tensor, func_name):
+                try:
+                    parts[n.part].append(n)
+                except Exception as _:
+                    print(
+                        f'when adding op{scope} invalid partition idx {n.part}')
+            else:
+                assert False, f'could not find nameSpace for {scope}'
+        elif n.type == NodeTypes.PYTHON_PRIMITIVE:
+            scope = n.scope
+            assert 'prim::' in scope, f'primitive does not have prim:: prefix {scope}'
+            func_name = scope.split('prim::')[1].rstrip(string.digits)
+            assert func_name == 'ListConstruct'
+            try:
+                parts[n.part].append(n)
+            except Exception as _:
+                print(
+                    f'when adding prim{scope} invalid partition idx {n.part}')
+        else:
+            assert n.type == NodeTypes.CONSTANT
+            try:
+                parts[n.part].append(n)
+            except Exception as _:
+                print(
+                    f'when adding Constant{scope} invalid partition idx {n.part}')
+
+    return parts
 
 
 def generate_imports():
-    imports = f'import torch\nimport torch.nn as nn\nimport torch.nn.functional as F\n'
+    imports = f'import torch\nfrom torch import Tensor\nimport torch.nn as nn\nimport torch.nn.functional as F\n'
     disclaimer = '# this is an auto generated file do not edit unless you know what you are doing\n\n'
 
     return imports + disclaimer
