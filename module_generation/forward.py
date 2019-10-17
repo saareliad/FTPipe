@@ -20,9 +20,10 @@ __all__ = ['generateForwardFunction', 'PartitionIO']
 
 
 def generateForwardFunction(partition: List[Node],
-                            scope_to_class_field: Dict[str, str]) -> Tuple[str, PartitionIO]:
+                            scope_to_class_field: Dict[str, str]) -> Tuple[List[str], PartitionIO]:
     # function arguments are x0...xn
-    # function arguments correspond to sorted input scope
+    # function arguments correspond to sorted input scopes
+    # functions outputs are o0,o1,... sorted by their scopes
     # temp variables are t0....tn
     # constants are embedded in use site
     # function and layers are allocated temporary only if they have more than 1 use
@@ -33,17 +34,17 @@ def generateForwardFunction(partition: List[Node],
 
     input_scopes = OrderedSet([node.scope for node in part_inputs])
     ready_expressions = dict(zip(input_scopes, input_ids))
-
-    header = generateDeclaration(input_ids, scope_to_class_field,
-                                 ready_expressions)
+    lines = []
+    lines.append(generateDeclaration(input_ids, scope_to_class_field,
+                                     ready_expressions))
 
     root_nodes = rootStatements(partition, part_inputs)
     out_scopes = sortedPartitionOutputs(partition)
 
     body = generateBody(out_scopes, root_nodes,
                         scope_to_class_field, ready_expressions)
-
-    return header + body, PartitionIO(input_scopes, out_scopes)
+    lines.append(body)
+    return lines, PartitionIO(input_scopes, out_scopes)
 
 
 def generateDeclaration(input_ids: List[str], scope_to_class_field: Dict[str, str],
@@ -51,14 +52,13 @@ def generateDeclaration(input_ids: List[str], scope_to_class_field: Dict[str, st
     ''' generates the forward function declaration and the variable map of inputs and layers
     '''
     args = ', '.join(input_ids)
-    declaration = tab + f'def forward(self, {args}):\n'
+    lines = [tab + f'def forward(self, {args}):\n']
 
     # comments describing relation between variables and scopes
-    comments = ''
     for scope, field in chain(scope_to_class_field.items(), input_args.items()):
-        comments += f"{dtab}# {scope} <=> {field}\n"
+        lines.append(f"{dtab}# {scope} <=> {field}\n")
 
-    return declaration + comments
+    return ''.join(lines)
 
 
 def generateBody(output_scopes: OrderedSet[str], root_nodes: List[Node],
@@ -80,7 +80,6 @@ def generateStatements(root_nodes: List[Node], scope_to_class_field: Dict[str, s
     close_nodes = set()
     arg_gen = variableNameGenerator()
     statements = []
-
     while len(open_nodes) > 0:
         node = open_nodes.pop(last=False)
         if node in close_nodes:
@@ -96,21 +95,21 @@ def generateStatements(root_nodes: List[Node], scope_to_class_field: Dict[str, s
             statements.append(generateLayerActivationExpression(scope_to_class_field,
                                                                 ready_expressions, node, arg_gen))
         elif node.type == NodeTypes.PYTHON_PRIMITIVE:
-            generateListExpression(ready_expressions, node)
+            statements.append(generateListExpression(ready_expressions, node,
+                                                     arg_gen))
         elif node.type == NodeTypes.CONSTANT:
             generateConstantExpression(ready_expressions, node)
         elif node.type == NodeTypes.OP:
             statements.append(generateFunctionCallExpression(ready_expressions,
                                                              node, arg_gen))
-
         # add dependent expression
         if node.type != NodeTypes.CONSTANT:
             open_nodes.update([n for n in node.out_nodes
                                if n.part == node.part])
-
         close_nodes.add(node)
 
-    statements = f'\n{dtab}' + f'\n{dtab}'.join(statements)
+    statements = filter(lambda s: s != '', statements)
+    statements = dtab + f'\n{dtab}'.join(statements)
 
     return statements + '\n'
 
@@ -141,10 +140,9 @@ def generateLayerActivationExpression(scope_to_class_field: Dict[str, str],
 
     # generate discription
     scope_comment = f'\n{dtab}# '.join(operand_scopes)
-    comment = f'# activating {node.scope} with input:\n{dtab}# {scope_comment}'
+    comment = f'# calling {node.scope} with arguments:\n{dtab}# {scope_comment}'
 
     call = f"{op}({', '.join(operand_ids)})"
-    # TODO sometimes we still have one use expression that could be optimized
     if canEmbedInUseSite(node):
         ready_expressions[node.scope] = call
         return ''
@@ -155,14 +153,27 @@ def generateLayerActivationExpression(scope_to_class_field: Dict[str, str],
     return comment + f"\n{dtab}{t} = {call}"
 
 
-def generateListExpression(ready_expressions: Dict[str, str], node: Node):
+def generateListExpression(ready_expressions: Dict[str, str], node: Node,
+                           arg_gen: Iterator[str]) -> str:
     ''' generates a python list construction to be embedded in use site\n
         does not produce a temporary variable
     '''
     assert 'ListConstruct' in node.scope and node.type == NodeTypes.PYTHON_PRIMITIVE,\
         f'expecting list construction but recieved {node.scope} of type {node.type}'
-    args = [ready_expressions[n.scope] for n in node.in_nodes]
-    ready_expressions[node.scope] = '[' + ', '.join(args) + ']'
+    operand_scopes = [n.scope for n in node.in_nodes]
+    args = [ready_expressions[operand] for operand in operand_scopes]
+    expression = '[' + ', '.join(args) + ']'
+    if canEmbedInUseSite(node):
+        ready_expressions[node.scope] = expression
+        return ''
+
+    # generate discription
+    scope_comment = f'\n{dtab}# '.join(operand_scopes)
+    comment = f'# building a list from:\n{dtab}# {scope_comment}'
+
+    t = next(arg_gen)
+    ready_expressions[node.scope] = t
+    return comment + f"\n{dtab}{t} = {expression}"
 
 
 def generateConstantExpression(ready_expressions: Dict[str, str], node: Node):
@@ -170,7 +181,6 @@ def generateConstantExpression(ready_expressions: Dict[str, str], node: Node):
         does not produce a variable
     '''
     assert 'prim::Constant' in node.scope, f'we expected a constant got {node.scope}'
-    assert node.value != None, 'constant must have non None value'
     ready_expressions[node.scope] = f'{node.value}'
 
 
@@ -187,8 +197,10 @@ def generateFunctionCallExpression(ready_expressions: Dict[str, str], node: Node
     '''
     scope = node.scope
     func_name = scope.split('aten::')[1].rstrip(string.digits)
-    operands = [ready_expressions[n.scope] for n in node.in_nodes]
-    operands = ', '.join(operands)
+    operand_scopes = [n.scope for n in node.in_nodes]
+    args = ', '.join([ready_expressions[operand]
+                      for operand in operand_scopes])
+
     if hasattr(torch, func_name):
         namespace = 'torch'
     elif hasattr(F, func_name):
@@ -199,13 +211,19 @@ def generateFunctionCallExpression(ready_expressions: Dict[str, str], node: Node
         # TODO is this the right edge case
         assert False, f'could not find {scope} function namespace'
 
+    expression = f'{namespace}.{func_name}({args})'
     if canEmbedInUseSite(node):
-        ready_expressions[scope] = f'{namespace}.{func_name}({operands})'
+        ready_expressions[scope] = expression
         return ''
+
+    # generate discription
+    scope_comment = f'\n{dtab}# '.join(operand_scopes)
+    comment = f'# calling {namespace}.{func_name} with arguments:\n{dtab}# {scope_comment}'
 
     t = next(arg_gen)
     ready_expressions[scope] = t
-    return f'{t} = {namespace}.{func_name}({operands})'
+
+    return comment + f'\n{dtab}{t} = {expression}'
 
 
 def inputsNotReady(node: Node, ready_expressions: Dict[str, str]) -> bool:
@@ -249,7 +267,7 @@ def rootStatements(partition: List[Node], input_nodes: List[Node]) -> List[Node]
         those are the statements which we generate first
     '''
     return[node for node in partition if any(n in input_nodes for n in node.in_nodes)
-           or node.type == NodeTypes.CONSTANT]
+           or node.type == NodeTypes.CONSTANT or node.type == NodeTypes.PYTHON_PRIMITIVE]
 
 
 def sortedPartitionOutputs(partition: List[Node]) -> OrderedSet[str]:

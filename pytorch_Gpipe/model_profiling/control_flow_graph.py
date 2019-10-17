@@ -34,6 +34,10 @@ class Graph():
         #TODO we disabled removal of constants
         # self._remove_constant_nodes()
         self._remove_nodes_that_go_nowhere(trace_graph.outputs())
+
+        self.remove_int_tensor_int_conversions()
+
+
         for idx,node in enumerate(self.nodes):
             node.idx=idx
 
@@ -90,9 +94,13 @@ class Graph():
                 # unprofiled torch op 
                 # TODO should we specialize the aten:: and prim:: cases   
                 elif 'aten::' in trace_node.kind():   
-                    node_type=NodeTypes.OP
+                    node_type = NodeTypes.OP
+                elif 'prim::' in trace_node.kind():
+                    node_type = NodeTypes.OP
                 else:
                     #unprofiled other
+                    node_scope = trace_node.scopeName() + \
+                        "/" + trace_node.kind() + str(idx)
                     node_type = NodeTypes.OP
                     print(f"unknown scope {node_scope}")
 
@@ -119,7 +127,6 @@ class Graph():
                     out_node.idx += i
                     self.nodes.append(out_node)
                     num_extra_nodes += 1
-
 
     def _add_shapes(self, trace_graph):
         '''
@@ -179,6 +186,11 @@ class Graph():
         ''' remove nodes representing constants as they do not provide any useful info'''
         self._remove_nodes(lambda n: "::Constant" in n.scope)
 
+    def remove_int_tensor_int_conversions(self):
+        def predicate(node):
+            return 'prim::NumToTensor' in node.scope or 'aten::Int' in node.scope
+        self._remove_nodes(predicate)
+
     def _find_encasing_layer(self, scopeName: str):
         '''
         find the closest scope which encases scopeName
@@ -229,13 +241,12 @@ class Graph():
                 if condition(node):
                     changed = True
                     # connect inputs to outputs directly
+                    #TODO we do not remove/add inputs or outputs might revisit
                     for in_node in node.in_nodes:
-                        in_node.remove_out_node(node)
-                        in_node.add_out_node(node.out_nodes)
+                        in_node.replace_out_node(node,node.out_nodes)
                     for out_node in node.out_nodes:
-                        out_node.remove_in_node(node)
+                        out_node.replace_in_node(node,node.in_nodes)
                         out_node.inputs.difference_update(node.outputs)
-                        out_node.add_in_node(node.in_nodes)
                         out_node.inputs.update(node.inputs)
                 else:
                     optimized_graph.append(node)
@@ -467,26 +478,63 @@ class Node():
     def add_out_node(self, node):
         if isinstance(node, Node):
             self.out_nodes.add(node)
-        if isinstance(node, OrderedSet):
+        if isinstance(node, (set, OrderedSet)):
             self.out_nodes.update(node)
 
     def add_in_node(self, node):
         if isinstance(node, Node):
             self.in_nodes.add(node)
-        if isinstance(node, OrderedSet):
+        if isinstance(node, (set, OrderedSet)):
             self.in_nodes.update(node)
 
     def remove_in_node(self, node):
         if isinstance(node, Node):
             self.in_nodes.discard(node)
-        if isinstance(node, OrderedSet):
+        if isinstance(node, (set, OrderedSet)):
             self.in_nodes.difference_update(node)
 
     def remove_out_node(self, node):
         if isinstance(node, Node):
             self.out_nodes.discard(node)
-        if isinstance(node, set):
+        if isinstance(node, (set,OrderedSet)):
             self.out_nodes.difference_update(node)
+
+    def replace_out_node(self,to_replace,value):
+        if to_replace not in self.out_nodes:
+            return
+        
+        values = list(self.out_nodes)
+        idx = values.index(to_replace)
+
+        before,after=values[:idx],values[idx+1:]
+        try:
+            #we handle the case for iterable, if value is not then we recall with [value]
+            iter(value)
+            keys=value
+            to_add = [v for v in keys if (v not in before) and (v not in after)]
+            self.out_nodes=OrderedSet(before+to_add+after)
+
+        except TypeError as _:
+            self.replace_out_node(to_replace,[value])
+
+
+    def replace_in_node(self,to_replace,value):
+        if to_replace not in self.in_nodes:
+            return
+
+        values = list(self.in_nodes)
+        idx = values.index(to_replace)
+
+        before, after = values[:idx], values[idx + 1:]
+        try:
+            #we handle the case for iterable, if value is not then we recall with [value]
+            iter(value)
+            keys=value
+            to_add = [v for v in keys if (v not in before) and (v not in after)]
+            self.in_nodes = OrderedSet(before + to_add + after)
+
+        except TypeError as _:
+            self.replace_in_node(to_replace, [value])
 
     def __repr__(self):
         out_idx = {node.idx for node in self.out_nodes}
