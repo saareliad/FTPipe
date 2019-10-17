@@ -37,7 +37,7 @@ def generateForwardFunction(partition: List[Node],
     lines = []
     lines.append(generateDeclaration(input_ids, scope_to_class_field,
                                      ready_expressions))
-
+    lines.extend(generateInputGuards(input_ids))
     root_nodes = rootStatements(partition, part_inputs)
     out_scopes = sortedPartitionOutputs(partition)
 
@@ -51,7 +51,7 @@ def generateDeclaration(input_ids: List[str], scope_to_class_field: Dict[str, st
                         input_args: Dict[str, str]) -> str:
     ''' generates the forward function declaration and the variable map of inputs and layers
     '''
-    args = ', '.join(input_ids)
+    args = ' = None, '.join(input_ids) + ' = None'
     lines = [tab + f'def forward(self, {args}):\n']
 
     # comments describing relation between variables and scopes
@@ -233,6 +233,16 @@ def generateFunctionCallExpression(ready_expressions: Dict[str, str], node: Node
     ready_expressions[scope] = t
 
     return comment + f'\n{dtab}{t} = {expression}'
+
+
+def generateInputGuards(input_ids: List[str]):
+    l = '[' + ', '.join(input_ids) + ']'
+
+    return[f"{dtab}# at any cycle all inputs must be given or none at all",
+           f"{dtab}if any(x is None for x in {l}):",
+           f"{dtab}{tab}assert all(x is None for x in {l}), 'all inputs must be given or none at all'",
+           f"{dtab}if x0 is None:",
+           f"{dtab}{tab}return None\n"]
 
 
 def inputsNotReady(node: Node, ready_expressions: Dict[str, str]) -> bool:
