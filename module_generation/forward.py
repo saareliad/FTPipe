@@ -201,6 +201,15 @@ def generateFunctionCallExpression(ready_expressions: Dict[str, str], node: Node
     args = ', '.join([ready_expressions[operand]
                       for operand in operand_scopes])
 
+    # TODO revisit
+    # this is a ugly hack for expression for x+y that generates aten::add(x,y,1)
+    # there is no such overload in pytorch
+    # we handle also mul div and sub as a precaution
+    # so we simply ignore the 1 as an argument
+    if 'add' in func_name or 'mul' in func_name or 'div' in func_name or 'sub':
+        if len(operand_scopes) == 3 and args[-1] == '1':
+            args = args[:-3]
+
     if hasattr(torch, func_name):
         namespace = 'torch'
     elif hasattr(F, func_name):

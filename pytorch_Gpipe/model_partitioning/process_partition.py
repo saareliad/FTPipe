@@ -19,16 +19,16 @@ def post_process_partition(graph: Graph, part: List[int]):
         a list of the nodes partition indices
     '''
     cannonize_partition_indices(graph, part)
-
-    # TODO we disabled this optimization
-    # make_partitions_change_only_at_end_of_scope(graph)
+    make_partitions_change_only_at_end_of_scope(graph)
 
     # make sure every scc in the graph is not splitted between different parts
     scc_partition_correction(graph)
 
     ensure_dag(graph, part)
 
-    fix_arithmetic_inputs(graph)
+    # TODO we disabled this optimization
+    # fix_arithmetic_inputs(graph)
+    return
 
 
 def fix_arithmetic_inputs(graph: Graph):
