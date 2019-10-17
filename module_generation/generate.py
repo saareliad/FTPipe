@@ -1,21 +1,23 @@
 
 import torch
 from torch import Tensor
+from torch.nn import Module
 import torch.nn.functional as F
 from pytorch_Gpipe.model_profiling.control_flow_graph import Node, NodeTypes, Graph
 import string
 from .forward import generateForwardFunction, PartitionIO
 from .constructor import generateConstructor
 from pprint import pprint
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 from pytorch_Gpipe.utils import OrderedSet
 from collections import OrderedDict
+import inspect
 
 
-def generatePartitionModules(graph: Graph) -> Tuple[List[str], List[PartitionIO]]:
+def generatePartitionModules(graph: Graph, layer_classes: Dict[str, Module]) -> Tuple[List[str], List[PartitionIO]]:
     parts = groupByPartition(graph.nodes)
 
-    lines = generatePytorchImports()
+    lines = generatePytorchImports(layer_classes)
 
     ios = []
 
@@ -25,7 +27,7 @@ def generatePartitionModules(graph: Graph) -> Tuple[List[str], List[PartitionIO]
         class_name = f'{graph.model_name}Partition{idx}'
         names = [n.scope for n in part if n.type == NodeTypes.LAYER]
         class_decl, scope_to_class_field = generateConstructor(class_name,
-                                                               names)
+                                                               names, layer_classes)
         forward_function, io = generateForwardFunction(part,
                                                        scope_to_class_field)
         lines.append(class_decl)
@@ -69,10 +71,17 @@ def groupByPartition(nodes: List[Node]) -> List[Tuple[int, List[Node]]]:
     return parts.items()
 
 
-def generatePytorchImports() -> List[str]:
-    '''generates imports to torch torch.nn, torch.nn.functionl as F and torch.Tensor
+def generatePytorchImports(layer_classes: Dict[str, Module]) -> List[str]:
+    '''generates imports to torch torch.nn, torch.nn.functionl as F and torch.Tensor,
+       and to every layer used
     '''
     imports = f'import torch\nfrom torch import Tensor\nimport torch.nn as nn\nimport torch.nn.functional as F\n'
+
+    unique_classes = set(layer_classes.values())
+
+    for cls in unique_classes:
+        imports += f'from {inspect.getmodule(cls).__name__} import {cls.__name__}\n'
+
     disclaimer = '# this is an auto generated file do not edit unless you know what you are doing\n\n'
 
     return imports.splitlines() + [disclaimer]
