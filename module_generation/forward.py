@@ -74,7 +74,7 @@ def generateBody(output_scopes: OrderedSet[str], root_nodes: List[Node],
 def generateStatements(root_nodes: List[Node], scope_to_class_field: Dict[str, str],
                        ready_expressions: Dict[str, str]) -> str:
     ''' generate statements starting from the root in bfs order\n
-        when possible avoids allocating temporary variables 
+        when possible avoids allocating temporary variables
     '''
     open_nodes = OrderedSet(root_nodes)
     close_nodes = set()
@@ -233,7 +233,9 @@ def inputsNotReady(node: Node, ready_expressions: Dict[str, str]) -> bool:
 def canEmbedInUseSite(node: Node) -> bool:
     ''' a predicate that returns True if an expression has only one use
     '''
-    return len([n for n in node.out_nodes if n.part == node.part]) <= 1
+    num_uses = len([n for n in node.out_nodes if n.part == node.part])
+    only_local = all(n.part == node.part for n in node.out_nodes)
+    return (num_uses == 0) or (num_uses == 1 and only_local)
 
 
 def variableNameGenerator() -> Iterator[str]:
