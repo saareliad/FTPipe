@@ -2,8 +2,6 @@ from copy import copy
 from enum import Enum
 from typing import Any, Dict, List
 from ..utils import OrderedSet
-from pprint import pprint
-from inspect import getmembers
 
 
 class Graph():
@@ -25,7 +23,7 @@ class Graph():
         self._build_graph(trace_graph)
         self.basic_blocks=basic_blocks
         self.depth=depth
-
+        self.model_name = profiled_layers[0].split('/')[0]
         for node in self.nodes:
             node.weight = weights.get(node.scope, node.weight)
 

@@ -1,1 +1,1 @@
-from .generate import generate_modules
+from .generate import generatePartitionModules

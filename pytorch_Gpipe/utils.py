@@ -1,10 +1,10 @@
-from typing import Dict, Iterable, Iterator, List, Optional, Tuple, Union
-
+from typing import Dict, Iterable, Iterator, List, Optional, Tuple, Union, TypeVar, Generic
+from copy import deepcopy
+import collections
 import torch
 import torch.nn as nn
 from torch import Tensor
-from copy import copy, deepcopy
-import collections
+
 __all__ = ["traverse_model", "traverse_params_buffs",
            "find_output_shapes_of_scopes", "model_scopes", "get_device", "_detach_inputs", "_get_size", "_get_shape",
            "Tensors", "TensorsShape", "Devices", "OrderedSet"]
@@ -240,7 +240,10 @@ def _count_elements(*inputs: Tensors) -> int:
     return c
 
 
-class OrderedSet(collections.MutableSet):
+T = TypeVar('T')
+
+
+class OrderedSet(collections.MutableSet, Generic[T]):
 
     def __init__(self, iterable=None):
         self.end = end = []

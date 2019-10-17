@@ -2,50 +2,39 @@
 import torch
 from torch import Tensor
 import torch.nn.functional as F
-from pytorch_Gpipe.model_profiling import NodeTypes
-from pytorch_Gpipe import partition_with_profiler
+from pytorch_Gpipe.model_profiling.control_flow_graph import Node, NodeTypes, Graph
 import string
-from .forward import generate_forward_function
-from .constructor import generate_constructor
+from .forward import generateForwardFunction, PartitionIO
+from .constructor import generateConstructor
 from pprint import pprint
+from typing import List, Tuple
 
 
-def generate_modules(model: torch.nn.Module, *sample_batch, depth=0):
-    # TODO the graph should be a parameter
-    graph = partition_with_profiler(model, *sample_batch,
-                                    max_depth=depth, nparts=4)
+def generatePartitionModules(graph: Graph) -> Tuple[List[str], List[PartitionIO]]:
+    parts = groupByPartition(graph.nodes)
 
-    model_name = type(model).__name__
-    graph.save(model_name, '.', show_buffs_params=True, show_weights=True)
-    parts = group_by_partition(graph.nodes)
-
-    # import torch torch.nn as nn import torch.nn.functional as F
-    torch_import = generate_imports()
+    torch_import = generatePytorchImports()
 
     lines = [torch_import]
+    ios = []
 
     # the main code generation loop generating a class decl
     # and forward function
     for idx, part in enumerate(parts):
         # TODO there are empty partitions which is obviously not good
-        class_name = f'{model_name}Partition{idx}'
+        class_name = f'{graph.model_name}Partition{idx}'
         names = [n.scope for n in part if n.type == NodeTypes.LAYER]
-        class_decl, scope_to_id = generate_constructor(class_name, names)
-        forward, partitionIO = generate_forward_function(part, scope_to_id)
+        class_decl, scope_to_class_field = generateConstructor(class_name,
+                                                               names)
+        forward_function, io = generateForwardFunction(part,
+                                                       scope_to_class_field)
+        lines.extend([class_decl, forward_function])
+        ios.append(io)
 
-        print("inputs")
-        pprint(partitionIO.inputs)
-        print()
-
-        print("outputs")
-        pprint(partitionIO.outputs)
-        print()
-        lines.extend([class_decl, forward])
-
-    return lines
+    return lines, ios
 
 
-def group_by_partition(nodes):
+def groupByPartition(nodes: List[Node]) -> List[List[Node]]:
     # groups layers and their respective nodes according to their partition
     # TODO if we have less partitions not all indices will appear
     parts = [[] for i in range(len({n.part for n in nodes}))]
@@ -92,7 +81,9 @@ def group_by_partition(nodes):
     return parts
 
 
-def generate_imports():
+def generatePytorchImports() -> str:
+    '''generates imports to torch torch.nn, torch.nn.functionl as F and torch.Tensor
+    '''
     imports = f'import torch\nfrom torch import Tensor\nimport torch.nn as nn\nimport torch.nn.functional as F\n'
     disclaimer = '# this is an auto generated file do not edit unless you know what you are doing\n\n'
 
