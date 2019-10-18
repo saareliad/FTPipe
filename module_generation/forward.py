@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from pytorch_Gpipe.model_profiling.control_flow_graph import Node, NodeTypes
 from pytorch_Gpipe.utils import OrderedSet
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 from itertools import chain
 from typing import List, Tuple, Dict, Iterator
 from pprint import pprint
@@ -20,7 +20,7 @@ __all__ = ['generateForwardFunction', 'PartitionIO']
 
 
 def generateForwardFunction(partition: List[Node],
-                            scope_to_class_field: Dict[str, str]) -> Tuple[List[str], PartitionIO]:
+                            scope_to_class_field: Dict[str, str], verbose=False) -> Tuple[List[str], PartitionIO]:
     # function arguments are x0...xn
     # function arguments correspond to sorted input scopes
     # functions outputs are o0,o1,... sorted by their scopes
@@ -32,8 +32,19 @@ def generateForwardFunction(partition: List[Node],
     num_inputs = len(part_inputs)
     input_ids = [f'x{i}'for i in range(num_inputs)]
 
+    ready_expressions = OrderedDict()
+    # partition buffers and params are also ready
+    remove_buffs_params = []
+    for k, v in scope_to_class_field.items():
+        if 'self.b_' in v or 'self.p_' in v:
+            ready_expressions[k] = v
+            remove_buffs_params.append(k)
+    for k in remove_buffs_params:
+        scope_to_class_field.pop(k)
+
     input_scopes = OrderedSet([node.scope for node in part_inputs])
-    ready_expressions = dict(zip(input_scopes, input_ids))
+    ready_expressions.update(zip(input_scopes, input_ids))
+
     lines = []
     lines.append(generateDeclaration(input_ids, scope_to_class_field,
                                      ready_expressions))
@@ -42,7 +53,7 @@ def generateForwardFunction(partition: List[Node],
     out_scopes = sortedPartitionOutputs(partition)
 
     body = generateBody(out_scopes, root_nodes,
-                        scope_to_class_field, ready_expressions)
+                        scope_to_class_field, ready_expressions, verbose=verbose)
     lines.append(body)
     return lines, PartitionIO(input_scopes, out_scopes)
 
@@ -62,9 +73,9 @@ def generateDeclaration(input_ids: List[str], scope_to_class_field: Dict[str, st
 
 
 def generateBody(output_scopes: OrderedSet[str], root_nodes: List[Node],
-                 scope_to_class_field: Dict[str, str], ready_expressions: Dict[str, str]) -> str:
+                 scope_to_class_field: Dict[str, str], ready_expressions: Dict[str, str], verbose=False) -> str:
     body = generateStatements(root_nodes, scope_to_class_field,
-                              ready_expressions)
+                              ready_expressions, verbose=verbose)
     return_statement = generateReturnStatement(output_scopes,
                                                ready_expressions)
 
@@ -72,7 +83,7 @@ def generateBody(output_scopes: OrderedSet[str], root_nodes: List[Node],
 
 
 def generateStatements(root_nodes: List[Node], scope_to_class_field: Dict[str, str],
-                       ready_expressions: Dict[str, str]) -> str:
+                       ready_expressions: Dict[str, str], verbose=False) -> str:
     ''' generate statements starting from the root in bfs order\n
         when possible avoids allocating temporary variables
     '''
@@ -93,15 +104,15 @@ def generateStatements(root_nodes: List[Node], scope_to_class_field: Dict[str, s
         # actual code generation
         if node.type == NodeTypes.LAYER:
             statements.append(generateLayerActivationExpression(scope_to_class_field,
-                                                                ready_expressions, node, arg_gen))
+                                                                ready_expressions, node, arg_gen, verbose=verbose))
         elif node.type == NodeTypes.PYTHON_PRIMITIVE:
             statements.append(generateListExpression(ready_expressions, node,
-                                                     arg_gen))
+                                                     arg_gen, verbose=verbose))
         elif node.type == NodeTypes.CONSTANT:
             generateConstantExpression(ready_expressions, node)
         elif node.type == NodeTypes.OP:
             statements.append(generateFunctionCallExpression(ready_expressions,
-                                                             node, arg_gen))
+                                                             node, arg_gen, verbose=verbose))
         # add dependent expression
         if node.type != NodeTypes.CONSTANT:
             open_nodes.update([n for n in node.out_nodes
@@ -126,7 +137,7 @@ def generateReturnStatement(output_scopes: OrderedSet[str], ready_expressions: D
 
 def generateLayerActivationExpression(scope_to_class_field: Dict[str, str],
                                       ready_expressions: Dict[str, str],
-                                      node: Node, arg_gen: Iterator[str]) -> str:
+                                      node: Node, arg_gen: Iterator[str], verbose=False) -> str:
     '''generate a layer activation expression\n
        if expression has only one use then it's embedded in call site\n
        otherwise stores the result in a temporary variable
@@ -143,7 +154,7 @@ def generateLayerActivationExpression(scope_to_class_field: Dict[str, str],
     comment = f'# calling {node.scope} with arguments:\n{dtab}# {scope_comment}'
 
     call = f"{op}({', '.join(operand_ids)})"
-    if canEmbedInUseSite(node):
+    if not verbose and canEmbedInUseSite(node):
         ready_expressions[node.scope] = call
         return ''
 
@@ -154,7 +165,7 @@ def generateLayerActivationExpression(scope_to_class_field: Dict[str, str],
 
 
 def generateListExpression(ready_expressions: Dict[str, str], node: Node,
-                           arg_gen: Iterator[str]) -> str:
+                           arg_gen: Iterator[str], verbose=False) -> str:
     ''' generates a python list construction to be embedded in use site\n
         does not produce a temporary variable
     '''
@@ -163,7 +174,7 @@ def generateListExpression(ready_expressions: Dict[str, str], node: Node,
     operand_scopes = [n.scope for n in node.in_nodes]
     args = [ready_expressions[operand] for operand in operand_scopes]
     expression = '[' + ', '.join(args) + ']'
-    if canEmbedInUseSite(node):
+    if not verbose and canEmbedInUseSite(node):
         ready_expressions[node.scope] = expression
         return ''
 
@@ -185,7 +196,7 @@ def generateConstantExpression(ready_expressions: Dict[str, str], node: Node):
 
 
 def generateFunctionCallExpression(ready_expressions: Dict[str, str], node: Node,
-                                   arg_gen: Iterator[str]) -> str:
+                                   arg_gen: Iterator[str], verbose=False) -> str:
     ''' generate a function call belonging to one of the nameSpaces:\n
         torch,torch.nn.functional, torch.Tensor\n
         we check those nameSpaces in order, and the first match is called\n
@@ -221,7 +232,7 @@ def generateFunctionCallExpression(ready_expressions: Dict[str, str], node: Node
         assert False, f'could not find {scope} function namespace'
 
     expression = f'{namespace}.{func_name}({args})'
-    if canEmbedInUseSite(node):
+    if not verbose and canEmbedInUseSite(node):
         ready_expressions[scope] = expression
         return ''
 
@@ -288,7 +299,7 @@ def rootStatements(partition: List[Node], input_nodes: List[Node]) -> List[Node]
         those are the statements which we generate first
     '''
     return[node for node in partition if any(n in input_nodes for n in node.in_nodes)
-           or node.type == NodeTypes.CONSTANT or node.type == NodeTypes.PYTHON_PRIMITIVE]
+           or node.type == NodeTypes.CONSTANT or node.type == NodeTypes.BUFF_PARAM or node.type == NodeTypes.PYTHON_PRIMITIVE]
 
 
 def sortedPartitionOutputs(partition: List[Node]) -> OrderedSet[str]:

@@ -14,7 +14,7 @@ from collections import OrderedDict
 import inspect
 
 
-def generatePartitionModules(graph: Graph, layer_classes: Dict[str, Module]) -> Tuple[List[str], List[PartitionIO]]:
+def generatePartitionModules(graph: Graph, layer_classes: Dict[str, Module], is_param_dict: Dict[str, bool], verbose=False) -> Tuple[List[str], List[PartitionIO]]:
     parts = groupByPartition(graph.nodes)
 
     lines = generatePytorchImports(layer_classes)
@@ -25,11 +25,14 @@ def generatePartitionModules(graph: Graph, layer_classes: Dict[str, Module]) -> 
     # and forward function
     for idx, part in parts:
         class_name = f'{graph.model_name}Partition{idx}'
-        names = [n.scope for n in part if n.type == NodeTypes.LAYER]
-        class_decl, scope_to_class_field = generateConstructor(class_name,
-                                                               names, layer_classes)
+        layer_names = [n.scope for n in part if n.type == NodeTypes.LAYER]
+        buff_param_names = {n.scope for n in part
+                            if n.type == NodeTypes.BUFF_PARAM}
+        class_decl, scope_to_class_field = generateConstructor(class_name, layer_names,
+                                                               layer_classes, is_param_dict,
+                                                               buff_param_names)
         forward_function, io = generateForwardFunction(part,
-                                                       scope_to_class_field)
+                                                       scope_to_class_field, verbose=verbose)
         lines.append(class_decl)
         lines.extend(forward_function)
         ios.append(io)
@@ -45,10 +48,11 @@ def groupByPartition(nodes: List[Node]) -> List[Tuple[int, List[Node]]]:
         parts[i] = []
 
     for n in nodes:
-        if n.type == NodeTypes.IN or n.type == NodeTypes.BUFF_PARAM:
-            # TODO handle in buff param
+        if n.type == NodeTypes.IN:
             continue
-        if n.type == NodeTypes.LAYER:
+        elif n.type == NodeTypes.BUFF_PARAM:
+            parts[n.part].append(n)
+        elif n.type == NodeTypes.LAYER:
             parts[n.part].append(n)
         elif n.type == NodeTypes.OP:
             scope = n.scope
@@ -65,7 +69,7 @@ def groupByPartition(nodes: List[Node]) -> List[Tuple[int, List[Node]]]:
             func_name = scope.split('prim::')[1].rstrip(string.digits)
             parts[n.part].append(n)
         else:
-            assert n.type == NodeTypes.CONSTANT
+            assert n.type == NodeTypes.CONSTANT, f'got type {n.type}'
             parts[n.part].append(n)
 
     return parts.items()
