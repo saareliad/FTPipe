@@ -6,9 +6,8 @@ import torch.nn.functional as F
 from pytorch_Gpipe.model_profiling.control_flow_graph import Node, NodeTypes, Graph
 from pytorch_Gpipe.utils import traverse_model, traverse_params_buffs
 import string
-from .forward import generateForwardFunction, PartitionIO
+from .forward import generateForwardFunction
 from .constructor import generateConstructor
-from pprint import pprint
 from typing import List, Tuple, Dict
 from pytorch_Gpipe.utils import OrderedSet
 from collections import OrderedDict
@@ -18,7 +17,7 @@ tab = '    '
 dtab = tab + tab
 
 
-def generatePartitionModules(graph: Graph, model: Module, verbose=False) -> Tuple[List[str], List[PartitionIO]]:
+def generatePartitionModules(graph: Graph, model: Module, verbose=False) -> List[str]:
     layer_classes = {scope: type(layer) for layer, scope, _
                      in traverse_model(model, depth=graph.depth)}
     is_param_dict = {scope: t.requires_grad for t,
@@ -26,12 +25,12 @@ def generatePartitionModules(graph: Graph, model: Module, verbose=False) -> Tupl
 
     parts = groupByPartition(graph.nodes)
 
-    lines = generatePytorchImports(layer_classes)
-    lines.append(generateFactory(parts, model))
+    lines = generateImports(layer_classes)
     ios = []
-
     # the main code generation loop generating a class decl
     # and forward function
+    partitions_code = []
+    ios = dict()
     for idx, part in parts:
         class_name = f'{graph.model_name}Partition{idx}'
         layer_names = [n.scope for n in part if n.type == NodeTypes.LAYER]
@@ -42,11 +41,14 @@ def generatePartitionModules(graph: Graph, model: Module, verbose=False) -> Tupl
                                                                buff_param_names)
         forward_function, io = generateForwardFunction(part, scope_to_class_field,
                                                        verbose=verbose)
-        lines.append(class_decl)
-        lines.extend(forward_function)
-        ios.append(io)
+        partitions_code.append(class_decl)
+        partitions_code.extend(forward_function)
+        ios[idx] = io
 
-    return lines, ios
+    lines.append(generatePartitionFactory(parts, model, ios))
+    lines += partitions_code
+
+    return lines
 
 
 def groupByPartition(nodes: List[Node]) -> List[Tuple[int, List[Node]]]:
@@ -84,12 +86,12 @@ def groupByPartition(nodes: List[Node]) -> List[Tuple[int, List[Node]]]:
     return parts.items()
 
 
-def generatePytorchImports(layer_classes: Dict[str, Module]) -> List[str]:
+def generateImports(layer_classes: Dict[str, Module]) -> List[str]:
     '''generates imports to torch torch.nn, torch.nn.functionl as F and torch.Tensor,
-       and to every layer used
+       and to every layer used and various other small things
     '''
     imports = f'import torch\nfrom torch import Tensor\nimport torch.nn as nn\nimport torch.nn.functional as F\n'
-    imports += 'from pytorch_Gpipe.utils import layerDict, tensorDict\n'
+    imports += 'from pytorch_Gpipe.utils import layerDict, tensorDict, OrderedSet\n'
     unique_classes = set(layer_classes.values())
 
     for cls in unique_classes:
@@ -110,7 +112,7 @@ def getFunctionName(scope: str) -> str:
     return scope.split(sep)[1].rstrip(string.digits)
 
 
-def generateFactory(partitions, model: Module):
+def generatePartitionFactory(partitions, model: Module, ios: Dict[int, OrderedSet]):
     '''generates function that will perform the actual partition\n
        the function will have the partition config hardcoded into it,\n
        enabling us to perform the partition process once and use the config multiple times
@@ -120,14 +122,16 @@ def generateFactory(partitions, model: Module):
     model_parameteres = {scope: t for t, scope in traverse_params_buffs(model)
                          if t.requires_grad}
     model_class = model.__class__.__name__
+    # function header
     lines = [
         f'def {model_class}PartitionFactory(model:nn.Module):',
         "layer_dict = layerDict(model)",
         "tensor_dict = tensorDict(model)",
-        "partitions = []",
         f"\n{tab}# now constructing the partitions in order"
     ]
     lines = [f'\n{tab}'.join(lines)]
+
+    # hard code which layers buffers and parameters belong to each partition
     construction_args = []
     for idx, part in partitions:
         layer_scopes = [f"'{n.scope}'"
@@ -139,7 +143,8 @@ def generateFactory(partitions, model: Module):
         construction_args.append(
             (layer_scopes, buffer_scopes, parameter_scopes))
 
-    for idx, (layer_scopes, buffer_scopes, parameter_scopes) in enumerate(construction_args):
+    # create partition generation statements
+    for idx, (layer_scopes, buffer_scopes, parameter_scopes) in zip(sorted(list(ios.keys())), construction_args):
         l_scopes = 'layer_scopes = [' + f",\n{dtab}".join(layer_scopes) + ']'
         b_scopes = 'buffer_scopes = [' + f",\n{dtab}".join(buffer_scopes) + ']'
         p_scopes = 'parameter_scopes = [' + \
@@ -148,8 +153,15 @@ def generateFactory(partitions, model: Module):
                       f"layers = {{l: layer_dict[l] for l in layer_scopes}}",
                       f"buffers = {{b: tensor_dict[b] for b in buffer_scopes}}",
                       f"parameters = {{p: tensor_dict[p] for p in parameter_scopes}}",
-                      f"partitions.append({model_class}Partition{idx}(layers,buffers,parameters))\n"])
+                      f"partition{idx} = {model_class}Partition{idx}(layers,buffers,parameters)\n"])
 
-    lines.append(f'\n{tab}return partitions\n\n')
+    # create and return the partition config
+    exp = f',\n{dtab}{tab}'.join([f"{k}: {v}" for k, v in ios.items()])
+    lines.append(
+        f"# creating configuration\n{tab}config = {{{exp}\n{dtab}{tab}}}")
+    lines.extend(
+        [f"config[{idx}]['model'] = partition{idx}" for idx, _ in enumerate(partitions)])
+
+    lines.append(f"\n{tab}return config\n\n")
 
     return f'\n{tab}'.join(lines)

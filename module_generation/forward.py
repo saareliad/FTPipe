@@ -5,22 +5,20 @@ import torch.nn.functional as F
 from torch import Tensor
 from pytorch_Gpipe.model_profiling.control_flow_graph import Node, NodeTypes
 from pytorch_Gpipe.utils import OrderedSet
-from collections import namedtuple, OrderedDict
+from collections import OrderedDict
 from itertools import chain
 from typing import List, Tuple, Dict, Iterator
-from pprint import pprint
-from copy import deepcopy
 from collections import deque
+
 tab = '    '
 dtab = tab + tab
 
-PartitionIO = namedtuple('PartitionIO', 'inputs outputs')
 
-__all__ = ['generateForwardFunction', 'PartitionIO']
+__all__ = ['generateForwardFunction']
 
 
 def generateForwardFunction(partition: List[Node],
-                            scope_to_class_field: Dict[str, str], verbose=False) -> Tuple[List[str], PartitionIO]:
+                            scope_to_class_field: Dict[str, str], verbose=False) -> Tuple[List[str], Dict[str, OrderedSet[str]]]:
     # function arguments are x0...xn
     # function arguments correspond to sorted input scopes
     # functions outputs are o0,o1,... sorted by their scopes
@@ -55,7 +53,7 @@ def generateForwardFunction(partition: List[Node],
     body = generateBody(out_scopes, root_nodes,
                         scope_to_class_field, ready_expressions, verbose=verbose)
     lines.append(body)
-    return lines, PartitionIO(input_scopes, out_scopes)
+    return lines, {"input": input_scopes, "output": out_scopes}
 
 
 def generateDeclaration(input_ids: List[str], scope_to_class_field: Dict[str, str],
