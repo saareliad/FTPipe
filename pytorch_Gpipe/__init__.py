@@ -55,7 +55,7 @@ def distribute_by_time(model: nn.Module, *sample_batch: Tensors, devices: Option
     '''
     def w_function(w):
         if hasattr(w, 'forward_time') and hasattr(w, 'backward_time'):
-            return max(int(100*(w.forward_time+w.backward_time)/2), 1)
+            return max(int(100 * (w.forward_time + w.backward_time) / 2), 1)
         return 1
 
     return distribute_using_profiler(model, *sample_batch, devices=devices, weighting_function=w_function, max_depth=depth, optimize_pipeline_wrappers=optimize_pipeline_wrappers)
@@ -84,7 +84,7 @@ def distribute_by_memory(model: nn.Module, *sample_batch: Tensors, devices: Opti
     '''
     def w_function(w):
         if hasattr(w, 'cuda_memory_forward') and hasattr(w, 'cuda_memory_backward'):
-            return max(int(100*(w.cuda_memory_forward+w.cuda_memory_backward)/2), 1)
+            return max(int(100 * (w.cuda_memory_forward + w.cuda_memory_backward) / 2), 1)
         return 1
 
     return distribute_using_profiler(model, *sample_batch, devices=devices, weighting_function=w_function, max_depth=depth, optimize_pipeline_wrappers=optimize_pipeline_wrappers)
@@ -153,7 +153,7 @@ def distribute_using_profiler(model: nn.Module, *sample_batch: Tensors, devices:
     result = distribute_model(model, devices, graph,
                               *sample_batch, optimize_pipeline_wrappers=optimize_pipeline_wrappers)
 
-    return result+(graph,)
+    return result + (graph,)
 
 
 def distribute_using_custom_weights(model: nn.Module, weights, *sample_batch: Tensors, devices: Optional[Devices] = None, max_depth=100, basic_blocks: Optional[List[nn.Module]] = None, weighting_function: Optional[Callable[[Any], int]] = None, optimize_pipeline_wrappers: bool = True):
@@ -195,4 +195,4 @@ def distribute_using_custom_weights(model: nn.Module, weights, *sample_batch: Te
     res = distribute_model(model, devices, graph,
                            *sample_batch, optimize_pipeline_wrappers=optimize_pipeline_wrappers)
 
-    return res+(graph,)
+    return res + (graph,)

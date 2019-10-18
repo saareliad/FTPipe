@@ -10,7 +10,7 @@ from itertools import chain
 from typing import List, Tuple, Dict, Iterator
 from pprint import pprint
 from copy import deepcopy
-
+from collections import deque
 tab = '    '
 dtab = tab + tab
 
@@ -87,20 +87,34 @@ def generateStatements(root_nodes: List[Node], scope_to_class_field: Dict[str, s
     ''' generate statements starting from the root in bfs order\n
         when possible avoids allocating temporary variables
     '''
-    open_nodes = OrderedSet(root_nodes)
+    open_nodes = deque(root_nodes)
     close_nodes = set()
     arg_gen = variableNameGenerator()
     statements = []
+    i = 0
     while len(open_nodes) > 0:
-        node = open_nodes.pop(last=False)
-        if node in close_nodes:
+        node = open_nodes.pop()
+        if node.idx in close_nodes:
             continue
 
         if inputsNotReady(node, ready_expressions):
             # inputs are not ready yet so we will attempt to generate this later
-            open_nodes.add(node)
+            open_nodes.appendleft(node)
             continue
-
+        i += 1
+        if i > 1000:
+            # cycle detection
+            print("we've detected that the code generation performed 1000 iterations\n"
+                  "we suspect that there is a loop in the control flow graph"
+                  "it is possible that you you the same layer twice? for eg.\n"
+                  "relu=nn.ReLU()\n"
+                  "identity=x\n"
+                  "x=layer(x)\n"
+                  "x+=identity\n"
+                  "x=relu(x)\n")
+            print("we suggest to avoid using layers for stateless operations")
+            print("for eg. F.relu() is preffered to nn.ReLU")
+            assert False
         # actual code generation
         if node.type == NodeTypes.LAYER:
             statements.append(generateLayerActivationExpression(scope_to_class_field,
@@ -115,9 +129,9 @@ def generateStatements(root_nodes: List[Node], scope_to_class_field: Dict[str, s
                                                              node, arg_gen, verbose=verbose))
         # add dependent expression
         if node.type != NodeTypes.CONSTANT:
-            open_nodes.update([n for n in node.out_nodes
-                               if n.part == node.part])
-        close_nodes.add(node)
+            open_nodes.extendleft([n for n in node.out_nodes
+                                   if n.part == node.part])
+        close_nodes.add(node.idx)
 
     statements = filter(lambda s: s != '', statements)
     statements = dtab + f'\n{dtab}'.join(statements)

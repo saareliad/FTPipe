@@ -309,7 +309,7 @@ class OrderedSet(collections.MutableSet, Generic[T]):
                 self.discard(k)
 
     def union(self, *others):
-        res = deepcopy(self)
+        res = OrderedSet(self.map.keys())
         for s in others:
             assert isinstance(s, (set, OrderedSet))
             res.update(s)
