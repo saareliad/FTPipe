@@ -155,7 +155,7 @@ def cannonize_partition_indices(graph: Graph, node_parts: List[int]):
 
     num_parts = len(set(node_parts))
     num_taken = 0
-    model_inputs = graph.nodes[graph.num_inputs:]
+    model_inputs = [node for node in graph.nodes if node.type == NodeTypes.IN]
     open_nodes = deque(model_inputs)
     closed = set()
     cannonical_parts = dict()
