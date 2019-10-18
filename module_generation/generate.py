@@ -4,6 +4,7 @@ from torch import Tensor
 from torch.nn import Module
 import torch.nn.functional as F
 from pytorch_Gpipe.model_profiling.control_flow_graph import Node, NodeTypes, Graph
+from pytorch_Gpipe.utils import traverse_model, traverse_params_buffs
 import string
 from .forward import generateForwardFunction, PartitionIO
 from .constructor import generateConstructor
@@ -13,12 +14,20 @@ from pytorch_Gpipe.utils import OrderedSet
 from collections import OrderedDict
 import inspect
 
+tab = '    '
+dtab = tab + tab
 
-def generatePartitionModules(graph: Graph, layer_classes: Dict[str, Module], is_param_dict: Dict[str, bool], verbose=False) -> Tuple[List[str], List[PartitionIO]]:
+
+def generatePartitionModules(graph: Graph, model: Module, verbose=False) -> Tuple[List[str], List[PartitionIO]]:
+    layer_classes = {scope: type(layer) for layer, scope, _
+                     in traverse_model(model, depth=graph.depth)}
+    is_param_dict = {scope: t.requires_grad for t,
+                     scope in traverse_params_buffs(model)}
+
     parts = groupByPartition(graph.nodes)
 
     lines = generatePytorchImports(layer_classes)
-
+    lines.append(generateFactory(parts, model))
     ios = []
 
     # the main code generation loop generating a class decl
@@ -31,8 +40,8 @@ def generatePartitionModules(graph: Graph, layer_classes: Dict[str, Module], is_
         class_decl, scope_to_class_field = generateConstructor(class_name, layer_names,
                                                                layer_classes, is_param_dict,
                                                                buff_param_names)
-        forward_function, io = generateForwardFunction(part,
-                                                       scope_to_class_field, verbose=verbose)
+        forward_function, io = generateForwardFunction(part, scope_to_class_field,
+                                                       verbose=verbose)
         lines.append(class_decl)
         lines.extend(forward_function)
         ios.append(io)
@@ -80,7 +89,7 @@ def generatePytorchImports(layer_classes: Dict[str, Module]) -> List[str]:
        and to every layer used
     '''
     imports = f'import torch\nfrom torch import Tensor\nimport torch.nn as nn\nimport torch.nn.functional as F\n'
-
+    imports += 'from pytorch_Gpipe.utils import layerDict, tensorDict\n'
     unique_classes = set(layer_classes.values())
 
     for cls in unique_classes:
@@ -99,3 +108,48 @@ def getFunctionName(scope: str) -> str:
         sep = 'prim::'
 
     return scope.split(sep)[1].rstrip(string.digits)
+
+
+def generateFactory(partitions, model: Module):
+    '''generates function that will perform the actual partition\n
+       the function will have the partition config hardcoded into it,\n
+       enabling us to perform the partition process once and use the config multiple times
+    '''
+    model_buffers = {scope: t for t, scope in traverse_params_buffs(model)
+                     if not t.requires_grad}
+    model_parameteres = {scope: t for t, scope in traverse_params_buffs(model)
+                         if t.requires_grad}
+    model_class = model.__class__.__name__
+    lines = [
+        f'def {model_class}PartitionFactory(model:nn.Module):',
+        "layer_dict = layerDict(model)",
+        "tensor_dict = tensorDict(model)",
+        "partitions = []",
+        f"\n{tab}# now constructing the partitions in order"
+    ]
+    lines = [f'\n{tab}'.join(lines)]
+    construction_args = []
+    for idx, part in partitions:
+        layer_scopes = [f"'{n.scope}'"
+                        for n in part if n.type == NodeTypes.LAYER]
+        buffer_scopes = [
+            f"'{n.scope}'" for n in part if n.scope in model_buffers]
+        parameter_scopes = [f"'{n.scope}'" for n in part
+                            if n.scope in model_parameteres]
+        construction_args.append(
+            (layer_scopes, buffer_scopes, parameter_scopes))
+
+    for idx, (layer_scopes, buffer_scopes, parameter_scopes) in enumerate(construction_args):
+        l_scopes = 'layer_scopes = [' + f",\n{dtab}".join(layer_scopes) + ']'
+        b_scopes = 'buffer_scopes = [' + f",\n{dtab}".join(buffer_scopes) + ']'
+        p_scopes = 'parameter_scopes = [' + \
+            f",\n{dtab}".join(parameter_scopes) + ']'
+        lines.extend([l_scopes, b_scopes, p_scopes,
+                      f"layers = {{l: layer_dict[l] for l in layer_scopes}}",
+                      f"buffers = {{b: tensor_dict[b] for b in buffer_scopes}}",
+                      f"parameters = {{p: tensor_dict[p] for p in parameter_scopes}}",
+                      f"partitions.append({model_class}Partition{idx}(layers,buffers,parameters))\n"])
+
+    lines.append(f'\n{tab}return partitions\n\n')
+
+    return f'\n{tab}'.join(lines)

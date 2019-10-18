@@ -7,7 +7,7 @@ from torch import Tensor
 
 __all__ = ["traverse_model", "traverse_params_buffs",
            "find_output_shapes_of_scopes", "model_scopes", "get_device", "_detach_inputs", "_get_size", "_get_shape",
-           "Tensors", "TensorsShape", "Devices", "OrderedSet"]
+           "Tensors", "TensorsShape", "Devices", "OrderedSet", "layerDict", "tensorDict"]
 
 # the officially supported input types
 Tensors = Union[Tensor, List['Tensors'], Tuple['Tensors', ...]]
@@ -128,6 +128,14 @@ def find_output_shapes_of_scopes(model, scopes, *sample_batch: Tensors) -> Dict:
             parent.add_module(name, layer.layer)
 
     return scope_to_shape
+
+
+def layerDict(model: nn.Module):
+    return {s: l for l, s, _ in traverse_model(model)}
+
+
+def tensorDict(model: nn.Module):
+    return {s: t for t, s in traverse_params_buffs(model)}
 
 
 INCORRECT_INPUT_TYPE = '''currently supported input types are torch.Tensor, List,Tuple or combination of them found: '''
