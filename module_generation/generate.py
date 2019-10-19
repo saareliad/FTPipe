@@ -45,7 +45,7 @@ def generatePartitionModules(graph: Graph, model: Module, verbose=False) -> List
         partitions_code.extend(forward_function)
         ios[idx] = io
 
-    lines.append(generatePartitionFactory(parts, model, ios))
+    lines.append(generatePartitionFactory(graph, parts, model, ios))
     lines += partitions_code
 
     return lines
@@ -112,7 +112,7 @@ def getFunctionName(scope: str) -> str:
     return scope.split(sep)[1].rstrip(string.digits)
 
 
-def generatePartitionFactory(partitions, model: Module, ios: Dict[int, OrderedSet]):
+def generatePartitionFactory(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, OrderedSet]):
     '''generates function that will perform the actual partition\n
        the function will have the partition config hardcoded into it,\n
        enabling us to perform the partition process once and use the config multiple times
@@ -160,7 +160,11 @@ def generatePartitionFactory(partitions, model: Module, ios: Dict[int, OrderedSe
     lines.append(
         f"# creating configuration\n{tab}config = {{{exp}\n{dtab}{tab}}}")
     lines.extend(
-        [f"config[{idx}]['model'] = partition{idx}" for idx, _ in enumerate(partitions)])
+        [f"config[{idx}]['model'] = partition{idx}.to(cuda:{idx})" for idx in sorted(list(ios.keys()))])
+
+    input_ids = [f"'input{idx}'" for idx in range(graph.num_inputs)]
+    lines.extend([f"config['inputs'] = [{', '.join(input_ids)}]",
+                  f"config['outputs']={list(graph.output_scopes)}"])
 
     lines.append(f"\n{tab}return config\n\n")
 

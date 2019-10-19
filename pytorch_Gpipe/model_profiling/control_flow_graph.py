@@ -2,8 +2,8 @@ from copy import copy
 from enum import Enum
 from typing import Any, Dict, List
 from ..utils import OrderedSet
-
-
+import inspect
+from pprint import pprint
 class Graph():
     '''
     a Graph data structure that model a pytorch network built from a pytorch trace\n
@@ -33,6 +33,7 @@ class Graph():
         self._add_shapes(trace_graph)
         #TODO we disabled removal of constants
         # self._remove_constant_nodes()
+        self._set_outputs(trace_graph.outputs())
         self._remove_nodes_that_go_nowhere(trace_graph.outputs())
 
         self.remove_int_tensor_int_conversions()
@@ -79,7 +80,7 @@ class Graph():
             # profiled Layer
             if node_scope != "":
                 new_node = Node(node_scope, node_idx,
-                                NodeTypes.LAYER, input_nodes)
+                                NodeTypes.LAYER, input_nodes) 
             # unprofiled constant value
             elif 'prim::Constant' in trace_node.kind():
                 node_scope = trace_node.scopeName() + \
@@ -112,8 +113,6 @@ class Graph():
 
             # add incoming edges
             for node in input_nodes:
-                if node is None:
-                    print(new_node.scope)
                 node.add_out_node(new_node)
 
             self.nodes.append(new_node)
@@ -208,26 +207,26 @@ class Graph():
         '''remove nodes without out edges that are not outputs of the model'''
         #necessary because the trace can contain such nodes for certain ops
         #those nodes provide no additional info to the graph
-        
-        #we need this method for compatibility issues
-        #in pytorch 1.2.0 the API changed the method name from uniqueName to debugName
-        #maybe it's a sign that we should not relay on it but it's simple and effective...
-        def get_id(out):
-            if hasattr(out,'debugName'):
-                #1.2.0 and onward
-                n=out.debugName()
-            else:
-                #before 1.2.0
-                assert hasattr(out,'uniqueName')
-                n=out.uniqueName()
-            return int(n)
 
-        out_indices=[get_id(out) for out in trace_outputs]
+        out_indices=[self._get_id(out) for out in trace_outputs]
 
         def going_nowhere(node):
             return (not node.out_nodes) and (not node.idx in out_indices)
 
         self._remove_nodes(going_nowhere)
+
+    def _get_id(self,out):
+        #we need this method for compatibility issues
+        #in pytorch 1.2.0 the API changed the method name from uniqueName to debugName
+        #maybe it's a sign that we should not relay on it but it's simple and effective...
+        if hasattr(out, 'debugName'):
+            #1.2.0 and onward
+            n = out.debugName()
+        else:
+            #before 1.2.0
+            assert hasattr(out, 'uniqueName')
+            n = out.uniqueName()
+        return int(n)
 
     def _remove_nodes(self, condition, reverse:bool=False):
         changed = True
@@ -252,6 +251,18 @@ class Graph():
                     optimized_graph.append(node)
 
             self.nodes = optimized_graph
+
+    def _set_outputs(self,trace_outputs):
+        outputs=OrderedSet()
+        for out in trace_outputs:
+            node=out.node()
+            scope=self._find_encasing_layer(node.scopeName())
+            if scope == '':
+                idx = self._get_id(out) - self.num_inputs_buffs_params
+                scope=node.scopeName() + \
+                    "/" + node.kind() + str(idx)
+            outputs.add(scope)
+        self.output_scopes=outputs
 
     def __getitem__(self, key):
         if isinstance(key,int):
