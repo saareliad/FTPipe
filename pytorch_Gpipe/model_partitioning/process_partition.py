@@ -18,14 +18,17 @@ def post_process_partition(graph: Graph, part: List[int]):
     part:
         a list of the nodes partition indices
     '''
-    cannonize_partition_indices(graph, part)
-    make_partitions_change_only_at_end_of_scope(graph)
 
+    for node, idx in zip(graph.nodes, part):
+        node.part = idx
+
+    cannonize_partition_indices(graph)
+    make_partitions_change_only_at_end_of_scope(graph)
     # make sure every scc in the graph is not splitted between different parts
     scc_partition_correction(graph)
-
     ensure_dag(graph, part)
 
+    cannonize_partition_indices(graph)
     # TODO we disabled this optimization
     # fix_arithmetic_inputs(graph)
     return
@@ -149,11 +152,8 @@ def strongly_connected_components_iterative(vertices: List[int], edges: Dict[int
                         yield scc
 
 
-def cannonize_partition_indices(graph: Graph, node_parts: List[int]):
-    for node, part in zip(graph.nodes, node_parts):
-        node.part = part
-
-    num_parts = len(set(node_parts))
+def cannonize_partition_indices(graph: Graph):
+    num_parts = len({n.part for n in graph.nodes})
     num_taken = 0
     model_inputs = [node for node in graph.nodes if node.type == NodeTypes.IN]
     open_nodes = deque(model_inputs)
@@ -175,6 +175,8 @@ def cannonize_partition_indices(graph: Graph, node_parts: List[int]):
 
     for node in graph.nodes:
         node.part = cannonical_parts[node.part]
+
+    graph.num_parts = len(cannonical_parts)
 
 
 def make_partitions_change_only_at_end_of_scope(graph: Graph):

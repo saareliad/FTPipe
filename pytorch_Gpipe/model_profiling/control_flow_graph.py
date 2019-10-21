@@ -23,6 +23,7 @@ class Graph():
         self._build_graph(trace_graph)
         self.basic_blocks=basic_blocks
         self.depth=depth
+        self.num_parts=0
         self.model_name = profiled_layers[0].split('/')[0]
         for node in self.nodes:
             node.weight = weights.get(node.scope, node.weight)

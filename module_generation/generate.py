@@ -17,7 +17,7 @@ tab = '    '
 dtab = tab + tab
 
 
-def generatePartitionModules(graph: Graph, model: Module, verbose=False) -> List[str]:
+def generatePartitionModules(graph: Graph, model: Module, verbose=False, output_file=None):
     layer_classes = {scope: type(layer) for layer, scope, _
                      in traverse_model(model, depth=graph.depth)}
     is_param_dict = {scope: t.requires_grad for t,
@@ -26,6 +26,7 @@ def generatePartitionModules(graph: Graph, model: Module, verbose=False) -> List
     parts = groupByPartition(graph.nodes)
 
     lines = generateImports(layer_classes)
+    lines.append(connections(graph))
     ios = []
     # the main code generation loop generating a class decl
     # and forward function
@@ -45,10 +46,16 @@ def generatePartitionModules(graph: Graph, model: Module, verbose=False) -> List
         partitions_code.extend(forward_function)
         ios[idx] = io
 
-    lines.append(generatePartitionFactory(graph, parts, model, ios))
+    lines.append(generatePipline(graph, parts, model, ios))
     lines += partitions_code
 
-    return lines
+    if output_file is None:
+        output_file = 'generated_modules'
+
+    output_file = output_file + '.py'
+
+    with open(output_file, 'w') as f:
+        f.write('\n'.join(lines))
 
 
 def groupByPartition(nodes: List[Node]) -> List[Tuple[int, List[Node]]]:
@@ -92,6 +99,7 @@ def generateImports(layer_classes: Dict[str, Module]) -> List[str]:
     '''
     imports = f'import torch\nfrom torch import Tensor\nimport torch.nn as nn\nimport torch.nn.functional as F\n'
     imports += 'from pytorch_Gpipe.utils import layerDict, tensorDict, OrderedSet\n'
+    imports += 'from module_generation.pipeline import Pipeline\n'
     unique_classes = set(layer_classes.values())
 
     for cls in unique_classes:
@@ -112,8 +120,8 @@ def getFunctionName(scope: str) -> str:
     return scope.split(sep)[1].rstrip(string.digits)
 
 
-def generatePartitionFactory(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, OrderedSet]):
-    '''generates function that will perform the actual partition\n
+def generatePipline(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, OrderedSet]):
+    '''generates function that will perform the actual partition returning a Pipeline object\n
        the function will have the partition config hardcoded into it,\n
        enabling us to perform the partition process once and use the config multiple times
     '''
@@ -124,7 +132,7 @@ def generatePartitionFactory(graph: Graph, partitions: List[List[Node]], model: 
     model_class = model.__class__.__name__
     # function header
     lines = [
-        f'def {model_class}PartitionFactory(model:nn.Module):',
+        f'def {model_class}Pipeline(model:nn.Module,output_device=None):',
         "layer_dict = layerDict(model)",
         "tensor_dict = tensorDict(model)",
         f"\n{tab}# now constructing the partitions in order"
@@ -164,8 +172,38 @@ def generatePartitionFactory(graph: Graph, partitions: List[List[Node]], model: 
 
     input_ids = [f"'input{idx}'" for idx in range(graph.num_inputs)]
     lines.extend([f"config['inputs'] = [{', '.join(input_ids)}]",
-                  f"config['outputs']={list(graph.output_scopes)}"])
+                  f"config['outputs'] = {list(graph.output_scopes)}"])
 
-    lines.append(f"\n{tab}return config\n\n")
+    lines.append(
+        f"\n{tab}return Pipeline(config,output_device=output_device)\n\n")
 
     return f'\n{tab}'.join(lines)
+
+
+def connections(graph: Graph):
+    adj_matrix = [{"inputs": set(), "outputs": set()}
+                  for i in range(graph.num_parts + 2)]
+
+    for node in graph.nodes:
+        if node.idx < graph.num_inputs:
+            for n in node.out_nodes:
+                adj_matrix[n.part + 1]["inputs"].add(node.scope)
+                adj_matrix[0]["outputs"].add(n.part)
+
+        idx = graph.output_scopes.indexOf(node.scope)
+        if idx > 0:
+            adj_matrix[graph.num_parts + 1]["inputs"].add(node.part)
+            adj_matrix[node.part + 1]["outputs"].add(f"output{idx}")
+
+        for n in node.out_nodes:
+            if n.part != node.part:
+                adj_matrix[node.part + 1]["outputs"].add(n.part)
+                adj_matrix[n.part + 1]["inputs"].add(node.part)
+
+    lines = ["# partition adjacency"]
+    lines.append(f"# model inputs {adj_matrix[0]['outputs']}")
+    for i, line in enumerate(adj_matrix[1:-1:]):
+        lines.append(f"# partition {i} {line}")
+    lines.append(
+        f"# model outputs {adj_matrix[graph.num_parts + 1]['inputs']}")
+    return '\n'.join(lines) + '\n'
