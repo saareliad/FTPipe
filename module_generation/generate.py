@@ -160,7 +160,7 @@ def generatePartitionFactory(graph: Graph, partitions: List[List[Node]], model: 
     lines.append(
         f"# creating configuration\n{tab}config = {{{exp}\n{dtab}{tab}}}")
     lines.extend(
-        [f"config[{idx}]['model'] = partition{idx}.to(cuda:{idx})" for idx in sorted(list(ios.keys()))])
+        [f"config[{idx}]['model'] = partition{idx}.to('cuda:{idx}')" for idx in sorted(list(ios.keys()))])
 
     input_ids = [f"'input{idx}'" for idx in range(graph.num_inputs)]
     lines.extend([f"config['inputs'] = [{', '.join(input_ids)}]",

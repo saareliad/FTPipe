@@ -1,5 +1,7 @@
 from typing import List, Tuple, Dict, Set
 from torch.nn import Module
+import re
+from itertools import chain
 tab = '    '
 dtab = tab + tab
 
@@ -26,11 +28,12 @@ def generateConstructor(class_name: str, full_names: List[str], layer_classes: D
         else:
             buffs.append(k)
 
-    tensor_init, tensor_ids = generate__init__BuffParamStatements(
-        buffs, params)
+    tensor_init, tensor_ids = generate__init__BuffParamStatements(buffs,
+                                                                  params)
+    state_dict = generateStateDictFunction(scope, tensor_ids)
     scope.update(tensor_ids)
 
-    return '\n'.join([class_decl, init_dec, super_init, layers_init, tensor_init]) + '\n', scope
+    return '\n'.join([class_decl, init_dec, super_init, layers_init, tensor_init, state_dict]) + '\n', scope
 
 
 def generate__init__layersStatements(layer_names: List[str], full_names: List[str], layer_classes: Dict[str, Module]) -> str:
@@ -87,3 +90,38 @@ def generate__init__BuffParamStatements(buffers: List[str], parameters: List[str
         tensor_ids[p_name] = f'self.p_{idx}'
 
     return f'\n{dtab}'.join(lines), tensor_ids
+
+
+def generateStateDictFunction(layers_to_id, tensors_to_id):
+    # first generate lookup table
+    {'p_0': 'w',
+     'l_1': 'module0.sub1.linear'}
+    lookup = dict()
+    for scope, id in chain(layers_to_id.items(), tensors_to_id.items()):
+        # scope: testMod/Linear[linear0] id: l_0
+        # we will have 2 keys: l_0.weight l_0.bias
+        # we wish to replace l_0 with linear0
+        # resulting in keys: linear0.weight linear0.bias
+        # for eg scope testMod/Mod0[a]/Sub[b] => a.b
+        fields = re.findall("\[[a-zA-Z0-9_]*\]", scope)
+        fields = map(lambda s: s[1:-1:], fields)
+        prefix = '.'.join(fields)
+        # remove the self. part of the id
+        lookup[f"{id[5:]}"] = f"{prefix}"
+
+    state_dict_function = ["def state_dict(self):",
+                           f"# we return the state dict of this part as it should be in the original model",
+                           "state = super().state_dict()",
+                           f"lookup = {lookup}",
+                           "result = dict()",
+                           "for k, v in state.items():",
+                           f"{tab}if k in lookup:",
+                           f"{dtab}result[lookup[k]] = v",
+                           f"{tab}else:",
+                           f"{dtab}assert '.' in k",
+                           f"{dtab}split_idx = k.find('.')",
+                           f"{dtab}new_k = lookup[k[:split_idx]] + k[split_idx:]",
+                           f"{dtab}result[new_k] = v",
+                           f"return result"]
+
+    return f"\n{tab}" + f"\n{dtab}".join(state_dict_function)
