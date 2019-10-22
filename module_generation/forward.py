@@ -53,7 +53,7 @@ def generateForwardFunction(partition: List[Node],
     body = generateBody(out_scopes, root_nodes,
                         scope_to_class_field, ready_expressions, verbose=verbose)
     lines.append(body)
-    return lines, {"input": input_scopes, "output": out_scopes}
+    return lines, {"inputs": input_scopes, "outputs": out_scopes}
 
 
 def generateDeclaration(input_ids: List[str], scope_to_class_field: Dict[str, str],
@@ -143,8 +143,11 @@ def generateReturnStatement(output_scopes: OrderedSet[str], ready_expressions: D
     scope_comment = f'\n{dtab}# '.join(output_scopes)
     comment = f'# returing:\n{dtab}# {scope_comment}'
     scopes = [ready_expressions[scope] for scope in output_scopes]
-
-    return f'{dtab}{comment}\n{dtab}return {", ".join(scopes)}\n\n'
+    if len(scopes) > 1:
+        result_tuple = ", ".join(scopes)
+    else:
+        result_tuple = scopes[0] + ','
+    return f'{dtab}{comment}\n{dtab}return ({result_tuple})\n\n'
 
 
 def generateLayerActivationExpression(scope_to_class_field: Dict[str, str],

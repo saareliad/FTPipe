@@ -171,8 +171,8 @@ def generatePipline(graph: Graph, partitions: List[List[Node]], model: Module, i
         [f"config[{idx}]['model'] = partition{idx}.to('cuda:{idx}')" for idx in sorted(list(ios.keys()))])
 
     input_ids = [f"'input{idx}'" for idx in range(graph.num_inputs)]
-    lines.extend([f"config['inputs'] = [{', '.join(input_ids)}]",
-                  f"config['outputs'] = {list(graph.output_scopes)}"])
+    lines.extend([f"config['model inputs'] = [{', '.join(input_ids)}]",
+                  f"config['model outputs'] = {list(graph.output_scopes)}"])
 
     lines.append(
         f"\n{tab}return Pipeline(config,output_device=output_device)\n\n")
@@ -191,7 +191,8 @@ def connections(graph: Graph):
                 adj_matrix[0]["outputs"].add(n.part)
 
         idx = graph.output_scopes.indexOf(node.scope)
-        if idx > 0:
+
+        if idx >= 0:
             adj_matrix[graph.num_parts + 1]["inputs"].add(node.part)
             adj_matrix[node.part + 1]["outputs"].add(f"output{idx}")
 
