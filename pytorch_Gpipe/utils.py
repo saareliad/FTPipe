@@ -1,5 +1,5 @@
-from typing import Dict, Iterable, Iterator, List, Optional, Tuple, Union, TypeVar, Generic
-from copy import deepcopy
+from typing import Dict, Iterable, Iterator, List, Optional,\
+    Tuple, Union, TypeVar, Generic, Callable, Any
 import collections
 import torch
 import torch.nn as nn
@@ -271,25 +271,28 @@ class OrderedSet(collections.MutableSet, Generic[T]):
             end = self.end
             curr = end[1]
             curr[2] = end[1] = self.map[key] = [key, curr, end]
+        return self
 
     def update(self, keys):
         for k in keys:
             self.add(k)
+        return self
 
     def discard(self, key):
         if key in self.map:
             key, prev, next = self.map.pop(key)
             prev[2] = next
             next[1] = prev
+        return self
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[T]:
         end = self.end
         curr = end[2]
         while curr is not end:
             yield curr[0]
             curr = curr[2]
 
-    def __reversed__(self):
+    def __reversed__(self) -> Iterator[T]:
         end = self.end
         curr = end[1]
         while curr is not end:
@@ -307,6 +310,7 @@ class OrderedSet(collections.MutableSet, Generic[T]):
         for k in self:
             if k in other:
                 self.discard(k)
+        return self
 
     def union(self, *others):
         res = OrderedSet(self.map.keys())
@@ -322,12 +326,39 @@ class OrderedSet(collections.MutableSet, Generic[T]):
                 res.add(k)
         return res
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         if not self:
             return '%s()' % (self.__class__.__name__,)
         return '%s(%r)' % (self.__class__.__name__, list(self))
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if isinstance(other, OrderedSet):
             return len(self) == len(other) and list(self) == list(other)
         return set(self) == set(other)
+
+    def indexOf(self, key) -> int:
+        for idx, k in enumerate(self):
+            if key == k:
+                return idx
+        return -1
+
+
+def tensorsMap(f: Callable[[Tensors], Any], tensors: Tensors,):
+    """maps each tensor using the f function while keeping the same structure"""
+
+    if isinstance(tensors, torch.Tensor):
+        return f(tensors)
+    elif isinstance(tensors, (list, tuple)):
+        container = type(tensors)
+        return container([tensorsMap(f, tensors) for tensors in tensors])
+    else:
+        raise ValueError(
+            f"expected list or tuple or tensor got {tensors.__class__.__name__}")
+
+
+def batchDim(tensors: Tensors):
+    """returns the batch_dim of a Tensors object"""
+    if isinstance(tensors, torch.Tensor):
+        return tensors.size(0)
+
+    return batchDim(tensors[0])

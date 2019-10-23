@@ -17,7 +17,7 @@ tab = '    '
 dtab = tab + tab
 
 
-def generatePartitionModules(graph: Graph, model: Module, verbose=False, output_file=None):
+def generatePartitionModules(graph: Graph, model: Module, verbose=False, output_file=None, DEBUG=False):
     layer_classes = {scope: type(layer) for layer, scope, _
                      in traverse_model(model, depth=graph.depth)}
     is_param_dict = {scope: t.requires_grad for t,
@@ -46,7 +46,7 @@ def generatePartitionModules(graph: Graph, model: Module, verbose=False, output_
         partitions_code.extend(forward_function)
         ios[idx] = io
 
-    lines.append(generatePipline(graph, parts, model, ios))
+    lines.append(generatePipline(graph, parts, model, ios, DEBUG=DEBUG))
     lines += partitions_code
 
     if output_file is None:
@@ -120,7 +120,7 @@ def getFunctionName(scope: str) -> str:
     return scope.split(sep)[1].rstrip(string.digits)
 
 
-def generatePipline(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, OrderedSet]):
+def generatePipline(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, OrderedSet], DEBUG=False):
     '''generates function that will perform the actual partition returning a Pipeline object\n
        the function will have the partition config hardcoded into it,\n
        enabling us to perform the partition process once and use the config multiple times
@@ -132,7 +132,7 @@ def generatePipline(graph: Graph, partitions: List[List[Node]], model: Module, i
     model_class = model.__class__.__name__
     # function header
     lines = [
-        f'def {model_class}Pipeline(model:nn.Module,output_device=None):',
+        f'def {model_class}Pipeline(model:nn.Module,output_device=None,DEBUG=False):',
         "layer_dict = layerDict(model)",
         "tensor_dict = tensorDict(model)",
         f"\n{tab}# now constructing the partitions in order"
@@ -167,15 +167,18 @@ def generatePipline(graph: Graph, partitions: List[List[Node]], model: Module, i
     exp = f',\n{dtab}{tab}'.join([f"{k}: {v}" for k, v in ios.items()])
     lines.append(
         f"# creating configuration\n{tab}config = {{{exp}\n{dtab}{tab}}}")
-    lines.extend(
-        [f"config[{idx}]['model'] = partition{idx}.to('cuda:{idx}')" for idx in sorted(list(ios.keys()))])
+
+    for idx in sorted(list(ios.keys())):
+        device = f'cuda:{idx}' if not DEBUG else 'cpu'
+        lines.append(
+            f"config[{idx}]['model'] = partition{idx}.to('{device}')")
 
     input_ids = [f"'input{idx}'" for idx in range(graph.num_inputs)]
     lines.extend([f"config['model inputs'] = [{', '.join(input_ids)}]",
                   f"config['model outputs'] = {list(graph.output_scopes)}"])
 
     lines.append(
-        f"\n{tab}return Pipeline(config,output_device=output_device)\n\n")
+        f"\n{tab}return Pipeline(config,output_device=output_device,DEBUG=DEBUG)\n\n")
 
     return f'\n{tab}'.join(lines)
 
