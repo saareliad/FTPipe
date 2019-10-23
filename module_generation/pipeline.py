@@ -483,7 +483,7 @@ class Result():
 
 
 class Connection():
-    def __init__(self, in_queues, out_queues, output_uses):
+    def __init__(self, in_queues: OrderedDict, out_queues: OrderedDict, output_uses: OrderedDict):
         self.in_queues = in_queues
         self.out_queues = out_queues
         self.output_uses = output_uses
@@ -585,9 +585,8 @@ class Pipeline():
             if DEBUG:
                 output_device = 'cpu'
             model = config['model'].to(output_device)
-
-            args = (idx, model, output_device, input_queues,
-                    output_queues, output_uses)
+            IO = Connection(input_queues, output_queues, output_uses)
+            args = (idx, model, output_device, IO)
             workers.append(Worker(*args))
             shards.append(model)
             worker_configs.append(args)
@@ -616,7 +615,8 @@ class Pipeline():
             self._spawnWorkers()
 
         chunked_input = self.scatter(xs, num_chunks)
-
+        for w in self.workers:
+            w.num_chunks = len(chunked_input)
         self._sendCommand(COMMAND.FORWARD)
         self.log("sended FORWARD command")
 
@@ -657,13 +657,8 @@ class Pipeline():
 
     def _sendCommand(self, command: COMMAND):
         assert self.workers_running
-        for k, q in self.input_queues.items():
-            for _ in range(self.uses[k]):
-                q.put(Result(data=command))
-
-        for k, q in self.output_queues.items():
-            for _ in range(self.uses[k]):
-                assert q.get().get() == command
+        for worker in self.workers:
+            worker.changeMode(command)
 
     def train(self, training=True):
         cmd = COMMAND.TRAIN if training else COMMAND.EVAL
@@ -703,20 +698,20 @@ class Pipeline():
 
 
 class Worker(Thread):
-    def __init__(self, idx: int, model: Module, device: int, input_queues: OrderedDict, output_queues: OrderedDict, output_uses: Dict):
+    def __init__(self, idx: int, model: Module, device: int, IO: Connection):
         super(Worker, self).__init__(daemon=True)
         self.idx = idx
         self.model = model
         self.device = device
-        self.input_queues = input_queues
-        self.output_queues = output_queues
-        self.output_uses = output_uses
+        self.IO = IO
         self.FORWARD = True
         self.running = True
         self.training = True
         self.n = 0
         self.activations = ActivationStack(device=self.device)
         self.rngs = RNGStack(device=self.device)
+        self.num_chunks = -1
+        self.curr_chunk = 0
 
     def log(self, msg: str):
         logging.debug(
@@ -727,31 +722,31 @@ class Worker(Thread):
         while self.running:
             try:
                 inputs = self.receiveInputs()
+                if inputs is None:
+                    continue
                 self.log("recieved input")
                 if self.recievedExceptions(inputs):
-                    self.propagate(inputs[0])
+                    self.IO.put(inputs[0], forward=self.FORWARD)
                 inputs = self.moveInputs(inputs)
                 self.log("no exceptions")
-                if isinstance(inputs[0], COMMAND):
-                    self.changeMode(inputs[0])
-                    self.propagate(Result(data=inputs[0]))
-                elif self.FORWARD:
+                if self.FORWARD:
                     outputs = self.forward(inputs)
-                    self.sendOutputs(outputs)
+                    self.IO.put(outputs, forward=self.FORWARD)
                 elif not self.FORWARD:
                     outputs = self.backward(inputs)
-                    self.sendOutputs(outputs)
+                    self.IO.put(outputs, forward=self.FORWARD)
             except Exception:
                 self.log("exception")
                 exc_info = cast(ExcInfo, sys.exc_info())
-                self.propagate(Result(exc_info=exc_info))
+                self.IO.put(Result(exc_info=exc_info), forward=self.FORWARD)
 
-    def receiveInputs(self) -> List[Result]:
-        inputs = [q.get() for q in self.input_queues.values()]
-        return inputs
+    def receiveInputs(self) -> Optional[List[Result]]:
+        if self.curr_chunk < self.num_chunks:
+            self.curr_chunk += 1
+            inputs = self.IO.get(forward=self.FORWARD)
+            return inputs
 
-    def receiveGrads(self) -> List[Result]:
-        pass
+        return None
 
     def recievedExceptions(self, results: List[Result]) -> bool:
         for r in results:
@@ -759,9 +754,6 @@ class Worker(Thread):
                 return True
 
         return False
-
-    def propagate(self, result: Result):
-        return self.sendOutputs([result for _ in self.output_queues])
 
     def changeMode(self, mode: COMMAND):
         if mode == COMMAND.TRAIN:
@@ -779,16 +771,10 @@ class Worker(Thread):
         elif mode == COMMAND.TERMINATE:
             self.running = False
 
-    def sendOutputs(self, outputs: List[Result]):
-        for result, (k, q) in zip(outputs, self.output_queues.items()):
-            for _ in range(self.output_uses[k]):
-                q.put(result)
-
     def forward(self, inputs: List[Tensor]) -> List[Tensor]:
         with torch.no_grad():
             self.activations.push(inputs)
-            # results = self.model(*inputs)
-            results = [torch.zeros(1) for _ in self.output_queues]
+            results = self.model(*inputs)
             self.log("forward")
             return [Result(data=r) for r in results]
 
