@@ -447,7 +447,8 @@ import torch
 from torch import Tensor
 from torch.nn import Module, ModuleList
 import logging
-from pprint import pprint
+from itertools import permutations
+
 ExcInfo = Tuple[Type[BaseException], BaseException, TracebackType]
 logging.basicConfig(
     level=logging.DEBUG, format='%(relativeCreated)6d %(message)s')
@@ -483,13 +484,14 @@ class Result():
 
 
 class Connection():
-    def __init__(self, in_queues: OrderedDict, out_queues: OrderedDict, output_uses: OrderedDict):
+    def __init__(self, in_queues: OrderedDict, out_queues: OrderedDict, output_uses: OrderedDict, forward=True):
         self.in_queues = in_queues
         self.out_queues = out_queues
         self.output_uses = output_uses
+        self.forward = forward
 
-    def get(self, forward=True):
-        if forward:
+    def get(self):
+        if self.forward:
             return [q.get() for q in self.in_queues.values()]
 
         grads = []
@@ -500,12 +502,17 @@ class Connection():
             grads.append(tmp)
         return grads
 
-    def put(self, data, forward=True):
-        if forward:
+    def put(self, data):
+        if self.forward:
+            if not isinstance(data, (tuple, list)):
+                data = [data for _ in self.out_queues]
             for x, (k, q) in zip(data, self.out_queues.items()):
                 for _ in range(self.output_uses[k]):
                     q.put(x)
         else:
+
+            if not isinstance(data, (tuple, list)):
+                data = [data for _ in self.in_queues]
             for grad, q in zip(data, self.in_queues.values()):
                 q.put(grad)
 
@@ -543,6 +550,13 @@ class ActivationStack():
         activations = self.activations.pop()
         activations = [x.requires_grad_() for x in activations]
         return activations
+
+
+def err(expected, actual):
+    print(torch.allclose(expected, actual))
+    print((expected - actual).sum())
+    print(((expected - actual)**2).sum())
+    print()
 
 
 class Pipeline():
@@ -610,15 +624,15 @@ class Pipeline():
             f"master msg{self.n} {msg}")
         self.n += 1
 
-    def forward(self, *xs: Tensor, num_chunks=1):
+    def forward(self, *xs: Tensor, num_chunks: int = 1, expected=None):
         if not self.workers_running:
             self._spawnWorkers()
 
         chunked_input = self.scatter(xs, num_chunks)
+        num_chunks = len(chunked_input)
         for w in self.workers:
-            w.num_chunks = len(chunked_input)
+            w.num_chunks = num_chunks
         self._sendCommand(COMMAND.FORWARD)
-        self.log("sended FORWARD command")
 
         # split input to chunks and send to workers
         # one minibatch at a time
@@ -638,14 +652,27 @@ class Pipeline():
                 self.log(f"collected output {k} of chunk {idx}")
             results.append(mini_batch)
 
-        return self.gather(results)
+        results = self.gather(results, expected=expected)
+        if isinstance(results, Tensor):
+            results = results.detach_()
+            if self.training:
+                results = results.requires_grad_()
+        else:
+            results = [r.detach_() for r in results]
+            if self.training:
+                results = [r.requires_grad_() for r in results]
+        return results
 
-    def gather(self, results: List[Tensor]) -> List[Tensor]:
+    def gather(self, results: List[Tensor], expected=None) -> List[Tensor]:
         outputs = [[]for _ in self.output_names]
-        assert len(outputs) == 1
         for minbatch in results:
             for out, t in zip(outputs, minbatch):
                 out.append(t)
+
+        # actual = outputs[0]
+        # for i in range(len(expected)):
+        #     for j in range(len(expected)):
+        #         err(expected[i], actual[j])
 
         batch_outs = [torch.cat(minibatches_out).to(self.output_device)
                       for minibatches_out in outputs]
@@ -723,27 +750,30 @@ class Worker(Thread):
             try:
                 inputs = self.receiveInputs()
                 if inputs is None:
+                    # we have processesed all input in this cycle
+                    # wait untill next cycle
+                    # TODO can sleep instead of busy wait
                     continue
-                self.log("recieved input")
                 if self.recievedExceptions(inputs):
-                    self.IO.put(inputs[0], forward=self.FORWARD)
+                    self.IO.put(inputs[0])
                 inputs = self.moveInputs(inputs)
-                self.log("no exceptions")
                 if self.FORWARD:
+                    self.log("attempting forward")
                     outputs = self.forward(inputs)
-                    self.IO.put(outputs, forward=self.FORWARD)
+                    self.log("sending output")
+                    self.IO.put(outputs)
                 elif not self.FORWARD:
                     outputs = self.backward(inputs)
-                    self.IO.put(outputs, forward=self.FORWARD)
+                    self.IO.put(outputs)
             except Exception:
-                self.log("exception")
                 exc_info = cast(ExcInfo, sys.exc_info())
-                self.IO.put(Result(exc_info=exc_info), forward=self.FORWARD)
+                self.IO.put(Result(exc_info=exc_info))
 
     def receiveInputs(self) -> Optional[List[Result]]:
         if self.curr_chunk < self.num_chunks:
             self.curr_chunk += 1
-            inputs = self.IO.get(forward=self.FORWARD)
+            inputs = self.IO.get()
+            self.log(f"recieved chunk {self.curr_chunk}/{self.num_chunks}")
             return inputs
 
         return None
@@ -765,17 +795,19 @@ class Worker(Thread):
             assert self.FORWARD
         elif mode == COMMAND.FORWARD:
             self.FORWARD = True
+            self.IO.forward = True
         elif mode == COMMAND.BACKWARD:
             self.FORWARD = False
+            self.IO.forward = False
             assert self.training
         elif mode == COMMAND.TERMINATE:
             self.running = False
 
     def forward(self, inputs: List[Tensor]) -> List[Tensor]:
         with torch.no_grad():
+            torch.manual_seed(0)
             self.activations.push(inputs)
             results = self.model(*inputs)
-            self.log("forward")
             return [Result(data=r) for r in results]
 
     def moveInputs(self, inputs: List[Result]) -> List:
@@ -784,9 +816,8 @@ class Worker(Thread):
             t = input.get()
             if t is None:
                 outs.append(None)
-            elif isinstance(t, COMMAND):
-                outs.append(t)
             else:
+                self.log("recieved tensor")
                 assert isinstance(t, Tensor)
                 outs.append(t.to(self.device))
         return outs
