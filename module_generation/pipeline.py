@@ -624,7 +624,7 @@ class Pipeline():
             f"master msg{self.n} {msg}")
         self.n += 1
 
-    def forward(self, *xs: Tensor, num_chunks: int = 1, expected=None):
+    def forward(self, *xs: Tensor, num_chunks: int = 1):
         if not self.workers_running:
             self._spawnWorkers()
 
@@ -652,7 +652,13 @@ class Pipeline():
                 self.log(f"collected output {k} of chunk {idx}")
             results.append(mini_batch)
 
-        results = self.gather(results, expected=expected)
+        results = self.gather(results)
+
+        results = self.postProcessResults(results)
+
+        return results
+
+    def postProcessResults(self, results):
         if isinstance(results, Tensor):
             results = results.detach_()
             if self.training:
@@ -663,16 +669,11 @@ class Pipeline():
                 results = [r.requires_grad_() for r in results]
         return results
 
-    def gather(self, results: List[Tensor], expected=None) -> List[Tensor]:
+    def gather(self, results: List[Tensor]) -> List[Tensor]:
         outputs = [[]for _ in self.output_names]
         for minbatch in results:
             for out, t in zip(outputs, minbatch):
                 out.append(t)
-
-        # actual = outputs[0]
-        # for i in range(len(expected)):
-        #     for j in range(len(expected)):
-        #         err(expected[i], actual[j])
 
         batch_outs = [torch.cat(minibatches_out).to(self.output_device)
                       for minibatches_out in outputs]
