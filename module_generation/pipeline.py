@@ -10,7 +10,7 @@ import torch
 from torch import Tensor
 from torch.nn import Module, ModuleList
 import logging
-from itertools import permutations
+import time
 
 ExcInfo = Tuple[Type[BaseException], BaseException, TracebackType]
 logging.basicConfig(
@@ -39,11 +39,20 @@ class Result():
         raise self.exc_info[0].with_traceback(self.exc_info[1],
                                               self.exc_info[2])
 
-    def hasException(self):
+    def hasException(self) -> bool:
         return self.exc_info is not None
 
-    def isValid(self):
+    def isValid(self) -> bool:
         return not self.hasException()
+
+    def __str__(self) -> str:
+        if self.isValid():
+            return f"tensor with shape {self.data.shape}"
+        else:
+            return f"exception {self.exc_info[0]},{self.exc_info[1]}"
+
+    def __repr__(self) -> str:
+        return str(self)
 
 
 class Connection():
@@ -55,29 +64,28 @@ class Connection():
 
     def get(self):
         if self.forward:
-            return [q.get() for q in self.in_queues.values()]
-
-        grads = []
-        for k, q in self.out_queues.items():
-            tmp = []
-            for _ in range(self.output_uses[k]):
-                tmp.append(q.get())
-            grads.append(tmp)
-        return grads
+            inputs = [q.get() for q in self.in_queues.values()]
+            for i in inputs:
+                if not isinstance(i, Result):
+                    raise TypeError(
+                        f"expected Result but got {type(i).__name__}")
+            return inputs
+        else:
+            raise NotImplementedError()
 
     def put(self, data):
         if self.forward:
             if not isinstance(data, (tuple, list)):
                 data = [data for _ in self.out_queues]
+            for x in data:
+                if not isinstance(x, Result):
+                    raise TypeError(
+                        f"expected Result but got {type(x).__name__}")
             for x, (k, q) in zip(data, self.out_queues.items()):
                 for _ in range(self.output_uses[k]):
                     q.put(x)
         else:
-
-            if not isinstance(data, (tuple, list)):
-                data = [data for _ in self.in_queues]
-            for grad, q in zip(data, self.in_queues.values()):
-                q.put(grad)
+            raise NotImplementedError()
 
 
 class StateStack():
@@ -86,7 +94,7 @@ class StateStack():
         self.states = deque()
         self.activations = deque()
 
-    def push(self, xs):
+    def push(self, xs: List[Tensor]):
         cloned = [x.clone() for x in xs]
         self.activations.appendleft(cloned)
         if self.device == 'cpu':
@@ -94,9 +102,9 @@ class StateStack():
         else:
             self.states.appendleft(torch.cuda.get_rng_state(self.device))
 
-    def pop(self):
-        assert len(self.activations) > 0
-        assert len(self.states) > 0
+    def pop(self) -> List[Tensor]:
+        if len(self.activations) == 0 or len(self.states) == 0:
+            raise AssertionError("cannot pop empty stack")
         activations = self.activations.pop()
         activations = [x.requires_grad_() for x in activations]
         if self.device == 'cpu':
@@ -104,13 +112,6 @@ class StateStack():
         else:
             torch.cuda.set_rng_state(self.states.pop(), device=self.device)
         return activations
-
-
-def err(expected, actual):
-    print(torch.allclose(expected, actual))
-    print((expected - actual).sum())
-    print(((expected - actual)**2).sum())
-    print()
 
 
 class Pipeline():
@@ -193,8 +194,8 @@ class Pipeline():
         for idx, chunk in enumerate(chunked_input):
             for (k, q), x in zip(self.input_queues.items(), chunk):
                 for i in range(self.uses[k]):
-                    self.log(f"sent chunk {idx} input {k} number {i}")
                     q.put(Result(data=x))
+                    self.log(f"sent chunk {idx} input {k} number {i}")
 
         # collect mini bactches in order
         results = []
@@ -213,6 +214,7 @@ class Pipeline():
         return results
 
     def postProcessResults(self, results):
+        self.log("processing model output")
         if isinstance(results, Tensor):
             results = results.detach_()
             if self.training:
@@ -224,6 +226,7 @@ class Pipeline():
         return results
 
     def gather(self, results: List[Tensor]) -> List[Tensor]:
+        self.log("gathering output")
         outputs = [[]for _ in results[0]]
         # group by output
         for minbatch in results:
@@ -240,6 +243,7 @@ class Pipeline():
         scatters each tensor across batch dim (0)
         returns list of chunks
         '''
+        self.log("scattering input")
         chunked_input = [x.chunk(num_chunks) for x in xs]
         return list(zip(*chunked_input))
 
@@ -258,16 +262,15 @@ class Pipeline():
 
     def killWorkers(self):
         self._sendCommand(COMMAND.TERMINATE)
-        self.workers_running = False
         for w in self.workers:
             w.join()
         self.workers.clear()
         self.workers_running = False
 
-    def _spawnWorkers(self, *commands: Tuple[COMMAND]):
+    def _spawnWorkers(self):
         assert not self.workers_running
         for config in self.worker_configs:
-            w = Worker(*config, commands)
+            w = Worker(*config)
             self.workers.append(w)
 
         for w in self.workers:
@@ -298,6 +301,8 @@ class Worker(Thread):
         self.curr_chunk = 0
 
     def log(self, msg: str):
+        ''' simple thread safe logging
+        '''
         logging.debug(
             f"thread {self.idx+1} msg{self.num_messages} {msg}")
         self.num_messages += 1
@@ -309,40 +314,49 @@ class Worker(Thread):
                 if inputs is None:
                     # we have processesed all input in this cycle
                     # wait untill next cycle
-                    # TODO can sleep instead of busy wait
+                    time.sleep(0.1 * (self.idx + 1))
                     continue
                 if self.recievedExceptions(inputs):
                     self.propagateExceptions(inputs)
                     break
+                # we've recieved a minibatch
                 inputs = self.moveInputs(inputs)
                 if self.FORWARD:
                     self.log("attempting forward")
                     outputs = self.forward(inputs)
-                    self.log("sending output")
+                    output_str = "\n".join([str(o) for o in outputs])
+                    self.log(f"sending output\n{output_str}")
                     self.IO.put(outputs)
                 elif not self.FORWARD:
                     outputs = self.backward(inputs)
                     self.IO.put(outputs)
+                else:
+                    self.log("run loop should not happen")
             except Exception:
                 exc_info = cast(ExcInfo, sys.exc_info())
+                self.log(f"exception {exc_info[0],exc_info[1]}")
                 self.IO.put(Result(exc_info=exc_info))
                 break
 
     def receiveInputs(self) -> Optional[List[Result]]:
+        ''' attempt to fetch data from input queues
+            only if we have not yet finished the current forward pass
+            if the worker already processesd it's entire batch then return None
+
+            this behaviour ensures no race conditions between workers
+        '''
         if self.curr_chunk < self.num_chunks:
             self.curr_chunk += 1
             inputs = self.IO.get()
-            self.log(f"recieved chunk {self.curr_chunk}/{self.num_chunks}")
+            inputs_str = "\n".join([str(i) for i in inputs])
+            self.log(
+                f"recieved chunk {self.curr_chunk}/{self.num_chunks}\n{inputs_str}")
             return inputs
 
         return None
 
     def recievedExceptions(self, results: List[Result]) -> bool:
-        for r in results:
-            if r.hasException():
-                return True
-
-        return False
+        return any(r.hasException() for r in results)
 
     def changeMode(self, mode: COMMAND):
         if mode == COMMAND.TRAIN:
@@ -361,6 +375,8 @@ class Worker(Thread):
             assert self.training
         elif mode == COMMAND.TERMINATE:
             self.running = False
+        else:
+            self.log(f"change mode should not happen{mode}")
 
     def forward(self, inputs: List[Tensor]) -> List[Tensor]:
         with torch.no_grad():
@@ -371,13 +387,14 @@ class Worker(Thread):
 
     def moveInputs(self, inputs: List[Result]) -> List:
         outs = []
-        for input in inputs:
-            t = input.get()
+        for i in inputs:
+            t = i.get()
             if t is None:
                 outs.append(None)
             else:
-                self.log("recieved tensor")
-                assert isinstance(t, Tensor)
+                if not isinstance(t, Tensor):
+                    raise ValueError(
+                        f"expected Tensor but got {type(t).__name__}")
                 outs.append(t.to(self.device))
         return outs
 
@@ -385,7 +402,12 @@ class Worker(Thread):
         raise NotImplementedError()
 
     def propagateExceptions(self, exceptions: List[Result]):
+        ''' propagate the first exception in the input
+            assumes that there is at least one
+        '''
         for e in exceptions:
             if e.hasException():
                 self.IO.put(e)
                 break
+
+        raise ValueError("expected exception but no exception was found")
