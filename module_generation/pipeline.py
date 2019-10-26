@@ -44,7 +44,7 @@ class Result():
                                               self.exc_info[2])
 
     def hasException(self) -> bool:
-        return self.exc_info is not None
+        return not (self.exc_info is None)
 
     def isValid(self) -> bool:
         return not self.hasException()
@@ -70,31 +70,41 @@ class Connection():
         self.output_uses = output_uses
 
     def get(self, forward=True) -> List[Result]:
+        if not isinstance(forward, bool):
+            raise TypeError(
+                f"expected forwad flag to be bool got {type(forward).__name__}")
+
         if forward:
-            queues = self.in_queues.values()
+            queues = self.in_queues
         else:
-            queues = self.out_queues.values()
-        inputs = [q.get() for q in queues]
-        for i in inputs:
-            if not isinstance(i, Result):
-                raise TypeError(
-                    f"expected Result but got {type(i).__name__}")
+            queues = self.out_queues
+
+        uses = [self.output_uses.get(q, 1) for q in queues]
+
+        inputs = []
+        for q, n in zip(queues.values(), uses):
+            for _ in range(n):
+                inputs.append(q.get())
 
         return inputs
 
     def put(self, data, forward=True):
+        if not isinstance(forward, bool):
+            raise TypeError(
+                f"expected forwad flag to be bool got {type(forward).__name__}")
         if forward:
-            if not isinstance(data, (tuple, list)):
-                data = [data for _ in self.out_queues]
-            for x in data:
-                if not isinstance(x, Result):
-                    raise TypeError(
-                        f"expected Result but got {type(x).__name__}")
-            for x, (k, q) in zip(data, self.out_queues.items()):
-                for _ in range(self.output_uses[k]):
-                    q.put(x)
+            queues = self.out_queues
         else:
-            raise NotImplementedError()
+            queues = self.in_queues
+
+        if not isinstance(data, (tuple, list)):
+            data = [data for _ in queues]
+
+        uses = [self.output_uses.get(q, 1) for q in queues]
+
+        for x, q, n in zip(data, queues.values(), uses):
+            for _ in range(n):
+                q.put(x)
 
 
 class StateStack():
@@ -269,9 +279,12 @@ class Pipeline():
             grad = self.grad_buffer[scope]
             queue = self.output_queues[scope]
             for idx, grad_chunk in enumerate(grad.chunk(num_chunks)):
-                queue.put(grad_chunk)
+                queue.put(Result(idx, data=grad_chunk))
                 self.log(f"sent gradient chunk {idx} output {scope}")
-        time.sleep(10)
+
+        # wait untill all workers have finished
+        for q in self.input_queues.values():
+            q.get().get()
 
     def postProcessResults(self, results, num_chunks):
         self.log("processing model output")
@@ -404,16 +417,13 @@ class Worker(Thread):
             try:
                 if self.curr_chunk == self.num_chunks:
                     self.waitForCommand()
+                    self.log("awaiting inputs")
                 inputs = self.receiveInputs()
                 minibatch = inputs[0].minibatch
                 self.checkMinibatch(inputs, minibatch)
                 if self.recievedExceptions(inputs):
                     self.propagateExceptions(inputs)
                     break
-                if self.receivedCommand(inputs):
-                    self.changeMode(inputs[0].data, inputs[0].metadata)
-                    self.IO.put(inputs[0])
-                    continue
                 # we've recieved a minibatch
                 inputs = self.moveInputs(inputs)
                 if self.FORWARD:
@@ -430,19 +440,19 @@ class Worker(Thread):
                     self.log("run loop should not happen")
             except Exception:
                 exc_info = cast(ExcInfo, sys.exc_info())
-                self.log(f"exception {exc_info[0],exc_info[1]}")
+                self.log(f"exception {exc_info[0],exc_info[1]},{self.FORWARD}")
                 self.IO.put(Result(minibatch=minibatch,
-                                   exc_info=exc_info), forward=self.forward)
+                                   exc_info=exc_info), forward=self.FORWARD)
                 break
 
     def receiveInputs(self) -> Optional[List[Result]]:
         ''' fetch data from input queues
         '''
-        inputs = self.IO.get(forward=self.forward)
+        inputs = self.IO.get(forward=self.FORWARD)
         self.curr_chunk += 1
         inputs_str = "\n".join([str(i) for i in inputs])
         self.log(
-            f"recieved chunk {inputs[0].minibatch}/{self.num_chunks}\n{inputs_str}")
+            f"recieved chunk {inputs[0].minibatch+1}/{self.num_chunks}\n{inputs_str}")
         return inputs
 
     def recievedExceptions(self, results: List[Result]) -> bool:
@@ -455,7 +465,6 @@ class Worker(Thread):
         elif mode == COMMAND.EVAL:
             self.model.eval()
             self.training = False
-            assert self.FORWARD
         elif mode == COMMAND.FORWARD:
             self.FORWARD = True
             self.curr_chunk = 0
@@ -465,7 +474,6 @@ class Worker(Thread):
             self.curr_chunk = 0
             self.num_chunks = metadata
             self.log("changed to backward mode")
-            assert self.training
         elif mode == COMMAND.TERMINATE:
             self.running = False
         else:
@@ -494,6 +502,7 @@ class Worker(Thread):
         return outs
 
     def backward(self, grads, minibatch):
+        self.log(f"backward with {type(grads)} , {minibatch}")
         raise NotImplementedError()
 
     def propagateExceptions(self, exceptions: List[Result]):
@@ -502,9 +511,9 @@ class Worker(Thread):
         '''
         for e in exceptions:
             if e.hasException():
-                self.IO.put(e, forward=self.forward)
-                break
-
+                self.IO.put(e, forward=self.FORWARD)
+                return
+        self.log(f"bad exception input was {exceptions}")
         raise ValueError("expected exception but no exception was found")
 
     def checkMinibatch(self, inputs: List[Result], minibatch: int):
@@ -516,3 +525,4 @@ class Worker(Thread):
         cmd, metadata = self.command_queue.get()
         self.changeMode(cmd, metadata)
         self.command_queue.put(cmd)
+        self.log(f"new cycle {self.curr_chunk}/{self.num_chunks}")

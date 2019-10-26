@@ -19,3 +19,4 @@ trace.txt
 inc.pdf
 *.pdf
 generated_modules.py
+*.log
