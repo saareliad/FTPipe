@@ -1,0 +1,584 @@
+   481 master msg0 scattering input
+   482 master msg1 sending forward command
+   482 thread 1 msg0 changed to forward mode
+   482 thread 2 msg0 changed to forward mode
+   482 thread 3 msg0 changed to forward mode
+   482 thread 4 msg0 changed to forward mode
+   983 master msg2 sent input chunk 0 input input0 number 0
+   983 thread 1 msg1 recieved chunk 0/32
+minibatch:0 tensor with shape torch.Size([2, 100])
+   983 master msg3 sent input chunk 1 input input0 number 0
+   983 master msg4 sent input chunk 2 input input0 number 0
+   983 master msg5 sent input chunk 3 input input0 number 0
+   983 master msg6 sent input chunk 4 input input0 number 0
+   983 master msg7 sent input chunk 5 input input0 number 0
+   983 master msg8 sent input chunk 6 input input0 number 0
+   983 master msg9 sent input chunk 7 input input0 number 0
+   983 master msg10 sent input chunk 8 input input0 number 0
+   983 master msg11 sent input chunk 9 input input0 number 0
+   983 master msg12 sent input chunk 10 input input0 number 0
+   983 master msg13 sent input chunk 11 input input0 number 0
+   983 master msg14 sent input chunk 12 input input0 number 0
+   983 master msg15 sent input chunk 13 input input0 number 0
+   983 master msg16 sent input chunk 14 input input0 number 0
+   983 master msg17 sent input chunk 15 input input0 number 0
+   983 master msg18 sent input chunk 16 input input0 number 0
+   983 master msg19 sent input chunk 17 input input0 number 0
+   983 master msg20 sent input chunk 18 input input0 number 0
+   984 master msg21 sent input chunk 19 input input0 number 0
+   984 master msg22 sent input chunk 20 input input0 number 0
+   984 master msg23 sent input chunk 21 input input0 number 0
+   984 master msg24 sent input chunk 22 input input0 number 0
+   984 master msg25 sent input chunk 23 input input0 number 0
+   984 master msg26 sent input chunk 24 input input0 number 0
+   984 master msg27 sent input chunk 25 input input0 number 0
+   984 master msg28 sent input chunk 26 input input0 number 0
+   984 master msg29 sent input chunk 27 input input0 number 0
+   984 master msg30 sent input chunk 28 input input0 number 0
+   984 master msg31 sent input chunk 29 input input0 number 0
+   984 master msg32 sent input chunk 30 input input0 number 0
+   984 master msg33 sent input chunk 31 input input0 number 0
+   985 thread 1 msg2 sending outputs
+minibatch:0 tensor with shape torch.Size([2, 100])
+   985 thread 1 msg3 recieved chunk 1/32
+minibatch:1 tensor with shape torch.Size([2, 100])
+   985 thread 2 msg1 recieved chunk 0/32
+minibatch:0 tensor with shape torch.Size([2, 100])
+   986 thread 1 msg4 sending outputs
+minibatch:1 tensor with shape torch.Size([2, 100])
+   986 thread 1 msg5 recieved chunk 2/32
+minibatch:2 tensor with shape torch.Size([2, 100])
+   986 thread 2 msg2 sending outputs
+minibatch:0 tensor with shape torch.Size([2, 100])
+   986 thread 2 msg3 recieved chunk 1/32
+minibatch:1 tensor with shape torch.Size([2, 100])
+   986 thread 3 msg1 recieved chunk 0/32
+minibatch:0 tensor with shape torch.Size([2, 100])
+   986 thread 1 msg6 sending outputs
+minibatch:2 tensor with shape torch.Size([2, 100])
+   986 thread 2 msg4 sending outputs
+minibatch:1 tensor with shape torch.Size([2, 100])
+   986 thread 1 msg7 recieved chunk 3/32
+minibatch:3 tensor with shape torch.Size([2, 100])
+   986 thread 3 msg2 sending outputs
+minibatch:0 tensor with shape torch.Size([2, 100])
+   986 thread 2 msg5 recieved chunk 2/32
+minibatch:2 tensor with shape torch.Size([2, 100])
+   987 thread 3 msg3 recieved chunk 1/32
+minibatch:1 tensor with shape torch.Size([2, 100])
+   987 thread 4 msg1 recieved chunk 0/32
+minibatch:0 tensor with shape torch.Size([2, 100])
+   987 thread 1 msg8 sending outputs
+minibatch:3 tensor with shape torch.Size([2, 100])
+   987 thread 2 msg6 sending outputs
+minibatch:2 tensor with shape torch.Size([2, 100])
+   987 thread 1 msg9 recieved chunk 4/32
+minibatch:4 tensor with shape torch.Size([2, 100])
+   987 thread 3 msg4 sending outputs
+minibatch:1 tensor with shape torch.Size([2, 100])
+   987 thread 2 msg7 recieved chunk 3/32
+minibatch:3 tensor with shape torch.Size([2, 100])
+   987 thread 3 msg5 recieved chunk 2/32
+minibatch:2 tensor with shape torch.Size([2, 100])
+   987 thread 4 msg2 sending outputs
+minibatch:0 tensor with shape torch.Size([2, 100])
+   988 thread 1 msg10 sending outputs
+minibatch:4 tensor with shape torch.Size([2, 100])
+   988 thread 4 msg3 recieved chunk 1/32
+minibatch:1 tensor with shape torch.Size([2, 100])
+   988 thread 2 msg8 sending outputs
+minibatch:3 tensor with shape torch.Size([2, 100])
+   988 master msg34 collected output Sequential/Linear[9] of chunk 0
+   988 thread 1 msg11 recieved chunk 5/32
+minibatch:5 tensor with shape torch.Size([2, 100])
+   988 thread 3 msg6 sending outputs
+minibatch:2 tensor with shape torch.Size([2, 100])
+   988 thread 2 msg9 recieved chunk 4/32
+minibatch:4 tensor with shape torch.Size([2, 100])
+   988 thread 3 msg7 recieved chunk 3/32
+minibatch:3 tensor with shape torch.Size([2, 100])
+   988 thread 4 msg4 sending outputs
+minibatch:1 tensor with shape torch.Size([2, 100])
+   989 thread 4 msg5 recieved chunk 2/32
+minibatch:2 tensor with shape torch.Size([2, 100])
+   989 thread 1 msg12 sending outputs
+minibatch:5 tensor with shape torch.Size([2, 100])
+   989 master msg35 collected output Sequential/Linear[9] of chunk 1
+   989 thread 1 msg13 recieved chunk 6/32
+minibatch:6 tensor with shape torch.Size([2, 100])
+   989 thread 2 msg10 sending outputs
+minibatch:4 tensor with shape torch.Size([2, 100])
+   989 thread 3 msg8 sending outputs
+minibatch:3 tensor with shape torch.Size([2, 100])
+   989 thread 2 msg11 recieved chunk 5/32
+minibatch:5 tensor with shape torch.Size([2, 100])
+   989 thread 4 msg6 sending outputs
+minibatch:2 tensor with shape torch.Size([2, 100])
+   989 thread 3 msg9 recieved chunk 4/32
+minibatch:4 tensor with shape torch.Size([2, 100])
+   990 thread 4 msg7 recieved chunk 3/32
+minibatch:3 tensor with shape torch.Size([2, 100])
+   990 thread 1 msg14 sending outputs
+minibatch:6 tensor with shape torch.Size([2, 100])
+   990 master msg36 collected output Sequential/Linear[9] of chunk 2
+   990 thread 2 msg12 sending outputs
+minibatch:5 tensor with shape torch.Size([2, 100])
+   990 thread 1 msg15 recieved chunk 7/32
+minibatch:7 tensor with shape torch.Size([2, 100])
+   990 thread 3 msg10 sending outputs
+minibatch:4 tensor with shape torch.Size([2, 100])
+   990 thread 2 msg13 recieved chunk 6/32
+minibatch:6 tensor with shape torch.Size([2, 100])
+   990 thread 3 msg11 recieved chunk 5/32
+minibatch:5 tensor with shape torch.Size([2, 100])
+   990 thread 4 msg8 sending outputs
+minibatch:3 tensor with shape torch.Size([2, 100])
+   990 thread 4 msg9 recieved chunk 4/32
+minibatch:4 tensor with shape torch.Size([2, 100])
+   991 thread 2 msg14 sending outputs
+minibatch:6 tensor with shape torch.Size([2, 100])
+   991 master msg37 collected output Sequential/Linear[9] of chunk 3
+   991 thread 1 msg16 sending outputs
+minibatch:7 tensor with shape torch.Size([2, 100])
+   991 thread 3 msg12 sending outputs
+minibatch:5 tensor with shape torch.Size([2, 100])
+   991 thread 1 msg17 recieved chunk 8/32
+minibatch:8 tensor with shape torch.Size([2, 100])
+   991 thread 4 msg10 sending outputs
+minibatch:4 tensor with shape torch.Size([2, 100])
+   991 thread 2 msg15 recieved chunk 7/32
+minibatch:7 tensor with shape torch.Size([2, 100])
+   991 thread 3 msg13 recieved chunk 6/32
+minibatch:6 tensor with shape torch.Size([2, 100])
+   991 thread 4 msg11 recieved chunk 5/32
+minibatch:5 tensor with shape torch.Size([2, 100])
+   991 master msg38 collected output Sequential/Linear[9] of chunk 4
+   992 thread 2 msg16 sending outputs
+minibatch:7 tensor with shape torch.Size([2, 100])
+   992 thread 3 msg14 sending outputs
+minibatch:6 tensor with shape torch.Size([2, 100])
+   992 thread 1 msg18 sending outputs
+minibatch:8 tensor with shape torch.Size([2, 100])
+   992 thread 3 msg15 recieved chunk 7/32
+minibatch:7 tensor with shape torch.Size([2, 100])
+   992 thread 4 msg12 sending outputs
+minibatch:5 tensor with shape torch.Size([2, 100])
+   992 thread 1 msg19 recieved chunk 9/32
+minibatch:9 tensor with shape torch.Size([2, 100])
+   992 thread 2 msg17 recieved chunk 8/32
+minibatch:8 tensor with shape torch.Size([2, 100])
+   992 thread 4 msg13 recieved chunk 6/32
+minibatch:6 tensor with shape torch.Size([2, 100])
+   992 master msg39 collected output Sequential/Linear[9] of chunk 5
+   992 thread 3 msg16 sending outputs
+minibatch:7 tensor with shape torch.Size([2, 100])
+   993 thread 2 msg18 sending outputs
+minibatch:8 tensor with shape torch.Size([2, 100])
+   993 thread 1 msg20 sending outputs
+minibatch:9 tensor with shape torch.Size([2, 100])
+   993 thread 4 msg14 sending outputs
+minibatch:6 tensor with shape torch.Size([2, 100])
+   993 thread 3 msg17 recieved chunk 8/32
+minibatch:8 tensor with shape torch.Size([2, 100])
+   993 thread 1 msg21 recieved chunk 10/32
+minibatch:10 tensor with shape torch.Size([2, 100])
+   993 thread 2 msg19 recieved chunk 9/32
+minibatch:9 tensor with shape torch.Size([2, 100])
+   993 thread 4 msg15 recieved chunk 7/32
+minibatch:7 tensor with shape torch.Size([2, 100])
+   993 master msg40 collected output Sequential/Linear[9] of chunk 6
+   993 thread 3 msg18 sending outputs
+minibatch:8 tensor with shape torch.Size([2, 100])
+   994 thread 1 msg22 sending outputs
+minibatch:10 tensor with shape torch.Size([2, 100])
+   994 thread 2 msg20 sending outputs
+minibatch:9 tensor with shape torch.Size([2, 100])
+   994 thread 1 msg23 recieved chunk 11/32
+minibatch:11 tensor with shape torch.Size([2, 100])
+   994 thread 4 msg16 sending outputs
+minibatch:7 tensor with shape torch.Size([2, 100])
+   994 thread 2 msg21 recieved chunk 10/32
+minibatch:10 tensor with shape torch.Size([2, 100])
+   994 thread 3 msg19 recieved chunk 9/32
+minibatch:9 tensor with shape torch.Size([2, 100])
+   994 thread 4 msg17 recieved chunk 8/32
+minibatch:8 tensor with shape torch.Size([2, 100])
+   994 master msg41 collected output Sequential/Linear[9] of chunk 7
+   994 thread 2 msg22 sending outputs
+minibatch:10 tensor with shape torch.Size([2, 100])
+   994 thread 3 msg20 sending outputs
+minibatch:9 tensor with shape torch.Size([2, 100])
+   995 thread 1 msg24 sending outputs
+minibatch:11 tensor with shape torch.Size([2, 100])
+   995 thread 3 msg21 recieved chunk 10/32
+minibatch:10 tensor with shape torch.Size([2, 100])
+   995 thread 1 msg25 recieved chunk 12/32
+minibatch:12 tensor with shape torch.Size([2, 100])
+   995 thread 4 msg18 sending outputs
+minibatch:8 tensor with shape torch.Size([2, 100])
+   995 thread 2 msg23 recieved chunk 11/32
+minibatch:11 tensor with shape torch.Size([2, 100])
+   995 thread 4 msg19 recieved chunk 9/32
+minibatch:9 tensor with shape torch.Size([2, 100])
+   995 master msg42 collected output Sequential/Linear[9] of chunk 8
+   995 thread 3 msg22 sending outputs
+minibatch:10 tensor with shape torch.Size([2, 100])
+   995 thread 1 msg26 sending outputs
+minibatch:12 tensor with shape torch.Size([2, 100])
+   996 thread 2 msg24 sending outputs
+minibatch:11 tensor with shape torch.Size([2, 100])
+   996 thread 1 msg27 recieved chunk 13/32
+minibatch:13 tensor with shape torch.Size([2, 100])
+   996 thread 4 msg20 sending outputs
+minibatch:9 tensor with shape torch.Size([2, 100])
+   996 thread 2 msg25 recieved chunk 12/32
+minibatch:12 tensor with shape torch.Size([2, 100])
+   996 thread 3 msg23 recieved chunk 11/32
+minibatch:11 tensor with shape torch.Size([2, 100])
+   996 thread 4 msg21 recieved chunk 10/32
+minibatch:10 tensor with shape torch.Size([2, 100])
+   996 master msg43 collected output Sequential/Linear[9] of chunk 9
+   996 thread 2 msg26 sending outputs
+minibatch:12 tensor with shape torch.Size([2, 100])
+   996 thread 3 msg24 sending outputs
+minibatch:11 tensor with shape torch.Size([2, 100])
+   996 thread 1 msg28 sending outputs
+minibatch:13 tensor with shape torch.Size([2, 100])
+   997 thread 3 msg25 recieved chunk 12/32
+minibatch:12 tensor with shape torch.Size([2, 100])
+   997 thread 1 msg29 recieved chunk 14/32
+minibatch:14 tensor with shape torch.Size([2, 100])
+   997 thread 2 msg27 recieved chunk 13/32
+minibatch:13 tensor with shape torch.Size([2, 100])
+   997 thread 4 msg22 sending outputs
+minibatch:10 tensor with shape torch.Size([2, 100])
+   997 thread 4 msg23 recieved chunk 11/32
+minibatch:11 tensor with shape torch.Size([2, 100])
+   997 master msg44 collected output Sequential/Linear[9] of chunk 10
+   997 thread 3 msg26 sending outputs
+minibatch:12 tensor with shape torch.Size([2, 100])
+   997 thread 1 msg30 sending outputs
+minibatch:14 tensor with shape torch.Size([2, 100])
+   997 thread 2 msg28 sending outputs
+minibatch:13 tensor with shape torch.Size([2, 100])
+   997 thread 1 msg31 recieved chunk 15/32
+minibatch:15 tensor with shape torch.Size([2, 100])
+   998 thread 2 msg29 recieved chunk 14/32
+minibatch:14 tensor with shape torch.Size([2, 100])
+   998 thread 3 msg27 recieved chunk 13/32
+minibatch:13 tensor with shape torch.Size([2, 100])
+   998 thread 4 msg24 sending outputs
+minibatch:11 tensor with shape torch.Size([2, 100])
+   998 thread 4 msg25 recieved chunk 12/32
+minibatch:12 tensor with shape torch.Size([2, 100])
+   998 thread 2 msg30 sending outputs
+minibatch:14 tensor with shape torch.Size([2, 100])
+   998 master msg45 collected output Sequential/Linear[9] of chunk 11
+   998 thread 3 msg28 sending outputs
+minibatch:13 tensor with shape torch.Size([2, 100])
+   998 thread 1 msg32 sending outputs
+minibatch:15 tensor with shape torch.Size([2, 100])
+   998 thread 3 msg29 recieved chunk 14/32
+minibatch:14 tensor with shape torch.Size([2, 100])
+   998 thread 4 msg26 sending outputs
+minibatch:12 tensor with shape torch.Size([2, 100])
+   998 thread 1 msg33 recieved chunk 16/32
+minibatch:16 tensor with shape torch.Size([2, 100])
+   999 thread 2 msg31 recieved chunk 15/32
+minibatch:15 tensor with shape torch.Size([2, 100])
+   999 thread 4 msg27 recieved chunk 13/32
+minibatch:13 tensor with shape torch.Size([2, 100])
+   999 master msg46 collected output Sequential/Linear[9] of chunk 12
+   999 thread 3 msg30 sending outputs
+minibatch:14 tensor with shape torch.Size([2, 100])
+   999 thread 2 msg32 sending outputs
+minibatch:15 tensor with shape torch.Size([2, 100])
+   999 thread 1 msg34 sending outputs
+minibatch:16 tensor with shape torch.Size([2, 100])
+   999 thread 4 msg28 sending outputs
+minibatch:13 tensor with shape torch.Size([2, 100])
+   999 thread 3 msg31 recieved chunk 15/32
+minibatch:15 tensor with shape torch.Size([2, 100])
+   999 thread 1 msg35 recieved chunk 17/32
+minibatch:17 tensor with shape torch.Size([2, 100])
+   999 thread 2 msg33 recieved chunk 16/32
+minibatch:16 tensor with shape torch.Size([2, 100])
+  1000 thread 4 msg29 recieved chunk 14/32
+minibatch:14 tensor with shape torch.Size([2, 100])
+  1000 master msg47 collected output Sequential/Linear[9] of chunk 13
+  1000 thread 3 msg32 sending outputs
+minibatch:15 tensor with shape torch.Size([2, 100])
+  1000 thread 2 msg34 sending outputs
+minibatch:16 tensor with shape torch.Size([2, 100])
+  1000 thread 1 msg36 sending outputs
+minibatch:17 tensor with shape torch.Size([2, 100])
+  1000 thread 4 msg30 sending outputs
+minibatch:14 tensor with shape torch.Size([2, 100])
+  1000 thread 3 msg33 recieved chunk 16/32
+minibatch:16 tensor with shape torch.Size([2, 100])
+  1000 thread 1 msg37 recieved chunk 18/32
+minibatch:18 tensor with shape torch.Size([2, 100])
+  1000 thread 2 msg35 recieved chunk 17/32
+minibatch:17 tensor with shape torch.Size([2, 100])
+  1000 thread 4 msg31 recieved chunk 15/32
+minibatch:15 tensor with shape torch.Size([2, 100])
+  1000 master msg48 collected output Sequential/Linear[9] of chunk 14
+  1001 thread 3 msg34 sending outputs
+minibatch:16 tensor with shape torch.Size([2, 100])
+  1001 thread 2 msg36 sending outputs
+minibatch:17 tensor with shape torch.Size([2, 100])
+  1001 thread 1 msg38 sending outputs
+minibatch:18 tensor with shape torch.Size([2, 100])
+  1001 thread 4 msg32 sending outputs
+minibatch:15 tensor with shape torch.Size([2, 100])
+  1001 thread 3 msg35 recieved chunk 17/32
+minibatch:17 tensor with shape torch.Size([2, 100])
+  1001 thread 1 msg39 recieved chunk 19/32
+minibatch:19 tensor with shape torch.Size([2, 100])
+  1001 thread 2 msg37 recieved chunk 18/32
+minibatch:18 tensor with shape torch.Size([2, 100])
+  1001 thread 4 msg33 recieved chunk 16/32
+minibatch:16 tensor with shape torch.Size([2, 100])
+  1001 master msg49 collected output Sequential/Linear[9] of chunk 15
+  1002 thread 2 msg38 sending outputs
+minibatch:18 tensor with shape torch.Size([2, 100])
+  1002 thread 3 msg36 sending outputs
+minibatch:17 tensor with shape torch.Size([2, 100])
+  1002 thread 1 msg40 sending outputs
+minibatch:19 tensor with shape torch.Size([2, 100])
+  1002 thread 3 msg37 recieved chunk 18/32
+minibatch:18 tensor with shape torch.Size([2, 100])
+  1002 thread 4 msg34 sending outputs
+minibatch:16 tensor with shape torch.Size([2, 100])
+  1002 thread 1 msg41 recieved chunk 20/32
+minibatch:20 tensor with shape torch.Size([2, 100])
+  1002 thread 2 msg39 recieved chunk 19/32
+minibatch:19 tensor with shape torch.Size([2, 100])
+  1002 thread 4 msg35 recieved chunk 17/32
+minibatch:17 tensor with shape torch.Size([2, 100])
+  1002 master msg50 collected output Sequential/Linear[9] of chunk 16
+  1003 thread 3 msg38 sending outputs
+minibatch:18 tensor with shape torch.Size([2, 100])
+  1003 thread 1 msg42 sending outputs
+minibatch:20 tensor with shape torch.Size([2, 100])
+  1003 thread 2 msg40 sending outputs
+minibatch:19 tensor with shape torch.Size([2, 100])
+  1003 thread 1 msg43 recieved chunk 21/32
+minibatch:21 tensor with shape torch.Size([2, 100])
+  1003 thread 4 msg36 sending outputs
+minibatch:17 tensor with shape torch.Size([2, 100])
+  1003 thread 2 msg41 recieved chunk 20/32
+minibatch:20 tensor with shape torch.Size([2, 100])
+  1003 thread 3 msg39 recieved chunk 19/32
+minibatch:19 tensor with shape torch.Size([2, 100])
+  1003 thread 4 msg37 recieved chunk 18/32
+minibatch:18 tensor with shape torch.Size([2, 100])
+  1003 master msg51 collected output Sequential/Linear[9] of chunk 17
+  1004 thread 2 msg42 sending outputs
+minibatch:20 tensor with shape torch.Size([2, 100])
+  1004 thread 3 msg40 sending outputs
+minibatch:19 tensor with shape torch.Size([2, 100])
+  1004 thread 1 msg44 sending outputs
+minibatch:21 tensor with shape torch.Size([2, 100])
+  1004 thread 3 msg41 recieved chunk 20/32
+minibatch:20 tensor with shape torch.Size([2, 100])
+  1004 thread 4 msg38 sending outputs
+minibatch:18 tensor with shape torch.Size([2, 100])
+  1004 thread 1 msg45 recieved chunk 22/32
+minibatch:22 tensor with shape torch.Size([2, 100])
+  1004 thread 2 msg43 recieved chunk 21/32
+minibatch:21 tensor with shape torch.Size([2, 100])
+  1004 thread 4 msg39 recieved chunk 19/32
+minibatch:19 tensor with shape torch.Size([2, 100])
+  1004 master msg52 collected output Sequential/Linear[9] of chunk 18
+  1004 thread 3 msg42 sending outputs
+minibatch:20 tensor with shape torch.Size([2, 100])
+  1005 thread 2 msg44 sending outputs
+minibatch:21 tensor with shape torch.Size([2, 100])
+  1005 thread 1 msg46 sending outputs
+minibatch:22 tensor with shape torch.Size([2, 100])
+  1005 thread 4 msg40 sending outputs
+minibatch:19 tensor with shape torch.Size([2, 100])
+  1005 thread 3 msg43 recieved chunk 21/32
+minibatch:21 tensor with shape torch.Size([2, 100])
+  1005 thread 1 msg47 recieved chunk 23/32
+minibatch:23 tensor with shape torch.Size([2, 100])
+  1005 thread 2 msg45 recieved chunk 22/32
+minibatch:22 tensor with shape torch.Size([2, 100])
+  1005 thread 4 msg41 recieved chunk 20/32
+minibatch:20 tensor with shape torch.Size([2, 100])
+  1005 master msg53 collected output Sequential/Linear[9] of chunk 19
+  1005 thread 3 msg44 sending outputs
+minibatch:21 tensor with shape torch.Size([2, 100])
+  1006 thread 2 msg46 sending outputs
+minibatch:22 tensor with shape torch.Size([2, 100])
+  1006 thread 1 msg48 sending outputs
+minibatch:23 tensor with shape torch.Size([2, 100])
+  1006 thread 4 msg42 sending outputs
+minibatch:20 tensor with shape torch.Size([2, 100])
+  1006 thread 3 msg45 recieved chunk 22/32
+minibatch:22 tensor with shape torch.Size([2, 100])
+  1006 thread 1 msg49 recieved chunk 24/32
+minibatch:24 tensor with shape torch.Size([2, 100])
+  1006 thread 2 msg47 recieved chunk 23/32
+minibatch:23 tensor with shape torch.Size([2, 100])
+  1006 thread 4 msg43 recieved chunk 21/32
+minibatch:21 tensor with shape torch.Size([2, 100])
+  1006 master msg54 collected output Sequential/Linear[9] of chunk 20
+  1006 thread 3 msg46 sending outputs
+minibatch:22 tensor with shape torch.Size([2, 100])
+  1007 thread 2 msg48 sending outputs
+minibatch:23 tensor with shape torch.Size([2, 100])
+  1007 thread 1 msg50 sending outputs
+minibatch:24 tensor with shape torch.Size([2, 100])
+  1007 thread 4 msg44 sending outputs
+minibatch:21 tensor with shape torch.Size([2, 100])
+  1007 thread 3 msg47 recieved chunk 23/32
+minibatch:23 tensor with shape torch.Size([2, 100])
+  1007 thread 1 msg51 recieved chunk 25/32
+minibatch:25 tensor with shape torch.Size([2, 100])
+  1007 thread 2 msg49 recieved chunk 24/32
+minibatch:24 tensor with shape torch.Size([2, 100])
+  1007 thread 4 msg45 recieved chunk 22/32
+minibatch:22 tensor with shape torch.Size([2, 100])
+  1007 master msg55 collected output Sequential/Linear[9] of chunk 21
+  1007 thread 3 msg48 sending outputs
+minibatch:23 tensor with shape torch.Size([2, 100])
+  1008 thread 2 msg50 sending outputs
+minibatch:24 tensor with shape torch.Size([2, 100])
+  1008 thread 1 msg52 sending outputs
+minibatch:25 tensor with shape torch.Size([2, 100])
+  1008 thread 4 msg46 sending outputs
+minibatch:22 tensor with shape torch.Size([2, 100])
+  1008 thread 3 msg49 recieved chunk 24/32
+minibatch:24 tensor with shape torch.Size([2, 100])
+  1008 thread 1 msg53 recieved chunk 26/32
+minibatch:26 tensor with shape torch.Size([2, 100])
+  1008 thread 2 msg51 recieved chunk 25/32
+minibatch:25 tensor with shape torch.Size([2, 100])
+  1008 thread 4 msg47 recieved chunk 23/32
+minibatch:23 tensor with shape torch.Size([2, 100])
+  1008 master msg56 collected output Sequential/Linear[9] of chunk 22
+  1008 thread 3 msg50 sending outputs
+minibatch:24 tensor with shape torch.Size([2, 100])
+  1008 thread 2 msg52 sending outputs
+minibatch:25 tensor with shape torch.Size([2, 100])
+  1009 thread 1 msg54 sending outputs
+minibatch:26 tensor with shape torch.Size([2, 100])
+  1009 thread 3 msg51 recieved chunk 25/32
+minibatch:25 tensor with shape torch.Size([2, 100])
+  1009 thread 1 msg55 recieved chunk 27/32
+minibatch:27 tensor with shape torch.Size([2, 100])
+  1009 thread 2 msg53 recieved chunk 26/32
+minibatch:26 tensor with shape torch.Size([2, 100])
+  1009 thread 4 msg48 sending outputs
+minibatch:23 tensor with shape torch.Size([2, 100])
+  1009 thread 3 msg52 sending outputs
+minibatch:25 tensor with shape torch.Size([2, 100])
+  1009 thread 4 msg49 recieved chunk 24/32
+minibatch:24 tensor with shape torch.Size([2, 100])
+  1009 master msg57 collected output Sequential/Linear[9] of chunk 23
+  1009 thread 2 msg54 sending outputs
+minibatch:26 tensor with shape torch.Size([2, 100])
+  1009 thread 1 msg56 sending outputs
+minibatch:27 tensor with shape torch.Size([2, 100])
+  1010 thread 3 msg53 recieved chunk 26/32
+minibatch:26 tensor with shape torch.Size([2, 100])
+  1010 thread 1 msg57 recieved chunk 28/32
+minibatch:28 tensor with shape torch.Size([2, 100])
+  1010 thread 4 msg50 sending outputs
+minibatch:24 tensor with shape torch.Size([2, 100])
+  1010 thread 2 msg55 recieved chunk 27/32
+minibatch:27 tensor with shape torch.Size([2, 100])
+  1010 thread 4 msg51 recieved chunk 25/32
+minibatch:25 tensor with shape torch.Size([2, 100])
+  1010 master msg58 collected output Sequential/Linear[9] of chunk 24
+  1010 thread 3 msg54 sending outputs
+minibatch:26 tensor with shape torch.Size([2, 100])
+  1010 thread 1 msg58 sending outputs
+minibatch:28 tensor with shape torch.Size([2, 100])
+  1010 thread 2 msg56 sending outputs
+minibatch:27 tensor with shape torch.Size([2, 100])
+  1011 thread 1 msg59 recieved chunk 29/32
+minibatch:29 tensor with shape torch.Size([2, 100])
+  1011 thread 4 msg52 sending outputs
+minibatch:25 tensor with shape torch.Size([2, 100])
+  1011 thread 2 msg57 recieved chunk 28/32
+minibatch:28 tensor with shape torch.Size([2, 100])
+  1011 thread 3 msg55 recieved chunk 27/32
+minibatch:27 tensor with shape torch.Size([2, 100])
+  1011 thread 4 msg53 recieved chunk 26/32
+minibatch:26 tensor with shape torch.Size([2, 100])
+  1011 master msg59 collected output Sequential/Linear[9] of chunk 25
+  1011 thread 2 msg58 sending outputs
+minibatch:28 tensor with shape torch.Size([2, 100])
+  1011 thread 1 msg60 sending outputs
+minibatch:29 tensor with shape torch.Size([2, 100])
+  1011 thread 3 msg56 sending outputs
+minibatch:27 tensor with shape torch.Size([2, 100])
+  1012 thread 1 msg61 recieved chunk 30/32
+minibatch:30 tensor with shape torch.Size([2, 100])
+  1012 thread 4 msg54 sending outputs
+minibatch:26 tensor with shape torch.Size([2, 100])
+  1012 thread 2 msg59 recieved chunk 29/32
+minibatch:29 tensor with shape torch.Size([2, 100])
+  1012 thread 3 msg57 recieved chunk 28/32
+minibatch:28 tensor with shape torch.Size([2, 100])
+  1012 thread 4 msg55 recieved chunk 27/32
+minibatch:27 tensor with shape torch.Size([2, 100])
+  1012 master msg60 collected output Sequential/Linear[9] of chunk 26
+  1012 thread 2 msg60 sending outputs
+minibatch:29 tensor with shape torch.Size([2, 100])
+  1012 thread 3 msg58 sending outputs
+minibatch:28 tensor with shape torch.Size([2, 100])
+  1012 thread 1 msg62 sending outputs
+minibatch:30 tensor with shape torch.Size([2, 100])
+  1013 thread 3 msg59 recieved chunk 29/32
+minibatch:29 tensor with shape torch.Size([2, 100])
+  1013 thread 4 msg56 sending outputs
+minibatch:27 tensor with shape torch.Size([2, 100])
+  1013 thread 1 msg63 recieved chunk 31/32
+minibatch:31 tensor with shape torch.Size([2, 100])
+  1013 thread 2 msg61 recieved chunk 30/32
+minibatch:30 tensor with shape torch.Size([2, 100])
+  1013 thread 4 msg57 recieved chunk 28/32
+minibatch:28 tensor with shape torch.Size([2, 100])
+  1013 master msg61 collected output Sequential/Linear[9] of chunk 27
+  1013 thread 3 msg60 sending outputs
+minibatch:29 tensor with shape torch.Size([2, 100])
+  1013 thread 2 msg62 sending outputs
+minibatch:30 tensor with shape torch.Size([2, 100])
+  1013 thread 1 msg64 sending outputs
+minibatch:31 tensor with shape torch.Size([2, 100])
+  1014 thread 3 msg61 recieved chunk 30/32
+minibatch:30 tensor with shape torch.Size([2, 100])
+  1014 thread 4 msg58 sending outputs
+minibatch:28 tensor with shape torch.Size([2, 100])
+  1014 thread 2 msg63 recieved chunk 31/32
+minibatch:31 tensor with shape torch.Size([2, 100])
+  1014 thread 4 msg59 recieved chunk 29/32
+minibatch:29 tensor with shape torch.Size([2, 100])
+  1014 master msg62 collected output Sequential/Linear[9] of chunk 28
+  1014 thread 3 msg62 sending outputs
+minibatch:30 tensor with shape torch.Size([2, 100])
+  1014 thread 2 msg64 sending outputs
+minibatch:31 tensor with shape torch.Size([2, 100])
+  1014 thread 3 msg63 recieved chunk 31/32
+minibatch:31 tensor with shape torch.Size([2, 100])
+  1014 thread 4 msg60 sending outputs
+minibatch:29 tensor with shape torch.Size([2, 100])
+  1014 thread 4 msg61 recieved chunk 30/32
+minibatch:30 tensor with shape torch.Size([2, 100])
+  1014 master msg63 collected output Sequential/Linear[9] of chunk 29
+  1015 thread 3 msg64 sending outputs
+minibatch:31 tensor with shape torch.Size([2, 100])
+  1015 thread 4 msg62 sending outputs
+minibatch:30 tensor with shape torch.Size([2, 100])
+  1015 thread 4 msg63 recieved chunk 31/32
+minibatch:31 tensor with shape torch.Size([2, 100])
+  1015 master msg64 collected output Sequential/Linear[9] of chunk 30
+  1015 thread 4 msg64 sending outputs
+minibatch:31 tensor with shape torch.Size([2, 100])
+  1015 master msg65 collected output Sequential/Linear[9] of chunk 31
+  1015 master msg66 gathering output
+  1017 master msg67 processing model output
