@@ -4,7 +4,7 @@ from enum import Enum, auto, unique
 from types import TracebackType
 from typing import Dict, List, Optional, Tuple, Type, cast, Iterator, Any
 
-from threading import Thread
+from threading import Thread, get_ident
 from queue import Queue as TQueue
 import torch
 from torch.autograd import Function
@@ -85,8 +85,9 @@ class Connection():
         for q, n in zip(queues.values(), uses):
             for _ in range(n):
                 inputs.append(q.get())
-
-        return inputs
+        if forward:
+            return inputs
+        return self.reduceGrads(inputs)
 
     def put(self, data, forward=True):
         if not isinstance(forward, bool):
@@ -106,6 +107,21 @@ class Connection():
             for _ in range(n):
                 q.put(x)
 
+    def reduceGrads(self, grads: List[Result]) -> List[Optional[Tensor]]:
+        index = self.output_uses.values()
+        minibatch = [g for g in grads if g is not None][0].minibatch
+        i = 0
+        reduced = []
+        for n in index:
+            grads = grads[i:i + n]
+            notNone = [g.get() for g in grads if g is not None]
+            i += n
+            if len(notNone) == 0:
+                reduced.append(None)
+            reduced.append(Result(minibatch, data=sum(notNone)))
+
+        return reduced
+
 
 class StateStack():
     def __init__(self, device):
@@ -113,23 +129,26 @@ class StateStack():
         self.states = deque()
         self.activations = deque()
 
-    def push(self, xs: List[Tensor]):
+    def push(self, xs: List[Tensor], save_state: bool = False):
         cloned = [x.clone() for x in xs]
-        self.activations.appendleft(cloned)
-        if self.device == 'cpu':
-            self.states.appendleft(torch.get_rng_state())
-        else:
-            self.states.appendleft(torch.cuda.get_rng_state(self.device))
+        self.activations.append(cloned)
+        if save_state:
+            if self.device == 'cpu':
+                self.states.appendleft(torch.get_rng_state())
+            else:
+                self.states.appendleft(torch.cuda.get_rng_state(self.device))
 
-    def pop(self) -> List[Tensor]:
+    def pop(self, remove_state: bool = False) -> List[Tensor]:
         if len(self.activations) == 0 or len(self.states) == 0:
             raise AssertionError("cannot pop empty stack")
         activations = self.activations.pop()
-        activations = [x.requires_grad_() for x in activations]
+        activations = [t.requires_grad_() for t in activations]
         if self.device == 'cpu':
-            torch.set_rng_state(self.states.pop())
+            torch.set_rng_state(self.states[-1])
         else:
-            torch.cuda.set_rng_state(self.states.pop(), device=self.device)
+            torch.cuda.set_rng_state(self.states[-1], device=self.device)
+        if remove_state:
+            self.states.pop()
         return activations
 
 
@@ -334,7 +353,7 @@ class Pipeline():
             q.put(r)
 
         # sleep to let workers chance to recieve command
-        time.sleep(0.5)
+        time.sleep(1)
 
         for q in self.command_queues:
             assert q.get() == command
@@ -484,7 +503,7 @@ class Worker(Thread):
 
     def forward(self, inputs: List[Tensor], minibatch: int) -> List[Tensor]:
         with torch.no_grad():
-            self.state_stack.push(inputs)
+            self.state_stack.push(inputs, save_state=(minibatch == 0))
             results = self.model(*inputs)
             return [Result(minibatch=minibatch, data=r) for r in results]
 
@@ -501,8 +520,20 @@ class Worker(Thread):
                 outs.append(t.to(self.device))
         return outs
 
-    def backward(self, grads, minibatch):
-        self.log(f"backward with {type(grads)} , {minibatch}")
+    def backward(self, grads: List[Optional[Tensor]], minibatch):
+        remove_state = (minibatch + 1) == self.num_chunks
+        inputs = self.state_stack.pop(remove_state=remove_state)
+        with torch.enable_grad():
+            outputs = self.model(*inputs)
+            try:
+                # TODO this hangs
+                for o, g in zip(outputs, grads):
+                    print(o.shape)
+                    print()
+                    print(g.shape)
+                    o.sum().backward()
+            except Exception:
+                self.log("backward failed")
         raise NotImplementedError()
 
     def propagateExceptions(self, exceptions: List[Result]):
