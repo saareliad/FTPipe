@@ -288,16 +288,18 @@ class Pipeline():
 
         return results
 
-    def backward(self, num_chunks: int):
+    def backward(self, num_chunks: int, grads: List[Optional[Tensor]]):
         self.FORWARD = False
         if not self.workers_running:
             raise RuntimeError(
                 "workers are not working no activation are saved")
         self._sendCommand(COMMAND.BACKWARD, num_chunks)
-        for scope in self.output_names:
-            grad = self.grad_buffer[scope]
+        for scope, grad in zip(self.output_names, grads):
+            # grad = self.grad_buffer[scope]
             queue = self.output_queues[scope]
-            for idx, grad_chunk in enumerate(grad.chunk(num_chunks)):
+            g_chunks = [None for _ in range(num_chunks)
+                        ] if grad is None else grad.chunk(num_chunks)
+            for idx, grad_chunk in enumerate(g_chunks):
                 queue.put(Result(idx, data=grad_chunk))
                 self.log(f"sent gradient chunk {idx} output {scope}")
 
@@ -311,15 +313,10 @@ class Pipeline():
             results = results.detach_()
             if self.training:
                 results = results.requires_grad_()
-                results.retain_grad()
-                results = TagOutput.apply(
-                    self.output_names[0], num_chunks, self, results)
         else:
             results = [r.detach_() for r in results]
             if self.training:
                 results = [r.requires_grad_() for r in results]
-                results = [TagOutput.apply(s, r)
-                           for s, r in zip(self.output_names, results)]
         return results
 
     def gather(self, results: List[Tensor]) -> List[Tensor]:
@@ -393,6 +390,9 @@ class Pipeline():
     def parameters(self):
         return chain(*[s.parameters() for s in self.shards])
 
+    def named_parameters(self):
+        return chain(*[s.named_parameters() for s in self.shards])
+
     def buffers(self):
         return chain(*[s.buffers() for s in self.shards])
 
@@ -451,10 +451,10 @@ class Worker(Thread):
                     self.log(f"sending outputs\n{output_str}")
                     self.IO.put(outputs, forward=True)
                 elif not self.FORWARD:
-                    outputs = self.backward(inputs, minibatch)
-                    output_str = "\n".join([str(o) for o in outputs])
-                    self.IO.put(outputs, forward=False)
-                    self.log(f"sending gradients\n{output_str}")
+                    grads = self.backward(inputs, minibatch)
+                    grad_str = "\n".join([str(o) for o in grads])
+                    self.IO.put(grads, forward=False)
+                    self.log(f"sending gradients\n{grad_str}")
                 else:
                     self.log("run loop should not happen")
             except Exception:
@@ -525,16 +525,10 @@ class Worker(Thread):
         inputs = self.state_stack.pop(remove_state=remove_state)
         with torch.enable_grad():
             outputs = self.model(*inputs)
-            try:
-                # TODO this hangs
-                for o, g in zip(outputs, grads):
-                    print(o.shape)
-                    print()
-                    print(g.shape)
-                    o.sum().backward()
-            except Exception:
-                self.log("backward failed")
-        raise NotImplementedError()
+            # this works for one minibatch
+            torch.autograd.backward(outputs, grads)
+
+        return [Result(minibatch, data=i.grad) for i in inputs]
 
     def propagateExceptions(self, exceptions: List[Result]):
         ''' propagate the first exception in the input
