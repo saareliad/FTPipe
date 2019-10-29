@@ -2,7 +2,7 @@ import sys
 from collections import Counter, OrderedDict, deque
 from enum import Enum, auto, unique
 from types import TracebackType
-from typing import Dict, List, Optional, Tuple, Type, cast, Iterator, Any
+from typing import Dict, List, Optional, Tuple, Type, cast, Iterator, Any, Union
 
 from threading import Thread, get_ident
 from queue import Queue as TQueue
@@ -21,16 +21,29 @@ logging.basicConfig(
 
 @unique
 class COMMAND(Enum):
+    '''Enum representing the possible commands recognized by the workers
+    '''
     TRAIN = auto()
     EVAL = auto()
     FORWARD = auto()
     BACKWARD = auto()
     TERMINATE = auto()
+    DONE = auto()
+
+
+class InvalidState(Exception):
+    pass
 
 
 class Result():
+    ''' a wrapper to an asychronous result can be either data or an exception
+    attempting to retrieve the data will trigger the exception (if present)
+    '''
+
     def __init__(self, minibatch: int, data: Optional[Tensor] = None, exc_info: Optional[ExcInfo] = None, metadata=None):
-        assert data is None or exc_info is None
+        if not (data is None or exc_info is None):
+            raise ValueError(
+                f"data and exc_info fields are mutually excelusive but got {data} {exc_info}")
         self.data = data
         self.exc_info = exc_info
         self.minibatch = minibatch
@@ -63,13 +76,21 @@ class Result():
         return str(self)
 
 
+Data = Union[Result, List[Result]]
+
+
 class Connection():
+    ''' Abstraction of partition input/output channels with awareness to flow mode
+    in forward mode data is pass from inputs to outputs and in backward mode it's reversed
+
+    '''
+
     def __init__(self, in_queues: OrderedDict, out_queues: OrderedDict, output_uses: OrderedDict):
         self.in_queues = in_queues
         self.out_queues = out_queues
         self.output_uses = output_uses
 
-    def get(self, forward=True) -> List[Result]:
+    def get(self, minibatch: int, forward: bool = True) -> List[Result]:
         if not isinstance(forward, bool):
             raise TypeError(
                 f"expected forwad flag to be bool got {type(forward).__name__}")
@@ -83,13 +104,22 @@ class Connection():
 
         inputs = []
         for q, n in zip(queues.values(), uses):
-            for _ in range(n):
-                inputs.append(q.get())
+            i = 0
+            while True:
+                if i == n:
+                    break
+                data = q.get()
+                if data.minibatch != minibatch:
+                    q.put(data)
+                else:
+                    i += 1
+                    inputs.append(data)
+
         if forward:
             return inputs
         return self.reduceGrads(inputs)
 
-    def put(self, data, forward=True):
+    def put(self, data: Data, forward: bool = True):
         if not isinstance(forward, bool):
             raise TypeError(
                 f"expected forwad flag to be bool got {type(forward).__name__}")
@@ -118,12 +148,15 @@ class Connection():
             i += n
             if len(notNone) == 0:
                 reduced.append(None)
-            reduced.append(Result(minibatch, data=sum(notNone)))
+            reduced.append(Result(minibatch=minibatch, data=sum(notNone)))
 
         return reduced
 
 
 class StateStack():
+    ''' A stack managing the saved activations and rng state of the partition
+    '''
+
     def __init__(self, device):
         self.device = device
         self.states = deque()
@@ -140,7 +173,7 @@ class StateStack():
 
     def pop(self, remove_state: bool = False) -> List[Tensor]:
         if len(self.activations) == 0 or len(self.states) == 0:
-            raise AssertionError("cannot pop empty stack")
+            raise InvalidState("cannot restore activation as none are saved")
         activations = self.activations.pop()
         activations = [t.requires_grad_() for t in activations]
         if self.device == 'cpu':
@@ -177,8 +210,8 @@ class TagOutput(Function):
         scope = ctx.scope
         num_chunks = ctx.num_chunks
         pipeline = ctx.pipeline
-        pipeline.updateGrad(scope, grad)
-        if pipeline.canStartBackward():
+        pipeline._updateGrad(scope, grad)
+        if pipeline._canStartBackward():
             pipeline.backward(num_chunks)
         return None, None, None, None
 
@@ -245,7 +278,6 @@ class Pipeline():
         for worker in self.workers:
             worker.start()
 
-        self.workers_running = True
         self.training = True
         self.num_messages = 0
         self.debug = DEBUG
@@ -255,11 +287,22 @@ class Pipeline():
         self.num_messages += 1
 
     def forward(self, *xs: Tensor, num_chunks: int = 1):
-        self.FORWARD = True
-        if not self.workers_running:
-            self._spawnWorkers()
+        '''runs the pipeline forward pass input is split across batch dim
+           and fed to workers process order and result order are presereved
+           and the result should be the same regardless the number of chunks
 
-        chunked_input = self.scatter(xs, num_chunks)
+        Parameters:
+        *xs:
+            the network input
+        num_chunks:
+            the number of chunks to split the inputs to
+
+        '''
+        self.FORWARD = True
+        if not self.WorkersRunning():
+            raise InvalidState("workers are not running")
+
+        chunked_input = self._scatter(xs, num_chunks)
         num_chunks = len(chunked_input)
         self.grad_buffer = dict()
         self._sendCommand(COMMAND.FORWARD, num_chunks)
@@ -272,7 +315,7 @@ class Pipeline():
                     q.put(Result(minibatch=idx, data=x))
                     self.log(f"sent input chunk {idx} input {k} number {i}")
 
-        # collect mini bactches in order
+        # collect mini batches in order
         results = []
         for idx in range(num_chunks):
             mini_batch = []
@@ -282,17 +325,26 @@ class Pipeline():
                 self.log(f"collected output {k} of chunk {idx}")
             results.append(mini_batch)
 
-        results = self.gather(results)
+        results = self._gather(results)
 
-        results = self.postProcessResults(results, num_chunks)
+        results = self._postProcessResults(results, num_chunks)
 
         return results
 
-    def backward(self, num_chunks: int, grads: List[Optional[Tensor]]):
+    def backward(self, grads: List[Optional[Tensor]], num_chunks: int):
+        '''runs the pipeline backward pass using the gradient input and the saved activations
+
+        Parameters:
+        *grads:
+            the network input
+        num_chunks:
+            the number of chunks to split the grads to should be the same as used in the forward pass
+
+        '''
         self.FORWARD = False
-        if not self.workers_running:
-            raise RuntimeError(
-                "workers are not working no activation are saved")
+        if not self.WorkersRunning():
+            raise InvalidState("workers are not running")
+
         self._sendCommand(COMMAND.BACKWARD, num_chunks)
         for scope, grad in zip(self.output_names, grads):
             # grad = self.grad_buffer[scope]
@@ -300,14 +352,19 @@ class Pipeline():
             g_chunks = [None for _ in range(num_chunks)
                         ] if grad is None else grad.chunk(num_chunks)
             for idx, grad_chunk in enumerate(g_chunks):
-                queue.put(Result(idx, data=grad_chunk))
+                queue.put(Result(minibatch=idx, data=grad_chunk))
                 self.log(f"sent gradient chunk {idx} output {scope}")
 
         # wait untill all workers have finished
-        for q in self.input_queues.values():
-            q.get().get()
+        self.log("waiting for workers")
 
-    def postProcessResults(self, results, num_chunks):
+        for _ in range(num_chunks):
+            for q in self.input_queues.values():
+                q.get().get()
+
+        self.log("backward done")
+
+    def _postProcessResults(self, results, num_chunks):
         self.log("processing model output")
         if isinstance(results, Tensor):
             results = results.detach_()
@@ -319,7 +376,7 @@ class Pipeline():
                 results = [r.requires_grad_() for r in results]
         return results
 
-    def gather(self, results: List[Tensor]) -> List[Tensor]:
+    def _gather(self, results: List[Tensor]) -> List[Tensor]:
         self.log("gathering output")
         outputs = [[]for _ in results[0]]
         # group by output
@@ -332,7 +389,7 @@ class Pipeline():
                       for minibatches_out in outputs]
         return batch_outs[0] if len(batch_outs) == 1 else batch_outs
 
-    def scatter(self, xs: Tuple[Tensor], num_chunks: int) -> List[Tuple[Tensor]]:
+    def _scatter(self, xs: Tuple[Tensor], num_chunks: int) -> List[Tuple[Tensor]]:
         '''
         scatters each tensor across batch dim (0)
         returns list of chunks
@@ -342,8 +399,9 @@ class Pipeline():
         return list(zip(*chunked_input))
 
     def _sendCommand(self, command: COMMAND, metadata=None):
-        assert self.workers_running
-        self.log(f"sending commnad {command} with metadata {metadata}")
+        if not self.WorkersRunning():
+            raise InvalidState("workers are not running")
+        self.log(f"sending command {command} with metadata {metadata}")
         r = (command, metadata)
 
         for q in self.command_queues:
@@ -353,7 +411,7 @@ class Pipeline():
         time.sleep(1)
 
         for q in self.command_queues:
-            assert q.get() == command
+            assert q.get().get() == COMMAND.DONE
 
     def train(self, training=True):
         cmd = COMMAND.TRAIN if training else COMMAND.EVAL
@@ -363,40 +421,22 @@ class Pipeline():
     def eval(self):
         self.train(training=False)
 
-    def killWorkers(self):
-        self._sendCommand(COMMAND.TERMINATE)
-        for w in self.workers:
-            w.join()
-        self.workers.clear()
-        self.workers_running = False
-
-    def _spawnWorkers(self):
-        assert not self.workers_running
-        for config in self.worker_configs:
-            w = Worker(*config)
-            self.workers.append(w)
-
-        for w in self.workers:
-            w.start()
-
-        self.workers_running = True
-
     def state_dict(self) -> Dict:
         res = dict()
         for s in self.shards:
             res.update(s.state_dict())
         return res
 
-    def parameters(self):
+    def parameters(self) -> Iterator[Tensor]:
         return chain(*[s.parameters() for s in self.shards])
 
-    def named_parameters(self):
+    def named_parameters(self) -> Iterator[Tuple[str, Tensor]]:
         return chain(*[s.named_parameters() for s in self.shards])
 
-    def buffers(self):
+    def buffers(self) -> Iterator[Tensor]:
         return chain(*[s.buffers() for s in self.shards])
 
-    def updateGrad(self, scope: str, grad: Tensor):
+    def _updateGrad(self, scope: str, grad: Tensor):
         if grad is None:
             self.log(
                 f"pipeline update grad recieved None grad for output {scope}")
@@ -404,8 +444,11 @@ class Pipeline():
 
         self.grad_buffer[scope] = grad + self.grad_buffer.get(scope, 0)
 
-    def canStartBackward(self) -> bool:
+    def _canStartBackward(self) -> bool:
         return all(g in self.grad_buffer for g in self.output_names) and len(self.grad_buffer) > 0
+
+    def WorkersRunning(self) -> bool:
+        return (len(self.workers) > 0) and all(w.is_alive() for w in self.workers)
 
 
 class Worker(Thread):
@@ -421,8 +464,8 @@ class Worker(Thread):
         self.command_queue = command_queue
         self.num_messages = 0
         self.state_stack = StateStack(self.device)
-        self.num_chunks = 0
-        self.curr_chunk = 0
+        self.total_minibatch = 0
+        self.minibatch_idx = 0
 
     def log(self, msg: str):
         ''' simple thread safe logging
@@ -434,78 +477,41 @@ class Worker(Thread):
     def run(self):
         while self.running:
             try:
-                if self.curr_chunk == self.num_chunks:
+                if self.minibatch_idx == self.total_minibatch:
                     self.waitForCommand()
-                    self.log("awaiting inputs")
+                    # continue to next iteration maybe it was a TRAIN/EVAL command
+                    # in that case we still need to wait for next cycle start
+                    # wait for master to acknowlege
+                    time.sleep(1)
+                    continue
                 inputs = self.receiveInputs()
-                minibatch = inputs[0].minibatch
-                self.checkMinibatch(inputs, minibatch)
-                if self.recievedExceptions(inputs):
-                    self.propagateExceptions(inputs)
-                    break
-                # we've recieved a minibatch
+                # for debugging to be removed when done
+                self.checkMinibatch(inputs)
                 inputs = self.moveInputs(inputs)
                 if self.FORWARD:
-                    outputs = self.forward(inputs, minibatch)
-                    output_str = "\n".join([str(o) for o in outputs])
-                    self.log(f"sending outputs\n{output_str}")
+                    outputs = self.forward(inputs)
                     self.IO.put(outputs, forward=True)
                 elif not self.FORWARD:
-                    grads = self.backward(inputs, minibatch)
-                    grad_str = "\n".join([str(o) for o in grads])
+                    grads = self.backward(inputs)
                     self.IO.put(grads, forward=False)
-                    self.log(f"sending gradients\n{grad_str}")
-                else:
-                    self.log("run loop should not happen")
+                self.minibatch_idx += 1
             except Exception:
+                # propagate the Exception to next workers eventually reaching the master
+                # a worker should always work unless explicitly shut down by master
+                # or untill master process terminates
                 exc_info = cast(ExcInfo, sys.exc_info())
-                self.log(f"exception {exc_info[0],exc_info[1]},{self.FORWARD}")
-                self.IO.put(Result(minibatch=minibatch,
+                self.IO.put(Result(minibatch=0,
                                    exc_info=exc_info), forward=self.FORWARD)
-                break
 
     def receiveInputs(self) -> Optional[List[Result]]:
         ''' fetch data from input queues
         '''
-        inputs = self.IO.get(forward=self.FORWARD)
-        self.curr_chunk += 1
+        self.log(f"waiting for minibatch {self.minibatch_idx}")
+        inputs = self.IO.get(self.minibatch_idx, forward=self.FORWARD)
         inputs_str = "\n".join([str(i) for i in inputs])
         self.log(
-            f"recieved chunk {inputs[0].minibatch+1}/{self.num_chunks}\n{inputs_str}")
+            f"recieved chunk {self.minibatch_idx}/{self.total_minibatch}\n{inputs_str}")
         return inputs
-
-    def recievedExceptions(self, results: List[Result]) -> bool:
-        return any(r.hasException() for r in results)
-
-    def changeMode(self, mode: COMMAND, metadata: Any):
-        if mode == COMMAND.TRAIN:
-            self.model.train()
-            self.training = True
-        elif mode == COMMAND.EVAL:
-            self.model.eval()
-            self.training = False
-        elif mode == COMMAND.FORWARD:
-            self.FORWARD = True
-            self.curr_chunk = 0
-            self.num_chunks = metadata
-        elif mode == COMMAND.BACKWARD:
-            self.FORWARD = False
-            self.curr_chunk = 0
-            self.num_chunks = metadata
-            self.log("changed to backward mode")
-        elif mode == COMMAND.TERMINATE:
-            self.running = False
-        else:
-            self.log(f"change mode should not happen{mode}")
-
-    def receivedCommand(self, inputs):
-        return isinstance(inputs[0].get(), COMMAND)
-
-    def forward(self, inputs: List[Tensor], minibatch: int) -> List[Tensor]:
-        with torch.no_grad():
-            self.state_stack.push(inputs, save_state=(minibatch == 0))
-            results = self.model(*inputs)
-            return [Result(minibatch=minibatch, data=r) for r in results]
 
     def moveInputs(self, inputs: List[Result]) -> List:
         outs = []
@@ -520,34 +526,56 @@ class Worker(Thread):
                 outs.append(t.to(self.device))
         return outs
 
-    def backward(self, grads: List[Optional[Tensor]], minibatch):
-        remove_state = (minibatch + 1) == self.num_chunks
+    def forward(self, inputs: List[Tensor]) -> List[Tensor]:
+        with torch.no_grad():
+            if self.training:
+                self.state_stack.push(
+                    inputs, save_state=(self.minibatch_idx == 0))
+            results = self.model(*inputs)
+            return [Result(minibatch=self.minibatch_idx, data=r) for r in results]
+
+    def backward(self, grads: List[Optional[Tensor]]):
+        if not self.training:
+            raise InvalidState("cannot backward in eval mode")
+        remove_state = (self.minibatch_idx) == self.total_minibatch
         inputs = self.state_stack.pop(remove_state=remove_state)
         with torch.enable_grad():
             outputs = self.model(*inputs)
             # this works for one minibatch
             torch.autograd.backward(outputs, grads)
 
-        return [Result(minibatch, data=i.grad) for i in inputs]
+        return [Result(minibatch=self.minibatch_idx, data=i.grad) for i in inputs]
 
-    def propagateExceptions(self, exceptions: List[Result]):
-        ''' propagate the first exception in the input
-            assumes that there is at least one
-        '''
-        for e in exceptions:
-            if e.hasException():
-                self.IO.put(e, forward=self.FORWARD)
-                return
-        self.log(f"bad exception input was {exceptions}")
-        raise ValueError("expected exception but no exception was found")
-
-    def checkMinibatch(self, inputs: List[Result], minibatch: int):
-        if ((minibatch + 1) != self.curr_chunk) or any(r.minibatch != minibatch for r in inputs):
-            raise ValueError(
-                f"processed input from different minibatches {minibatch+1} vs {self.curr_chunk}")
-
-    def waitForCommand(self) -> Tuple[COMMAND, Any]:
+    def waitForCommand(self):
         cmd, metadata = self.command_queue.get()
         self.changeMode(cmd, metadata)
-        self.command_queue.put(cmd)
-        self.log(f"new cycle {self.curr_chunk}/{self.num_chunks}")
+        self.command_queue.put(Result(0, data=COMMAND.DONE))
+        self.log(
+            f"recieved command {cmd} with metadata {metadata} executed and sent ack")
+
+    def changeMode(self, mode: COMMAND, metadata: Any):
+        if mode is COMMAND.TRAIN:
+            self.model.train()
+            self.training = True
+        elif mode is COMMAND.EVAL:
+            self.model.eval()
+            self.training = False
+        elif mode is COMMAND.FORWARD:
+            self.FORWARD = True
+            self.minibatch_idx = 0
+            self.total_minibatch = metadata
+        elif mode is COMMAND.BACKWARD:
+            self.FORWARD = False
+            self.minibatch_idx = 0
+            self.total_minibatch = metadata
+        elif mode is COMMAND.TERMINATE:
+            self.running = False
+        else:
+            raise ValueError(f"change mode should not happen{mode}")
+
+    def checkMinibatch(self, inputs: List[Result]):
+        minibatch = inputs[0].minibatch
+        for r in inputs:
+            if r.minibatch != minibatch:
+                raise ValueError(
+                    f"processed input from different minibatches {r.minibatch} vs {minibatch} vs {self.minibatch_idx-1}")
