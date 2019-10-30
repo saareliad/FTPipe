@@ -28,7 +28,6 @@ class COMMAND(Enum):
     FORWARD = auto()
     BACKWARD = auto()
     TERMINATE = auto()
-    DONE = auto()
 
 
 class InvalidState(Exception):
@@ -138,16 +137,19 @@ class Connection():
 
     def reduceGrads(self, grads: List[Result]) -> List[Optional[Tensor]]:
         index = self.output_uses.values()
-        minibatch = [g for g in grads if g is not None][0].minibatch
+        minibatch = grads[0].minibatch
+
         i = 0
         reduced = []
         for n in index:
-            grads = grads[i:i + n]
-            notNone = [g.get() for g in grads if g is not None]
-            i += n
+            gs = grads[i:i + n]
+            gs = [g.get() for g in gs]
+            notNone = [g for g in gs if not (g is None)]
             if len(notNone) == 0:
-                reduced.append(None)
-            reduced.append(Result(minibatch=minibatch, data=sum(notNone)))
+                reduced.append(Result(minibatch, data=None))
+            else:
+                reduced.append(Result(minibatch, data=sum(notNone)))
+            i += n
 
         return reduced
 
@@ -285,7 +287,7 @@ class Pipeline():
         logging.debug(f"master msg{self.num_messages} {msg}")
         self.num_messages += 1
 
-    def forward(self, *xs: Tensor, num_chunks: int = 1):
+    def __call__(self, *xs: Tensor, num_chunks: Optional[int] = 1):
         '''runs the pipeline forward pass input is split across batch dim
            and fed to workers process order and result order are presereved
            and the result should be the same regardless the number of chunks
@@ -293,10 +295,14 @@ class Pipeline():
         Parameters:
         *xs:
             the network input
-        num_chunks:
+        num_chunks Optional:
             the number of chunks to split the inputs to
+            if not given defaults to number of partitions
 
         '''
+        if num_chunks is None:
+            num_chunks = len(self.shards)
+        self.num_chunks = num_chunks
         self.FORWARD = True
         if not self.WorkersRunning():
             raise InvalidState("workers are not running")
@@ -330,26 +336,25 @@ class Pipeline():
 
         return results
 
-    def backward(self, grads: List[Optional[Tensor]], num_chunks: int):
+    def backward(self, grad_input: List[Optional[Tensor]]):
         '''runs the pipeline backward pass using the gradient input and the saved activations
 
         Parameters:
-        *grads:
-            the network input
-        num_chunks:
-            the number of chunks to split the grads to should be the same as used in the forward pass
-
+        grad_input:
+            list of Tensor containing the gradients of the loss in regards to the model outputs
+            the elements must match the order of the model outputs meaning:
+            grad_input = [out0_grad,out1_grad,...,outn_grad]
         '''
         self.FORWARD = False
         if not self.WorkersRunning():
             raise InvalidState("workers are not running")
 
-        self._sendCommand(COMMAND.BACKWARD, num_chunks)
-        for scope, grad in zip(self.output_names, grads):
+        self._sendCommand(COMMAND.BACKWARD, self.num_chunks)
+        for scope, grad in zip(self.output_names, grad_input):
             # grad = self.grad_buffer[scope]
             queue = self.output_queues[scope]
-            g_chunks = [None for _ in range(num_chunks)
-                        ] if grad is None else grad.chunk(num_chunks)
+            g_chunks = [None for _ in range(self.num_chunks)
+                        ] if grad is None else grad.chunk(self.num_chunks)
             for idx, grad_chunk in enumerate(g_chunks):
                 queue.put(Result(minibatch=idx, data=grad_chunk))
                 self.log(f"sent gradient chunk {idx} output {scope}")
@@ -357,9 +362,10 @@ class Pipeline():
         # wait untill all workers have finished
         self.log("waiting for workers")
 
-        for _ in range(num_chunks):
-            for q in self.input_queues.values():
-                q.get().get()
+        for _ in range(self.num_chunks):
+            for k, q in self.input_queues.items():
+                for _ in range(self.uses[k]):
+                    q.get().get()
 
         self.log("backward done")
 
@@ -406,12 +412,6 @@ class Pipeline():
         for q in self.command_queues:
             q.put(r)
 
-        # sleep to let workers chance to recieve command
-        time.sleep(1)
-
-        for q in self.command_queues:
-            assert q.get().get() == COMMAND.DONE
-
     def train(self, training=True):
         cmd = COMMAND.TRAIN if training else COMMAND.EVAL
         self._sendCommand(cmd)
@@ -453,8 +453,6 @@ class Pipeline():
         return (len(self.workers) > 0) and all(w.is_alive() for w in self.workers)
 
 
-# TODO does not work with more then 1 chunk
-
 class Worker(Thread):
     def __init__(self, idx: int, model: Module, device: int, IO: Connection, command_queue: TQueue):
         super(Worker, self).__init__(daemon=True)
@@ -485,7 +483,6 @@ class Worker(Thread):
                     self.waitForCommand()
                     # continue to next iteration maybe it was a TRAIN/EVAL command
                     # in that case we still need to wait for next cycle start
-                    # wait for master to acknowlege
                     time.sleep(1)
                     continue
                 inputs = self.receiveInputs()
@@ -510,7 +507,6 @@ class Worker(Thread):
     def receiveInputs(self) -> Optional[List[Result]]:
         ''' fetch data from input queues
         '''
-        self.log(f"waiting for minibatch {self.minibatch_idx}")
         inputs = self.IO.get(self.minibatch_idx, forward=self.FORWARD)
         inputs_str = "\n".join([str(i) for i in inputs])
         self.log(
@@ -545,17 +541,12 @@ class Worker(Thread):
         inputs = self.state_stack.pop(remove_state=remove_state)
         with torch.enable_grad():
             outputs = self.model(*inputs)
-            # this works for one minibatch
             torch.autograd.backward(outputs, grads)
-
         return [Result(minibatch=self.minibatch_idx, data=i.grad) for i in inputs]
 
     def waitForCommand(self):
         cmd, metadata = self.command_queue.get()
         self.changeMode(cmd, metadata)
-        self.command_queue.put(Result(0, data=COMMAND.DONE))
-        self.log(
-            f"recieved command {cmd} with metadata {metadata} executed and sent ack")
 
     def changeMode(self, mode: COMMAND, metadata: Any):
         if mode is COMMAND.TRAIN:
