@@ -130,11 +130,14 @@ class InceptionPartition0(nn.Module):
         assert len(parameters) == 0, f'expected parameters to have 0 elements but has {len(parameters)} elements'
         assert all(isinstance(k,str) for k in parameters.keys()), 'string keys are expected'
         assert all(isinstance(v,Tensor) for v in parameters.values()), 'Tensor values are expected'
+        self.lookup = {'l_0': 'b3.0', 'l_1': 'b3.1', 'l_2': 'b3.2',
+                       'l_3': 'b3.3', 'l_4': 'b4.0', 'l_5': 'b4.1', 'l_6': 'b4.2'}
+
 
     def state_dict(self):
         # we return the state dict of this part as it should be in the original model
         state = super().state_dict()
-        lookup = {'l_0': 'b3.0', 'l_1': 'b3.1', 'l_2': 'b3.2', 'l_3': 'b3.3', 'l_4': 'b4.0', 'l_5': 'b4.1', 'l_6': 'b4.2'}
+        lookup = self.lookup
         result = dict()
         for k, v in state.items():
             if k in lookup:
@@ -145,6 +148,19 @@ class InceptionPartition0(nn.Module):
                 new_k = lookup[k[:split_idx]] + k[split_idx:]
                 result[new_k] = v
         return result
+
+    def named_parameters(self):
+        # we return the named parameters of this part as it should be in the original model",
+        params = super().named_parameters()
+        lookup = self.lookup
+        for k, v in params:
+            if k in lookup:
+                yield (lookup[k], v)
+            else:
+                assert '.' in k
+                split_idx = k.find('.')
+                new_k = lookup[k[:split_idx]] + k[split_idx:]
+                yield (new_k, v)
 
     def forward(self, x0 = None):
         # Inception/Sequential[b3]/Conv2d[0] <=> self.l_0
@@ -205,11 +221,26 @@ class InceptionPartition1(nn.Module):
         assert len(parameters) == 0, f'expected parameters to have 0 elements but has {len(parameters)} elements'
         assert all(isinstance(k,str) for k in parameters.keys()), 'string keys are expected'
         assert all(isinstance(v,Tensor) for v in parameters.values()), 'Tensor values are expected'
+        self.lookup = {'l_0': 'b1.0', 'l_1': 'b1.1',
+                       'l_2': 'b3.4', 'l_3': 'b3.5'}
+
+    def named_parameters(self):
+        # we return the named parameters of this part as it should be in the original model",
+        params = super().named_parameters()
+        lookup = self.lookup
+        for k, v in params:
+            if k in lookup:
+                yield (lookup[k], v)
+            else:
+                assert '.' in k
+                split_idx = k.find('.')
+                new_k = lookup[k[:split_idx]] + k[split_idx:]
+                yield (new_k, v)
 
     def state_dict(self):
         # we return the state dict of this part as it should be in the original model
         state = super().state_dict()
-        lookup = {'l_0': 'b1.0', 'l_1': 'b1.1', 'l_2': 'b3.4', 'l_3': 'b3.5'}
+        lookup = self.lookup
         result = dict()
         for k, v in state.items():
             if k in lookup:
@@ -267,11 +298,12 @@ class InceptionPartition2(nn.Module):
         assert len(parameters) == 0, f'expected parameters to have 0 elements but has {len(parameters)} elements'
         assert all(isinstance(k,str) for k in parameters.keys()), 'string keys are expected'
         assert all(isinstance(v,Tensor) for v in parameters.values()), 'Tensor values are expected'
+        self.lookup = {'l_0': 'b2.0'}
 
     def state_dict(self):
         # we return the state dict of this part as it should be in the original model
         state = super().state_dict()
-        lookup = {'l_0': 'b2.0'}
+        lookup = self.lookup
         result = dict()
         for k, v in state.items():
             if k in lookup:
@@ -282,6 +314,19 @@ class InceptionPartition2(nn.Module):
                 new_k = lookup[k[:split_idx]] + k[split_idx:]
                 result[new_k] = v
         return result
+
+    def named_parameters(self):
+            # we return the named parameters of this part as it should be in the original model",
+        params = super().named_parameters()
+        lookup = self.lookup
+        for k, v in params:
+            if k in lookup:
+                yield (lookup[k], v)
+            else:
+                assert '.' in k
+                split_idx = k.find('.')
+                new_k = lookup[k[:split_idx]] + k[split_idx:]
+                yield (new_k, v)
 
     def forward(self, x0 = None):
         # Inception/Sequential[b2]/Conv2d[0] <=> self.l_0
@@ -331,11 +376,12 @@ class InceptionPartition3(nn.Module):
         assert len(parameters) == 0, f'expected parameters to have 0 elements but has {len(parameters)} elements'
         assert all(isinstance(k,str) for k in parameters.keys()), 'string keys are expected'
         assert all(isinstance(v,Tensor) for v in parameters.values()), 'Tensor values are expected'
+        self.lookup = {'l_0': 'b2.1', 'l_1': 'b2.2', 'l_2': 'b2.3'}
 
     def state_dict(self):
         # we return the state dict of this part as it should be in the original model
         state = super().state_dict()
-        lookup = {'l_0': 'b2.1', 'l_1': 'b2.2', 'l_2': 'b2.3'}
+        lookup = self.lookup
         result = dict()
         for k, v in state.items():
             if k in lookup:
@@ -364,3 +410,15 @@ class InceptionPartition3(nn.Module):
         # Inception/Sequential[b2]/ReLU[3]
         return (self.l_2(self.l_1(self.l_0(x0))),)
 
+    def named_parameters(self):
+        # we return the named parameters of this part as it should be in the original model",
+        params = super().named_parameters()
+        lookup = self.lookup
+        for k, v in params:
+            if k in lookup:
+                yield (lookup[k],v)
+            else:
+                assert '.' in k
+                split_idx = k.find('.')
+                new_k = lookup[k[:split_idx]] + k[split_idx:]
+                yield (new_k, v)

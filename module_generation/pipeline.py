@@ -52,7 +52,6 @@ class Result():
     def get(self) -> Tensor:
         if self.exc_info is None:
             return self.data
-
         raise self.exc_info[0].with_traceback(self.exc_info[1],
                                               self.exc_info[2])
 
@@ -436,6 +435,9 @@ class Pipeline():
     def buffers(self) -> Iterator[Tensor]:
         return chain(*[s.buffers() for s in self.shards])
 
+    def named_buffers(self) -> Iterator[Tuple[str, Tensor]]:
+        return chain(*[s.named_buffers() for s in self.shards])
+
     def _updateGrad(self, scope: str, grad: Tensor):
         if grad is None:
             self.log(
@@ -450,6 +452,8 @@ class Pipeline():
     def WorkersRunning(self) -> bool:
         return (len(self.workers) > 0) and all(w.is_alive() for w in self.workers)
 
+
+# TODO does not work with more then 1 chunk
 
 class Worker(Thread):
     def __init__(self, idx: int, model: Module, device: int, IO: Connection, command_queue: TQueue):
@@ -529,8 +533,8 @@ class Worker(Thread):
     def forward(self, inputs: List[Tensor]) -> List[Tensor]:
         with torch.no_grad():
             if self.training:
-                self.state_stack.push(
-                    inputs, save_state=(self.minibatch_idx == 0))
+                self.state_stack.push(inputs,
+                                      save_state=(self.minibatch_idx == 0))
             results = self.model(*inputs)
             return [Result(minibatch=self.minibatch_idx, data=r) for r in results]
 

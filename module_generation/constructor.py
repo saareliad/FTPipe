@@ -1,12 +1,11 @@
 from typing import List, Tuple, Dict, Set
-from torch.nn import Module
 import re
 from itertools import chain
+from torch.nn import Module
 tab = '    '
 dtab = tab + tab
 
 
-# generate a class decl and __init__ method
 def generateConstructor(class_name: str, full_names: List[str], layer_classes: Dict[str, Module],
                         is_param_dict: Dict[str, bool], buff_param_names: Set[str]) -> Tuple[str, Dict[str, str]]:
     '''creates the partition constructor and the mapping between layers and field ids
@@ -30,10 +29,10 @@ def generateConstructor(class_name: str, full_names: List[str], layer_classes: D
 
     tensor_init, tensor_ids = generate__init__BuffParamStatements(buffs,
                                                                   params)
-    state_dict = generateStateDictFunction(scope, tensor_ids)
+    lookup = generateLookup(scope, tensor_ids)
     scope.update(tensor_ids)
 
-    return '\n'.join([class_decl, init_dec, super_init, layers_init, tensor_init, state_dict]) + '\n', scope
+    return '\n'.join([class_decl, init_dec, super_init, layers_init, tensor_init, lookup]) + '\n', scope
 
 
 def generate__init__layersStatements(layer_names: List[str], full_names: List[str], layer_classes: Dict[str, Module]) -> str:
@@ -92,7 +91,7 @@ def generate__init__BuffParamStatements(buffers: List[str], parameters: List[str
     return f'\n{dtab}'.join(lines), tensor_ids
 
 
-def generateStateDictFunction(layers_to_id, tensors_to_id):
+def generateLookup(layers_to_id, tensors_to_id):
     # first generate lookup table
     {'p_0': 'w',
      'l_1': 'module0.sub1.linear'}
@@ -109,19 +108,4 @@ def generateStateDictFunction(layers_to_id, tensors_to_id):
         # remove the self. part of the id
         lookup[f"{id[5:]}"] = f"{prefix}"
 
-    state_dict_function = ["def state_dict(self):",
-                           f"# we return the state dict of this part as it should be in the original model",
-                           "state = super().state_dict()",
-                           f"lookup = {lookup}",
-                           "result = dict()",
-                           "for k, v in state.items():",
-                           f"{tab}if k in lookup:",
-                           f"{dtab}result[lookup[k]] = v",
-                           f"{tab}else:",
-                           f"{dtab}assert '.' in k",
-                           f"{dtab}split_idx = k.find('.')",
-                           f"{dtab}new_k = lookup[k[:split_idx]] + k[split_idx:]",
-                           f"{dtab}result[new_k] = v",
-                           f"return result"]
-
-    return f"\n{tab}" + f"\n{dtab}".join(state_dict_function)
+    return f"{dtab}self.lookup = {lookup}"

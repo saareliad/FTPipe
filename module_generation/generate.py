@@ -8,6 +8,7 @@ from pytorch_Gpipe.utils import traverse_model, traverse_params_buffs
 import string
 from .forward import generateForwardFunction
 from .constructor import generateConstructor
+from .misc import generateMiscMethods
 from typing import List, Tuple, Dict
 from pytorch_Gpipe.utils import OrderedSet
 from collections import OrderedDict
@@ -40,10 +41,12 @@ def generatePartitionModules(graph: Graph, model: Module, verbose=False, output_
         class_decl, scope_to_class_field = generateConstructor(class_name, layer_names,
                                                                layer_classes, is_param_dict,
                                                                buff_param_names)
+        misc_functions = generateMiscMethods()
         forward_function, io = generateForwardFunction(part, scope_to_class_field,
                                                        verbose=verbose)
         partitions_code.append(class_decl)
         partitions_code.extend(forward_function)
+        partitions_code.append(misc_functions)
         ios[idx] = io
 
     lines.append(generatePipline(graph, parts, model, ios, DEBUG=DEBUG))
