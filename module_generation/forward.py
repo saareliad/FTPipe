@@ -93,7 +93,6 @@ def generateStatements(root_nodes: List[Node], scope_to_class_field: Dict[str, s
         node = open_nodes.pop()
         if node.idx in close_nodes:
             continue
-
         if inputsNotReady(node, ready_expressions):
             # inputs are not ready yet so we will attempt to generate this later
             open_nodes.appendleft(node)
@@ -125,7 +124,7 @@ def generateStatements(root_nodes: List[Node], scope_to_class_field: Dict[str, s
             statements.append(generateFunctionCallExpression(ready_expressions,
                                                              node, arg_gen, verbose=verbose))
         # add dependent expression
-        if node.type != NodeTypes.CONSTANT:
+        if True or node.type != NodeTypes.CONSTANT:
             open_nodes.extendleft([n for n in node.out_nodes
                                    if n.part == node.part])
         close_nodes.add(node.idx)
@@ -206,7 +205,10 @@ def generateConstantExpression(ready_expressions: Dict[str, str], node: Node):
         does not produce a variable
     '''
     assert 'prim::Constant' in node.scope, f'we expected a constant got {node.scope}'
-    ready_expressions[node.scope] = f'{node.value}'
+    value = node.value
+    if isinstance(value, torch.device):
+        value = f"torch.device('{value}')"
+    ready_expressions[node.scope] = f'{value}'
 
 
 def generateFunctionCallExpression(ready_expressions: Dict[str, str], node: Node,
@@ -223,8 +225,12 @@ def generateFunctionCallExpression(ready_expressions: Dict[str, str], node: Node
     scope = node.scope
     func_name = scope.split('aten::')[1].rstrip(string.digits)
     operand_scopes = [n.scope for n in node.in_nodes]
-    args = ', '.join([ready_expressions[operand]
-                      for operand in operand_scopes])
+    if 'aten::expand' in scope:
+        args = ', '.join([ready_expressions[operand]
+                          for operand in operand_scopes[:-1]])
+    else:
+        args = ', '.join([ready_expressions[operand]
+                          for operand in operand_scopes])
 
     # TODO revisit
     # this is a ugly hack for expression for x+y that generates aten::add(x,y,1)
@@ -241,11 +247,26 @@ def generateFunctionCallExpression(ready_expressions: Dict[str, str], node: Node
         namespace = 'F'
     elif hasattr(Tensor, func_name):
         namespace = 'Tensor'
+    elif 'aten::slice' in scope:
+        namespace = 'Tensor'
     else:
         # TODO is this the right edge case
         assert False, f'could not find {scope} function namespace'
-
-    expression = f'{namespace}.{func_name}({args})'
+    if 'aten::scalar_tensor' in scope:
+        value = ready_expressions[operand_scopes[0]]
+        device_arg = ready_expressions[operand_scopes[3]]
+        non_blocking_arg = ready_expressions[operand_scopes[4]]
+        to_args = f"{device_arg},non_blocking={non_blocking_arg}"
+        expression = f'{namespace}.{func_name}({value}).to({to_args})'
+    elif 'aten::slice' in scope:
+        operand = ready_expressions[operand_scopes[0]]
+        view_args = "".join([":, " for _ in range(
+            int(ready_expressions[operand_scopes[1]]))])
+        view_args += ":".join([str(ready_expressions[a])
+                               for a in operand_scopes[2:]])
+        expression = f"{operand}[{view_args}]"
+    else:
+        expression = f'{namespace}.{func_name}({args})'
     if not verbose and canEmbedInUseSite(node):
         ready_expressions[scope] = expression
         return ''

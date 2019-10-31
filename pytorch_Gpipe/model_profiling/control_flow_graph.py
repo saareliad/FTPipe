@@ -32,10 +32,11 @@ class Graph():
         self._add_IO_nodes(trace_graph.inputs())
         self._add_OP_nodes(trace_graph.nodes())
         self._add_shapes(trace_graph)
-        #TODO we disabled removal of constants
-        # self._remove_constant_nodes()
+        self.remove_useless_clone()
+        self.remove_empty_view()
+        #TODO fold constanst into the operation node save them in values field
         self._set_outputs(trace_graph.outputs())
-        self._remove_nodes_that_go_nowhere(trace_graph.outputs())
+        # self._remove_nodes_that_go_nowhere(trace_graph.outputs())
 
         self.remove_int_tensor_int_conversions()
 
@@ -182,9 +183,18 @@ class Graph():
                 idx += 1
                 output_idx += 1
 
-    def _remove_constant_nodes(self):
-        ''' remove nodes representing constants as they do not provide any useful info'''
-        self._remove_nodes(lambda n: "::Constant" in n.scope)
+    def remove_useless_clone(self):
+        def predicate(n:Node):
+            return ('aten::clone' in n.scope) and (len(n.out_nodes) == 0)
+        self._remove_nodes(predicate)
+
+    def remove_empty_view(self):
+        def predicate(n:Node):
+            if ('aten::view' in n.scope):
+                sizes = list(n.in_nodes)[0]
+                return len(sizes.in_nodes) == 0 or len(n.in_nodes) < 2
+            return('prim::ListConstruct' in n.scope) and (len(n.in_nodes) == 0)
+        self._remove_nodes(predicate)
 
     def remove_int_tensor_int_conversions(self):
         def predicate(node):
@@ -371,6 +381,8 @@ class Graph():
 
             if show_weights and node.weight != 0:
                 label = f"{label}\n {node.weight}"
+            if not (node.value is None):
+                label = f"{label}\n value={node.value}"
             dot.node(str(node.idx), label, fillcolor=colors[node.part])
 
         for node in self.nodes:

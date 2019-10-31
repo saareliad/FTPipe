@@ -81,6 +81,8 @@ def groupByPartition(nodes: List[Node]) -> List[Tuple[int, List[Node]]]:
             func_name = getFunctionName(scope)
             if hasattr(torch, func_name) or hasattr(F, func_name) or hasattr(Tensor, func_name):
                 parts[n.part].append(n)
+            elif 'aten::slice' in scope:
+                parts[n.part].append(n)
             else:
                 assert False, f'could not find nameSpace for {scope}'
         elif n.type == NodeTypes.PYTHON_PRIMITIVE:
