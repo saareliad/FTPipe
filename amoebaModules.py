@@ -14,6 +14,8 @@ from torch.nn.modules.linear import Linear
 from torch.nn.modules.pooling import MaxPool2d
 # this is an auto generated file do not edit unless you know what you are doing
 
+#TODO had to explicitly convert every MergeTwo call into torch.add_call
+# as we actually record only the 2 tensors which are merged by the mergeTwo layer
 
 # partition adjacency
 # model inputs {0}
@@ -1089,8 +1091,7 @@ class AmoebaNet_DPartition0(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[0]/Sequential[layers]/MergeTwo[2] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[0]/Sequential[layers]/InputOne[0]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[0]/Sequential[layers]/InputOne[1]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
-        print(type(t_26),type(t_27))
-        t_31 = self.l_15(t_26, t_27)
+        t_31 = torch.add(t_26, t_27)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/FactorizedReduce[preprocess0]/BatchNorm2d[bn] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/FactorizedReduce[preprocess0]/aten::cat1501
         t_32 = self.l_56(t_29)
@@ -1163,7 +1164,7 @@ class AmoebaNet_DPartition0(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[0]/Sequential[layers]/MergeTwo[5] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[0]/Sequential[layers]/InputOne[3]/Conv_3x3[module]/Conv_Cell[conv3_1x1]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[0]/Sequential[layers]/MergeTwo[2]
-        t_55 = self.l_25(t_54, t_31)
+        t_55 = torch.add(t_54, t_31)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[0]/Sequential[layers]/InputOne[6]/Conv_7x1_1x7[module]/Conv_Cell[conv2_1x7]/Conv2d[conv] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[0]/Sequential[layers]/InputOne[6]/Conv_7x1_1x7[module]/Conv_Cell[conv2_1x7]/ReLU[relu]
         t_56 = self.l_30(t_52)
@@ -1173,7 +1174,7 @@ class AmoebaNet_DPartition0(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[0]/Sequential[layers]/MergeTwo[14] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[0]/Sequential[layers]/MergeTwo[5]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[0]/Sequential[layers]/InputOne[13]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
-        t_58 = self.l_52(t_55, t_25)
+        t_58 = torch.add(t_55, t_25)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[0]/Sequential[layers]/InputOne[10]/Conv_Cell[module]/ReLU[relu] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[0]/Sequential[layers]/MergeTwo[5]
         t_59 = self.l_45(t_55)
@@ -1201,7 +1202,7 @@ class AmoebaNet_DPartition0(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[0]/Sequential[layers]/MergeTwo[11] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[0]/Sequential[layers]/InputOne[9]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[0]/Sequential[layers]/InputOne[10]/Conv_Cell[module]/BatchNorm2d[norm]
-        t_67 = self.l_48(t_48, t_65)
+        t_67 = torch.add(t_48, t_65)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/Sequential[layers]/InputOne[3]/Conv_3x3[module]/Conv_Cell[conv3_1x1]/Conv2d[conv] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/Sequential[layers]/InputOne[3]/Conv_3x3[module]/Conv_Cell[conv3_1x1]/ReLU[relu]
         t_68 = self.l_74(t_64)
@@ -1223,7 +1224,7 @@ class AmoebaNet_DPartition0(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[0]/Sequential[layers]/MergeTwo[8] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[0]/Sequential[layers]/InputOne[6]/Conv_7x1_1x7[module]/Conv_Cell[conv4_1x1]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[0]/Sequential[layers]/InputOne[7]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
-        t_74 = self.l_41(t_73, t_47)
+        t_74 = torch.add(t_73, t_47)
         # building a list from:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[0]/Sequential[layers]/MergeTwo[8]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[0]/Sequential[layers]/MergeTwo[11]
@@ -1263,15 +1264,15 @@ class AmoebaNet_DPartition0(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/Sequential[layers]/MergeTwo[2] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/Sequential[layers]/InputOne[0]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/Sequential[layers]/InputOne[1]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
-        t_86 = self.l_66(t_84, t_85)
+        t_86 = torch.add(t_84, t_85)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/Sequential[layers]/MergeTwo[5] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/Sequential[layers]/InputOne[3]/Conv_3x3[module]/Conv_Cell[conv3_1x1]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/Sequential[layers]/MergeTwo[2]
-        t_87 = self.l_76(t_70, t_86)
+        t_87 = torch.add(t_70, t_86)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/Sequential[layers]/MergeTwo[14] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/Sequential[layers]/MergeTwo[5]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/Sequential[layers]/InputOne[13]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
-        t_88 = self.l_103(t_87, t_50)
+        t_88 = torch.add(t_87, t_50)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/Sequential[layers]/InputOne[6]/Conv_7x1_1x7[module]/Conv_Cell[conv1_1x1]/ReLU[relu] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/Sequential[layers]/MergeTwo[2]
         t_89 = self.l_77(t_86)
@@ -1314,7 +1315,7 @@ class AmoebaNet_DPartition0(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/Sequential[layers]/MergeTwo[11] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/Sequential[layers]/InputOne[9]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/Sequential[layers]/InputOne[10]/Conv_Cell[module]/BatchNorm2d[norm]
-        t_102 = self.l_99(t_99, t_100)
+        t_102 = torch.add(t_99, t_100)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/Sequential[layers]/InputOne[6]/Conv_7x1_1x7[module]/Conv_Cell[conv2_1x7]/Conv2d[conv] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/Sequential[layers]/InputOne[6]/Conv_7x1_1x7[module]/Conv_Cell[conv2_1x7]/ReLU[relu]
         t_103 = self.l_81(t_101)
@@ -1342,7 +1343,7 @@ class AmoebaNet_DPartition0(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/Sequential[layers]/MergeTwo[8] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/Sequential[layers]/InputOne[6]/Conv_7x1_1x7[module]/Conv_Cell[conv4_1x1]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/Sequential[layers]/InputOne[7]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
-        t_111 = self.l_92(t_110, t_98)
+        t_111 = torch.add(t_110, t_98)
         # returing:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[0]/aten::cat1439
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[1]/Sequential[layers]/MergeTwo[11]
@@ -2137,7 +2138,7 @@ class AmoebaNet_DPartition1(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[2]/Sequential[layers]/MergeTwo[2] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[2]/Sequential[layers]/InputOne[0]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[2]/Sequential[layers]/InputOne[1]/Conv_Cell[module]/BatchNorm2d[norm]
-        t_51 = self.l_13(t_45, t_46)
+        t_51 = torch.add(t_45, t_46)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[2]/Sequential[layers]/InputOne[7]/Conv_7x1_1x7[module]/Conv_Cell[conv3_7x1]/ReLU[relu] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[2]/Sequential[layers]/InputOne[7]/Conv_7x1_1x7[module]/Conv_Cell[conv2_1x7]/BatchNorm2d[norm]
         t_52 = self.l_24(t_48)
@@ -2177,7 +2178,7 @@ class AmoebaNet_DPartition1(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[2]/Sequential[layers]/MergeTwo[5] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[2]/Sequential[layers]/MergeTwo[2]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[2]/Sequential[layers]/InputOne[4]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
-        t_64 = self.l_17(t_51, t_63)
+        t_64 = torch.add(t_51, t_63)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[2]/Sequential[layers]/InputOne[7]/Conv_7x1_1x7[module]/Conv_Cell[conv4_1x1]/ReLU[relu] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[2]/Sequential[layers]/InputOne[7]/Conv_7x1_1x7[module]/Conv_Cell[conv3_7x1]/BatchNorm2d[norm]
         t_65 = self.l_27(t_60)
@@ -2208,15 +2209,15 @@ class AmoebaNet_DPartition1(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[2]/Sequential[layers]/MergeTwo[8] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[2]/FactorizedReduce[preprocess0]/BatchNorm2d[bn]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[2]/Sequential[layers]/InputOne[7]/Conv_7x1_1x7[module]/Conv_Cell[conv4_1x1]/BatchNorm2d[norm]
-        t_74 = self.l_30(t_27, t_71)
+        t_74 = torch.add(t_27, t_71)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[2]/Sequential[layers]/MergeTwo[14] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[2]/Sequential[layers]/InputOne[12]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[2]/Sequential[layers]/InputOne[13]/Conv_Cell[module]/BatchNorm2d[norm]
-        t_75 = self.l_53(t_47, t_73)
+        t_75 = torch.add(t_47, t_73)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[2]/Sequential[layers]/MergeTwo[11] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[2]/Sequential[layers]/InputOne[9]/Conv_Cell[module]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[2]/Sequential[layers]/InputOne[10]/Conv_7x1_1x7[module]/Conv_Cell[conv4_1x1]/BatchNorm2d[norm]
-        t_76 = self.l_46(t_29, t_72)
+        t_76 = torch.add(t_29, t_72)
         # building a list from:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[2]/Sequential[layers]/MergeTwo[8]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[2]/Sequential[layers]/MergeTwo[11]
@@ -2301,15 +2302,15 @@ class AmoebaNet_DPartition1(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[3]/Sequential[layers]/MergeTwo[2] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[3]/Sequential[layers]/InputOne[0]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[3]/Sequential[layers]/InputOne[1]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
-        t_97 = self.l_66(t_93, t_94)
+        t_97 = torch.add(t_93, t_94)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[3]/Sequential[layers]/MergeTwo[5] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[3]/Sequential[layers]/InputOne[3]/Conv_3x3[module]/Conv_Cell[conv3_1x1]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[3]/Sequential[layers]/MergeTwo[2]
-        t_98 = self.l_76(t_62, t_97)
+        t_98 = torch.add(t_62, t_97)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[3]/Sequential[layers]/MergeTwo[14] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[3]/Sequential[layers]/MergeTwo[5]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[3]/Sequential[layers]/InputOne[13]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
-        t_99 = self.l_103(t_98, t_32)
+        t_99 = torch.add(t_98, t_32)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/FactorizedReduce[preprocess0]/BatchNorm2d[bn] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/FactorizedReduce[preprocess0]/aten::cat3808
         t_100 = self.l_107(t_96)
@@ -2355,7 +2356,7 @@ class AmoebaNet_DPartition1(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[3]/Sequential[layers]/MergeTwo[11] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[3]/Sequential[layers]/InputOne[9]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[3]/Sequential[layers]/InputOne[10]/Conv_Cell[module]/BatchNorm2d[norm]
-        t_114 = self.l_99(t_111, t_112)
+        t_114 = torch.add(t_111, t_112)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[3]/Sequential[layers]/InputOne[6]/Conv_7x1_1x7[module]/Conv_Cell[conv2_1x7]/Conv2d[conv] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[3]/Sequential[layers]/InputOne[6]/Conv_7x1_1x7[module]/Conv_Cell[conv2_1x7]/ReLU[relu]
         t_115 = self.l_81(t_113)
@@ -2383,7 +2384,7 @@ class AmoebaNet_DPartition1(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[3]/Sequential[layers]/MergeTwo[8] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[3]/Sequential[layers]/InputOne[6]/Conv_7x1_1x7[module]/Conv_Cell[conv4_1x1]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[3]/Sequential[layers]/InputOne[7]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
-        t_123 = self.l_92(t_122, t_110)
+        t_123 = torch.add(t_122, t_110)
         # building a list from:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[3]/Sequential[layers]/MergeTwo[8]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[3]/Sequential[layers]/MergeTwo[11]
@@ -3300,7 +3301,7 @@ class AmoebaNet_DPartition2(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/Sequential[layers]/MergeTwo[2] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/Sequential[layers]/InputOne[0]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/Sequential[layers]/InputOne[1]/Conv_Cell[module]/BatchNorm2d[norm]
-        t_17 = self.l_9(t_13, t_12)
+        t_17 = torch.add(t_13, t_12)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/Sequential[layers]/InputOne[7]/Conv_7x1_1x7[module]/Conv_Cell[conv1_1x1]/ReLU[relu] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/Conv_Cell[preprocess1]/BatchNorm2d[norm]
         t_18 = self.l_14(t_14)
@@ -3355,7 +3356,7 @@ class AmoebaNet_DPartition2(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/Sequential[layers]/MergeTwo[5] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/Sequential[layers]/MergeTwo[2]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/Sequential[layers]/InputOne[4]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
-        t_35 = self.l_13(t_17, t_34)
+        t_35 = torch.add(t_17, t_34)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/Sequential[layers]/InputOne[7]/Conv_7x1_1x7[module]/Conv_Cell[conv2_1x7]/ReLU[relu] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/Sequential[layers]/InputOne[7]/Conv_7x1_1x7[module]/Conv_Cell[conv1_1x1]/BatchNorm2d[norm]
         t_36 = self.l_17(t_30)
@@ -3404,7 +3405,7 @@ class AmoebaNet_DPartition2(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/Sequential[layers]/MergeTwo[14] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/Sequential[layers]/InputOne[12]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/Sequential[layers]/InputOne[13]/Conv_Cell[module]/BatchNorm2d[norm]
-        t_51 = self.l_49(t_11, t_47)
+        t_51 = torch.add(t_11, t_47)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/Sequential[layers]/InputOne[7]/Conv_7x1_1x7[module]/Conv_Cell[conv3_7x1]/Conv2d[conv] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/Sequential[layers]/InputOne[7]/Conv_7x1_1x7[module]/Conv_Cell[conv3_7x1]/ReLU[relu]
         t_52 = self.l_21(t_48)
@@ -3441,11 +3442,11 @@ class AmoebaNet_DPartition2(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/Sequential[layers]/MergeTwo[8] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/FactorizedReduce[preprocess0]/BatchNorm2d[bn]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/Sequential[layers]/InputOne[7]/Conv_7x1_1x7[module]/Conv_Cell[conv4_1x1]/BatchNorm2d[norm]
-        t_63 = self.l_26(x1, t_61)
+        t_63 = torch.add(x1, t_61)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/Sequential[layers]/MergeTwo[11] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/Sequential[layers]/InputOne[9]/Conv_Cell[module]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/Sequential[layers]/InputOne[10]/Conv_7x1_1x7[module]/Conv_Cell[conv4_1x1]/BatchNorm2d[norm]
-        t_64 = self.l_42(t_31, t_62)
+        t_64 = torch.add(t_31, t_62)
         # building a list from:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/Sequential[layers]/MergeTwo[8]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[4]/Sequential[layers]/MergeTwo[11]
@@ -3530,18 +3531,18 @@ class AmoebaNet_DPartition2(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/MergeTwo[2] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/InputOne[0]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/InputOne[1]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
-        t_85 = self.l_62(t_81, t_82)
+        t_85 = torch.add(t_81, t_82)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[6]/FactorizedReduce[preprocess0]/BatchNorm2d[bn] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[6]/FactorizedReduce[preprocess0]/aten::cat5338
         t_86 = self.l_103(t_84)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/MergeTwo[5] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/InputOne[3]/Conv_3x3[module]/Conv_Cell[conv3_1x1]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/MergeTwo[2]
-        t_87 = self.l_72(t_54, t_85)
+        t_87 = torch.add(t_54, t_85)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/MergeTwo[14] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/MergeTwo[5]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/InputOne[13]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
-        t_88 = self.l_99(t_87, t_28)
+        t_88 = torch.add(t_87, t_28)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/InputOne[6]/Conv_7x1_1x7[module]/Conv_Cell[conv1_1x1]/ReLU[relu] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/MergeTwo[2]
         t_89 = self.l_73(t_85)
@@ -3611,11 +3612,11 @@ class AmoebaNet_DPartition2(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/MergeTwo[11] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/InputOne[9]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/InputOne[10]/Conv_Cell[module]/BatchNorm2d[norm]
-        t_111 = self.l_95(t_105, t_109)
+        t_111 = torch.add(t_105, t_109)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[6]/Sequential[layers]/MergeTwo[2] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[6]/Sequential[layers]/InputOne[0]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[6]/Sequential[layers]/InputOne[1]/Conv_Cell[module]/BatchNorm2d[norm]
-        t_112 = self.l_113(t_106, t_107)
+        t_112 = torch.add(t_106, t_107)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/InputOne[6]/Conv_7x1_1x7[module]/Conv_Cell[conv2_1x7]/Conv2d[conv] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/InputOne[6]/Conv_7x1_1x7[module]/Conv_Cell[conv2_1x7]/ReLU[relu]
         t_113 = self.l_77(t_110)
@@ -3637,7 +3638,7 @@ class AmoebaNet_DPartition2(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[6]/Sequential[layers]/MergeTwo[5] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[6]/Sequential[layers]/MergeTwo[2]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[6]/Sequential[layers]/InputOne[4]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
-        t_119 = self.l_117(t_112, t_118)
+        t_119 = torch.add(t_112, t_118)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/InputOne[6]/Conv_7x1_1x7[module]/Conv_Cell[conv3_7x1]/Conv2d[conv] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/InputOne[6]/Conv_7x1_1x7[module]/Conv_Cell[conv3_7x1]/ReLU[relu]
         t_120 = self.l_80(t_117)
@@ -3659,7 +3660,7 @@ class AmoebaNet_DPartition2(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[6]/Sequential[layers]/MergeTwo[14] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[6]/Sequential[layers]/InputOne[12]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[6]/Sequential[layers]/InputOne[13]/Conv_Cell[module]/BatchNorm2d[norm]
-        t_126 = self.l_153(t_108, t_125)
+        t_126 = torch.add(t_108, t_125)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/InputOne[6]/Conv_7x1_1x7[module]/Conv_Cell[conv4_1x1]/Conv2d[conv] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/InputOne[6]/Conv_7x1_1x7[module]/Conv_Cell[conv4_1x1]/ReLU[relu]
         t_127 = self.l_83(t_124)
@@ -3669,7 +3670,7 @@ class AmoebaNet_DPartition2(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/MergeTwo[8] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/InputOne[6]/Conv_7x1_1x7[module]/Conv_Cell[conv4_1x1]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/InputOne[7]/Pool_Operation[module]/Conv_Cell[conv_cell]/BatchNorm2d[norm]
-        t_129 = self.l_88(t_128, t_104)
+        t_129 = torch.add(t_128, t_104)
         # building a list from:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/MergeTwo[8]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[5]/Sequential[layers]/MergeTwo[11]
@@ -3772,11 +3773,11 @@ class AmoebaNet_DPartition2(nn.Module):
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[6]/Sequential[layers]/MergeTwo[8] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[6]/FactorizedReduce[preprocess0]/BatchNorm2d[bn]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[6]/Sequential[layers]/InputOne[7]/Conv_7x1_1x7[module]/Conv_Cell[conv4_1x1]/BatchNorm2d[norm]
-        t_162 = self.l_130(t_86, t_160)
+        t_162 = torch.add(t_86, t_160)
         # calling AmoebaNet_D/Sequential[cells]/Amoeba_Cell[6]/Sequential[layers]/MergeTwo[11] with arguments:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[6]/Sequential[layers]/InputOne[9]/Conv_Cell[module]/BatchNorm2d[norm]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[6]/Sequential[layers]/InputOne[10]/Conv_7x1_1x7[module]/Conv_Cell[conv4_1x1]/BatchNorm2d[norm]
-        t_163 = self.l_146(t_142, t_161)
+        t_163 = torch.add(t_142, t_161)
         # building a list from:
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[6]/Sequential[layers]/MergeTwo[8]
         # AmoebaNet_D/Sequential[cells]/Amoeba_Cell[6]/Sequential[layers]/MergeTwo[11]

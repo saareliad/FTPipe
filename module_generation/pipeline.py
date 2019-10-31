@@ -438,6 +438,10 @@ class Pipeline():
     def named_buffers(self) -> Iterator[Tuple[str, Tensor]]:
         return chain(*[s.named_buffers() for s in self.shards])
 
+    def zero_grad(self):
+        for s in self.shards:
+            s.zero_grad()
+
     def _updateGrad(self, scope: str, grad: Tensor):
         if grad is None:
             self.log(

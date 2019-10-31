@@ -295,7 +295,6 @@ class MergeTwo(Hack):
     def forward(self, tensors: Tensors) -> Tensors:  # type: ignore
         i = self.i
         j = self.j
-        print(len(tensors))
         # Set the initial value as the first tensor
         # to type as 'Tensor' instead of 'Union[Tensor, int]'.
         merged = sum(tensors[i + 1:j + 1], tensors[i])
