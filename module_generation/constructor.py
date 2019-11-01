@@ -95,7 +95,7 @@ def generateLookup(layers_to_id, tensors_to_id):
     # first generate lookup table
     {'p_0': 'w',
      'l_1': 'module0.sub1.linear'}
-    lookup = dict()
+    lookup = []
     for scope, id in chain(layers_to_id.items(), tensors_to_id.items()):
         # scope: testMod/Linear[linear0] id: l_0
         # we will have 2 keys: l_0.weight l_0.bias
@@ -106,6 +106,6 @@ def generateLookup(layers_to_id, tensors_to_id):
         fields = map(lambda s: s[1:-1:], fields)
         prefix = '.'.join(fields)
         # remove the self. part of the id
-        lookup[f"{id[5:]}"] = f"{prefix}"
-
-    return f"{dtab}self.lookup = {lookup}"
+        lookup.append(f"'{id[5:]}': '{prefix}'")
+    lookup = f",\n{dtab}".join(lookup)
+    return f"{dtab}self.lookup = {{{lookup}}}"

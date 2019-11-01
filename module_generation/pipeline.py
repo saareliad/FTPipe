@@ -299,6 +299,11 @@ class Pipeline():
             the number of chunks to split the inputs to
             if not given defaults to number of partitions
 
+        for example:
+            pipe=Pipeline(model)
+            out0,out1,...outM = pipe(tensor0,tensor1,...tensorM,num_chunks=4)
+
+            this will run the pipeline with 4 microbatches
         '''
         if num_chunks is None:
             num_chunks = len(self.shards)
@@ -344,6 +349,15 @@ class Pipeline():
             list of Tensor containing the gradients of the loss in regards to the model outputs
             the elements must match the order of the model outputs meaning:
             grad_input = [out0_grad,out1_grad,...,outn_grad]
+
+        for example:
+            pipe=Pipeline(model)
+            out0,out1,...outM = pipe(tensor0,tensor1,...tensorM,num_chunks=4)
+            loss0,loss1,..... = compute loss
+            grads = torch.autograd.grad([loss0,loss1,...],[out0,out1,...])
+            pipe.backward(grads)
+
+        this will run forward and backward pass using 4 microbatches
         '''
         self.FORWARD = False
         if not self.WorkersRunning():
