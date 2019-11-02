@@ -4,14 +4,12 @@ from enum import Enum, auto, unique
 from types import TracebackType
 from typing import Dict, List, Optional, Tuple, Type, cast, Iterator, Any, Union
 
-from threading import Thread, get_ident
+from threading import Thread
 from queue import Queue as TQueue
 import torch
-from torch.autograd import Function
 from torch import Tensor
 from torch.nn import Module, ModuleList
 import logging
-import time
 from itertools import chain
 ExcInfo = Tuple[Type[BaseException], BaseException, TracebackType]
 open('pipelineLog.log', 'w').close()
@@ -31,7 +29,9 @@ class COMMAND(Enum):
 
 
 class InvalidState(Exception):
-    pass
+    ''' Error used to indicate that the pipeline is not in the correct state 
+    for some operation for eg. backward when in eval mode will raise this exception
+    '''
 
 
 class Result():
@@ -89,10 +89,6 @@ class Connection():
         self.output_uses = output_uses
 
     def get(self, minibatch: int, forward: bool = True) -> List[Result]:
-        if not isinstance(forward, bool):
-            raise TypeError(
-                f"expected forwad flag to be bool got {type(forward).__name__}")
-
         if forward:
             queues = self.in_queues
         else:
@@ -103,6 +99,8 @@ class Connection():
         inputs = []
         for q, n in zip(queues.values(), uses):
             i = 0
+            # recive inputs only if they are from the current microbatch
+            # to avoid race conditions between workers that share inputs
             while True:
                 if i == n:
                     break
@@ -118,9 +116,6 @@ class Connection():
         return self.reduceGrads(inputs)
 
     def put(self, data: Data, forward: bool = True):
-        if not isinstance(forward, bool):
-            raise TypeError(
-                f"expected forwad flag to be bool got {type(forward).__name__}")
         if forward:
             queues = self.out_queues
         else:
@@ -186,37 +181,6 @@ class StateStack():
         return activations
 
 
-class TagOutput(Function):
-    '''
-    this will be called every time a gradient is computed in respect to the outputs.\n
-    when at least one gradient has been computed for each output we start the backpropagation
-    so if you need multiple losses then do:\n
-    (loss1+loss2+loss3+...).backward()\n
-    instead of l1.backward()\n
-    l2.backward()\n
-    ...\n
-    this will ensure that gradients are computed correctly
-    '''
-    @staticmethod
-    def forward(ctx, scope, num_chunks, pipeline, tensor: Tensor):
-        ctx.scope = scope
-        ctx.num_chunks = num_chunks
-        ctx.pipeline = pipeline
-        return tensor
-
-    @staticmethod
-    def backward(ctx, grad: Tensor):
-        # this is end of the line so we can return None
-        # the only purpose is to tag the gradients before calling pipeline.backward
-        scope = ctx.scope
-        num_chunks = ctx.num_chunks
-        pipeline = ctx.pipeline
-        pipeline._updateGrad(scope, grad)
-        if pipeline._canStartBackward():
-            pipeline.backward(num_chunks)
-        return None, None, None, None
-
-
 class Pipeline():
     def __init__(self, configs: Dict, output_device: Optional[int] = None, DEBUG=False):
         if output_device is None:
@@ -231,30 +195,29 @@ class Pipeline():
         self.command_queues = [TQueue() for _ in configs]
 
         # this tells how many workers(including master) use each value
+        # for example if 2 partitions share an input, we need to send it twice
+        # once for each dependent worker
         uses = Counter([k for config in configs.values()
                         for k in config['inputs']])
         uses.update([k for k in self.output_names])
 
-        # the queues used for worker <=> worker and master <=> worker communication
-        queues = {k: TQueue() for k in uses.keys()}
+        data_queues = {k: TQueue() for k in uses.keys()}
 
         # input and output queues are in the same order as
         # specified in the original's model forward method
-        self.input_queues = OrderedDict([(k, queues[k])
+        self.input_queues = OrderedDict([(k, data_queues[k])
                                          for k in self.input_names])
-        self.output_queues = OrderedDict([(k, queues[k])
+        self.output_queues = OrderedDict([(k, data_queues[k])
                                           for k in self.output_names])
-        self.grad_buffer = dict()
         shards = []
         workers = []
         worker_configs = []
-        # for each partition we select the relevant input/output queues
         # we use sortedDict because by our convention partition inputs/outputs
         # are sorted by their scope name
         for idx, config in configs.items():
-            input_queues = [(k, queues[k]) for k in config['inputs']]
+            input_queues = [(k, data_queues[k]) for k in config['inputs']]
             input_queues = OrderedDict(sorted(input_queues))
-            output_queues = [(k, queues[k]) for k in config['outputs']]
+            output_queues = [(k, data_queues[k]) for k in config['outputs']]
             output_queues = OrderedDict(sorted(output_queues))
             output_uses = OrderedDict([(k, uses[k])
                                        for k in output_queues.keys()])
@@ -280,12 +243,11 @@ class Pipeline():
             worker.start()
 
         self.training = True
-        self.num_messages = 0
-        self.debug = DEBUG
+        self.num_DEBUG_messages = 0
 
     def log(self, msg: str):
-        logging.debug(f"master msg{self.num_messages} {msg}")
-        self.num_messages += 1
+        logging.debug(f"master msg{self.num_DEBUG_messages} {msg}")
+        self.num_DEBUG_messages += 1
 
     def __call__(self, *xs: Tensor, num_chunks: Optional[int] = 1):
         '''runs the pipeline forward pass input is split across batch dim
@@ -307,37 +269,33 @@ class Pipeline():
         '''
         if num_chunks is None:
             num_chunks = len(self.shards)
-        self.num_chunks = num_chunks
         self.FORWARD = True
         if not self.WorkersRunning():
             raise InvalidState("workers are not running")
 
-        chunked_input = self._scatter(xs, num_chunks)
+        chunked_input = self._scatterInputs(xs, num_chunks)
         num_chunks = len(chunked_input)
-        self.grad_buffer = dict()
+        self.num_chunks = num_chunks
         self._sendCommand(COMMAND.FORWARD, num_chunks)
 
-        # split input to chunks and send to workers
-        # one minibatch at a time
+        # send inputs one microbatch at a time
         for idx, chunk in enumerate(chunked_input):
             for (k, q), x in zip(self.input_queues.items(), chunk):
-                for i in range(self.uses[k]):
+                for _ in range(self.uses[k]):
                     q.put(Result(minibatch=idx, data=x))
-                    self.log(f"sent input chunk {idx} input {k} number {i}")
 
-        # collect mini batches in order
+        # collect outputs one micro batch at a time
         results = []
         for idx in range(num_chunks):
             mini_batch = []
             for k, q in self.output_queues.items():
                 r = q.get()
                 mini_batch.append(r.get())
-                self.log(f"collected output {k} of chunk {idx}")
             results.append(mini_batch)
 
-        results = self._gather(results)
+        results = self._gatherOutputs(results)
 
-        results = self._postProcessResults(results, num_chunks)
+        results = self._postProcessResults(results)
 
         return results
 
@@ -364,27 +322,25 @@ class Pipeline():
             raise InvalidState("workers are not running")
 
         self._sendCommand(COMMAND.BACKWARD, self.num_chunks)
+        # seed gradients one gradient at a time
         for scope, grad in zip(self.output_names, grad_input):
-            # grad = self.grad_buffer[scope]
             queue = self.output_queues[scope]
             g_chunks = [None for _ in range(self.num_chunks)
                         ] if grad is None else grad.chunk(self.num_chunks)
             for idx, grad_chunk in enumerate(g_chunks):
                 queue.put(Result(minibatch=idx, data=grad_chunk))
-                self.log(f"sent gradient chunk {idx} output {scope}")
 
-        # wait untill all workers have finished
-        self.log("waiting for workers")
-
+        # wait untill all workers are done
         for _ in range(self.num_chunks):
             for k, q in self.input_queues.items():
                 for _ in range(self.uses[k]):
                     q.get().get()
 
-        self.log("backward done")
-
-    def _postProcessResults(self, results, num_chunks):
-        self.log("processing model output")
+    def _postProcessResults(self, results):
+        '''
+        detaches the output from the pipeline so that gradient will flow only
+        using the Pipeline.bacward method
+        '''
         if isinstance(results, Tensor):
             results = results.detach_()
             if self.training:
@@ -395,32 +351,30 @@ class Pipeline():
                 results = [r.requires_grad_() for r in results]
         return results
 
-    def _gather(self, results: List[Tensor]) -> List[Tensor]:
-        self.log("gathering output")
+    def _gatherOutputs(self, results: List[Tensor]) -> List[Tensor]:
+        '''merges minibatch outputs to batches
+           merge is supported only for tensors and only along dimention 0
+        '''
         outputs = [[]for _ in results[0]]
-        # group by output
         for minbatch in results:
             for idx, t in enumerate(minbatch):
                 outputs[idx].append(t)
 
-        # reduce each output group
         batch_outs = [torch.cat(minibatches_out).to(self.output_device)
                       for minibatches_out in outputs]
         return batch_outs[0] if len(batch_outs) == 1 else batch_outs
 
-    def _scatter(self, xs: Tuple[Tensor], num_chunks: int) -> List[Tuple[Tensor]]:
+    def _scatterInputs(self, xs: Tuple[Tensor], num_chunks: int) -> List[Tuple[Tensor, ...]]:
         '''
         scatters each tensor across batch dim (0)
         returns list of chunks
         '''
-        self.log("scattering input")
         chunked_input = [x.chunk(num_chunks) for x in xs]
         return list(zip(*chunked_input))
 
     def _sendCommand(self, command: COMMAND, metadata=None):
         if not self.WorkersRunning():
             raise InvalidState("workers are not running")
-        self.log(f"sending command {command} with metadata {metadata}")
         r = (command, metadata)
 
         for q in self.command_queues:
@@ -435,39 +389,43 @@ class Pipeline():
         self.train(training=False)
 
     def state_dict(self) -> Dict:
+        '''gathers the state dicts of all shards
+           resulting in a state_dict with the same keys as the non pipelined model
+        '''
         res = dict()
         for s in self.shards:
             res.update(s.state_dict())
         return res
 
     def parameters(self) -> Iterator[Tensor]:
+        '''return iterator over all parameters of the pipelined model
+        '''
         return chain(*[s.parameters() for s in self.shards])
 
     def named_parameters(self) -> Iterator[Tuple[str, Tensor]]:
+        ''' returns iterator over all parameters with the same names as the non pipelined model
+        '''
         return chain(*[s.named_parameters() for s in self.shards])
 
     def buffers(self) -> Iterator[Tensor]:
+        '''return iterator over all buffers of the pipelined model
+        '''
         return chain(*[s.buffers() for s in self.shards])
 
     def named_buffers(self) -> Iterator[Tuple[str, Tensor]]:
+        ''' returns iterator over all parameters with the same names as the non pipelined model
+        '''
         return chain(*[s.named_buffers() for s in self.shards])
 
     def zero_grad(self):
+        '''zeros the gradients across all model shards
+        '''
         for s in self.shards:
             s.zero_grad()
 
-    def _updateGrad(self, scope: str, grad: Tensor):
-        if grad is None:
-            self.log(
-                f"pipeline update grad recieved None grad for output {scope}")
-            return
-
-        self.grad_buffer[scope] = grad + self.grad_buffer.get(scope, 0)
-
-    def _canStartBackward(self) -> bool:
-        return all(g in self.grad_buffer for g in self.output_names) and len(self.grad_buffer) > 0
-
     def WorkersRunning(self) -> bool:
+        '''checks whether all workers are in a valid state
+        '''
         return (len(self.workers) > 0) and all(w.is_alive() for w in self.workers)
 
 
@@ -482,56 +440,43 @@ class Worker(Thread):
         self.running = True
         self.training = True
         self.command_queue = command_queue
-        self.num_messages = 0
+        self.num_DEBUG_messages = 0
         self.state_stack = StateStack(self.device)
-        self.total_minibatch = 0
+        self.num_minibatches = 0
         self.minibatch_idx = 0
 
     def log(self, msg: str):
         ''' simple thread safe logging
         '''
         logging.debug(
-            f"thread {self.idx+1} msg{self.num_messages} {msg}")
-        self.num_messages += 1
+            f"worker {self.idx+1} msg{self.num_DEBUG_messages} {msg}")
+        self.num_DEBUG_messages += 1
 
     def run(self):
         while self.running:
             try:
-                if self.minibatch_idx == self.total_minibatch:
-                    self.waitForCommand()
-                    # continue to next iteration maybe it was a TRAIN/EVAL command
-                    # in that case we still need to wait for next cycle start
-                    time.sleep(1)
+                if self.minibatch_idx == self.num_minibatches:
+                    cmd, metadata = self.command_queue.get()
+                    self.changeMode(cmd, metadata)
                     continue
-                inputs = self.receiveInputs()
-                # for debugging to be removed when done
-                self.checkMinibatch(inputs)
+                inputs = self.IO.get(self.minibatch_idx, forward=self.FORWARD)
                 inputs = self.moveInputs(inputs)
                 if self.FORWARD:
                     outputs = self.forward(inputs)
                     self.IO.put(outputs, forward=True)
-                elif not self.FORWARD:
+                else:
                     grads = self.backward(inputs)
                     self.IO.put(grads, forward=False)
                 self.minibatch_idx += 1
             except Exception:
-                # propagate the Exception to next workers eventually reaching the master
+                # propagate the Exception eventually reaching the master
                 # a worker should always work unless explicitly shut down by master
                 # or untill master process terminates
                 exc_info = cast(ExcInfo, sys.exc_info())
                 self.IO.put(Result(minibatch=0,
                                    exc_info=exc_info), forward=self.FORWARD)
 
-    def receiveInputs(self) -> Optional[List[Result]]:
-        ''' fetch data from input queues
-        '''
-        inputs = self.IO.get(self.minibatch_idx, forward=self.FORWARD)
-        inputs_str = "\n".join([str(i) for i in inputs])
-        self.log(
-            f"recieved chunk {self.minibatch_idx}/{self.total_minibatch}\n{inputs_str}")
-        return inputs
-
-    def moveInputs(self, inputs: List[Result]) -> List:
+    def moveInputs(self, inputs: List[Result]) -> List[Optional[Tensor]]:
         outs = []
         for i in inputs:
             t = i.get()
@@ -539,7 +484,7 @@ class Worker(Thread):
                 outs.append(None)
             else:
                 if not isinstance(t, Tensor):
-                    raise ValueError(
+                    raise TypeError(
                         f"expected Tensor but got {type(t).__name__}")
                 outs.append(t.to(self.device))
         return outs
@@ -547,24 +492,20 @@ class Worker(Thread):
     def forward(self, inputs: List[Tensor]) -> List[Tensor]:
         with torch.no_grad():
             if self.training:
-                self.state_stack.push(inputs,
-                                      save_state=(self.minibatch_idx == 0))
+                save_state = self.minibatch_idx == 0
+                self.state_stack.push(inputs, save_state=save_state)
             results = self.model(*inputs)
             return [Result(minibatch=self.minibatch_idx, data=r) for r in results]
 
-    def backward(self, grads: List[Optional[Tensor]]):
+    def backward(self, grad_input: List[Optional[Tensor]]) -> List[Result]:
         if not self.training:
             raise InvalidState("cannot backward in eval mode")
-        remove_state = (self.minibatch_idx) == self.total_minibatch
+        remove_state = self.minibatch_idx == self.num_minibatches
         inputs = self.state_stack.pop(remove_state=remove_state)
         with torch.enable_grad():
             outputs = self.model(*inputs)
-            torch.autograd.backward(outputs, grads)
+            torch.autograd.backward(outputs, grad_input)
         return [Result(minibatch=self.minibatch_idx, data=i.grad) for i in inputs]
-
-    def waitForCommand(self):
-        cmd, metadata = self.command_queue.get()
-        self.changeMode(cmd, metadata)
 
     def changeMode(self, mode: COMMAND, metadata: Any):
         if mode is COMMAND.TRAIN:
@@ -576,19 +517,12 @@ class Worker(Thread):
         elif mode is COMMAND.FORWARD:
             self.FORWARD = True
             self.minibatch_idx = 0
-            self.total_minibatch = metadata
+            self.num_minibatches = metadata
         elif mode is COMMAND.BACKWARD:
             self.FORWARD = False
             self.minibatch_idx = 0
-            self.total_minibatch = metadata
+            self.num_minibatches = metadata
         elif mode is COMMAND.TERMINATE:
             self.running = False
         else:
             raise ValueError(f"change mode should not happen{mode}")
-
-    def checkMinibatch(self, inputs: List[Result]):
-        minibatch = inputs[0].minibatch
-        for r in inputs:
-            if r.minibatch != minibatch:
-                raise ValueError(
-                    f"processed input from different minibatches {r.minibatch} vs {minibatch} vs {self.minibatch_idx-1}")
