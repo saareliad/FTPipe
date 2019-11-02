@@ -3,7 +3,7 @@ from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
 from pytorch_Gpipe.utils import layerDict, tensorDict, OrderedSet
-from module_generation.pipeline import Pipeline
+from pytorch_Gpipe import Pipeline
 from torch.nn.modules.linear import Linear
 # this is an auto generated file do not edit unless you know what you are doing
 

@@ -104,7 +104,7 @@ def generateImports(layer_classes: Dict[str, Module]) -> List[str]:
     '''
     imports = f'import torch\nfrom torch import Tensor\nimport torch.nn as nn\nimport torch.nn.functional as F\n'
     imports += 'from pytorch_Gpipe.utils import layerDict, tensorDict, OrderedSet\n'
-    imports += 'from module_generation.pipeline import Pipeline\n'
+    imports += 'from pytorch_Gpipe import Pipeline\n'
     unique_classes = set(layer_classes.values())
 
     for cls in unique_classes:

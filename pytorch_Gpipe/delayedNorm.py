@@ -5,15 +5,12 @@ from torch import Tensor
 from torch.nn.functional import batch_norm as BatchNorm
 from torch.nn.modules.batchnorm import Module, _BatchNorm
 
-from .pipeline_parallel import PipelineParallel
-from .cycle_counter import CycleCounter
-from .forward_mode import ForwardMode
+# TODO not supported with new pipeline/partition format
 
 
 class DelayedBatchNorm(_BatchNorm):
     def __init__(self, num_features: int, eps: float = 1e-5, momentum: Optional[float] = 0.1,
-                 affine: bool = True, track_running_stats: bool = True, num_micro_batches: int = 1,
-                 counter: CycleCounter = None):
+                 affine: bool = True, track_running_stats: bool = True, num_micro_batches: int = 1):
         super().__init__(num_features, eps=eps, momentum=momentum,
                          affine=affine, track_running_stats=track_running_stats)
 
@@ -30,8 +27,6 @@ class DelayedBatchNorm(_BatchNorm):
                                  torch.zeros_like(self.running_mean))
             self.register_buffer("running_micro_sum_squares",
                                  torch.zeros_like(self.running_var))
-
-        self.counter = counter
 
     def _check_input_dim(self, x: Tensor):
         if x.dim() <= 2:
@@ -145,8 +140,6 @@ class DelayedBatchNorm(_BatchNorm):
             model = pipe_model(model,microbatch_size,sample_batch,...)
             model = DelayedBatchNorm.convert(model)
         """
-        counter = module.counter if isinstance(
-            module, PipelineParallel) else None
 
         def convert_aux(module: Module, num_micro_batches: int) -> Module:
             module_output = module
@@ -157,8 +150,7 @@ class DelayedBatchNorm(_BatchNorm):
                                                  module.momentum,
                                                  module.affine,
                                                  num_micro_batches=num_micro_batches,
-                                                 counter=counter)\
-                    .to(device=module.weight.device)
+                                                 ).to(device=module.weight.device)
 
                 # use the original buffers and parameters
                 if module.affine:
