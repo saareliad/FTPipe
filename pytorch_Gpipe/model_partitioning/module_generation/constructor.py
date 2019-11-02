@@ -107,5 +107,5 @@ def generateLookup(layers_to_id, tensors_to_id):
         prefix = '.'.join(fields)
         # remove the self. part of the id
         lookup.append(f"'{id[5:]}': '{prefix}'")
-    lookup = f",\n{dtab}".join(lookup)
-    return f"{dtab}self.lookup = {{{lookup}}}"
+    lookup = f",\n{dtab}{dtab}{dtab}".join(lookup)
+    return f"{dtab}self.lookup = {{ {lookup}}}"

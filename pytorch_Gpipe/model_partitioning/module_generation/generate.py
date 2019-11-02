@@ -53,7 +53,7 @@ def generatePartitionModules(graph: Graph, model: Module, verbose=False, output_
     lines += partitions_code
 
     if output_file is None:
-        output_file = 'generated_modules'
+        output_file = f'generated_{graph.model_name}{len(parts)}'
 
     output_file = output_file + '.py'
 
