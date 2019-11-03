@@ -13,6 +13,7 @@ from collections import deque
 tab = '    '
 dtab = tab + tab
 
+# TODO reuse local variables
 
 __all__ = ['generateForwardFunction']
 
@@ -84,6 +85,7 @@ def generateStatements(root_nodes: List[Node], scope_to_class_field: Dict[str, s
     ''' generate statements starting from the root in bfs order\n
         when possible avoids allocating temporary variables
     '''
+    expression_len = {e: 0 for e in ready_expressions.keys()}
     open_nodes = deque(root_nodes)
     close_nodes = set()
     arg_gen = variableNameGenerator()
@@ -114,14 +116,16 @@ def generateStatements(root_nodes: List[Node], scope_to_class_field: Dict[str, s
         # actual code generation
         if node.type == NodeTypes.LAYER:
             statements.append(generateLayerActivationExpression(scope_to_class_field,
-                                                                ready_expressions, node, arg_gen, verbose=verbose))
+                                                                ready_expressions, expression_len,
+                                                                node, arg_gen,
+                                                                verbose=verbose))
         elif node.type == NodeTypes.PYTHON_PRIMITIVE:
-            statements.append(generateListExpression(ready_expressions, node,
+            statements.append(generateListExpression(ready_expressions, expression_len, node,
                                                      arg_gen, verbose=verbose))
         elif node.type == NodeTypes.CONSTANT:
-            generateConstantExpression(ready_expressions, node)
+            generateConstantExpression(ready_expressions, expression_len, node)
         elif node.type == NodeTypes.OP:
-            statements.append(generateFunctionCallExpression(ready_expressions,
+            statements.append(generateFunctionCallExpression(ready_expressions, expression_len,
                                                              node, arg_gen, verbose=verbose))
         # add dependent expression
         if True or node.type != NodeTypes.CONSTANT:
@@ -149,7 +153,7 @@ def generateReturnStatement(output_scopes: OrderedSet[str], ready_expressions: D
 
 
 def generateLayerActivationExpression(scope_to_class_field: Dict[str, str],
-                                      ready_expressions: Dict[str, str],
+                                      ready_expressions: Dict[str, str], expression_len,
                                       node: Node, arg_gen: Iterator[str], verbose=False) -> str:
     '''generate a layer activation expression\n
        if expression has only one use then it's embedded in call site\n
@@ -162,22 +166,26 @@ def generateLayerActivationExpression(scope_to_class_field: Dict[str, str],
     operand_scopes = [n.scope for n in node.in_nodes]
     operand_ids = [ready_expressions[s] for s in operand_scopes]
 
+    exp_len = 1 + max(expression_len[s] for s in operand_scopes)
+
     # generate discription
     scope_comment = f'\n{dtab}# '.join(operand_scopes)
     comment = f'# calling {node.scope} with arguments:\n{dtab}# {scope_comment}'
 
     call = f"{op}({', '.join(operand_ids)})"
-    if not verbose and canEmbedInUseSite(node):
+    if (not verbose) and (exp_len < 10) and canEmbedInUseSite(node):
         ready_expressions[node.scope] = call
+        expression_len[node.scope] = exp_len
         return ''
 
     t = next(arg_gen)
     ready_expressions[node.scope] = t
+    expression_len[node.scope] = 0
 
     return comment + f"\n{dtab}{t} = {call}"
 
 
-def generateListExpression(ready_expressions: Dict[str, str], node: Node,
+def generateListExpression(ready_expressions: Dict[str, str], expression_len, node: Node,
                            arg_gen: Iterator[str], verbose=False) -> str:
     ''' generates a python list construction to be embedded in use site\n
         does not produce a temporary variable
@@ -187,8 +195,11 @@ def generateListExpression(ready_expressions: Dict[str, str], node: Node,
     operand_scopes = [n.scope for n in node.in_nodes]
     args = [ready_expressions[operand] for operand in operand_scopes]
     expression = '[' + ', '.join(args) + ']'
-    if not verbose and canEmbedInUseSite(node):
+    exp_len = 1 + max(expression_len[s] for s in operand_scopes)
+
+    if (not verbose) and (exp_len < 10) and canEmbedInUseSite(node):
         ready_expressions[node.scope] = expression
+        expression_len[node.scope] = exp_len
         return ''
 
     # generate discription
@@ -197,10 +208,11 @@ def generateListExpression(ready_expressions: Dict[str, str], node: Node,
 
     t = next(arg_gen)
     ready_expressions[node.scope] = t
+    expression_len[node.scope] = 0
     return comment + f"\n{dtab}{t} = {expression}"
 
 
-def generateConstantExpression(ready_expressions: Dict[str, str], node: Node):
+def generateConstantExpression(ready_expressions: Dict[str, str], expression_len, node: Node):
     ''' generate a constant expression to be embeded in use site\n
         does not produce a variable
     '''
@@ -209,9 +221,10 @@ def generateConstantExpression(ready_expressions: Dict[str, str], node: Node):
     if isinstance(value, torch.device):
         value = f"torch.device('{value}')"
     ready_expressions[node.scope] = f'{value}'
+    expression_len[node.scope] = 0
 
 
-def generateFunctionCallExpression(ready_expressions: Dict[str, str], node: Node,
+def generateFunctionCallExpression(ready_expressions: Dict[str, str], expression_len, node: Node,
                                    arg_gen: Iterator[str], verbose=False) -> str:
     ''' generate a function call belonging to one of the nameSpaces:\n
         torch,torch.nn.functional, torch.Tensor\n
@@ -267,8 +280,12 @@ def generateFunctionCallExpression(ready_expressions: Dict[str, str], node: Node
         expression = f"{operand}[{view_args}]"
     else:
         expression = f'{namespace}.{func_name}({args})'
-    if not verbose and canEmbedInUseSite(node):
+
+    exp_len = 1 + max(expression_len[s] for s in operand_scopes)
+
+    if (not verbose) and (exp_len < 10) and canEmbedInUseSite(node):
         ready_expressions[scope] = expression
+        expression_len[scope] = exp_len
         return ''
 
     # generate discription
@@ -277,6 +294,7 @@ def generateFunctionCallExpression(ready_expressions: Dict[str, str], node: Node
 
     t = next(arg_gen)
     ready_expressions[scope] = t
+    expression_len[scope] = 0
 
     return comment + f'\n{dtab}{t} = {expression}'
 
