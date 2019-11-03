@@ -11,6 +11,8 @@ from torch import Tensor
 from torch.nn import Module, ModuleList
 import logging
 from itertools import chain
+from pytorch_Gpipe.delayedNorm import DelayedBatchNorm
+
 ExcInfo = Tuple[Type[BaseException], BaseException, TracebackType]
 open('pipelineLog.log', 'w').close()
 logging.basicConfig(
@@ -182,7 +184,7 @@ class StateStack():
 
 
 class Pipeline():
-    def __init__(self, configs: Dict, output_device: Optional[int] = None, DEBUG=False):
+    def __init__(self, configs: Dict, output_device: Optional[int] = None, use_delayedNorm: bool = False, DEBUG=False):
         if output_device is None:
             output_device = torch.cuda.current_device()
         if DEBUG:
@@ -224,11 +226,15 @@ class Pipeline():
             output_device = idx
             if DEBUG:
                 output_device = 'cpu'
+
             model = config['model'].to(output_device)
+            if use_delayedNorm:
+                model = DelayedBatchNorm.convertBatchNorm(model)
             command_queue = self.command_queues[idx]
             IO = Connection(input_queues, output_queues,
                             output_uses)
-            args = (idx, model, output_device, IO, command_queue)
+            args = (idx, model, output_device, IO,
+                    command_queue, use_delayedNorm)
             workers.append(Worker(*args))
             shards.append(model)
             worker_configs.append(args)
@@ -430,7 +436,7 @@ class Pipeline():
 
 
 class Worker(Thread):
-    def __init__(self, idx: int, model: Module, device: int, IO: Connection, command_queue: TQueue):
+    def __init__(self, idx: int, model: Module, device: int, IO: Connection, command_queue: TQueue, use_delayedNorm: bool):
         super(Worker, self).__init__(daemon=True)
         self.idx = idx
         self.model = model
@@ -440,6 +446,7 @@ class Worker(Thread):
         self.running = True
         self.training = True
         self.command_queue = command_queue
+        self.use_delayedNorm = use_delayedNorm
         self.num_DEBUG_messages = 0
         self.state_stack = StateStack(self.device)
         self.num_minibatches = 0
@@ -518,11 +525,23 @@ class Worker(Thread):
             self.FORWARD = True
             self.minibatch_idx = 0
             self.num_minibatches = metadata
+            self.switchDelayedNormMode()
         elif mode is COMMAND.BACKWARD:
             self.FORWARD = False
             self.minibatch_idx = 0
             self.num_minibatches = metadata
+            self.switchDelayedNormMode()
         elif mode is COMMAND.TERMINATE:
             self.running = False
         else:
             raise ValueError(f"change mode should not happen{mode}")
+
+    def switchDelayedNormMode(self):
+        '''flip all delayedBatchNorm layers between computation and recomputation
+        '''
+        if self.use_delayedNorm:
+            for m in self.model.modules():
+                if isinstance(m, DelayedBatchNorm):
+                    m: DelayedBatchNorm
+                    m.is_recomputing = not self.FORWARD
+                    m.num_micro_batches = self.num_minibatches

@@ -6,13 +6,11 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from pytorch_Gpipe.pipeline import DelayedBatchNorm
+from pytorch_Gpipe.delayedNorm import DelayedBatchNorm
 
 NUM_MICRO_BATCHES = 4
 
 # taken from torchGpipe repo
-
-# TODO need to test after implementation
 
 
 def tilt_dist(x):
@@ -42,7 +40,7 @@ def chunked_forward(model, x, micro_batches=NUM_MICRO_BATCHES):
 @pytest.mark.parametrize('x_requires_grad', [True, False])
 def test_transparency(micro_batches, x_requires_grad):
     bn = nn.BatchNorm2d(3)
-    dbn = DelayedBatchNorm.convert(
+    dbn = DelayedBatchNorm.convertBatchNorm(
         deepcopy(bn), num_micro_batches=micro_batches)
 
     x1 = torch.rand(16, 3, 224, 224)
@@ -70,7 +68,7 @@ def test_transparency(micro_batches, x_requires_grad):
 @pytest.mark.parametrize('momentum', [0.1, None])
 def test_running_stats(momentum):
     bn = nn.BatchNorm2d(3, momentum=momentum)
-    dbn = DelayedBatchNorm.convert(
+    dbn = DelayedBatchNorm.convertBatchNorm(
         deepcopy(bn), num_micro_batches=NUM_MICRO_BATCHES)
 
     x = torch.rand(16, 3, 224, 224)
@@ -85,11 +83,12 @@ def test_running_stats(momentum):
 
 def test_convert():
     bn = nn.BatchNorm2d(3, track_running_stats=False)
-    bn = DelayedBatchNorm.convert(bn, num_micro_batches=NUM_MICRO_BATCHES)
+    bn = DelayedBatchNorm.convertBatchNorm(
+        bn, num_micro_batches=NUM_MICRO_BATCHES)
     assert type(bn) is nn.BatchNorm2d  # because of track_running_stats=False
 
     dbn = DelayedBatchNorm(3, num_micro_batches=NUM_MICRO_BATCHES)
-    dbn_again = DelayedBatchNorm.convert(
+    dbn_again = DelayedBatchNorm.convertBatchNorm(
         dbn, num_micro_batches=NUM_MICRO_BATCHES)
     assert dbn.weight is dbn_again.weight
     assert dbn.bias is dbn_again.bias
@@ -99,7 +98,7 @@ def test_convert():
 
 def test_eval():
     bn = nn.BatchNorm2d(3)
-    dbn = DelayedBatchNorm.convert(
+    dbn = DelayedBatchNorm.convertBatchNorm(
         deepcopy(bn), num_micro_batches=NUM_MICRO_BATCHES)
 
     x = torch.rand(16, 3, 224, 224)
@@ -116,7 +115,7 @@ def test_eval():
 
 def test_optimize():
     bn = nn.BatchNorm2d(3)
-    dbn = DelayedBatchNorm.convert(
+    dbn = DelayedBatchNorm.convertBatchNorm(
         deepcopy(bn), num_micro_batches=NUM_MICRO_BATCHES)
 
     opt = optim.SGD(chain(bn.parameters(), dbn.parameters()), lr=1.0)
@@ -146,7 +145,7 @@ def test_optimize():
 
 def test_conv_bn():
     bn = nn.Sequential(nn.Conv2d(3, 3, 1), nn.BatchNorm2d(3))
-    dbn = DelayedBatchNorm.convert(
+    dbn = DelayedBatchNorm.convertBatchNorm(
         deepcopy(bn), num_micro_batches=NUM_MICRO_BATCHES)
 
     x = torch.rand(16, 3, 224, 224)
@@ -193,5 +192,5 @@ def test_x_requiring_grad():
 
     chunked_forward(dbn, x)
 
-    assert not dbn.running_micro_sum.requires_grad
-    assert dbn.running_micro_sum.grad_fn is None
+    assert not dbn.sum.requires_grad
+    assert dbn.sum.grad_fn is None
