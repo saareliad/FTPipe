@@ -1,6 +1,0 @@
-#TODO describe your implementation desciribe important points assumptions and ideas.
-
-
-#TODO add batchNorm correction
-#TODO add dropout/rng correction
-#TODO optimize

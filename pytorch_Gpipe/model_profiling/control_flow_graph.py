@@ -1,6 +1,9 @@
 from copy import copy
 from enum import Enum
 from typing import Any, Dict, List
+from ..utils import OrderedSet
+import inspect
+from pprint import pprint
 class Graph():
     '''
     a Graph data structure that model a pytorch network built from a pytorch trace\n
@@ -20,7 +23,8 @@ class Graph():
         self._build_graph(trace_graph)
         self.basic_blocks=basic_blocks
         self.depth=depth
-
+        self.num_parts=0
+        self.model_name = profiled_layers[0].split('/')[0]
         for node in self.nodes:
             node.weight = weights.get(node.scope, node.weight)
 
@@ -28,8 +32,15 @@ class Graph():
         self._add_IO_nodes(trace_graph.inputs())
         self._add_OP_nodes(trace_graph.nodes())
         self._add_shapes(trace_graph)
-        self._remove_constant_nodes()
-        self._remove_nodes_that_go_nowhere(trace_graph.outputs())
+        self.remove_useless_clone()
+        self.remove_empty_view()
+        #TODO fold constanst into the operation node save them in values field
+        self._set_outputs(trace_graph.outputs())
+        # self._remove_nodes_that_go_nowhere(trace_graph.outputs())
+
+        self.remove_int_tensor_int_conversions()
+
+
         for idx,node in enumerate(self.nodes):
             node.idx=idx
 
@@ -62,8 +73,8 @@ class Graph():
         num_extra_nodes = 0
         for idx, trace_node in enumerate(OP_nodes):
             node_scope = self._find_encasing_layer(trace_node.scopeName())
-            input_nodes = {self.nodes[i.unique()]
-                           for i in trace_node.inputs()}
+            input_nodes = OrderedSet([self.nodes[i.unique()]
+                           for i in trace_node.inputs()])
             node_idx = self.num_inputs_buffs_params+idx+num_extra_nodes
 
             new_node = None
@@ -71,13 +82,36 @@ class Graph():
             # profiled Layer
             if node_scope != "":
                 new_node = Node(node_scope, node_idx,
-                                NodeTypes.LAYER, input_nodes)
-            # unprofiled OP
-            else:
+                                NodeTypes.LAYER, input_nodes) 
+            # unprofiled constant value
+            elif 'prim::Constant' in trace_node.kind():
                 node_scope = trace_node.scopeName() + \
                     "/"+trace_node.kind() + str(idx)
+                value = trace_node.output().toIValue()
                 new_node = Node(node_scope, node_idx,
-                                NodeTypes.OP, input_nodes)
+                                NodeTypes.CONSTANT, input_nodes,value=value)      
+            else:
+                # unprofiled List
+                if 'prim::ListConstruct' in trace_node.kind():
+                    node_type=NodeTypes.PYTHON_PRIMITIVE
+                # unprofiled torch op 
+                # TODO should we specialize the aten:: and prim:: cases   
+                elif 'aten::' in trace_node.kind():   
+                    node_type = NodeTypes.OP
+                elif 'prim::' in trace_node.kind():
+                    node_type = NodeTypes.OP
+                else:
+                    #unprofiled other
+                    node_scope = trace_node.scopeName() + \
+                        "/" + trace_node.kind() + str(idx)
+                    node_type = NodeTypes.OP
+                    print(f"unknown scope {node_scope}")
+
+                node_scope = trace_node.scopeName() + \
+                    "/" + trace_node.kind() + str(idx)
+                new_node = Node(node_scope, node_idx,
+                                node_type, input_nodes)
+
 
             # add incoming edges
             for node in input_nodes:
@@ -90,7 +124,7 @@ class Graph():
                 if i != 0:
                     out_node: Node = copy(new_node)
                     # it appears those are dummpy outputs so we just add them for bookkeeping and remove them later
-                    out_node.out_nodes = set()
+                    out_node.out_nodes = OrderedSet()
                     out_node.idx += i
                     self.nodes.append(out_node)
                     num_extra_nodes += 1
@@ -118,7 +152,7 @@ class Graph():
             u = self.nodes[idx]
             layer_out = LayerOutput(output_idx, u.scope, get_shape(node))
             u.outputs.add(layer_out)
-            out_scopes=set()
+            out_scopes=OrderedSet()
 
             for use in node.uses():
                 target_node = use.user
@@ -137,7 +171,7 @@ class Graph():
                 u = self.nodes[idx]
                 layer_out = LayerOutput(output_idx, u.scope, get_shape(out))
                 u.outputs.add(layer_out)
-                out_scopes=set()
+                out_scopes=OrderedSet()
                 for use in out.uses():
                     target_node = use.user
                     for target_out in target_node.outputs():
@@ -149,9 +183,23 @@ class Graph():
                 idx += 1
                 output_idx += 1
 
-    def _remove_constant_nodes(self):
-        ''' remove nodes representing constants as they do not provide any useful info'''
-        self._remove_nodes(lambda n: "::Constant" in n.scope)
+    def remove_useless_clone(self):
+        def predicate(n:Node):
+            return ('aten::clone' in n.scope) and (len(n.out_nodes) == 0)
+        self._remove_nodes(predicate)
+
+    def remove_empty_view(self):
+        def predicate(n:Node):
+            if ('aten::view' in n.scope):
+                sizes = list(n.in_nodes)[0]
+                return len(sizes.in_nodes) == 0 or len(n.in_nodes) < 2
+            return('prim::ListConstruct' in n.scope) and (len(n.in_nodes) == 0)
+        self._remove_nodes(predicate)
+
+    def remove_int_tensor_int_conversions(self):
+        def predicate(node):
+            return 'prim::NumToTensor' in node.scope or 'aten::Int' in node.scope
+        self._remove_nodes(predicate)
 
     def _find_encasing_layer(self, scopeName: str):
         '''
@@ -170,26 +218,26 @@ class Graph():
         '''remove nodes without out edges that are not outputs of the model'''
         #necessary because the trace can contain such nodes for certain ops
         #those nodes provide no additional info to the graph
-        
-        #we need this method for compatibility issues
-        #in pytorch 1.2.0 the API changed the method name from uniqueName to debugName
-        #maybe it's a sign that we should not relay on it but it's simple and effective...
-        def get_id(out):
-            if hasattr(out,'debugName'):
-                #1.2.0 and onward
-                n=out.debugName()
-            else:
-                #before 1.2.0
-                assert hasattr(out,'uniqueName')
-                n=out.uniqueName()
-            return int(n)
 
-        out_indices=[get_id(out) for out in trace_outputs]
+        out_indices=[self._get_id(out) for out in trace_outputs]
 
         def going_nowhere(node):
             return (not node.out_nodes) and (not node.idx in out_indices)
 
         self._remove_nodes(going_nowhere)
+
+    def _get_id(self,out):
+        #we need this method for compatibility issues
+        #in pytorch 1.2.0 the API changed the method name from uniqueName to debugName
+        #maybe it's a sign that we should not relay on it but it's simple and effective...
+        if hasattr(out, 'debugName'):
+            #1.2.0 and onward
+            n = out.debugName()
+        else:
+            #before 1.2.0
+            assert hasattr(out, 'uniqueName')
+            n = out.uniqueName()
+        return int(n)
 
     def _remove_nodes(self, condition, reverse:bool=False):
         changed = True
@@ -203,18 +251,29 @@ class Graph():
                 if condition(node):
                     changed = True
                     # connect inputs to outputs directly
+                    #TODO we do not remove/add inputs or outputs might revisit
                     for in_node in node.in_nodes:
-                        in_node.remove_out_node(node)
-                        in_node.add_out_node(node.out_nodes)
+                        in_node.replace_out_node(node,node.out_nodes)
                     for out_node in node.out_nodes:
-                        out_node.remove_in_node(node)
+                        out_node.replace_in_node(node,node.in_nodes)
                         out_node.inputs.difference_update(node.outputs)
-                        out_node.add_in_node(node.in_nodes)
                         out_node.inputs.update(node.inputs)
                 else:
                     optimized_graph.append(node)
 
             self.nodes = optimized_graph
+
+    def _set_outputs(self,trace_outputs):
+        outputs=OrderedSet()
+        for out in trace_outputs:
+            node=out.node()
+            scope=self._find_encasing_layer(node.scopeName())
+            if scope == '':
+                idx = self._get_id(out) - self.num_inputs_buffs_params
+                scope=node.scopeName() + \
+                    "/" + node.kind() + str(idx)
+            outputs.add(scope)
+        self.output_scopes=outputs
 
     def __getitem__(self, key):
         if isinstance(key,int):
@@ -322,6 +381,8 @@ class Graph():
 
             if show_weights and node.weight != 0:
                 label = f"{label}\n {node.weight}"
+            if not (node.value is None):
+                label = f"{label}\n value={node.value}"
             dot.node(str(node.idx), label, fillcolor=colors[node.part])
 
         for node in self.nodes:
@@ -390,6 +451,8 @@ class NodeTypes(Enum):
     BUFF_PARAM = 2
     LAYER = 3
     OP = 4
+    CONSTANT=5
+    PYTHON_PRIMITIVE=6
 
     def __repr__(self):
         return self.name
@@ -423,41 +486,79 @@ class Node():
      parallel edges in the same direction are not allowed
     '''
 
-    def __init__(self, scope:str, idx:int, node_type: NodeTypes, incoming_nodes=None, weight=0, part=-1):
+    def __init__(self, scope:str, idx:int, node_type: NodeTypes, incoming_nodes=None, weight=0, part=-1,value=None):
         self.scope = scope
         self.idx = idx
         self.type = node_type
-        self.out_nodes = set()
+        self.out_nodes = OrderedSet()
         self.weight = weight
         self.part = part
         self.in_nodes = incoming_nodes if isinstance(
-            incoming_nodes, set) else set()
-        self.outputs = set()
-        self.inputs = set()
+            incoming_nodes, OrderedSet) else OrderedSet()
+        self.outputs = OrderedSet()
+        self.inputs = OrderedSet()
+        self.value=value
 
     def add_out_node(self, node):
         if isinstance(node, Node):
             self.out_nodes.add(node)
-        if isinstance(node, set):
+        if isinstance(node, (set, OrderedSet)):
             self.out_nodes.update(node)
 
     def add_in_node(self, node):
         if isinstance(node, Node):
             self.in_nodes.add(node)
-        if isinstance(node, set):
+        if isinstance(node, (set, OrderedSet)):
             self.in_nodes.update(node)
 
     def remove_in_node(self, node):
         if isinstance(node, Node):
             self.in_nodes.discard(node)
-        if isinstance(node, set):
+        if isinstance(node, (set, OrderedSet)):
             self.in_nodes.difference_update(node)
 
     def remove_out_node(self, node):
         if isinstance(node, Node):
             self.out_nodes.discard(node)
-        if isinstance(node, set):
+        if isinstance(node, (set,OrderedSet)):
             self.out_nodes.difference_update(node)
+
+    def replace_out_node(self,to_replace,value):
+        if to_replace not in self.out_nodes:
+            return
+        
+        values = list(self.out_nodes)
+        idx = values.index(to_replace)
+
+        before,after=values[:idx],values[idx+1:]
+        try:
+            #we handle the case for iterable, if value is not then we recall with [value]
+            iter(value)
+            keys=value
+            to_add = [v for v in keys if (v not in before) and (v not in after)]
+            self.out_nodes=OrderedSet(before+to_add+after)
+
+        except TypeError as _:
+            self.replace_out_node(to_replace,[value])
+
+
+    def replace_in_node(self,to_replace,value):
+        if to_replace not in self.in_nodes:
+            return
+
+        values = list(self.in_nodes)
+        idx = values.index(to_replace)
+
+        before, after = values[:idx], values[idx + 1:]
+        try:
+            #we handle the case for iterable, if value is not then we recall with [value]
+            iter(value)
+            keys=value
+            to_add = [v for v in keys if (v not in before) and (v not in after)]
+            self.in_nodes = OrderedSet(before + to_add + after)
+
+        except TypeError as _:
+            self.replace_in_node(to_replace, [value])
 
     def __repr__(self):
         out_idx = {node.idx for node in self.out_nodes}

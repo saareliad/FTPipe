@@ -198,10 +198,10 @@ class Amoeba_Cell(nn.Module):
         layers = []
         assert (len(ops) % 2) == 0
         for i in range(len(ops) // 2):
-            op0, i0 = ops[i*2]
-            op1, i1 = ops[i*2 + 1]
+            op0, i0 = ops[i * 2]
+            op1, i1 = ops[i * 2 + 1]
             layers.extend([
-                InputOne(op0, i=i0, insert=2+i),
+                InputOne(op0, i=i0, insert=2 + i),
                 # Output: x..., op0(x[i0]), skip]
 
                 InputOne(op1, i=i1, insert=2 + i + 1),
@@ -214,7 +214,8 @@ class Amoeba_Cell(nn.Module):
 
         self.concat_indices = concat
 
-        assert len(concat) > 0 and all(i < (3+(len(ops)//2)-1) for i in concat)
+        assert len(concat) > 0 and all(i < (3 + (len(ops) // 2) - 1)
+                                       for i in concat)
 
     def forward(self, xs):
         preprocessed = self.preprocess(xs)
@@ -274,7 +275,7 @@ class InputOne(Hack):
 
         if self.insert is None:
             # Replace with the input.
-            return tensors[:i] + output + tensors[i+1:]
+            return tensors[:i] + output + tensors[i + 1:]
 
         return tensors[:self.insert] + output + tensors[self.insert:]
 
@@ -294,9 +295,8 @@ class MergeTwo(Hack):
     def forward(self, tensors: Tensors) -> Tensors:  # type: ignore
         i = self.i
         j = self.j
-
         # Set the initial value as the first tensor
         # to type as 'Tensor' instead of 'Union[Tensor, int]'.
-        merged = sum(tensors[i+1:j+1], tensors[i])
+        merged = sum(tensors[i + 1:j + 1], tensors[i])
 
-        return tensors[:i] + (merged,) + tensors[j+1:]
+        return tensors[:i] + (merged,) + tensors[j + 1:]

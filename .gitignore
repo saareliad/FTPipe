@@ -14,3 +14,9 @@ model_partition/graph/__pycache__/
 main.py
 experiment/stanford_car_dataset_images_in_224x224/*
 experiments/stanford-car-dataset-by-classes-folder-224/*
+playground.py
+trace.txt
+inc.pdf
+*.pdf
+generated_modules.py
+*.log

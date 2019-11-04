@@ -1,6 +1,7 @@
 from typing import List
 
 from .control_flow_graph import Graph, Node, NodeTypes
+from ..utils import OrderedSet
 
 
 def optimize_graph(graph: Graph):
@@ -12,7 +13,8 @@ def optimize_graph(graph: Graph):
     nodes = _combine_OP_nodes_under_the_same_scope(nodes)
     graph.nodes = nodes
     _combine_params_and_buffers_into_OP_nodes(graph)
-    _merge_op_chains(graph)
+    # TODO we disabled op chain merges
+    # _merge_op_chains(graph)
 
     for idx, node in enumerate(graph.nodes):
         node.idx = idx
@@ -43,20 +45,20 @@ def _combine_OP_nodes_under_the_same_scope(nodes: List[Node]) -> List[Node]:
         # get the sets of all incoming/outgoing scopes
         # those will dictate the new set of edges and
         # remove the internal edges of the scope
-        incoming_scopes = {n.scope for n in node.in_nodes
-                           if n.scope != node.scope}
-        outgoing_scopes = {n.scope for n in node.out_nodes
-                           if n.scope != node.scope}
+        incoming_scopes = OrderedSet(n.scope for n in node.in_nodes
+                                     if n.scope != node.scope)
+        outgoing_scopes = OrderedSet(n.scope for n in node.out_nodes
+                                     if n.scope != node.scope)
 
-        inputs = {layer_in for layer_in in node.inputs
-                  if layer_in.scope != node.scope}
+        inputs = OrderedSet(layer_in for layer_in in node.inputs
+                            if layer_in.scope != node.scope)
         outputs = {layer_out for layer_out in node.outputs
                    if node.scope not in layer_out.out_scopes}
 
-        out_nodes = {scope_representative[out_node]
-                     for out_node in outgoing_scopes}
-        in_nodes = {scope_representative[in_node]
-                    for in_node in incoming_scopes}
+        out_nodes = OrderedSet(scope_representative[out_node]
+                               for out_node in outgoing_scopes)
+        in_nodes = OrderedSet(scope_representative[in_node]
+                              for in_node in incoming_scopes)
 
         node.in_nodes = in_nodes
         node.out_nodes = out_nodes

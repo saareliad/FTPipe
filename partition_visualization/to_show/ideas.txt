@@ -1,9 +1,0 @@
-1.proof of concept and technical limitations:
-  show that we can understand something complex as an Amoeba net but looks can be deceiving,
-  what appears as chaos can be in fuct sequential
-
-2. lets take a closer look
-   show that we can decide what part of the network to profile more deeply(expand a logit branch in inception model)
-
-3. at multiple resolutions
-   show that we can break a compound module to it's components including torch ops like cat
