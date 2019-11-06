@@ -292,7 +292,11 @@ class MergeTwo(Hack):
         self.i = i
         self.j = j
 
-    def forward(self, tensors: Tensors) -> Tensors:  # type: ignore
+    def forward(self, *tensors: Tensors) -> Tensors:  # type: ignore
+        if len(tensors) > 1:
+            return sum(tensors)
+
+        tensors = tensors[0]
         i = self.i
         j = self.j
         # Set the initial value as the first tensor

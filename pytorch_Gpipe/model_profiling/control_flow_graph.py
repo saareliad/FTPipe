@@ -2,8 +2,7 @@ from copy import copy
 from enum import Enum
 from typing import Any, Dict, List
 from ..utils import OrderedSet
-import inspect
-from pprint import pprint
+import string
 class Graph():
     '''
     a Graph data structure that model a pytorch network built from a pytorch trace\n
@@ -34,9 +33,8 @@ class Graph():
         self._add_shapes(trace_graph)
         self.remove_useless_clone()
         self.remove_empty_view()
-        #TODO fold constanst into the operation node save them in values field
         self._set_outputs(trace_graph.outputs())
-        # self._remove_nodes_that_go_nowhere(trace_graph.outputs())
+        self._remove_nodes_that_go_nowhere(trace_graph.outputs())
 
         self.remove_int_tensor_int_conversions()
 
@@ -222,6 +220,12 @@ class Graph():
         out_indices=[self._get_id(out) for out in trace_outputs]
 
         def going_nowhere(node):
+            if node.type is NodeTypes.OP and 'aten::' in node.scope:
+                func_name = node.scope.split('aten::')[1].rstrip(string.digits)
+                #do not remove inplace ops prematurly
+                if func_name[-1] == '_':
+                    return False
+                    
             return (not node.out_nodes) and (not node.idx in out_indices)
 
         self._remove_nodes(going_nowhere)
@@ -364,7 +368,7 @@ class Graph():
 
         #TODO split big graphs to multiple pdfs
 
-        colors = {-1:'grey',0:'grey',1:'green',2:'red',3:'yellow',4:'orange',5:'brown',6:'purple',7:'pink'}
+        colors = {0:'grey',1:'green',2:'red',3:'yellow',4:'orange',5:'brown',6:'purple',7:'pink'}
 
         def hide_node(node):
             return (node.type == NodeTypes.BUFF_PARAM) and (not show_buffs_params)
@@ -372,7 +376,7 @@ class Graph():
         for node in self.nodes:
             if hide_node(node):
                 continue
-            label = node.scope
+            label = f"{node.scope} {node.idx}"
 
             if not node.out_nodes:
                 outputs = list(map(str, node.outputs))
@@ -486,7 +490,7 @@ class Node():
      parallel edges in the same direction are not allowed
     '''
 
-    def __init__(self, scope:str, idx:int, node_type: NodeTypes, incoming_nodes=None, weight=0, part=-1,value=None):
+    def __init__(self, scope:str, idx:int, node_type: NodeTypes, incoming_nodes=None, weight=0, part=0,value=None):
         self.scope = scope
         self.idx = idx
         self.type = node_type

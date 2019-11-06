@@ -63,7 +63,7 @@ def profileNetwork(net: nn.Module, *sample_batch: Tensors, basic_blocks: Optiona
                    for layer in layers_dict.values()]
 
     # prepare profiling results
-    layers_profile = {name: Profile(forward, backward, *cuda_mem, param_size+buffer_size+in_size+out_size) for name, forward, backward, param_size, buffer_size, in_size, out_size, cuda_mem in zip(
+    layers_profile = {name: Profile(forward, backward, *cuda_mem, param_size + buffer_size + in_size + out_size) for name, forward, backward, param_size, buffer_size, in_size, out_size, cuda_mem in zip(
         layers_dict.keys(), forward_times, backward_times, param_sizes, buffer_sizes, layer_input_sizes, layer_output_sizes, cuda_memory)}
 
     _unwrap_layers(net)
@@ -87,7 +87,7 @@ def _wrap_profiled_layers(module: nn.Module, depth, basic_blocks: List[nn.Module
     layers_dict = {}
 
     for sub_layer, scope, parent in traverse_model(module, depth, basic_blocks):
-        name = scope[scope.rfind('[')+1:-1]
+        name = scope[scope.rfind('[') + 1:-1]
         wrapper = Wrapper(sub_layer)
         parent.add_module(name, wrapper)
         layers_dict[scope] = wrapper
@@ -164,7 +164,7 @@ class Wrapper(nn.Module):
             loss = loss + out.norm()
 
         # measure backward execution time
-        self.backward_time, _,  self.backward_cuda_mem = self._time_op(
+        self.backward_time, _, self.backward_cuda_mem = self._time_op(
             torch.autograd.backward, loss)
 
         # input and output size
@@ -201,13 +201,13 @@ class Wrapper(nn.Module):
 
             # record memory usage
             peak_usage = torch.cuda.max_memory_allocated(device=device)
-            cuda_mem = peak_usage-base_mem
+            cuda_mem = peak_usage - base_mem
         else:
             # convert seconds to milliseconds
             start = time.time()
             out = func(*inputs)
             end = time.time()
-            exec_time = 1000*(end - start)
+            exec_time = 1000 * (end - start)
 
         return exec_time, out, cuda_mem
 
@@ -230,3 +230,9 @@ class Wrapper(nn.Module):
 
     def __contains__(self, key):
         return key in self.layer
+
+    def __getattr__(self, name):
+        try:
+            return super().__getattr__(name)
+        except Exception:
+            return getattr(self.layer, name)

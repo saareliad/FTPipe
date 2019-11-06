@@ -20,3 +20,6 @@ inc.pdf
 *.pdf
 generated_modules.py
 *.log
+transformer_example/**
+transformer_trace.txt
+generated*

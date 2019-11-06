@@ -213,7 +213,6 @@ class Pipeline():
                                           for k in self.output_names])
         shards = []
         workers = []
-        worker_configs = []
         # we use sortedDict because by our convention partition inputs/outputs
         # are sorted by their scope name
         for idx, config in configs.items():
@@ -227,7 +226,7 @@ class Pipeline():
             if DEBUG:
                 output_device = 'cpu'
 
-            model = config['model'].to(output_device)
+            model = config['model'].share_memory()
             if use_delayedNorm:
                 model = DelayedBatchNorm.convertBatchNorm(model)
             command_queue = self.command_queues[idx]
@@ -237,9 +236,7 @@ class Pipeline():
                     command_queue, use_delayedNorm)
             workers.append(Worker(*args))
             shards.append(model)
-            worker_configs.append(args)
 
-        self.worker_configs = worker_configs
         self.shards = ModuleList(shards)
         self.workers = workers
         self.uses = uses
@@ -394,14 +391,28 @@ class Pipeline():
     def eval(self):
         self.train(training=False)
 
-    def state_dict(self) -> Dict:
+    def state_dict(self, out_device=None) -> Dict:
         '''gathers the state dicts of all shards
            resulting in a state_dict with the same keys as the non pipelined model
+           Parameters:
+           -----------
+           out_device:
+           on which device to store the weights if None weights will not be moved from their location
         '''
         res = dict()
         for s in self.shards:
-            res.update(s.state_dict())
+            res.update(s.state_dict(out_device))
         return res
+
+    def load_state_dict(self, state):
+        '''loads the given state dict into the partitions
+        Parameters:
+        -----------
+        state:
+        a state dict which contains a valid state dict of the unpartitioned model
+        '''
+        for s in self.shards:
+            s.load_state_dict(state)
 
     def parameters(self) -> Iterator[Tensor]:
         '''return iterator over all parameters of the pipelined model

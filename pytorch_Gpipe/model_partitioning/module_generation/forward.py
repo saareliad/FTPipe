@@ -18,7 +18,7 @@ dtab = tab + tab
 __all__ = ['generateForwardFunction']
 
 
-def generateForwardFunction(partition: List[Node],
+def generateForwardFunction(partition: List[Node], model_outputs: List[str],
                             scope_to_class_field: Dict[str, str], verbose=False) -> Tuple[List[str], Dict[str, OrderedSet[str]]]:
     # function arguments are x0...xn
     # function arguments correspond to sorted input scopes
@@ -47,10 +47,9 @@ def generateForwardFunction(partition: List[Node],
     lines = []
     lines.append(generateDeclaration(input_ids, scope_to_class_field,
                                      ready_expressions))
-    root_nodes = rootStatements(partition, part_inputs)
-    out_scopes = sortedPartitionOutputs(partition)
+    out_scopes = sortedPartitionOutputs(partition, model_outputs)
 
-    body = generateBody(out_scopes, root_nodes,
+    body = generateBody(out_scopes, partition,
                         scope_to_class_field, ready_expressions, verbose=verbose)
     lines.append(body)
     return lines, {"inputs": input_scopes, "outputs": out_scopes}
@@ -70,9 +69,9 @@ def generateDeclaration(input_ids: List[str], scope_to_class_field: Dict[str, st
     return ''.join(lines)
 
 
-def generateBody(output_scopes: OrderedSet[str], root_nodes: List[Node],
+def generateBody(output_scopes: OrderedSet[str], partition: List[Node],
                  scope_to_class_field: Dict[str, str], ready_expressions: Dict[str, str], verbose=False) -> str:
-    body = generateStatements(root_nodes, scope_to_class_field,
+    body = generateStatements(partition, scope_to_class_field,
                               ready_expressions, verbose=verbose)
     return_statement = generateReturnStatement(output_scopes,
                                                ready_expressions)
@@ -80,24 +79,24 @@ def generateBody(output_scopes: OrderedSet[str], root_nodes: List[Node],
     return body + return_statement
 
 
-def generateStatements(root_nodes: List[Node], scope_to_class_field: Dict[str, str],
+def generateStatements(partition: List[Node], scope_to_class_field: Dict[str, str],
                        ready_expressions: Dict[str, str], verbose=False) -> str:
     ''' generate statements starting from the root in bfs order\n
         when possible avoids allocating temporary variables
     '''
     expression_len = {e: 0 for e in ready_expressions.keys()}
-    open_nodes = deque(root_nodes)
+    open_nodes = deque(sortNodes(partition))
     close_nodes = set()
     arg_gen = variableNameGenerator()
     statements = []
     i = 0
     while len(open_nodes) > 0:
-        node = open_nodes.pop()
+        node = open_nodes.popleft()
         if node.idx in close_nodes:
             continue
         if inputsNotReady(node, ready_expressions):
             # inputs are not ready yet so we will attempt to generate this later
-            open_nodes.appendleft(node)
+            open_nodes.append(node)
             continue
         i += 1
         if i > 1000:
@@ -128,11 +127,10 @@ def generateStatements(root_nodes: List[Node], scope_to_class_field: Dict[str, s
             statements.append(generateFunctionCallExpression(ready_expressions, expression_len,
                                                              node, arg_gen, verbose=verbose))
         # add dependent expression
-        if True or node.type != NodeTypes.CONSTANT:
-            open_nodes.extendleft([n for n in node.out_nodes
-                                   if n.part == node.part])
+        # if True or node.type != NodeTypes.CONSTANT:
+        #     open_nodes.extendleft([n for n in node.out_nodes
+        #                            if n.part == node.part])
         close_nodes.add(node.idx)
-
     statements = filter(lambda s: s != '', statements)
     statements = dtab + f'\n{dtab}'.join(statements)
 
@@ -337,23 +335,22 @@ def sortedPartitionInputs(partition: List[Node]) -> List[Node]:
     return sorted(inputs, key=lambda n: n.scope)
 
 
-def rootStatements(partition: List[Node], input_nodes: List[Node]) -> List[Node]:
-    ''' return the roots of the partition statement forest\n
-        those are the statements which we generate first
-    '''
-    return[node for node in partition if any(n in input_nodes for n in node.in_nodes)
-           or node.type == NodeTypes.CONSTANT or node.type == NodeTypes.BUFF_PARAM or node.type == NodeTypes.PYTHON_PRIMITIVE]
-
-
-def sortedPartitionOutputs(partition: List[Node]) -> OrderedSet[str]:
+def sortedPartitionOutputs(partition: List[Node], model_outputs: List[str]) -> OrderedSet[str]:
     ''' return all scopes that are outputs of the partition\n
         sorted in alphabetical order
     '''
     def isOutput(n):
-        return any(o.part != n.part for o in n.out_nodes) or len(n.out_nodes) == 0
+        part_output = any(o.part != n.part for o in n.out_nodes)
+        model_output = n.scope in model_outputs
+        return part_output or model_output
 
     output_scopes = {n.scope for n in partition if isOutput(n)}
 
     output_scopes = OrderedSet(sorted(output_scopes))
 
     return output_scopes
+
+
+def sortNodes(nodes):
+    nodes = list(sorted(nodes, key=lambda node: node.idx))
+    return nodes

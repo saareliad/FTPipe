@@ -42,7 +42,7 @@ def generatePartitionModules(graph: Graph, model: Module, verbose=False, output_
                                                                layer_classes, is_param_dict,
                                                                buff_param_names)
         misc_functions = generateMiscMethods()
-        forward_function, io = generateForwardFunction(part, scope_to_class_field,
+        forward_function, io = generateForwardFunction(part, graph.output_scopes, scope_to_class_field,
                                                        verbose=verbose)
         partitions_code.append(class_decl)
         partitions_code.extend(forward_function)
@@ -102,7 +102,8 @@ def generateImports(layer_classes: Dict[str, Module]) -> List[str]:
     '''generates imports to torch torch.nn, torch.nn.functionl as F and torch.Tensor,
        and to every layer used and various other small things
     '''
-    imports = f'import torch\nfrom torch import Tensor\nimport torch.nn as nn\nimport torch.nn.functional as F\n'
+    imports = 'import torch\nfrom torch import Tensor\nimport torch.nn as nn\nimport torch.nn.functional as F\n'
+    imports += 'from itertools import chain\n'
     imports += 'from pytorch_Gpipe.utils import layerDict, tensorDict, OrderedSet\n'
     imports += 'from pytorch_Gpipe import Pipeline\n'
     unique_classes = set(layer_classes.values())
