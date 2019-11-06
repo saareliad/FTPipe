@@ -88,7 +88,6 @@ def groupByPartition(nodes: List[Node]) -> List[Tuple[int, List[Node]]]:
         elif n.type == NodeTypes.PYTHON_PRIMITIVE:
             scope = n.scope
             assert 'prim::' in scope, f'primitive does not have prim:: prefix {scope}'
-            assert 'ListConstruct' in scope, f'expected ListConstruct got {scope}'
             func_name = scope.split('prim::')[1].rstrip(string.digits)
             parts[n.part].append(n)
         else:

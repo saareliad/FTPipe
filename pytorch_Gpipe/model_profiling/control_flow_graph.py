@@ -16,7 +16,6 @@ class Graph():
         self.nodes = []
         self.profiled_layers = profiled_layers
         self.num_inputs_buffs_params = 0
-        #TODO tuple inputs do not count as one
         self.num_inputs = num_inputs
         self.buffer_param_names = buffer_param_names
         self._build_graph(trace_graph)
@@ -32,10 +31,9 @@ class Graph():
         self._add_OP_nodes(trace_graph.nodes())
         self._add_shapes(trace_graph)
         self.remove_useless_clone()
-        self.remove_empty_view()
         self._set_outputs(trace_graph.outputs())
+        self.remove_empty_view()
         self._remove_nodes_that_go_nowhere(trace_graph.outputs())
-
         self.remove_int_tensor_int_conversions()
 
 
@@ -84,29 +82,27 @@ class Graph():
             # unprofiled constant value
             elif 'prim::Constant' in trace_node.kind():
                 node_scope = trace_node.scopeName() + \
-                    "/"+trace_node.kind() + str(idx)
+                    "/"+trace_node.kind() + str(node_idx-self.num_inputs_buffs_params)
                 value = trace_node.output().toIValue()
                 new_node = Node(node_scope, node_idx,
                                 NodeTypes.CONSTANT, input_nodes,value=value)      
             else:
                 # unprofiled List
-                if 'prim::ListConstruct' in trace_node.kind():
+                if 'prim::' in trace_node.kind():
                     node_type=NodeTypes.PYTHON_PRIMITIVE
                 # unprofiled torch op 
                 # TODO should we specialize the aten:: and prim:: cases   
                 elif 'aten::' in trace_node.kind():   
                     node_type = NodeTypes.OP
-                elif 'prim::' in trace_node.kind():
-                    node_type = NodeTypes.OP
                 else:
                     #unprofiled other
                     node_scope = trace_node.scopeName() + \
-                        "/" + trace_node.kind() + str(idx)
+                        "/" + trace_node.kind() + str(node_idx-self.num_inputs_buffs_params)
                     node_type = NodeTypes.OP
                     print(f"unknown scope {node_scope}")
 
                 node_scope = trace_node.scopeName() + \
-                    "/" + trace_node.kind() + str(idx)
+                    "/" + trace_node.kind() + str(node_idx-self.num_inputs_buffs_params)
                 new_node = Node(node_scope, node_idx,
                                 node_type, input_nodes)
 
@@ -120,10 +116,13 @@ class Graph():
             # add node for each output
             for i, _ in enumerate(trace_node.outputs()):
                 if i != 0:
+                    new_node.scope+="0"
                     out_node: Node = copy(new_node)
+                    out_node.scope+=f"{i}"
                     # it appears those are dummpy outputs so we just add them for bookkeeping and remove them later
                     out_node.out_nodes = OrderedSet()
                     out_node.idx += i
+                    out_node.in_nodes[0].add_out_node(out_node)
                     self.nodes.append(out_node)
                     num_extra_nodes += 1
 

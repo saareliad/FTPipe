@@ -342,6 +342,18 @@ class OrderedSet(collections.MutableSet, Generic[T]):
                 return idx
         return -1
 
+    def __getitem__(self, idx):
+        if not isinstance(idx, int):
+            raise TypeError(f"expected int index got {type(idx).__name__}")
+        if idx < 0 or idx >= len(self):
+            raise ValueError("index out of range")
+
+        for i, v in enumerate(self):
+            if i == idx:
+                return v
+
+        raise Exception("should never happen")
+
 
 def tensorsMap(f: Callable[[Tensors], Any], tensors: Tensors,):
     """maps each tensor using the f function while keeping the same structure"""

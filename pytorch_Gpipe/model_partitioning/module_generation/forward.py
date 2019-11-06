@@ -119,17 +119,14 @@ def generateStatements(partition: List[Node], scope_to_class_field: Dict[str, st
                                                                 node, arg_gen,
                                                                 verbose=verbose))
         elif node.type == NodeTypes.PYTHON_PRIMITIVE:
-            statements.append(generateListExpression(ready_expressions, expression_len, node,
-                                                     arg_gen, verbose=verbose))
+            statements.append(generatePrimitiveExpression(ready_expressions, expression_len, node,
+                                                          arg_gen, verbose=verbose))
         elif node.type == NodeTypes.CONSTANT:
             generateConstantExpression(ready_expressions, expression_len, node)
         elif node.type == NodeTypes.OP:
             statements.append(generateFunctionCallExpression(ready_expressions, expression_len,
                                                              node, arg_gen, verbose=verbose))
-        # add dependent expression
-        # if True or node.type != NodeTypes.CONSTANT:
-        #     open_nodes.extendleft([n for n in node.out_nodes
-        #                            if n.part == node.part])
+
         close_nodes.add(node.idx)
     statements = filter(lambda s: s != '', statements)
     statements = dtab + f'\n{dtab}'.join(statements)
@@ -183,13 +180,22 @@ def generateLayerActivationExpression(scope_to_class_field: Dict[str, str],
     return comment + f"\n{dtab}{t} = {call}"
 
 
+def generatePrimitiveExpression(ready_expressions: Dict[str, str], expression_len, node: Node,
+                                arg_gen: Iterator[str], verbose=False) -> str:
+
+    if 'ListConstruct' in node.scope:
+        return generateListExpression(ready_expressions, expression_len, node, arg_gen, verbose=verbose)
+    elif 'ListUnpack' in node.scope:
+        return generateUnpackExpression(ready_expressions, expression_len, node, arg_gen, verbose=verbose)
+    else:
+        assert False, f"unsupported primitive {node.scope}"
+
+
 def generateListExpression(ready_expressions: Dict[str, str], expression_len, node: Node,
                            arg_gen: Iterator[str], verbose=False) -> str:
     ''' generates a python list construction to be embedded in use site\n
         does not produce a temporary variable
     '''
-    assert 'ListConstruct' in node.scope and node.type == NodeTypes.PYTHON_PRIMITIVE,\
-        f'expecting list construction but recieved {node.scope} of type {node.type}'
     operand_scopes = [n.scope for n in node.in_nodes]
     args = [ready_expressions[operand] for operand in operand_scopes]
     expression = '[' + ', '.join(args) + ']'
@@ -208,6 +214,24 @@ def generateListExpression(ready_expressions: Dict[str, str], expression_len, no
     ready_expressions[node.scope] = t
     expression_len[node.scope] = 0
     return comment + f"\n{dtab}{t} = {expression}"
+
+
+def generateUnpackExpression(ready_expressions: Dict[str, str], expression_len, node: Node,
+                             arg_gen: Iterator[str], verbose=False) -> str:
+    father = node.in_nodes[0]
+    father_exp = ready_expressions[father.scope]
+    idx = father.out_nodes.indexOf(node)
+    expression = f"{father_exp}[{idx}]"
+    exp_len = expression_len[father.scope]
+    if (not verbose) and (exp_len < 10) and canEmbedInUseSite(node):
+        ready_expressions[node.scope] = expression
+        expression_len[node.scope] = exp_len
+        return ''
+
+    t = next(arg_gen)
+    ready_expressions[node.scope] = t
+    expression_len[node.scope] = 0
+    return f"{t} = {expression}"
 
 
 def generateConstantExpression(ready_expressions: Dict[str, str], expression_len, node: Node):
@@ -242,13 +266,12 @@ def generateFunctionCallExpression(ready_expressions: Dict[str, str], expression
     else:
         args = ', '.join([ready_expressions[operand]
                           for operand in operand_scopes])
-
     # TODO revisit
     # this is a ugly hack for expression for x+y that generates aten::add(x,y,1)
     # there is no such overload in pytorch
     # we handle also mul div and sub as a precaution
     # so we simply ignore the 1 as an argument
-    if 'add' in func_name or 'mul' in func_name or 'div' in func_name or 'sub':
+    if 'add' in func_name or 'mul' in func_name or 'div' in func_name or 'sub' in func_name:
         if len(operand_scopes) == 3 and args[-1] == '1':
             args = args[:-3]
 
