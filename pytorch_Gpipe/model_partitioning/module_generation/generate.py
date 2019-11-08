@@ -18,7 +18,7 @@ tab = '    '
 dtab = tab + tab
 
 
-def generatePartitionModules(graph: Graph, model: Module, verbose=False, output_file=None, DEBUG=False):
+def generatePartitionModules(graph: Graph, model: Module, verbose=False, output_file=None):
     layer_classes = {scope: type(layer) for layer, scope, _
                      in traverse_model(model, depth=graph.depth)}
     is_param_dict = {scope: t.requires_grad for t,
@@ -49,7 +49,7 @@ def generatePartitionModules(graph: Graph, model: Module, verbose=False, output_
         partitions_code.append(misc_functions)
         ios[idx] = io
 
-    lines.append(generatePipline(graph, parts, model, ios, DEBUG=DEBUG))
+    lines.append(generatePipline(graph, parts, model, ios))
     lines += partitions_code
 
     if output_file is None:
@@ -125,7 +125,7 @@ def getFunctionName(scope: str) -> str:
     return scope.split(sep)[1].rstrip(string.digits)
 
 
-def generatePipline(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, OrderedSet], DEBUG=False):
+def generatePipline(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, OrderedSet]):
     '''generates function that will perform the actual partition returning a Pipeline object\n
        the function will have the partition config hardcoded into it,\n
        enabling us to perform the partition process once and use the config multiple times
@@ -174,9 +174,8 @@ def generatePipline(graph: Graph, partitions: List[List[Node]], model: Module, i
         f"# creating configuration\n{tab}config = {{{exp}\n{dtab}{tab}}}")
 
     for idx in sorted(list(ios.keys())):
-        device = f'cuda:{idx}' if not DEBUG else 'cpu'
         lines.append(
-            f"config[{idx}]['model'] = partition{idx}.to('{device}')")
+            f"config[{idx}]['model'] = partition{idx}")
 
     input_ids = [f"'input{idx}'" for idx in range(graph.num_inputs)]
     lines.extend([f"config['model inputs'] = [{', '.join(input_ids)}]",

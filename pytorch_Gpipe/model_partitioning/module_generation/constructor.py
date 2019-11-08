@@ -32,7 +32,10 @@ def generateConstructor(class_name: str, full_names: List[str], layer_classes: D
     lookup = generateLookup(scope, tensor_ids)
     scope.update(tensor_ids)
 
-    return '\n'.join([class_decl, init_dec, super_init, layers_init, tensor_init, lookup]) + '\n', scope
+    device_id = re.search(r'\d+$', class_name).group()
+    device = f"{dtab}self.device = torch.device('cuda:{device_id}')"
+
+    return '\n'.join([class_decl, init_dec, super_init, layers_init, tensor_init, device, lookup]) + '\n', scope
 
 
 def generate__init__layersStatements(layer_names: List[str], full_names: List[str], layer_classes: Dict[str, Module]) -> str:
