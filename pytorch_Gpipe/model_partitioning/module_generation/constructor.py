@@ -33,6 +33,8 @@ def generateConstructor(class_name: str, full_names: List[str], layer_classes: D
     scope.update(tensor_ids)
 
     device_id = re.search(r'\d+$', class_name).group()
+
+    # we initialize it to expected device if DEBUG then the pipeline will set it to cpu device
     device = f"{dtab}self.device = torch.device('cuda:{device_id}')"
 
     return '\n'.join([class_decl, init_dec, super_init, layers_init, tensor_init, device, lookup]) + '\n', scope

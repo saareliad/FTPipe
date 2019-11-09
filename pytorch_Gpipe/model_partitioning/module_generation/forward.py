@@ -239,9 +239,11 @@ def generateConstantExpression(ready_expressions: Dict[str, str], expression_len
     assert 'prim::Constant' in node.scope, f'we expected a constant got {node.scope}'
     value = node.value
     if isinstance(value, torch.device):
-        # TODO this should be dynamic and not static
+        # the given device is the device used for tracing
+        # we override it and use the partition's device instead
         value = f"torch.device(self.device)"
     elif isinstance(value, float):
+        # in case of inf -inf nan
         value = f"float('{value}')"
     ready_expressions[node.scope] = f'{value}'
     expression_len[node.scope] = 0

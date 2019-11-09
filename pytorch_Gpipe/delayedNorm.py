@@ -127,8 +127,6 @@ class DelayedBatchNorm(_BatchNorm):
         if isinstance(module, DelayedBatchNorm) and module.num_micro_batches is num_micro_batches:
             return module
 
-        module_output: nn.Module = module
-
         if isinstance(module, _BatchNorm) and module.track_running_stats:
             module_output = DelayedBatchNorm(module.num_features,
                                              module.eps,
@@ -143,8 +141,10 @@ class DelayedBatchNorm(_BatchNorm):
             module_output.register_buffer(
                 'num_batches_tracked', module.num_batches_tracked)
 
+            return module_output
+
         for name, child in module.named_children():
-            module_output.add_module(
+            module.add_module(
                 name, cls.convertBatchNorm(child, num_micro_batches))
 
-        return module_output
+        return module

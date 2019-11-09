@@ -185,11 +185,13 @@ class StateStack():
 
 class Pipeline():
     def __init__(self, configs: Dict, output_device: Optional[int] = None, use_delayedNorm: bool = False, DEBUG=False):
-        if output_device is None:
-            output_device = torch.cuda.current_device()
         if DEBUG:
-            output_device = 'cpu'
-        self.output_device = output_device
+            self.output_device = torch.device('cpu')
+        elif output_device is None:
+            default = 'cuda' if torch.cuda.is_available() else 'cpu'
+            self.output_device = torch.device(default)
+        else:
+            self.output_device = torch.device(output_device)
 
         self.input_names = configs.pop('model inputs')
         self.output_names = configs.pop('model outputs')
@@ -222,17 +224,18 @@ class Pipeline():
             output_queues = OrderedDict(sorted(output_queues))
             output_uses = OrderedDict([(k, uses[k])
                                        for k in output_queues.keys()])
-            output_device = idx
             if DEBUG:
-                output_device = 'cpu'
-
-            model = config['model'].share_memory()
+                device = torch.device('cpu')
+            else:
+                device = torch.device(idx)
+            model = config['model'].share_memory().to(device)
+            model.device = device
             if use_delayedNorm:
                 model = DelayedBatchNorm.convertBatchNorm(model)
             command_queue = self.command_queues[idx]
             IO = Connection(input_queues, output_queues,
                             output_uses)
-            args = (idx, model, output_device, IO,
+            args = (idx, model, device, IO,
                     command_queue, use_delayedNorm)
             workers.append(Worker(*args))
             shards.append(model)

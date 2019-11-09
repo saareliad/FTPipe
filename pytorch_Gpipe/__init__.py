@@ -53,7 +53,7 @@ def pipe_model(model: nn.Module, *sample_batch: Tensors, nparts: int = 4, partit
                                     weighting_function=w_func)
 
     generatePartitionModules(graph, model,
-                             output_file=output_file, DEBUG=DEBUG, verbose=DEBUG)
+                             output_file=output_file, verbose=DEBUG)
 
     return graph
 

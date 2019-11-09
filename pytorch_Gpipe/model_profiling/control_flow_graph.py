@@ -3,6 +3,8 @@ from enum import Enum
 from typing import Any, Dict, List
 from ..utils import OrderedSet
 import string
+
+
 class Graph():
     '''
     a Graph data structure that model a pytorch network built from a pytorch trace\n
@@ -12,16 +14,17 @@ class Graph():
     the graph can have weighted nodes
     do not instanciate this class directly use the graph_builder method provided with this module
     '''
-    def __init__(self, profiled_layers: List[str], num_inputs: int, buffer_param_names: List[str], trace_graph, weights: Dict[str, Any],basic_blocks:List,depth:int):
+
+    def __init__(self, profiled_layers: List[str], num_inputs: int, buffer_param_names: List[str], trace_graph, weights: Dict[str, Any], basic_blocks: List, depth: int):
         self.nodes = []
         self.profiled_layers = profiled_layers
         self.num_inputs_buffs_params = 0
         self.num_inputs = num_inputs
         self.buffer_param_names = buffer_param_names
         self._build_graph(trace_graph)
-        self.basic_blocks=basic_blocks
-        self.depth=depth
-        self.num_parts=0
+        self.basic_blocks = basic_blocks
+        self.depth = depth
+        self.num_parts = 0
         self.model_name = profiled_layers[0].split('/')[0]
         for node in self.nodes:
             node.weight = weights.get(node.scope, node.weight)
@@ -29,16 +32,18 @@ class Graph():
     def _build_graph(self, trace_graph):
         self._add_IO_nodes(trace_graph.inputs())
         self._add_OP_nodes(trace_graph.nodes())
-        self._add_shapes(trace_graph)
-        self.remove_useless_clone()
+        #TODO we've disabled output shape untill we can think about full support
+        # self._add_shapes(trace_graph)
         self._set_outputs(trace_graph.outputs())
+
+        self.remove_useless_clone()
         self.remove_empty_view()
-        self._remove_nodes_that_go_nowhere(trace_graph.outputs())
         self.remove_int_tensor_int_conversions()
+        self._remove_nodes_that_go_nowhere(trace_graph)
+        
 
-
-        for idx,node in enumerate(self.nodes):
-            node.idx=idx
+        for idx, node in enumerate(self.nodes):
+            node.idx = idx
 
     def _add_IO_nodes(self, input_nodes):
         '''
@@ -71,41 +76,37 @@ class Graph():
             node_scope = self._find_encasing_layer(trace_node.scopeName())
             input_nodes = OrderedSet([self.nodes[i.unique()]
                            for i in trace_node.inputs()])
-            node_idx = self.num_inputs_buffs_params+idx+num_extra_nodes
+            node_idx = self.num_inputs_buffs_params + idx + num_extra_nodes
 
             new_node = None
 
             # profiled Layer
             if node_scope != "":
                 new_node = Node(node_scope, node_idx,
-                                NodeTypes.LAYER, input_nodes) 
+                                NodeTypes.LAYER, input_nodes)
             # unprofiled constant value
             elif 'prim::Constant' in trace_node.kind():
                 node_scope = trace_node.scopeName() + \
-                    "/"+trace_node.kind() + str(node_idx-self.num_inputs_buffs_params)
+                    "/" + trace_node.kind() + str(node_idx - self.num_inputs_buffs_params)
                 value = trace_node.output().toIValue()
                 new_node = Node(node_scope, node_idx,
-                                NodeTypes.CONSTANT, input_nodes,value=value)      
+                                NodeTypes.CONSTANT, input_nodes, value=value)
             else:
                 # unprofiled List
                 if 'prim::' in trace_node.kind():
-                    node_type=NodeTypes.PYTHON_PRIMITIVE
-                # unprofiled torch op 
-                # TODO should we specialize the aten:: and prim:: cases   
-                elif 'aten::' in trace_node.kind():   
+                    node_type = NodeTypes.PYTHON_PRIMITIVE
+                # unprofiled torch op
+                # TODO should we specialize the aten:: and prim:: cases
+                elif 'aten::' in trace_node.kind():
                     node_type = NodeTypes.OP
                 else:
-                    #unprofiled other
-                    node_scope = trace_node.scopeName() + \
-                        "/" + trace_node.kind() + str(node_idx-self.num_inputs_buffs_params)
-                    node_type = NodeTypes.OP
-                    print(f"unknown scope {node_scope}")
+                    # unprofiled other
+                    assert False, f"unknown scope {trace_node.scopeName()}"
 
                 node_scope = trace_node.scopeName() + \
-                    "/" + trace_node.kind() + str(node_idx-self.num_inputs_buffs_params)
+                    "/" + trace_node.kind() + str(node_idx - self.num_inputs_buffs_params)
                 new_node = Node(node_scope, node_idx,
                                 node_type, input_nodes)
-
 
             # add incoming edges
             for node in input_nodes:
@@ -113,19 +114,23 @@ class Graph():
 
             self.nodes.append(new_node)
 
+            nOuts = 1
             # add node for each output
             for i, _ in enumerate(trace_node.outputs()):
                 if i != 0:
-                    new_node.scope+="0"
-                    out_node: Node = copy(new_node)
-                    out_node.scope+=f"{i}"
-                    # it appears those are dummpy outputs so we just add them for bookkeeping and remove them later
-                    out_node.out_nodes = OrderedSet()
-                    out_node.idx += i
-                    out_node.in_nodes[0].add_out_node(out_node)
+                    out_scope = new_node.scope
+                    if self._find_encasing_layer(new_node.scope) == "":
+                        out_scope += +f"{i} "
+                    out_idx = new_node.idx+i
+                    out_node = Node(out_scope,out_idx,new_node.type)
+                    out_node.add_in_node(new_node.in_nodes[0])
+                    new_node.in_nodes[0].add_out_node(out_node)
                     self.nodes.append(out_node)
                     num_extra_nodes += 1
-
+                    nOuts+=1
+            if nOuts > 1 and self._find_encasing_layer(self.nodes[-nOuts].scope) == "":
+                self.nodes[-nOuts].scope+=f"{0} "
+   
     def _add_shapes(self, trace_graph):
         '''
         add the shapes of all intermediate outputs and inputs to the graph nodes
@@ -206,38 +211,40 @@ class Graph():
         # so we need to manually find a profiled layer that encases the op
         most_specific_scope = ""
         for layer_scope in self.profiled_layers:
-            if scopeName.startswith(layer_scope) and len(layer_scope) > len(most_specific_scope):
+            if scopeName.startswith(layer_scope):
                 most_specific_scope = layer_scope
-
+                break
         return most_specific_scope
 
-    def _remove_nodes_that_go_nowhere(self, trace_outputs):
+    def _remove_nodes_that_go_nowhere(self, trace_graph):
         '''remove nodes without out edges that are not outputs of the model'''
-        #necessary because the trace can contain such nodes for certain ops
-        #those nodes provide no additional info to the graph
-
-        out_indices=[self._get_id(out) for out in trace_outputs]
+        # necessary because the trace can contain such nodes for certain ops
+        # those nodes provide no additional info to the graph    
+        out_indices=[self._get_id(out) for out in trace_graph.outputs()]
 
         def going_nowhere(node):
             if node.type is NodeTypes.OP and 'aten::' in node.scope:
                 func_name = node.scope.split('aten::')[1].rstrip(string.digits)
-                #do not remove inplace ops prematurly
+                # do not remove inplace ops prematurly
                 if func_name[-1] == '_':
                     return False
-                    
+
+            if node.scope in self.output_scopes:
+                return False       
             return (not node.out_nodes) and (not node.idx in out_indices)
 
         self._remove_nodes(going_nowhere)
 
     def _get_id(self,out):
-        #we need this method for compatibility issues
-        #in pytorch 1.2.0 the API changed the method name from uniqueName to debugName
-        #maybe it's a sign that we should not relay on it but it's simple and effective...
+        # we need this method for compatibility issues
+        # in pytorch 1.2.0 the API changed the method name from uniqueName to debugName
+        # maybe it's a sign that we should not relay on it but it's simple and effective...
         if hasattr(out, 'debugName'):
-            #1.2.0 and onward
+            # 1.2.0 and onward
             n = out.debugName()
+
         else:
-            #before 1.2.0
+            # before 1.2.0
             assert hasattr(out, 'uniqueName')
             n = out.uniqueName()
         return int(n)
@@ -254,7 +261,7 @@ class Graph():
                 if condition(node):
                     changed = True
                     # connect inputs to outputs directly
-                    #TODO we do not remove/add inputs or outputs might revisit
+                    # TODO we do not remove/add inputs or outputs might revisit
                     for in_node in node.in_nodes:
                         in_node.replace_out_node(node,node.out_nodes)
                     for out_node in node.out_nodes:
@@ -317,7 +324,6 @@ class Graph():
             return [[n.idx for n in node.out_nodes.union(node.in_nodes)] for node in self.nodes]
         return [[n.idx for n in node.out_nodes] for node in self.nodes]
 
-
     def build_dot(self, show_buffs_params=False, show_weights=True):
         '''
         return a graphviz representation of the graph
@@ -365,7 +371,7 @@ class Graph():
                  fontcolor=theme["font_color"],
                  fontname=theme["font_name"])
 
-        #TODO split big graphs to multiple pdfs
+        # TODO split big graphs to multiple pdfs
 
         colors = {0:'grey',1:'green',2:'red',3:'yellow',4:'orange',5:'brown',6:'purple',7:'pink'}
 
@@ -535,7 +541,7 @@ class Node():
 
         before,after=values[:idx],values[idx+1:]
         try:
-            #we handle the case for iterable, if value is not then we recall with [value]
+            # we handle the case for iterable, if value is not then we recall with [value]
             iter(value)
             keys=value
             to_add = [v for v in keys if (v not in before) and (v not in after)]
@@ -554,7 +560,7 @@ class Node():
 
         before, after = values[:idx], values[idx + 1:]
         try:
-            #we handle the case for iterable, if value is not then we recall with [value]
+            # we handle the case for iterable, if value is not then we recall with [value]
             iter(value)
             keys=value
             to_add = [v for v in keys if (v not in before) and (v not in after)]
