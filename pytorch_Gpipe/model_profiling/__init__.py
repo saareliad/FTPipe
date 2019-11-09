@@ -6,7 +6,6 @@ import torch.nn as nn
 from ..utils import Tensors, traverse_model, traverse_params_buffs, model_scopes, _count_elements
 from .control_flow_graph import Graph, NodeTypes
 from .network_profiler import profileNetwork
-from .optimize_graph import optimize_graph
 
 __all__ = ['graph_builder', 'profileNetwork']
 
@@ -53,7 +52,5 @@ def graph_builder(model: nn.Module, *sample_batch: Tensors, max_depth: int = 100
 
     graph = Graph(layerNames, num_inputs, buffer_param_names,
                   trace_graph, weights, basic_blocks, max_depth)
-    graph.save(f"{graph.model_name}_basic", ".", show_buffs_params=True)
-    optimize_graph(graph)
 
     return graph
