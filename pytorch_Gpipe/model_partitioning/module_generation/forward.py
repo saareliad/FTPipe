@@ -291,7 +291,7 @@ def generateFunctionCallExpression(ready_expressions: Dict[str, str], expression
         size = ready_expressions[operand_scopes[1]]
         implicit = ready_expressions[operand_scopes[2]]
         args = f"{tensor_id}, {size}, implicit={implicit}"
-    elif func_name == 'add':
+    elif func_name == 'add' or func_name == 'add_':
         # this is a ugly hack for expression for x+y that generates aten::add(x,y,1)
         # so we simply ignore the 1 as an argument
         if len(operand_scopes) == 3 and ready_expressions[operand_scopes[-1]] == '1':

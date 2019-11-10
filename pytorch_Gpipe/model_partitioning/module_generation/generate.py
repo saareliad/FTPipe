@@ -137,7 +137,7 @@ def generatePipline(graph: Graph, partitions: List[List[Node]], model: Module, i
     model_class = model.__class__.__name__
     # function header
     lines = [
-        f'def {model_class}Pipeline(model:nn.Module,output_device=None,use_delayedNorm=False,DEBUG=False):',
+        f'def {model_class}Pipeline(model:nn.Module,output_device=None,split_dim=0,use_delayedNorm=False,DEBUG=False):',
         "layer_dict = layerDict(model)",
         "tensor_dict = tensorDict(model)",
         f"\n{tab}# now constructing the partitions in order"
@@ -182,7 +182,7 @@ def generatePipline(graph: Graph, partitions: List[List[Node]], model: Module, i
                   f"config['model outputs'] = {list(graph.output_scopes)}"])
 
     lines.append(
-        f"\n{tab}return Pipeline(config,output_device=output_device,use_delayedNorm=use_delayedNorm,DEBUG=DEBUG)\n\n")
+        f"\n{tab}return Pipeline(config,output_device=output_device,split_dim=split_dim,use_delayedNorm=use_delayedNorm,DEBUG=DEBUG)\n\n")
 
     return f'\n{tab}'.join(lines)
 

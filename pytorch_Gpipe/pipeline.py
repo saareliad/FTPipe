@@ -184,7 +184,7 @@ class StateStack():
 
 
 class Pipeline():
-    def __init__(self, configs: Dict, output_device: Optional[int] = None, use_delayedNorm: bool = False, DEBUG=False):
+    def __init__(self, configs: Dict, output_device: Optional[int] = None, split_dim=0, use_delayedNorm: bool = False, DEBUG=False):
         if DEBUG:
             self.output_device = torch.device('cpu')
         elif output_device is None:
@@ -193,6 +193,7 @@ class Pipeline():
         else:
             self.output_device = torch.device(output_device)
 
+        self.split_dim = split_dim
         self.input_names = configs.pop('model inputs')
         self.output_names = configs.pop('model outputs')
 
@@ -358,24 +359,23 @@ class Pipeline():
         return results
 
     def _gatherOutputs(self, results: List[Tensor]) -> List[Tensor]:
-        '''merges minibatch outputs to batches
-           merge is supported only for tensors and only along dimention 0
+        '''merges minibatch outputs to batches along split_dim
         '''
         outputs = [[]for _ in results[0]]
         for minbatch in results:
             for idx, t in enumerate(minbatch):
                 outputs[idx].append(t)
 
-        batch_outs = [torch.cat(minibatches_out).to(self.output_device)
+        batch_outs = [torch.cat(minibatches_out, dim=self.split_dim).to(self.output_device)
                       for minibatches_out in outputs]
         return batch_outs[0] if len(batch_outs) == 1 else batch_outs
 
     def _scatterInputs(self, xs: Tuple[Tensor], num_chunks: int) -> List[Tuple[Tensor, ...]]:
         '''
-        scatters each tensor across batch dim (0)
+        scatters each tensor across split_dim
         returns list of chunks
         '''
-        chunked_input = [x.chunk(num_chunks) for x in xs]
+        chunked_input = [x.chunk(num_chunks, dim=self.split_dim) for x in xs]
         return list(zip(*chunked_input))
 
     def _sendCommand(self, command: COMMAND, metadata=None):
