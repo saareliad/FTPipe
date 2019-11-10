@@ -13,7 +13,7 @@ Profile = namedtuple('Profile',
                      'forward_time backward_time cuda_memory_forward cuda_memory_backward  layer_size')
 
 
-def profileNetwork(net: nn.Module, *sample_batch: Tensors, basic_blocks: Optional[List[nn.Module]] = None, max_depth=100) -> Dict[str, Profile]:
+def profileNetwork(net: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, basic_blocks: Optional[List[nn.Module]] = None, max_depth=100) -> Dict[str, Profile]:
     '''
     profiles a network's computation time(forward/backward) and memory consumption
     returns a dictionary from layer_scope to Profile
@@ -27,6 +27,9 @@ def profileNetwork(net: nn.Module, *sample_batch: Tensors, basic_blocks: Optiona
         a sample batch that will be used to measure executation time of network
         can be single/multiple inputs
 
+    kwargs:
+        keyword args to pass to the profiled model
+
     basic_blocks:
         a tuple of nn.Module classes that the profiler will regard as a cohesive unit
         for eg. if basic_blocks = nn.Sequential then the profiler will break it down to its components
@@ -37,12 +40,17 @@ def profileNetwork(net: nn.Module, *sample_batch: Tensors, basic_blocks: Optiona
 
 
     '''
+    if kwargs is None:
+        kwargs = {}
+    if not isinstance(sample_batch, tuple):
+        sample_batch = (sample_batch,)
+
     # wrap all individula layers for profiling
     layers_dict = _wrap_profiled_layers(net, max_depth, basic_blocks)
 
     # perform 2 symbolic forward backward run first one is warmup as we have seen the first time measurements are higher
-    _perform_forward_backward_pass(net, *sample_batch)
-    _perform_forward_backward_pass(net, *sample_batch)
+    _perform_forward_backward_pass(net, *sample_batch, **kwargs)
+    _perform_forward_backward_pass(net, *sample_batch, **kwargs)
 
     # gather forward and backward execution times
     backward_times = [layer.backward_time
@@ -71,14 +79,14 @@ def profileNetwork(net: nn.Module, *sample_batch: Tensors, basic_blocks: Optiona
     return layers_profile
 
 
-def _perform_forward_backward_pass(net, *sample_batch: Tensors):
+def _perform_forward_backward_pass(net, *sample_batch: Tensors, **kwargs: Dict):
     device = get_device(sample_batch)
     if device.type == "cuda":
         torch.cuda.synchronize(device=device)
-        out = net(*sample_batch)
+        out = net(*sample_batch, **kwargs)
         torch.cuda.synchronize(device=device)
     else:
-        out = net(*sample_batch)
+        out = net(*sample_batch, **kwargs)
     net.zero_grad()
     return out
 
@@ -146,7 +154,7 @@ class Wrapper(nn.Module):
 
         return parameters_size, buffers_size
 
-    def forward(self, *inputs: Tensors):
+    def forward(self, *inputs: Tensors, **kwargs: Dict):
         '''
         perform forward and backward pass of the underlying layer and measure metrics
         '''
@@ -156,7 +164,7 @@ class Wrapper(nn.Module):
         detached_inputs = _detach_inputs(inputs)
 
         self.forward_time, outputs, self.forward_cuda_mem = self._time_op(
-            self.layer, *detached_inputs)
+            self.layer, *detached_inputs, **kwargs)
 
         # reduce outputs to calculate dummy loss
         loss = torch.zeros(1, requires_grad=True, device=device)
@@ -181,7 +189,7 @@ class Wrapper(nn.Module):
 
         return outputs
 
-    def _time_op(self, func, *inputs: Tensors):
+    def _time_op(self, func, *inputs: Tensors, **kwargs: Dict):
         exec_time = 0
         cuda_mem = 0
         device = get_device(inputs)
@@ -194,7 +202,7 @@ class Wrapper(nn.Module):
             start = torch.cuda.Event(enable_timing=True)
             end = torch.cuda.Event(enable_timing=True)
             start.record()
-            out = func(*inputs)
+            out = func(*inputs, **kwargs)
             end.record()
             torch.cuda.synchronize(device=device)
             exec_time = (start.elapsed_time(end))
@@ -205,7 +213,7 @@ class Wrapper(nn.Module):
         else:
             # convert seconds to milliseconds
             start = time.time()
-            out = func(*inputs)
+            out = func(*inputs, **kwargs)
             end = time.time()
             exec_time = 1000 * (end - start)
 
