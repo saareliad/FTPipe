@@ -3,13 +3,13 @@ from typing import Any, Callable, List, Optional
 import torch
 import torch.nn as nn
 
-from .model_partitioning import generatePartitionModules, partition_graph
+from .model_partitioning import generatePartitionModules, partition_graph, partition_networkx
 from .model_profiling import Graph, graph_builder, profileNetwork
 from .pipeline import Pipeline
 from .utils import Devices, Tensors
 
 __all__ = ['pipe_model', 'partition_with_profiler',
-           'partition_graph', 'Pipeline']
+           'partition_graph', 'partition_networkx', 'Pipeline']
 
 
 def pipe_model(model: nn.Module, *sample_batch: Tensors, nparts: int = 4, partition_by_memory: bool = False, output_file: str = None, DEBUG=False):
@@ -80,7 +80,7 @@ def partition_with_profiler(model: nn.Module, *sample_batch: Tensors, nparts=4, 
     graph = graph_builder(model, *sample_batch, max_depth=max_depth,
                           basic_blocks=basic_blocks, use_profiler=True)
 
-    graph = partition_graph(
+    graph = partition_networkx(
         graph, nparts, weighting_function=weighting_function)
 
     return graph

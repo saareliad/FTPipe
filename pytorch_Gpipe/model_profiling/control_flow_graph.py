@@ -326,6 +326,25 @@ class Graph():
             return [[n.idx for n in node.out_nodes.union(node.in_nodes)] for node in self.nodes]
         return [[n.idx for n in node.out_nodes] for node in self.nodes]
 
+    def asNetworkx(self):
+        try:
+            import networkx as nx
+        except ImportError as _:
+            print("networkx package not found")
+            return
+        
+        #edge_list
+        edge_list=[]
+        for u in self.nodes:
+            for v in u.in_nodes:
+                edge_list.append((u.idx,v.idx))
+
+        G = nx.from_edgelist(edge_list)
+        for n in self.nodes:
+            G.nodes[n.idx]['weight']=n.weight
+        
+        return G
+
     def build_dot(self, show_buffs_params=False, show_weights=True):
         '''
         return a graphviz representation of the graph
