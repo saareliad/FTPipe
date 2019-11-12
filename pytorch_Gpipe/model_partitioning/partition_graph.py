@@ -1,7 +1,6 @@
 
 from typing import Any, Callable, Optional
 
-from ..METIS import METIS_partition
 from ..model_profiling import Graph
 from .process_partition import post_process_partition
 import networkx as nx
@@ -27,7 +26,7 @@ def partition_graph(graph: Graph, num_partitions: int, weighting_function: Optio
         additional options to pass to METIS
         for eg. for the option METIS_OPTION_SEED pass seed=value
     '''
-
+    from ..METIS import METIS_partition
     wfunc = weighting_function if weighting_function != None else default_weight_func
 
     adjlist = graph.adjacency_list()
