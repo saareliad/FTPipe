@@ -49,7 +49,7 @@ def generatePartitionModules(graph: Graph, model: Module, verbose=False, output_
         partitions_code.append(misc_functions)
         ios[idx] = io
 
-    lines.append(generatePipline(graph, parts, model, ios))
+    lines.append(generatePiplineAndGetConfig(graph, parts, model, ios))
     lines += partitions_code
 
     if output_file is None:
@@ -125,11 +125,7 @@ def getFunctionName(scope: str) -> str:
     return scope.split(sep)[1].rstrip(string.digits)
 
 
-def generatePipline(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, OrderedSet]):
-    '''generates function that will perform the actual partition returning a Pipeline object\n
-       the function will have the partition config hardcoded into it,\n
-       enabling us to perform the partition process once and use the config multiple times
-    '''
+def createConfig(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, OrderedSet]):
     model_buffers = {scope: t for t, scope in traverse_params_buffs(model)
                      if not t.requires_grad}
     model_parameteres = {scope: t for t, scope in traverse_params_buffs(model)
@@ -137,12 +133,11 @@ def generatePipline(graph: Graph, partitions: List[List[Node]], model: Module, i
     model_class = model.__class__.__name__
     # function header
     lines = [
-        f'def {model_class}Pipeline(model:nn.Module,output_device=None,split_dim=0,use_delayedNorm=False,DEBUG=False):',
+        f"def createConfig(model,DEBUG=False,partitions_only=False):",
         "layer_dict = layerDict(model)",
         "tensor_dict = tensorDict(model)",
         f"\n{tab}# now constructing the partitions in order"
     ]
-    lines = [f'\n{tab}'.join(lines)]
 
     # hard code which layers buffers and parameters belong to each partition
     construction_args = []
@@ -174,17 +169,34 @@ def generatePipline(graph: Graph, partitions: List[List[Node]], model: Module, i
         f"# creating configuration\n{tab}config = {{{exp}\n{dtab}{tab}}}")
 
     for idx in sorted(list(ios.keys())):
-        lines.append(
-            f"config[{idx}]['model'] = partition{idx}")
+        lines.extend([f"device = 'cpu' if DEBUG else torch.device('cuda:{idx}')",
+                      f"partition{idx}.device=device",
+                      f"config[{idx}]['model'] = partition{idx}.to(device)"])
 
     input_ids = [f"'input{idx}'" for idx in range(graph.num_inputs)]
     lines.extend([f"config['model inputs'] = [{', '.join(input_ids)}]",
-                  f"config['model outputs'] = {list(graph.output_scopes)}"])
+                  f"config['model outputs'] = {list(graph.output_scopes)}",
+                  f"\n{tab}return [config[i]['model'] for i in range({len(ios)})] if partitions_only else config"])
+
+    return f"\n{tab}".join(lines) + "\n"
+
+
+def generatePiplineAndGetConfig(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, OrderedSet]):
+    '''generates function that will perform the actual partition returning a Pipeline object\n
+       the function will have the partition config hardcoded into it,\n
+       enabling us to perform the partition process once and use the config multiple times
+    '''
+    model_class = model.__class__.__name__
+    config = createConfig(graph, partitions, model, ios)
+
+    lines = [
+        f'\ndef {model_class}Pipeline(model:nn.Module,output_device=None,split_dim=0,use_delayedNorm=False,DEBUG=False):']
 
     lines.append(
-        f"\n{tab}return Pipeline(config,output_device=output_device,split_dim=split_dim,use_delayedNorm=use_delayedNorm,DEBUG=DEBUG)\n\n")
+        f"return Pipeline(createConfig(model,DEBUG=DEBUG,partitions_only=False),output_device=output_device,split_dim=split_dim,use_delayedNorm=use_delayedNorm)\n\n",
+    )
 
-    return f'\n{tab}'.join(lines)
+    return f'\n{tab}'.join(lines) + f"\n{config}\n"
 
 
 def connections(graph: Graph):

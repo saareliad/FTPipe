@@ -184,10 +184,8 @@ class StateStack():
 
 
 class Pipeline():
-    def __init__(self, configs: Dict, output_device: Optional[int] = None, split_dim=0, use_delayedNorm: bool = False, DEBUG=False):
-        if DEBUG:
-            self.output_device = torch.device('cpu')
-        elif output_device is None:
+    def __init__(self, configs: Dict, output_device: Optional[int] = None, split_dim=0, use_delayedNorm: bool = False):
+        if output_device is None:
             default = 'cuda' if torch.cuda.is_available() else 'cpu'
             self.output_device = torch.device(default)
         else:
@@ -225,12 +223,9 @@ class Pipeline():
             output_queues = OrderedDict(sorted(output_queues))
             output_uses = OrderedDict([(k, uses[k])
                                        for k in output_queues.keys()])
-            if DEBUG:
-                device = torch.device('cpu')
-            else:
-                device = torch.device(idx)
-            model = config['model'].share_memory().to(device)
-            model.device = device
+
+            model = config['model'].share_memory()
+            device = model.device
             if use_delayedNorm:
                 model = DelayedBatchNorm.convertBatchNorm(model)
             command_queue = self.command_queues[idx]
