@@ -4,9 +4,11 @@ from pytorch_Gpipe import pipe_model
 import argparse
 import importlib
 
-
-MODEL_CONFIGS = dict(wrn_16x4=dict(
-    depth=16, num_classes=10, widen_factor=4, drop_rate=0.0))
+MODEL_CONFIGS = dict(
+    wrn_16x4=dict(depth=16, num_classes=10, widen_factor=4, drop_rate=0.0),
+    wrn_28x10_do=dict(depth=28, num_classes=10, widen_factor=4, drop_rate=0.3),
+    wrn_28x10=dict(depth=28, num_classes=10, widen_factor=4, drop_rate=0)
+)
 DATASETS = ['cifar10', 'cifar100', 'imagenet']
 
 # Used to get generated name later
@@ -14,7 +16,7 @@ MODEL_CFG_TO_SAMPLE_MODEL = dict(wrn_16x4=WideResNet)
 
 
 def create_model(cfg='wrn_16x4'):
-    return WideResNet(**MODEL_CONFIGS[cfg])
+    return MODEL_CFG_TO_SAMPLE_MODEL[cfg](**MODEL_CONFIGS[cfg])
 
 
 def create_random_sample(args):
@@ -42,7 +44,7 @@ if __name__ == "__main__":
     parser.add_argument('--output_file', default='wrn_16x4')
 
     args = parser.parse_args()
-    VERBOSE_PARTITIONING = True
+    VERBOSE_PARTITIONING = False
     GET_PARTITIONS_ON_CPU = True
 
     # if the model is too big run the whole partitioning process on CPU
@@ -78,6 +80,7 @@ if __name__ == "__main__":
         model, partitions_only=True, DEBUG=GET_PARTITIONS_ON_CPU)
 
     def run_sequential(sample, partitions):
+        # ( Note - its ugly to be backwardcompatible with dicts)
         a = partitions[0](sample)
         for i in range(1, args.n_partitions - 1):
             a = partitions[i](*a)
@@ -87,10 +90,9 @@ if __name__ == "__main__":
     out = run_sequential(sample, partitions)
 
     def test_gpipe_stuff():
-        # FIXME: NOT TESTED YET. DECOUPLED FROM PARTITIONS.
+        # In function because its DECOUPLED FROM PARTITIONS.
         name = MODEL_CFG_TO_SAMPLE_MODEL[args.model].__name__
-        gpipe_generated_pipeline = importlib.import_module(
-            args.output_file + "." + name + "Pipeline")
+        gpipe_generated_pipeline = getattr(generated, name + "Pipeline")
 
         # create a pipeLine from the given model
         # split dim the dim to split inputs and gradients across
@@ -110,3 +112,5 @@ if __name__ == "__main__":
 
         # pass gradients to the pipeline and compute the backward pass
         pipe.backward(grads)
+
+    # test_gpipe_stuff()
