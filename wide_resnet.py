@@ -35,10 +35,10 @@ if __name__ == "__main__":
     parser.add_argument('--model', default='wrn_16x4',
                         choices=MODEL_CONFIGS.keys())
     parser.add_argument('--dataset', default='cifar10', choices=DATASETS)
-    parser.add_argument('--batch_size', default=32)
+    parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--model_too_big', default=False,
                         help="if the model is too big run the whole partitioning process on CPU, and drink a cup of coffee in the meantime")
-    parser.add_argument('--n_partitions', default=4)
+    parser.add_argument('--n_partitions', type=int, default=4)
     parser.add_argument('--output_file', default='wrn_16x4')
 
     args = parser.parse_args()
@@ -80,7 +80,6 @@ if __name__ == "__main__":
     def run_sequential(sample, partitions):
         a = partitions[0](sample)
         for i in range(1, args.n_partitions - 1):
-            a = partitions[i](*a)
             a = partitions[i](*a)
         out = partitions[args.n_partitions - 1](*a)
         return out
