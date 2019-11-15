@@ -2,7 +2,8 @@ from enum import Enum
 from typing import Any, Dict, List
 from ..utils import OrderedSet
 import string
-
+import inspect
+import torch
 
 class Graph():
     '''
@@ -38,11 +39,12 @@ class Graph():
 
         self.remove_useless_clone()
         self.remove_empty_view()
-        self.remove_int_tensor_int_conversions()
-
         optimize_graph(self)
         self._remove_nodes_that_go_nowhere(trace_graph)
-
+        for idx, node in enumerate(self.nodes):
+            node.idx = idx
+        self.remove_one_input_from_add_nodes()
+        self.add_missing_types()
         for idx, node in enumerate(self.nodes):
             node.idx = idx
 
@@ -64,6 +66,7 @@ class Graph():
                 node_scope = self.buffer_param_names[idx - self.num_inputs]
 
             new_node = Node(node_scope, idx, node_type, weight=node_weight)
+            new_node.value_type=torch.Tensor
             self.nodes.append(new_node)
 
             self.num_inputs_buffs_params += 1
@@ -85,6 +88,7 @@ class Graph():
             if node_scope != "":
                 new_node = Node(node_scope, node_idx,
                                 NodeTypes.LAYER, input_nodes)
+                new_node.value_type=torch.Tensor
             # unprofiled constant value
             elif 'prim::Constant' in trace_node.kind():
                 node_scope = trace_node.scopeName() + \
@@ -117,7 +121,9 @@ class Graph():
 
             nOuts = 1
             # add node for each output
-            for i, _ in enumerate(trace_node.outputs()):
+            for i, output in enumerate(trace_node.outputs()):
+                if i==0 and output.isCompleteTensor():
+                    self.nodes[-1].value_type=torch.Tensor
                 if i != 0:
                     out_scope = new_node.scope
                     if self._find_encasing_layer(new_node.scope) == "":
@@ -126,12 +132,14 @@ class Graph():
                     out_node = Node(out_scope,out_idx,new_node.type)
                     out_node.add_in_node(new_node.in_nodes[0])
                     new_node.in_nodes[0].add_out_node(out_node)
+                    if output.isCompleteTensor():
+                        out_node.value_type=torch.Tensor
                     self.nodes.append(out_node)
                     num_extra_nodes += 1
                     nOuts+=1
             if nOuts > 1 and self._find_encasing_layer(self.nodes[-nOuts].scope) == "":
                 self.nodes[-nOuts].scope+=f"{0} "
-   
+
     def _add_shapes(self, trace_graph):
         '''
         add the shapes of all intermediate outputs and inputs to the graph nodes
@@ -186,6 +194,16 @@ class Graph():
                 idx += 1
                 output_idx += 1
 
+    def add_missing_types(self):
+        for node in self.nodes:
+            if node.valueType() is type(None):
+                if 'aten::size' in node.scope or 'aten::Int' in node.scope:
+                    node.value_type=int
+                elif 'prim::ListConstruct' in node.scope or 'aten::chunk' in node.scope:
+                    node.value_type=list
+                elif node.type != NodeTypes.CONSTANT:
+                    continue
+
     def remove_useless_clone(self):
         def predicate(n:Node):
             return ('aten::clone' in n.scope) and (len(n.out_nodes) == 0)
@@ -199,10 +217,15 @@ class Graph():
             return('prim::ListConstruct' in n.scope) and (len(n.in_nodes) == 0)
         self._remove_nodes(predicate)
 
-    def remove_int_tensor_int_conversions(self):
-        def predicate(node):
-            return 'prim::NumToTensor' in node.scope or 'aten::Int' in node.scope
-        self._remove_nodes(predicate)
+    def remove_one_input_from_add_nodes(self):
+        # stupid fix where for some odd reason torch.add has 3 input with value 1
+        def pred(node:Node):
+            if node.type == NodeTypes.CONSTANT and node.value == 1:
+                assert len(node.out_nodes) == 1 , "Constant should have one use"
+                out = node.out_nodes[0]
+                return ('aten::add' in out.scope) and (out.in_nodes.indexOf(node) == 2)
+            return False
+        self._remove_nodes(pred) 
 
     def _find_encasing_layer(self, scopeName: str):
         '''
@@ -266,6 +289,9 @@ class Graph():
                     # TODO we do not remove/add inputs or outputs might revisit
                     for in_node in node.in_nodes:
                         in_node.replace_out_node(node,node.out_nodes)
+                        if node.value_type:
+                            in_node.value_type=node.value_type
+                            in_node.value=None
                     for out_node in node.out_nodes:
                         out_node.replace_in_node(node,node.in_nodes)
                         out_node.inputs.difference_update(node.outputs)
@@ -411,8 +437,11 @@ class Graph():
 
             if show_weights and node.weight != 0:
                 label = f"{label}\n {node.weight}"
+
+            label = f"{label}\n type: {node.valueType()}"
             if not (node.value is None):
                 label = f"{label}\n value={node.value}"
+            
             dot.node(str(node.idx), label, fillcolor=colors[node.part])
 
         for node in self.nodes:
@@ -528,6 +557,13 @@ class Node():
         self.outputs = OrderedSet()
         self.inputs = OrderedSet()
         self.value=value
+        self.value_type=None
+
+    def valueType(self):
+        if self.value_type:
+            return self.value_type
+        else:
+            return type(self.value)
 
     def add_out_node(self, node):
         if isinstance(node, Node):
@@ -570,7 +606,6 @@ class Node():
 
         except TypeError as _:
             self.replace_out_node(to_replace,[value])
-
 
     def replace_in_node(self,to_replace,value):
         if to_replace not in self.in_nodes:

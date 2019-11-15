@@ -3,7 +3,8 @@ from typing import Any, Callable, List, Dict, Optional
 import torch
 import torch.nn as nn
 
-from .model_partitioning import generatePartitionModules, partition
+from .model_partitioning import partition
+from .module_generation import generatePartitionModules
 from .model_profiling import Graph, graph_builder, profileNetwork
 from .pipeline import Pipeline
 from .utils import Devices, Tensors
