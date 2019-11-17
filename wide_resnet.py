@@ -4,15 +4,24 @@ from pytorch_Gpipe import pipe_model
 import argparse
 import importlib
 
-MODEL_CONFIGS = dict(
-    wrn_16x4=dict(depth=16, num_classes=10, widen_factor=4, drop_rate=0.0),
-    wrn_28x10_do=dict(depth=28, num_classes=10, widen_factor=4, drop_rate=0.3),
-    wrn_28x10=dict(depth=28, num_classes=10, widen_factor=4, drop_rate=0)
-)
-DATASETS = ['cifar10', 'cifar100', 'imagenet']
+_WIDE_RESNETS = dict(
+    wrn_16x4=dict(depth=16, num_classes=10, widen_factor=4, drop_rate=0.0),  # FOR BACKWARD COMPATABILITY
+    wrn_16x4_c10=dict(depth=16, num_classes=10, widen_factor=4, drop_rate=0.0),
+    wrn_28x10_c10_dr03=dict(depth=28, num_classes=10, widen_factor=10, drop_rate=0.3),
+    wrn_28x10_c10=dict(depth=28, num_classes=10, widen_factor=10, drop_rate=0),
 
-# Used to get generated name later
-MODEL_CFG_TO_SAMPLE_MODEL = dict(wrn_16x4=WideResNet)
+    wrn_16x4_c100=dict(depth=16, num_classes=100, widen_factor=4, drop_rate=0.0),
+    wrn_28x10_c100_dr03=dict(depth=28, num_classes=100, widen_factor=10, drop_rate=0.3),
+    wrn_28x10_c100=dict(depth=28, num_classes=100, widen_factor=10, drop_rate=0),
+)
+
+MODEL_CONFIGS = {**_WIDE_RESNETS}
+
+# (note) originally used to get generated pipeline name later
+MODEL_CFG_TO_SAMPLE_MODEL = {k: WideResNet for k in _WIDE_RESNETS.keys()}
+
+
+DATASETS = ['cifar10', 'cifar100', 'imagenet']
 
 
 def create_model(cfg='wrn_16x4'):
@@ -37,13 +46,18 @@ if __name__ == "__main__":
     parser.add_argument('--model', default='wrn_16x4',
                         choices=MODEL_CONFIGS.keys())
     parser.add_argument('--dataset', default='cifar10', choices=DATASETS)
-    parser.add_argument('--batch_size', type=int, default=32)
-    parser.add_argument('--model_too_big', default=False,
+    parser.add_argument('--batch_size', type=int, default=128)
+    parser.add_argument('--model_too_big', action='store_true', default=False,
                         help="if the model is too big run the whole partitioning process on CPU, and drink a cup of coffee in the meantime")
     parser.add_argument('--n_partitions', type=int, default=4)
     parser.add_argument('--output_file', default='wrn_16x4')
+    parser.add_argument('--auto_file_name', action='store_true', default=False, help="create file name automatically")
 
     args = parser.parse_args()
+
+    if args.auto_file_name:
+        args.output_file = f"{args.model}_p{args.n_partitions}"
+
     VERBOSE_PARTITIONING = False
     GET_PARTITIONS_ON_CPU = True
 

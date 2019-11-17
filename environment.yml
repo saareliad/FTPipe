@@ -10,4 +10,10 @@ dependencies:
   - graphviz
   - python-graphviz
   - networkx
-  - networkx-metis
+  - tqdm
+  - scikit-learn
+  - pip
+  - cython
+  - pip: 
+    - git+https://github.com/networkx/networkx-metis.git
+  
