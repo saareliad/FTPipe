@@ -94,7 +94,7 @@ def _perform_forward_backward_pass(net, *sample_batch: Tensors, **kwargs: Dict):
 def _wrap_profiled_layers(module: nn.Module, depth, basic_blocks: List[nn.Module]):
     layers_dict = {}
 
-    for sub_layer, scope, parent in traverse_model(module, depth, basic_blocks):
+    for sub_layer, scope, parent in traverse_model(module, depth, basic_blocks=basic_blocks):
         name = scope[scope.rfind('[') + 1:-1]
         wrapper = Wrapper(sub_layer)
         parent.add_module(name, wrapper)

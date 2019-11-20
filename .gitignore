@@ -24,3 +24,4 @@ transformer_example/**
 transformer_trace.txt
 generated*
 *Bug*
+glue_data/**

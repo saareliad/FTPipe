@@ -251,10 +251,14 @@ def parse_functions(file_path=None):
                         function = Function(args)
                 elif is_torch:
                     f_type = FunctionTypes.TORCH
-                    assert hasattr(torch, func_name)
+                    if not hasattr(torch, func_name):
+                        pass
+                        # print(f"could not resolve torch.{func_name}")
                 else:
                     f_type = FunctionTypes.TENSOR
-                    assert hasattr(Tensor, func_name)
+                    if not hasattr(Tensor, func_name):
+                        pass
+                        # print(f"could not resolve Tensor.{func_name}")
 
                 supported_functions.addFunction(func_name, function, f_type)
         return supported_functions

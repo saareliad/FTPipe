@@ -4,13 +4,12 @@ from torch import Tensor
 from torch.nn import Module
 import torch.nn.functional as F
 from pytorch_Gpipe.model_profiling.control_flow_graph import Node, NodeTypes, Graph
-from pytorch_Gpipe.utils import traverse_model, traverse_params_buffs
+from pytorch_Gpipe.utils import traverse_model, traverse_params_buffs, layerDict, tensorDict
 import string
 from .forward import generateForwardFunction
 from .constructor import generateConstructor
 from .misc import generateMiscMethods
 from typing import List, Tuple, Dict
-from pytorch_Gpipe.utils import OrderedSet
 from collections import OrderedDict
 import inspect
 
@@ -49,8 +48,9 @@ def generatePartitionModules(graph: Graph, model: Module, verbose=False, output_
         partitions_code.append(misc_functions)
         ios[idx] = io
 
-    lines.append(generatePiplineAndGetConfig(graph, parts, model, ios))
+    lines.append(createConfig(graph, parts, model, ios))
     lines += partitions_code
+    lines.append(generateHelpFunctions())
 
     if output_file is None:
         output_file = f'generated_{graph.model_name}{len(parts)}'
@@ -104,8 +104,8 @@ def generateImports(layer_classes: Dict[str, Module]) -> List[str]:
     imports = 'import torch\nfrom torch import Tensor\nimport torch.nn as nn\nimport torch.nn.functional as F\n'
     imports += 'from itertools import chain\n'
     imports += 'import operator\n'
-    imports += 'from pytorch_Gpipe.utils import layerDict, tensorDict, OrderedSet\n'
-    imports += 'from pytorch_Gpipe import Pipeline\n'
+    imports += 'from typing import Optional, Tuple, Iterator, Iterable'
+    imports += '\n'
     unique_classes = set(layer_classes.values())
 
     for cls in unique_classes:
@@ -114,6 +114,13 @@ def generateImports(layer_classes: Dict[str, Module]) -> List[str]:
     disclaimer = '# this is an auto generated file do not edit unless you know what you are doing\n\n'
 
     return imports.splitlines() + [disclaimer]
+
+
+def generateHelpFunctions():
+    lines = [inspect.getsource(f) for f in
+             [traverse_model, layerDict, traverse_params_buffs, tensorDict]]
+
+    return "\n\n".join(lines)
 
 
 def getFunctionName(scope: str) -> str:
@@ -126,7 +133,7 @@ def getFunctionName(scope: str) -> str:
     return scope.split(sep)[1].rstrip(string.digits)
 
 
-def createConfig(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, OrderedSet]):
+def createConfig(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, Dict[str, List[str]]]):
     model_buffers = {scope: t for t, scope in traverse_params_buffs(model)
                      if not t.requires_grad}
     model_parameteres = {scope: t for t, scope in traverse_params_buffs(model)
@@ -180,24 +187,6 @@ def createConfig(graph: Graph, partitions: List[List[Node]], model: Module, ios:
                   f"\n{tab}return [config[i]['model'] for i in range({len(ios)})] if partitions_only else config"])
 
     return f"\n{tab}".join(lines) + "\n"
-
-
-def generatePiplineAndGetConfig(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, OrderedSet]):
-    '''generates function that will perform the actual partition returning a Pipeline object\n
-       the function will have the partition config hardcoded into it,\n
-       enabling us to perform the partition process once and use the config multiple times
-    '''
-    model_class = model.__class__.__name__
-    config = createConfig(graph, partitions, model, ios)
-
-    lines = [
-        f'\ndef {model_class}Pipeline(model:nn.Module,output_device=None,split_dim=0,use_delayedNorm=False,DEBUG=False):']
-
-    lines.append(
-        f"return Pipeline(createConfig(model,DEBUG=DEBUG,partitions_only=False),output_device=output_device,split_dim=split_dim,use_delayedNorm=use_delayedNorm)\n\n",
-    )
-
-    return f'\n{tab}'.join(lines) + f"\n{config}\n"
 
 
 def connections(graph: Graph):

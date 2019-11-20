@@ -1,4 +1,4 @@
-from typing import Dict, Iterable, Iterator, List, Optional,\
+from typing import Iterable, Iterator, List, Optional,\
     Tuple, Union, TypeVar, Generic, Callable, Any
 import collections
 import torch
@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch import Tensor
 
 __all__ = ["traverse_model", "traverse_params_buffs",
-           "find_output_shapes_of_scopes", "model_scopes", "get_device", "_detach_inputs", "_get_size", "_get_shape",
+           "model_scopes", "get_device", "_detach_inputs", "_get_size", "_get_shape",
            "Tensors", "TensorsShape", "Devices", "OrderedSet", "layerDict", "tensorDict"]
 
 # the officially supported input types
@@ -17,7 +17,7 @@ Device = Union[torch.device, int, str]
 Devices = Union[List[Device], Tuple[Device, ...]]
 
 
-def traverse_model(model: nn.Module, depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None, full: bool = False) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
+def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None, basic_blocks: Optional[Iterable[nn.Module]] = None, full: bool = False) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
     '''
     iterate over model layers yielding the layer,layer_scope,encasing_module
     Parameters:
@@ -31,11 +31,9 @@ def traverse_model(model: nn.Module, depth: int = 1000, basic_blocks: Optional[L
     full:
         whether to yield only layers specified by the depth and basick_block options or to yield all layers
     '''
-    prefix = type(model).__name__
-    yield from _traverse_model(model, depth, prefix, basic_blocks, full)
+    if prefix is None:
+        prefix = type(module).__name__
 
-
-def _traverse_model(module: nn.Module, depth: int, prefix: str, basic_blocks: Optional[Iterable[nn.Module]], full: bool) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
     for name, sub_module in module.named_children():
         scope = prefix + "/" + type(sub_module).__name__ + f"[{name}]"
         if len(list(sub_module.children())) == 0 or (basic_blocks != None and isinstance(sub_module, tuple(basic_blocks))) or depth == 0:
@@ -43,7 +41,7 @@ def _traverse_model(module: nn.Module, depth: int, prefix: str, basic_blocks: Op
         else:
             if full:
                 yield sub_module, scope, module
-            yield from _traverse_model(sub_module, depth - 1, prefix + "/" + type(
+            yield from traverse_model(sub_module, depth - 1, prefix + "/" + type(
                 sub_module).__name__ + f"[{name}]", basic_blocks, full)
 
 
@@ -64,7 +62,7 @@ def model_scopes(model: nn.Module, depth: int = 1000, basic_blocks: Optional[Lis
     return list(map(lambda t: t[1], traverse_model(model, depth=depth, basic_blocks=basic_blocks, full=full)))
 
 
-def traverse_params_buffs(module: nn.Module) -> Iterator[Tuple[torch.tensor, str]]:
+def traverse_params_buffs(module: nn.Module, prefix: Optional[str] = None) -> Iterator[Tuple[torch.tensor, str]]:
     '''
     iterate over model's buffers and parameters yielding obj,obj_scope
 
@@ -73,11 +71,9 @@ def traverse_params_buffs(module: nn.Module) -> Iterator[Tuple[torch.tensor, str
     model:
         the model to iterate over
     '''
-    prefix = type(module).__name__
-    yield from _traverse_params_buffs(module, prefix)
+    if prefix is None:
+        prefix = type(module).__name__
 
-
-def _traverse_params_buffs(module: nn.Module, prefix: str) -> Iterator[Tuple[torch.tensor, str]]:
     # params
     for param_name, param in module.named_parameters(recurse=False):
         param_scope = f"{prefix}/{type(param).__name__}[{param_name}]"
@@ -90,48 +86,11 @@ def _traverse_params_buffs(module: nn.Module, prefix: str) -> Iterator[Tuple[tor
 
     # recurse
     for name, sub_module in module.named_children():
-        yield from _traverse_params_buffs(sub_module, prefix + "/" + type(sub_module).__name__ + f"[{name}]")
-
-
-def find_output_shapes_of_scopes(model, scopes, *sample_batch: Tensors) -> Dict:
-    '''
-    returns a dictionary from scope to input/output shapes without the batch dimention
-    by performing a forward pass
-
-    Parameters:
-    -----------
-    model:
-        the model to profile
-    scopes:
-        the scopes we wish to know their output shapes
-    sample_batch:
-        the model sample_batch that will used in the forward pass
-    '''
-    backup = dict()
-
-    for layer, scope, parent in traverse_model(model, full=True):
-        if scope in scopes:
-            name = scope[scope.rfind('[') + 1:-1]
-            parent.add_module(name, ShapeWrapper(layer))
-
-            new_scope = scope[:scope.rfind('/') + 1] + f"ShapeWrapper[{name}]"
-            backup[new_scope] = (scope, name)
-
-    with torch.no_grad():
-        model(*sample_batch)
-        model.zero_grad()
-    scope_to_shape = {}
-    for layer, scope, parent in traverse_model(model, full=True):
-        if isinstance(layer, ShapeWrapper):
-            old_scope, name = backup[scope]
-            scope_to_shape[old_scope] = (layer.input_shape, layer.output_shape)
-            parent.add_module(name, layer.layer)
-
-    return scope_to_shape
+        yield from traverse_params_buffs(sub_module, prefix + "/" + type(sub_module).__name__ + f"[{name}]")
 
 
 def layerDict(model: nn.Module):
-    return {s: l for l, s, _ in traverse_model(model)}
+    return {s: l for l, s, _ in traverse_model(model, 1000)}
 
 
 def tensorDict(model: nn.Module):
@@ -139,47 +98,6 @@ def tensorDict(model: nn.Module):
 
 
 INCORRECT_INPUT_TYPE = '''currently supported input types are torch.Tensor, List,Tuple or combination of them found: '''
-
-
-class ShapeWrapper(nn.Module):
-    '''
-    a wrapper that when it performs forward pass it records the underlying layer's output shape without batch dimention
-    '''
-
-    def __init__(self, sub_module: nn.Module):
-        super(ShapeWrapper, self).__init__()
-        self.output_shape = []
-        self.layer = sub_module
-        self.input_shape = []
-
-    def forward(self, *inputs: Tensors):
-        self.input_shape = _get_shape(inputs)
-
-        outs = self.layer(*inputs)
-
-        self.output_shape = _get_shape(outs)
-
-        return outs
-
-    # just in case those operations are required we pass them to the profiled layer
-
-    def __iter__(self):
-        return iter(self.layer)
-
-    def __getitem__(self, key):
-        return self.layer[key]
-
-    def __setitem__(self, key, value):
-        self.layer[key] = value
-
-    def __delitem__(self, idx):
-        delattr(self.layer, idx)
-
-    def __len__(self):
-        return len(self.layer)
-
-    def __contains__(self, key):
-        return key in self.layer
 
 
 def get_device(x: Tensors) -> Device:
@@ -353,24 +271,3 @@ class OrderedSet(collections.MutableSet, Generic[T]):
                 return v
 
         raise Exception("should never happen")
-
-
-def tensorsMap(f: Callable[[Tensors], Any], tensors: Tensors,):
-    """maps each tensor using the f function while keeping the same structure"""
-
-    if isinstance(tensors, torch.Tensor):
-        return f(tensors)
-    elif isinstance(tensors, (list, tuple)):
-        container = type(tensors)
-        return container([tensorsMap(f, tensors) for tensors in tensors])
-    else:
-        raise ValueError(
-            f"expected list or tuple or tensor got {tensors.__class__.__name__}")
-
-
-def batchDim(tensors: Tensors):
-    """returns the batch_dim of a Tensors object"""
-    if isinstance(tensors, torch.Tensor):
-        return tensors.size(0)
-
-    return batchDim(tensors[0])

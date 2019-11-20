@@ -5,14 +5,19 @@ import argparse
 import importlib
 
 _WIDE_RESNETS = dict(
-    wrn_16x4=dict(depth=16, num_classes=10, widen_factor=4, drop_rate=0.0),  # FOR BACKWARD COMPATABILITY
+    wrn_16x4=dict(depth=16, num_classes=10, widen_factor=4,
+                  drop_rate=0.0),  # FOR BACKWARD COMPATABILITY
     wrn_16x4_c10=dict(depth=16, num_classes=10, widen_factor=4, drop_rate=0.0),
-    wrn_28x10_c10_dr03=dict(depth=28, num_classes=10, widen_factor=10, drop_rate=0.3),
+    wrn_28x10_c10_dr03=dict(depth=28, num_classes=10,
+                            widen_factor=10, drop_rate=0.3),
     wrn_28x10_c10=dict(depth=28, num_classes=10, widen_factor=10, drop_rate=0),
 
-    wrn_16x4_c100=dict(depth=16, num_classes=100, widen_factor=4, drop_rate=0.0),
-    wrn_28x10_c100_dr03=dict(depth=28, num_classes=100, widen_factor=10, drop_rate=0.3),
-    wrn_28x10_c100=dict(depth=28, num_classes=100, widen_factor=10, drop_rate=0),
+    wrn_16x4_c100=dict(depth=16, num_classes=100,
+                       widen_factor=4, drop_rate=0.0),
+    wrn_28x10_c100_dr03=dict(depth=28, num_classes=100,
+                             widen_factor=10, drop_rate=0.3),
+    wrn_28x10_c100=dict(depth=28, num_classes=100,
+                        widen_factor=10, drop_rate=0),
 )
 
 MODEL_CONFIGS = {**_WIDE_RESNETS}
@@ -51,7 +56,8 @@ if __name__ == "__main__":
                         help="if the model is too big run the whole partitioning process on CPU, and drink a cup of coffee in the meantime")
     parser.add_argument('--n_partitions', type=int, default=4)
     parser.add_argument('--output_file', default='wrn_16x4')
-    parser.add_argument('--auto_file_name', action='store_true', default=False, help="create file name automatically")
+    parser.add_argument('--auto_file_name', action='store_true',
+                        default=False, help="create file name automatically")
 
     args = parser.parse_args()
 
@@ -81,10 +87,6 @@ if __name__ == "__main__":
     graph = pipe_model(model, sample, kwargs=None, nparts=args.n_partitions,
                        DEBUG=VERBOSE_PARTITIONING, output_file=args.output_file)
 
-    # from PartitionedWideResnet101_2 import ResNetPipeline, createConfig
-    # after that import the generated pipeline from the output file
-    # It is called ResNetPipeline because the model class is named ResNet
-
     generated = importlib.import_module(args.output_file)
     createConfig = generated.createConfig
 
@@ -94,25 +96,28 @@ if __name__ == "__main__":
         model, partitions_only=True, DEBUG=GET_PARTITIONS_ON_CPU)
 
     def run_sequential(sample, partitions):
-        # ( Note - its ugly to be backwardcompatible with dicts)
-        a = partitions[0](sample)
-        for i in range(1, args.n_partitions - 1):
-            a = partitions[i](*a)
-        out = partitions[args.n_partitions - 1](*a)
+        if not isinstance(sample, tuple):
+            sample = (sample,)
+        out = sample
+        for p in partitions:
+            out = p(*out)
         return out
 
     out = run_sequential(sample, partitions)
 
     def test_gpipe_stuff():
-        # In function because its DECOUPLED FROM PARTITIONS.
-        name = MODEL_CFG_TO_SAMPLE_MODEL[args.model].__name__
-        gpipe_generated_pipeline = getattr(generated, name + "Pipeline")
 
         # create a pipeLine from the given model
         # split dim the dim to split inputs and gradients across
         # DEBUG switches between running workers on CPU or GPUS
-        pipe = gpipe_generated_pipeline(
-            model, output_device='cpu', split_dim=0, DEBUG=True)
+
+        config = createConfig(model, partitions_only=False,
+                              DEBUG=GET_PARTITIONS_ON_CPU)
+        output_device = 'cpu' if GET_PARTITIONS_ON_CPU else 'cuda'
+
+        from pytorch_Gpipe import Pipeline
+        pipe = Pipeline(config, output_device=output_device,
+                        split_dim=0, use_delayedNorm=False)
 
         output = pipe(sample.cpu())
 
