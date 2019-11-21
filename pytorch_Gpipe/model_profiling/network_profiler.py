@@ -1,7 +1,7 @@
 import time
 from collections import namedtuple
 from typing import Dict, List, Optional
-
+from itertools import chain
 import torch
 import torch.nn as nn
 
@@ -80,7 +80,16 @@ def profileNetwork(net: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict]
 
 
 def _perform_forward_backward_pass(net, *sample_batch: Tensors, **kwargs: Dict):
-    device = get_device(sample_batch)
+    if len(sample_batch) > 0:
+        device = get_device(sample_batch)
+    else:
+        for t in kwargs.values():
+            if isinstance(t, torch.Tensor):
+                device = t.device
+                break
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = torch.device(device)
+
     if device.type == "cuda":
         torch.cuda.synchronize(device=device)
         out = net(*sample_batch, **kwargs)
@@ -158,9 +167,22 @@ class Wrapper(nn.Module):
         '''
         perform forward and backward pass of the underlying layer and measure metrics
         '''
+        ts = list(chain(self.parameters(), self.buffers()))
+        if len(ts) > 0:
+            device = ts[0].device
+        elif len(inputs) > 0:
+            device = get_device(inputs)
+        else:
+            for t in kwargs.values():
+                if isinstance(t, torch.Tensor):
+                    device = t.device
+                    break
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+        self.device = torch.device(device)
         # detach inputs from previous history enabling us to measure execution time
         # only for this layer
-        device = get_device(inputs)
+
         detached_inputs = _detach_inputs(inputs)
 
         self.forward_time, outputs, self.forward_cuda_mem = self._time_op(
@@ -179,7 +201,7 @@ class Wrapper(nn.Module):
         self.input_size = _get_size(inputs)
         self.output_size = _get_size(outputs)
 
-        #size in MegaBytes
+        # size in MegaBytes
         self.backward_cuda_mem /= 1e6
         self.forward_cuda_mem /= 1e6
         self.input_size /= 1e6
@@ -192,7 +214,7 @@ class Wrapper(nn.Module):
     def _time_op(self, func, *inputs: Tensors, **kwargs: Dict):
         exec_time = 0
         cuda_mem = 0
-        device = get_device(inputs)
+        device = self.device
         if(device.type == 'cuda'):
             torch.cuda.reset_max_memory_allocated(device=device)
             base_mem = torch.cuda.max_memory_allocated(device=device)
