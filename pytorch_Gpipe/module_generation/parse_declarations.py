@@ -123,7 +123,9 @@ class PytorchFunctions():
             f"could not find match for function {name} with types {types}")
 
     def __getitem__(self, key):
-        if not isinstance(key, FunctionTypes):
+        if key in [t.name for t in FunctionTypes]:
+            return getattr(self, key)
+        elif not isinstance(key, FunctionTypes):
             raise TypeError(f"expected FunctionType got {type(key).__name__}")
         return getattr(self, key.name)
 
@@ -259,7 +261,6 @@ def parse_functions(file_path=None):
                     if not hasattr(Tensor, func_name):
                         pass
                         # print(f"could not resolve Tensor.{func_name}")
-
                 supported_functions.addFunction(func_name, function, f_type)
         return supported_functions
 
@@ -267,14 +268,3 @@ def parse_functions(file_path=None):
 # function + args in order  => positional/keyword
 if __name__ == "__main__":
     functions = parse_functions()
-
-
-# torch.Int not found in supported functions
-
-# torch.Int not found in supported functions
-
-# Tensor.to not found in supported functions
-
-# Tensor.slice not found in supported functions
-
-# Tensor.slice not found in supported functions

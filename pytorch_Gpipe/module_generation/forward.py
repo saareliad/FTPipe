@@ -115,6 +115,7 @@ def generateStatements(partition: List[Node], scope_to_class_field: Dict[str, st
             print("we suggest to avoid using layers for stateless operations")
             print("for eg. F.relu() is preffered to nn.ReLU")
             assert False
+        
         # actual code generation
         if node.type == NodeTypes.LAYER:
             statements.append(generateLayerActivationExpression(scope_to_class_field,
@@ -192,8 +193,8 @@ def generatePrimitiveExpression(ready_expressions: Dict[str, str], expression_le
         return generateListExpression(ready_expressions, expression_len, node, arg_gen, verbose=verbose)
     elif 'ListUnpack' in node.scope:
         return generateUnpackExpression(ready_expressions, expression_len, node, arg_gen, verbose=verbose)
-    elif 'NumToTensor' in node.scope:
-        assert len(node.in_nodes) == 1, "NumToTensor is a no op with 1 input"
+    elif 'NumToTensor' in node.scope or 'ImplicitTensorToNum' in node.scope:
+        assert len(node.in_nodes) == 1, "num <=> Tensor conversions are a no op with 1 input"
         expression_len[node.scope] = 0
         ready_expressions[node.scope] = ready_expressions[node.in_nodes[0].scope]
         return ''
@@ -286,7 +287,7 @@ def generateFunctionCallExpressionOld(ready_expressions: Dict[str, str], express
         print(input_types)
         print()
         specialCases(ready_expressions, node, operand_scopes,
-                     func_name, input_types, values)
+                     namespace,func_name, input_types, values)
 
     # if func_name == 'log_softmax':
     #     print(f"value types: {input_types}")
@@ -388,7 +389,7 @@ def generateFunctionCallExpression(ready_expressions: Dict[str, str], expression
     try:
         expression = SupportedFunctions.findMatch(func_name, types, values)
     except Exception:
-        expression = specialCases(ready_expressions,node,operand_scopes,func_name,types,values)
+        expression = specialCases(ready_expressions,node,operand_scopes,namespace,func_name,types,values)
 
     exp_len = 1 + max(expression_len[s]for s in operand_scopes)
 
@@ -414,11 +415,16 @@ def generateFunctionCallExpression(ready_expressions: Dict[str, str], expression
 
 
 def specialCases(ready_expressions: Dict[str, str], node:Node, operand_scopes:List[str],
-                 func_name:str, types:List, values:List):
+namespace:str, func_name:str, types:List, values:List):
     '''
     handle special cases that the trace/standard code generation can't manage
     '''
-    if func_name == 'Int':
+    if hasattr(F,func_name):
+        # if function is in torch.nn.functional 
+        # note we cannot generate keywords so we pass everything by position
+        args = ", ".join([ready_expressions[scope] for scope in operand_scopes])
+        return f"F.{func_name}({args})"
+    elif func_name == 'Int':
         assert len(node.in_nodes) == 1, "aten::Int is a no op with 2 input"
         ready_expressions[node.scope] = ready_expressions[node.in_nodes[0].scope]
         return ''
@@ -434,8 +440,11 @@ def specialCases(ready_expressions: Dict[str, str], node:Node, operand_scopes:Li
         expression = f"{operand}[{args}]"
         return expression
     else:
-        raise ValueError(
-            f"unsupported function {func_name}\ntypes: {types}\nvalues: {values}")
+        print(
+            f"unsupported function {func_name}\ntypes: {types}\nvalues: {values}\noperands: {operand_scopes}\n{node.scope}")
+        args = ", ".join([ready_expressions[scope]
+                          for scope in operand_scopes])
+        return f"{namespace}.{func_name}({args})"
 
 
 def getAtenFunctionNameAndScope(scope: str) -> Tuple[str, str]:
@@ -456,7 +465,8 @@ def getAtenFunctionNameAndScope(scope: str) -> Tuple[str, str]:
         assert False, f'could not find {scope} function namespace'
 
     # inplace
-    if func_name[-1] == '_':
+    operator_name = 'i' + func_name[:-1]
+    if func_name[-1] == '_' and operator_name in SupportedFunctions['OPERATOR']:
         func_name = 'i' + func_name[:-1]
 
     return func_name, namespace

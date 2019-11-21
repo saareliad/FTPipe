@@ -37,13 +37,13 @@ class Graph():
         # self._add_shapes(trace_graph)
         self._set_outputs(trace_graph.outputs())
 
-        self.remove_useless_clone()
+        self.remove_useless_clone()   
         self.remove_empty_view()
         optimize_graph(self)
         self._remove_nodes_that_go_nowhere(trace_graph)
         for idx, node in enumerate(self.nodes):
             node.idx = idx
-        self.remove_one_input_from_add_nodes()
+        self.remove_useless_node_inputs()
         self.add_missing_types()
         for idx, node in enumerate(self.nodes):
             node.idx = idx
@@ -76,12 +76,11 @@ class Graph():
         add nodes representing the layers/ops of the model
         '''
         num_extra_nodes = 0
-        for idx, trace_node in enumerate(OP_nodes):
+        for idx, trace_node in enumerate(sorted(OP_nodes, key=lambda n: next(n.outputs()).unique())):
             node_scope = self._find_encasing_layer(trace_node.scopeName())
             input_nodes = OrderedSet([self.nodes[i.unique()]
                            for i in trace_node.inputs()])
             node_idx = self.num_inputs_buffs_params + idx + num_extra_nodes
-
             new_node = None
 
             # profiled Layer
@@ -201,8 +200,10 @@ class Graph():
                     node.value_type=int
                 elif 'prim::ListConstruct' in node.scope or 'aten::chunk' in node.scope:
                     node.value_type=list
-                elif node.type != NodeTypes.CONSTANT:
-                    continue
+                elif 'ImplicitTensorToNum' in node.scope:
+                    node.value_type=int
+            elif 'NumToTensor' in node.scope:
+                node.value_type=int
 
     def remove_useless_clone(self):
         def predicate(n:Node):
@@ -212,18 +213,27 @@ class Graph():
     def remove_empty_view(self):
         def predicate(n:Node):
             if ('aten::view' in n.scope):
-                sizes = list(n.in_nodes)[0]
-                return len(sizes.in_nodes) == 0 or len(n.in_nodes) < 2
+                if len(n.in_nodes) < 2:
+                    return True
+                sizes = list(n.in_nodes)[1]
+                return len(sizes.in_nodes) == 0
             return('prim::ListConstruct' in n.scope) and (len(n.in_nodes) == 0)
         self._remove_nodes(predicate)
 
-    def remove_one_input_from_add_nodes(self):
+    def remove_useless_node_inputs(self):
         # stupid fix where for some odd reason torch.add has 3 input with value 1
+        # and Tensor.contiguous has a second input with value 0
+        # and torch.arange having a zero input
         def pred(node:Node):
-            if node.type == NodeTypes.CONSTANT and node.value == 1:
+            if node.type == NodeTypes.CONSTANT and (node.value in [0,1]):
                 assert len(node.out_nodes) == 1 , "Constant should have one use"
                 out = node.out_nodes[0]
-                return ('aten::add' in out.scope) and (out.in_nodes.indexOf(node) == 2)
+                add_input=('aten::add' in out.scope) and (out.in_nodes.indexOf(node) == 2)
+                contiguous_input = ('aten::contiguous' in out.scope) and (
+                    out.in_nodes.indexOf(node) == 1)
+                arange_input = ('aten::arange' in out.scope) and (
+                    out.in_nodes.indexOf(node) == (len(out.in_nodes) - 3))
+                return add_input or contiguous_input or arange_input
             return False
         self._remove_nodes(pred) 
 
