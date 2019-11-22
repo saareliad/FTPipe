@@ -4,6 +4,7 @@ from ..utils import OrderedSet
 import string
 import inspect
 import torch
+import re
 
 class Graph():
     '''
@@ -36,7 +37,7 @@ class Graph():
         #TODO we've disabled output shape untill we can think about full support
         # self._add_shapes(trace_graph)
         self._set_outputs(trace_graph.outputs())
-
+        
         self.remove_useless_clone()   
         self.remove_empty_view()
         optimize_graph(self)
@@ -221,19 +222,20 @@ class Graph():
         self._remove_nodes(predicate)
 
     def remove_useless_node_inputs(self):
-        # stupid fix where for some odd reason torch.add has 3 input with value 1
+        # stupid fix where for some odd reason arithmetic ops have a third input with value 1
         # and Tensor.contiguous has a second input with value 0
         # and torch.arange having a zero input
         def pred(node:Node):
             if node.type == NodeTypes.CONSTANT and (node.value in [0,1]):
                 assert len(node.out_nodes) == 1 , "Constant should have one use"
                 out = node.out_nodes[0]
-                add_input=('aten::add' in out.scope) and (out.in_nodes.indexOf(node) == 2)
+                arithmetic_ops = ['aten::add','aten::div','aten::mul','aten::sub']
+                arithmetic = any(opMatch(out.scope,o) for o in arithmetic_ops) and (out.in_nodes.indexOf(node) == 2)
                 contiguous_input = ('aten::contiguous' in out.scope) and (
                     out.in_nodes.indexOf(node) == 1)
                 arange_input = ('aten::arange' in out.scope) and (
                     out.in_nodes.indexOf(node) == (len(out.in_nodes) - 3))
-                return add_input or contiguous_input or arange_input
+                return arithmetic or contiguous_input or arange_input
             return False
         self._remove_nodes(pred) 
 
@@ -756,3 +758,6 @@ def _merge_op_chains(graph: Graph):
 
     # op chains need to be placed on the same device anyways
     graph._remove_nodes(to_remove)
+
+def opMatch(scope,op_name):
+    return re.search(f"{op_name}[{string.digits}]",scope)

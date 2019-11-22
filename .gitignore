@@ -25,3 +25,4 @@ transformer_trace.txt
 generated*
 *Bug*
 glue_data/**
+wikitext-2-raw/**

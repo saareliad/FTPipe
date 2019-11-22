@@ -102,9 +102,10 @@ def generateStatements(partition: List[Node], scope_to_class_field: Dict[str, st
             open_nodes.append(node)
             continue
         i += 1
-        if i > 1000:
+        if i > (2*len(partition)):
             # cycle detection
-            print("we've detected that the code generation performed 1000 iterations\n"
+            print(f"we've detected that the code generation performed {(2*len(partition))} iterations\n"
+                  f"while the partition has only {(len(partition))} statements\n"
                   "we suspect that there is a loop in the control flow graph"
                   "it is possible that you you the same layer twice? for eg.\n"
                   "relu=nn.ReLU()\n"
