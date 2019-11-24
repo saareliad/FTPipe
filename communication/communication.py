@@ -61,8 +61,7 @@ class CommunicationHandler(object):
         # Populate ranks_in_server.
         rank_of_first_gpu_in_server = rank - rank % num_ranks_in_server
         for connected_rank in range(
-            rank_of_first_gpu_in_server,
-            rank_of_first_gpu_in_server + num_ranks_in_server):
+            rank_of_first_gpu_in_server, rank_of_first_gpu_in_server + num_ranks_in_server):
             if connected_rank == rank:
                 continue
             self.ranks_in_server.append(connected_rank)
@@ -164,6 +163,7 @@ class CommunicationHandler(object):
                 self.num_forward_threads += 1
                 self.num_backward_threads += 1
 
+        # FIXME: (saar): It makes NO SENSE to pass the targets all the way to the end.
         for target_tensor_name in self.target_tensor_names:
             # Queues for target in forward pass.
             self.forward_receive_queues[target_tensor_name] = []
@@ -189,8 +189,8 @@ class CommunicationHandler(object):
                         threadsafe_queue.Queue())
                     self.num_forward_threads += 1
 
-        print ("Send ranks: ", self.send_ranks)
-        print ("Receive ranks: ", self.receive_ranks)
+        print("Send ranks: ", self.send_ranks)
+        print("Receive ranks: ", self.receive_ranks)
 
         # Queues for ack for forward pass-only runs as a clocking mechanism.
         self.num_ack_threads = 0
