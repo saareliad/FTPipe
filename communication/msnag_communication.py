@@ -84,7 +84,7 @@ class CommunicationHandler(object):
 
         For tensors that are sent GPU-to-GPU (intra-server for GLOO backend),
         make a list of destination/source ranks and the corresponding tag.
-        This information is then used to crate process groups.
+        This information is then used to create process groups.
         """
         if not self.is_gpu_to_gpu_comm(connected_rank=connected_rank):
             return
@@ -97,7 +97,8 @@ class CommunicationHandler(object):
                    rank_in_stage,
                    num_ranks_in_stage,
                    ranks_in_previous_stage,
-                   ranks_in_next_stage):
+                   ranks_in_next_stage,
+                   TOTAL_TAGS):
         """
         Initialize state needed for CommunicationHandler.
         """
@@ -112,6 +113,7 @@ class CommunicationHandler(object):
         self.num_ranks_in_previous_stage = len(ranks_in_previous_stage)
         self.ranks_in_next_stage = ranks_in_next_stage
         self.num_ranks_in_next_stage = len(ranks_in_next_stage)
+        self.TOTAL_TAGS = TOTAL_TAGS
 
         self.setup_queues()
         self.setup_messaging_schedule()
@@ -218,6 +220,8 @@ class CommunicationHandler(object):
                     threadsafe_queue.Queue())
                 self.num_ack_threads += 1
 
+        print("self.num_ack_threads", self.num_ack_threads)
+
     def set_tensor_shapes(self, tensor_shapes):
         self.tensor_shapes = tensor_shapes
 
@@ -254,114 +258,6 @@ class CommunicationHandler(object):
             backward_num_iterations = 0
 
         return forward_num_iterations, backward_num_iterations
-
-    def start_helper_threads(self, num_iterations, forward_only):
-        """
-        Start helper communication threads, one for each queue.
-        """
-        if forward_only:
-            self.set_counter(self.num_forward_threads +
-                             self.num_ack_threads)
-            # For validation, receive acks in backward pass from next stage, send
-            # acks in backward pass to next stage.
-            self.receive_ranks["ack"] = self.ranks_in_previous_stage
-            self.send_ranks["ack"] = self.ranks_in_next_stage
-        else:
-            self.set_counter(self.num_forward_threads +
-                             self.num_backward_threads)
-            if "ack" in self.receive_ranks:
-                del self.receive_ranks["ack"]
-            if "ack" in self.send_ranks:
-                del self.send_ranks["ack"]
-
-        (num_iterations_for_forward_threads,
-         num_iterations_for_backward_threads) = \
-            self.num_iterations_for_helper_threads(
-                num_iterations=num_iterations)
-        dtype = torch.float16 if self.fp16 else torch.float32
-
-        # Setup queues for each tensor to be received and sent.
-        for input_name in self.receive_ranks:
-            if input_name in self.target_tensor_names or input_name == "ack":
-                continue
-
-            for i in range(len(self.receive_ranks[input_name])):
-                if not forward_only:
-                    self.start_helper_thread(
-                        self.send_helper_thread_args,
-                        send_helper_thread,
-                        [input_name, i, True],
-                        num_iterations_for_backward_threads)
-                self.start_helper_thread(
-                    self.recv_helper_thread_args,
-                    recv_helper_thread,
-                    [input_name,
-                     i,
-                     self.training_tensor_dtypes[input_name],
-                     False],
-                    num_iterations_for_backward_threads)
-        for output_name in self.send_ranks:
-            if output_name in self.target_tensor_names or output_name == "ack":
-                continue
-
-            for i in range(len(self.send_ranks[output_name])):
-                if not forward_only:
-                    self.start_helper_thread(
-                        self.recv_helper_thread_args,
-                        recv_helper_thread,
-                        [output_name, i,
-                         self.training_tensor_dtypes[output_name],
-                         True],
-                        num_iterations_for_forward_threads)
-                self.start_helper_thread(
-                    self.send_helper_thread_args,
-                    send_helper_thread,
-                    [output_name, i, False],
-                    num_iterations_for_forward_threads)
-
-        for target_tensor_name in self.target_tensor_names:
-            if self.num_ranks_in_previous_stage > 0:
-                for i in range(len(self.receive_ranks[target_tensor_name])):
-                    self.start_helper_thread(
-                        self.recv_helper_thread_args,
-                        recv_helper_thread,
-                        [target_tensor_name, i, torch.int64,
-                         False],
-                        num_iterations_for_backward_threads)
-
-            if self.num_ranks_in_next_stage > 0:
-                for i in range(len(self.send_ranks[target_tensor_name])):
-                    self.start_helper_thread(
-                        self.send_helper_thread_args,
-                        send_helper_thread,
-                        [target_tensor_name, i, False],
-                        num_iterations_for_forward_threads)
-
-        # Start helper threads for ack for forward pass-only run as a clocking
-        # mechanism.
-        if forward_only:
-            if "ack" in self.receive_ranks:
-                for i in range(len(self.receive_ranks["ack"])):
-                    self.start_helper_thread(self.send_helper_thread_args,
-                                             send_helper_thread,
-                                             ["ack", i, True],
-                                             num_iterations_for_backward_threads)
-            if "ack" in self.send_ranks:
-                for i in range(len(self.send_ranks["ack"])):
-                    self.start_helper_thread(self.recv_helper_thread_args,
-                                             recv_helper_thread,
-                                             ["ack", i, torch.int64, True],
-                                             num_iterations_for_forward_threads)
-
-    def start_helper_thread(self, args_func, func, args_func_args, num_iterations):
-        """
-        Start passed-in func on a helper thread.
-        """
-        args_func_args += [num_iterations]
-        args = args_func(*args_func_args)
-        helper_thread = threading.Thread(target=func,
-                                         args=args)
-        helper_thread.start()
 
     def create_process_groups(self):
         """ Create process groups in the same order across all ranks.
@@ -473,6 +369,7 @@ class CommunicationHandler(object):
         that they are sent. Backwards send is done so that that it
         matches up with forward receive.
         """
+        # TODO: (saar) read code
         self.messaging_schedule = []
         for i in range(self.num_ranks_in_stage):
             idx = i
@@ -527,66 +424,6 @@ class CommunicationHandler(object):
                 if self.fwd_messaging_scheduling_row == -1:
                     self.fwd_messaging_scheduling_row = \
                         len(self.messaging_schedule) - 1
-
-    def recv_helper_thread_args(self, tensor_name, index, dtype,
-                                backward, num_iterations):
-        if backward:
-            src_rank = self.send_ranks[tensor_name][index]
-        else:
-            src_rank = self.receive_ranks[tensor_name][index]
-
-        sub_process_group = None
-        tag = self.tensor_tags[tensor_name]
-        if self.is_gpu_to_gpu_comm(connected_rank=src_rank) and tensor_name != "ack":
-            min_rank = min(self.rank, src_rank)
-            max_rank = max(self.rank, src_rank)
-            if src_rank > self.rank:
-                sub_process_group = \
-                    self.process_groups[min_rank][max_rank][tag]['backward']
-            else:
-                sub_process_group = \
-                    self.process_groups[min_rank][max_rank][tag]['forward']
-            assert sub_process_group
-
-        if backward:
-            queue = self.backward_receive_queues[tensor_name][index]
-        else:
-            queue = self.forward_receive_queues[tensor_name][index]
-        tensor_shape = self.tensor_shapes[tensor_name]
-
-        return (queue, self.counter, self.local_rank, tensor_name,
-                src_rank, tag, tensor_shape, dtype, sub_process_group,
-                num_iterations)
-
-    def send_helper_thread_args(self, tensor_name, index,
-                                backward, num_iterations):
-        if backward:
-            dst_rank = self.receive_ranks[tensor_name][index]
-            num_ranks_in_connected_stage = self.num_ranks_in_previous_stage
-        else:
-            dst_rank = self.send_ranks[tensor_name][index]
-            num_ranks_in_connected_stage = self.num_ranks_in_next_stage
-
-        sub_process_group = None
-        tag = self.tensor_tags[tensor_name]
-        if self.is_gpu_to_gpu_comm(connected_rank=dst_rank) and tensor_name != "ack":
-            min_rank = min(self.rank, dst_rank)
-            max_rank = max(self.rank, dst_rank)
-            if dst_rank > self.rank:
-                sub_process_group = \
-                    self.process_groups[min_rank][max_rank][tag]['forward']
-            else:
-                sub_process_group = \
-                    self.process_groups[min_rank][max_rank][tag]['backward']
-            assert sub_process_group
-
-        if backward:
-            queue = self.backward_send_queues[tensor_name][index]
-        else:
-            queue = self.forward_send_queues[tensor_name][index]
-
-        return (queue, self.counter, self.local_rank, tensor_name, self.rank,
-                dst_rank, tag, sub_process_group, num_iterations)
 
     def recv(self, tensor_name, forward_minibatch_id,
              backward_minibatch_id, backward=False):

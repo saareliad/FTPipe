@@ -6,7 +6,8 @@ import models
 import numpy as np
 import torch
 import torch.distributed as dist
-
+from collections import OrderedDict
+from misc.datasets import add_dataset_argument, simplified_get_train_test_dl_from_args
 
 def parse_cli():
     parser = argparse.ArgumentParser(
@@ -27,7 +28,7 @@ def parse_cli():
     parser.add_argument('--fp16', action='store_true',
                         help='train model in fp16 precision')
     parser.add_argument('--distributed_backend',
-                        choices=['gloo', 'nccl'], default='nccl', type=str, help='distributed backend to use')
+                        choices=['gloo', 'nccl'], default='gloo', type=str, help='distributed backend to use')
 
     #
     parser.add_argument('--model', choices=list(models.SUPPORTED_CONFIGS), default='wrn_16x4',
@@ -38,6 +39,8 @@ def parse_cli():
                         default=128, metavar='B')
     parser.add_argument('--bs-test', type=int, help='Test batch size', default=128,
                         metavar='BT')
+    
+    add_dataset_argument(parser)
 
     # parser.add_argument('--seed', '-s', type=int, help='Random seed',
     #                      default=None, required=False)
@@ -152,7 +155,7 @@ def tensor_tags_from_config(config, target_tensor_names):
     tensor_tags["ack"] = tensor_tag
     tensor_tag += 1
 
-    return tensor_tags
+    return tensor_tags, tensor_tag
 
 # TODO: target_tensor_names
 
@@ -189,7 +192,7 @@ def create_distributed_communcation_context(args, config, stage, stage_to_rank_m
 
     eval_tensor_shapes = {**training_tensor_shapes}
 
-    tensor_tags = tensor_tags_from_config(
+    tensor_tags, TOTAL_TAGS = tensor_tags_from_config(
         config, target_tensor_names=target_tensor_names)
 
     def ranks_in_stage(given_stage):
@@ -199,8 +202,9 @@ def create_distributed_communcation_context(args, config, stage, stage_to_rank_m
             return [given_stage]
 
     # TODO: support weight sharing
-    receive_ranks = {}
-    send_ranks = {}
+    # TODO: asset this is same order with Alon's code/config...
+    receive_ranks = OrderedDict()
+    send_ranks = OrderedDict()
 
     for i in range(len(config)):
         for j in range(i + 1, len(config)):
@@ -268,15 +272,19 @@ def create_distributed_communcation_context(args, config, stage, stage_to_rank_m
     ranks_in_next_stage = ranks_in_stage(
         stage + 1) if stage < args.num_stages - 1 else []
 
-    return (receive_ranks,
-            send_ranks,
-            tensor_tags,
-            target_tensor_names,
-            training_tensor_dtypes,
-            rank_in_stage,
-            num_ranks_in_stage,
-            ranks_in_previous_stage,
-            ranks_in_next_stage)
+    comm_args = (receive_ranks,
+                 send_ranks,
+                 tensor_tags,
+                 target_tensor_names,
+                 training_tensor_dtypes,
+                 rank_in_stage,
+                 num_ranks_in_stage,
+                 ranks_in_previous_stage,
+                 ranks_in_next_stage,
+                 TOTAL_TAGS)
+    shapes = (training_tensor_shapes, eval_tensor_shapes)
+
+    return comm_args, shapes
 
     def init_proccess_groups(args, stage_to_rank_map=None):
         """ Initialize all groups in the same order for every worker.
@@ -330,7 +338,7 @@ def main():
     if NO_DP:
         args.num_stages = len(configs)
         stage = args.local_rank
-        args.num_ranks = 4
+        args.num_ranks = 4  # FIXME
         # args.num_ranks = len(configs) # FIXME:
     else:
         raise NotImplementedError()
@@ -354,7 +362,7 @@ def main():
     training_tensor_shapes = {"input0": (
         *bs_train, *BASE_INPUT_SHAPE), "target": (*bs_train, *BASE_TARGET_SHAPE)}
 
-    comm_init_args = \
+    comm_init_args, shapes = \
         create_distributed_communcation_context(args, configs, stage,
                                                 stage_to_rank_map=None,
                                                 target_tensor_names=target_tensor_names,
@@ -366,16 +374,23 @@ def main():
 
     comm_handler = create_comm_handler(args, comm_init_args)
 
-    # comm_handler.initialize(
-    #         self.receive_ranks,
-    #         self.send_ranks,
-    #         self.tensor_tags,
-    #         self.target_tensor_names,
-    #         self.training_tensor_dtypes,
-    #         self.rank_in_stage,
-    #         self.num_ranks_in_stage,
-    #         self.ranks_in_previous_stage,
-    #         self.ranks_in_next_stage)
+    training_tensor_shapes, eval_tensor_shapes = shapes
+
+    # FIXME:
+    # device = torch.device(f"cuda:{args.local_rank}")
+    device = torch.device(f"cuda:{0}")
+    torch.cuda.set_device(device)
+
+    train_dl, test_dl = simplified_get_train_test_dl_from_args(args)
+
+    is_last_partition = args.local_rank == len(configs) - 1  # FIXME
+    runtime_ = runtime.SinglePartitionRuntime(
+        configs, configs[stage]['model'], comm_handler, training_tensor_shapes, eval_tensor_shapes, device, is_last_partition)
+    
+    runtime_.set_dataloader(train_dl)
+    runtime_.train(1)  # FIXME
+    runtime_.run_until_flush(1)
+    # TODO: create partition from config,
 
     # num_ranks = get_num_ranks()
 
