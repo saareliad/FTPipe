@@ -1,7 +1,11 @@
-import msnag_runtime as runtime
 import argparse
-import communication
+# from communication.threadsafe_queue
+from communication import CommunicationHandler
+from communication import runtime
 import models
+import numpy as np
+import torch
+import torch.distributed as dist
 
 
 def parse_cli():
@@ -23,11 +27,20 @@ def parse_cli():
     parser.add_argument('--fp16', action='store_true',
                         help='train model in fp16 precision')
     parser.add_argument('--distributed_backend',
-                        choices=['gloo', 'nccl'], type=str, help='distributed backend to use')
+                        choices=['gloo', 'nccl'], default='nccl', type=str, help='distributed backend to use')
 
     #
-    parser.add_argument('--model', choices=list(models.SUPPORTED_CONFIGS),
+    parser.add_argument('--model', choices=list(models.SUPPORTED_CONFIGS), default='wrn_16x4',
                         type=str, help="name of the file with partitioning definitions")
+
+    # Training, which are also needed for communication
+    parser.add_argument('--bs-train', type=int, help='Train batch size',
+                        default=128, metavar='B')
+    parser.add_argument('--bs-test', type=int, help='Test batch size', default=128,
+                        metavar='BT')
+
+    # parser.add_argument('--seed', '-s', type=int, help='Random seed',
+    #                      default=None, required=False)
 
     args = parser.parse_args()
 
@@ -39,10 +52,10 @@ def assert_args(args):
     assert not (args.master_addr is None)
 
 
-def create_comm_handler(args):
+def create_comm_handler(args, initialize_args):
 
     # TODO: get the parameters to create the comm handler:
-    comm_handler = communication.CommunicationHandler(
+    comm_handler = CommunicationHandler(
         master_addr=args.master_addr,
         master_port=args.master_port,
         rank=args.rank,
@@ -51,6 +64,8 @@ def create_comm_handler(args):
         world_size=args.num_ranks,
         fp16=args.fp16,
         backend=args.distributed_backend)
+
+    comm_handler.initialize(*initialize_args)
 
     return comm_handler
 
@@ -102,10 +117,14 @@ def get_global_maps(num_stages, mode='seq'):
     return configuration_maps, rank_to_stage_map
 
 
-def config_to_tuples_generator(config):
+def config_to_tuples_generator(configs):
     """ allows iterating with the tuple: (stage, inputs, outputs) """
-    for i, v in config:
-        yield i, v['inputs'], v['output']
+    for i, v in configs.items():
+        yield i, v['inputs'], v['outputs']
+
+
+def config_to_tuples_array(configs):
+    return np.array(list(config_to_tuples_generator(configs)))
 
 
 # target_tensor_names = {"target", "target_length"}
@@ -116,7 +135,7 @@ def tensor_tags_from_config(config, target_tensor_names):
 
     tensor_tags = {}
     tensor_tag = 1
-    model = config_to_tuples_generator(config)
+    model = config_to_tuples_array(config)
 
     for (_, input_tensors, output_tensors) in model:
         for input_tensor in input_tensors:
@@ -138,31 +157,164 @@ def tensor_tags_from_config(config, target_tensor_names):
 # TODO: target_tensor_names
 
 
-def create_distributed_communcation_context(args, config, rank_to_stage_map, target_tensor_names={"target"}):
+def create_distributed_communcation_context(args, config, stage, stage_to_rank_map=None,
+                                            target_tensor_names={"target"},
+                                            training_tensor_dtypes={
+                                                "input0": torch.int64, "target": torch.int64},
+                                            training_tensor_shapes={
+                                                "input0": None, "target": None},
+                                            random_input_sample=None,
+                                            bs_train=(1,),
+                                            bs_test=(1,)):
+
+    # training_tensor_shapes = {"input0": input_size, "target": [args.batch_size]}
+    # inputs_module_destinations={"input0": [0]} Not needed, already taken care of by config.
+
+    # Creates and returns the following
+    # target_tensor_names (input)
+    # tensor_tags
+    # receive_ranks
+    # send_ranks
+    # training_tensor_dtypes
+    # training_tensor_shapes
+    # eval_tensor_shapes
+    # rank_in_stage
+    # num_ranks_in_stage
+    # ranks_in_previous_stage
+    # ranks_in_next_stage
+
+    # TODO: eval_tensor_dtypes
+
+    #     dtypes = {"input0": torch.int64, "target": torch.int64}
+
+    eval_tensor_shapes = {**training_tensor_shapes}
+
     tensor_tags = tensor_tags_from_config(
         config, target_tensor_names=target_tensor_names)
 
-    rank = args.rank
-    stage = rank_to_stage_map[rank]
+    def ranks_in_stage(given_stage):
+        if stage_to_rank_map:
+            return stage_to_rank_map[given_stage]
+        else:
+            return [given_stage]
 
-    #     configuration_maps = {
-    #     'module_to_stage_map': None,
-    #     'stage_to_rank_map': None,
-    #     'stage_to_depth_map': None
-    # }
+    # TODO: support weight sharing
+    receive_ranks = {}
+    send_ranks = {}
 
-    model = config_to_tuples_generator(config)
+    for i in range(len(config)):
+        for j in range(i + 1, len(config)):
+            # Update only for this stage...
+            if i != stage and j != stage:
+                continue
+
+            stage_i = config[i]
+            stage_j = config[j]
+            for tensor_name in stage_i['outputs']:
+                if tensor_name in stage_j['inputs']:
+                    if stage == j:
+                        receive_ranks[tensor_name] = ranks_in_stage(i)
+                    else:
+                        send_ranks[tensor_name] = ranks_in_stage(j)
+    # this_stage = config['stage']
+    # this_stage_tensors = set(config['stage']['inputs'] + config['stage']['outputs'])
+
+    # Run a sequential forward pass to determine:
+    # training_tensor_dtypes
+    # training_tensor_shapes
+    # eval_tensor_shapes
+    # TODO: eval_tensor_dtypes
+
+    for i, v in config.items():
+        partition = v['model']
+        if i == 0:
+            a = partition(random_input_sample)
+        else:
+            a = partition(*a)
+
+        outputs = v['outputs']
+        dtypes = tuple(j.data.dtype for j in a)
+
+        # Concatenate shapes with expected bs_train/bs_test
+        # the batch size can be a collection (e.g (batch, seq_len) in NLP)
+        bs_train = to_tuple(bs_train)
+        bs_test = to_tuple(bs_test)
+
+        len_bs = len(bs_train)
+        train_shapes = tuple(
+            tuple(list(bs_train) + list(j.data.size()[len_bs:])) for j in a)
+        eval_shapes = tuple(
+            tuple(list(bs_test) + list(j.data.size()[len_bs:])) for j in a)
+
+        training_tensor_dtypes.update(zip(outputs, dtypes))
+        training_tensor_shapes.update(zip(outputs, train_shapes))
+        eval_tensor_shapes.update(zip(outputs, eval_shapes))
+
+    # Create:
+    # rank_in_stage
+    # num_ranks_in_stage
+    # ranks_in_previous_stage
+    # ranks_in_next_stage
+
+    # rank = args.local_rank
+    rank_in_stage = stage_to_rank_map[stage].index(
+        args.local_rank) if stage_to_rank_map else 0
+    num_ranks_in_stage = len(
+        stage_to_rank_map[stage]) if stage_to_rank_map else 1
+
+    # TODO: can create these by th econfig too.
+    ranks_in_previous_stage = ranks_in_stage(
+        stage - 1) if stage > 0 else []
+    ranks_in_next_stage = ranks_in_stage(
+        stage + 1) if stage < args.num_stages - 1 else []
+
+    return (receive_ranks,
+            send_ranks,
+            tensor_tags,
+            target_tensor_names,
+            training_tensor_dtypes,
+            rank_in_stage,
+            num_ranks_in_stage,
+            ranks_in_previous_stage,
+            ranks_in_next_stage)
+
+    def init_proccess_groups(args, stage_to_rank_map=None):
+        """ Initialize all groups in the same order for every worker.
+            A group will be created for stages with more thank one rank.
+
+            Returns: groups list
+        """
+        def ranks_in_stage(stage):
+            if stage_to_rank_map:
+                return stage_to_rank_map[stage]
+            else:
+                return [stage]
+
+        groups = []
+        for stage in range(args.num_stages):
+            ranks = ranks_in_stage(stage)
+            if len(ranks) > 1:
+                groups.append(dist.new_group(ranks=ranks))
+            else:
+                groups.append(None)
+
+        # group = groups[stage]
+        return groups
 
 
-    # TODO:
-    # self.receive_ranks,
-    # self.send_ranks,
-    # self.target_tensor_names,
-    # self.training_tensor_dtypes,
-    # self.rank_in_stage,
-    # self.num_ranks_in_stage,
-    # self.ranks_in_previous_stage,
-    # self.ranks_in_next_stage)
+def to_tuple(x):
+    return x if isinstance(x, tuple) else (x,)
+
+
+def create_random_sample(dataset, batch_size):
+    # TODO: continue
+
+    if dataset == 'cifar10' or dataset == 'cifar100':
+        sample = torch.randn(batch_size, 3, 32, 32)
+    elif dataset == 'imagenet':
+        sample = torch.randn(batch_size, 3, 224, 224)
+
+    return sample
 
 
 def main():
@@ -172,13 +324,49 @@ def main():
 
     input_names = configs.pop('model inputs')
     output_names = configs.pop('model outputs')
-    args.num_ranks = len(configs)
 
-    # num_ranks = get_num_ranks()
-    comm_handler = create_comm_handler(args)
+    NO_DP = True
+    stage = None
+    if NO_DP:
+        args.num_stages = len(configs)
+        stage = args.local_rank
+        args.num_ranks = 4
+        # args.num_ranks = len(configs) # FIXME:
+    else:
+        raise NotImplementedError()
 
-    # if comm_handler is not None:
-    #     comm_handler.initialize(
+    assert(not (stage is None))
+
+    # TODO formalize with function according to dataset/task
+    # For CIFAR10 network
+    BASE_INPUT_SHAPE = (3, 32, 32)
+    BASE_TARGET_SHAPE = (10,)
+
+    bs_train = to_tuple(args.bs_train)
+    bs_test = to_tuple(args.bs_test)
+    # Smallest batch as possible.
+    # we will determine the rest of the shape with bs_train, bs_test
+    SAMPLE_BATCH_SIZE = 1
+    random_input_sample = torch.randn(SAMPLE_BATCH_SIZE, *BASE_INPUT_SHAPE)
+
+    target_tensor_names = {"target"}
+    training_tensor_dtypes = {"input0": torch.int64, "target": torch.int64}
+    training_tensor_shapes = {"input0": (
+        *bs_train, *BASE_INPUT_SHAPE), "target": (*bs_train, *BASE_TARGET_SHAPE)}
+
+    comm_init_args = \
+        create_distributed_communcation_context(args, configs, stage,
+                                                stage_to_rank_map=None,
+                                                target_tensor_names=target_tensor_names,
+                                                training_tensor_dtypes=training_tensor_dtypes,
+                                                training_tensor_shapes=training_tensor_shapes,
+                                                random_input_sample=random_input_sample,
+                                                bs_train=bs_train,
+                                                bs_test=bs_test)
+
+    comm_handler = create_comm_handler(args, comm_init_args)
+
+    # comm_handler.initialize(
     #         self.receive_ranks,
     #         self.send_ranks,
     #         self.tensor_tags,
@@ -188,6 +376,10 @@ def main():
     #         self.num_ranks_in_stage,
     #         self.ranks_in_previous_stage,
     #         self.ranks_in_next_stage)
+
+    # num_ranks = get_num_ranks()
+
+    # model = config_to_tuples_generator(configs)
 
     # r = runtime.StageRuntime(
     #     model=model, distributed_backend=args.distributed_backend,

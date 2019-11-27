@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 # Adapted from pipedream.
+# TODO: understand ranks_in_previous_stage
 
 
 import os
@@ -9,12 +10,13 @@ import torch
 import torch.distributed as dist
 import sys
 
-import threadsafe_counter
-import threadsafe_queue
+from . import threadsafe_counter
+from . import threadsafe_queue
+import datetime
 
 
-NCCL='nccl'
-GLOO='gloo'
+NCCL = 'nccl'
+GLOO = 'gloo'
 
 
 class CommunicationHandler(object):
@@ -23,6 +25,7 @@ class CommunicationHandler(object):
     For stages on different machines, use send/recv.
     For stages on same machine, use broadcast.
     """
+
     def __init__(self, master_addr, master_port, rank,
                  local_rank, num_ranks_in_server,
                  world_size, fp16, backend):
@@ -41,10 +44,12 @@ class CommunicationHandler(object):
         # Initialize the distributed environment.
         os.environ['MASTER_ADDR'] = master_addr
         os.environ['MASTER_PORT'] = str(master_port)
-        dist.init_process_group(backend, rank=rank, world_size=world_size)
+        # dist.init_process_group(backend, rank=rank, world_size=world_size)
+        dist.init_process_group(backend, timeout=datetime.timedelta(
+            seconds=5), world_size=world_size)
         assert dist.get_world_size() == self.world_size
-        print("Finished initializing process group; backend: %s, rank: %d, "
-              "world_size: %d" % (backend, rank, world_size))
+        print(f"Initialized process group; backend: {backend}, rank: {rank}, "
+              f"local_rank: {local_rank}, world_size: {world_size}")
 
         # Stores list of ranks of GPUs on the same server.
         self.ranks_in_server = []
@@ -61,7 +66,7 @@ class CommunicationHandler(object):
         # Populate ranks_in_server.
         rank_of_first_gpu_in_server = rank - rank % num_ranks_in_server
         for connected_rank in range(
-            rank_of_first_gpu_in_server, rank_of_first_gpu_in_server + num_ranks_in_server):
+                rank_of_first_gpu_in_server, rank_of_first_gpu_in_server + num_ranks_in_server):
             if connected_rank == rank:
                 continue
             self.ranks_in_server.append(connected_rank)
@@ -128,6 +133,7 @@ class CommunicationHandler(object):
         self.target_receive_rank_counts = {}
         self.target_send_rank_counts = {}
         # Setup queues for each tensor to be received and sent.
+        # forward + backward
         for input_name in self.receive_ranks:
             self.forward_receive_queues[input_name] = []
             self.backward_send_queues[input_name] = []
@@ -189,8 +195,8 @@ class CommunicationHandler(object):
                         threadsafe_queue.Queue())
                     self.num_forward_threads += 1
 
-        print("Send ranks: ", self.send_ranks)
-        print("Receive ranks: ", self.receive_ranks)
+        print("Send ranks: ", list(self.send_ranks.values()))
+        print("Receive ranks: ", list(self.receive_ranks.values()))
 
         # Queues for ack for forward pass-only runs as a clocking mechanism.
         self.num_ack_threads = 0
@@ -401,7 +407,7 @@ class CommunicationHandler(object):
             gathered_connection_list_sizes)
 
         if max_connection_list_size == 0:
-            return 
+            return
 
         # Build tensor to send local connection list to all other workers.
         connection_list_tensor = torch.ones([max_connection_list_size, 2],
@@ -484,7 +490,7 @@ class CommunicationHandler(object):
 
         # For cases where previous stage has less workers than current stage.
         while self.fwd_messaging_scheduling_row > \
-            len(self.messaging_schedule):
+                len(self.messaging_schedule):
             self.fwd_messaging_scheduling_row -= 1
             self.bwd_messaging_scheduling_row -= 1
 
@@ -568,7 +574,7 @@ class CommunicationHandler(object):
             max_rank = max(self.rank, dst_rank)
             if dst_rank > self.rank:
                 sub_process_group = \
-                     self.process_groups[min_rank][max_rank][tag]['forward']
+                    self.process_groups[min_rank][max_rank][tag]['forward']
             else:
                 sub_process_group = \
                     self.process_groups[min_rank][max_rank][tag]['backward']
@@ -609,6 +615,7 @@ class CommunicationHandler(object):
                 len(self.send_ranks[tensor_name])
             self.forward_send_queues[tensor_name][index].add(tensor)
 
+
 def recv_helper_thread(queue, counter, local_rank, tensor_name,
                        src_rank, tag, tensor_shape, dtype,
                        sub_process_group, num_iterations):
@@ -622,6 +629,7 @@ def recv_helper_thread(queue, counter, local_rank, tensor_name,
         queue.add(tensor)
     counter.decrement()
 
+
 def send_helper_thread(queue, counter, local_rank, tensor_name,
                        src_rank, dst_rank, tag,
                        sub_process_group, num_iterations):
@@ -633,6 +641,7 @@ def send_helper_thread(queue, counter, local_rank, tensor_name,
               tag=tag,
               sub_process_group=sub_process_group)
     counter.decrement()
+
 
 def _recv(tensor_name, src_rank, tensor_shape=None, dtype=torch.float32,
           tensor=None, tag=None, sub_process_group=None):
@@ -682,6 +691,7 @@ def _recv(tensor_name, src_rank, tensor_shape=None, dtype=torch.float32,
     assert tensor.is_cuda
     return tensor
 
+
 def _send(tensor, tensor_name, src_rank, dst_rank, tag, sub_process_group=None):
     """
     Sends tensor by calling PyTorch's send() call.
@@ -695,7 +705,7 @@ def _send(tensor, tensor_name, src_rank, dst_rank, tag, sub_process_group=None):
         # Send tensor shape.
         tensor_shape = torch.tensor(tensor.shape, dtype=torch.int)
         dist.broadcast(tensor=tensor_shape, src=src_rank,
-                      group=sub_process_group)
+                       group=sub_process_group)
 
         # Send tensor.
         contiguous_tensor = tensor.detach().clone()
@@ -706,6 +716,7 @@ def _send(tensor, tensor_name, src_rank, dst_rank, tag, sub_process_group=None):
         assert tensor.is_cuda
         tensor = tensor.cpu()
 
+        # FIXME: We don't really have to do this.
         # Send tensor shape.
         tensor_shape = torch.tensor(tensor.shape, dtype=torch.int)
         dist.send(tensor=tensor_shape, dst=dst_rank, tag=tag)

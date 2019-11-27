@@ -6,8 +6,8 @@ import torch
 import torch.distributed as dist
 
 import communication
-from communication import CommunicationHandler
-import runtime_utilities
+from .communication import CommunicationHandler
+from . import runtime_utilities
 
 from typing import Dict
 
