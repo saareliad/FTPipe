@@ -11,8 +11,8 @@ if __name__ == "__main__":
     pg = dist.new_group(ranks=[0, 1], backend=BACKEND)
     shape = (10, 10, 10)
 
-    res = torch.ones(*shape).cuda()
-    buff = torch.zeros(*shape).cuda()
+    res = torch.ones(*shape)
+    buff = torch.zeros(*shape)
     if CUDA:
         res = res.cuda()
         buff = buff.cuda()
@@ -20,8 +20,7 @@ if __name__ == "__main__":
     start = time.time()
     if dist.get_rank() == 0:
         tensor = torch.ones(*shape).cuda()
-        o = dist.broadcast(torch.ones(*shape).cuda(),
-                           0, async_op=True, group=pg)
+        o = dist.broadcast(tensor, 0, async_op=True, group=pg)
     else:
         tensor = buff
         o = dist.broadcast(tensor, 0, async_op=True, group=pg)

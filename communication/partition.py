@@ -8,8 +8,12 @@ TensorOrTensors = Union[Tensor, Tensors]
 
 __all__ = ['Partition', 'LastPartition']
 
+
 class PartitionRngStasher:
-    """ Utility class to stash and restore RNG state"""
+    """
+    Utility class to stash and restore RNG state
+    pop happens when re restore the state (therefore we can only restore once).
+    """
 
     def __init__(self, device=torch.device('cpu')):
         self.device = device
@@ -30,13 +34,22 @@ class PartitionRngStasher:
         self.state[micro_batch_index] = (cpu_rng_state, gpu_rng_state)
 
     def restore_rng_state(self, micro_batch_index):
-        cpu_rng_state, gpu_rng_state = self.state[micro_batch_index]
+        cpu_rng_state, gpu_rng_state = self.state.pop(micro_batch_index)
         torch.set_rng_state(cpu_rng_state)
         if not (gpu_rng_state is None):
             torch.cuda.set_rng_state(gpu_rng_state, self.device)
 
+    def clear_state(self):
+        self.state = {}
+
 
 class Partition(nn.Module):
+    """
+    Partition with recomputation.
+
+    saves activations.
+    pop happens when we read the gradient.
+    """
 
     def __init__(self, layers, device, to_device=True):
         """
@@ -46,21 +59,19 @@ class Partition(nn.Module):
         super(Partition, self).__init__()
         self.device = device
         if isinstance(layers, list):
-            self.layers = nn.Sequential(*layers)  # .to(self.device)
+            self.layers = nn.Sequential(*layers)
         elif isinstance(layers, nn.Module):
             self.layers = layers
 
-        self.cache_input = {}
+        self.input_buffer = {}
         self.rng_stasher = PartitionRngStasher(device=self.device)
 
         if to_device:
             self.to(self.device)
 
     def on_new_batch(self, num_micro_batches):
-        # Create placeholder for micro batches input
-        self.cache_input = {idx: None for idx in range(num_micro_batches)}
-        self.stash_rngs = {idx: PartitionRngStasher(
-            device=self.device) for idx in range(num_micro_batches)}
+        # Create placeholder for micro batches input and rng states.
+        self.input_buffer = {idx: None for idx in range(num_micro_batches)}
 
     def forward(self, x: TensorOrTensors, micro_batch_idx):
 
@@ -73,30 +84,29 @@ class Partition(nn.Module):
 
             with torch.no_grad():
                 if isinstance(x, Tensor):
-                    x = x.detach().to(self.device).requires_grad_()
-                    self.cache_input[micro_batch_idx] = x
+                    x.detach_().requires_grad_()
+                    self.input_buffer[micro_batch_idx] = x
                     x = self.layers(x)
                 else:
-                    # FIXME: explicitly creating new objects
-                    x = [y.detach().to(self.device).requires_grad_()
-                         for y in x]
-                    self.cache_input[micro_batch_idx] = x
+                    for tensor in x:
+                        tensor.detach_().requires_grad_()
+                    self.input_buffer[micro_batch_idx] = x
                     x = self.layers(*x)
             return x
         else:
             with torch.no_grad():
                 if isinstance(x, Tensor):
-                    x = x.to(self.device)
+                    # x = x.to(self.device)
                     x = self.layers(x)
                 else:
-                    x = [y.to(self.device) for y in x]
+                    # x = [y.to(self.device) for y in x]
                     x = self.layers(*x)
                 return x
 
     def recompute_and_backward(self, g, micro_batch_idx):
         with torch.random.fork_rng(devices=self.rng_stasher.devices):
             self.rng_stasher.restore_rng_state(micro_batch_idx)
-            x = self.cache_input[micro_batch_idx]
+            x = self.input_buffer[micro_batch_idx]  # Note: still not poping!
             if isinstance(x, Tensor):
                 x = self.layers(x)
                 torch.autograd.backward(x, g)
@@ -105,7 +115,7 @@ class Partition(nn.Module):
                 torch.autograd.backward(x, g)
 
     def get_grad(self, micro_batch_idx):
-        x = self.cache_input[micro_batch_idx]
+        x = self.input_buffer.pop(micro_batch_idx)
         if isinstance(x, Tensor):
             return x.grad
         else:
@@ -128,36 +138,36 @@ class LastPartition(Partition):
             # we do not plan to do any recomputation.
 
             if isinstance(x, Tensor):
-                x = x.detach().to(self.device).requires_grad_()
-                self.cache_input[micro_batch_idx] = x
+                x.detach_().requires_grad_()
+                self.input_buffer[micro_batch_idx] = x
                 x = self.layers(x)
             else:
-                x = [y.detach().to(self.device).requires_grad_()
-                     for y in x]  # FIXME: explicitly creating new objects
-                self.cache_input[micro_batch_idx] = x
+                for tensor in x:
+                    tensor.detach_().requires_grad_()
+                self.input_buffer[micro_batch_idx] = x
                 x = self.layers(*x)
-
-            return x
         else:
             with torch.no_grad():
                 if isinstance(x, Tensor):
-                    x = x.to(self.device)
+                    # x = x.to(self.device)
                     x = self.layers(x)
                 else:
-                    x = [y.to(self.device) for y in x]
+                    # x = [y.to(self.device) for y in x]
                     x = self.layers(*x)
 
-                    # Last partition outputs results in a non tensor format
-                    if not isinstance(x, Tensor):
-                        assert(len(x) == 1)
-                        x = x[0]
-            return x
+        #  Last partition outputs results in a non tensor format
+        if not isinstance(x, Tensor):
+            assert(len(x) == 1)
+            return x[0]
+        return x
 
     def recompute_and_backward(self, *args):
         raise NotImplementedError()
 
 
 class GpipePartition:
+    """ TODO: uncompleted version of GpipePartition.... """
+
     def __init__(self, layers, device, recomputation=True):
         """
         :param layers: list of layers (or a single layer)
@@ -169,10 +179,10 @@ class GpipePartition:
             self.layers = nn.Sequential(*layers)  # .to(self.device)
         elif isinstance(layers, nn.Module):
             self.layers = layers
-        
+
         self.recomputation = recomputation
         if self.recomputation:
-            self.cache_input = {}
+            self.input_buffer = {}
             self.rng_stasher = PartitionRngStasher(device=self.device)
         self.to(self.device)
 
@@ -180,9 +190,7 @@ class GpipePartition:
         if not self.recomputation:
             return
         # Create placeholder for micro batches input
-        self.cache_input = {idx: None for idx in range(num_micro_batches)}
-        self.stash_rngs = {idx: PartitionRngStasher(
-            device=self.device) for idx in range(num_micro_batches)}
+        self.input_buffer = {idx: None for idx in range(num_micro_batches)}
 
     def forward(self, x: TensorOrTensors, micro_batch_idx):
         # TODO
