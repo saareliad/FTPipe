@@ -20,7 +20,7 @@ class PartitionRngStasher:
         self.state = {}
 
         # devices list for `fork_rng` method
-        self.devices = [self.device] if self.device.type == 'cuda' else None
+        self.devices = [self.device] if self.device.type == 'cuda' else []
 
     def stash_rng_state(self, micro_batch_index):
         """ Stash RNG state """

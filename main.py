@@ -374,7 +374,7 @@ def main():
     # TODO - we may want to set the device before this...
     train_dl, test_dl = simplified_get_train_test_dl_from_args(args)
     x, y = next(iter(train_dl))
-    
+
     # BASE_INPUT_SHAPE = (3, 32, 32)
     # BASE_TARGET_SHAPE = (10,)
     BASE_INPUT_SHAPE = x.shape[1:]
@@ -424,7 +424,10 @@ def main():
     trainer = None  # TODO...
 
     runtime_ = runtime.SinglePartitionRuntime(
-        configs, configs[stage]['model'], comm_handler, training_tensor_shapes, eval_tensor_shapes,
+        stage,
+        configs, configs[stage]['model'],
+        comm_handler, training_tensor_shapes,
+        eval_tensor_shapes,
         device, is_last_partition, is_first_partition, trainer=trainer)
 
     runtime_.set_dataloader(train_dl)  # sets only to first partition

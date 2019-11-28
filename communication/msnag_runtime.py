@@ -11,8 +11,10 @@ from .partition import Partition, LastPartition
 
 from typing import Dict
 
+
 class DummyTrainer:
     """ just for the flow.. .later replace with one of my real full trainers """
+
     def __init__(self, model):
         self.loss_fn = torch.nn.CrossEntropyLoss()
         self.optimizer = torch.optim.SGD(model.parameters(), 0.1, 0.9)
@@ -21,12 +23,14 @@ class DummyTrainer:
         self.total_loss = 0
         self.total_num_correct = 0
 
-    def do_your_job(self, x, y):
+    def do_your_job(self, x, y, zero_grad=True):
         """
         Loss
         Backward
         step
         stats
+
+        zero_grad parameter can be used later for grad accumulations...
         """
         y_pred = torch.argmax(x, 1)
         loss = self.loss_fn(x, y)
@@ -38,11 +42,20 @@ class DummyTrainer:
         self.total_loss += loss.item()
         self.total_num_correct += num_correct.item()
 
+        if zero_grad:
+            self.optimizer.zero_grad()
+
+    def step_and_staleness_stats(self, zero_grad=True):
+        # TODO: implement later
+        self.optimizer.step()
+        if zero_grad:
+            self.optimizer.zero_grad()
+
 class SinglePartitionRuntime:
     # FIXME: to the partitionion class we use...
-    def __init__(self, configs: Dict, partition: torch.nn.Module, comm_handler: CommunicationHandler,
-                 training_tensor_shapes, eval_tensor_shapes, 
-                 device, is_last_partition, is_first_partition, 
+    def __init__(self, stage, configs: Dict, partition: torch.nn.Module, comm_handler: CommunicationHandler,
+                 training_tensor_shapes, eval_tensor_shapes,
+                 device, is_last_partition, is_first_partition,
                  trainer=None):
 
         # self.split_dim = split_dim
@@ -57,11 +70,14 @@ class SinglePartitionRuntime:
         self.device = device
         self.is_last_partition = is_last_partition
         self.is_first_partition = is_first_partition
+        self.stage = stage
+        self.num_stages = len(configs)  # FIXME:
 
         self.fwd_rcev_buffers = None
         self.bwd_rcev_buffers = None
 
-        self.trainer = trainer if not (trainer is None) else DummyTrainer(self.partition)
+        self.trainer = trainer if not (
+            trainer is None) else DummyTrainer(self.partition)
 
         # TODO: maybe do this with some trainer object...
         # FIXME, its here just for the flow...
@@ -72,13 +88,13 @@ class SinglePartitionRuntime:
             self.dataloader = dataloader
 
     def train(self):
-        self.tensors = []
-        self.gradients = {}
+        # self.tensors = []
+        # self.gradients = {}
         self.tensor_shapes = self.training_tensor_shapes
         self.forward_only = False
 
-        self.forward_minibatch_id = 0
-        self.backward_minibatch_id = 0
+        # self.forward_minibatch_id = 0
+        # self.backward_minibatch_id = 0
 
         if self.comm_handler is not None:
             self.comm_handler.set_tensor_shapes(self.tensor_shapes)
@@ -86,14 +102,14 @@ class SinglePartitionRuntime:
         self.partition.train()
 
     def eval(self):
-        self.tensors = []
-        self.gradients = {}
+        # self.tensors = []
+        # self.gradients = {}
         self.tensor_shapes = self.eval_tensor_shapes
-        self.tensor_shapes["ack"] = (1,)
-        self.forward_only = True
+        # self.tensor_shapes["ack"] = (1,)
+        self.forward_only = True  # TODO: work that out ....
 
-        self.forward_minibatch_id = 0
-        self.backward_minibatch_id = 0
+        # self.forward_minibatch_id = 0
+        # self.backward_minibatch_id = 0
 
         if self.comm_handler is not None:
             self.comm_handler.set_tensor_shapes(self.tensor_shapes)
@@ -137,17 +153,43 @@ class SinglePartitionRuntime:
                 # mb_to_last_res[micro_batch] = partition.get_grad(micro_batch)
                 grads = self.partition.get_grad(batch_idx)
                 # Send gradients async
-                request_objects = self.comm_handler.send_gradients(grads, batch_idx)
+                request_objects = self.comm_handler.send_gradients(
+                    grads, batch_idx)
 
         return request_objects
 
-    def policy_scheduler_is_fwd(self):
+    def policy_scheduler_is_fwd(self, num_steps, done_bwds, done_fwds):
         # TODO: implement...
-        return True
+        # and generically/nicely.
+        # FIXME: Here is a dummy sequential implementation with dummy args.
+        # stage = self.stage
+        # num_stages = self.num_stages
+        if self.is_last_partition:
+            return True
+        else:
+            if not (done_bwds < done_fwds):
+                return True
+            else:
+                return False
+                 
+        # return True
 
     def run_batch_backward(self, batch_idx):
         # TODO: implement
-        raise NotImplementedError()
+
+        if not self.bwd_rcev_buffers:
+            self.bwd_rcev_buffers = self.comm_handler.create_gradients_rcv_buffers(
+                self.device)
+        g = self.bwd_rcev_buffers
+
+        request_objects = self.comm_handler.recv_gradients(g, batch_idx)
+
+        # recv for bwd
+        for obj in request_objects:
+            obj.wait()
+
+        self.partition.recompute_and_backward(g, batch_idx)
+        self.trainer.step_and_staleness_stats()
 
     def run_until_flush(self, num_batches):
         """
@@ -155,18 +197,33 @@ class SinglePartitionRuntime:
             set_dataloader() was called
             train() or eval()
         """
+        done_bwds = 0
+        done_fwds = 0
+
         if self.is_first_partition:
             self.dl_iter = iter(self.dataloader)
 
-        for batch_idx in range(num_batches):
+        num_steps = num_batches if self.is_last_partition else num_batches * 2
+
+        for step_index in range(num_steps):
             # Act according to some policy
-            if self.policy_scheduler_is_fwd():
-                sent_request_objects = self.run_batch_forward(batch_idx)
+            action_is_fwd = self.policy_scheduler_is_fwd(num_steps, done_bwds, done_fwds)
+            if action_is_fwd:
+                sent_request_objects = self.run_batch_forward(done_fwds)
             else:
-                sent_request_objects = self.run_batch_backward(batch_idx)
+                sent_request_objects = self.run_batch_backward(done_bwds)
+
+            if self.is_last_partition:
+                done_bwds += 1
+                done_fwds += 1
+            else:
+                if action_is_fwd:
+                    done_fwds += 1
+                else:
+                    done_fwds += 1
 
             # FIXME: we may not want to wait on this yet.
-            # TODO: save the object and wait only when truely needed.
+            # TODO: save the object and wait only when truly needed.
             if sent_request_objects:
                 for i in sent_request_objects:
                     i.wait()
