@@ -388,18 +388,19 @@ def generateFunctionCallExpression(ready_expressions: Dict[str, str], expression
     values = [ready_expressions[s] for s in operand_scopes]
 
     try:
+        specialCase=False
         expression = SupportedFunctions.findMatch(func_name, types, values)
     except Exception:
+        specialCase = True
         expression = specialCases(ready_expressions,node,operand_scopes,namespace,func_name,types,values)
 
-    exp_len = 1 + max(expression_len[s]for s in operand_scopes)
-
+    if not specialCase:
+        exp_len = 1 + max(expression_len[s]for s in operand_scopes)
+    else:
+        exp_len = 1000
+        
     # embeded
-    if expression == '':
-        expression_len[scope]=exp_len
-        return ''
-
-    if (not verbose) and (exp_len < 10) and canEmbedInUseSite(node):
+    if (not specialCase) and  ((not verbose) and (exp_len < 10) and canEmbedInUseSite(node)):
         ready_expressions[scope] = expression
         expression_len[scope] = exp_len
         return ''
@@ -427,8 +428,7 @@ namespace:str, func_name:str, types:List, values:List):
         return f"F.{func_name}({args})"
     elif func_name == 'Int':
         assert len(node.in_nodes) == 1, "aten::Int is a no op with 2 input"
-        ready_expressions[node.scope] = ready_expressions[node.in_nodes[0].scope]
-        return ''
+        return ready_expressions[node.in_nodes[0].scope]
     elif func_name == 'to':
         assert len(operand_scopes) == 7
         return f"{ready_expressions[operand_scopes[0]]}.to(device={ready_expressions[operand_scopes[3]]})"
