@@ -114,7 +114,9 @@ class CommunicationHandler(object):
         return self.create_recv_buffers(device, self.receive_ranks.keys(), requires_grad=requires_grad)
 
     def create_gradients_rcv_buffers(self, device, requires_grad=False):
-        return self.create_recv_buffers(device, self.grad_rcv_items, requires_grad=requires_grad)
+        tensor_names = [
+            i for i in self.send_ranks.keys() if not (i in self.target_tensor_names)]
+        return self.create_recv_buffers(device, tensor_names, requires_grad=requires_grad)
 
     def recv_tensors(self, x, batch_idx, ranks_dict_items):
         request_objects = []
