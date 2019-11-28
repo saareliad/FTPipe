@@ -251,6 +251,7 @@ def create_distributed_communcation_context(args, config, stage, stage_to_rank_m
     # eval_tensor_shapes
     # TODO: eval_tensor_dtypes
 
+    # with torch.no_grad():
     for i, v in config.items():
         partition = v['model']
         if i == 0:
@@ -369,8 +370,15 @@ def main():
 
     # TODO formalize with function according to dataset/task
     # For CIFAR10 network
-    BASE_INPUT_SHAPE = (3, 32, 32)
-    BASE_TARGET_SHAPE = (10,)
+
+    # TODO - we may want to set the device before this...
+    train_dl, test_dl = simplified_get_train_test_dl_from_args(args)
+    x, y = next(iter(train_dl))
+    
+    # BASE_INPUT_SHAPE = (3, 32, 32)
+    # BASE_TARGET_SHAPE = (10,)
+    BASE_INPUT_SHAPE = x.shape[1:]
+    BASE_TARGET_SHAPE = y.shape[1:]
 
     bs_train = to_tuple(args.bs_train)
     bs_test = to_tuple(args.bs_test)
@@ -380,7 +388,9 @@ def main():
     random_input_sample = torch.randn(SAMPLE_BATCH_SIZE, *BASE_INPUT_SHAPE)
 
     target_tensor_names = {"target"}
-    training_tensor_dtypes = {"input0": torch.int64, "target": torch.int64}
+    # training_tensor_dtypes = {"input0": torch.int64, "target": torch.int64}
+    training_tensor_dtypes = {"input0": x.dtype, "target": y.dtype}
+
     training_tensor_shapes = {"input0": (
         *bs_train, *BASE_INPUT_SHAPE), "target": (*bs_train, *BASE_TARGET_SHAPE)}
 
@@ -406,15 +416,16 @@ def main():
     # torch.cuda.set_device(device)
 
     device = torch.device('cpu')
-
     train_dl, test_dl = simplified_get_train_test_dl_from_args(args)
 
     is_last_partition = args.local_rank == len(configs) - 1  # FIXME
     is_first_partition = args.local_rank == 0  # FIXME:
 
+    trainer = None  # TODO...
+
     runtime_ = runtime.SinglePartitionRuntime(
         configs, configs[stage]['model'], comm_handler, training_tensor_shapes, eval_tensor_shapes,
-        device, is_last_partition, is_first_partition)
+        device, is_last_partition, is_first_partition, trainer=trainer)
 
     runtime_.set_dataloader(train_dl)  # sets only to first partition
     runtime_.train()

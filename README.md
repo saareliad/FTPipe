@@ -12,6 +12,9 @@
   * https://www.open-mpi.org/faq/?category=runcuda
   * https://github.com/pytorch/pytorch#from-source
 
+* Support multi node after everything works.
+* later change `batch_idx` to `micro_batch_index` to be consistent with the paper.
+
 ## Crazy ideas
 
 * we can utilize idle/spare time to do gradient smoothing.

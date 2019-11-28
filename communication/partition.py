@@ -128,11 +128,10 @@ class Partition(nn.Module):
 class LastPartition(Partition):
     # TODO: make the inheritance true subtype.
 
-    def __init__(self, layers, device):
-        super(LastPartition, self).__init__(layers, device)
+    def __init__(self, *args, **kw):
+        super(LastPartition, self).__init__(*args, **kw)
 
     def forward(self, x, micro_batch_idx):
-
         if self.training:
             # Note that here we save the input just to get its gradeint later
             # we do not plan to do any recomputation.
@@ -164,7 +163,9 @@ class LastPartition(Partition):
     def recompute_and_backward(self, *args):
         raise NotImplementedError()
 
-
+##################################################
+# Unrelated.. but still here, may be useful later
+##################################################
 class GpipePartition:
     """ TODO: uncompleted version of GpipePartition.... """
 
