@@ -38,7 +38,7 @@ class PartitionRngStasher:
 
 class Partition(nn.Module):
 
-    def __init__(self, layers, device):
+    def __init__(self, layers, device, to_device=True):
         """
         :param layers: list of layers (or a single module)
         :param device: device of the partition
@@ -52,7 +52,9 @@ class Partition(nn.Module):
 
         self.cache_input = {}
         self.rng_stasher = PartitionRngStasher(device=self.device)
-        self.to(self.device)
+
+        if to_device:
+            self.to(self.device)
 
     def on_new_batch(self, num_micro_batches):
         # Create placeholder for micro batches input

@@ -7,6 +7,7 @@ import torch.distributed as dist
 
 from . import CommunicationHandler
 from . import runtime_utilities
+from .partition import Partition
 
 from typing import Dict
 
@@ -19,7 +20,7 @@ class SinglePartitionRuntime:
         # self.input_names = configs.pop('model inputs')
         # self.output_names = configs.pop('model outputs')
 
-        self.partition = partition
+        self.partition = Partition(partition, device, to_device=False)
         self.comm_handler = comm_handler  # Initialized (duh...)
         self.training_tensor_shapes = training_tensor_shapes
         self.eval_tensor_shape = eval_tensor_shapes
@@ -79,7 +80,7 @@ class SinglePartitionRuntime:
                 # TODO: generic data handling.
                 assert len(data) == 2
                 x, y = data
-                x = self.partition(x)
+                x = self.partition(x, batch_idx)
                 request_objects = self.comm_handler.send_activations(
                     (*x, y), batch_idx)
 
@@ -100,7 +101,7 @@ class SinglePartitionRuntime:
                 obj.wait()
 
             x, y = x[:-1], x[-1]
-            x = self.partition(*x)
+            x = self.partition(x, batch_idx)
             if self.is_last_partition:
                 print("Hi, i'M LAST PARTITION")
                 print([z.size() for z in x])
