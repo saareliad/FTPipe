@@ -10,14 +10,10 @@ from . import runtime_utilities
 
 from typing import Dict
 
-
-class Partition(torch.nn.Module):
-    pass
-
-
 class SinglePartitionRuntime:
-    def __init__(self, configs: Dict, partition: Partition, comm_handler: CommunicationHandler,
-                 training_tensor_shapes, eval_tensor_shapes, device, is_last_partition):
+    # FIXME: to the partitionion class we use...
+    def __init__(self, configs: Dict, partition: torch.nn.Module, comm_handler: CommunicationHandler,
+                 training_tensor_shapes, eval_tensor_shapes, device, is_last_partition, is_first_partition):
 
         # self.split_dim = split_dim
         # self.input_names = configs.pop('model inputs')
@@ -29,11 +25,16 @@ class SinglePartitionRuntime:
         self.eval_tensor_shape = eval_tensor_shapes
         self.device = device
         self.is_last_partition = is_last_partition
+        self.is_first_partition = is_first_partition
+
+        self.fwd_rcev_buffers = None
+        self.bwd_rcev_buffers = None
 
     def set_dataloader(self, dataloader):
-        self.dataloader = dataloader
+        if self.is_first_partition:
+            self.dataloader = dataloader
 
-    def train(self, num_iterations):
+    def train(self):
         self.tensors = []
         self.gradients = {}
         self.tensor_shapes = self.training_tensor_shapes
@@ -44,12 +45,10 @@ class SinglePartitionRuntime:
 
         if self.comm_handler is not None:
             self.comm_handler.set_tensor_shapes(self.tensor_shapes)
-            # self.comm_handler.start_helper_threads(
-            #     num_iterations, forward_only=False)
 
         self.partition.train()
 
-    def eval(self, num_iterations):
+    def eval(self):
         self.tensors = []
         self.gradients = {}
         self.tensor_shapes = self.eval_tensor_shapes
@@ -61,90 +60,61 @@ class SinglePartitionRuntime:
 
         if self.comm_handler is not None:
             self.comm_handler.set_tensor_shapes(self.tensor_shapes)
-            # self.comm_handler.start_helper_threads(
-            #     num_iterations, forward_only=True)
 
         self.partition.eval()
 
-    def send_tensors(self, x, batch_idx):
-        request_objects = []
-        for tensor, (tensor_name, send_ranks) in zip(x, self.comm_handler.send_ranks.items()):
-            tensor_tag = self.comm_handler.tensor_tags[tensor_name] + \
-                (self.comm_handler.TOTAL_TAGS * batch_idx)
-
-            tensor.detach_()
-            for send_rank in send_ranks:
-                # TODO: tag for minibatch idx too
-                request_obj = dist.isend(tensor, send_rank, tag=tensor_tag)
-                request_objects.append(request_obj)
-
-        return request_objects
-
     def run_until_flush(self, num_batches):
         """
-
         Requires:
             set_dataloader() was called
             train() or eval()
         """
-        if self.dataloader:
-            # First stage
-
+        if self.is_first_partition:
             # with tqdm.tqdm(desc=pbar_name, total=num_batches,
             #    file=pbar_file) as pbar:
-
             dl_iter = iter(self.dataloader)
             for batch_idx in range(num_batches):
                 data = next(dl_iter)
-                # FIXME: handle data
+                # TODO: handle y with separate coordinated dataloader
+                # TODO: generic data handling.
                 assert len(data) == 2
                 x, y = data
-
                 x = self.partition(x)
-                request_objects = self.send_tensors(x, batch_idx)
+                request_objects = self.comm_handler.send_activations(
+                    (*x, y), batch_idx)
 
-                # torch.distributed.broadcast(tensor.detach(), comm_handler.local_rank, group=<object object>, async_op=True)
-
-                # self.comm_handler.
-
-                # TODO: isend tensors
-
+            for i in request_objects:
+                i.wait()
         else:
-            # receive buffers
+            # receive from forward
             batch_idx = 0
-            x = []
-            for tensor_name in self.comm_handler.receive_ranks.keys():
-                shape = self.comm_handler.tensor_shapes[tensor_name]
-                # FIXME: eval dtype
-                dtype = self.comm_handler.training_tensor_dtypes[tensor_name]
-                rcv_buffer = torch.empty(
-                    shape, dtype=dtype, device=self.device, requires_grad=False)
-                x.append(rcv_buffer)
+            if not self.fwd_rcev_buffers:
+                self.fwd_rcev_buffers = self.comm_handler.create_activations_recv_buffers(
+                    self.device)
+            x = self.fwd_rcev_buffers
 
-            request_objects = []
-            for tensor, (tensor_name, receive_ranks) in zip(x, self.comm_handler.receive_ranks.items()):
-                assert len(receive_ranks) == 1
-                receive_rank = receive_ranks[0]
-                tensor_tag = self.comm_handler.tensor_tags[tensor_name] + (
-                    self.comm_handler.TOTAL_TAGS * batch_idx)
-                # TODO: tag for minibatch idx too
-                request_obj = dist.irecv(tensor, receive_rank, tag=tensor_tag)
-                request_objects.append(request_obj)
+            request_objects = self.comm_handler.recv_activations(x, batch_idx)
 
             # recv for fwd
             for obj in request_objects:
                 obj.wait()
 
+            x, y = x[:-1], x[-1]
             x = self.partition(*x)
-            request_objects = self.send_tensors(x, batch_idx)
-
             if self.is_last_partition:
                 print("Hi, i'M LAST PARTITION")
-                print(x)
+                print([z.size() for z in x])
+                print(y.size())
+            else:
+                request_objects = self.comm_handler.send_activations(
+                    (*x, y), batch_idx)
 
             # TODO:
-            # Receive for next batch
+            # Receive for next batch etc...
             # fwd
+
+        # Last one waits
+        # time.sleep(3)
 
     # def run_forward(num_iterations):
     #     pass
@@ -153,15 +123,5 @@ class SinglePartitionRuntime:
     #     pass
 
 
-# class StageRuntime:
-#     def __init__(self, model, distributed_backend, fp16, loss_scale,
-#                  training_tensor_shapes, eval_tensor_shapes,
-#                  training_tensor_dtypes, inputs_module_destinations,
-#                  target_tensor_names, configuration_maps, master_addr,
-#                  rank, local_rank, num_ranks_in_server, verbose_freq,
-#                  model_type, enable_recompute=False):
-        # self.comm_handler = self, master_addr, master_port, rank,
-        #          local_rank, num_ranks_in_server,
-        #          world_size, fp16, backend
 if __name__ == "__main__":
     pass

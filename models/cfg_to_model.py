@@ -4,6 +4,7 @@ from .normal import WideResNet
 _PARTITIONED_MODELS_PACKAGE = "models.partitioned"
 _WIDE_RESNETS = dict(
     wrn_16x4=dict(depth=16, num_classes=10, widen_factor=4, drop_rate=0.0),  # FOR BACKWARD COMPATABILITY
+    wrn_16x4_p2=dict(depth=16, num_classes=10, widen_factor=4, drop_rate=0.0),  # FOR BACKWARD COMPATABILITY
     # wrn_16x4_c10=dict(depth=16, num_classes=10, widen_factor=4, drop_rate=0.0),
     # wrn_28x10_c10_dr03=dict(depth=28, num_classes=10, widen_factor=10, drop_rate=0.3),
     # wrn_28x10_c10=dict(depth=28, num_classes=10, widen_factor=10, drop_rate=0),

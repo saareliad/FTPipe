@@ -9,29 +9,36 @@ import torch.distributed as dist
 from collections import OrderedDict
 from misc.datasets import add_dataset_argument, simplified_get_train_test_dl_from_args
 
+
 def parse_cli():
     parser = argparse.ArgumentParser(
         description='PyTorch partition as part of Async Pipepline')
     parser.add_argument('--master_addr', default='127.0.0.1', type=str,
-                        help="IP address of master (machine with rank 0)")
-    parser.add_argument('--master_port', default=12345,
-                        type=int, help="Port of master")
+                        help="IP address of master(machine with rank 0)."
+                        "DEPRECATED: Currently taken from env and not in use.")
+    parser.add_argument('--master_port', default=6001,
+                        type=int, help="Port of master."
+                        "DEPRECATED: Currently taken from env and not in use.")
+
     parser.add_argument('--rank', default=None,
                         type=int, help="Rank of worker")
     parser.add_argument('--local_rank', default=0,
                         type=int, help="Local rank of worker")
 
-    # TODO: support multiple servers
-    parser.add_argument('--num_ranks_in_server', default=1,
-                        type=int, help="number of gpus per machine")
-    # TODO: Not supported
-    parser.add_argument('--fp16', action='store_true',
-                        help='train model in fp16 precision')
+    # TODO: support multiple servers,
+    # TODO heterogenous servers...
+    # parser.add_argument('--num_ranks_in_server', default=1,
+    #                     type=int, help="number of gpus per machine")
+
+    # TODO: support mix precision, in the future
+    # parser.add_argument('--fp16', action='store_true',
+    #                     help='train model in fp16 precision')
+
     parser.add_argument('--distributed_backend',
                         choices=['gloo', 'nccl'], default='gloo', type=str, help='distributed backend to use')
 
     #
-    parser.add_argument('--model', choices=list(models.SUPPORTED_CONFIGS), default='wrn_16x4',
+    parser.add_argument('--model', choices=list(models.SUPPORTED_CONFIGS), default='wrn_16x4_p2',
                         type=str, help="name of the file with partitioning definitions")
 
     # Training, which are also needed for communication
@@ -39,7 +46,10 @@ def parse_cli():
                         default=128, metavar='B')
     parser.add_argument('--bs-test', type=int, help='Test batch size', default=128,
                         metavar='BT')
-    
+
+    parser.add_argument('--fp16', action='store_true',
+                        help='train model in fp16 precision')
+
     add_dataset_argument(parser)
 
     # parser.add_argument('--seed', '-s', type=int, help='Random seed',
@@ -51,27 +61,40 @@ def parse_cli():
 
 
 def assert_args(args):
-    assert not args.fp16
-    assert not (args.master_addr is None)
+    pass
 
 
 def create_comm_handler(args, initialize_args):
 
-    # TODO: get the parameters to create the comm handler:
+    # get the parameters to create the comm handler
+
     comm_handler = CommunicationHandler(
         master_addr=args.master_addr,
         master_port=args.master_port,
         rank=args.rank,
         local_rank=args.local_rank,
-        num_ranks_in_server=args.num_ranks_in_server,
+        # num_ranks_in_server=args.num_ranks_in_server,
         world_size=args.num_ranks,
-        fp16=args.fp16,
         backend=args.distributed_backend)
 
     comm_handler.initialize(*initialize_args)
 
     return comm_handler
 
+
+# def init_dist(args):
+#     master_addr = args.master_addr,
+#     master_port = args.master_port,
+#     rank = args.rank,
+#     local_rank = args.local_rank,
+#     world_size = args.num_ranks,
+#     backend = args.distributed_backend
+
+#     dist.init_process_group(backend, init_method="env://",
+#                             world_size=world_size)
+#     assert dist.get_world_size() == world_size
+#     print(f"Initialized process group; backend: {backend}, rank: {rank}, "
+#           f"local_rank: {local_rank}, world_size: {world_size}")
 
 # def get_num_ranks(configuration_maps=None):
 #     if configuration_maps:
@@ -157,8 +180,6 @@ def tensor_tags_from_config(config, target_tensor_names):
 
     return tensor_tags, tensor_tag
 
-# TODO: target_tensor_names
-
 
 def create_distributed_communcation_context(args, config, stage, stage_to_rank_map=None,
                                             target_tensor_names={"target"},
@@ -170,6 +191,7 @@ def create_distributed_communcation_context(args, config, stage, stage_to_rank_m
                                             bs_train=(1,),
                                             bs_test=(1,)):
 
+    assert(len(training_tensor_shapes) == len(training_tensor_dtypes))
     # training_tensor_shapes = {"input0": input_size, "target": [args.batch_size]}
     # inputs_module_destinations={"input0": [0]} Not needed, already taken care of by config.
 
@@ -338,8 +360,8 @@ def main():
     if NO_DP:
         args.num_stages = len(configs)
         stage = args.local_rank
-        args.num_ranks = 4  # FIXME
-        # args.num_ranks = len(configs) # FIXME:
+        # args.num_ranks = 4  # FIXME
+        args.num_ranks = len(configs)  # FIXME:
     else:
         raise NotImplementedError()
 
@@ -373,44 +395,33 @@ def main():
                                                 bs_test=bs_test)
 
     comm_handler = create_comm_handler(args, comm_init_args)
+    # init_dist(args)
 
     training_tensor_shapes, eval_tensor_shapes = shapes
 
     # FIXME:
     # device = torch.device(f"cuda:{args.local_rank}")
-    device = torch.device(f"cuda:{0}")
-    torch.cuda.set_device(device)
+
+    # device = torch.device(f"cuda:{0}")
+    # torch.cuda.set_device(device)
+
+    device = torch.device('cpu')
 
     train_dl, test_dl = simplified_get_train_test_dl_from_args(args)
 
     is_last_partition = args.local_rank == len(configs) - 1  # FIXME
+    is_first_partition = args.local_rank == 0  # FIXME:
+
     runtime_ = runtime.SinglePartitionRuntime(
-        configs, configs[stage]['model'], comm_handler, training_tensor_shapes, eval_tensor_shapes, device, is_last_partition)
-    
-    runtime_.set_dataloader(train_dl)
-    runtime_.train(1)  # FIXME
+        configs, configs[stage]['model'], comm_handler, training_tensor_shapes, eval_tensor_shapes,
+        device, is_last_partition, is_first_partition)
+
+    runtime_.set_dataloader(train_dl)  # sets only to first partition
+    runtime_.train()
     runtime_.run_until_flush(1)
     # TODO: create partition from config,
 
     # num_ranks = get_num_ranks()
-
-    # model = config_to_tuples_generator(configs)
-
-    # r = runtime.StageRuntime(
-    #     model=model, distributed_backend=args.distributed_backend,
-    #     fp16=args.fp16, loss_scale=args.loss_scale,
-    #     training_tensor_shapes=training_tensor_shapes,
-    #     eval_tensor_shapes=eval_tensor_shapes,
-    #     training_tensor_dtypes=dtypes,
-    #     inputs_module_destinations=inputs_module_destinations,
-    #     target_tensor_names=target_tensor_names,
-    #     configuration_maps=configuration_maps,
-    #     master_addr=args.master_addr, rank=args.rank,
-    #     local_rank=args.local_rank,
-    #     num_ranks_in_server=args.num_ranks_in_server,
-    #     verbose_freq=args.verbose_frequency,
-    #     model_type=runtime.IMAGE_CLASSIFICATION,
-    #     enable_recompute=args.recompute)
 
 
 if __name__ == "__main__":
