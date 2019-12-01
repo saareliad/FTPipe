@@ -5,6 +5,8 @@ import torch
 import torchvision
 from torchvision.datasets import CIFAR10, CIFAR100
 
+# TODO: remove hardcoded DATA_DIR
+# read DATA_DIR from env or some config.yml file.
 DATA_DIR = os.path.expanduser('~/.pytorch-datasets')
 
 # torch.backends.cudnn.deterministic = True
@@ -34,6 +36,7 @@ def get_cifar_train_test_dl(ds_train, ds_test, bs_train, bs_test, shuffle_train=
     dl_test = torch.utils.data.DataLoader(
         ds_test, bs_test, shuffle=False, pin_memory=pin_memory)
     return dl_train, dl_test
+
 
 def get_cifar_100_train_test_ds():
     mean = np.array([0.5071, 0.4867, 0.4408])
@@ -89,17 +92,19 @@ def get_train_test_dl(dataset, *args, **kw):
     else:
         raise ValueError(dataset)
 
+
 def simplified_get_train_test_dl(dataset, bs_train, bs_test, shuffle_train=True, verbose=True):
     ds_train, ds_test = get_train_test_ds(dataset)
 
     dl_train, dl_test = get_train_test_dl(
         dataset, ds_train, ds_test, bs_train, bs_test, shuffle_train=shuffle_train)
-    
+
     if verbose:
         print(f'Train: {len(dl_train) * bs_train} samples')
         print(f'Test: {len(dl_test) * bs_test} samples')
 
     return dl_train, dl_test
+
 
 def simplified_get_train_test_dl_from_args(args, shuffle_train=True, verbose=True):
     return simplified_get_train_test_dl(args.dataset, args.bs_train, args.bs_test, shuffle_train=True, verbose=True)

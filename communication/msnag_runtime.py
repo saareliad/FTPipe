@@ -1,12 +1,8 @@
 
-import collections
-import itertools
 import time
 import torch
-import torch.distributed as dist
 
 from . import CommunicationHandler
-from . import runtime_utilities
 from .partition import Partition, LastPartition
 
 from typing import Dict
@@ -50,6 +46,7 @@ class DummyTrainer:
         self.optimizer.step()
         if zero_grad:
             self.optimizer.zero_grad()
+
 
 class SinglePartitionRuntime:
     # FIXME: to the partitionion class we use...
@@ -171,7 +168,7 @@ class SinglePartitionRuntime:
                 return True
             else:
                 return False
-                 
+
         # return True
 
     def run_batch_backward(self, batch_idx):
@@ -207,7 +204,8 @@ class SinglePartitionRuntime:
 
         for step_index in range(num_steps):
             # Act according to some policy
-            action_is_fwd = self.policy_scheduler_is_fwd(num_steps, done_bwds, done_fwds)
+            action_is_fwd = self.policy_scheduler_is_fwd(
+                num_steps, done_bwds, done_fwds)
             if action_is_fwd:
                 sent_request_objects = self.run_batch_forward(done_fwds)
             else:

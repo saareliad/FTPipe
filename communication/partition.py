@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch import Tensor
-from typing import List, Tuple, Union
+from typing import Tuple, Union
 
 Tensors = Tuple[Tensor, ...]
 TensorOrTensors = Union[Tensor, Tensors]
@@ -104,6 +104,8 @@ class Partition(nn.Module):
                 return x
 
     def recompute_and_backward(self, g, micro_batch_idx):
+        # TODO: can make these two functions (recompute, backwards)
+        # To enable scheduling the recompute
         with torch.random.fork_rng(devices=self.rng_stasher.devices):
             self.rng_stasher.restore_rng_state(micro_batch_idx)
             x = self.input_buffer[micro_batch_idx]  # Note: still not poping!
@@ -164,8 +166,10 @@ class LastPartition(Partition):
         raise NotImplementedError()
 
 ##################################################
-# Unrelated.. but still here, may be useful later
+# Unrelated but still here, may be useful later
 ##################################################
+
+
 class GpipePartition:
     """ TODO: uncompleted version of GpipePartition.... """
 

@@ -1,19 +1,11 @@
-# Copyright (c) Microsoft Corporation.
-# Licensed under the MIT license.
-# Adapted from pipedream.
-# TODO: understand ranks_in_previous_stage
 
+import torch
+import torch.distributed as dist
 
 import os
 import threading
-import torch
-import torch.distributed as dist
 import sys
-
-from . import threadsafe_counter
-from . import threadsafe_queue
 import datetime
-
 
 NCCL = 'nccl'
 GLOO = 'gloo'
@@ -75,14 +67,13 @@ class CommunicationHandler(object):
         self.grad_send_items = [
             (i, v) for i, v in self.receive_ranks.items() if not (i in target_tensor_names)]
 
-        self.register_target_tensor()
-        # self.setup_messaging_schedule()
+        self._register_target_tensor()
         # self.create_process_groups()
 
         print("Send ranks: ", self.send_ranks)
         print("Receive ranks: ", self.receive_ranks)
 
-    def register_target_tensor(self):
+    def _register_target_tensor(self):
         # FIXME: Its inefficient to pass the targets all the way to the end.
         # It can be replaced by propper data loaders and timing.
         # However, when using dataloaders are in different machines,
@@ -93,13 +84,10 @@ class CommunicationHandler(object):
             if self.num_ranks_in_next_stage > 0:
                 self.send_ranks[target_tensor_name] = self.ranks_in_next_stage
 
-        # print("Send ranks: ", list(self.send_ranks.values()))
-        # print("Receive ranks: ", list(self.receive_ranks.values()))
-
     def set_tensor_shapes(self, tensor_shapes):
         self.tensor_shapes = tensor_shapes
 
-    def create_recv_buffers(self, device, tensor_names, requires_grad=False):
+    def _create_recv_buffers(self, device, tensor_names, requires_grad=False):
         buffers = []
         for tensor_name in tensor_names:
             shape = self.tensor_shapes[tensor_name]
@@ -111,14 +99,14 @@ class CommunicationHandler(object):
         return buffers
 
     def create_activations_recv_buffers(self, device, requires_grad=False):
-        return self.create_recv_buffers(device, self.receive_ranks.keys(), requires_grad=requires_grad)
+        return self._create_recv_buffers(device, self.receive_ranks.keys(), requires_grad=requires_grad)
 
     def create_gradients_rcv_buffers(self, device, requires_grad=False):
         tensor_names = [
             i for i in self.send_ranks.keys() if not (i in self.target_tensor_names)]
-        return self.create_recv_buffers(device, tensor_names, requires_grad=requires_grad)
+        return self._create_recv_buffers(device, tensor_names, requires_grad=requires_grad)
 
-    def recv_tensors(self, x, batch_idx, ranks_dict_items):
+    def _recv_tensors(self, x, batch_idx, ranks_dict_items):
         request_objects = []
         for tensor, (tensor_name, receive_ranks) in zip(x, ranks_dict_items):
             assert len(receive_ranks) == 1
@@ -132,12 +120,12 @@ class CommunicationHandler(object):
         return request_objects
 
     def recv_activations(self, x, batch_idx):
-        return self.recv_tensors(x, batch_idx, self.receive_ranks.items())
+        return self._recv_tensors(x, batch_idx, self.receive_ranks.items())
 
     def recv_gradients(self, x, batch_idx):
-        return self.recv_tensors(x, batch_idx, self.grad_rcv_items)
+        return self._recv_tensors(x, batch_idx, self.grad_rcv_items)
 
-    def send_tensors(self, x, batch_idx, ranks_dict_items):
+    def _send_tensors(self, x, batch_idx, ranks_dict_items):
         request_objects = []
         for tensor, (tensor_name, send_ranks) in zip(x, ranks_dict_items):
             # tag for minibatch idx too
@@ -154,7 +142,7 @@ class CommunicationHandler(object):
         return request_objects
 
     def send_activations(self, x, batch_idx):
-        return self.send_tensors(x, batch_idx, self.send_ranks.items())
+        return self._send_tensors(x, batch_idx, self.send_ranks.items())
 
     def send_gradients(self, x, batch_idx):
-        return self.send_tensors(x, batch_idx, self.grad_send_items)
+        return self._send_tensors(x, batch_idx, self.grad_send_items)

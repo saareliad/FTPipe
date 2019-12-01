@@ -1,5 +1,4 @@
 import argparse
-# from communication.threadsafe_queue
 from communication import CommunicationHandler
 from communication import runtime
 import models
@@ -8,17 +7,17 @@ import torch
 import torch.distributed as dist
 from collections import OrderedDict
 from misc.datasets import add_dataset_argument, simplified_get_train_test_dl_from_args
-
+import logging
 
 def parse_cli():
     parser = argparse.ArgumentParser(
         description='PyTorch partition as part of Async Pipepline')
-    parser.add_argument('--master_addr', default='127.0.0.1', type=str,
-                        help="IP address of master(machine with rank 0)."
-                        "DEPRECATED: Currently taken from env and not in use.")
-    parser.add_argument('--master_port', default=6001,
-                        type=int, help="Port of master."
-                        "DEPRECATED: Currently taken from env and not in use.")
+    # parser.add_argument('--master_addr', default='127.0.0.1', type=str,
+    #                     help="IP address of master(machine with rank 0)."
+    #                     "DEPRECATED: Currently taken from env and not in use.")
+    # parser.add_argument('--master_port', default=6001,
+    #                     type=int, help="Port of master."
+    #                     "DEPRECATED: Currently taken from env and not in use.")
 
     parser.add_argument('--rank', default=None,
                         type=int, help="Rank of worker")
@@ -35,7 +34,8 @@ def parse_cli():
     #                     help='train model in fp16 precision')
 
     parser.add_argument('--distributed_backend',
-                        choices=['gloo', 'nccl'], default='gloo', type=str, help='distributed backend to use')
+                        choices=['gloo', 'nccl', 'mpi'], default='gloo', type=str,
+                        help='distributed backend to use')
 
     #
     parser.add_argument('--model', choices=list(models.SUPPORTED_CONFIGS), default='wrn_16x4_p2',
@@ -46,9 +46,6 @@ def parse_cli():
                         default=128, metavar='B')
     parser.add_argument('--bs-test', type=int, help='Test batch size', default=128,
                         metavar='BT')
-
-    parser.add_argument('--fp16', action='store_true',
-                        help='train model in fp16 precision')
 
     add_dataset_argument(parser)
 
@@ -80,67 +77,6 @@ def create_comm_handler(args, initialize_args):
     comm_handler.initialize(*initialize_args)
 
     return comm_handler
-
-
-# def init_dist(args):
-#     master_addr = args.master_addr,
-#     master_port = args.master_port,
-#     rank = args.rank,
-#     local_rank = args.local_rank,
-#     world_size = args.num_ranks,
-#     backend = args.distributed_backend
-
-#     dist.init_process_group(backend, init_method="env://",
-#                             world_size=world_size)
-#     assert dist.get_world_size() == world_size
-#     print(f"Initialized process group; backend: {backend}, rank: {rank}, "
-#           f"local_rank: {local_rank}, world_size: {world_size}")
-
-# def get_num_ranks(configuration_maps=None):
-#     if configuration_maps:
-#         stage_to_rank_map = configuration_maps['stage_to_rank_map']
-#     else:
-#         raise NotImplementedError()
-#         # stage_to_rank_map =  # TODO:
-
-#     rank_to_stage_map = {}
-#     for stage in stage_to_rank_map:
-#         for rank in stage_to_rank_map[stage]:
-#             rank_to_stage_map[rank] = stage
-
-#     num_ranks = len(rank_to_stage_map)
-
-#     return num_ranks
-
-def get_global_maps(num_stages, mode='seq'):
-    configuration_maps = {
-        'module_to_stage_map': None,
-        'stage_to_rank_map': None,
-        'stage_to_depth_map': None
-    }
-
-    if mode == 'seq':
-        configuration_maps = {
-            "module_to_stage_map": list(range(num_stages)),
-            "stage_to_rank_map": {i: [i] for i in range(num_stages)},
-            "stage_to_depth_map": {i: [num_stages - i - 1] for i in range(num_stages)}
-        }
-    elif mode == 'file':
-        raise NotImplementedError()  # TODO
-    else:
-        raise NotImplementedError()
-
-    module_to_stage_map = configuration_maps['module_to_stage_map']
-    stage_to_rank_map = configuration_maps['stage_to_rank_map']
-    stage_to_depth_map = configuration_maps['stage_to_depth_map']
-
-    rank_to_stage_map = {}
-    # Reverse
-    for stage in stage_to_rank_map:
-        for rank in stage_to_rank_map[stage]:
-            rank_to_stage_map[rank] = stage
-
-    return configuration_maps, rank_to_stage_map
 
 
 def config_to_tuples_generator(configs):
@@ -350,6 +286,12 @@ def create_random_sample(dataset, batch_size):
 
 def main():
     args = parse_cli()
+    
+    log_fn = f'asyncPipelineLog_{args.local_rank}.log'
+    open(log_fn, 'w').close()
+    logging.basicConfig(
+        filename=log_fn, level=logging.DEBUG, format='%(relativeCreated)6d %(message)s')
+
     assert_args(args)
     configs = models.get_partitioning(args.model, model_instance=None)
 
@@ -376,7 +318,7 @@ def main():
     x, y = next(iter(train_dl))
 
     # BASE_INPUT_SHAPE = (3, 32, 32)
-    # BASE_TARGET_SHAPE = (10,)
+    # BASE_TARGET_SHAPE = (1,)
     BASE_INPUT_SHAPE = x.shape[1:]
     BASE_TARGET_SHAPE = y.shape[1:]
 
