@@ -1,4 +1,12 @@
-# TODOs
+# Multi Step NAG Asynchronous Pipeline
+
+## Run
+
+```
+python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_node 2 main.py
+```
+
+## TODOs
 
 * Target_tensor_names:
   * I notice that they (pipedream) pass the target all across the pipeline (waste of energy, inefficient).

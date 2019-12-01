@@ -29,7 +29,7 @@ def get_cifar_10_train_test_ds():
     return ds_train, ds_test
 
 
-def get_cifar_train_test_dl(ds_train, ds_test, bs_train, bs_test, shuffle_train=True, pin_memory=True):
+def get_cifar_train_test_dl(ds_train, ds_test, bs_train, bs_test, shuffle_train=True, pin_memory=True, **kw):
     # TODO: X to first device and y to last device.
     dl_train = torch.utils.data.DataLoader(
         ds_train, bs_train, shuffle=shuffle_train, pin_memory=pin_memory)
@@ -93,11 +93,11 @@ def get_train_test_dl(dataset, *args, **kw):
         raise ValueError(dataset)
 
 
-def simplified_get_train_test_dl(dataset, bs_train, bs_test, shuffle_train=True, verbose=True):
+def simplified_get_train_test_dl(dataset, bs_train, bs_test, shuffle_train=True, verbose=True, **kw):
     ds_train, ds_test = get_train_test_ds(dataset)
 
     dl_train, dl_test = get_train_test_dl(
-        dataset, ds_train, ds_test, bs_train, bs_test, shuffle_train=shuffle_train)
+        dataset, ds_train, ds_test, bs_train, bs_test, shuffle_train=shuffle_train, **kw)
 
     if verbose:
         print(f'Train: {len(dl_train) * bs_train} samples')
@@ -106,9 +106,9 @@ def simplified_get_train_test_dl(dataset, bs_train, bs_test, shuffle_train=True,
     return dl_train, dl_test
 
 
-def simplified_get_train_test_dl_from_args(args, shuffle_train=True, verbose=True):
+def simplified_get_train_test_dl_from_args(args, shuffle_train=True, verbose=True, **kw):
     return simplified_get_train_test_dl(args.dataset, args.bs_train,
-                                        args.bs_test, shuffle_train=shuffle_train, verbose=verbose)
+                                        args.bs_test, shuffle_train=shuffle_train, verbose=verbose, **kw)
 
 
 def add_dataset_argument(parser, default='cifar10', required=False):

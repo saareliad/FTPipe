@@ -56,6 +56,9 @@ def parse_cli():
     parser.add_argument('--logdir', type=str,
                         default='./logs', help="where logs and events go")
 
+    parser.add_argument('--cpu', action='store_true', default=False, help="run partition on cpu")
+    parser.add_argument('--num-data-workers', type=int, help='Number of workers to use for dataloading', default=4)
+
     args = parser.parse_args()
 
     return args
@@ -68,24 +71,19 @@ def assert_args(args):
 def create_comm_handler(args, initialize_args):
 
     # get the parameters to create the comm handler
-
     comm_handler = CommunicationHandler(
-        rank=args.rank,
-        local_rank=args.local_rank,
-        backend=args.distributed_backend,
-        # num_ranks_in_server=args.num_ranks_in_server,
-        # master_addr=args.master_addr,
-        # master_port=args.master_port,
-        # world_size=args.num_ranks,
-    )
-
-    comm_handler.initialize(*initialize_args)
+        args.rank,
+        args.local_rank,
+        args.distributed_backend,
+        args.num_stages,
+        args.stage,
+        *initialize_args)
 
     return comm_handler
 
 
 def config_to_tuples_generator(configs):
-    """ allows iterating with the tuple: (stage, inputs, outputs) """
+    """ allows iterating with the tuple: (stage_id, inputs, outputs) """
     for i, v in configs.items():
         yield i, v['inputs'], v['outputs']
 
@@ -310,27 +308,32 @@ def main():
     output_names = configs.pop('model outputs')
 
     NO_DP = True
+    # TODO: make it nicer.
     stage = None
     if NO_DP:
         args.num_stages = len(configs)
         stage = args.local_rank
-        # args.num_ranks = 4  # FIXME
-        args.num_ranks = len(configs)  # FIXME:
+        is_first_partition = args.local_rank == 0
+        is_last_partition = args.local_rank == len(configs) - 1
+        args.num_ranks = len(configs)
     else:
         raise NotImplementedError()
 
     assert(not (stage is None))
+    args.stage = stage
 
-    # TODO formalize with function according to dataset/task
-    # For CIFAR10 network
+    # Here is a dummy for For CIFAR10 network
+    # TODO: best practice is env var for choosing gpu
+    device = torch.device('cpu' if args.cpu else f"cuda:{args.local_rank}")  
 
-    # TODO - we may want to set the device before this...
-    # FIXME:
-    # device = torch.device(f"cuda:{args.local_rank}")
-    # device = torch.device(f"cuda:{0}")
-    # torch.cuda.set_device(device)
-    device = torch.device('cpu')
-    train_dl, test_dl = simplified_get_train_test_dl_from_args(args, verbose=False)
+    dl_kw = dict()
+    if args.cpu:
+        dl_kw['pin_memory'] = False
+    # TODO: num workers.
+    dl_kw['num_workers'] = args.num_data_workers
+
+    train_dl, test_dl = simplified_get_train_test_dl_from_args(
+        args, verbose=False, **dl_kw)
     x, y = next(iter(train_dl))
 
     # BASE_INPUT_SHAPE = (3, 32, 32)
@@ -345,6 +348,7 @@ def main():
     SAMPLE_BATCH_SIZE = 1
     random_input_sample = torch.randn(SAMPLE_BATCH_SIZE, *BASE_INPUT_SHAPE)
 
+    # TODO formalize with function according to dataset/task
     target_tensor_names = {"target"}
     # training_tensor_dtypes = {"input0": torch.int64, "target": torch.int64}
     training_tensor_dtypes = {"input0": x.dtype, "target": y.dtype}
@@ -366,16 +370,6 @@ def main():
     # init_dist(args)
 
     training_tensor_shapes, eval_tensor_shapes = shapes
-
-    # FIXME:
-    # device = torch.device(f"cuda:{args.local_rank}")
-    # device = torch.device(f"cuda:{0}")
-    # torch.cuda.set_device(device)
-    device = torch.device('cpu')
-    # train_dl, test_dl = simplified_get_train_test_dl_from_args(args, verbose=False)
-
-    is_last_partition = args.local_rank == len(configs) - 1  # FIXME
-    is_first_partition = args.local_rank == 0  # FIXME:
 
     trainer = None  # TODO...
 
