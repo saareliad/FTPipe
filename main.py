@@ -1,17 +1,18 @@
 import argparse
 from communication import CommunicationHandler
-from communication import runtime
+from communication import runtime, util
 import models
 import numpy as np
 import torch
 import torch.distributed as dist
 from collections import OrderedDict
 from misc.datasets import add_dataset_argument, simplified_get_train_test_dl_from_args
-import logging
+from misc.filelogger import FileLogger
+
 
 def parse_cli():
     parser = argparse.ArgumentParser(
-        description='PyTorch partition as part of Async Pipepline')
+        description='PyTorch partition as part of Async Pipeline')
     # parser.add_argument('--master_addr', default='127.0.0.1', type=str,
     #                     help="IP address of master(machine with rank 0)."
     #                     "DEPRECATED: Currently taken from env and not in use.")
@@ -52,6 +53,9 @@ def parse_cli():
     # parser.add_argument('--seed', '-s', type=int, help='Random seed',
     #                      default=None, required=False)
 
+    parser.add_argument('--logdir', type=str,
+                        default='./logs', help="where logs and events go")
+
     args = parser.parse_args()
 
     return args
@@ -66,13 +70,14 @@ def create_comm_handler(args, initialize_args):
     # get the parameters to create the comm handler
 
     comm_handler = CommunicationHandler(
-        master_addr=args.master_addr,
-        master_port=args.master_port,
         rank=args.rank,
         local_rank=args.local_rank,
+        backend=args.distributed_backend,
         # num_ranks_in_server=args.num_ranks_in_server,
-        world_size=args.num_ranks,
-        backend=args.distributed_backend)
+        # master_addr=args.master_addr,
+        # master_port=args.master_port,
+        # world_size=args.num_ranks,
+    )
 
     comm_handler.initialize(*initialize_args)
 
@@ -286,12 +291,18 @@ def create_random_sample(dataset, batch_size):
 
 def main():
     args = parse_cli()
-    
-    log_fn = f'asyncPipelineLog_{args.local_rank}.log'
-    open(log_fn, 'w').close()
-    logging.basicConfig(
-        filename=log_fn, level=logging.DEBUG, format='%(relativeCreated)6d %(message)s')
 
+    # log_fn = f'asyncPipelineLog_{args.local_rank}.log'
+    # open(log_fn, 'w').close()
+    # logging.basicConfig(
+    #     filename=log_fn, level=logging.DEBUG, format='%(relativeCreated)6d %(message)s')
+    # logging.getLogger().addHandler(logging.StreamHandler())
+
+    local_rank = args.local_rank
+    global_rank = util.get_global_rank()
+    # max_rank = util.get_world_size()
+    logger = FileLogger(args.logdir, global_rank=global_rank,
+                        local_rank=local_rank, name='msnag')
     assert_args(args)
     configs = models.get_partitioning(args.model, model_instance=None)
 
@@ -314,7 +325,7 @@ def main():
     # For CIFAR10 network
 
     # TODO - we may want to set the device before this...
-    train_dl, test_dl = simplified_get_train_test_dl_from_args(args)
+    train_dl, test_dl = simplified_get_train_test_dl_from_args(args, verbose=False)
     x, y = next(iter(train_dl))
 
     # BASE_INPUT_SHAPE = (3, 32, 32)

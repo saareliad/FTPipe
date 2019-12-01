@@ -107,7 +107,8 @@ def simplified_get_train_test_dl(dataset, bs_train, bs_test, shuffle_train=True,
 
 
 def simplified_get_train_test_dl_from_args(args, shuffle_train=True, verbose=True):
-    return simplified_get_train_test_dl(args.dataset, args.bs_train, args.bs_test, shuffle_train=True, verbose=True)
+    return simplified_get_train_test_dl(args.dataset, args.bs_train,
+                                        args.bs_test, shuffle_train=shuffle_train, verbose=verbose)
 
 
 def add_dataset_argument(parser, default='cifar10', required=False):

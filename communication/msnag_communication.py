@@ -1,11 +1,9 @@
 
 import torch
 import torch.distributed as dist
+from .util import get_world_size
 
-import os
-import threading
-import sys
-import datetime
+import logging
 
 NCCL = 'nccl'
 GLOO = 'gloo'
@@ -15,16 +13,17 @@ class CommunicationHandler(object):
     """ Handles communication between stages.
     """
 
-    def __init__(self, master_addr, master_port, rank,
+    def __init__(self, rank,
                  local_rank,
-                 world_size, backend):
+                 backend):
         """
         """
         self.rank = rank
         self.local_rank = local_rank
         self.backend = backend
+        self.logger = logging.getLogger('msnag')
         # self.num_ranks_in_server = num_ranks_in_server
-        self.world_size = world_size
+        world_size = get_world_size()
 
         # Initialize the distributed environment.
         # os.environ['MASTER_ADDR'] = master_addr
@@ -33,8 +32,8 @@ class CommunicationHandler(object):
         #  timeout=datetime.timedelta(seconds=18),
         # , init_method="env://"
         dist.init_process_group(backend)
-        assert dist.get_world_size() == self.world_size
-        print(f"Initialized process group; backend: {backend}, rank: {rank}, "
+        assert dist.get_world_size() == world_size
+        self.logger.info(f"Initialized process group; backend: {backend}, rank: {rank}, "
               f"local_rank: {local_rank}, world_size: {world_size}")
 
     def initialize(self, receive_ranks, send_ranks,
@@ -70,8 +69,11 @@ class CommunicationHandler(object):
         self._register_target_tensor()
         # self.create_process_groups()
 
-        print("Send ranks: ", self.send_ranks)
-        print("Receive ranks: ", self.receive_ranks)
+        # print("Send ranks: ", self.send_ranks)
+        # print("Receive ranks: ", self.receive_ranks)
+
+        self.logger.debug(f"Send ranks: {self.send_ranks}")
+        self.logger.debug(f"Receive ranks: {self.receive_ranks}")
 
     def _register_target_tensor(self):
         # FIXME: Its inefficient to pass the targets all the way to the end.
@@ -113,8 +115,8 @@ class CommunicationHandler(object):
             receive_rank = receive_ranks[0]
             tensor_tag = self.tensor_tags[tensor_name] + (
                 self.TOTAL_TAGS * batch_idx)
-            print(
-                f"irecv, src={receive_rank}, tag={tensor_tag}, name={tensor_name}, rank={dist.get_rank()}")
+            self.logger.info(
+                f"irecv, src={receive_rank}, tag={tensor_tag}, name={tensor_name}, rank={self.local_rank}")
             request_obj = dist.irecv(tensor, receive_rank, tag=tensor_tag)
             request_objects.append(request_obj)
         return request_objects
@@ -134,8 +136,9 @@ class CommunicationHandler(object):
 
             tensor.detach_()
             for send_rank in send_ranks:
-                print(
-                    f"isend, dst={send_rank}, tag={tensor_tag}, name={tensor_name}, rank={dist.get_rank()}")
+                self.logger.info(
+                    f"isend, dst={send_rank}, tag={tensor_tag}, name={tensor_name}, rank={self.local_rank}")
+
                 request_obj = dist.isend(tensor, send_rank, tag=tensor_tag)
                 request_objects.append(request_obj)
 
