@@ -40,7 +40,8 @@ class FileLogger:
         console = logging.StreamHandler()
         console.setFormatter(formatter)
         # FIXME:
-        console.setLevel(logging.DEBUG if local_rank == 0 else logging.WARN)
+        # console.setLevel(logging.DEBUG if local_rank == 0 else logging.WARN)
+        console.setLevel(logging.DEBUG)
         logger_.addHandler(console)
         return logger_
 

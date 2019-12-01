@@ -1,9 +1,10 @@
 
 import time
 import torch
+import logging
 
 from . import CommunicationHandler
-from .partition import Partition, LastPartition
+from .partition import Partition, LastPartition, FirstPartition
 
 from typing import Dict
 
@@ -59,7 +60,13 @@ class SinglePartitionRuntime:
         # self.input_names = configs.pop('model inputs')
         # self.output_names = configs.pop('model outputs')
 
-        partition_cls = Partition if not is_last_partition else LastPartition
+        if is_last_partition:
+            partition_cls = LastPartition
+        elif is_first_partition:
+            partition_cls = FirstPartition
+        else:
+            partition_cls: Partition
+
         self.partition = partition_cls(partition, device, to_device=True)
         self.comm_handler = comm_handler
         self.training_tensor_shapes = training_tensor_shapes
@@ -76,9 +83,11 @@ class SinglePartitionRuntime:
         self.trainer = trainer if not (
             trainer is None) else DummyTrainer(self.partition)
 
-        # TODO: maybe do this with some trainer object...
-        # FIXME, its here just for the flow...
-        self.loss_fn = torch.nn.CrossEntropyLoss()
+        # Async handle objects
+        self.async_fwd_objects = {}
+        self.async_bwd_objects = {}
+
+        self.logger = logging.getLogger("msnag")
 
     def set_dataloader(self, dataloader):
         if self.is_first_partition:
@@ -161,13 +170,25 @@ class SinglePartitionRuntime:
         # FIXME: Here is a dummy sequential implementation with dummy args.
         # stage = self.stage
         # num_stages = self.num_stages
-        if self.is_last_partition:
-            return True
-        else:
-            if not (done_bwds < done_fwds):
+
+        POLICY = 'P1'
+
+        if POLICY == 'SEQ':
+            if self.is_last_partition:
                 return True
             else:
+                if not (done_bwds < done_fwds):
+                    return True
+                else:
+                    return False
+        elif POLICY == 'P1':
+            if self.is_last_partition:
+                return True
+            if done_fwds == num_steps:
                 return False
+            allowed_staleness = self.num_stages - 1 - self.stage
+            current_staleness = done_fwds - done_bwds
+            return current_staleness <= allowed_staleness
 
         # return True
 
@@ -188,6 +209,11 @@ class SinglePartitionRuntime:
         self.partition.recompute_and_backward(g, batch_idx)
         self.trainer.step_and_staleness_stats()
 
+        if not (self.is_first_partition):
+            g = self.Partition.get_grad(batch_idx)
+            request_objects = self.comm_handler.send_gradients(g, batch_idx)
+            return request_objects
+
     def run_until_flush(self, num_batches):
         """
         Requires:
@@ -200,17 +226,21 @@ class SinglePartitionRuntime:
         if self.is_first_partition:
             self.dl_iter = iter(self.dataloader)
 
-        num_steps = num_batches if self.is_last_partition else num_batches * 2
-
-        for step_index in range(num_steps):
+        # if not (self.is_last_partition) else num_batches // 2
+        num_steps = num_batches
+        while done_bwds < num_batches:
+            # for step_index in range(num_steps):
             # Act according to some policy
             action_is_fwd = self.policy_scheduler_is_fwd(
                 num_steps, done_bwds, done_fwds)
             if action_is_fwd:
                 sent_request_objects = self.run_batch_forward(done_fwds)
+                self.async_fwd_objects[done_fwds] = sent_request_objects
             else:
                 sent_request_objects = self.run_batch_backward(done_bwds)
-
+                if not (self.is_first_partition):
+                    self.async_bwd_objects[done_bwds] = sent_request_objects
+            # Increase counters
             if self.is_last_partition:
                 done_bwds += 1
                 done_fwds += 1
@@ -218,13 +248,22 @@ class SinglePartitionRuntime:
                 if action_is_fwd:
                     done_fwds += 1
                 else:
-                    done_fwds += 1
+                    done_bwds += 1
 
             # FIXME: we may not want to wait on this yet.
             # TODO: save the object and wait only when truly needed.
-            if sent_request_objects:
-                for i in sent_request_objects:
-                    i.wait()
 
-        # Last one waits
-        time.sleep(3)
+        # TODO: wait on all objects
+        for sent_request_objects in self.async_bwd_objects.values():
+            for i in sent_request_objects:
+                i.wait()
+
+        for sent_request_objects in self.async_fwd_objects.values():
+            for i in sent_request_objects:
+                i.wait()
+
+        self.async_bwd_objects.clear()
+        self.async_fwd_objects.clear()
+
+        self.logger.info(f"Done running until flush stage:{self.stage}")
+        torch.distributed.barrier()

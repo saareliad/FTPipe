@@ -6,7 +6,7 @@ from typing import Tuple, Union
 Tensors = Tuple[Tensor, ...]
 TensorOrTensors = Union[Tensor, Tensors]
 
-__all__ = ['Partition', 'LastPartition']
+__all__ = ['Partition', 'LastPartition', 'FirstPartition']
 
 
 class PartitionRngStasher:
@@ -40,7 +40,7 @@ class PartitionRngStasher:
             torch.cuda.set_rng_state(gpu_rng_state, self.device)
 
     def clear_state(self):
-        self.state = {}
+        self.state.clear()
 
 
 class Partition(nn.Module):
@@ -50,6 +50,7 @@ class Partition(nn.Module):
     saves activations.
     pop happens when we read the gradient.
     """
+    _REQ_GRAD = True
 
     def __init__(self, layers, device, to_device=True):
         """
@@ -84,12 +85,12 @@ class Partition(nn.Module):
 
             with torch.no_grad():
                 if isinstance(x, Tensor):
-                    x.detach_().requires_grad_()
+                    x.detach_().requires_grad_(self._REQ_GRAD)
                     self.input_buffer[micro_batch_idx] = x
                     x = self.layers(x)
                 else:
                     for tensor in x:
-                        tensor.detach_().requires_grad_()
+                        tensor.detach_().requires_grad_(self._REQ_GRAD)
                     self.input_buffer[micro_batch_idx] = x
                     x = self.layers(*x)
             return x
@@ -125,6 +126,31 @@ class Partition(nn.Module):
 
     def backward(self, g, **kw):
         raise NotImplementedError()
+
+
+class FirstPartition(Partition):
+    """ The first partition does not need to record gradients of stashed inputs.
+        This may save some memory.
+    """
+    _REQ_GRAD = False
+
+    def __init__(self, *args, **kw):
+        super(FirstPartition, self).__init__(*args, **kw)
+
+    def recompute_and_backward(self, g, micro_batch_idx):
+        # Unlike normal partition, here we pop the gradients when we read from buffer
+        with torch.random.fork_rng(devices=self.rng_stasher.devices):
+            self.rng_stasher.restore_rng_state(micro_batch_idx)
+            x = self.input_buffer.pop(micro_batch_idx)  # Note: here we pop.
+            if isinstance(x, Tensor):
+                x = self.layers(x)
+                torch.autograd.backward(x, g)
+            else:
+                x = self.layers(*x)
+                torch.autograd.backward(x, g)
+
+    def get_grad(self, micro_batch_idx):
+        return None
 
 
 class LastPartition(Partition):

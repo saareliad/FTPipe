@@ -34,7 +34,7 @@ class CommunicationHandler(object):
         dist.init_process_group(backend)
         assert dist.get_world_size() == world_size
         self.logger.info(f"Initialized process group; backend: {backend}, rank: {rank}, "
-              f"local_rank: {local_rank}, world_size: {world_size}")
+                         f"local_rank: {local_rank}, world_size: {world_size}")
 
     def initialize(self, receive_ranks, send_ranks,
                    tensor_tags, target_tensor_names,

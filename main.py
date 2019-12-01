@@ -325,6 +325,11 @@ def main():
     # For CIFAR10 network
 
     # TODO - we may want to set the device before this...
+    # FIXME:
+    # device = torch.device(f"cuda:{args.local_rank}")
+    # device = torch.device(f"cuda:{0}")
+    # torch.cuda.set_device(device)
+    device = torch.device('cpu')
     train_dl, test_dl = simplified_get_train_test_dl_from_args(args, verbose=False)
     x, y = next(iter(train_dl))
 
@@ -364,12 +369,10 @@ def main():
 
     # FIXME:
     # device = torch.device(f"cuda:{args.local_rank}")
-
     # device = torch.device(f"cuda:{0}")
     # torch.cuda.set_device(device)
-
     device = torch.device('cpu')
-    train_dl, test_dl = simplified_get_train_test_dl_from_args(args)
+    # train_dl, test_dl = simplified_get_train_test_dl_from_args(args, verbose=False)
 
     is_last_partition = args.local_rank == len(configs) - 1  # FIXME
     is_first_partition = args.local_rank == 0  # FIXME:
@@ -385,7 +388,7 @@ def main():
 
     runtime_.set_dataloader(train_dl)  # sets only to first partition
     runtime_.train()
-    runtime_.run_until_flush(1)
+    runtime_.run_until_flush(2)
     # TODO: create partition from config,
 
     # num_ranks = get_num_ranks()
