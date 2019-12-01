@@ -130,6 +130,9 @@ class SinglePartitionRuntime:
             # Can be according to trainer.
             assert len(data) == 2
             x, y = data
+            x = x.to(self.device, non_blocking=True)
+            y = y.to(self.device, non_blocking=True)
+
             x = self.partition(x, batch_idx)
             request_objects = self.comm_handler.send_activations(
                 (*x, y), batch_idx)

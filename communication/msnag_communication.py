@@ -5,9 +5,29 @@ from .util import get_world_size
 
 import logging
 
+from enum import Enum, auto
+
+
+class CommPolicy(Enum):
+    P2P = auto()
+    BCAST = auto()
+
+
 NCCL = 'nccl'
 GLOO = 'gloo'
 MPI = 'mpi'
+
+
+def to_policy(backend, is_cpu):
+    # Assuming MPI is cuda aware.
+    if backend in {NCCL, GLOO}:
+        if is_cpu:
+            return CommPolicy.P2P
+        else:
+            return CommPolicy.BCAST
+
+    if backend == MPI:
+        return CommPolicy.P2P
 
 
 class CommunicationHandler(object):
@@ -26,7 +46,8 @@ class CommunicationHandler(object):
                  num_ranks_in_stage,
                  ranks_in_previous_stage,
                  ranks_in_next_stage,
-                 TOTAL_TAGS
+                 TOTAL_TAGS,
+                 cpu,
                  ):
 
         self.rank = rank
@@ -46,6 +67,7 @@ class CommunicationHandler(object):
         self.ranks_in_next_stage = ranks_in_next_stage
         self.num_ranks_in_next_stage = len(ranks_in_next_stage)
         self.TOTAL_TAGS = TOTAL_TAGS
+        self.comm_policy = to_policy(backend, cpu)
 
         world_size = get_world_size()
 
@@ -116,7 +138,7 @@ class CommunicationHandler(object):
             i for i in self.send_ranks.keys() if not (i in self.target_tensor_names)]
         return self._create_recv_buffers(device, tensor_names, requires_grad=requires_grad)
 
-    def _recv_tensors(self, x, batch_idx, ranks_dict_items):
+    def _recv_tensors_p2p(self, x, batch_idx, ranks_dict_items):
         request_objects = []
         for tensor, (tensor_name, receive_ranks) in zip(x, ranks_dict_items):
             assert len(receive_ranks) == 1
@@ -129,13 +151,13 @@ class CommunicationHandler(object):
             request_objects.append(request_obj)
         return request_objects
 
-    def recv_activations(self, x, batch_idx):
-        return self._recv_tensors(x, batch_idx, self.receive_ranks.items())
+    def recv_activations_p2p(self, x, batch_idx):
+        return self._recv_tensors_p2p(x, batch_idx, self.receive_ranks.items())
 
-    def recv_gradients(self, x, batch_idx):
-        return self._recv_tensors(x, batch_idx, self.grad_rcv_items)
+    def recv_gradients_p2p(self, x, batch_idx):
+        return self._recv_tensors_p2p(x, batch_idx, self.grad_rcv_items)
 
-    def _send_tensors(self, x, batch_idx, ranks_dict_items):
+    def _send_tensors_p2p(self, x, batch_idx, ranks_dict_items):
         request_objects = []
         for tensor, (tensor_name, send_ranks) in zip(x, ranks_dict_items):
             # tag for minibatch idx too
@@ -152,8 +174,74 @@ class CommunicationHandler(object):
 
         return request_objects
 
-    def send_activations(self, x, batch_idx):
-        return self._send_tensors(x, batch_idx, self.send_ranks.items())
+    def send_activations_p2p(self, x, batch_idx):
+        return self._send_tensors_p2p(x, batch_idx, self.send_ranks.items())
+
+    def send_gradients_p2p(self, x, batch_idx):
+        return self._send_tensors_p2p(x, batch_idx, self.grad_send_items)
+
+    def _send_tensors_bcast(self, x, batch_idx, pg):
+        request_objects = []
+        for tensor in x:
+            tensor.detach_()
+            self.logger.info(
+                f"ibcast, (send) src={self.local_rank}, batch_idx={batch_idx}")
+            request_obj = dist.broadcast(
+                tensor, self.local_rank, group=pg, async_op=True)
+            request_objects.append(request_obj)
+        return request_objects
+
+    def _recv_tensors_bcast(self, x, batch_idx, src, pg):
+        # FIXME
+        # FIXME
+        # FIXME
+        # FIXME
+        # FIXME
+        request_objects = []
+        for tensor in x:
+            tensor.detach_()
+            self.logger.info(
+                f"ibcast, (recv), src={src}, batch_idx={batch_idx}")
+            request_obj = dist.broadcast(tensor, src, group=pg, async_op=True)
+            request_objects.append(request_obj)
+        return request_objects
+
+    def send_gradients_bcast(self, x, batch_idx):
+        # TODO support multiple right/left ranks
+        return self._send_tensors_bcast(x, batch_idx, self.my_left_group)
+
+    def send_activations_bcast(self, x, batch_idx):
+        # TODO support multiple right/left ranks
+        return self._send_tensors_bcast(x, batch_idx, self.my_right_group)
+
+    def recv_activations_bcast(self, x, batch_idx):
+        # TODO support multiple right/left ranks
+        return self._recv_tensors_bcast(x, batch_idx, self.ranks_in_previous_stage[0], self.my_left_group)
+
+    def recv_gradients_bcast(self, x, batch_idx):
+        # TODO support multiple right/left ranks
+        return self._recv_tensors_bcast(x, batch_idx, self.ranks_in_next_stage[0], self.my_right_group)
+
+    def recv_gradients(self, x, batch_idx):
+        if self.comm_policy == CommPolicy.P2P:
+            return self.recv_gradients_p2p(x, batch_idx)
+        else:
+            return self.recv_gradients_bcast(x, batch_idx)
+
+    def recv_activations(self, x, batch_idx):
+        if self.comm_policy == CommPolicy.P2P:
+            return self.recv_activations_p2p(x, batch_idx)
+        else:
+            return self.recv_activations_bcast(x, batch_idx)
 
     def send_gradients(self, x, batch_idx):
-        return self._send_tensors(x, batch_idx, self.grad_send_items)
+        if self.comm_policy == CommPolicy.P2P:
+            return self.send_gradients_p2p(x, batch_idx)
+        else:
+            return self.send_gradients_bcast(x, batch_idx)
+
+    def send_activations(self, x, batch_idx):
+        if self.comm_policy == CommPolicy.P2P:
+            return self.send_activations_p2p(x, batch_idx)
+        else:
+            return self.send_activations_bcast(x, batch_idx)

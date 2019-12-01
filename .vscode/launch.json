@@ -1,0 +1,44 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: distributed",
+            "type": "python",
+            "request": "launch",
+            "module": "torch.distributed.launch",
+            "args": [
+                "--nnodes",
+                "1",
+                "--nproc_per_node",
+                "2",
+                "--node_rank",
+                "0",
+                "--master_port",
+                "6003",
+                "main.py",
+                "--cpu"
+            ],
+            "justMyCode": true,
+            "subProcess": true
+        },
+        {
+            "name": "Python: distributed gpu",
+            "type": "python",
+            "request": "launch",
+            "module": "torch.distributed.launch",
+            "args": [
+                "--nnodes",
+                "1",
+                "--nproc_per_node",
+                "2",
+                "--node_rank",
+                "0",
+                "--master_port",
+                "6003",
+                "main.py",
+            ],
+            "justMyCode": false,
+            "subProcess": true
+        },
+    ]
+}

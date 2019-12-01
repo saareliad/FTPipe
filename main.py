@@ -57,7 +57,7 @@ def parse_cli():
                         default='./logs', help="where logs and events go")
 
     parser.add_argument('--cpu', action='store_true', default=False, help="run partition on cpu")
-    parser.add_argument('--num-data-workers', type=int, help='Number of workers to use for dataloading', default=4)
+    parser.add_argument('--num-data-workers', type=int, help='Number of workers to use for dataloading', default=0)
 
     args = parser.parse_args()
 
@@ -77,7 +77,8 @@ def create_comm_handler(args, initialize_args):
         args.distributed_backend,
         args.num_stages,
         args.stage,
-        *initialize_args)
+        *initialize_args,
+        args.cpu)
 
     return comm_handler
 
@@ -324,17 +325,22 @@ def main():
 
     # Here is a dummy for For CIFAR10 network
     # TODO: best practice is env var for choosing gpu
-    device = torch.device('cpu' if args.cpu else f"cuda:{args.local_rank}")  
+    device = torch.device('cpu' if args.cpu else f"cuda:{args.local_rank}")
+    if not args.cpu:
+        torch.cuda.set_device(device)
 
     dl_kw = dict()
     if args.cpu:
         dl_kw['pin_memory'] = False
+    # else:
+    #     dl_kw['pin_memory'] = True  # FIXME
     # TODO: num workers.
     dl_kw['num_workers'] = args.num_data_workers
 
     train_dl, test_dl = simplified_get_train_test_dl_from_args(
         args, verbose=False, **dl_kw)
     x, y = next(iter(train_dl))
+    
 
     # BASE_INPUT_SHAPE = (3, 32, 32)
     # BASE_TARGET_SHAPE = (1,)

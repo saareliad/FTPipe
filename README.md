@@ -3,8 +3,18 @@
 ## Run
 
 ```
-python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_node 2 main.py
+python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_node 2 main.py --cpu
 ```
+
+## Bugs
+
+* gpu bcast not working yet. (some deadlock)
+  * I suspect that a possible problem with gpu bcast vs p2p is that we don't have tags.
+
+## Small TODOs
+
+* timing (per batch)
+* a schedule like pipedream (eliminate bubbles)
 
 ## TODOs
 
