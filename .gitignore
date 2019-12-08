@@ -281,3 +281,5 @@ $RECYCLE.BIN/
 # End of https://www.gitignore.io/api/python,pycharm,windows,osx,linux
 *.cp.pt
 *.out
+
+.vscode/settings.json
