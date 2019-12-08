@@ -28,7 +28,7 @@ def toPolicy(backend, cpu):
     return CommPolicy.BCAST
 
 
-def createBufferConfigs(xs, partitionConfig):
+def createBufferConfigs(xs, partitions_config):
     '''
     performs a forward pass of the partitioned model and records the size and dtype of every data transfer
 
@@ -37,26 +37,27 @@ def createBufferConfigs(xs, partitionConfig):
     xs:
         the input for the model
 
-    partitionConfig:
+    partitions_config:
         the configuration we generated, aka the output of createConfig()
 
     Return:
     -------
     dictionary from tensor name to {size,dtype}
     '''
-    nparts = len(i for i in partitionConfig if isinstance(i, int))
-    bufferConfigs = {}
-
-    ts = dict(zip(partitionConfig['model inputs'], xs))
+    if not isinstance(xs, tuple):
+        xs = (xs,)
+    nparts = len([i for i in partitions_config if isinstance(i, int)])
+    buffer_configs = dict()
+    ts = dict(zip(partitions_config['model inputs'], xs))
 
     for n, t in ts.items():
-        bufferConfigs[n] = {'size': t.shape, 'dtype': t.dtype}
+        buffer_configs[n] = {'size': t.shape, 'dtype': t.dtype}
 
     parts = deque(range(nparts))
     # here we assume a DAG structure and not sequential structure
     while parts:
         idx = parts.popleft()
-        partition = partitionConfig[idx]
+        partition = partitions_config[idx]
         model = partition['model']
         # gather inputs
         inputs = []
@@ -72,17 +73,17 @@ def createBufferConfigs(xs, partitionConfig):
             continue
 
         # move inputs to the model device and forward pass
-        partitionDevice = list(model.Parameters)[0].device
-        inputs = [t.to(partitionDevice) for t in inputs]
+        device = list(model.parameters())[0].device
+        inputs = [t.to(device) for t in inputs]
         outs = model(*inputs)
 
         # update outputs
         for n, o in zip(partition['outputs'], outs):
             ts[n] = o
-            bufferConfigs[n] = {'size': o.shape,
-                                'dtype': o.dtype}
+            buffer_configs[n] = {'size': o.shape,
+                                 'dtype': o.dtype}
 
-    for n, t in zip(partitionConfig['model outputs'], outs):
-        bufferConfigs[n] = {'size': t.shape, 'dtype': t.dtype}
+    for n, t in zip(partitions_config['model outputs'], outs):
+        buffer_configs[n] = {'size': t.shape, 'dtype': t.dtype}
 
-    return bufferConfigs
+    return buffer_configs

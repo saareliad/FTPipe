@@ -1,4 +1,4 @@
-from collections import Counter, deque, defaultdict
+from collections import Counter
 from .util import CommPolicy, toPolicy
 
 import torch.distributed as dist
@@ -8,7 +8,7 @@ import logging
 
 class CommunicationHandler():
     '''
-    a general purpose Comm handler that oly assumes the graph is DAG
+    a general purpose Comm handler that only assumes the graph is DAG
 
         backend:
             one of nccl gloo mpi
@@ -16,10 +16,10 @@ class CommunicationHandler():
         rank:
             the workers group rank
 
-        partitionsConfig:
+        partitions_config:
             the configuration we generated, aka the output of createConfig()
 
-        bufferConfigs:
+        buffer_configs:
             the size and dtype of every transmitted tensor, the output of createBufferConfigs()
 
         cpu:
@@ -30,46 +30,45 @@ class CommunicationHandler():
     # right now we generate configs like 'model inputs'->0 that indicate that partition 0 recives input0
     # the easy solution is to have dedicated processes that will send/recieve the model's input/output tensors so here they will not have a special treatment
 
-    def __init__(self, backend, rank, partitionsConfig, bufferConfigs, cpu=False):
+    def __init__(self, backend, rank, partitions_config, buffer_configs, cpu=False):
         dist.init_process_group(backend)
 
-        policy, inputConfig, outputConfig, totalTags = createCommParams(rank, backend, partitionsConfig,
-                                                                        bufferConfigs, cpu=cpu)
+        policy, input_config, output_config, total_tags = createCommParams(rank, backend, partitions_config,
+                                                                           buffer_configs, cpu=cpu)
 
         self.rank = rank
-        self.inputConfig = inputConfig
-        self.outputConfig = outputConfig
+        self.input_config = input_config
+        self.output_config = output_config
         self.policy = policy
-        self.totalTags = totalTags
-        # what the hell is msnag?
+        self.total_tags = total_tags
         self.logger = logging.getLogger('msnag')
 
         # log the in/out configs
         init_msg = f"Initialized process group; backend: {backend}, rank: {self.rank}, world_size: {dist.get_world_size()}\n"
         input_msg = "inputs info: (name,idx,src):\n"
-        for idx, rank, _, _, name in self.inputConfig:
+        for idx, rank, _, _, name in self.input_config:
             input_msg += f"{name}, {idx}, {rank}\n"
         output_msg = "\noutputs info: (name,idx,dest)\n"
-        for idx, dest, _, _, name in self.outputConfig:
+        for idx, dest, _, _, name in self.output_config:
             output_msg += f"{name}, {idx}, {dest}\n"
 
         self.logger.info(f"{init_msg+input_msg+output_msg}")
 
     # one activation to many partitions
     # does not need to match partition output order but indexes must match
-    def sendActivations(self, xs, batchIdx, block=False):
+    def sendActivations(self, xs, batch_idx, block=False):
         requests = []
-        for idx, rank, _, tagOrGroup, name in self.outputConfig:
+        for idx, rank, _, tag_or_group, name in self.output_config:
             x = xs[idx].detach_()
             if self.policy is CommPolicy.P2P:
                 request = dist.isend(x, rank,
-                                     tag=tagOrGroup+batchIdx*self.totalTags)
+                                     tag=tag_or_group+batch_idx*self.total_tags)
             else:
                 request = dist.broadcast(x, self.rank,
-                                         group=tagOrGroup, async_op=True)
+                                         group=tag_or_group, async_op=True)
             requests.append(request)
             self.logger.info(
-                f"rank:{self.rank} sent activation of batch:{batchIdx}, name:{name}, dest:{rank}")
+                f"rank:{self.rank} sent activation of batch:{batch_idx}, name:{name}, dest:{rank}")
 
         if block:
             for r in requests:
@@ -79,19 +78,19 @@ class CommunicationHandler():
 
     # one gradient to one partition
     # must match input order
-    def sendGradients(self, gs, batchIdx, block=False):
+    def sendGradients(self, gs, batch_idx, block=False):
         requests = []
-        for idx, rank, _, tagOrGroup, name in self.inputConfig:
+        for idx, rank, _, tag_or_group, name in self.input_config:
             g = gs[idx]
             if self.policy is CommPolicy.P2P:
                 request = dist.isend(g, rank,
-                                     tag=tagOrGroup+batchIdx*self.totalTags)
+                                     tag=tag_or_group+batch_idx*self.total_tags)
             else:
                 request = dist.broadcast(g, self.rank,
-                                         group=tagOrGroup, async_op=True)
+                                         group=tag_or_group, async_op=True)
             requests.append(request)
             self.logger.info(
-                f"rank:{self.rank} sent gradients of batch:{batchIdx}, name:{name}, dest:{rank}")
+                f"rank:{self.rank} sent gradients of batch:{batch_idx}, name:{name}, dest:{rank}")
 
         if block:
             for r in requests:
@@ -101,18 +100,18 @@ class CommunicationHandler():
 
     # one activation from one partition
     # must match partition input order
-    def recvActivations(self, batchIdx, block=False):
+    def recvActivations(self, batch_idx, block=False):
         requests = []
-        for _, rank, buffer, tagOrGroup, name in self.inputConfig:
+        for _, rank, buffer, tag_or_group, name in self.input_config:
             if self.policy is CommPolicy.P2P:
                 request = dist.irecv(buffer, rank,
-                                     tag=tagOrGroup+batchIdx*self.totalTags)
+                                     tag=tag_or_group+batch_idx*self.total_tags)
             else:
                 request = dist.broadcast(buffer, rank,
-                                         group=tagOrGroup, async_op=True)
+                                         group=tag_or_group, async_op=True)
             requests.append(request)
             self.logger.info(
-                f"rank:{self.rank} received activations of batch:{batchIdx}, name:{name}, src:{rank}")
+                f"rank:{self.rank} received activations of batch:{batch_idx}, name:{name}, src:{rank}")
 
         if block:
             for r in requests:
@@ -122,18 +121,18 @@ class CommunicationHandler():
 
     # one gradient from many partitions
     # needs to be in order
-    def recvGradients(self, batchIdx, block=False):
+    def recvGradients(self, batch_idx, block=False):
         requests = []
-        for _, rank, buffer, tagOrGroup, name in self.outputConfig:
+        for _, rank, buffer, tag_or_group, name in self.output_config:
             if self.policy is CommPolicy.P2P:
                 request = dist.irecv(buffer, rank,
-                                     tag=tagOrGroup+batchIdx*self.totalTags)
+                                     tag=tag_or_group+batch_idx*self.total_tags)
             else:
                 request = dist.broadcast(buffer, rank,
-                                         group=tagOrGroup, async_op=True)
+                                         group=tag_or_group, async_op=True)
             requests.append(request)
             self.logger.info(
-                f"rank:{self.rank} received gradients of batch:{batchIdx}, name:{name}, src:{rank}")
+                f"rank:{self.rank} received gradients of batch:{batch_idx}, name:{name}, src:{rank}")
 
         if block:
             for r in requests:
@@ -142,8 +141,8 @@ class CommunicationHandler():
         return requests
 
 
-def createCommParams(rank, backend, partitionConfig, bufferConfigs, cpu=False):
-    ''' computes inputConfig, outputConfig, totalTags that are needed for the CommunicationHandler
+def createCommParams(rank, backend, partitions_config, buffer_configs, cpu=False):
+    ''' computes input_config, output_config, total_tags that are needed for the CommunicationHandler
 
         Parameters:
         -----------
@@ -153,10 +152,10 @@ def createCommParams(rank, backend, partitionConfig, bufferConfigs, cpu=False):
         backend:
             the distributed backend used one of [mpi,nccl,gloo]
 
-        partitionConfig:
+        partitions_config:
             the configuration we generated, aka the output of createConfig()
 
-        bufferConfigs:
+        buffer_configs:
             the size and dtype of every transmitted tensor, the output of createBufferConfigs()
 
         cpu:
@@ -165,60 +164,61 @@ def createCommParams(rank, backend, partitionConfig, bufferConfigs, cpu=False):
     policy = toPolicy(backend, cpu)
 
     # for each tensor (including inputs/outputs) how many uses it has
-    uses = Counter(k for p, config in partitionConfig.items()
+    uses = Counter(k for p, config in partitions_config.items()
                    if isinstance(p, int) for k in config['inputs'])
-    uses.update(partitionConfig['model outputs'])
+    uses.update(partitions_config['model outputs'])
 
     # total number of data tansfers
-    totalTags = sum(uses.values())
+    total_tags = sum(uses.values())
 
     # map between tensor and it's creating rank
-    creators = ({o: r for r, c in partitionConfig.items()
+    creators = ({o: r for r, c in partitions_config.items()
                  if isinstance(r, int) for o in c['outputs']})
 
-    for i in partitionConfig['model inputs']:
+    for i in partitions_config['model inputs']:
         creators[i] = 'model inputs'
 
     # outgoing edges (src dest name)
-    outgoingEdges = []
-    for r, config in partitionConfig.items():
+    outgoing_edges = []
+    for r, config in partitions_config.items():
         if isinstance(r, int):
             for i in config['inputs']:
-                outgoingEdges.append((creators[i], r, i))
-    for o in partitionConfig['model outputs']:
-        outgoingEdges.append((creators[o], 'model outputs', o))
+                outgoing_edges.append((creators[i], r, i))
+    for o in partitions_config['model outputs']:
+        outgoing_edges.append((creators[o], 'model outputs', o))
 
     # create input/output configs return only edges relevant to given rank
     # creates all process groups if necessary
-    inputConfig = []
-    outputConfig = []
-    for tag, edge in enumerate(outgoingEdges):
+    input_config = []
+    output_config = []
+    for tag, edge in enumerate(outgoing_edges):
         src, dest, name = edge
 
-        output_idx = partitionConfig[src]
+        output_idx = partitions_config[src]
         if isinstance(output_idx, dict):
             output_idx = output_idx['outputs'].index(name)
         else:
             output_idx = output_idx.index(name)
 
-        input_idx = partitionConfig[dest]
+        input_idx = partitions_config[dest]
         if isinstance(input_idx, dict):
             input_idx = input_idx['inputs'].index(name)
         else:
             input_idx = input_idx.index(name)
 
         if policy is CommPolicy.P2P:
-            tagOrGroup = tag
+            tag_or_group = tag
         else:
-            tagOrGroup = dist.new_group(ranks=[src, dest], backend=backend)
+            # TODO possibly problematic
+            tag_or_group = dist.new_group(ranks=[src, dest], backend=backend)
 
         # edge data
         edge = {'src': src, "src_idx": output_idx, 'dest': dest,
-                'dest_idx': input_idx, "tagOrGroup": tagOrGroup, 'name': name}
+                'dest_idx': input_idx, "tag_or_group": tag_or_group, 'name': name}
 
         # allocate buffer only if necessary
         if rank in [src, dest]:
-            info = bufferConfigs[name]
+            info = buffer_configs[name]
             if cpu or isinstance(rank, str):
                 device = torch.device('cpu')
             else:
@@ -228,41 +228,15 @@ def createCommParams(rank, backend, partitionConfig, bufferConfigs, cpu=False):
         # add only if relevant
         if rank == src:
             outEdge = (edge['src_idx'], edge['dest'],
-                       buffer, edge['tagOrGroup'], edge['name'])
-            outputConfig.append(outEdge)
+                       buffer, edge['tag_or_group'], edge['name'])
+            output_config.append(outEdge)
         elif rank == dest:
             inEdge = (edge['dest_idx'], edge['src'],
-                      buffer, edge['tagOrGroup'], edge['name'])
-            inputConfig.append(inEdge)
+                      buffer, edge['tag_or_group'], edge['name'])
+            input_config.append(inEdge)
 
     # sort by idx
-    inputConfig = sorted(inputConfig, key=lambda edge: edge[0])
-    outputConfig = sorted(outputConfig, key=lambda edge: edge[0])
+    input_config = sorted(input_config, key=lambda edge: edge[0])
+    output_config = sorted(output_config, key=lambda edge: edge[0])
 
-    return policy, inputConfig, outputConfig, totalTags
-
-
-if __name__ == "__main__":
-    partitionConfig = {'model inputs': ['input0'],
-                       0: {'inputs': ['input0'], 'outputs': ['i0', 'i1']},
-                       1: {'inputs': ['i1'], 'outputs': ['i2']},
-                       2: {'inputs': ['i1'], 'outputs': ['i3', 'i4']},
-                       3: {'inputs': ['i2', 'i3', 'i4'], 'outputs': ['i5']},
-                       4: {'inputs': ['i0', 'i5'], 'outputs': ['output0']},
-                       'model outputs': ['output0']
-                       }
-    for pIdx in list(range(5))+['model inputs', 'model outputs']:
-        print(f"partiton {pIdx}")
-        i, o, t = createCommParams(
-            pIdx, 'mpi', partitionConfig, defaultdict(lambda: "TODO size dtype"))
-
-        print("inputs")
-        for e in i:
-            print(e)
-
-        print("outputs")
-        for e in o:
-            print(e)
-
-        print(f"totalTags {t}")
-        print()
+    return policy, input_config, output_config, total_tags
