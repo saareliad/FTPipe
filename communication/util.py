@@ -71,7 +71,11 @@ def createBufferConfigs(xs, partitionConfig):
             parts.append(idx)
             continue
 
+        # move inputs to the model device and forward pass
+        partitionDevice = list(model.Parameters)[0].device
+        inputs = [t.to(partitionDevice) for t in inputs]
         outs = model(*inputs)
+
         # update outputs
         for n, o in zip(partition['outputs'], outs):
             ts[n] = o
