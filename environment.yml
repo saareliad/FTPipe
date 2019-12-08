@@ -1,0 +1,31 @@
+name: msnag
+channels:
+  - saareliad # should be explicitly set first, to gain priority over pytorch, however anaconda got channel priority problems (*)
+  - pytorch
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.7
+  - pip
+#  - pytorch # (*) therefore I removed this, and add script in makefile.
+  - se-msnag1 # cuda aware openmpi
+  - torchvision
+  - cudatoolkit
+  - jupyterlab
+  - numpy
+  - scikit-learn
+  - ipython
+  - jupyter
+  - pandas
+  - cython
+  - pytest
+  - tqdm
+  - pip:
+    - matplotlib
+    - nbmerge
+    - pytest-xdist
+    - flake8
+    - autopep8
+    - rope
+    - click
+    - transformers
