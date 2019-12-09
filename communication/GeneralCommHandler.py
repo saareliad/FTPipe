@@ -26,10 +26,6 @@ class CommunicationHandler():
             whether to use CPU tensors instead of CUDA tensors
     '''
 
-    # TODO decide if this should handle the model inputs/outputs?
-    # right now we generate configs like 'model inputs'->0 that indicate that partition 0 recives input0
-    # the easy solution is to have dedicated processes that will send/recieve the model's input/output tensors so here they will not have a special treatment
-
     def __init__(self, backend, rank, partitions_config, buffer_configs, cpu=False):
         dist.init_process_group(backend)
 
@@ -46,8 +42,8 @@ class CommunicationHandler():
         # log the in/out configs
         init_msg = f"Initialized process group; backend: {backend}, rank: {self.rank}, world_size: {dist.get_world_size()}\n"
         input_msg = "inputs info: (name,idx,src):\n"
-        for idx, rank, _, _, name in self.input_config:
-            input_msg += f"{name}, {idx}, {rank}\n"
+        for idx, src, _, _, name in self.input_config:
+            input_msg += f"{name}, {idx}, {src}\n"
         output_msg = "\noutputs info: (name,idx,dest)\n"
         for idx, dest, _, _, name in self.output_config:
             output_msg += f"{name}, {idx}, {dest}\n"
@@ -175,8 +171,13 @@ def createCommParams(rank, backend, partitions_config, buffer_configs, cpu=False
     creators = ({o: r for r, c in partitions_config.items()
                  if isinstance(r, int) for o in c['outputs']})
 
+    # TODO for now assume that there are 2 more ranks, an input rank that feeds samples and an output rank that pulls results
+    input_rank = max(creators.values()) + 1
+    output_rank = input_rank + 1
+    translate = {input_rank: "model inputs", output_rank: "model outputs"}
+
     for i in partitions_config['model inputs']:
-        creators[i] = 'model inputs'
+        creators[i] = input_rank
 
     # outgoing edges (src dest name)
     outgoing_edges = []
@@ -185,7 +186,7 @@ def createCommParams(rank, backend, partitions_config, buffer_configs, cpu=False
             for i in config['inputs']:
                 outgoing_edges.append((creators[i], r, i))
     for o in partitions_config['model outputs']:
-        outgoing_edges.append((creators[o], 'model outputs', o))
+        outgoing_edges.append((creators[o], output_rank, o))
 
     # create input/output configs return only edges relevant to given rank
     # creates all process groups if necessary
@@ -194,17 +195,15 @@ def createCommParams(rank, backend, partitions_config, buffer_configs, cpu=False
     for tag, edge in enumerate(outgoing_edges):
         src, dest, name = edge
 
-        output_idx = partitions_config[src]
-        if isinstance(output_idx, dict):
-            output_idx = output_idx['outputs'].index(name)
+        if src >= input_rank:
+            output_idx = partitions_config[translate[src]].index(name)
         else:
-            output_idx = output_idx.index(name)
+            output_idx = partitions_config[src]['outputs'].index(name)
 
-        input_idx = partitions_config[dest]
-        if isinstance(input_idx, dict):
-            input_idx = input_idx['inputs'].index(name)
+        if dest >= input_rank:
+            input_idx = partitions_config[translate[dest]].index(name)
         else:
-            input_idx = input_idx.index(name)
+            input_idx = partitions_config[dest]['inputs'].index(name)
 
         if policy is CommPolicy.P2P:
             tag_or_group = tag
@@ -217,10 +216,15 @@ def createCommParams(rank, backend, partitions_config, buffer_configs, cpu=False
                 'dest_idx': input_idx, "tag_or_group": tag_or_group, 'name': name}
 
         # allocate buffer only if necessary
+        # TODO for now assume that input rank is on device:0 and output rank is on the last device
         if rank in [src, dest]:
             info = buffer_configs[name]
-            if cpu or isinstance(rank, str):
+            if cpu:
                 device = torch.device('cpu')
+            elif rank == input_rank:
+                device = torch.device("cuda:0")
+            elif rank == output_rank:
+                device = torch.device(f"cuda:{input_rank-1}")
             else:
                 device = torch.device(f'cuda:{rank}')
             buffer = torch.empty(device=device, **info)

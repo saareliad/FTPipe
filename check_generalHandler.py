@@ -15,7 +15,7 @@ if __name__ == "__main__":
         print(k, v)
     print()
 
-    for pIdx in list(range(5))+['model inputs', 'model outputs']:
+    for pIdx in list(range(5))+[5, 6]:
         print(f"partiton {pIdx}")
         policy, i, o, t = createCommParams(pIdx, 'mpi', config,
                                            buffer_config, cpu=True)
