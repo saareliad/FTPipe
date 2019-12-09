@@ -285,43 +285,9 @@ def create_distributed_communcation_context(args, config, stage, stage_to_rank_m
 
     return comm_args, shapes
 
-    def init_proccess_groups(args, stage_to_rank_map=None):
-        """ Initialize all groups in the same order for every worker.
-            A group will be created for stages with more thank one rank.
-
-            Returns: groups list
-        """
-        def ranks_in_stage(stage):
-            if stage_to_rank_map:
-                return stage_to_rank_map[stage]
-            else:
-                return [stage]
-
-        groups = []
-        for stage in range(args.num_stages):
-            ranks = ranks_in_stage(stage)
-            if len(ranks) > 1:
-                groups.append(dist.new_group(ranks=ranks))
-            else:
-                groups.append(None)
-
-        # group = groups[stage]
-        return groups
-
 
 def to_tuple(x):
     return x if isinstance(x, tuple) else (x,)
-
-
-def create_random_sample(dataset, batch_size):
-    # TODO: continue
-
-    if dataset == 'cifar10' or dataset == 'cifar100':
-        sample = torch.randn(batch_size, 3, 32, 32)
-    elif dataset == 'imagenet':
-        sample = torch.randn(batch_size, 3, 224, 224)
-
-    return sample
 
 
 def main():
@@ -369,15 +335,16 @@ def main():
         dl_kw['pin_memory'] = False
     # else:
     #     dl_kw['pin_memory'] = True  # FIXME
-    # TODO: num workers.
+
     dl_kw['num_workers'] = args.num_data_workers
 
     train_dl, test_dl = simplified_get_train_test_dl_from_args(
         args, verbose=False, **dl_kw)
-    x, y = next(iter(train_dl))
 
-    # BASE_INPUT_SHAPE = (3, 32, 32)
-    # BASE_TARGET_SHAPE = (1,)
+    # TODO: do the following block generically and automatically using tasks.
+    # May need to extend tasks a little to produce all targets, etc.
+    # Will be easier when we work we precise example from NLP which is different from CV.
+    x, y = next(iter(train_dl))
     BASE_INPUT_SHAPE = x.shape[1:]
     BASE_TARGET_SHAPE = y.shape[1:]
 
