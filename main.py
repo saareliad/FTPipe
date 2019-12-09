@@ -8,6 +8,7 @@ import torch.distributed as dist
 from collections import OrderedDict
 from misc.datasets import add_dataset_argument, simplified_get_train_test_dl_from_args
 from misc.filelogger import FileLogger
+import os
 
 
 def parse_cli():
@@ -35,7 +36,7 @@ def parse_cli():
     #                     help='train model in fp16 precision')
 
     parser.add_argument('--distributed_backend',
-                        choices=['gloo', 'nccl', 'mpi'], default='gloo', type=str,
+                        choices=['gloo', 'nccl', 'mpi'], default='mpi', type=str,
                         help='distributed backend to use')
 
     #
@@ -64,9 +65,25 @@ def parse_cli():
     return args
 
 
+def parse_env_vars(args):
+    """
+    Parses env vars (e.g from mpirun) and push them into args (overriding).
+    This allows completing some "incomplete" cli-argument parsing.
+
+    Requires:
+        args = parse_cli()
+
+    References:
+        https://www.open-mpi.org/faq/?category=running#mpi-environmental-variables
+    """
+
+    if args.distributed_backend == 'mpi':
+        args.rank = int(os.environ['OMPI_COMM_WORLD_RANK'])
+        args.local_rank = int(os.environ['OMPI_COMM_WORLD_LOCAL_RANK'])
+        args.world_size = int(os.environ['OMPI_COMM_WORLD_SIZE'])
+
 def assert_args(args):
     pass
-
 
 def create_comm_handler(args, initialize_args):
 
@@ -290,6 +307,7 @@ def create_random_sample(dataset, batch_size):
 
 def main():
     args = parse_cli()
+    parse_env_vars(args)
 
     # log_fn = f'asyncPipelineLog_{args.local_rank}.log'
     # open(log_fn, 'w').close()
@@ -298,9 +316,9 @@ def main():
     # logging.getLogger().addHandler(logging.StreamHandler())
 
     local_rank = args.local_rank
-    global_rank = util.get_global_rank()
+    # global_rank = util.get_global_rank(args.distributed_backend)
     # max_rank = util.get_world_size()
-    logger = FileLogger(args.logdir, global_rank=global_rank,
+    logger = FileLogger(args.logdir, global_rank=args.rank,
                         local_rank=local_rank, name='msnag')
     assert_args(args)
     configs = models.get_partitioning(args.model, model_instance=None)

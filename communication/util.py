@@ -4,14 +4,20 @@ from enum import Enum, auto
 from collections import deque
 
 
-def get_world_size() -> int:
+def get_world_size(backend=None) -> int:
     """Returns world size (from env), or 1 if not set"""
-    return int(os.environ.get('WORLD_SIZE', 1))
+    if backend != 'mpi':
+        return int(os.environ.get('WORLD_SIZE', 1))
+    else:
+        return int(os.environ.get('OMPI_COMM_WORLD_SIZE', 1))
 
 
-def get_global_rank() -> int:
+def get_global_rank(backend=None) -> int:
     """Returns global rank (from env), or 0 if not set"""
-    return int(os.environ.get('RANK', 0))
+    if backend != 'mpi':
+        return int(os.environ.get('RANK', 0))
+    else:
+        return int(os.environ.get('OMPI_COMM_WORLD_RANK',0))
 
 
 class CommPolicy(Enum):

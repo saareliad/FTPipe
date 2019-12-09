@@ -11,8 +11,22 @@ make env
 
 ## Run
 
+### MPI:
+
+cuda aware openmpi:
 ```
-python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_node 2 main.py --cpu
+mpirun -np 2 python main.py
+```
+
+### Via torch.distributed.launch model
+
+Not supported. To be removed.
+
+* will not work for MPI backend.
+* (NOTE) nccl/gloo does broadcasting which we do not support yet.
+
+```
+python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_node 2 main.py --cpu --distributed_backend gloo
 ```
 
 ## Bugs
@@ -38,6 +52,11 @@ python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_nod
 
 * Support multi node after everything works.
 * later change `batch_idx` to `micro_batch_index` to be consistent with the paper.
+
+## References:
+
+[running with mpi](https://www.open-mpi.org/faq/?category=running)
+especially see [mpi-env-vars](https://www.open-mpi.org/faq/?category=running#mpi-environmental-variables).
 
 ## Crazy ideas
 
