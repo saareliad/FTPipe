@@ -1,8 +1,8 @@
 import torch
 from models.normal.dummyDAG import DummyDAG
 from models.partitioned.dDAG import createConfig
-from communication.util import createBufferConfigs
-from communication.GeneralCommHandler import CommunicationHandler, createCommParams
+from pipeline.util import createBufferConfigs
+from pipeline.GeneralCommHandler import CommunicationHandler, createCommParams
 
 if __name__ == "__main__":
     # visual check to see if the config turns out as intended

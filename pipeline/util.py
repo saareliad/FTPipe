@@ -25,7 +25,7 @@ class CommPolicy(Enum):
     BCAST = auto()
 
 
-def toPolicy(backend, cpu):
+def to_policy(backend, cpu):
     assert backend in {'nccl', 'gloo', 'mpi'}
 
     if backend == 'mpi' or cpu:
@@ -34,7 +34,7 @@ def toPolicy(backend, cpu):
     return CommPolicy.BCAST
 
 
-def createBufferConfigs(xs, partitions_config):
+def create_buffer_configs(xs, partitions_config):
     '''
     performs a forward pass of the partitioned model and records the size and dtype of every data transfer
 

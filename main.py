@@ -1,6 +1,8 @@
 import argparse
-from communication import CommunicationHandler
-from communication import SinglePartitionManager
+# import pipeline
+from pipeline import CommunicationHandler
+from pipeline import SinglePartitionManager
+
 import models
 import numpy as np
 import torch

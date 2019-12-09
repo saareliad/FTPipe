@@ -1,10 +1,24 @@
 
 import torch
 import torch.distributed as dist
-from .util import get_world_size
+from .util import get_world_size  # , CommPolicy, to_policy
+from enum import Enum, auto
 
 import logging
-from .util import CommPolicy, to_policy
+
+
+class CommPolicy(Enum):
+    P2P = auto()
+    BCAST = auto()
+
+
+def to_policy(backend, cpu):
+    assert backend in {'nccl', 'gloo', 'mpi'}
+
+    if backend == 'mpi' or cpu:
+        return CommPolicy.P2P
+
+    return CommPolicy.BCAST
 
 
 class CommunicationHandler(object):
