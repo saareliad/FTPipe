@@ -1,59 +1,18 @@
 import time
 import torch
 import logging
+from typing import Dict
 
 from . import CommunicationHandler
 from .partition import Partition, LastPartition, FirstPartition
-
-from typing import Dict
-
-
-class DummyTrainer:
-    """ just for the flow.. .later replace with one of my real full trainers """
-
-    def __init__(self, model):
-        self.loss_fn = torch.nn.CrossEntropyLoss()
-        self.optimizer = torch.optim.SGD(model.parameters(), 0.1, 0.9)
-
-        # Stats
-        self.total_loss = 0
-        self.total_num_correct = 0
-
-    def do_your_job(self, x, y, zero_grad=True):
-        """
-        Loss
-        Backward
-        step
-        stats
-
-        zero_grad parameter can be used later for grad accumulations...
-        """
-        y_pred = torch.argmax(x, 1)
-        loss = self.loss_fn(x, y)
-        loss.backward()  # this does backward() only for the last partition
-        num_correct = torch.sum(y == y_pred)
-        # Take optimization step
-        self.optimizer.step()
-        # Save stats
-        self.total_loss += loss.item()
-        self.total_num_correct += num_correct.item()
-
-        if zero_grad:
-            self.optimizer.zero_grad()
-
-    def step_and_staleness_stats(self, zero_grad=True):
-        # TODO: implement later
-        self.optimizer.step()
-        if zero_grad:
-            self.optimizer.zero_grad()
+from .training.interface import AnyTrainer
 
 
 class SinglePartitionManager:
     # FIXME: to the partitionion class we use...
     def __init__(self, stage, configs: Dict, partition: torch.nn.Module, comm_handler: CommunicationHandler,
                  training_tensor_shapes, eval_tensor_shapes,
-                 device, is_last_partition, is_first_partition,
-                 trainer=None):
+                 device, is_last_partition, is_first_partition):
 
         # self.split_dim = split_dim
         # self.input_names = configs.pop('model inputs')
@@ -79,14 +38,16 @@ class SinglePartitionManager:
         self.fwd_rcev_buffers = None
         self.bwd_rcev_buffers = None
 
-        self.trainer = trainer if not (
-            trainer is None) else DummyTrainer(self.partition)
+        self.trainer = None
 
         # Async handle objects
         self.async_fwd_objects = {}
         self.async_bwd_objects = {}
 
         self.logger = logging.getLogger("msnag")
+
+    def set_trainer(self, trainer: AnyTrainer):
+        self.trainer = trainer
 
     def set_dataloader(self, dataloader):
         if self.is_first_partition:
@@ -209,7 +170,7 @@ class SinglePartitionManager:
             obj.wait()
 
         self.partition.recompute_and_backward(g, batch_idx)
-        self.trainer.step_and_staleness_stats()
+        self.trainer.step_on_computed_grads()
 
         if not (self.is_first_partition):
             g = self.Partition.get_grad(batch_idx)

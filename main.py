@@ -2,7 +2,7 @@ import argparse
 # import pipeline
 from pipeline import CommunicationHandler
 from pipeline import SinglePartitionManager
-
+from pipeline.training.dummy_trainer import DummyTrainer
 import models
 import numpy as np
 import torch
@@ -63,6 +63,8 @@ def parse_cli():
                         default=False, help="run partition on cpu")
     parser.add_argument('--num-data-workers', type=int,
                         help='Number of workers to use for dataloading', default=0)
+    
+    parser.add_argument('--trainer', help='Trainer use', choices='dummy')
 
     args = parser.parse_args()
 
@@ -392,14 +394,17 @@ def main():
 
     training_tensor_shapes, eval_tensor_shapes = shapes
 
-    trainer = None  # TODO...
+    trainer_cls = DummyTrainer  # TODO...
 
     partition = SinglePartitionManager(
         stage,
         configs, configs[stage]['model'],
         comm_handler, training_tensor_shapes,
         eval_tensor_shapes,
-        device, is_last_partition, is_first_partition, trainer=trainer)
+        device, is_last_partition, is_first_partition)
+
+    trainer = trainer_cls(partition.partition)
+    partition.set_trainer(trainer)
 
     partition.set_dataloader(train_dl)  # sets only to first partition
     partition.train()
