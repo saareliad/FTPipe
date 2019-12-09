@@ -1,6 +1,6 @@
 import argparse
 from communication import CommunicationHandler
-from communication import runtime, util
+from communication import SinglePartitionManager
 import models
 import numpy as np
 import torch
@@ -57,8 +57,10 @@ def parse_cli():
     parser.add_argument('--logdir', type=str,
                         default='./logs', help="where logs and events go")
 
-    parser.add_argument('--cpu', action='store_true', default=False, help="run partition on cpu")
-    parser.add_argument('--num-data-workers', type=int, help='Number of workers to use for dataloading', default=0)
+    parser.add_argument('--cpu', action='store_true',
+                        default=False, help="run partition on cpu")
+    parser.add_argument('--num-data-workers', type=int,
+                        help='Number of workers to use for dataloading', default=0)
 
     args = parser.parse_args()
 
@@ -82,8 +84,10 @@ def parse_env_vars(args):
         args.local_rank = int(os.environ['OMPI_COMM_WORLD_LOCAL_RANK'])
         args.world_size = int(os.environ['OMPI_COMM_WORLD_SIZE'])
 
+
 def assert_args(args):
     pass
+
 
 def create_comm_handler(args, initialize_args):
 
@@ -309,15 +313,7 @@ def main():
     args = parse_cli()
     parse_env_vars(args)
 
-    # log_fn = f'asyncPipelineLog_{args.local_rank}.log'
-    # open(log_fn, 'w').close()
-    # logging.basicConfig(
-    #     filename=log_fn, level=logging.DEBUG, format='%(relativeCreated)6d %(message)s')
-    # logging.getLogger().addHandler(logging.StreamHandler())
-
     local_rank = args.local_rank
-    # global_rank = util.get_global_rank(args.distributed_backend)
-    # max_rank = util.get_world_size()
     logger = FileLogger(args.logdir, global_rank=args.rank,
                         local_rank=local_rank, name='msnag')
     assert_args(args)
@@ -358,7 +354,6 @@ def main():
     train_dl, test_dl = simplified_get_train_test_dl_from_args(
         args, verbose=False, **dl_kw)
     x, y = next(iter(train_dl))
-    
 
     # BASE_INPUT_SHAPE = (3, 32, 32)
     # BASE_TARGET_SHAPE = (1,)
@@ -397,16 +392,16 @@ def main():
 
     trainer = None  # TODO...
 
-    runtime_ = runtime.SinglePartitionRuntime(
+    partition = SinglePartitionManager(
         stage,
         configs, configs[stage]['model'],
         comm_handler, training_tensor_shapes,
         eval_tensor_shapes,
         device, is_last_partition, is_first_partition, trainer=trainer)
 
-    runtime_.set_dataloader(train_dl)  # sets only to first partition
-    runtime_.train()
-    runtime_.run_until_flush(2)
+    partition.set_dataloader(train_dl)  # sets only to first partition
+    partition.train()
+    partition.run_until_flush(2)
     # TODO: create partition from config,
 
     # num_ranks = get_num_ranks()

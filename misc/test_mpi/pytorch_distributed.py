@@ -2,7 +2,6 @@ import os
 import socket
 import torch
 import torch.distributed as dist
-from torch.multiprocessing import Process
 
 
 def run(rank, size, hostname):

@@ -4,38 +4,7 @@ import torch.distributed as dist
 from .util import get_world_size
 
 import logging
-
-from enum import Enum, auto
-
-
-class CommPolicy(Enum):
-    P2P = auto()
-    BCAST = auto()
-
-
-def to_policy(backend, cpu):
-    assert backend in {'nccl', 'gloo', 'mpi'}
-
-    if backend == 'mpi' or cpu:
-        return CommPolicy.P2P
-
-    return CommPolicy.BCAST
-
-# def to_policy(backend, is_cpu):
-# NCCL = 'nccl'
-# GLOO = 'gloo'
-# MPI = 'mpi'
-#     # Assuming MPI is cuda aware.
-#     if backend in {NCCL, GLOO}:
-#         if is_cpu:
-#             return CommPolicy.P2P
-#         else:
-#             return CommPolicy.BCAST
-#     elif backend == MPI:
-#         return CommPolicy.P2P
-#     else:
-#         # shouldn't happen, guarded by "argparse choices"
-#         raise ValueError(f"Unknown backend {backend}")
+from .util import CommPolicy, to_policy
 
 
 class CommunicationHandler(object):
@@ -85,7 +54,6 @@ class CommunicationHandler(object):
         # dist.init_process_group(backend, rank=rank, world_size=world_size)
         #  timeout=datetime.timedelta(seconds=18),
         # , init_method="env://"
-        #nit_process(0, 0, run, backend='mpi')
         dist.init_process_group(backend)
         assert dist.get_world_size() == world_size
         self.logger.info(f"Initialized process group; backend: {backend}, rank: {rank}, "

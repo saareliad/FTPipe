@@ -1,4 +1,3 @@
-
 import time
 import torch
 import logging
@@ -49,7 +48,7 @@ class DummyTrainer:
             self.optimizer.zero_grad()
 
 
-class SinglePartitionRuntime:
+class SinglePartitionManager:
     # FIXME: to the partitionion class we use...
     def __init__(self, stage, configs: Dict, partition: torch.nn.Module, comm_handler: CommunicationHandler,
                  training_tensor_shapes, eval_tensor_shapes,
