@@ -19,6 +19,7 @@ python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_nod
 
 * gpu bcast not working yet. (some deadlock)
   * I suspect that a possible problem with gpu bcast vs p2p is that we don't have tags.
+* Note/Bug: may need to manually do ```kill -9 <PID>``` in case of errors to kill workers.
 
 ## Small TODOs
 

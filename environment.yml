@@ -8,8 +8,8 @@ dependencies:
   - python=3.7
   - pip
 #  - pytorch # (*) therefore I removed this, and add script in makefile.
+#  - torchvision # Remove it too, as it requires pytorch...
   - se-msnag1 # cuda aware openmpi
-  - torchvision
   - cudatoolkit
   - jupyterlab
   - numpy
