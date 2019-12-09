@@ -2,7 +2,12 @@ import argparse
 # import pipeline
 from pipeline import CommunicationHandler
 from pipeline import SinglePartitionManager
-from pipeline.training.dummy_trainer import DummyTrainer
+
+# from pipeline.training.dummy_trainer import DummyTrainer
+# from pipeline.tasks import CVTask
+from pipeline.training import AVAILABLE_TRAINERS
+from pipeline.tasks import AVAILABLE_TASKS
+
 import models
 import numpy as np
 import torch
@@ -51,6 +56,7 @@ def parse_cli():
     parser.add_argument('--bs-test', type=int, help='Test batch size', default=128,
                         metavar='BT')
 
+    # should be like `trainer` and `task` but I left it like this.
     add_dataset_argument(parser)
 
     # parser.add_argument('--seed', '-s', type=int, help='Random seed',
@@ -63,8 +69,13 @@ def parse_cli():
                         default=False, help="run partition on cpu")
     parser.add_argument('--num-data-workers', type=int,
                         help='Number of workers to use for dataloading', default=0)
-    
-    parser.add_argument('--trainer', help='Trainer use', choices='dummy')
+
+    parser.add_argument('--trainer', help='Trainer to use',
+                        choices=AVAILABLE_TRAINERS.keys(), default='dummy')
+    parser.add_argument('--task', help='Task type to use',
+                        choices=AVAILABLE_TASKS.keys(), default='cv')
+    parser.add_argument('--debug', action='store_true', default=False,
+                        help='Set to debug mpi applications. Will wait for attachment.')
 
     args = parser.parse_args()
 
@@ -317,6 +328,12 @@ def main():
     args = parse_cli()
     parse_env_vars(args)
 
+    if args.debug:
+        import ptvsd
+        port = 3000 + args.local_rank
+        ptvsd.enable_attach(address=('127.0.0.1', port))
+        ptvsd.wait_for_attach()
+
     local_rank = args.local_rank
     logger = FileLogger(args.logdir, global_rank=args.rank,
                         local_rank=local_rank, name='msnag')
@@ -394,7 +411,8 @@ def main():
 
     training_tensor_shapes, eval_tensor_shapes = shapes
 
-    trainer_cls = DummyTrainer  # TODO...
+    trainer_cls = AVAILABLE_TRAINERS.get(args.trainer)
+    task_cls = AVAILABLE_TASKS.get(args.task)
 
     partition = SinglePartitionManager(
         stage,
@@ -403,15 +421,21 @@ def main():
         eval_tensor_shapes,
         device, is_last_partition, is_first_partition)
 
+    # Set Trainer
     trainer = trainer_cls(partition.partition)
     partition.set_trainer(trainer)
 
+    # Set Task
+    task = task_cls(device, is_last_partition, is_first_partition)
+    partition.set_task(task)
+
+    # Set Dataloader
     partition.set_dataloader(train_dl)  # sets only to first partition
+
+    # Start training
     partition.train()
     partition.run_until_flush(2)
-    # TODO: create partition from config,
-
-    # num_ranks = get_num_ranks()
+    # TODO:
 
 
 if __name__ == "__main__":

@@ -29,3 +29,4 @@ dependencies:
     - rope
     - click
     - transformers
+    - ptvsd

@@ -55,8 +55,15 @@ python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_nod
 
 ## References:
 
-[running with mpi](https://www.open-mpi.org/faq/?category=running)
-especially see [mpi-env-vars](https://www.open-mpi.org/faq/?category=running#mpi-environmental-variables).
+* [running with mpi](https://www.open-mpi.org/faq/?category=running)
+  * especially see [mpi-env-vars](https://www.open-mpi.org/faq/?category=running#mpi-environmental-variables).
+
+## Debugging
+* [debugging mpi python applications with vscode](https://gist.github.com/asroy/ca018117e5dbbf53569b696a8c89204f)
+  * run same thing, with `--debug` flag, then wait for attachment:
+  >> ```
+  >> mpirun -np 2 python main.py --debug
+  >> ```
 
 ## Crazy ideas
 

@@ -6,17 +6,13 @@ from typing import Dict
 from . import CommunicationHandler
 from .partition import Partition, LastPartition, FirstPartition
 from .training.interface import AnyTrainer
+from .tasks import DLTask
 
 
 class SinglePartitionManager:
-    # FIXME: to the partitionion class we use...
     def __init__(self, stage, configs: Dict, partition: torch.nn.Module, comm_handler: CommunicationHandler,
                  training_tensor_shapes, eval_tensor_shapes,
                  device, is_last_partition, is_first_partition):
-
-        # self.split_dim = split_dim
-        # self.input_names = configs.pop('model inputs')
-        # self.output_names = configs.pop('model outputs')
 
         if is_last_partition:
             partition_cls = LastPartition
@@ -38,13 +34,18 @@ class SinglePartitionManager:
         self.fwd_rcev_buffers = None
         self.bwd_rcev_buffers = None
 
-        self.trainer = None
-
         # Async handle objects
         self.async_fwd_objects = {}
         self.async_bwd_objects = {}
 
         self.logger = logging.getLogger("msnag")
+
+        # Hints
+        self.task: DLTask
+        self.trainer: AnyTrainer
+
+    def set_task(self, task: DLTask):
+        self.task = task
 
     def set_trainer(self, trainer: AnyTrainer):
         self.trainer = trainer
@@ -88,14 +89,15 @@ class SinglePartitionManager:
             # TODO: handle y with separate coordinated dataloader
             # TODO: generic data handling.
             # Can be according to trainer.
-            assert len(data) == 2
-            x, y = data
-            x = x.to(self.device, non_blocking=True)
-            y = y.to(self.device, non_blocking=True)
 
+            x, *ctx = self.task.unpack_data_for_partition(data)
             x = self.partition(x, batch_idx)
+
+            send_ctx = self.task.pack_send_context(x, *ctx)
+
             request_objects = self.comm_handler.send_activations(
-                (*x, y), batch_idx)
+                send_ctx, batch_idx)
+
         else:
             if not self.fwd_rcev_buffers:
                 self.fwd_rcev_buffers = self.comm_handler.create_activations_recv_buffers(
@@ -108,19 +110,22 @@ class SinglePartitionManager:
             for obj in request_objects:
                 obj.wait()
 
-            x, y = x[:-1], x[-1]
+            x, *ctx = self.task.unpack_data_for_partition(x)
             x = self.partition(x, batch_idx)
 
             if not self.is_last_partition:
+                send_ctx = self.task.pack_send_context(x, *ctx)
                 request_objects = self.comm_handler.send_activations(
-                    (*x, y), batch_idx)
+                    send_ctx, batch_idx)
             else:
                 # Last partition
                 # Also do backward and step
-                self.trainer.do_your_job(x, y)
+                self.trainer.do_your_job(x, *ctx)
                 # TODO: save the gradient - (later to be passed to previous partition)
-                # mb_to_last_res[micro_batch] = partition.get_grad(micro_batch)
                 grads = self.partition.get_grad(batch_idx)
+                # TODO: this is a little ugly, maybe find a better way later
+                if isinstance(grads, torch.Tensor):
+                    grads = (grads,)
                 # Send gradients async
                 request_objects = self.comm_handler.send_gradients(
                     grads, batch_idx)
