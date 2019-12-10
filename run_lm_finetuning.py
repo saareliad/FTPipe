@@ -42,7 +42,7 @@ except:
 
 from tqdm import tqdm, trange
 
-from transformers import (WEIGHTS_NAME, AdamW, WarmupLinearSchedule,
+from transformers import (WEIGHTS_NAME, AdamW,
                           BertConfig, BertForMaskedLM, BertTokenizer,
                           GPT2Config,
                           #    GPT2LMHeadModel,
@@ -52,6 +52,14 @@ from transformers import (WEIGHTS_NAME, AdamW, WarmupLinearSchedule,
                           DistilBertConfig, DistilBertForMaskedLM, DistilBertTokenizer,
                           #   CamembertConfig, CamembertForMaskedLM, CamembertTokenizer
                           )
+try:
+    from transformers.optimization import WarmupLinearSchedule
+    def get_scheduler(optimizer, warmup_steps, t_total): return WarmupLinearSchedule(optimizer,
+                                                                                     warmup_steps=warmup_steps, t_total=t_total)
+except ImportError:
+    from transformers.optimization import get_linear_schedule_with_warmup
+    def get_scheduler(optimizer, warmup_steps, t_total): return get_linear_schedule_with_warmup(optimizer,
+                                                                                                warmup_steps, t_total)
 
 from NLP_models import GPT2LMHeadModel
 
@@ -217,8 +225,7 @@ def train(args, train_dataset, model, tokenizer):
     ]
     optimizer = AdamW(optimizer_grouped_parameters,
                       lr=args.learning_rate, eps=args.adam_epsilon)
-    scheduler = WarmupLinearSchedule(
-        optimizer, warmup_steps=args.warmup_steps, t_total=t_total)
+    scheduler = get_scheduler(optimizer, args.warmup_steps, t_total)
     if args.fp16:
         try:
             from apex import amp

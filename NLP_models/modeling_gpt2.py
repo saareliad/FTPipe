@@ -808,7 +808,8 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
             shift_logits = lm_logits[..., :-1, :].contiguous()
             shift_labels = labels[..., 1:].contiguous()
             # Flatten the tokens
-            loss_fct = CrossEntropyLoss(ignore_index=-1)
+            # loss_fct = CrossEntropyLoss(ignore_index=-1)
+            loss_fct = lambda logits,labels: nn.functional.cross_entropy(logits,labels,ignore_index=-1)
             loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)),
                             shift_labels.view(-1))
             outputs = (loss,) + outputs
