@@ -8,6 +8,7 @@ from .partition import Partition, LastPartition, FirstPartition
 from .training.interface import AnyTrainer
 from .tasks import DLTask
 
+# from gpu_mem_track import MemTracker
 
 class SinglePartitionManager:
     def __init__(self, stage, configs: Dict, partition: torch.nn.Module, comm_handler: CommunicationHandler,
@@ -24,7 +25,7 @@ class SinglePartitionManager:
         self.partition = partition_cls(partition, device, to_device=True)
         self.comm_handler = comm_handler
         self.training_tensor_shapes = training_tensor_shapes
-        self.eval_tensor_shape = eval_tensor_shapes
+        self.eval_tensor_shapes = eval_tensor_shapes
         self.device = device
         self.is_last_partition = is_last_partition
         self.is_first_partition = is_first_partition
@@ -39,6 +40,7 @@ class SinglePartitionManager:
         self.async_bwd_objects = {}
 
         self.logger = logging.getLogger("msnag")
+        self.dl_iter = None
 
         # Hints
         self.task: DLTask
@@ -72,6 +74,7 @@ class SinglePartitionManager:
         # self.tensors = []
         # self.gradients = {}
         self.tensor_shapes = self.eval_tensor_shapes
+        
         # self.tensor_shapes["ack"] = (1,)
         self.forward_only = True  # TODO: work that out ....
 
@@ -94,9 +97,17 @@ class SinglePartitionManager:
             x = self.partition(x, batch_idx)
 
             send_ctx = self.task.pack_send_context(x, *ctx)
+            for i in send_ctx:
+                print(f"send ctx: {i.shape}")
 
             request_objects = self.comm_handler.send_activations(
                 send_ctx, batch_idx)
+            
+            # # FIXME
+            # # FIXME
+            # # FIXME
+            # for i in request_objects:
+            #     i.wait()
 
         else:
             if not self.fwd_rcev_buffers:
@@ -104,15 +115,22 @@ class SinglePartitionManager:
                     self.device)
             x = self.fwd_rcev_buffers
 
+            # x = self.comm_handler.create_activations_recv_buffers(self.device)
+
             request_objects = self.comm_handler.recv_activations(x, batch_idx)
 
             # recv for fwd
             for obj in request_objects:
+                print(f"-I- {self.stage} waiting on rcv")
                 obj.wait()
+                print(f"-I- {self.stage} DONE waiting on rcv")
 
             x, *ctx = self.task.unpack_data_for_partition(x)
             x = self.partition(x, batch_idx)
-
+            if not self.partition.training:
+                return []
+            
+            # if self.partition.training:
             if not self.is_last_partition:
                 send_ctx = self.task.pack_send_context(x, *ctx)
                 request_objects = self.comm_handler.send_activations(
@@ -129,6 +147,9 @@ class SinglePartitionManager:
                 # Send gradients async
                 request_objects = self.comm_handler.send_gradients(
                     grads, batch_idx)
+                
+                for i in self.fwd_rcev_buffers:
+                    i.grad = None
 
         return request_objects
 
@@ -177,10 +198,31 @@ class SinglePartitionManager:
         self.partition.recompute_and_backward(g, batch_idx)
         self.trainer.step_on_computed_grads()
 
+        # for z in self.bwd_rcev_buffers:
+        #     z.detach_().zero_()
+
         if not (self.is_first_partition):
             g = self.Partition.get_grad(batch_idx)
             request_objects = self.comm_handler.send_gradients(g, batch_idx)
+            
             return request_objects
+
+    def run_forward_until_flush(self, num_batches):
+        # TODO: write fwd only for last partition..
+        if self.is_first_partition and (self.dl_iter is None):
+            self.dl_iter = iter(self.dataloader)
+
+        for done_fwds in range(num_batches):
+
+            sent_request_objects = self.run_batch_forward(done_fwds)
+            self.async_fwd_objects[done_fwds] = sent_request_objects
+
+            for sent_request_objects in self.async_fwd_objects.values():
+                for i in sent_request_objects:
+                    print(f"-I- {self.stage} waiting")
+                    i.wait()
+
+            self.async_fwd_objects.clear()
 
     def run_until_flush(self, num_batches):
         """
@@ -191,7 +233,7 @@ class SinglePartitionManager:
         done_bwds = 0
         done_fwds = 0
 
-        if self.is_first_partition:
+        if self.is_first_partition and (self.dl_iter is None):
             self.dl_iter = iter(self.dataloader)
 
         # if not (self.is_last_partition) else num_batches // 2
@@ -217,6 +259,18 @@ class SinglePartitionManager:
                     done_fwds += 1
                 else:
                     done_bwds += 1
+
+            if done_bwds % 4 == 0:
+                for sent_request_objects in self.async_bwd_objects.values():
+                    for i in sent_request_objects:
+                        i.wait()
+
+                for sent_request_objects in self.async_fwd_objects.values():
+                    for i in sent_request_objects:
+                        i.wait()
+
+                self.async_bwd_objects.clear()
+                self.async_fwd_objects.clear()
 
             # FIXME: we may not want to wait on this yet.
             # TODO: save the object and wait only when truly needed.

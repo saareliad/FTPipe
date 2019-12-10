@@ -84,13 +84,15 @@ class Partition(nn.Module):
             self.rng_stasher.stash_rng_state(micro_batch_idx)
 
             with torch.no_grad():
+                # EXPLICITLY DO DETACH() INSTEAD OF DETACH_()
+                # TODO: this could be optimized...
                 if isinstance(x, Tensor):
-                    x.detach_().requires_grad_(self._REQ_GRAD)
+                    x.detach().requires_grad_(self._REQ_GRAD)
                     self.input_buffer[micro_batch_idx] = x
                     x = self.layers(x)
                 else:
                     for tensor in x:
-                        tensor.detach_().requires_grad_(self._REQ_GRAD)
+                        tensor.detach().requires_grad_(self._REQ_GRAD)
                     self.input_buffer[micro_batch_idx] = x
                     x = self.layers(*x)
             return x

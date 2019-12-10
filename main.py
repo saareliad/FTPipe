@@ -52,7 +52,7 @@ def parse_cli():
 
     # Training, which are also needed for communication
     parser.add_argument('--bs-train', type=int, help='Train batch size',
-                        default=128, metavar='B')
+                        default=2048, metavar='B')
     parser.add_argument('--bs-test', type=int, help='Test batch size', default=128,
                         metavar='BT')
 
@@ -163,6 +163,8 @@ def create_distributed_communcation_context(args, config, stage, stage_to_rank_m
                                                 "input0": torch.int64, "target": torch.int64},
                                             training_tensor_shapes={
                                                 "input0": None, "target": None},
+                                            eval_tensor_shapes={
+                                                "input0": None, "target": None},
                                             random_input_sample=None,
                                             bs_train=(1,),
                                             bs_test=(1,)):
@@ -188,7 +190,7 @@ def create_distributed_communcation_context(args, config, stage, stage_to_rank_m
 
     #     dtypes = {"input0": torch.int64, "target": torch.int64}
 
-    eval_tensor_shapes = {**training_tensor_shapes}
+    # eval_tensor_shapes = {**training_tensor_shapes}
 
     tensor_tags, TOTAL_TAGS = tensor_tags_from_config(
         config, target_tensor_names=target_tensor_names)
@@ -242,7 +244,7 @@ def create_distributed_communcation_context(args, config, stage, stage_to_rank_m
         # the batch size can be a collection (e.g (batch, seq_len) in NLP)
         bs_train = to_tuple(bs_train)
         bs_test = to_tuple(bs_test)
-
+        # TODO: this assume that batch is first
         len_bs = len(bs_train)
         train_shapes = tuple(
             tuple(list(bs_train) + list(j.data.size()[len_bs:])) for j in a)
@@ -337,6 +339,7 @@ def main():
     #     dl_kw['pin_memory'] = True  # FIXME
 
     dl_kw['num_workers'] = args.num_data_workers
+    dl_kw['drop_last'] = True
 
     train_dl, test_dl = simplified_get_train_test_dl_from_args(
         args, verbose=False, **dl_kw)
@@ -363,12 +366,16 @@ def main():
     training_tensor_shapes = {"input0": (
         *bs_train, *BASE_INPUT_SHAPE), "target": (*bs_train, *BASE_TARGET_SHAPE)}
 
+    eval_tensor_shapes = {"input0": (
+        *bs_test, *BASE_INPUT_SHAPE), "target": (*bs_test, *BASE_TARGET_SHAPE)}
+    
     comm_init_args, shapes = \
         create_distributed_communcation_context(args, configs, stage,
                                                 stage_to_rank_map=None,
                                                 target_tensor_names=target_tensor_names,
                                                 training_tensor_dtypes=training_tensor_dtypes,
                                                 training_tensor_shapes=training_tensor_shapes,
+                                                eval_tensor_shapes=eval_tensor_shapes,                                                
                                                 random_input_sample=random_input_sample,
                                                 bs_train=bs_train,
                                                 bs_test=bs_test)
@@ -397,11 +404,21 @@ def main():
     partition.set_task(task)
 
     # Set Dataloader
-    partition.set_dataloader(train_dl)  # sets only to first partition
 
-    # Start training
-    partition.train()
-    partition.run_until_flush(2)
+    TRAIN = True
+    if TRAIN:
+        partition.set_dataloader(train_dl)  # sets only to first partition
+        # Start training
+        partition.train()
+        # for i in range(100):
+        partition.run_until_flush(min(400, len(train_dl)))
+    else:
+        DL_TO_WORK_ON = test_dl
+        partition.set_dataloader(DL_TO_WORK_ON)  # sets only to first partition
+        partition.eval()
+        partition.run_forward_until_flush(min(400, len(DL_TO_WORK_ON)))
+
+
     # TODO:
 
 
