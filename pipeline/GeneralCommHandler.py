@@ -1,5 +1,5 @@
 from collections import Counter
-from .util import CommPolicy, toPolicy
+from .util import CommPolicy, to_policy
 
 import torch.distributed as dist
 import torch
@@ -52,7 +52,7 @@ class CommunicationHandler():
 
     # one activation to many partitions
     # does not need to match partition output order but indexes must match
-    def sendActivations(self, xs, batch_idx, block=False):
+    def send_activations(self, xs, batch_idx, block=False):
         requests = []
         for idx, rank, _, tag_or_group, name in self.output_config:
             x = xs[idx].detach_()
@@ -74,7 +74,7 @@ class CommunicationHandler():
 
     # one gradient to one partition
     # must match input order
-    def sendGradients(self, gs, batch_idx, block=False):
+    def send_gradients(self, gs, batch_idx, block=False):
         requests = []
         for idx, rank, _, tag_or_group, name in self.input_config:
             g = gs[idx]
@@ -96,7 +96,7 @@ class CommunicationHandler():
 
     # one activation from one partition
     # must match partition input order
-    def recvActivations(self, batch_idx, block=False):
+    def recv_activations(self, batch_idx, block=False):
         requests = []
         for _, rank, buffer, tag_or_group, name in self.input_config:
             if self.policy is CommPolicy.P2P:
@@ -117,7 +117,7 @@ class CommunicationHandler():
 
     # one gradient from many partitions
     # needs to be in order
-    def recvGradients(self, batch_idx, block=False):
+    def recv_gradients(self, batch_idx, block=False):
         requests = []
         for _, rank, buffer, tag_or_group, name in self.output_config:
             if self.policy is CommPolicy.P2P:
@@ -157,7 +157,7 @@ def createCommParams(rank, backend, partitions_config, buffer_configs, cpu=False
         cpu:
             whether to send/receive CPU tensors instead of CUDA tensors
     '''
-    policy = toPolicy(backend, cpu)
+    policy = to_policy(backend, cpu)
 
     # for each tensor (including inputs/outputs) how many uses it has
     uses = Counter(k for p, config in partitions_config.items()

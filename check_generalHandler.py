@@ -1,14 +1,14 @@
 import torch
 from models.normal.dummyDAG import DummyDAG
 from models.partitioned.dDAG import createConfig
-from pipeline.util import createBufferConfigs
+from pipeline.util import create_buffer_configs
 from pipeline.GeneralCommHandler import CommunicationHandler, createCommParams
 
 if __name__ == "__main__":
     # visual check to see if the config turns out as intended
     model = DummyDAG()
     config = createConfig(model, cpu=True)
-    buffer_config = createBufferConfigs(torch.randn(100, 200), config)
+    buffer_config = create_buffer_configs(torch.randn(100, 200), config)
 
     print("buffer info")
     for k, v in buffer_config.items():
