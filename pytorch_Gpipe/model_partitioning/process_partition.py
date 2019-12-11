@@ -23,15 +23,20 @@ def post_process_partition(graph: Graph, part: List[int]):
         node.part = idx
 
     cannonize_partition_indices(graph)
-    make_partitions_change_only_at_end_of_scope(graph)
-    # make sure every scc in the graph is not splitted between different parts
-    scc_partition_correction(graph)
-    ensure_dag(graph, part)
+    # TODO ensure_dag makes problems
+    # for node in graph.nodes:
+    #     if node.idx in [2021, 2022, 2016]:
+    #         node.part = 3
 
-    cannonize_partition_indices(graph)
+    # make_partitions_change_only_at_end_of_scope(graph)
+    # make sure every scc in the graph is not splitted between different parts
+    # scc_partition_correction(graph)
+    # ensure_dag(graph, part)
+
+    # cannonize_partition_indices(graph)
     # TODO we disabled this optimization
     # fix_arithmetic_inputs(graph)
-    return
+    return graph
 
 
 def fix_arithmetic_inputs(graph: Graph):
@@ -171,7 +176,7 @@ def cannonize_partition_indices(graph: Graph):
         closed.add(node)
         edges = node.out_nodes.union(node.in_nodes)
         nodes = edges.difference(closed, set(open_nodes))
-        open_nodes.extend(nodes)
+        open_nodes.extendleft(nodes)
 
     for node in graph.nodes:
         node.part = cannonical_parts[node.part]

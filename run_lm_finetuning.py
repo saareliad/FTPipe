@@ -78,7 +78,7 @@ MODEL_CLASSES = {
 
 class TextDataset(Dataset):
     def __init__(self, tokenizer, args, file_path='train', block_size=512):
-        assert os.path.isfile(file_path)
+        assert os.path.isfile(file_path), file_path
         directory, filename = os.path.split(file_path)
         cached_features_file = os.path.join(
             directory, args.model_name_or_path + '_cached_lm_' + str(block_size) + '_' + filename)
@@ -196,6 +196,65 @@ def mask_tokens(inputs, tokenizer, args):
     return inputs, labels
 
 
+def create_buffer_configs(xs, partitions_config):
+    '''
+    performs a forward pass of the partitioned model and records the size and dtype of every data transfer
+
+    Parameters:
+    -----------
+    xs:
+        the input for the model
+
+    partitions_config:
+        the configuration we generated, aka the output of createConfig()
+
+    Return:
+    -------
+    dictionary from tensor name to {size,dtype}
+    '''
+    if not isinstance(xs, tuple):
+        xs = (xs,)
+    nparts = len([i for i in partitions_config if isinstance(i, int)])
+    buffer_configs = dict()
+    ts = dict(zip(partitions_config['model inputs'], xs))
+    from collections import deque
+    for n, t in ts.items():
+        buffer_configs[n] = {'size': t.shape, 'dtype': t.dtype}
+
+    parts = deque(range(nparts))
+    # here we assume a DAG structure and not sequential structure
+    while parts:
+        idx = parts.popleft()
+        partition = partitions_config[idx]
+        model = partition['model']
+        # gather inputs
+        inputs = []
+        for n in partition['inputs']:
+            if not (n in ts):
+                break
+            else:
+                inputs.append(ts[n])
+
+        # not all inputs were ready proceed to next partition and try again later
+        if len(inputs) < len(partition['inputs']):
+            parts.append(idx)
+            continue
+
+        # move inputs to the model device and forward pass
+        device = list(model.parameters())[0].device
+        inputs = [t.to(device) for t in inputs]
+        outs = model(*inputs)
+
+        # update outputs
+        for n, o in zip(partition['outputs'], outs):
+            print(n)
+            ts[n] = o
+            buffer_configs[n] = {'size': o.shape,
+                                 'dtype': o.dtype}
+
+    return buffer_configs
+
+
 def train(args, train_dataset, model, tokenizer):
     """ Train the model """
     if args.local_rank in [-1, 0]:
@@ -277,6 +336,20 @@ def train(args, train_dataset, model, tokenizer):
             inputs = inputs.to(args.device)
             labels = labels.to(args.device)
             model.train()
+            from pytorch_Gpipe import pipe_model, graph_builder, partition, generatePartitionModules
+            # graph = pipe_model(model, (inputs, labels), DEBUG=False)
+            # graph.save("GPT2", ".", show_weights=False)
+            if False:
+                graph = graph_builder(model, (inputs, labels))
+                graph = partition(graph, 4)
+                graph.save("GPT2", ".", show_weights=False)
+                generatePartitionModules(graph, model, verbose=True)
+            else:
+                from GPT2LMHeadModel4 import createConfig
+                config = createConfig(model, DEBUG=True, partitions_only=False)
+                create_buffer_configs((inputs, labels), config)
+
+            assert False
             outputs = model(inputs, masked_lm_labels=labels) if args.mlm else model(
                 inputs, labels=labels)
             # model outputs are always tuple in transformers (see doc)
@@ -450,9 +523,9 @@ def main():
     parser.add_argument("--do_lower_case", action='store_true',
                         help="Set this flag if you are using an uncased model.")
 
-    parser.add_argument("--per_gpu_train_batch_size", default=4, type=int,
+    parser.add_argument("--per_gpu_train_batch_size", default=1, type=int,
                         help="Batch size per GPU/CPU for training.")
-    parser.add_argument("--per_gpu_eval_batch_size", default=4, type=int,
+    parser.add_argument("--per_gpu_eval_batch_size", default=1, type=int,
                         help="Batch size per GPU/CPU for evaluation.")
     parser.add_argument('--gradient_accumulation_steps', type=int, default=1,
                         help="Number of updates steps to accumulate before performing a backward/update pass.")
@@ -563,7 +636,6 @@ def main():
                                             '.ckpt' in args.model_name_or_path),
                                         config=config,
                                         cache_dir=args.cache_dir if args.cache_dir else None)
-    assert False
     model.to(args.device)
 
     if args.local_rank == 0:
@@ -639,8 +711,7 @@ def main():
 
 # download dataset from https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip
 
-# export TRAIN_FILE=wikitext-2-raw/wiki.train.raw
-# export TEST_FILE=wikitext-2-raw/wiki.test.raw
+# export TRAIN_FILE=wikitext-2-raw/wiki.train.raw TEST_FILE=wikitext-2-raw/wiki.test.raw
 
 # python run_lm_finetuning.py --output_dir=output --model_type=gpt2 --model_name_or_path=gpt2 --do_train --train_data_file=$TRAIN_FILE --do_eval --eval_data_file=$TEST_FILE
 if __name__ == "__main__":
