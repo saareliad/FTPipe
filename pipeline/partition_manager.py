@@ -66,11 +66,15 @@ class SinglePartitionManager:
         # self.forward_minibatch_id = 0
         # self.backward_minibatch_id = 0
         # TODO: 
-        
+
         if self.comm_handler is not None:
             self.comm_handler.set_tensor_shapes(self.tensor_shapes)
 
         self.partition.train()
+    
+        # Handles the transition : eval -> train
+        if not (self.fwd_rcev_buffers is None):
+            self.fwd_rcev_buffers = self.comm_handler.create_activations_recv_buffers(self.device)
 
     def eval(self):
         # self.tensors = []
@@ -87,6 +91,10 @@ class SinglePartitionManager:
             self.comm_handler.set_tensor_shapes(self.tensor_shapes)
 
         self.partition.eval()
+
+        # Handles the transition : train -> eval
+        if not (self.fwd_rcev_buffers is None):
+            self.fwd_rcev_buffers = self.comm_handler.create_activations_recv_buffers(self.device)
 
     def run_batch_forward(self, batch_idx):
         if self.is_first_partition:

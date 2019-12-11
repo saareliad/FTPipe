@@ -1,5 +1,7 @@
 {
     "logdir": "logs/",
+    "out_dir":"logs/",
+    "out_filename": "dummy",
     "distributed_backend": "mpi",
     "task": "cv",
     "statistics": "cv",

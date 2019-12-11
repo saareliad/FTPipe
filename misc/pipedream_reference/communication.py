@@ -47,7 +47,7 @@ class CommunicationHandler(object):
         # dist.init_process_group(backend, rank=rank, world_size=world_size)
         dist.init_process_group(backend, timeout=datetime.timedelta(
             seconds=5), world_size=world_size)
-        assert dist.get_world_size() == self.world_size
+        assert dist.get_world_size(backend) == self.world_size
         print(f"Initialized process group; backend: {backend}, rank: {rank}, "
               f"local_rank: {local_rank}, world_size: {world_size}")
 

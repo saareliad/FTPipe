@@ -1,8 +1,9 @@
 from typing import NamedTuple, List
 import json
+from .interface import Stats
+from types import SimpleNamespace
 
-
-class FitResult(NamedTuple):
+class FitResult(SimpleNamespace):
     """
     Represents the result of fitting a model for multiple epochs given a
     training and test (or validation) set.
@@ -39,7 +40,7 @@ class AverageMeter(object):
         return self.sum / self.count
 
 
-class CVStats:
+class CVStats(Stats):
     """ Class to handle statistics collection for CV Tasks """
 
     def __init__(self, record_loss_per_batch=False):
@@ -77,6 +78,7 @@ class CVStats:
                 self.fit_res.train_loss = self.epoch_loss.get_avg()
 
             self.fit_res.train_acc = self.epoch_acc.get_avg()
+            self.fit_res.num_epochs += 1  # FIXME: its only here, currently assuming test are same as train.
         else:
             if not self.record_loss_per_batch:
                 self.fit_res.test_loss = self.epoch_loss.get_avg()
@@ -85,22 +87,6 @@ class CVStats:
 
         self.epoch_acc.reset()
         self.epoch_loss.reset()
-        self.fit_res.num_epochs += 1
 
     def get_stats(self):
         return self.fit_res
-
-
-def load_experiment(filename, fit_res_cls):
-    with open(filename, 'r') as f:
-        output = json.load(f)
-
-    config = output['config']
-    fit_res = output['results']
-
-    return config, fit_res
-
-
-# def load_experiment(filename):
-#fit_res_cls(**output['results'])
-#     return _load_experiment(filename, FitResult)

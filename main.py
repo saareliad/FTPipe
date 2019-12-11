@@ -9,6 +9,7 @@ from pipeline.training import AVAILABLE_TRAINERS
 from pipeline.tasks import AVAILABLE_TASKS
 from pipeline.stats import AVAILBALE_STATS
 from optimizers import AVAILBALE_OPTIMIZERS
+from pipeline.util import get_world_size
 
 import models
 import numpy as np
@@ -19,6 +20,7 @@ from misc.datasets import add_dataset_argument, simplified_get_train_test_dl_fro
 from misc.filelogger import FileLogger
 import os
 import json
+from experiments import save_experiment
 
 
 def parse_cli():
@@ -68,6 +70,12 @@ def parse_cli():
 
     parser.add_argument('--logdir', type=str,
                         default='./logs', help="where logs and events go")
+
+    parser.add_argument('--out-dir', '-o', type=str, help='Output folder for results',
+                        default='./results', required=False)
+
+    parser.add_argument('--out-filename', '-n', type=str,
+                        help='Name of output file', required=False)
 
     parser.add_argument('--cpu', action='store_true',
                         default=False, help="run partition on cpu")
@@ -441,7 +449,8 @@ def main():
     if args.trainer == 'dummy':
         trainer = trainer_cls(partition.partition)
     else:
-        trainer = trainer_cls(partition.partition, optimizer=optimizer, statistics=statistics)
+        trainer = trainer_cls(partition.partition,
+                              optimizer=optimizer, statistics=statistics)
 
     partition.set_trainer(trainer)
 
@@ -451,27 +460,44 @@ def main():
 
     # Set Dataloader
 
-    TRAIN = False
-    AMOUNT = 2
-    if TRAIN:
-        partition.set_dataloader(train_dl)  # sets only to first partition
-        # Start training
-        partition.train()
+    # TRAIN = False
+    for epochs in range(2):
+        for TRAIN in [True, False]:
+            BATCHES_TO_RUN = 2
+            if TRAIN:
+                # sets only to first partition
+                partition.set_dataloader(train_dl)
+                # Start training
+                partition.train()
+                if statistics:
+                    statistics.train()
+                # for i in range(100):
+                partition.run_until_flush(min(BATCHES_TO_RUN, len(train_dl)))
+            else:
+                with torch.no_grad():
+                    DL_TO_WORK_ON = test_dl
+                    # sets only to first partition
+                    partition.set_dataloader(DL_TO_WORK_ON)
+                    partition.eval()
+                    if statistics:
+                        statistics.eval()
+                    partition.run_forward_until_flush(
+                        min(BATCHES_TO_RUN, len(DL_TO_WORK_ON)))
+
+            if args.local_rank == get_world_size(args.distributed_backend) - 1:
+                # print(os.environ.get('OMPI_COMM_WORLD_SIZE'))
+                # print(f"world_size {get_world_size(args.distributed_backend)}")
+                # print(f"local_rank {args.local_rank}")
+                statistics.on_epoch_end()
+
+    # FIXME: If last state
+    if args.rank == get_world_size(args.distributed_backend) - 1:
         if statistics:
-            statistics.train()
-        # for i in range(100):
-        partition.run_until_flush(min(AMOUNT, len(train_dl)))
-    else:
-        with torch.no_grad():
-            DL_TO_WORK_ON = test_dl
-            partition.set_dataloader(DL_TO_WORK_ON)  # sets only to first partition
-            partition.eval()
-            if statistics:
-                statistics.eval()
-            partition.run_forward_until_flush(min(AMOUNT, len(DL_TO_WORK_ON)))
-    
-    # if args.rank == 0:
-    # TODO: 
+            fit_res = statistics.get_stats()  # Assuming its a named tuple..
+            config = {}  # FIXME: TODO:
+            save_experiment(args.out_filename, args.out_dir, config, fit_res)
+
+    # TODO:
 
 
 if __name__ == "__main__":

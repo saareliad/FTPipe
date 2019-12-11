@@ -26,10 +26,11 @@ class CVTrainer(SupervisedTrainer):
     #     return self.stats.get_stats()
 
     def calc_test_stats(self, x, y):
+        print("Called calc_test_stats")
         loss = self.loss_fn(x, y)
         batch_size = len(y)
         y_pred = torch.argmax(x, 1)
-        num_correct = torch.sum(y == y_pred)
+        num_correct = torch.sum(y == y_pred).item()
         acc = num_correct / batch_size
         self.statistics.on_batch_end(loss.item(), acc, batch_size)
 
@@ -47,7 +48,7 @@ class CVTrainer(SupervisedTrainer):
 
         batch_size = len(y)
         y_pred = torch.argmax(x, 1)
-        num_correct = torch.sum(y == y_pred)
+        num_correct = torch.sum(y == y_pred).item()
         acc = num_correct / batch_size
 
         # Save stats
