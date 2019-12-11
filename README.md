@@ -18,6 +18,11 @@ cuda aware openmpi:
 mpirun -np 2 python main.py
 ```
 
+on the rishon sever:
+```
+salloc -n2 --gres=gpu:2 mpirun python main.py
+```
+
 ### Via torch.distributed.launch model
 
 Not supported. To be removed.
