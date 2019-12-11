@@ -7,6 +7,9 @@ from pipeline import SinglePartitionManager
 # from pipeline.tasks import CVTask
 from pipeline.training import AVAILABLE_TRAINERS
 from pipeline.tasks import AVAILABLE_TASKS
+from pipeline.stats import AVAILBALE_STATS
+from optimizers import AVAILBALE_OPTIMIZERS
+from pipeline.util import get_world_size
 
 import models
 import numpy as np
@@ -16,6 +19,8 @@ from collections import OrderedDict
 from misc.datasets import add_dataset_argument, simplified_get_train_test_dl_from_args
 from misc.filelogger import FileLogger
 import os
+import json
+from experiments import save_experiment
 
 
 def parse_cli():
@@ -53,7 +58,8 @@ def parse_cli():
     # Training, which are also needed for communication
     parser.add_argument('--bs-train', type=int, help='Train batch size',
                         default=128, metavar='B')
-    parser.add_argument('--bs-test', type=int, help='Test batch size', default=128,
+
+    parser.add_argument('--bs-test', type=int, help='Test batch size', default=200,
                         metavar='BT')
 
     # should be like `trainer` and `task` but I left it like this.
@@ -65,6 +71,12 @@ def parse_cli():
     parser.add_argument('--logdir', type=str,
                         default='./logs', help="where logs and events go")
 
+    parser.add_argument('--out-dir', '-o', type=str, help='Output folder for results',
+                        default='./results', required=False)
+
+    parser.add_argument('--out-filename', '-n', type=str,
+                        help='Name of output file', required=False)
+
     parser.add_argument('--cpu', action='store_true',
                         default=False, help="run partition on cpu")
     parser.add_argument('--num-data-workers', type=int,
@@ -74,12 +86,43 @@ def parse_cli():
                         choices=AVAILABLE_TRAINERS.keys(), default='dummy')
     parser.add_argument('--task', help='Task type to use',
                         choices=AVAILABLE_TASKS.keys(), default='cv')
+
+    parser.add_argument('--statistics', help='Statistics to collect',
+                        choices=AVAILBALE_STATS.keys(), default='cv')
+
+    parser.add_argument('--optimizer_type', help='Optimizer type to use',
+                        choices=AVAILABLE_TASKS.keys(), default='sgd1')
+
+    # parser.add_argument('--linear_scaling', help="Use linear LR scaling rule", default=True)
+
     parser.add_argument('--debug', action='store_true', default=False,
                         help='Set to debug mpi applications. Will wait for attachment.')
 
+    parser.add_argument('--config', help="Config File",
+                        default='configs/dummy.json')
     args = parser.parse_args()
 
     return args
+
+
+def parse_json_config(args):
+    assert(os.path.exists(args.config))
+
+    with open(args.config, 'r') as f:
+        output = json.load(f)
+
+    # replace
+    for key, value in output.items():
+        # if hasattr(args, key):
+        setattr(args, key, value)
+
+    # Explicit yuck replace
+    # (just to get help from argparse)
+    if hasattr(output, 'optimizer'):
+        if hasattr(output['optimizer'], 'type'):
+            args.optimizer_type = output['optimizer']['type']
+
+    # return output
 
 
 def parse_env_vars(args):
@@ -163,6 +206,8 @@ def create_distributed_communcation_context(args, config, stage, stage_to_rank_m
                                                 "input0": torch.int64, "target": torch.int64},
                                             training_tensor_shapes={
                                                 "input0": None, "target": None},
+                                            eval_tensor_shapes={
+                                                "input0": None, "target": None},
                                             random_input_sample=None,
                                             bs_train=(1,),
                                             bs_test=(1,)):
@@ -188,7 +233,7 @@ def create_distributed_communcation_context(args, config, stage, stage_to_rank_m
 
     #     dtypes = {"input0": torch.int64, "target": torch.int64}
 
-    eval_tensor_shapes = {**training_tensor_shapes}
+    # eval_tensor_shapes = {**training_tensor_shapes}
 
     tensor_tags, TOTAL_TAGS = tensor_tags_from_config(
         config, target_tensor_names=target_tensor_names)
@@ -242,7 +287,7 @@ def create_distributed_communcation_context(args, config, stage, stage_to_rank_m
         # the batch size can be a collection (e.g (batch, seq_len) in NLP)
         bs_train = to_tuple(bs_train)
         bs_test = to_tuple(bs_test)
-
+        # TODO: this assume that batch is first
         len_bs = len(bs_train)
         train_shapes = tuple(
             tuple(list(bs_train) + list(j.data.size()[len_bs:])) for j in a)
@@ -293,6 +338,7 @@ def to_tuple(x):
 def main():
     args = parse_cli()
     parse_env_vars(args)
+    parse_json_config(args)
 
     if args.debug:
         import ptvsd
@@ -337,6 +383,7 @@ def main():
     #     dl_kw['pin_memory'] = True  # FIXME
 
     dl_kw['num_workers'] = args.num_data_workers
+    dl_kw['drop_last'] = True
 
     train_dl, test_dl = simplified_get_train_test_dl_from_args(
         args, verbose=False, **dl_kw)
@@ -363,12 +410,16 @@ def main():
     training_tensor_shapes = {"input0": (
         *bs_train, *BASE_INPUT_SHAPE), "target": (*bs_train, *BASE_TARGET_SHAPE)}
 
+    eval_tensor_shapes = {"input0": (
+        *bs_test, *BASE_INPUT_SHAPE), "target": (*bs_test, *BASE_TARGET_SHAPE)}
+
     comm_init_args, shapes = \
         create_distributed_communcation_context(args, configs, stage,
                                                 stage_to_rank_map=None,
                                                 target_tensor_names=target_tensor_names,
                                                 training_tensor_dtypes=training_tensor_dtypes,
                                                 training_tensor_shapes=training_tensor_shapes,
+                                                eval_tensor_shapes=eval_tensor_shapes,
                                                 random_input_sample=random_input_sample,
                                                 bs_train=bs_train,
                                                 bs_test=bs_test)
@@ -380,6 +431,8 @@ def main():
 
     trainer_cls = AVAILABLE_TRAINERS.get(args.trainer)
     task_cls = AVAILABLE_TASKS.get(args.task)
+    optimizer_cls = AVAILBALE_OPTIMIZERS.get(args.optimizer_type)
+    statistics = AVAILBALE_STATS.get(args.statistics)
 
     partition = SinglePartitionManager(
         stage,
@@ -389,7 +442,16 @@ def main():
         device, is_last_partition, is_first_partition)
 
     # Set Trainer
-    trainer = trainer_cls(partition.partition)
+    if optimizer_cls:
+        optimizer = optimizer_cls(
+            partition.partition.parameters(), **args.optimizer['args'])
+
+    if args.trainer == 'dummy':
+        trainer = trainer_cls(partition.partition)
+    else:
+        trainer = trainer_cls(partition.partition,
+                              optimizer=optimizer, statistics=statistics)
+
     partition.set_trainer(trainer)
 
     # Set Task
@@ -397,11 +459,44 @@ def main():
     partition.set_task(task)
 
     # Set Dataloader
-    partition.set_dataloader(train_dl)  # sets only to first partition
 
-    # Start training
-    partition.train()
-    partition.run_until_flush(2)
+    # TRAIN = False
+    for epochs in range(2):
+        for TRAIN in [True, False]:
+            BATCHES_TO_RUN = 2
+            if TRAIN:
+                # sets only to first partition
+                partition.set_dataloader(train_dl)
+                # Start training
+                partition.train()
+                if statistics:
+                    statistics.train()
+                # for i in range(100):
+                partition.run_until_flush(min(BATCHES_TO_RUN, len(train_dl)))
+            else:
+                with torch.no_grad():
+                    DL_TO_WORK_ON = test_dl
+                    # sets only to first partition
+                    partition.set_dataloader(DL_TO_WORK_ON)
+                    partition.eval()
+                    if statistics:
+                        statistics.eval()
+                    partition.run_forward_until_flush(
+                        min(BATCHES_TO_RUN, len(DL_TO_WORK_ON)))
+
+            if args.local_rank == get_world_size(args.distributed_backend) - 1:
+                # print(os.environ.get('OMPI_COMM_WORLD_SIZE'))
+                # print(f"world_size {get_world_size(args.distributed_backend)}")
+                # print(f"local_rank {args.local_rank}")
+                statistics.on_epoch_end()
+
+    # FIXME: If last state
+    if args.rank == get_world_size(args.distributed_backend) - 1:
+        if statistics:
+            fit_res = statistics.get_stats()  # Assuming its a named tuple..
+            config = {}  # FIXME: TODO:
+            save_experiment(args.out_filename, args.out_dir, config, fit_res)
+
     # TODO:
 
 

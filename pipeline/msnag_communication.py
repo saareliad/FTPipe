@@ -118,6 +118,7 @@ class CommunicationHandler(object):
             dtype = self.training_tensor_dtypes[tensor_name]
             rcv_buffer = torch.empty(
                 shape, dtype=dtype, device=device, requires_grad=requires_grad)
+            # print(f"-V- rcv_buffer shape {rcv_buffer.shape}")
             buffers.append(rcv_buffer)
         return buffers
 

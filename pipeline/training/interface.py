@@ -14,6 +14,10 @@ class AnyTrainer(abc.ABC):
     def step_on_computed_grads(self, **kw):
         pass
 
+    @abc.abstractmethod
+    def calc_test_stats(self, *args, **kw):
+        pass
+
 
 class SupervisedTrainer(AnyTrainer):
     # added *args just to make it a true subtype.

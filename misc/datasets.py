@@ -32,9 +32,9 @@ def get_cifar_10_train_test_ds():
 def get_cifar_train_test_dl(ds_train, ds_test, bs_train, bs_test, shuffle_train=True, pin_memory=True, **kw):
     # TODO: X to first device and y to last device.
     dl_train = torch.utils.data.DataLoader(
-        ds_train, bs_train, shuffle=shuffle_train, pin_memory=pin_memory)
+        ds_train, bs_train, shuffle=shuffle_train, pin_memory=pin_memory, **kw)
     dl_test = torch.utils.data.DataLoader(
-        ds_test, bs_test, shuffle=False, pin_memory=pin_memory)
+        ds_test, bs_test, shuffle=False, pin_memory=pin_memory, **kw)
     return dl_train, dl_test
 
 
