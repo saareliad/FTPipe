@@ -146,8 +146,10 @@ class Attention(nn.Module):
     def _attn(self, q, k, v, attention_mask=None, head_mask=None):
         w = torch.matmul(q, k)
         if self.scale:
+            #TODO tracer warning using v.size(-1) as a value
             w = w / math.sqrt(v.size(-1))
         nd, ns = w.size(-2), w.size(-1)
+        #TODO tracer warning using w.size as values
         b = self.bias[:, :, ns-nd:ns, :ns]
         w = w * b - 1e4 * (1 - b)
 
@@ -790,8 +792,8 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
         self._tie_or_clone_weights(self.lm_head,
                                    self.transformer.wte)
 
-    def forward(self, input_ids, past=None, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None,
-                labels=None):
+    def forward(self, input_ids,labels=None, past=None, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None,
+                ):
         transformer_outputs = self.transformer(input_ids,
                                                past=past,
                                                attention_mask=attention_mask,
