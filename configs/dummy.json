@@ -1,0 +1,23 @@
+{
+    "logdir": "logs/",
+    "distributed_backend": "mpi",
+    "task": "cv",
+    "statistics": "cv",
+    "model": "wrn_16x4_p2",
+    "trainer": "cv",
+    "bs_train": 128,
+    "bs_test": 200,
+    "num_data_workers": 0,
+    "optimizer": {
+        "type": "sgd1",
+        "args": {
+            "lr": 0.1,
+            "weight_decay": 0.0005,
+            "momentum": 0.9,
+            "nesterov": false
+        }
+    },
+    "epochs": -1,
+    "steps": -1
+
+}

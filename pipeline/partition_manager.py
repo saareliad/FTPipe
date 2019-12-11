@@ -10,10 +10,11 @@ from .tasks import DLTask
 
 # from gpu_mem_track import MemTracker
 
+
 class SinglePartitionManager:
     def __init__(self, stage, configs: Dict, partition: torch.nn.Module, comm_handler: CommunicationHandler,
                  training_tensor_shapes, eval_tensor_shapes,
-                 device, is_last_partition, is_first_partition):
+                 device, is_last_partition, is_first_partition, statistics=None):
 
         if is_last_partition:
             partition_cls = LastPartition
@@ -64,7 +65,8 @@ class SinglePartitionManager:
 
         # self.forward_minibatch_id = 0
         # self.backward_minibatch_id = 0
-
+        # TODO: 
+        
         if self.comm_handler is not None:
             self.comm_handler.set_tensor_shapes(self.tensor_shapes)
 
@@ -97,8 +99,8 @@ class SinglePartitionManager:
             x = self.partition(x, batch_idx)
 
             send_ctx = self.task.pack_send_context(x, *ctx)
-            for i in send_ctx:
-                print(f"send ctx: {i.shape}")
+            # for i in send_ctx:
+            #     print(f"send ctx: {i.shape}")
 
             request_objects = self.comm_handler.send_activations(
                 send_ctx, batch_idx)
@@ -121,13 +123,15 @@ class SinglePartitionManager:
 
             # recv for fwd
             for obj in request_objects:
-                print(f"-I- {self.stage} waiting on rcv")
+                # print(f"-I- {self.stage} waiting on rcv")
                 obj.wait()
-                print(f"-I- {self.stage} DONE waiting on rcv")
+                # print(f"-I- {self.stage} DONE waiting on rcv")
 
             x, *ctx = self.task.unpack_data_for_partition(x)
             x = self.partition(x, batch_idx)
             if not self.partition.training:
+                if self.is_last_partition:
+                    self.trainer.calc_test_stats(x, *ctx)
                 return []
             
             # if self.partition.training:
@@ -217,12 +221,21 @@ class SinglePartitionManager:
             sent_request_objects = self.run_batch_forward(done_fwds)
             self.async_fwd_objects[done_fwds] = sent_request_objects
 
-            for sent_request_objects in self.async_fwd_objects.values():
-                for i in sent_request_objects:
-                    print(f"-I- {self.stage} waiting")
-                    i.wait()
+            # TODO: don't wait every time, add option to accum by depth
+            if done_fwds % 2 == 0:
+                for sent_request_objects in self.async_fwd_objects.values():
+                    for i in sent_request_objects:
+                        # print(f"-I- {self.stage} waiting")
+                        i.wait()
 
-            self.async_fwd_objects.clear()
+                self.async_fwd_objects.clear()
+
+        # Also clear in the end, just in case...
+        for sent_request_objects in self.async_fwd_objects.values():
+            for i in sent_request_objects:
+                i.wait()
+
+        self.async_fwd_objects.clear()
 
     def run_until_flush(self, num_batches):
         """
