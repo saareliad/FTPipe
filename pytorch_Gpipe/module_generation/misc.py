@@ -33,9 +33,9 @@ def generateStateDictFunction():
 
 
 def generateNamedParametersFunction():
-    named_parameters_function = ["def named_parameters(self):",
+    named_parameters_function = ["def named_parameters(self,recurese=True):",
                                  f"# we return the named parameters of this part as it should be in the original model",
-                                 "params = super().named_parameters()",
+                                 "params = super().named_parameters(recurse=recurse)",
                                  f"lookup = self.lookup",
                                  "for k, v in params:",
                                  f"{tab}if k in lookup:",
@@ -49,9 +49,9 @@ def generateNamedParametersFunction():
 
 
 def generateNamedBuffersFunction():
-    named_buffers_function = ["def named_buffers(self):",
+    named_buffers_function = ["def named_buffers(self,recurse=True):",
                               f"# we return the named buffers of this part as it should be in the original model",
-                              "params = super().named_buffers()",
+                              "params = super().named_buffers(recurse=recurse)",
                               f"lookup = self.lookup",
                               "for k, v in params:",
                               f"{tab}if k in lookup:",
