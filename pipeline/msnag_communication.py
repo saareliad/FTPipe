@@ -39,8 +39,9 @@ class CommunicationHandler(object):
                  ranks_in_next_stage,
                  TOTAL_TAGS,
                  cpu,
+                 GRAD_UGLY_SHAMEFUL_NAME="_grad"
                  ):
-
+        assert isinstance(GRAD_UGLY_SHAMEFUL_NAME, str)
         self.rank = rank
         self.local_rank = local_rank
         self.backend = backend
@@ -85,11 +86,12 @@ class CommunicationHandler(object):
             elif i+1 == stage:
                 self.my_left_group = pg
 
+        # GRAD_UGLY_SHAMEFUL_NAME = "_grad"
         # can spare the if, intentionally ugly.
         self.grad_rcv_items = [
-            (i, v) for i, v in self.send_ranks.items() if not (i in target_tensor_names)]
+            (i + GRAD_UGLY_SHAMEFUL_NAME, v) for i, v in self.send_ranks.items() if not (i in target_tensor_names)]
         self.grad_send_items = [
-            (i, v) for i, v in self.receive_ranks.items() if not (i in target_tensor_names)]
+            (i + GRAD_UGLY_SHAMEFUL_NAME, v) for i, v in self.receive_ranks.items() if not (i in target_tensor_names)]
 
         self._register_target_tensor()
 
@@ -135,8 +137,7 @@ class CommunicationHandler(object):
         for tensor, (tensor_name, receive_ranks) in zip(x, ranks_dict_items):
             assert len(receive_ranks) == 1
             receive_rank = receive_ranks[0]
-            tensor_tag = self.tensor_tags[tensor_name] + (
-                self.TOTAL_TAGS * batch_idx)
+            tensor_tag = self.tensor_tags[tensor_name] + (self.TOTAL_TAGS * batch_idx)
             self.logger.info(
                 f"irecv, src={receive_rank}, tag={tensor_tag}, name={tensor_name}, rank={self.local_rank}")
             request_obj = dist.irecv(tensor, receive_rank, tag=tensor_tag)

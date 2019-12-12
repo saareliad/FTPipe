@@ -26,7 +26,7 @@ class CVTrainer(SupervisedTrainer):
     #     return self.stats.get_stats()
 
     def calc_test_stats(self, x, y):
-        print("Called calc_test_stats")
+        # print("Called calc_test_stats")
         loss = self.loss_fn(x, y)
         batch_size = len(y)
         y_pred = torch.argmax(x, 1)

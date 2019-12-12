@@ -56,6 +56,7 @@ class SinglePartitionManager:
     def set_dataloader(self, dataloader):
         if self.is_first_partition:
             self.dataloader = dataloader
+            self.dl_iter = None
 
     def train(self):
         # self.tensors = []
@@ -65,7 +66,7 @@ class SinglePartitionManager:
 
         # self.forward_minibatch_id = 0
         # self.backward_minibatch_id = 0
-        # TODO: 
+        # TODO:
 
         if self.comm_handler is not None:
             self.comm_handler.set_tensor_shapes(self.tensor_shapes)
@@ -107,6 +108,7 @@ class SinglePartitionManager:
             x = self.partition(x, batch_idx)
 
             send_ctx = self.task.pack_send_context(x, *ctx)
+            # print("Sending", *ctx, ctx[0].shape)
             # for i in send_ctx:
             #     print(f"send ctx: {i.shape}")
 
@@ -139,6 +141,7 @@ class SinglePartitionManager:
             x = self.partition(x, batch_idx)
             if not self.partition.training:
                 if self.is_last_partition:
+                    # print(*ctx, ctx[0].shape)
                     self.trainer.calc_test_stats(x, *ctx)
                 return []
             

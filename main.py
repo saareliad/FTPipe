@@ -93,6 +93,8 @@ def parse_cli():
     parser.add_argument('--optimizer_type', help='Optimizer type to use',
                         choices=AVAILABLE_TASKS.keys(), default='sgd1')
 
+    parser.add_argument("--epochs", type=int, help="Training epochs to run", default=-1, required=False)
+    parser.add_argument("--steps", type=int, help="Training steps to run", default=-1, required=False)
     # parser.add_argument('--linear_scaling', help="Use linear LR scaling rule", default=True)
 
     parser.add_argument('--debug', action='store_true', default=False,
@@ -144,7 +146,7 @@ def parse_env_vars(args):
 
 
 def assert_args(args):
-    pass
+    assert (args.epochs >= 1 or args.steps >=1)
 
 
 def create_comm_handler(args, initialize_args):
@@ -174,7 +176,7 @@ def config_to_tuples_array(configs):
 
 # target_tensor_names = {"target", "target_length"}
 # target_tensor_names = {"target"}
-def tensor_tags_from_config(config, target_tensor_names):
+def tensor_tags_from_config(config, target_tensor_names, GRAD_UGLY_SHAMEFUL_NAME = "_grad"):
 
     # Note: same tags for all proccess
 
@@ -191,11 +193,27 @@ def tensor_tags_from_config(config, target_tensor_names):
             if output_tensor not in tensor_tags:
                 tensor_tags[output_tensor] = tensor_tag
                 tensor_tag += 1
+    # Create different tags for gradients
+    for (_, input_tensors, output_tensors) in model:
+        for input_tensor in input_tensors:
+            input_tensor += GRAD_UGLY_SHAMEFUL_NAME
+            if input_tensor not in tensor_tags:
+                tensor_tags[input_tensor] = tensor_tag
+                tensor_tag += 1
+        for output_tensor in output_tensors:
+            output_tensor += GRAD_UGLY_SHAMEFUL_NAME
+            if output_tensor not in tensor_tags:
+                tensor_tags[output_tensor] = tensor_tag
+                tensor_tag += 1
+
     for target_tensor_name in sorted(target_tensor_names):
         tensor_tags[target_tensor_name] = tensor_tag
         tensor_tag += 1
+    
     tensor_tags["ack"] = tensor_tag
     tensor_tag += 1
+
+
 
     return tensor_tags, tensor_tag
 
@@ -346,9 +364,8 @@ def main():
         ptvsd.enable_attach(address=('127.0.0.1', port))
         ptvsd.wait_for_attach()
 
-    local_rank = args.local_rank
     logger = FileLogger(args.logdir, global_rank=args.rank,
-                        local_rank=local_rank, name='msnag')
+                        local_rank=args.local_rank, name='msnag')
     assert_args(args)
     configs = models.get_partitioning(args.model, model_instance=None)
 
@@ -458,13 +475,19 @@ def main():
     task = task_cls(device, is_last_partition, is_first_partition)
     partition.set_task(task)
 
-    # Set Dataloader
-
-    # TRAIN = False
-    for epochs in range(2):
+    epochs = 0
+    steps = 0
+    logger.info(f"Running for {args.epochs} epochs and {args.steps} steps")
+    while epochs < args.epochs or args.epochs < 0:
+        logger.info(f"Starting Epoch {epochs}, so far did {steps} steps")
+        # while args.steps < 0 or steps < args.steps:
+        # steps_at_epoch_start = steps
         for TRAIN in [True, False]:
-            BATCHES_TO_RUN = 2
+            logger.info(f"Running MODE is {'train' if TRAIN else 'eval'}")
+            TRAIN_BATCHES_TO_RUN = 2
+            TEST_BATCHES_TO_RUN = 2
             if TRAIN:
+                # Set Dataloader
                 # sets only to first partition
                 partition.set_dataloader(train_dl)
                 # Start training
@@ -472,24 +495,29 @@ def main():
                 if statistics:
                     statistics.train()
                 # for i in range(100):
-                partition.run_until_flush(min(BATCHES_TO_RUN, len(train_dl)))
+                partition.run_until_flush(min(TRAIN_BATCHES_TO_RUN, len(train_dl)))
             else:
-                with torch.no_grad():
-                    DL_TO_WORK_ON = test_dl
-                    # sets only to first partition
-                    partition.set_dataloader(DL_TO_WORK_ON)
-                    partition.eval()
-                    if statistics:
-                        statistics.eval()
-                    partition.run_forward_until_flush(
-                        min(BATCHES_TO_RUN, len(DL_TO_WORK_ON)))
+            
+                DL_TO_WORK_ON = test_dl
+                # Set Dataloader
+                # sets only to first partition
+                partition.set_dataloader(DL_TO_WORK_ON)
+                partition.eval()
+
+                if statistics:
+                    statistics.eval()
+                    with torch.no_grad():
+                        partition.run_forward_until_flush(
+                            min(TEST_BATCHES_TO_RUN, len(DL_TO_WORK_ON)))
 
             if args.local_rank == get_world_size(args.distributed_backend) - 1:
-                # print(os.environ.get('OMPI_COMM_WORLD_SIZE'))
-                # print(f"world_size {get_world_size(args.distributed_backend)}")
-                # print(f"local_rank {args.local_rank}")
                 statistics.on_epoch_end()
-
+        epochs += 1
+        steps += TRAIN_BATCHES_TO_RUN
+        if args.steps > 0 and steps >= args.steps:
+            break
+            # steps_condition_is_met = True
+    
     # FIXME: If last state
     if args.rank == get_world_size(args.distributed_backend) - 1:
         if statistics:
@@ -502,3 +530,52 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# /opt/pytorch2/aten/src/THCUNN/ClassNLLCriterion.cu:106: void cunn_ClassNLLCriterion_updateOutput_kernel(Dtype *, Dtype *, Dtype *, signed long *, Dtype *, int, int, int, int, signed long) [with Dtype = float, Acctype = float]: block: [0,0,0], thread: [7,0,0] Assertion `t >= 0 && t < n_classes` failed.
+# Traceback (most recent call last):
+#   File "main.py", line 511, in <module>
+#     main()
+#   File "main.py", line 491, in main
+#     min(TEST_BATCHES_TO_RUN, len(DL_TO_WORK_ON)))
+#   File "/home/saareliad/workspace/async_pipeline/pipeline/partition_manager.py", line 229, in run_forward_until_flush
+#     sent_request_objects = self.run_batch_forward(done_fwds)
+#   File "/home/saareliad/workspace/async_pipeline/pipeline/partition_manager.py", line 142, in run_batch_forward
+#     self.trainer.calc_test_stats(x, *ctx)
+#   File "/home/saareliad/workspace/async_pipeline/pipeline/training/cvtrainer.py", line 33, in calc_test_stats
+#     num_correct = torch.sum(y == y_pred).item()
+# RuntimeError: CUDA error: device-side assert triggered
+
+
+# /opt/pytorch2/aten/src/THCUNN/ClassNLLCriterion.cu:106: void cunn_ClassNLLCriterion_updateOutput_kernel(Dtype *, Dtype *, Dtype *, signed long *, Dtype *, int, int, int, int, signed long) [with Dtype = float, Acctype = float]: block: [0,0,0], thread: [7,0,0] Assertion `t >= 0 && t < n_classes` failed.
+# THCudaCheck FAIL file=/opt/pytorch2/aten/src/THCUNN/generic/ClassNLLCriterion.cu line=110 error=710 : device-side assert triggered
+# Traceback (most recent call last):
+#   File "main.py", line 511, in <module>
+#     main()
+#   File "main.py", line 491, in main
+#     min(TEST_BATCHES_TO_RUN, len(DL_TO_WORK_ON)))
+#   File "/home/saareliad/workspace/async_pipeline/pipeline/partition_manager.py", line 229, in run_forward_until_flush
+#     sent_request_objects = self.run_batch_forward(done_fwds)
+#   File "/home/saareliad/workspace/async_pipeline/pipeline/partition_manager.py", line 142, in run_batch_forward
+#     self.trainer.calc_test_stats(x, *ctx)
+#   File "/home/saareliad/workspace/async_pipeline/pipeline/training/cvtrainer.py", line 30, in calc_test_stats
+#     loss = self.loss_fn(x, y)
+#   File "/home_local/saareliad/miniconda3/envs/msnag/lib/python3.7/site-packages/torch/nn/modules/module.py", line 532, in __call__
+#     result = self.forward(*input, **kwargs)
+#   File "/home_local/saareliad/miniconda3/envs/msnag/lib/python3.7/site-packages/torch/nn/modules/loss.py", line 916, in forward
+#     ignore_index=self.ignore_index, reduction=self.reduction)
+#   File "/home_local/saareliad/miniconda3/envs/msnag/lib/python3.7/site-packages/torch/nn/functional.py", line 2028, in cross_entropy
+#     return nll_loss(log_softmax(input, 1), target, weight, None, ignore_index, None, reduction)
+#   File "/home_local/saareliad/miniconda3/envs/msnag/lib/python3.7/site-packages/torch/nn/functional.py", line 1845, in nll_loss
+#     ret = torch._C._nn.nll_loss(input, target, weight, _Reduction.get_enum(reduction), ignore_index)
+# RuntimeError: cuda runtime error (710) : device-side assert triggered at /opt/pytorch2/aten/src/THCUNN/generic/ClassNLLCriterion.cu:110
+
+
+
+#   File "/home_local/saareliad/miniconda3/envs/msnag/lib/python3.7/site-packages/torch/nn/modules/loss.py", line 916, in forward
+#     ignore_index=self.ignore_index, reduction=self.reduction)
+#   File "/home_local/saareliad/miniconda3/envs/msnag/lib/python3.7/site-packages/torch/nn/functional.py", line 2028, in cross_entropy
+#     return nll_loss(log_softmax(input, 1), target, weight, None, ignore_index, None, reduction)
+#   File "/home_local/saareliad/miniconda3/envs/msnag/lib/python3.7/site-packages/torch/nn/functional.py", line 1845, in nll_loss
+#     ret = torch._C._nn.nll_loss(input, target, weight, _Reduction.get_enum(reduction), ignore_index)
+# IndexError: Target 4577720945669625662 is out of bounds.

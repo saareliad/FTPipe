@@ -75,15 +75,15 @@ class CVStats(Stats):
     def on_epoch_end(self):
         if self.training:
             if not self.record_loss_per_batch:
-                self.fit_res.train_loss = self.epoch_loss.get_avg()
+                self.fit_res.train_loss.append(self.epoch_loss.get_avg())
 
-            self.fit_res.train_acc = self.epoch_acc.get_avg()
+            self.fit_res.train_acc.append(self.epoch_acc.get_avg())
             self.fit_res.num_epochs += 1  # FIXME: its only here, currently assuming test are same as train.
         else:
             if not self.record_loss_per_batch:
-                self.fit_res.test_loss = self.epoch_loss.get_avg()
+                self.fit_res.test_loss.append(self.epoch_loss.get_avg())
 
-            self.fit_res.test_acc = self.epoch_acc.get_avg()
+            self.fit_res.test_acc.append(self.epoch_acc.get_avg())
 
         self.epoch_acc.reset()
         self.epoch_loss.reset()

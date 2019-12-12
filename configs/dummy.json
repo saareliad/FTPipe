@@ -20,6 +20,6 @@
         }
     },
     "epochs": -1,
-    "steps": -1
+    "steps": 10
 
 }
