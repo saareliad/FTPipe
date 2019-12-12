@@ -157,7 +157,8 @@ class Attention(nn.Module):
             # Apply the attention mask
             w = w + attention_mask
 
-        w = nn.Softmax(dim=-1)(w)
+        # w = nn.Softmax(dim=-1)(w)
+        w= torch.softmax(w,dim=-1)
         w = self.attn_dropout(w)
 
         # Mask heads if we want to
@@ -713,7 +714,7 @@ class GPT2Model(GPT2PreTrainedModel):
                 all_attentions.append(outputs[2])
 
         hidden_states = self.ln_f(hidden_states)
-
+        attention_output_shape=hidden_states.shape
         hidden_states = hidden_states.view(*output_shape)
         # Add last hidden state
         if self.output_hidden_states:
@@ -726,8 +727,8 @@ class GPT2Model(GPT2PreTrainedModel):
             outputs = outputs + (all_hidden_states,)
         if self.output_attentions:
             # let the number of heads free (-1) so we can extract attention even after head pruning
-            attention_output_shape = input_shape[:-1] + \
-                (-1,) + all_attentions[0].shape[-2:]
+            # attention_output_shape = input_shape[:-1] + \
+            #     (-1,) + all_attentions[0].shape[-2:]
             all_attentions = tuple(t.view(*attention_output_shape)
                                    for t in all_attentions)
             outputs = outputs + (all_attentions,)
@@ -801,9 +802,7 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
                                                position_ids=position_ids,
                                                head_mask=head_mask)
         hidden_states = transformer_outputs[0]
-
         lm_logits = self.lm_head(hidden_states)
-
         outputs = (lm_logits,) + transformer_outputs[1:]
         if labels is not None:
             # Shift so that tokens < n predict n

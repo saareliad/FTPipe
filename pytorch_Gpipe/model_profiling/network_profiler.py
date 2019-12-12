@@ -5,7 +5,7 @@ from itertools import chain
 import torch
 import torch.nn as nn
 
-from ..utils import Tensors, _detach_inputs, _get_size, get_device, traverse_model
+from ..utils import Tensors, _detach_inputs, _get_size, get_device, traverse_model, flatten
 
 __all__ = ['profileNetwork', 'Profile']
 
@@ -190,8 +190,8 @@ class Wrapper(nn.Module):
 
         # reduce outputs to calculate dummy loss
         loss = torch.zeros(1, requires_grad=True, device=device)
-        for out in outputs:
-            loss = loss + out.norm()
+        for out in flatten(outputs):
+            loss = loss+out.norm()
 
         # measure backward execution time
         self.backward_time, _, self.backward_cuda_mem = self._time_op(

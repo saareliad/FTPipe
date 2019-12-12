@@ -247,7 +247,6 @@ def create_buffer_configs(xs, partitions_config):
 
         # update outputs
         for n, o in zip(partition['outputs'], outs):
-            print(n)
             ts[n] = o
             buffer_configs[n] = {'size': o.shape,
                                  'dtype': o.dtype}
@@ -337,18 +336,26 @@ def train(args, train_dataset, model, tokenizer):
             labels = labels.to(args.device)
             model.train()
             from pytorch_Gpipe import pipe_model, graph_builder, partition, generatePartitionModules
+            from pytorch_Gpipe.utils import traverse_model
             # graph = pipe_model(model, (inputs, labels), DEBUG=False)
             # graph.save("GPT2", ".", show_weights=False)
             if False:
-                graph = graph_builder(model, (inputs, labels))
+                graph = graph_builder(model, inputs, use_profiler=False,
+                                      max_depth=3)
                 graph = partition(graph, 4)
-                graph.save("GPT2", ".", show_weights=False)
-                generatePartitionModules(graph, model, verbose=True)
+                graph.save("GPT2_with_profiler", ".",
+                           show_weights=False, show_buffs_params=True)
+                generatePartitionModules(graph, model, verbose=False,
+                                         output_file="gpt2_profiler_4")
+
+                with open("trace.txt", "w") as f:
+                    graph, _ = torch.jit.get_trace_graph(model,
+                                                         (inputs))
+                    f.write(str(graph.graph()))
             else:
-                from GPT2LMHeadModel4 import createConfig
+                from NLP_models.partitioned_gpt2 import createConfig
                 config = createConfig(model, DEBUG=True, partitions_only=False)
                 create_buffer_configs((inputs, labels), config)
-
             assert False
             outputs = model(inputs, masked_lm_labels=labels) if args.mlm else model(
                 inputs, labels=labels)
@@ -624,6 +631,7 @@ def main():
     config_class, model_class, tokenizer_class = MODEL_CLASSES[args.model_type]
     config = config_class.from_pretrained(args.config_name if args.config_name else args.model_name_or_path,
                                           cache_dir=args.cache_dir if args.cache_dir else None)
+
     tokenizer = tokenizer_class.from_pretrained(args.tokenizer_name if args.tokenizer_name else args.model_name_or_path,
                                                 do_lower_case=args.do_lower_case,
                                                 cache_dir=args.cache_dir if args.cache_dir else None)

@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from pytorch_Gpipe.model_profiling.control_flow_graph import Node, NodeTypes
 from pytorch_Gpipe.utils import OrderedSet
-from .parse_declarations import parse_functions, dtype_lookup,layout_lookup
+from .parse_declarations import parse_functions, dtype_lookup, layout_lookup
 from collections import OrderedDict
 from itertools import chain
 from typing import List, Tuple, Dict, Iterator
@@ -116,7 +116,7 @@ def generateStatements(partition: List[Node], scope_to_class_field: Dict[str, st
             print("we suggest to avoid using layers for stateless operations")
             print("for eg. F.relu() is preffered to nn.ReLU")
             assert False
-        
+
         # actual code generation
         if node.type == NodeTypes.LAYER:
             statements.append(generateLayerActivationExpression(scope_to_class_field,
@@ -132,7 +132,7 @@ def generateStatements(partition: List[Node], scope_to_class_field: Dict[str, st
             # statements.append(generateFunctionCallExpressionOld(ready_expressions, expression_len,
             #                                                  node, arg_gen, verbose=verbose))
             statements.append(generateFunctionCallExpression(ready_expressions, expression_len,
-                                    node, arg_gen, verbose=verbose))
+                                                             node, arg_gen, verbose=verbose))
 
         close_nodes.add(node.idx)
     statements = filter(lambda s: s != '', statements)
@@ -195,7 +195,8 @@ def generatePrimitiveExpression(ready_expressions: Dict[str, str], expression_le
     elif 'ListUnpack' in node.scope:
         return generateUnpackExpression(ready_expressions, expression_len, node, arg_gen, verbose=verbose)
     elif 'NumToTensor' in node.scope or 'ImplicitTensorToNum' in node.scope:
-        assert len(node.in_nodes) == 1, "num <=> Tensor conversions are a no op with 1 input"
+        assert len(
+            node.in_nodes) == 1, "num <=> Tensor conversions are a no op with 1 input"
         expression_len[node.scope] = 0
         ready_expressions[node.scope] = ready_expressions[node.in_nodes[0].scope]
         return ''
@@ -263,115 +264,8 @@ def generateConstantExpression(ready_expressions: Dict[str, str], expression_len
     expression_len[node.scope] = 0
 
 
-def generateFunctionCallExpressionOld(ready_expressions: Dict[str, str], expression_len: Dict[str, int], node: Node,
-                                   arg_gen: Iterator[str], verbose=False) -> str:
-    ''' generate a function call belonging to one of the nameSpaces:\n
-        torch,torch.nn.functional, torch.Tensor\n
-        we check those nameSpaces in order, and the first match is called\n
-
-        if no match was found triggers assert\n
-
-        if the expression has one use then it's embedded in call site,\n
-        otherwise creates a temporary variable to store the result
-    '''
-    scope = node.scope
-    func_name, namespace = getAtenFunctionNameAndScope(scope)
-    operand_scopes = [n.scope for n in node.in_nodes]
-    input_types = [n.valueType() for n in node.in_nodes]
-    values = [ready_expressions[s] for s in operand_scopes]
-    expression_len[scope] = 1 + max(expression_len[s] for s in operand_scopes)
-
-    try:
-        SupportedFunctions.findMatch(func_name, input_types, values)
-    except Exception:
-        print(f"{namespace}.{func_name} not found in supported functions")
-        print(input_types)
-        print()
-        specialCases(ready_expressions, node, operand_scopes,
-                     namespace,func_name, input_types, values)
-
-    # if func_name == 'log_softmax':
-    #     print(f"value types: {input_types}")
-    #     print(SupportedFunctions.findMatch(
-    #         func_name, input_types, values) != '')
-    #     print("\nsignatures")
-    #     for f in SupportedFunctions[FunctionTypes.TORCH]['log_softmax']:
-    #         print(f)
-    #         print(f.match(input_types))
-    #         print()
-    #         print()
-
-    # generate args
-    if func_name == 'expand':
-        tensor_id = ready_expressions[operand_scopes[0]]
-        size = ready_expressions[operand_scopes[1]]
-        implicit = ready_expressions[operand_scopes[2]]
-        args = f"{tensor_id}, {size}, implicit={implicit}"
-    elif func_name == 'add' or func_name == 'add_':
-        # this is a ugly hack for expression for x+y that generates aten::add(x,y,1)
-        # so we simply ignore the 1 as an argument
-        if len(operand_scopes) == 3 and ready_expressions[operand_scopes[-1]] == '1':
-            operand_scopes = operand_scopes[:-1]
-        args = ', '.join([ready_expressions[operand]
-                          for operand in operand_scopes])
-    if func_name == 'Int':
-        assert len(node.in_nodes) == 1, "aten::Int is a no op with 2 input"
-        ready_expressions[scope] = ready_expressions[node.in_nodes[0].scope]
-        expression_len[scope] = expression_len[node.in_nodes[0].scope]
-        return ''
-    elif func_name == "to":
-        args = generateToArgs(ready_expressions, node)
-    elif func_name == "scalar_tensor":
-        value = ready_expressions[operand_scopes[0]]
-        dtype = dtype_lookup[ready_expressions[operand_scopes[1]]]
-        layout = layout_lookup[ready_expressions[operand_scopes[2]]]
-        device = ready_expressions[operand_scopes[3]]
-        pin_memory = ready_expressions[operand_scopes[4]]
-        args = f"{value}, dtype={dtype}, layout={layout}, device={device}, pin_memory={pin_memory}"
-    elif func_name == "slice":
-        operand = ready_expressions[operand_scopes[0]]
-        args = "".join([":, " for _ in range(
-            int(ready_expressions[operand_scopes[1]]))])
-        args += ":".join([str(ready_expressions[a])
-                          for a in operand_scopes[2:]])
-        expression = f"{operand}[{args}]"
-    elif func_name == "ones":
-        size = ready_expressions[operand_scopes[0]]
-        dtype = dtype_lookup[ready_expressions[operand_scopes[1]]]
-        layout = layout_lookup[ready_expressions[operand_scopes[2]]]
-        device = ready_expressions[operand_scopes[3]]
-        requires_grad = ready_expressions[operand_scopes[4]]
-        args = f"{size}, dtype={dtype}, layout={layout}, device={device}, requires_grad={requires_grad}"
-    else:
-        # default case all positional args
-        args = ', '.join([ready_expressions[operand]
-                          for operand in operand_scopes])
-
-    # generate the expression
-    if func_name == "slice":
-        expression = f"{operand}[{args}]"
-    else:
-        expression = f'{namespace}.{func_name}({args})'
-
-    exp_len = 1 + max(expression_len[s] for s in operand_scopes)
-    if (not verbose) and (exp_len < 10) and canEmbedInUseSite(node):
-        ready_expressions[scope] = expression
-        expression_len[scope] = exp_len
-        return ''
-
-    # generate discription
-    scope_comment = f'\n{dtab}# '.join(operand_scopes)
-    comment = f'# calling {namespace}.{func_name} with arguments:\n{dtab}# {scope_comment}'
-
-    t = next(arg_gen)
-    ready_expressions[scope] = t
-    expression_len[scope] = 0
-
-    return comment + f'\n{dtab}{t} = {expression}'
-
-
 def generateFunctionCallExpression(ready_expressions: Dict[str, str], expression_len: Dict[str, int], node: Node,
-          arg_gen: Iterator[str], verbose=False) -> str:
+                                   arg_gen: Iterator[str], verbose=False) -> str:
     ''' generate a function call belonging to one of the nameSpaces:\n
         torch,torch.nn.functional, torch.Tensor\n
         we check those nameSpaces in order, and the first match is called\n
@@ -388,19 +282,19 @@ def generateFunctionCallExpression(ready_expressions: Dict[str, str], expression
     values = [ready_expressions[s] for s in operand_scopes]
 
     try:
-        specialCase=False
+        specialCase = False
         expression = SupportedFunctions.findMatch(func_name, types, values)
     except Exception:
-        specialCase = True
-        expression = specialCases(ready_expressions,node,operand_scopes,namespace,func_name,types,values)
-
+        expression = specialCases(ready_expressions, node, operand_scopes,
+                                  namespace, func_name, types, values)
+        specialCase = expression.startswith("F.")
     if not specialCase:
         exp_len = 1 + max(expression_len[s]for s in operand_scopes)
     else:
         exp_len = 1000
-        
+
     # embeded
-    if (not specialCase) and  ((not verbose) and (exp_len < 10) and canEmbedInUseSite(node)):
+    if (not verbose) and (exp_len < 10) and canEmbedInUseSite(node):
         ready_expressions[scope] = expression
         expression_len[scope] = exp_len
         return ''
@@ -416,15 +310,16 @@ def generateFunctionCallExpression(ready_expressions: Dict[str, str], expression
     return comment + f'\n{dtab}{t} = {expression}'
 
 
-def specialCases(ready_expressions: Dict[str, str], node:Node, operand_scopes:List[str],
-namespace:str, func_name:str, types:List, values:List):
+def specialCases(ready_expressions: Dict[str, str], node: Node, operand_scopes: List[str],
+                 namespace: str, func_name: str, types: List, values: List):
     '''
     handle special cases that the trace/standard code generation can't manage
     '''
-    if hasattr(F,func_name):
-        # if function is in torch.nn.functional 
+    if hasattr(F, func_name):
+        # if function is in torch.nn.functional
         # note we cannot generate keywords so we pass everything by position
-        args = ", ".join([ready_expressions[scope] for scope in operand_scopes])
+        args = ", ".join([ready_expressions[scope]
+                          for scope in operand_scopes])
         return f"F.{func_name}({args})"
     elif func_name == 'Int':
         assert len(node.in_nodes) == 1, "aten::Int is a no op with 2 input"

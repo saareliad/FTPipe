@@ -153,6 +153,17 @@ def _get_size(*inputs: Tensors) -> int:
     return size
 
 
+def flatten(x: Tensors):
+    if isinstance(x, Tensor):
+        return[x]
+
+    ts = []
+    for t in x:
+        ts.extend(flatten(t))
+
+    return ts
+
+
 def _count_elements(*inputs: Tensors) -> int:
     c = 0
     for x in inputs:

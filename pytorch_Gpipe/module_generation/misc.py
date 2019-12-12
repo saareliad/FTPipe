@@ -33,7 +33,7 @@ def generateStateDictFunction():
 
 
 def generateNamedParametersFunction():
-    named_parameters_function = ["def named_parameters(self,recurese=True):",
+    named_parameters_function = ["def named_parameters(self,recurse=True):",
                                  f"# we return the named parameters of this part as it should be in the original model",
                                  "params = super().named_parameters(recurse=recurse)",
                                  f"lookup = self.lookup",
