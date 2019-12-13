@@ -23,11 +23,11 @@ def post_process_partition(graph: Graph, part: List[int]):
         node.part = idx
 
     cannonize_partition_indices(graph)
-    # TODO ensure_dag makes problems
-    # for node in graph.nodes:
-    #     if node.idx in [2021, 2022, 2016]:
-    #         node.part = 3
+    # graph.save("raw", ".", show_weights=False, show_buffs_params=True)
 
+    remove_backward_forward_edges(graph)
+
+    # TODO ensure_dag makes problems
     # make_partitions_change_only_at_end_of_scope(graph)
     # make sure every scc in the graph is not splitted between different parts
     # scc_partition_correction(graph)
@@ -37,6 +37,31 @@ def post_process_partition(graph: Graph, part: List[int]):
     # TODO we disabled this optimization
     # fix_arithmetic_inputs(graph)
     return graph
+
+
+def remove_backward_forward_edges(graph: Graph):
+    while True:
+        backward_edges = []
+        for node in graph.nodes:
+            for n in node.in_nodes:
+                if n.part > node.part:
+                    backward_edges.append((n, node))
+
+        for u, v in backward_edges:
+            v.part = u.part
+
+        if not backward_edges:
+            break
+
+    while True:
+        changed = False
+        for node in graph.nodes:
+            for n in node.in_nodes:
+                if n.part != node.part and len(n.in_nodes) == 0:
+                    n.part = node.part
+                    changed = True
+        if not changed:
+            break
 
 
 def fix_arithmetic_inputs(graph: Graph):
