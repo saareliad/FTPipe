@@ -25,7 +25,8 @@ def post_process_partition(graph: Graph, part: List[int]):
     cannonize_partition_indices(graph)
     # graph.save("raw", ".", show_weights=False, show_buffs_params=True)
 
-    remove_backward_forward_edges(graph)
+    graph_root_fix(graph)
+    remove_backward_edges(graph)
 
     # TODO ensure_dag makes problems
     # make_partitions_change_only_at_end_of_scope(graph)
@@ -39,7 +40,24 @@ def post_process_partition(graph: Graph, part: List[int]):
     return graph
 
 
-def remove_backward_forward_edges(graph: Graph):
+def graph_root_fix(graph: Graph):
+    fixed = False
+    while True:
+        changed = False
+        for node in graph.nodes:
+            for n in node.in_nodes:
+                if n.part != node.part and len(n.in_nodes) == 0:
+                    n.part = node.part
+                    changed = True
+                    fixed = True
+        if not changed:
+            break
+    return fixed
+
+
+def remove_backward_edges(graph: Graph):
+    # TODO biased towards the lesser idx
+    fixed = False
     while True:
         backward_edges = []
         for node in graph.nodes:
@@ -49,19 +67,11 @@ def remove_backward_forward_edges(graph: Graph):
 
         for u, v in backward_edges:
             v.part = u.part
+            fixed = True
 
         if not backward_edges:
             break
-
-    while True:
-        changed = False
-        for node in graph.nodes:
-            for n in node.in_nodes:
-                if n.part != node.part and len(n.in_nodes) == 0:
-                    n.part = node.part
-                    changed = True
-        if not changed:
-            break
+    return fixed
 
 
 def fix_arithmetic_inputs(graph: Graph):
