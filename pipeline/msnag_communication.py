@@ -39,9 +39,11 @@ class CommunicationHandler(object):
                  ranks_in_next_stage,
                  TOTAL_TAGS,
                  cpu,
-                 GRAD_UGLY_SHAMEFUL_NAME="_grad"
+                 GRAD_UGLY_SHAMEFUL_NAME="_grad",
+                 verbose=False
                  ):
         assert isinstance(GRAD_UGLY_SHAMEFUL_NAME, str)
+        self.verbose = verbose
         self.rank = rank
         self.local_rank = local_rank
         self.backend = backend
@@ -138,8 +140,9 @@ class CommunicationHandler(object):
             assert len(receive_ranks) == 1
             receive_rank = receive_ranks[0]
             tensor_tag = self.tensor_tags[tensor_name] + (self.TOTAL_TAGS * batch_idx)
-            self.logger.info(
-                f"irecv, src={receive_rank}, tag={tensor_tag}, name={tensor_name}, rank={self.local_rank}")
+            if self.verbose:
+                self.logger.info(
+                    f"irecv, src={receive_rank}, tag={tensor_tag}, name={tensor_name}, rank={self.local_rank}")
             request_obj = dist.irecv(tensor, receive_rank, tag=tensor_tag)
             request_objects.append(request_obj)
         return request_objects
@@ -159,8 +162,9 @@ class CommunicationHandler(object):
 
             tensor.detach_()
             for send_rank in send_ranks:
-                self.logger.info(
-                    f"isend, dst={send_rank}, tag={tensor_tag}, name={tensor_name}, rank={self.local_rank}")
+                if self.verbose:
+                    self.logger.info(
+                        f"isend, dst={send_rank}, tag={tensor_tag}, name={tensor_name}, rank={self.local_rank}")
 
                 request_obj = dist.isend(tensor, send_rank, tag=tensor_tag)
                 request_objects.append(request_obj)
@@ -177,8 +181,10 @@ class CommunicationHandler(object):
         request_objects = []
         for tensor in x:
             tensor.detach_()
-            self.logger.info(
-                f"ibcast, (send) src={self.local_rank}, batch_idx={batch_idx}")
+            if self.verbose:
+                self.logger.info(
+                    f"ibcast, (send) src={self.local_rank}, batch_idx={batch_idx}")
+
             request_obj = dist.broadcast(
                 tensor, self.local_rank, group=pg, async_op=True)
             request_objects.append(request_obj)
@@ -193,8 +199,11 @@ class CommunicationHandler(object):
         request_objects = []
         for tensor in x:
             tensor.detach_()
-            self.logger.info(
-                f"ibcast, (recv), src={src}, batch_idx={batch_idx}")
+
+            if self.verbose:
+                self.logger.info(
+                    f"ibcast, (recv), src={src}, batch_idx={batch_idx}")
+
             request_obj = dist.broadcast(tensor, src, group=pg, async_op=True)
             request_objects.append(request_obj)
         return request_objects

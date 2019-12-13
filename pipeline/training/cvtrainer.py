@@ -31,8 +31,8 @@ class CVTrainer(SupervisedTrainer):
         batch_size = len(y)
         y_pred = torch.argmax(x, 1)
         num_correct = torch.sum(y == y_pred).item()
-        acc = num_correct / batch_size
-        self.statistics.on_batch_end(loss.item(), acc, batch_size)
+        # acc = num_correct / batch_size
+        self.statistics.on_batch_end(loss.item(), num_correct, batch_size)
 
     def do_your_job(self, x, y, step=True):
         """
@@ -49,7 +49,7 @@ class CVTrainer(SupervisedTrainer):
         batch_size = len(y)
         y_pred = torch.argmax(x, 1)
         num_correct = torch.sum(y == y_pred).item()
-        acc = num_correct / batch_size
+        # acc = num_correct / batch_size
 
         # Save stats
         # self.total_loss += loss.item()
@@ -58,7 +58,7 @@ class CVTrainer(SupervisedTrainer):
         if step:
             self.step_on_computed_grads()
 
-        self.statistics.on_batch_end(loss.item(), acc, batch_size)
+        self.statistics.on_batch_end(loss.item(), num_correct, batch_size)
 
     def step_on_computed_grads(self):
         # TODO: implement gradient statistics later

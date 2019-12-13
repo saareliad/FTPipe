@@ -30,14 +30,25 @@ class AverageMeter(object):
         # self.record = []
 
     def update(self, val, n=1):
-        self.sum += val
+        self.sum += val * n
         self.count += n
-
-    # def record(self, val):
-    #     self.record.append(val)
 
     def get_avg(self):
         return self.sum / self.count
+
+# def record(self, va
+    # def record(self, val):
+    #     self.record.append(val)
+
+
+class AccuracyMeter(AverageMeter):
+    def __init__(self):
+        super().__init__()
+
+    def update(self, val, n=1):
+        """ just to supoort adding num correct instead of accuracy """
+        self.sum += val
+        self.count += n
 
 
 class CVStats(Stats):
@@ -48,10 +59,10 @@ class CVStats(Stats):
         self.fit_res = FitResult(
             num_epochs=0, train_loss=[], train_acc=[], test_loss=[], test_acc=[])
         self.epoch_loss = AverageMeter()
-        self.epoch_acc = AverageMeter()
+        self.epoch_acc = AccuracyMeter()
 
         self.fit_loss = AverageMeter()
-        self.fit_acc = AverageMeter()
+        # self.fit_acc = AverageMeter()
 
         self.record_loss_per_batch = record_loss_per_batch
         self.training = True
@@ -62,7 +73,7 @@ class CVStats(Stats):
     def eval(self):
         self.training = False
 
-    def on_batch_end(self, loss, acc, batch_size):
+    def on_batch_end(self, loss, num_correct, batch_size):
         if self.record_loss_per_batch:
             if self.training:
                 self.fit_res.train_loss.append(loss)
@@ -70,20 +81,20 @@ class CVStats(Stats):
                 self.fit_res.test_loss.append(loss)
 
         self.epoch_loss.update(loss, batch_size)
-        self.epoch_acc.update(acc, batch_size)
+        self.epoch_acc.update(num_correct, batch_size)
 
     def on_epoch_end(self):
         if self.training:
             if not self.record_loss_per_batch:
                 self.fit_res.train_loss.append(self.epoch_loss.get_avg())
 
-            self.fit_res.train_acc.append(self.epoch_acc.get_avg())
+            self.fit_res.train_acc.append(self.epoch_acc.get_avg() * 100)
             self.fit_res.num_epochs += 1  # FIXME: its only here, currently assuming test are same as train.
         else:
             if not self.record_loss_per_batch:
                 self.fit_res.test_loss.append(self.epoch_loss.get_avg())
 
-            self.fit_res.test_acc.append(self.epoch_acc.get_avg())
+            self.fit_res.test_acc.append(self.epoch_acc.get_avg() * 100)
 
         self.epoch_acc.reset()
         self.epoch_loss.reset()
