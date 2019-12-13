@@ -3,9 +3,6 @@ from torch.optim import SGD as PytorchSGD
 
 # from .utils import linear_lr_scaling
 
-from .warmup_scheduler import GradualWarmupScheduler
-
-
 AVAILBALE_OPTIMIZERS = {
     'sgd1': PytorchSGD,
     'sgd2': SutskeverSGD

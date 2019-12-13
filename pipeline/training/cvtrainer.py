@@ -5,9 +5,10 @@ from .interface import SupervisedTrainer
 # TODO: make sure that the pipelien calls these new methods...
 
 class CVTrainer(SupervisedTrainer):
-    def __init__(self, model, optimizer, statistics):
+    def __init__(self, model, optimizer, scheduler, statistics):
         self.loss_fn = torch.nn.CrossEntropyLoss()
         self.optimizer = optimizer
+        self.scheduler = scheduler
 
         # torch.optim.SGD(model.parameters(), 0.1, 0.9)
 
@@ -64,3 +65,7 @@ class CVTrainer(SupervisedTrainer):
         # TODO: implement gradient statistics later
         self.optimizer.step()
         self.optimizer.zero_grad()
+        # self.scheduler.step()
+
+    # def get_lr(self):
+    #     return self.scheduler.get_lr()  # if self.scheduler else [pg['lr'] for pg in self.optimizer.param_groups]

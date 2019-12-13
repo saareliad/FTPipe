@@ -1,9 +1,10 @@
 import abc
-
+from typing import List
 
 # class LossTrainer(abc.ABC):
 #     # TODO: for models which returns only loss...
 #     pass
+
 
 class AnyTrainer(abc.ABC):
     @abc.abstractmethod
@@ -17,6 +18,10 @@ class AnyTrainer(abc.ABC):
     @abc.abstractmethod
     def calc_test_stats(self, *args, **kw):
         pass
+
+    # @abc.abstractmethod
+    # def get_lr(self) -> List[float]:
+    #     pass
 
 
 class SupervisedTrainer(AnyTrainer):

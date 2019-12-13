@@ -47,3 +47,6 @@ class DummyTrainer(SupervisedTrainer):
 
     def calc_test_stats(self, x, y):
         pass
+
+    # def get_lr(self):
+    #     return [pg['lr'] for pg in self.optimizer.param_groups]

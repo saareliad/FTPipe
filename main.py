@@ -10,17 +10,19 @@ from pipeline.tasks import AVAILABLE_TASKS
 from pipeline.stats import AVAILBALE_STATS
 from optimizers import AVAILBALE_OPTIMIZERS
 from pipeline.util import get_world_size
+import optimizers.lr_scheduler
+# from optimizers.warmup_scheduler import GradualWarmupScheduler
 
 import models
 import numpy as np
 import torch
-import torch.distributed as dist
 from collections import OrderedDict
 from misc.datasets import add_dataset_argument, simplified_get_train_test_dl_from_args
 from misc.filelogger import FileLogger
 import os
 import json
 from experiments import save_experiment
+import time
 
 
 def parse_cli():
@@ -93,8 +95,10 @@ def parse_cli():
     parser.add_argument('--optimizer_type', help='Optimizer type to use',
                         choices=AVAILABLE_TASKS.keys(), default='sgd1')
 
-    parser.add_argument("--epochs", type=int, help="Training epochs to run", default=-1, required=False)
-    parser.add_argument("--steps", type=int, help="Training steps to run", default=-1, required=False)
+    parser.add_argument(
+        "--epochs", type=int, help="Training epochs to run", default=-1, required=False)
+    parser.add_argument(
+        "--steps", type=int, help="Training steps to run", default=-1, required=False)
     # parser.add_argument('--linear_scaling', help="Use linear LR scaling rule", default=True)
 
     parser.add_argument('--debug', action='store_true', default=False,
@@ -146,7 +150,7 @@ def parse_env_vars(args):
 
 
 def assert_args(args):
-    assert (args.epochs >= 1 or args.steps >=1)
+    assert (args.epochs >= 1 or args.steps >= 1)
 
 
 def create_comm_handler(args, initialize_args):
@@ -210,11 +214,9 @@ def tensor_tags_from_config(config, target_tensor_names, GRAD_UGLY_SHAMEFUL_NAME
     for target_tensor_name in sorted(target_tensor_names):
         tensor_tags[target_tensor_name] = tensor_tag
         tensor_tag += 1
-    
+
     tensor_tags["ack"] = tensor_tag
     tensor_tag += 1
-
-
 
     return tensor_tags, tensor_tag
 
@@ -354,6 +356,17 @@ def to_tuple(x):
     return x if isinstance(x, tuple) else (x,)
 
 
+def get_scheduler(args, optimizer):
+    if hasattr(args, "lr_scheduler"):
+        attr = getattr(args, 'lr_scheduler')
+        if attr['type'] in optimizers.lr_scheduler.AVAILABLE_LR_SCHEDULERS:
+            scheduler_cls = getattr(optimizers.lr_scheduler, attr['type'])
+        else:
+            scheduler_cls = getattr(torch.optim.lr_scheduler, attr['type'])
+        scheduler = scheduler_cls(optimizer, **attr['args'])
+        return scheduler
+
+
 def main():
     args = parse_cli()
     parse_env_vars(args)
@@ -460,15 +473,22 @@ def main():
         device, is_last_partition, is_first_partition)
 
     # Set Trainer
+    # FIXME: this if is just to support trainers hardcoded with their own default optimizer.
+    # currently thats just the dummy trainer.
     if optimizer_cls:
+        # if hasattr(args, "warmup_scheduler") and args.warmup_scheduler['type'] == "GradualWarmupScheduler":
+        #     multiplier = args.warmup_scheduler['args']['multiplier']
+        #     args.optimizer['args']['lr'] /= multiplier
+
         optimizer = optimizer_cls(
             partition.partition.parameters(), **args.optimizer['args'])
 
+        scheduler = get_scheduler(args, optimizer)
     if args.trainer == 'dummy':
         trainer = trainer_cls(partition.partition)
     else:
         trainer = trainer_cls(partition.partition,
-                              optimizer=optimizer, statistics=statistics)
+                              optimizer=optimizer, scheduler=scheduler, statistics=statistics)
 
     partition.set_trainer(trainer)
 
@@ -480,11 +500,22 @@ def main():
     steps = 0
     logger.info(f"Running for {args.epochs} epochs and {args.steps} steps")
     while epochs < args.epochs or args.epochs < 0:
-        logger.info(f"Starting Epoch {epochs}, so far did {steps} steps")
+        # if epochs > 0:
+        #     lr = scheduler.get_last_lr()
+        #     logger.info(f"Done Epoch {epochs}, so far did {steps} steps, LR {lr}")
+
+        #     print('-' * 89)
+        #     logger.info('| end of epoch {:3d} | time: {:5.2f}s '.format(epochs, (time.time() - epoch_start_time)))
+
+        #     #  valid loss {:5.2f} | '
+        #     #     'valid ppl {:8.2f}'.format(epochs, (time.time() - epoch_start_time),
+        #     #                                 val_loss, math.exp(val_loss)))
+        #     print('-' * 89)
+        epoch_start_time = time.time()
         # while args.steps < 0 or steps < args.steps:
         # steps_at_epoch_start = steps
         for TRAIN in [True, False]:
-            logger.info(f"Running MODE is {'train' if TRAIN else 'eval'}")
+            logger.info(f"Running {'train' if TRAIN else 'eval'}")
             # TODO: option to change it such that we will run epoch with multiple flushes
             # e.g flush every batch.
             TRAIN_BATCHES_TO_RUN = len(train_dl)
@@ -498,7 +529,10 @@ def main():
                 if statistics:
                     statistics.train()
                 # for i in range(100):
-                partition.run_until_flush(min(TRAIN_BATCHES_TO_RUN, len(train_dl)))
+                partition.run_until_flush(
+                    min(TRAIN_BATCHES_TO_RUN, len(train_dl)))
+                scheduler.step()  # self.scheduler.step()
+
             else:
                 # Set Dataloader
                 # sets only to first partition
@@ -514,11 +548,28 @@ def main():
             if args.local_rank == get_world_size(args.distributed_backend) - 1:
                 statistics.on_epoch_end()
         epochs += 1
+        # logger.info(f"lr {lr}")
+        # logger.info(f"after_schedualr base lrs {scheduler.after_scheduler.base_lrs}")
         steps += TRAIN_BATCHES_TO_RUN
+
+        logger.info('-' * 89)
+        logger.info('| end of epoch {:3d} | time: {:5.2f}s | steps: {:5d}'.format(
+            epochs, (time.time() - epoch_start_time), steps))
+
+        # {:5d}/{:5d} batches | '
+        #           'lr {:02.2f} | ms/batch {:5.2f} | '
+        #           'loss {:5.2f} | ppl {:8.2f}'.format(
+        #             epoch, batch, len(train_data)
+
+        #  valid loss {:5.2f} | '
+        #     'valid ppl {:8.2f}'.format(epochs, (time.time() - epoch_start_time),
+        #                                 val_loss, math.exp(val_loss)))
+        logger.info('-' * 89)
+
         if args.steps > 0 and steps >= args.steps:
             break
             # steps_condition_is_met = True
-    
+
     # FIXME: If last state
     if args.rank == get_world_size(args.distributed_backend) - 1:
         if statistics:

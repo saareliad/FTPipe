@@ -19,7 +19,15 @@
             "nesterov": false
         }
     },
-    "epochs": 10,
+    "lr_scheduler": {
+        "type": "get_multi_step_lr_schedule_with_warmup",
+        "args": {
+            "num_warmup_steps": 5,
+            "milestones": [60, 120, 160],
+            "gamma": 0.2,
+            "last_epoch": -1
+        }
+    },
+    "epochs": 15,
     "steps": -1
-
 }
