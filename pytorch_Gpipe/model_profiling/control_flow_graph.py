@@ -46,6 +46,7 @@ class Graph():
             node.idx = idx
         self.remove_useless_node_inputs()
         self.add_missing_types()
+        self.remove_tensor_int_tensor()
         for idx, node in enumerate(self.nodes):
             node.idx = idx
 
@@ -205,6 +206,17 @@ class Graph():
                     node.value_type=int
             elif 'NumToTensor' in node.scope:
                 node.value_type=int
+
+    def remove_tensor_int_tensor(self):
+        def predicate(node):
+            if 'prim::ImplicitTensorToNum' in node.scope or 'aten::Int' in node.scope or 'aten::NumToTensor' in node.scope:
+                for n in node.in_nodes:
+                    n.value_type = int
+                return True
+            return False
+
+        self._remove_nodes(predicate)
+
 
     def remove_useless_clone(self):
         def predicate(n:Node):
