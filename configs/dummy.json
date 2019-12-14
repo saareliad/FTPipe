@@ -10,7 +10,7 @@
     "trainer": "cv",
     "bs_train": 128,
     "bs_test": 200,
-    "num_data_workers": 0,
+    "num_data_workers": 6,
     "optimizer": {
         "type": "sgd1",
         "args": {
@@ -32,5 +32,5 @@
     "epochs": 200,
     "steps": -1,
     "seed": 42,
-    "flush_rate": 1
+    "flush_rate": -1
 }

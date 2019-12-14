@@ -237,7 +237,6 @@ class SinglePartitionManager:
         self.async_fwd_objects.clear()
         # FIXME: not sure if this needed.
         # For now I leave this for debugging/safety.
-        torch.distributed.barrier()
 
     def run_until_flush(self, num_batches):
         """
@@ -303,4 +302,4 @@ class SinglePartitionManager:
         self.async_fwd_objects.clear()
 
         # self.logger.info(f"Done running until flush stage:{self.stage}")
-        torch.distributed.barrier()
+        # torch.distributed.barrier()

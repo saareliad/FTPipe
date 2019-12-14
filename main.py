@@ -590,7 +590,6 @@ def main():
             logger.info(info_str)
             logger.info('-' * 89)
 
-
         # {:5d}/{:5d} batches | '
         #           'lr {:02.2f} | ms/batch {:5.2f} | '
         #           'loss {:5.2f} | ppl {:8.2f}'.format(
@@ -610,6 +609,7 @@ def main():
             fit_res = statistics.get_stats()  # Assuming its a named tuple..
             config = vars(args)  # FIXME: TODO:
             save_experiment(args.out_filename, args.out_dir, config, fit_res)
+    torch.distributed.barrier()
 
     # TODO:
 
