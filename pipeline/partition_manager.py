@@ -7,6 +7,7 @@ from . import CommunicationHandler
 from .partition import Partition, LastPartition, FirstPartition
 from .training.interface import AnyTrainer
 from .tasks import DLTask
+from .weight_prediction.interface import WeightPredictor
 
 # from gpu_mem_track import MemTracker
 
@@ -32,6 +33,11 @@ class SinglePartitionManager:
         self.is_first_partition = is_first_partition
         self.stage = stage
         self.num_stages = len(configs)  # FIXME:
+        self.weight_predictor = None
+
+        # State for train logging
+        self.log_frequency = 100  # FIXME: magic number
+        self.batches = 0
 
         self.fwd_rcev_buffers = None
         self.bwd_rcev_buffers = None
@@ -46,6 +52,7 @@ class SinglePartitionManager:
         # Hints
         self.task: DLTask
         self.trainer: AnyTrainer
+        self.weight_predictor: WeightPredictor
 
     def set_task(self, task: DLTask):
         self.task = task
@@ -57,6 +64,10 @@ class SinglePartitionManager:
         if self.is_first_partition:
             self.dataloader = dataloader
             self.dl_iter = iter(self.dataloader)
+            
+    def set_weight_predictor(self, weight_predictor: WeightPredictor, nag_with_predictor: bool):
+        self.weight_predictor = weight_predictor
+        self.nag_with_predictor = nag_with_predictor
 
     def train(self):
         self.tensor_shapes = self.training_tensor_shapes
@@ -86,7 +97,7 @@ class SinglePartitionManager:
             self.fwd_rcev_buffers = self.comm_handler.create_activations_recv_buffers(
                 self.device)
 
-    def run_batch_forward(self, batch_idx):
+    def run_batch_forward(self, batch_idx, done_bwds=None):
         if self.is_first_partition:
             data = next(self.dl_iter)
             # TODO: handle y with separate coordinated dataloader
@@ -94,7 +105,14 @@ class SinglePartitionManager:
             # Can be according to trainer.
 
             x, *ctx = self.task.unpack_data_for_partition(data)
-            x = self.partition(x, batch_idx)
+
+            if self.weight_predictor and self.partition.training:
+                self.weight_predictor.setup(self.expected_staleness(batch_idx, done_bwds)) 
+                self.weight_predictor.forward()
+                x = self.partition(x, batch_idx)
+                self.weight_predictor.revert()
+            else:
+                x = self.partition(x, batch_idx)
 
             send_ctx = self.task.pack_send_context(x, *ctx)
             # print("Sending", *ctx, ctx[0].shape)
@@ -127,7 +145,16 @@ class SinglePartitionManager:
                 # print(f"-I- {self.stage} DONE waiting on rcv")
 
             x, *ctx = self.task.unpack_data_for_partition(x)
-            x = self.partition(x, batch_idx)
+
+            # TODO: last partition can do bengio nesterov instead of predicting.
+            if self.weight_predictor and self.partition.training:
+                self.weight_predictor.setup(self.expected_staleness(batch_idx, done_bwds))  # TODO: more generic way for staleness
+                self.weight_predictor.forward()
+                x = self.partition(x, batch_idx)
+                self.weight_predictor.revert()
+            else:
+                x = self.partition(x, batch_idx)
+
             if (not self.partition.training) and self.is_last_partition:
                 # print(*ctx, ctx[0].shape)
                 self.trainer.calc_test_stats(x, *ctx)
@@ -150,6 +177,20 @@ class SinglePartitionManager:
                 # Send gradients async
                 request_objects = self.comm_handler.send_gradients(
                     grads, batch_idx)
+
+                # TODO: can print here
+        #          {:5d}/{:5d} batches | '
+        # #           'lr {:02.2f} | ms/batch {:5.2f} | '
+        # #           'loss {:5.2f} | ppl {:8.2f}'
+
+                # if self.is_last_partition
+                if self.partition.training:
+                    self.batches += 1
+                    if self.batches % self.log_frequency == 0:
+                        # TODO: scheduler could be None.
+                        lr = self.trainer.scheduler.get_last_lr()[0]  # TODO: could be more than one LR
+                        log_str = '| lr {:02.2f}'.format(lr)  # TODO: add more stats..
+                        self.logger.info(log_str)
 
                 for i in self.fwd_rcev_buffers:
                     i.grad = None
@@ -210,6 +251,12 @@ class SinglePartitionManager:
 
             return request_objects
 
+    def expected_staleness(self, done_fwds, done_bwds):
+        if self.nag_with_predictor:
+            return min(1, done_fwds - done_bwds)
+        else:
+            return done_fwds - done_bwds
+
     def run_forward_until_flush(self, num_batches):
         # TODO: write fwd only for last partition..
         # if self.is_first_partition and (self.dl_iter is None):
@@ -258,7 +305,7 @@ class SinglePartitionManager:
             action_is_fwd = self.policy_scheduler_is_fwd(
                 num_steps, done_bwds, done_fwds)
             if action_is_fwd:
-                sent_request_objects = self.run_batch_forward(done_fwds)
+                sent_request_objects = self.run_batch_forward(done_fwds, done_bwds)
                 self.async_fwd_objects[done_fwds] = sent_request_objects
             else:
                 sent_request_objects = self.run_batch_backward(done_bwds)

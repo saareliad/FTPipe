@@ -8,9 +8,11 @@ from pipeline import SinglePartitionManager
 from pipeline.training import AVAILABLE_TRAINERS
 from pipeline.tasks import AVAILABLE_TASKS
 from pipeline.stats import AVAILBALE_STATS
+from pipeline.weight_prediction import get_sgd_weight_predictor
 from optimizers import AVAILBALE_OPTIMIZERS
 from pipeline.util import get_world_size
 import optimizers.lr_scheduler
+
 # from optimizers.warmup_scheduler import GradualWarmupScheduler
 
 import models
@@ -107,7 +109,7 @@ def parse_cli():
 
     parser.add_argument('--config', help="Config File",
                         default='configs/dummy.json')
-    
+
     args = parser.parse_args()
 
     # TODO: note, some arguments are supported only through config and not argparse.
@@ -361,13 +363,40 @@ def to_tuple(x):
 
 def get_scheduler(args, optimizer):
     if hasattr(args, "lr_scheduler"):
+        # should_step = False
         attr = getattr(args, 'lr_scheduler')
         if attr['type'] in optimizers.lr_scheduler.AVAILABLE_LR_SCHEDULERS:
             scheduler_cls = getattr(optimizers.lr_scheduler, attr['type'])
+            # should_step = True
         else:
             scheduler_cls = getattr(torch.optim.lr_scheduler, attr['type'])
         scheduler = scheduler_cls(optimizer, **attr['args'])
+        # TODO: in some optimizers version we can bendfit from lr=0 (build momentum in place)
+        # while on others we dont, and better step.
+        # For now I just leave it as is.
+        # OPTIONAL: Perform a dummy step to avoid lr=0 at the start of the training.
+        # if should_step:
+        #     scheduler.step()
         return scheduler
+
+
+def get_weight_predictor(args, optimizer, scheduler=None):
+    optimizer_type = getattr(args, 'optimizer')['type']
+    pred = getattr(args, 'weight_prediction')
+    pred_mem = pred['args']['pred_mem']
+    nag_with_predictor = pred['args']['nag_with_predictor']
+
+    assert(pred_mem in {"clone", "calc"})
+    assert(pred['type'] == "msnag")
+    assert('sgd' in optimizer_type)
+
+    # if pred_mem['type'] == "msnag":
+    if 'sgd' in optimizer_type:
+        weight_predictor = get_sgd_weight_predictor(
+            optimizer_type, pred_mem, optimizer, scheduler)
+        return weight_predictor, nag_with_predictor
+    else:
+        raise NotImplementedError()
 
 
 def main():
@@ -380,7 +409,7 @@ def main():
         port = 3000 + args.local_rank
         ptvsd.enable_attach(address=('127.0.0.1', port))
         ptvsd.wait_for_attach()
-    
+
     args.world_size = get_world_size(args.distributed_backend)
     # is_last_rank = args.local_rank == get_world_size(args.distributed_backend) - 1
 
@@ -495,6 +524,11 @@ def main():
             partition.partition.parameters(), **args.optimizer['args'])
 
         scheduler = get_scheduler(args, optimizer)
+
+        # TODO: scheduler for sched aware prediction
+        weight_predictor, nag_with_predictor = get_weight_predictor(
+            args, optimizer, scheduler=scheduler)
+
     if args.trainer == 'dummy':
         trainer = trainer_cls(partition.partition)
     else:
@@ -502,6 +536,8 @@ def main():
                               optimizer=optimizer, scheduler=scheduler, statistics=statistics)
 
     partition.set_trainer(trainer)
+    if weight_predictor:
+        partition.set_weight_predictor(weight_predictor, nag_with_predictor)
 
     # Set Task
     task = task_cls(device, is_last_partition, is_first_partition)
@@ -551,13 +587,13 @@ def main():
                     for _ in range(0, len(train_dl), args.flush_rate):
                         partition.run_until_flush(
                             min(args.flush_rate, len(train_dl)))
-                    
+
                     reminder = len(train_dl) % args.flush_rate
                     if reminder > 0:
                         partition.run_until_flush(reminder)
                 else:
                     partition.run_until_flush(
-                            min(TRAIN_BATCHES_TO_RUN, len(train_dl)))
+                        min(TRAIN_BATCHES_TO_RUN, len(train_dl)))
 
                 scheduler.step()
 

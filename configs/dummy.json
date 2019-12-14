@@ -1,7 +1,7 @@
 {
     "logdir": "logs/",
-    "out_dir":"logs/",
-    "out_filename": "stale_weights",
+    "out_dir":"results/",
+    "out_filename": "msnag_clone",
     "distributed_backend": "mpi",
     "task": "cv",
     "statistics": "cv",
@@ -17,7 +17,7 @@
             "lr": 0.1,
             "weight_decay": 0.0005,
             "momentum": 0.9,
-            "nesterov": true
+            "nesterov": false
         }
     },
     "lr_scheduler": {
@@ -27,6 +27,13 @@
             "milestones": [60, 120, 160],
             "gamma": 0.2,
             "last_epoch": -1
+        }
+    },
+    "weight_prediction": {
+        "type": "msnag",
+        "args": {
+            "pred_mem": "clone",
+            "nag_with_predictor": true
         }
     },
     "epochs": 200,

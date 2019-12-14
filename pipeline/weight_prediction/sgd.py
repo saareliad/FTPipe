@@ -11,10 +11,10 @@ import math
 class SGDRevertableLinearWeightPrediction(WeightPredictor):
 
     # FIXME: handle the error obtained from linear prediction (error < 1e-7)
-    def __init__(self, opt, params,
+    def __init__(self, optimizer,
                  fix_fn, scheduler=None):
 
-        super().__init__(opt, params,
+        super().__init__(optimizer,
                          fix_fn, scheduler=scheduler)
 
     def forward(self):
@@ -38,11 +38,16 @@ class SGDRevertableLinearWeightPrediction(WeightPredictor):
 
 
 class SGDClonedWeightPrediction(WeightPredictor):
-    def __init__(self, opt, params,
-                 momentum_fix_coeff_function, scheduler=None):
+    def __init__(self, optimizer,
+                 fix_fn, scheduler=None):
 
-        super().__init__(opt, params,
-                         momentum_fix_coeff_function, scheduler=scheduler)
+        super().__init__(optimizer,
+                         fix_fn, scheduler=scheduler)
+        
+        # Ugly hack, init momentum buffer to zeros before we start
+        for pg in self.optimizer.param_groups:
+            for p in pg['params']:
+                self.optimizer.state[p]['momentum_buffer'] = torch.zeros_like(p)
 
     def forward(self):
         with torch.no_grad():
@@ -85,3 +90,23 @@ class SGD2MSNAG(SGD1MSNAG):
     """ Pytorch SGD. Mentioned as eq 9 Goyal et al. """
     def __call__(self, p: WeightPredictor, pg):
         return pg['lr'] * super().__call__(p, pg)
+
+
+PRED_MEM_TO_CLASS = {
+    'clone': SGDClonedWeightPrediction,
+    'calc': SGDRevertableLinearWeightPrediction
+}
+
+SGD_TYPE_TO_MSNAG_CLASS = {
+    'sgd1': SGD1MSNAG,
+    'sgd2': SGD2MSNAG
+}
+
+
+def get_sgd_weight_predictor(sgd_type: str, pred_mem: str, optimizer, scheduler=None) -> WeightPredictor:
+    fix_fn_cls = SGD_TYPE_TO_MSNAG_CLASS.get(sgd_type, None)
+    fix_fn = fix_fn_cls()
+    pred_cls = PRED_MEM_TO_CLASS.get(pred_mem, None)
+    # pred_cls: WeightPredictor
+    # fix_fn: FixFunction
+    return pred_cls(optimizer, fix_fn, scheduler=scheduler)
