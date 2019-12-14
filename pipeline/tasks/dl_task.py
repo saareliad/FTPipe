@@ -54,12 +54,12 @@ class CVTask(DLTask):
     def unpack_data_for_last_partition(self, data):
         x, y = data
         # x = x.to(self.device, non_blocking=True)
-        y = y.to(self.device, non_blocking=True)
+        y = y.to(self.device, non_blocking=False)
         return x, y
 
     def unpack_data_for_first_partition(self, data):
         x, y = data
-        x = x.to(self.device, non_blocking=True)
+        x = x.to(self.device, non_blocking=False)
         # Note: we don't send the y to GPU if we don't use it in this partition.
         return x, y
 
