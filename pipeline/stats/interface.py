@@ -21,3 +21,6 @@ class Stats(abc.ABC):
     @abc.abstractmethod
     def get_stats(self):
         pass
+
+    def get_epoch_info_str(self, is_train):
+        return ''

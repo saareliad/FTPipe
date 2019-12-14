@@ -23,6 +23,7 @@ import os
 import json
 from experiments import save_experiment
 import time
+import random
 
 
 def parse_cli():
@@ -67,8 +68,8 @@ def parse_cli():
     # should be like `trainer` and `task` but I left it like this.
     add_dataset_argument(parser)
 
-    # parser.add_argument('--seed', '-s', type=int, help='Random seed',
-    #                      default=None, required=False)
+    parser.add_argument('--seed', '-s', type=int, help='Random seed',
+                        default=None, required=False)
 
     parser.add_argument('--logdir', type=str,
                         default='./logs', help="where logs and events go")
@@ -106,8 +107,10 @@ def parse_cli():
 
     parser.add_argument('--config', help="Config File",
                         default='configs/dummy.json')
+    
     args = parser.parse_args()
 
+    # TODO: note, some arguments are supported only through config and not argparse.
     return args
 
 
@@ -377,14 +380,22 @@ def main():
         port = 3000 + args.local_rank
         ptvsd.enable_attach(address=('127.0.0.1', port))
         ptvsd.wait_for_attach()
+    
+    args.world_size = get_world_size(args.distributed_backend)
+    # is_last_rank = args.local_rank == get_world_size(args.distributed_backend) - 1
 
     logger = FileLogger(args.logdir, global_rank=args.rank,
-                        local_rank=args.local_rank, name='msnag')
+                        local_rank=args.local_rank, name='msnag', world_size=args.world_size)
     assert_args(args)
     configs = models.get_partitioning(args.model, model_instance=None)
 
     input_names = configs.pop('model inputs')
     output_names = configs.pop('model outputs')
+
+    if not args.seed:
+        args.seed = random.randint(0, 2 ** 31)
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
 
     NO_DP = True
     # TODO: make it nicer.
@@ -498,6 +509,9 @@ def main():
 
     epochs = 0
     steps = 0
+    FLUSH_EVERY_BATCH = True
+    # flush_rate = 2
+    logger.info(f"flush rate {args.flush_rate}")
     logger.info(f"Running for {args.epochs} epochs and {args.steps} steps")
     while epochs < args.epochs or args.epochs < 0:
         # if epochs > 0:
@@ -520,6 +534,7 @@ def main():
             # e.g flush every batch.
             TRAIN_BATCHES_TO_RUN = len(train_dl)
             TEST_BATCHES_TO_RUN = len(test_dl)
+
             if TRAIN:
                 # Set Dataloader
                 # sets only to first partition
@@ -528,10 +543,20 @@ def main():
                 partition.train()
                 if statistics:
                     statistics.train()
-                # for i in range(100):
-                partition.run_until_flush(
-                    min(TRAIN_BATCHES_TO_RUN, len(train_dl)))
-                scheduler.step()  # self.scheduler.step()
+                if FLUSH_EVERY_BATCH or args.flush_rate > 0:
+                    TRAIN_BATCHES_TO_RUN = args.flush_rate
+                    for _ in range(0, len(train_dl), args.flush_rate):
+                        partition.run_until_flush(
+                            min(args.flush_rate, len(train_dl)))
+                    
+                    reminder = len(train_dl) % args.flush_rate
+                    partition.run_until_flush(
+                            min(reminder, len(train_dl)))
+                else:
+                    partition.run_until_flush(
+                            min(TRAIN_BATCHES_TO_RUN, len(train_dl)))
+
+                scheduler.step()
 
             else:
                 # Set Dataloader
@@ -552,9 +577,14 @@ def main():
         # logger.info(f"after_schedualr base lrs {scheduler.after_scheduler.base_lrs}")
         steps += TRAIN_BATCHES_TO_RUN
 
-        logger.info('-' * 89)
-        logger.info('| end of epoch {:3d} | time: {:5.2f}s | steps: {:5d}'.format(
-            epochs, (time.time() - epoch_start_time), steps))
+        if args.local_rank == args.world_size - 1:
+            logger.info('-' * 89)
+            info_str = '| end of epoch {:3d} | time: {:5.2f}s | steps: {:5d}'.format(
+                epochs, (time.time() - epoch_start_time), steps)
+            info_str += statistics.get_epoch_info_str(is_train=False)
+            logger.info(info_str)
+            logger.info('-' * 89)
+
 
         # {:5d}/{:5d} batches | '
         #           'lr {:02.2f} | ms/batch {:5.2f} | '
@@ -564,7 +594,6 @@ def main():
         #  valid loss {:5.2f} | '
         #     'valid ppl {:8.2f}'.format(epochs, (time.time() - epoch_start_time),
         #                                 val_loss, math.exp(val_loss)))
-        logger.info('-' * 89)
 
         if args.steps > 0 and steps >= args.steps:
             break
@@ -574,7 +603,7 @@ def main():
     if args.rank == get_world_size(args.distributed_backend) - 1:
         if statistics:
             fit_res = statistics.get_stats()  # Assuming its a named tuple..
-            config = {}  # FIXME: TODO:
+            config = vars(args)  # FIXME: TODO:
             save_experiment(args.out_filename, args.out_dir, config, fit_res)
 
     # TODO:

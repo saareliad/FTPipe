@@ -3,18 +3,18 @@ import logging
 
 
 class FileLogger:
-    def __init__(self, output_dir: str, global_rank: int, local_rank: int, name: str):
+    def __init__(self, output_dir: str, global_rank: int, local_rank: int, name: str, world_size: int):
         self.output_dir = output_dir
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir, exist_ok=True)
         self.logger = FileLogger.get_logger(
-            output_dir, global_rank=global_rank, local_rank=local_rank, name=name)
+            output_dir, global_rank=global_rank, local_rank=local_rank, name=name, world_size=world_size)
 
     def exception(self, *args_, **kwargs):
         return self.logger.exception(*args_, **kwargs)
 
     @staticmethod
-    def get_logger(output_dir: str, global_rank: int, local_rank: int, name: str):
+    def get_logger(output_dir: str, global_rank: int, local_rank: int, name: str,  world_size: int):
         logger_ = logging.getLogger(name)
         logger_.setLevel(logging.DEBUG)
         formatter = logging.Formatter('%(message)s')
@@ -40,7 +40,8 @@ class FileLogger:
         console = logging.StreamHandler()
         console.setFormatter(formatter)
         # FIXME:
-        console.setLevel(logging.DEBUG if local_rank == 0 else logging.WARN)
+        console.setLevel(logging.DEBUG if local_rank == world_size - 1 else logging.WARN)
+        # console.setLevel(logging.DEBUG if local_rank == 0 else logging.WARN)
         # console.setLevel(logging.DEBUG)
         logger_.addHandler(console)
         return logger_

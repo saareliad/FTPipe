@@ -1,7 +1,7 @@
 {
     "logdir": "logs/",
     "out_dir":"logs/",
-    "out_filename": "dummy",
+    "out_filename": "flush2",
     "distributed_backend": "mpi",
     "task": "cv",
     "statistics": "cv",
@@ -28,6 +28,8 @@
             "last_epoch": -1
         }
     },
-    "epochs": 15,
-    "steps": -1
+    "epochs": 20,
+    "steps": -1,
+    "seed": 42,
+    "flush_rate": -1
 }

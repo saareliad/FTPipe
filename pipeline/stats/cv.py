@@ -1,7 +1,7 @@
-from typing import NamedTuple, List
-import json
+from typing import List
 from .interface import Stats
 from types import SimpleNamespace
+
 
 class FitResult(SimpleNamespace):
     """
@@ -101,3 +101,15 @@ class CVStats(Stats):
 
     def get_stats(self):
         return self.fit_res
+
+    def get_epoch_info_str(self, is_train):
+        if is_train:
+            name = "train"
+            loss = self.fit_res.train_loss[-1]
+            acc = self.fit_res.train_acc[-1]
+        else:
+            name = "valid"
+            loss = self.fit_res.test_loss[-1]
+            acc = self.fit_res.test_acc[-1]
+
+        return ' | {} loss {:5.2f} | valid acc {:8.2f}'.format(name, loss, acc)
