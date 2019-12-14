@@ -87,12 +87,12 @@ class Partition(nn.Module):
                 # EXPLICITLY DO DETACH() INSTEAD OF DETACH_()
                 # TODO: this could be optimized...
                 if isinstance(x, Tensor):
-                    x.detach().requires_grad_(self._REQ_GRAD)
-                    self.input_buffer[micro_batch_idx] = x
+                    x = x.detach().requires_grad_(self._REQ_GRAD)
+                    self.input_buffer[micro_batch_idx] = x.detach().requires_grad_(self._REQ_GRAD)
                     x = self.layers(x)
                 else:
-                    for tensor in x:
-                        tensor.detach().requires_grad_(self._REQ_GRAD)
+                    # for tensor in x:                    
+                    x = [tensor.detach().requires_grad_(self._REQ_GRAD) for tensor in x]
                     self.input_buffer[micro_batch_idx] = x
                     x = self.layers(*x)
             return x

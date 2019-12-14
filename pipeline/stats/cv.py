@@ -112,4 +112,4 @@ class CVStats(Stats):
             loss = self.fit_res.test_loss[-1]
             acc = self.fit_res.test_acc[-1]
 
-        return ' | {} loss {:5.2f} | valid acc {:8.2f}'.format(name, loss, acc)
+        return ' | {} loss {:5.2f} | {} acc {:8.2f}'.format(name, loss, name, acc)

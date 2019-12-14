@@ -535,8 +535,8 @@ def main():
             TRAIN_BATCHES_TO_RUN = len(train_dl)
             TEST_BATCHES_TO_RUN = len(test_dl)
 
-            # TRAIN_BATCHES_TO_RUN = 6
-            # TEST_BATCHES_TO_RUN = 6
+            # TRAIN_BATCHES_TO_RUN = 30
+            # TEST_BATCHES_TO_RUN = 30
 
             if TRAIN:
                 # Set Dataloader
@@ -553,8 +553,8 @@ def main():
                             min(args.flush_rate, len(train_dl)))
                     
                     reminder = len(train_dl) % args.flush_rate
-                    partition.run_until_flush(
-                            min(reminder, len(train_dl)))
+                    if reminder > 0:
+                        partition.run_until_flush(reminder)
                 else:
                     partition.run_until_flush(
                             min(TRAIN_BATCHES_TO_RUN, len(train_dl)))
@@ -584,7 +584,9 @@ def main():
             logger.info('-' * 89)
             info_str = '| end of epoch {:3d} | time: {:5.2f}s | steps: {:5d}'.format(
                 epochs, (time.time() - epoch_start_time), steps)
+            info_str += statistics.get_epoch_info_str(is_train=True)
             info_str += statistics.get_epoch_info_str(is_train=False)
+
             logger.info(info_str)
             logger.info('-' * 89)
 

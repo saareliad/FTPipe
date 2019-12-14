@@ -1,22 +1,23 @@
 {
     "logdir": "logs/",
     "out_dir":"logs/",
-    "out_filename": "flush2",
+    "out_filename": "stale_weights",
     "distributed_backend": "mpi",
     "task": "cv",
     "statistics": "cv",
     "model": "wrn_16x4_p2",
+    "dataset": "cifar10",
     "trainer": "cv",
     "bs_train": 128,
     "bs_test": 200,
-    "num_data_workers": 4,
+    "num_data_workers": 0,
     "optimizer": {
         "type": "sgd1",
         "args": {
             "lr": 0.1,
             "weight_decay": 0.0005,
             "momentum": 0.9,
-            "nesterov": false
+            "nesterov": true
         }
     },
     "lr_scheduler": {
@@ -28,8 +29,8 @@
             "last_epoch": -1
         }
     },
-    "epochs": 20,
+    "epochs": 200,
     "steps": -1,
     "seed": 42,
-    "flush_rate": -1
+    "flush_rate": 1
 }

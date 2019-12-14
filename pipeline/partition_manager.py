@@ -62,8 +62,7 @@ class SinglePartitionManager:
         self.tensor_shapes = self.training_tensor_shapes
         # self.forward_only = False
 
-        if self.comm_handler is not None:
-            self.comm_handler.set_tensor_shapes(self.tensor_shapes)
+        self.comm_handler.set_tensor_shapes(self.tensor_shapes)
 
         self.partition.train()
 
@@ -78,8 +77,7 @@ class SinglePartitionManager:
         # self.tensor_shapes["ack"] = (1,)
         # self.forward_only = True  # TODO: work that out.
 
-        if self.comm_handler is not None:
-            self.comm_handler.set_tensor_shapes(self.tensor_shapes)
+        self.comm_handler.set_tensor_shapes(self.tensor_shapes)
 
         self.partition.eval()
 
@@ -130,7 +128,7 @@ class SinglePartitionManager:
 
             x, *ctx = self.task.unpack_data_for_partition(x)
             x = self.partition(x, batch_idx)
-            if not self.partition.training and self.is_last_partition:
+            if (not self.partition.training) and self.is_last_partition:
                 # print(*ctx, ctx[0].shape)
                 self.trainer.calc_test_stats(x, *ctx)
                 return []
@@ -277,7 +275,7 @@ class SinglePartitionManager:
                 else:
                     done_bwds += 1
 
-            if done_bwds % 4 == 0:
+            if done_bwds % 2 == 0:
                 for sent_request_objects in self.async_bwd_objects.values():
                     for i in sent_request_objects:
                         i.wait()
