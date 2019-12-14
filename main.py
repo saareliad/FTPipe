@@ -531,8 +531,12 @@ def main():
             logger.info(f"Running {'train' if TRAIN else 'eval'}")
             # TODO: option to change it such that we will run epoch with multiple flushes
             # e.g flush every batch.
+
             TRAIN_BATCHES_TO_RUN = len(train_dl)
             TEST_BATCHES_TO_RUN = len(test_dl)
+
+            # TRAIN_BATCHES_TO_RUN = 6
+            # TEST_BATCHES_TO_RUN = 6
 
             if TRAIN:
                 # Set Dataloader
