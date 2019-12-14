@@ -130,10 +130,9 @@ class SinglePartitionManager:
 
             x, *ctx = self.task.unpack_data_for_partition(x)
             x = self.partition(x, batch_idx)
-            if not self.partition.training:
-                if self.is_last_partition:
-                    # print(*ctx, ctx[0].shape)
-                    self.trainer.calc_test_stats(x, *ctx)
+            if not self.partition.training and self.is_last_partition:
+                # print(*ctx, ctx[0].shape)
+                self.trainer.calc_test_stats(x, *ctx)
                 return []
 
             # if self.partition.training:
@@ -208,15 +207,15 @@ class SinglePartitionManager:
         #     z.detach_().zero_()
 
         if not (self.is_first_partition):
-            g = self.Partition.get_grad(batch_idx)
+            g = self.partition.get_grad(batch_idx)
             request_objects = self.comm_handler.send_gradients(g, batch_idx)
 
             return request_objects
 
     def run_forward_until_flush(self, num_batches):
         # TODO: write fwd only for last partition..
-        if self.is_first_partition and (self.dl_iter is None):
-            self.dl_iter = iter(self.dataloader)
+        # if self.is_first_partition and (self.dl_iter is None):
+        #     self.dl_iter = iter(self.dataloader)
 
         for done_fwds in range(num_batches):
 
@@ -238,6 +237,9 @@ class SinglePartitionManager:
                 i.wait()
 
         self.async_fwd_objects.clear()
+        # FIXME: not sure if this needed.
+        # For now I leave this for debugging/safety.
+        torch.distributed.barrier()
 
     def run_until_flush(self, num_batches):
         """
