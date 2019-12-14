@@ -56,37 +56,27 @@ class SinglePartitionManager:
     def set_dataloader(self, dataloader):
         if self.is_first_partition:
             self.dataloader = dataloader
-            self.dl_iter = None
+            self.dl_iter = iter(self.dataloader)
 
     def train(self):
-        # self.tensors = []
-        # self.gradients = {}
         self.tensor_shapes = self.training_tensor_shapes
-        self.forward_only = False
-
-        # self.forward_minibatch_id = 0
-        # self.backward_minibatch_id = 0
-        # TODO:
+        # self.forward_only = False
 
         if self.comm_handler is not None:
             self.comm_handler.set_tensor_shapes(self.tensor_shapes)
 
         self.partition.train()
-    
+
         # Handles the transition : eval -> train
         if not (self.fwd_rcev_buffers is None):
-            self.fwd_rcev_buffers = self.comm_handler.create_activations_recv_buffers(self.device)
+            self.fwd_rcev_buffers = self.comm_handler.create_activations_recv_buffers(
+                self.device)
 
     def eval(self):
-        # self.tensors = []
-        # self.gradients = {}
         self.tensor_shapes = self.eval_tensor_shapes
-        
-        # self.tensor_shapes["ack"] = (1,)
-        self.forward_only = True  # TODO: work that out ....
 
-        # self.forward_minibatch_id = 0
-        # self.backward_minibatch_id = 0
+        # self.tensor_shapes["ack"] = (1,)
+        # self.forward_only = True  # TODO: work that out.
 
         if self.comm_handler is not None:
             self.comm_handler.set_tensor_shapes(self.tensor_shapes)
@@ -95,7 +85,8 @@ class SinglePartitionManager:
 
         # Handles the transition : train -> eval
         if not (self.fwd_rcev_buffers is None):
-            self.fwd_rcev_buffers = self.comm_handler.create_activations_recv_buffers(self.device)
+            self.fwd_rcev_buffers = self.comm_handler.create_activations_recv_buffers(
+                self.device)
 
     def run_batch_forward(self, batch_idx):
         if self.is_first_partition:
@@ -114,7 +105,7 @@ class SinglePartitionManager:
 
             request_objects = self.comm_handler.send_activations(
                 send_ctx, batch_idx)
-            
+
             # # FIXME
             # # FIXME
             # # FIXME
@@ -144,7 +135,7 @@ class SinglePartitionManager:
                     # print(*ctx, ctx[0].shape)
                     self.trainer.calc_test_stats(x, *ctx)
                 return []
-            
+
             # if self.partition.training:
             if not self.is_last_partition:
                 send_ctx = self.task.pack_send_context(x, *ctx)
@@ -162,7 +153,7 @@ class SinglePartitionManager:
                 # Send gradients async
                 request_objects = self.comm_handler.send_gradients(
                     grads, batch_idx)
-                
+
                 for i in self.fwd_rcev_buffers:
                     i.grad = None
 
@@ -219,7 +210,7 @@ class SinglePartitionManager:
         if not (self.is_first_partition):
             g = self.Partition.get_grad(batch_idx)
             request_objects = self.comm_handler.send_gradients(g, batch_idx)
-            
+
             return request_objects
 
     def run_forward_until_flush(self, num_batches):
@@ -257,8 +248,8 @@ class SinglePartitionManager:
         done_bwds = 0
         done_fwds = 0
 
-        if self.is_first_partition and (self.dl_iter is None):
-            self.dl_iter = iter(self.dataloader)
+        # if self.is_first_partition and (self.dl_iter is None):
+        #     self.dl_iter = iter(self.dataloader)
 
         # if not (self.is_last_partition) else num_batches // 2
         num_steps = num_batches

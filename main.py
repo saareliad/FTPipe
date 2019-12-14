@@ -509,8 +509,7 @@ def main():
 
     epochs = 0
     steps = 0
-    FLUSH_EVERY_BATCH = True
-    # flush_rate = 2
+    FLUSH_EVERY_BATCH = False
     logger.info(f"flush rate {args.flush_rate}")
     logger.info(f"Running for {args.epochs} epochs and {args.steps} steps")
     while epochs < args.epochs or args.epochs < 0:
@@ -570,7 +569,7 @@ def main():
                         partition.run_forward_until_flush(
                             min(TEST_BATCHES_TO_RUN, len(test_dl)))
 
-            if args.local_rank == get_world_size(args.distributed_backend) - 1:
+            if args.local_rank == args.world_size - 1:
                 statistics.on_epoch_end()
         epochs += 1
         # logger.info(f"lr {lr}")
