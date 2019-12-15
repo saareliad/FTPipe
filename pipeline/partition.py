@@ -176,12 +176,15 @@ class LastPartition(Partition):
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(x)
             else:
-                for tensor in x:
-                    # Option 1: we don't copy the tnesor here to save memory,
-                    # we don't care that the next recv will override it,
-                    # as all we need from it is its grad, imidaitly after.
-                    # (otherwise, we have to do synchrounous recvs)
-                    tensor.detach_().requires_grad_()
+                # Option 2
+                x = [tensor.data.clone().requires_grad_() for tensor in x]
+
+                # for tensor in x:
+                #     # Option 1: we don't copy the tnesor here to save memory,
+                #     # we don't care that the next recv will override it,
+                #     # as all we need from it is its grad, imidaitly after.
+                #     # (otherwise, we have to do synchrounous recvs)
+                #     tensor.detach_().requires_grad_()                    
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(*x)
         else:

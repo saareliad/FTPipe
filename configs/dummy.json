@@ -1,7 +1,7 @@
 {
     "logdir": "logs/",
     "out_dir":"results/",
-    "out_filename": "ninja4_msnag_clone",
+    "out_filename": "rambo2_msnag_clone_chunks_after_fix",
     "distributed_backend": "mpi",
     "task": "cv",
     "statistics": "cv",
@@ -39,7 +39,7 @@
     "epochs": 200,
     "steps": -1,
     "seed": 42,
-    "num_chunks": 4,
+    "num_chunks": 8,
     "verbose_comm": false,
     "flush_rate": -1
 }

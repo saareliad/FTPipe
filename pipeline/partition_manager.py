@@ -149,7 +149,7 @@ class SinglePartitionManager:
                 # print(f"-I- {self.stage} waiting on rcv")
                 obj.wait()
                 # print(f"-I- {self.stage} DONE waiting on rcv")
-            
+
             x = [torch.cat(group) for group in grouper(x, self.comm_handler.num_chunks)]
 
             x, *ctx = self.task.unpack_data_for_partition(x)
@@ -203,8 +203,10 @@ class SinglePartitionManager:
                         log_str = '| lr {:02.4f}'.format(lr)
                         self.logger.info(log_str)
 
-                for i in self.fwd_rcev_buffers:
-                    i.grad = None
+                # Not sure its needed at all. probobly not needed anymore.
+                # FIXME: I removed this because nothing else works...
+                # for i in self.fwd_rcev_buffers:
+                #     i.grad = None
 
         return request_objects
 
