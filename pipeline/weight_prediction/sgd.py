@@ -97,11 +97,11 @@ PRED_MEM_TO_CLASS = {
     'calc': SGDRevertableLinearWeightPrediction
 }
 
+# FIXME: keys are hardcoded from optimizers...
 SGD_TYPE_TO_MSNAG_CLASS = {
     'sgd1': SGD1MSNAG,
     'sgd2': SGD2MSNAG
 }
-
 
 def get_sgd_weight_predictor(sgd_type: str, pred_mem: str, optimizer, scheduler=None) -> WeightPredictor:
     fix_fn_cls = SGD_TYPE_TO_MSNAG_CLASS.get(sgd_type, None)

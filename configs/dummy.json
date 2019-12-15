@@ -1,7 +1,7 @@
 {
     "logdir": "logs/",
     "out_dir":"results/",
-    "out_filename": "msnag_clone",
+    "out_filename": "ninja4_msnag_clone",
     "distributed_backend": "mpi",
     "task": "cv",
     "statistics": "cv",

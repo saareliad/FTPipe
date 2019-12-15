@@ -46,7 +46,5 @@ class CVTrainer(SupervisedTrainer):
         # TODO: implement gradient statistics later
         self.optimizer.step()
         self.optimizer.zero_grad()
+        # TODO: per step scheduler
         # self.scheduler.step()
-
-    # def get_lr(self):
-    #     return self.scheduler.get_lr()  # if self.scheduler else [pg['lr'] for pg in self.optimizer.param_groups]

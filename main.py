@@ -1,10 +1,7 @@
 import argparse
-# import pipeline
 from pipeline import CommunicationHandler
 from pipeline import SinglePartitionManager
 
-# from pipeline.training.dummy_trainer import DummyTrainer
-# from pipeline.tasks import CVTask
 from pipeline.training import AVAILABLE_TRAINERS
 from pipeline.tasks import AVAILABLE_TASKS
 from pipeline.stats import AVAILBALE_STATS
@@ -12,8 +9,6 @@ from pipeline.weight_prediction import get_sgd_weight_predictor
 from optimizers import AVAILBALE_OPTIMIZERS
 from pipeline.util import get_world_size
 import optimizers.lr_scheduler
-
-# from optimizers.warmup_scheduler import GradualWarmupScheduler
 
 import models
 import numpy as np
@@ -381,6 +376,9 @@ def get_scheduler(args, optimizer):
 
 
 def get_weight_predictor(args, optimizer, scheduler=None):
+    if not hasattr(args, 'weight_prediction'):
+        return None, None
+
     optimizer_type = getattr(args, 'optimizer')['type']
     pred = getattr(args, 'weight_prediction')
     pred_mem = pred['args']['pred_mem']
@@ -513,27 +511,21 @@ def main():
         device, is_last_partition, is_first_partition)
 
     # Set Trainer
-    # FIXME: this if is just to support trainers hardcoded with their own default optimizer.
-    # currently thats just the dummy trainer.
-    if optimizer_cls:
-        # if hasattr(args, "warmup_scheduler") and args.warmup_scheduler['type'] == "GradualWarmupScheduler":
-        #     multiplier = args.warmup_scheduler['args']['multiplier']
-        #     args.optimizer['args']['lr'] /= multiplier
+    # FIXME: this `if` is just to support trainers hardcoded with their own default optimizer.
+    # currently thats just the `dummy` trainer,
+    # This is to be removed
 
-        optimizer = optimizer_cls(
-            partition.partition.parameters(), **args.optimizer['args'])
+    optimizer = optimizer_cls(
+        partition.partition.parameters(), **args.optimizer['args'])
 
-        scheduler = get_scheduler(args, optimizer)
+    scheduler = get_scheduler(args, optimizer)
 
-        # TODO: scheduler for sched aware prediction
-        weight_predictor, nag_with_predictor = get_weight_predictor(
-            args, optimizer, scheduler=scheduler)
+    # TODO: scheduler for sched aware prediction
+    weight_predictor, nag_with_predictor = get_weight_predictor(
+        args, optimizer, scheduler=scheduler)
 
-    if args.trainer == 'dummy':
-        trainer = trainer_cls(partition.partition)
-    else:
-        trainer = trainer_cls(partition.partition,
-                              optimizer=optimizer, scheduler=scheduler, statistics=statistics)
+    trainer = trainer_cls(partition.partition,
+                          optimizer=optimizer, scheduler=scheduler, statistics=statistics)
 
     partition.set_trainer(trainer)
     if weight_predictor:
@@ -545,32 +537,16 @@ def main():
 
     epochs = 0
     steps = 0
-    FLUSH_EVERY_BATCH = False
     logger.info(f"flush rate {args.flush_rate}")
     logger.info(f"Running for {args.epochs} epochs and {args.steps} steps")
     while epochs < args.epochs or args.epochs < 0:
-        # if epochs > 0:
-        #     lr = scheduler.get_last_lr()
-        #     logger.info(f"Done Epoch {epochs}, so far did {steps} steps, LR {lr}")
-
-        #     print('-' * 89)
-        #     logger.info('| end of epoch {:3d} | time: {:5.2f}s '.format(epochs, (time.time() - epoch_start_time)))
-
-        #     #  valid loss {:5.2f} | '
-        #     #     'valid ppl {:8.2f}'.format(epochs, (time.time() - epoch_start_time),
-        #     #                                 val_loss, math.exp(val_loss)))
-        #     print('-' * 89)
         epoch_start_time = time.time()
-        # while args.steps < 0 or steps < args.steps:
         # steps_at_epoch_start = steps
         for TRAIN in [True, False]:
             logger.info(f"Running {'train' if TRAIN else 'eval'}")
-            # TODO: option to change it such that we will run epoch with multiple flushes
-            # e.g flush every batch.
 
             TRAIN_BATCHES_TO_RUN = len(train_dl)
             TEST_BATCHES_TO_RUN = len(test_dl)
-
             # TRAIN_BATCHES_TO_RUN = 30
             # TEST_BATCHES_TO_RUN = 30
 
@@ -582,9 +558,8 @@ def main():
                 partition.train()
                 if statistics:
                     statistics.train()
-                if FLUSH_EVERY_BATCH or args.flush_rate > 0:
-                    TRAIN_BATCHES_TO_RUN = args.flush_rate
-                    for _ in range(0, len(train_dl), args.flush_rate):
+                if args.flush_rate > 0:
+                    for _ in range(0, TRAIN_BATCHES_TO_RUN, args.flush_rate):
                         partition.run_until_flush(
                             min(args.flush_rate, len(train_dl)))
 
@@ -612,12 +587,11 @@ def main():
             if args.local_rank == args.world_size - 1:
                 statistics.on_epoch_end()
         epochs += 1
-        # logger.info(f"lr {lr}")
-        # logger.info(f"after_schedualr base lrs {scheduler.after_scheduler.base_lrs}")
         steps += TRAIN_BATCHES_TO_RUN
 
         if args.local_rank == args.world_size - 1:
             logger.info('-' * 89)
+            # ms/batch {:5.2f}
             info_str = '| end of epoch {:3d} | time: {:5.2f}s | steps: {:5d}'.format(
                 epochs, (time.time() - epoch_start_time), steps)
             info_str += statistics.get_epoch_info_str(is_train=True)
@@ -626,23 +600,13 @@ def main():
             logger.info(info_str)
             logger.info('-' * 89)
 
-        # {:5d}/{:5d} batches | '
-        #           'lr {:02.2f} | ms/batch {:5.2f} | '
-        #           'loss {:5.2f} | ppl {:8.2f}'.format(
-        #             epoch, batch, len(train_data)
-
-        #  valid loss {:5.2f} | '
-        #     'valid ppl {:8.2f}'.format(epochs, (time.time() - epoch_start_time),
-        #                                 val_loss, math.exp(val_loss)))
-
         if args.steps > 0 and steps >= args.steps:
-            break
-            # steps_condition_is_met = True
+            break  # steps condition met
 
     # FIXME: If last state
     if args.rank == get_world_size(args.distributed_backend) - 1:
         if statistics:
-            fit_res = statistics.get_stats()  # Assuming its a named tuple..
+            fit_res = statistics.get_stats()
             config = vars(args)  # FIXME: TODO:
             save_experiment(args.out_filename, args.out_dir, config, fit_res)
     torch.distributed.barrier()

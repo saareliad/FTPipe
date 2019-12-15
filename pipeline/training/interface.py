@@ -19,10 +19,6 @@ class AnyTrainer(abc.ABC):
     def calc_test_stats(self, *args, **kw):
         pass
 
-    # @abc.abstractmethod
-    # def get_lr(self) -> List[float]:
-    #     pass
-
 
 class SupervisedTrainer(AnyTrainer):
     # added *args just to make it a true subtype.
@@ -35,7 +31,3 @@ class SupervisedTrainer(AnyTrainer):
         We currently assume its the last partition for simplicity
         """
         pass
-
-    # @abc.abstractmethod
-    # def step_on_computed_grads(self, **kw):
-    #     pass

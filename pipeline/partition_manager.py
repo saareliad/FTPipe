@@ -148,7 +148,7 @@ class SinglePartitionManager:
 
             # TODO: last partition can do bengio nesterov instead of predicting.
             if self.weight_predictor and self.partition.training:
-                self.weight_predictor.setup(self.expected_staleness(batch_idx, done_bwds))  # TODO: more generic way for staleness
+                self.weight_predictor.setup(self.expected_staleness(batch_idx, done_bwds))
                 self.weight_predictor.forward()
                 x = self.partition(x, batch_idx)
                 self.weight_predictor.revert()
@@ -189,7 +189,7 @@ class SinglePartitionManager:
                     if self.batches % self.log_frequency == 0:
                         # TODO: scheduler could be None.
                         lr = self.trainer.scheduler.get_last_lr()[0]  # TODO: could be more than one LR
-                        log_str = '| lr {:02.2f}'.format(lr)  # TODO: add more stats..
+                        log_str = '| lr {:02.4f}'.format(lr)  # TODO: add more stats..
                         self.logger.info(log_str)
 
                 for i in self.fwd_rcev_buffers:
