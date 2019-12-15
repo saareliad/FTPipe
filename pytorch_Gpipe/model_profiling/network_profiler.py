@@ -13,7 +13,7 @@ Profile = namedtuple('Profile',
                      'forward_time backward_time cuda_memory_forward cuda_memory_backward  layer_size')
 
 
-def profileNetwork(net: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, basic_blocks: Optional[List[nn.Module]] = None, max_depth=100) -> Dict[str, Profile]:
+def profileNetwork(net: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, basic_blocks: Optional[List[nn.Module]] = None, max_depth=100, n_iter=10) -> Dict[str, Profile]:
     '''
     profiles a network's computation time(forward/backward) and memory consumption
     returns a dictionary from layer_scope to Profile
@@ -48,14 +48,19 @@ def profileNetwork(net: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict]
     # wrap all individula layers for profiling
     layers_dict = _wrap_profiled_layers(net, max_depth, basic_blocks)
 
-    # perform 2 symbolic forward backward run first one is warmup as we have seen the first time measurements are higher
+    # perform n_iter symbolic forward backward run first one is warmup as we have seen the first time measurements are higher
     _perform_forward_backward_pass(net, *sample_batch, **kwargs)
-    _perform_forward_backward_pass(net, *sample_batch, **kwargs)
+    for l in layers_dict.values():
+        l.forward_time = 0
+        l.backward_time = 0
+
+    for _ in range(n_iter):
+        _perform_forward_backward_pass(net, *sample_batch, **kwargs)
 
     # gather forward and backward execution times
-    backward_times = [layer.backward_time
+    backward_times = [layer.backward_time / n_iter
                       for layer in layers_dict.values()]
-    forward_times = [layer.forward_time
+    forward_times = [layer.forward_time/n_iter
                      for layer in layers_dict.values()]
 
     # gather input and output sizes
@@ -185,17 +190,19 @@ class Wrapper(nn.Module):
 
         detached_inputs = _detach_inputs(inputs)
 
-        self.forward_time, outputs, self.forward_cuda_mem = self._time_op(
+        forward_time, outputs, self.forward_cuda_mem = self._time_op(
             self.layer, *detached_inputs, **kwargs)
 
+        self.forward_time += forward_time
         # reduce outputs to calculate dummy loss
         loss = torch.zeros(1, requires_grad=True, device=device)
         for out in flatten(outputs):
             loss = loss+out.norm()
 
         # measure backward execution time
-        self.backward_time, _, self.backward_cuda_mem = self._time_op(
+        backward_time, _, self.backward_cuda_mem = self._time_op(
             torch.autograd.backward, loss)
+        self.backward_time += backward_time
 
         # input and output size
         self.input_size = _get_size(inputs)

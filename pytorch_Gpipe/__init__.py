@@ -15,7 +15,7 @@ __all__ = ['pipe_model', 'partition_with_profiler',
 
 # TODO pytorch jit trace / get_trace_graph do not support kwargs
 
-def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, nparts: int = 4, partition_by_memory: bool = False, output_file: str = None, DEBUG=False):
+def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, n_iter=10, nparts: int = 4, partition_by_memory: bool = False, output_file: str = None, DEBUG=False):
     '''attemps to partition a model to given number of parts using our profiler
        this will produce a python file with the partition config
 
@@ -52,7 +52,7 @@ def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] =
     else:
         w_func = by_time
 
-    graph = partition_with_profiler(model, sample_batch, kwargs=kwargs, nparts=nparts,
+    graph = partition_with_profiler(model, sample_batch, kwargs=kwargs, n_iter=n_iter, nparts=nparts,
                                     weighting_function=w_func)
 
     generatePartitionModules(graph, model,
@@ -61,7 +61,7 @@ def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] =
     return graph
 
 
-def partition_with_profiler(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, nparts=4, max_depth=100, basic_blocks: Optional[List[nn.Module]] = None, weighting_function: Optional[Callable[[Any], int]] = None) -> Graph:
+def partition_with_profiler(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, n_iter=10, nparts=4, max_depth=100, basic_blocks: Optional[List[nn.Module]] = None, weighting_function: Optional[Callable[[Any], int]] = None) -> Graph:
     '''
     return a graph representing the partitioned model with the weights given by the profiler
     this method does not distribute the model accross devices
@@ -81,7 +81,7 @@ def partition_with_profiler(model: nn.Module, sample_batch: Tensors, kwargs: Opt
         an optional function from node weights to non negative integers if not provided a default function will be used
     '''
     graph = graph_builder(model, sample_batch, kwargs=kwargs, max_depth=max_depth,
-                          basic_blocks=basic_blocks, use_profiler=True)
+                          basic_blocks=basic_blocks, n_iter=n_iter, use_profiler=True)
 
     graph = partition(graph, nparts, weighting_function=weighting_function)
 

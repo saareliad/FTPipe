@@ -5,7 +5,7 @@ import string
 import inspect
 import torch
 import re
-
+from copy import deepcopy
 class Graph():
     '''
     a Graph data structure that model a pytorch network built from a pytorch trace\n
@@ -209,7 +209,7 @@ class Graph():
 
     def remove_tensor_int_tensor(self):
         def predicate(node):
-            if 'prim::ImplicitTensorToNum' in node.scope or 'aten::Int' in node.scope or 'aten::NumToTensor' in node.scope:
+            if 'prim::ImplicitTensorToNum' in node.scope or 'aten::Int' in node.scope or 'prim::NumToTensor' in node.scope:
                 for n in node.in_nodes:
                     n.value_type = int
                 return True
@@ -392,8 +392,26 @@ class Graph():
         G = nx.from_edgelist(edge_list)
         for n in self.nodes:
             G.nodes[n.idx]['weight']=n.weight
+            G.nodes[n.idx]['scope']=n.scope
+            G.nodes[n.idx]['part']=n.part
         
         return G
+
+
+    def layers_graph(self):
+        copy_graph = deepcopy(self)
+
+        copy_graph._remove_nodes(lambda n: n.type not in [NodeTypes.LAYER,NodeTypes.IN],reverse=True)
+
+        for idx,n in enumerate(copy_graph.nodes):
+            n.idx=idx
+            assert n.type in [NodeTypes.IN, NodeTypes.LAYER]
+            for o in n.out_nodes:
+                assert o.type == NodeTypes.LAYER
+            for i in n.in_nodes:
+                assert i.type in [NodeTypes.IN,NodeTypes.LAYER]
+
+        return copy_graph
 
     def build_dot(self, show_buffs_params=False, show_weights=True):
         '''
@@ -500,7 +518,7 @@ class Graph():
         except ImportError as _:
             print("only works in python notebooks")
 
-    def save(self, file_name,directory, show_buffs_params=False,show_weights=True):
+    def save(self, file_name,directory, show_buffs_params=True,show_weights=False):
         '''
         save the rendered graph to a file
 

@@ -10,7 +10,7 @@ from .network_profiler import profileNetwork
 __all__ = ['graph_builder', 'profileNetwork']
 
 
-def graph_builder(model: nn.Module, sample_batch: Tensors = (), kwargs: Optional[Dict] = None, max_depth: int = 1000, weights: Optional[Dict[str, Any]] = None, basic_blocks: Optional[List[nn.Module]] = None, use_profiler=False) -> Graph:
+def graph_builder(model: nn.Module, sample_batch: Tensors = (), kwargs: Optional[Dict] = None, max_depth: int = 1000, weights: Optional[Dict[str, Any]] = None, basic_blocks: Optional[List[nn.Module]] = None, n_iter=1, use_profiler=False) -> Graph:
     '''
     returns a graph that models the control flow of the given network by tracing it's forward pass
 
@@ -38,7 +38,7 @@ def graph_builder(model: nn.Module, sample_batch: Tensors = (), kwargs: Optional
         sample_batch = (sample_batch,)
 
     if use_profiler:
-        weights = profileNetwork(model, sample_batch, kwargs=kwargs, max_depth=max_depth,
+        weights = profileNetwork(model, sample_batch, kwargs=kwargs, n_iter=n_iter, max_depth=max_depth,
                                  basic_blocks=basic_blocks)
 
     buffer_param_names = map(lambda t: t[1], traverse_params_buffs(model))
