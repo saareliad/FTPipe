@@ -2,7 +2,7 @@ import time
 import torch
 import logging
 from typing import Dict
-
+from collections import OrderedDict
 from . import CommunicationHandler
 from .partition import Partition, LastPartition, FirstPartition
 from .training.interface import AnyTrainer
@@ -43,8 +43,12 @@ class SinglePartitionManager:
         self.bwd_rcev_buffers = None
 
         # Async handle objects
-        self.async_fwd_objects = {}
-        self.async_bwd_objects = {}
+        self.async_fwd_objects = OrderedDict()
+        self.async_bwd_objects = OrderedDict()
+
+        # # TODO: read real values from config...
+        # self.base_fwd_send_tensors = 1
+        # self.base_bwd_send_tensors = 1
 
         self.logger = logging.getLogger("msnag")
         self.dl_iter = None
@@ -64,7 +68,7 @@ class SinglePartitionManager:
         if self.is_first_partition:
             self.dataloader = dataloader
             self.dl_iter = iter(self.dataloader)
-            
+
     def set_weight_predictor(self, weight_predictor: WeightPredictor, nag_with_predictor: bool):
         self.weight_predictor = weight_predictor
         self.nag_with_predictor = nag_with_predictor
@@ -107,7 +111,8 @@ class SinglePartitionManager:
             x, *ctx = self.task.unpack_data_for_partition(data)
 
             if self.weight_predictor and self.partition.training:
-                self.weight_predictor.setup(self.expected_staleness(batch_idx, done_bwds)) 
+                self.weight_predictor.setup(
+                    self.expected_staleness(batch_idx, done_bwds))
                 self.weight_predictor.forward()
                 x = self.partition(x, batch_idx)
                 self.weight_predictor.revert()
@@ -148,7 +153,8 @@ class SinglePartitionManager:
 
             # TODO: last partition can do bengio nesterov instead of predicting.
             if self.weight_predictor and self.partition.training:
-                self.weight_predictor.setup(self.expected_staleness(batch_idx, done_bwds))
+                self.weight_predictor.setup(
+                    self.expected_staleness(batch_idx, done_bwds))
                 self.weight_predictor.forward()
                 x = self.partition(x, batch_idx)
                 self.weight_predictor.revert()
@@ -188,8 +194,10 @@ class SinglePartitionManager:
                     self.batches += 1
                     if self.batches % self.log_frequency == 0:
                         # TODO: scheduler could be None.
-                        lr = self.trainer.scheduler.get_last_lr()[0]  # TODO: could be more than one LR
-                        log_str = '| lr {:02.4f}'.format(lr)  # TODO: add more stats..
+                        # TODO: could be more than one LR
+                        lr = self.trainer.scheduler.get_last_lr()[0]
+                        # TODO: add more stats..
+                        log_str = '| lr {:02.4f}'.format(lr)
                         self.logger.info(log_str)
 
                 for i in self.fwd_rcev_buffers:
@@ -265,16 +273,19 @@ class SinglePartitionManager:
         for done_fwds in range(num_batches):
 
             sent_request_objects = self.run_batch_forward(done_fwds)
+
             self.async_fwd_objects[done_fwds] = sent_request_objects
 
-            # TODO: don't wait every time, add option to accum by depth
-            if done_fwds % 2 == 0:
-                for sent_request_objects in self.async_fwd_objects.values():
-                    for i in sent_request_objects:
-                        # print(f"-I- {self.stage} waiting")
-                        i.wait()
+            if len(self.async_fwd_objects) > 1:
+                # Pop the item that was increaced first.
+                _, tmp_send_objects = self.async_fwd_objects.popitem(
+                    last=False)
+                for i in tmp_send_objects:
+                    i.wait()
 
-                self.async_fwd_objects.clear()
+            # TODO, wait on first
+
+            # TODO: don't wait every time, add option to accum by depth
 
         # Also clear in the end, just in case...
         for sent_request_objects in self.async_fwd_objects.values():
@@ -305,7 +316,8 @@ class SinglePartitionManager:
             action_is_fwd = self.policy_scheduler_is_fwd(
                 num_steps, done_bwds, done_fwds)
             if action_is_fwd:
-                sent_request_objects = self.run_batch_forward(done_fwds, done_bwds)
+                sent_request_objects = self.run_batch_forward(
+                    done_fwds, done_bwds)
                 self.async_fwd_objects[done_fwds] = sent_request_objects
             else:
                 sent_request_objects = self.run_batch_backward(done_bwds)
@@ -320,33 +332,50 @@ class SinglePartitionManager:
                     done_fwds += 1
                 else:
                     done_bwds += 1
+            # TODO: can write the entire thing MUCH more nicely if we just save asside and insert the new objects at the end...
 
-            if done_bwds % 2 == 0:
-                for sent_request_objects in self.async_bwd_objects.values():
-                    for i in sent_request_objects:
-                        i.wait()
+            # wait on the first,
+            if len(self.async_fwd_objects) > 1:
+                # Pop the item that was increaced first.
+                _, sent_request_objects = self.async_fwd_objects.popitem(
+                    last=False)
+                for i in sent_request_objects:
+                    i.wait()
 
-                for sent_request_objects in self.async_fwd_objects.values():
-                    for i in sent_request_objects:
-                        i.wait()
+            if len(self.async_bwd_objects) > 1:
+                # Pop the item that was increaced first.
+                _, sent_request_objects = self.async_bwd_objects.popitem(
+                    last=False)
+                for i in sent_request_objects:
+                    i.wait()
 
-                self.async_bwd_objects.clear()
-                self.async_fwd_objects.clear()
+        # FIXME: just for even numbers.
+        print(self.stage, len(self.async_bwd_objects), len(self.async_fwd_objects))
+        # assert len(self.async_bwd_objects) == 1
+        # assert len(self.async_fwd_objects) == 1
 
-            # FIXME: we may not want to wait on this yet.
-            # TODO: save the object and wait only when truly needed.
-
-        # TODO: wait on all objects
-        for sent_request_objects in self.async_bwd_objects.values():
-            for i in sent_request_objects:
+        # FIXME: maybe more than 1...
+        while len(self.async_fwd_objects) > 0:
+            _, o1 = self.async_fwd_objects.popitem(last=False)                    
+            for i in o1:
+                i.wait()
+    
+        while len(self.async_bwd_objects) > 0:
+            _, o2 = self.async_bwd_objects.popitem(last=False)
+            for i in o2:
                 i.wait()
 
-        for sent_request_objects in self.async_fwd_objects.values():
-            for i in sent_request_objects:
-                i.wait()
+        # # TODO: wait on all objects
+        # for sent_request_objects in self.async_bwd_objects.values():
+        #     for i in sent_request_objects:
+        #         i.wait()
 
-        self.async_bwd_objects.clear()
-        self.async_fwd_objects.clear()
+        # for sent_request_objects in self.async_fwd_objects.values():
+        #     for i in sent_request_objects:
+        #         i.wait()
+
+        # self.async_bwd_objects.clear()
+        # self.async_fwd_objects.clear()
 
         # self.logger.info(f"Done running until flush stage:{self.stage}")
         # torch.distributed.barrier()

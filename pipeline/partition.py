@@ -84,15 +84,19 @@ class Partition(nn.Module):
             self.rng_stasher.stash_rng_state(micro_batch_idx)
 
             with torch.no_grad():
-                # EXPLICITLY DO DETACH() INSTEAD OF DETACH_()
-                # TODO: this could be optimized...
+                # EXPLICITLY DO CLONE
                 if isinstance(x, Tensor):
-                    x = x.detach().requires_grad_(self._REQ_GRAD)
-                    self.input_buffer[micro_batch_idx] = x.detach().requires_grad_(self._REQ_GRAD)
+                    # x = x.data.clone().requires_grad_(self._REQ_GRAD)
+                    # TODO: I wonder what would happen if we do some relu inplace....
+                    # it can destroy our activation!
+                    # therefore, we may like to run on the original x before clone
+                    # but I'm afrait that due to cuda async operations it will get overriden by next step.
+                    x = x.data.clone().requires_grad_(self._REQ_GRAD)
+                    self.input_buffer[micro_batch_idx] = x
                     x = self.layers(x)
                 else:
-                    # for tensor in x:                    
-                    x = [tensor.detach().requires_grad_(self._REQ_GRAD) for tensor in x]
+                    # for tensor in x:
+                    x = [tensor.data.clone().requires_grad_(self._REQ_GRAD) for tensor in x]
                     self.input_buffer[micro_batch_idx] = x
                     x = self.layers(*x)
             return x
@@ -165,13 +169,17 @@ class LastPartition(Partition):
         if self.training:
             # Note that here we save the input just to get its gradeint later
             # we do not plan to do any recomputation.
-
             if isinstance(x, Tensor):
+                # # See note on option 1 below.
                 x.detach_().requires_grad_()
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(x)
             else:
                 for tensor in x:
+                    # Option 1: we don't copy the tnesor here to save memory,
+                    # we don't care that the next recv will override it,
+                    # as all we need from it is its grad, imidaitly after.
+                    # (otherwise, we have to do synchrounous recvs)
                     tensor.detach_().requires_grad_()
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(*x)
