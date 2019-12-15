@@ -46,9 +46,15 @@ python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_nod
 * We currently must do `drop_last=True` because we use constant buffer buffers
   (we can write code to fix that, but we prefer this easy fix meanwhile).
 
+* `in_place` operations (like ReLU) at partition border have a potential of destroying our saved activations (?).
+
+* fix batch normalization in `torch.no_grad()`
+
 ## TODOs
 
-* timing (ms per batch, epoch, etc)
+* Double Buffering (Remember credit to Mark)
+* Monkey patch batch normalization
+* timing (ms per batch, fwd, bwd, etc)
 * schedule: find way to eliminate bubbles
 * Target_tensor_names:
   * I notice that they (pipedream) pass the target all across the pipeline (waste of energy, inefficient).

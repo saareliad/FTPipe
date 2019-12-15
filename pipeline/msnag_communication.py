@@ -3,7 +3,7 @@ import torch
 import torch.distributed as dist
 from .util import get_world_size  # , CommPolicy, to_policy
 from enum import Enum, auto
-
+from .itertools import grouper
 import logging
 
 
@@ -39,6 +39,7 @@ class CommunicationHandler(object):
                  ranks_in_next_stage,
                  TOTAL_TAGS,
                  cpu,
+                 num_chunks,
                  GRAD_UGLY_SHAMEFUL_NAME="_grad",
                  verbose=False
                  ):
@@ -62,6 +63,9 @@ class CommunicationHandler(object):
         self.num_ranks_in_next_stage = len(ranks_in_next_stage)
         self.TOTAL_TAGS = TOTAL_TAGS
         self.comm_policy = to_policy(backend, cpu)
+
+        # TODO: pass from argparse/config
+        self.num_chunks = 4  # we split the batches to chunks
 
         world_size = get_world_size(backend)
 
@@ -115,36 +119,42 @@ class CommunicationHandler(object):
         self.tensor_shapes = tensor_shapes
 
     def _create_recv_buffers(self, device, tensor_names, requires_grad=False):
+        # FIXME chunk
         buffers = []
         for tensor_name in tensor_names:
-            shape = self.tensor_shapes[tensor_name]
-            # TODO: also eval dtype
             dtype = self.training_tensor_dtypes[tensor_name]
-            rcv_buffer = torch.empty(
-                shape, dtype=dtype, device=device, requires_grad=requires_grad)
-            # print(f"-V- rcv_buffer shape {rcv_buffer.shape}")
-            buffers.append(rcv_buffer)
+            # TODO: also eval dtype
+            shape = self.tensor_shapes[tensor_name]
+            rcv_buffer = torch.empty(shape, dtype=dtype, device=device, requires_grad=requires_grad)
+            # Alocate buffer for double buffering
+            # Yo dawg, heard you allocate buffers so we could do double buffering with your buffers :-)
+            for chunk in rcv_buffer.chunk(self.num_chunks):
+                buffers.append(chunk)
         return buffers
 
     def create_activations_recv_buffers(self, device, requires_grad=False):
         return self._create_recv_buffers(device, self.receive_ranks.keys(), requires_grad=requires_grad)
 
     def create_gradients_rcv_buffers(self, device, requires_grad=False):
+        # FIXME chunks
         tensor_names = [
             i for i in self.send_ranks.keys() if not (i in self.target_tensor_names)]
         return self._create_recv_buffers(device, tensor_names, requires_grad=requires_grad)
 
     def _recv_tensors_p2p(self, x, batch_idx, ranks_dict_items):
         request_objects = []
-        for tensor, (tensor_name, receive_ranks) in zip(x, ranks_dict_items):
+        for tensor, (tensor_name, receive_ranks) in zip(grouper(x, self.num_chunks), ranks_dict_items):
             assert len(receive_ranks) == 1
             receive_rank = receive_ranks[0]
             tensor_tag = self.tensor_tags[tensor_name] + (self.TOTAL_TAGS * batch_idx)
             if self.verbose:
                 self.logger.info(
                     f"irecv, src={receive_rank}, tag={tensor_tag}, name={tensor_name}, rank={self.local_rank}")
-            request_obj = dist.irecv(tensor, receive_rank, tag=tensor_tag)
-            request_objects.append(request_obj)
+
+            for chunk, chunk_tag in zip(tensor, range(tensor_tag, tensor_tag + self.num_chunks)):
+                request_obj = dist.irecv(chunk, receive_rank, tag=chunk_tag)
+                request_objects.append(request_obj)
+
         return request_objects
 
     def recv_activations_p2p(self, x, batch_idx):
@@ -161,13 +171,19 @@ class CommunicationHandler(object):
                 (self.TOTAL_TAGS * batch_idx)
 
             tensor.detach_()
+            # One message per tensor, regardles of number of chunks.
             for send_rank in send_ranks:
                 if self.verbose:
                     self.logger.info(
                         f"isend, dst={send_rank}, tag={tensor_tag}, name={tensor_name}, rank={self.local_rank}")
 
-                request_obj = dist.isend(tensor, send_rank, tag=tensor_tag)
-                request_objects.append(request_obj)
+                for i, chunk in enumerate(tensor.chunk(self.num_chunks)):
+                    chunk_tag = tensor_tag + i
+                    if self.verbose:
+                        self.logger.info(
+                            f"isend, dst={send_rank}, tag={chunk_tag}, shape={chunk.shape}, rank={self.local_rank}")
+                    request_obj = dist.isend(chunk, send_rank, tag=chunk_tag)
+                    request_objects.append(request_obj)
 
         return request_objects
 
@@ -178,6 +194,7 @@ class CommunicationHandler(object):
         return self._send_tensors_p2p(x, batch_idx, self.grad_send_items)
 
     def _send_tensors_bcast(self, x, batch_idx, pg):
+        # TODO: Double buffering like p2p
         request_objects = []
         for tensor in x:
             tensor.detach_()
@@ -191,6 +208,7 @@ class CommunicationHandler(object):
         return request_objects
 
     def _recv_tensors_bcast(self, x, batch_idx, src, pg):
+        # TODO: Double buffering like p2p
         # FIXME
         # FIXME
         # FIXME

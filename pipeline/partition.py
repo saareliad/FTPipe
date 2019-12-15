@@ -171,7 +171,8 @@ class LastPartition(Partition):
             # we do not plan to do any recomputation.
             if isinstance(x, Tensor):
                 # # See note on option 1 below.
-                x.detach_().requires_grad_()
+                # x.detach_().requires_grad_()
+                x = x.data.clone().requires_grad_()
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(x)
             else:

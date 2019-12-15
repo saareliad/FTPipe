@@ -23,5 +23,11 @@ if __name__ == "__main__":
     loss_per_batch = "loss_per_batch" in config['statistics']
     fig, ax = plot.plot_fit(fit_res, fig=fig, log_loss=False, legend="rambo_msnag")
 
+
+    config, fit_res = load_experiment("results/rambo2_stale_weights.json")
+    loss_per_batch = "loss_per_batch" in config['statistics']
+    fig, ax = plot.plot_fit(fit_res, fig=fig, log_loss=False, legend="rambo_stale_weights")
+
+
     plt.plot()
     plt.savefig('results/comparssion.png')

@@ -8,6 +8,7 @@ from .partition import Partition, LastPartition, FirstPartition
 from .training.interface import AnyTrainer
 from .tasks import DLTask
 from .weight_prediction.interface import WeightPredictor
+from .itertools import grouper
 
 # from gpu_mem_track import MemTracker
 
@@ -142,12 +143,14 @@ class SinglePartitionManager:
             # x = self.comm_handler.create_activations_recv_buffers(self.device)
 
             request_objects = self.comm_handler.recv_activations(x, batch_idx)
-
+            
             # recv for fwd
             for obj in request_objects:
                 # print(f"-I- {self.stage} waiting on rcv")
                 obj.wait()
                 # print(f"-I- {self.stage} DONE waiting on rcv")
+            
+            x = [torch.cat(group) for group in grouper(x, self.comm_handler.num_chunks)]
 
             x, *ctx = self.task.unpack_data_for_partition(x)
 
@@ -246,6 +249,9 @@ class SinglePartitionManager:
         # recv for bwd
         for obj in request_objects:
             obj.wait()
+
+        g = [torch.cat(group) for group in grouper(g, self.comm_handler.num_chunks)]
+        # g = torch.cat(g, self.comm_handler.
 
         self.partition.recompute_and_backward(g, batch_idx)
         self.trainer.step_on_computed_grads()

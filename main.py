@@ -105,6 +105,8 @@ def parse_cli():
     parser.add_argument('--config', help="Config File",
                         default='configs/dummy.json')
 
+    parser.add_argument("--num_chunks", help="Number of chunks for Double Buffering", type=int, default=4)
+
     args = parser.parse_args()
 
     # TODO: note, some arguments are supported only through config and not argparse.
@@ -164,7 +166,9 @@ def create_comm_handler(args, initialize_args):
         args.stage,
         *initialize_args,
         args.cpu,
-        verbose=False)
+        args.num_chunks,
+        GRAD_UGLY_SHAMEFUL_NAME="_grad",
+        verbose=args.verbose_comm if hasattr(args, "verbose_comm") else False)
 
     return comm_handler
 
@@ -181,7 +185,7 @@ def config_to_tuples_array(configs):
 
 # target_tensor_names = {"target", "target_length"}
 # target_tensor_names = {"target"}
-def tensor_tags_from_config(config, target_tensor_names, GRAD_UGLY_SHAMEFUL_NAME="_grad"):
+def tensor_tags_from_config(config, target_tensor_names, num_chunks, GRAD_UGLY_SHAMEFUL_NAME="_grad"):
 
     # Note: same tags for all proccess
 
@@ -193,30 +197,30 @@ def tensor_tags_from_config(config, target_tensor_names, GRAD_UGLY_SHAMEFUL_NAME
         for input_tensor in input_tensors:
             if input_tensor not in tensor_tags:
                 tensor_tags[input_tensor] = tensor_tag
-                tensor_tag += 1
+                tensor_tag += num_chunks
         for output_tensor in output_tensors:
             if output_tensor not in tensor_tags:
                 tensor_tags[output_tensor] = tensor_tag
-                tensor_tag += 1
+                tensor_tag += num_chunks
     # Create different tags for gradients
     for (_, input_tensors, output_tensors) in model:
         for input_tensor in input_tensors:
             input_tensor += GRAD_UGLY_SHAMEFUL_NAME
             if input_tensor not in tensor_tags:
                 tensor_tags[input_tensor] = tensor_tag
-                tensor_tag += 1
+                tensor_tag += num_chunks
         for output_tensor in output_tensors:
             output_tensor += GRAD_UGLY_SHAMEFUL_NAME
             if output_tensor not in tensor_tags:
                 tensor_tags[output_tensor] = tensor_tag
-                tensor_tag += 1
+                tensor_tag += num_chunks
 
     for target_tensor_name in sorted(target_tensor_names):
         tensor_tags[target_tensor_name] = tensor_tag
-        tensor_tag += 1
+        tensor_tag += num_chunks
 
-    tensor_tags["ack"] = tensor_tag
-    tensor_tag += 1
+    # tensor_tags["ack"] = tensor_tag
+    tensor_tag += num_chunks
 
     return tensor_tags, tensor_tag
 
@@ -257,7 +261,7 @@ def create_distributed_communcation_context(args, config, stage, stage_to_rank_m
     # eval_tensor_shapes = {**training_tensor_shapes}
 
     tensor_tags, TOTAL_TAGS = tensor_tags_from_config(
-        config, target_tensor_names=target_tensor_names)
+        config, target_tensor_names, args.num_chunks, GRAD_UGLY_SHAMEFUL_NAME="_grad")
 
     def ranks_in_stage(given_stage):
         if stage_to_rank_map:

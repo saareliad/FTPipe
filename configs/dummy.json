@@ -39,5 +39,7 @@
     "epochs": 200,
     "steps": -1,
     "seed": 42,
+    "num_chunks": 4,
+    "verbose_comm": false,
     "flush_rate": -1
 }
