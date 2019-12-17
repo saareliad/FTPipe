@@ -105,7 +105,8 @@ def parse_cli():
     parser.add_argument('--config', help="Config File",
                         default='configs/dummy.json')
 
-    parser.add_argument("--num_chunks", help="Number of chunks for Double Buffering", type=int, default=4)
+    parser.add_argument(
+        "--num_chunks", help="Number of chunks for Double Buffering", type=int, default=4)
 
     args = parser.parse_args()
 
@@ -403,8 +404,8 @@ def get_weight_predictor(args, optimizer, scheduler=None):
 
 def main():
     args = parse_cli()
-    parse_env_vars(args)
     parse_json_config(args)
+    parse_env_vars(args)
 
     if args.debug:
         import ptvsd
@@ -543,15 +544,26 @@ def main():
     steps = 0
     logger.info(f"flush rate {args.flush_rate}")
     logger.info(f"Running for {args.epochs} epochs and {args.steps} steps")
+
+    if not hasattr(args, "train_batches_limit"):
+        TRAIN_BATCHES_TO_RUN = len(train_dl)
+    else:
+        TRAIN_BATCHES_TO_RUN = getattr(args, "train_batches_limit") if getattr(
+            args, "train_batches_limit") > 0 else len(train_dl)
+
+    if not hasattr(args, "test_batches_limit"):
+        TEST_BATCHES_TO_RUN = len(test_dl)
+    else:
+        TEST_BATCHES_TO_RUN = getattr(args, "test_batches_limit") if getattr(
+            args, "test_batches_limit") > 0 else len(test_dl)
+
     while epochs < args.epochs or args.epochs < 0:
         epoch_start_time = time.time()
         # steps_at_epoch_start = steps
         for TRAIN in [True, False]:
             logger.info(f"Running {'train' if TRAIN else 'eval'}")
 
-            TRAIN_BATCHES_TO_RUN = len(train_dl)
-            TEST_BATCHES_TO_RUN = len(test_dl)
-            # TRAIN_BATCHES_TO_RUN = 30
+            # TRAIN_BATCHES_TO_RUN = 4
             # TEST_BATCHES_TO_RUN = 30
 
             if TRAIN:
