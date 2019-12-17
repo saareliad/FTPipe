@@ -2,11 +2,14 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from typing import Tuple, Union
-
+from .monkey_patch import DummyForwardMonkeyPatcher
 Tensors = Tuple[Tensor, ...]
 TensorOrTensors = Union[Tensor, Tensors]
 
 __all__ = ['Partition', 'LastPartition', 'FirstPartition']
+
+DEFAULT_CLASSES_LIST_TO_PATCH = [nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d,
+                                 nn.SyncBatchNorm, nn.InstanceNorm1d, nn.InstanceNorm2d, nn.InstanceNorm3d]
 
 
 class PartitionRngStasher:
@@ -51,8 +54,9 @@ class Partition(nn.Module):
     pop happens when we read the gradient.
     """
     _REQ_GRAD = True
+    _HAS_DUMMY_FORWARD = True
 
-    def __init__(self, layers, device, to_device=True):
+    def __init__(self, layers, device, to_device=True, classes_list_to_patch=DEFAULT_CLASSES_LIST_TO_PATCH):
         """
         :param layers: list of layers (or a single module)
         :param device: device of the partition
@@ -64,6 +68,8 @@ class Partition(nn.Module):
         elif isinstance(layers, nn.Module):
             self.layers = layers
 
+        self.dummy_forward_monkey_patcher = DummyForwardMonkeyPatcher(self.layers, classes_list_to_patch) \
+            if self._HAS_DUMMY_FORWARD else None
         self.input_buffer = {}
         self.rng_stasher = PartitionRngStasher(device=self.device)
 
@@ -83,6 +89,10 @@ class Partition(nn.Module):
             # TODO: can spare the detach
             self.rng_stasher.stash_rng_state(micro_batch_idx)
 
+            if self.dummy_forward_monkey_patcher:
+                self.dummy_forward_monkey_patcher.sync()
+                self.dummy_forward_monkey_patcher.replace_for_dummy()
+
             with torch.no_grad():
                 # EXPLICITLY DO CLONE
                 if isinstance(x, Tensor):
@@ -96,10 +106,15 @@ class Partition(nn.Module):
                     x = self.layers(x)
                 else:
                     # for tensor in x:
-                    x = [tensor.data.clone().requires_grad_(self._REQ_GRAD) for tensor in x]
+                    x = [tensor.data.clone().requires_grad_(self._REQ_GRAD)
+                         for tensor in x]
                     self.input_buffer[micro_batch_idx] = x
                     x = self.layers(*x)
+
+            if self.dummy_forward_monkey_patcher:
+                self.dummy_forward_monkey_patcher.replace_for_forward()
             return x
+
         else:
             with torch.no_grad():
                 if isinstance(x, Tensor):
@@ -139,6 +154,7 @@ class FirstPartition(Partition):
         This may save some memory.
     """
     _REQ_GRAD = False
+    _HAS_DUMMY_FORWARD = True
 
     def __init__(self, *args, **kw):
         super(FirstPartition, self).__init__(*args, **kw)
@@ -160,6 +176,8 @@ class FirstPartition(Partition):
 
 
 class LastPartition(Partition):
+    _REQ_GRAD = True
+    _HAS_DUMMY_FORWARD = False
     # TODO: make the inheritance true subtype.
 
     def __init__(self, *args, **kw):
@@ -184,7 +202,7 @@ class LastPartition(Partition):
                 #     # we don't care that the next recv will override it,
                 #     # as all we need from it is its grad, imidaitly after.
                 #     # (otherwise, we have to do synchrounous recvs)
-                #     tensor.detach_().requires_grad_()                    
+                #     tensor.detach_().requires_grad_()
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(*x)
         else:
@@ -210,33 +228,33 @@ class LastPartition(Partition):
 ##################################################
 
 
-class GpipePartition:
-    """ TODO: uncompleted version of GpipePartition.... """
+# class GpipePartition:
+#     """ TODO: uncompleted version of GpipePartition.... """
 
-    def __init__(self, layers, device, recomputation=True):
-        """
-        :param layers: list of layers (or a single layer)
-        :param device: device of the partition
-        """
-        super(GpipePartition, self).__init__()
-        self.device = device
-        if isinstance(layers, list):
-            self.layers = nn.Sequential(*layers)  # .to(self.device)
-        elif isinstance(layers, nn.Module):
-            self.layers = layers
+#     def __init__(self, layers, device, recomputation=True):
+#         """
+#         :param layers: list of layers (or a single layer)
+#         :param device: device of the partition
+#         """
+#         super(GpipePartition, self).__init__()
+#         self.device = device
+#         if isinstance(layers, list):
+#             self.layers = nn.Sequential(*layers)  # .to(self.device)
+#         elif isinstance(layers, nn.Module):
+#             self.layers = layers
 
-        self.recomputation = recomputation
-        if self.recomputation:
-            self.input_buffer = {}
-            self.rng_stasher = PartitionRngStasher(device=self.device)
-        self.to(self.device)
+#         self.recomputation = recomputation
+#         if self.recomputation:
+#             self.input_buffer = {}
+#             self.rng_stasher = PartitionRngStasher(device=self.device)
+#         self.to(self.device)
 
-    def on_new_batch(self, num_micro_batches):
-        if not self.recomputation:
-            return
-        # Create placeholder for micro batches input
-        self.input_buffer = {idx: None for idx in range(num_micro_batches)}
+#     def on_new_batch(self, num_micro_batches):
+#         if not self.recomputation:
+#             return
+#         # Create placeholder for micro batches input
+#         self.input_buffer = {idx: None for idx in range(num_micro_batches)}
 
-    def forward(self, x: TensorOrTensors, micro_batch_idx):
-        # TODO
-        pass
+#     def forward(self, x: TensorOrTensors, micro_batch_idx):
+#         # TODO
+#         pass

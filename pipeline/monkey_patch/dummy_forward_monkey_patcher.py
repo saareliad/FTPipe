@@ -8,7 +8,7 @@ def convert_child(model, b4, after):
     for child_name, child in model.named_children():
         if child is b4:
             setattr(model, child_name, after)
-            print(f"Converted {child_name}")
+            # print(f"Converted {child_name}")
         else:
             convert_child(child, b4, after)
 
@@ -18,23 +18,23 @@ class DummyForwardMonkeyPatcher:
         """ List of model names to patch """
         self.model = model
         self.classes_to_patch = classes_list_to_patch
-        # self.FMODELS = []
-        # self.ENCAPSULATORS = []
-        # self.MODELS = []
+        self.models = []
+        self.encapsulators = []
+        self.fmodels = []
 
         for model_to_patch in self.classes_to_patch:
             found = []  # list of tuples: (access_string, model)
             find_modules(model, "", model_to_patch, found)
 
             # ACCESS_STRS = [i[0][1:] for i in found]
-            self.models = [i[1] for i in found]
+            self.models += [i[1] for i in found]
 
             # list of tuples (fmodel, encapsulator)
             monkey_patched_enc_tuples = [dummy_forward_monkeypatch(
                 orig_model) for orig_model in self.models]
 
-            self.fmodels = [i[0] for i in monkey_patched_enc_tuples]
-            self.encapsulators = [i[1] for i in monkey_patched_enc_tuples]
+            self.fmodels += [i[0] for i in monkey_patched_enc_tuples]
+            self.encapsulators += [i[1] for i in monkey_patched_enc_tuples]
 
     def replace_for_dummy(self):
         for m, fm in zip(self.models, self.fmodels):
@@ -58,6 +58,7 @@ def test():
 
     patcher = DummyForwardMonkeyPatcher(
         model, classes_list_to_patch=[torch.nn.BatchNorm1d])
+    patcher.sync()
     print(model)
     patcher.replace_for_dummy()
     model(torch.randn(features, features))

@@ -278,15 +278,19 @@ def _make_functional(
 
     true_forward = type(module).forward
 
-    def patched_forward(self, *args, **kwargs):
-        for name, param in zip(
-            self._param_names,
-            params_box[0][params_offset:params_offset + num_params]
-        ):
-            setattr(self, name, param)
-        return true_forward(self, *args, **kwargs)
+    # def patched_forward(self, *args, **kwargs):
+    #     # TODO: should just be true forward...
+    #     if params_box[0]:
+    #         for name, param in zip(
+    #             self._param_names,
+    #             params_box[0][params_offset:params_offset + num_params]
+    #         ):
+    #             setattr(self, name, param)
+    #     return true_forward(self, *args, **kwargs)
 
-    setattr(MonkeyPatched, "forward", patched_forward)
+    # setattr(MonkeyPatched, "forward", patched_forward)
+
+    setattr(MonkeyPatched, "forward", true_forward)
 
     return child_params_offset, fmodule, type(fmodule)
 
@@ -327,7 +331,7 @@ def make_functional(
     top_name = "Functional" + MonkeyPatched._wrapped_name
     MonkeyPatched.__name__ = MonkeyPatched.__qualname__ = top_name
 
-    MonkeyPatched.boxed_forward = MonkeyPatched.forward
+    MonkeyPatched.boxed_forward = MonkeyPatched.forward  # TODO: remove
 
     param_mapping = _utils._get_param_mapping(module, [], [])
     setattr(fmodule, "_param_mapping", param_mapping)
@@ -336,13 +340,15 @@ def make_functional(
         if "params" in kwargs:
             params = kwargs.pop('params')
             self.fast_params = params  # update view on latest fast params
-        elif self.fast_params is None:
-            raise ValueError(
-                "params keyword must be provided if patched module not "
-                "tracking its own fast parameters"
-            )
+        # elif self.fast_params is None:
+        #     raise ValueError(
+        #         "params keyword must be provided if patched module not "
+        #         "tracking its own fast parameters"
+        #     )
 
-        params_box[0] = self._expand_params(self.fast_params)
+        # params_box[0] = self._expand_params(self.fast_params)
+        if not self.fast_params:
+            params_box[0] = []
         return self.boxed_forward(*args, **kwargs)
 
     def _update_params(self, params):
@@ -350,7 +356,9 @@ def make_functional(
         params = self._expand_params(params)
         _update_patched_params(self, [params], 0)
 
-    setattr(MonkeyPatched, "forward", _patched_forward)
+    # setattr(MonkeyPatched, "forward", _patched_forward)
+    # setattr(MonkeyPatched, "forward", _patched_forward)
+
     setattr(MonkeyPatched, "parameters", _patched_parameters)
     setattr(MonkeyPatched, "update_params", _update_params)
 
@@ -380,13 +388,6 @@ def dummy_forward_monkeypatch(
 
     Args:
         module: a ``torch.nn.Module`` subclass instance.
-        device (optional): a device to cast the fast weights and state to.
-        copy_initial_weights: if True, the weights of the patched module are
-            copied to form the initial weights of the patched module, and thus
-            are not part of the gradient tape when unrolling the patched module.
-            If this is set to False, the actual module weights will be the
-            initial weights of the patched module. This is useful when doing
-            MAML, for example.
 
     Returns:
         ``fmodule``: a "stateless" version of the original module, for which calls
@@ -394,6 +395,10 @@ def dummy_forward_monkeypatch(
         should be a list of torch tensors requiring gradients, ideally
         provided by this function (see below) or by an update step from one
         of the optimizers in ``higher.optim``.
+        ``encapsulator``: A function, so the user can use
+                ``` encapsulator(fmodule, module) ```
+            - Before first usage
+            - And after every update to the original model
     """
 
     def encapsulator(
@@ -403,12 +408,15 @@ def dummy_forward_monkeypatch(
         buffer_sync(module, fmodule, None)
         fmodule.update_params(params)
 
-    fmodule = make_functional(module, encapsulator=encapsulator)
+    fmodule = make_functional(module, encapsulator=None)  # FIXME None
+    # Do not send incapsulator yet
+    # Device is None...
 
     return fmodule, encapsulator  # Also return the encapsulator,
-    # so the use can use
+    # so the user can use
     # encapsulator(fmodule, module)
-    # to sync after every update.
+    # Before first usage
+    # and after every update
 
 
 # Original
