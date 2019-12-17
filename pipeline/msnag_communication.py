@@ -6,7 +6,6 @@ from enum import Enum, auto
 from .itertools import grouper
 import logging
 
-
 class CommPolicy(Enum):
     P2P = auto()
     BCAST = auto()
@@ -125,10 +124,13 @@ class CommunicationHandler(object):
             dtype = self.training_tensor_dtypes[tensor_name]
             # TODO: also eval dtype
             shape = self.tensor_shapes[tensor_name]
+            # rcv_buffer = torch.empty(shape, dtype=dtype, requires_grad=requires_grad)
             rcv_buffer = torch.empty(shape, dtype=dtype, device=device, requires_grad=requires_grad)
+
             # Alocate buffer for double buffering
             # Yo dawg, heard you allocate buffers so we could do double buffering with your buffers :-)
             for chunk in rcv_buffer.chunk(self.num_chunks):
+                # buffers.append(chunk.pin_memory().to(device))
                 buffers.append(chunk)
         return buffers
 
@@ -165,6 +167,7 @@ class CommunicationHandler(object):
 
     def _send_tensors_p2p(self, x, batch_idx, ranks_dict_items):
         request_objects = []
+        sent_items = []  # Used to save them somewere.
         for tensor, (tensor_name, send_ranks) in zip(x, ranks_dict_items):
             # tag for minibatch idx too
             tensor_tag = self.tensor_tags[tensor_name] + \
@@ -182,10 +185,12 @@ class CommunicationHandler(object):
                     if self.verbose:
                         self.logger.info(
                             f"isend, dst={send_rank}, tag={chunk_tag}, shape={chunk.shape}, rank={self.local_rank}")
+                    # HACK: synchronize...
+                    torch.cuda.synchronize(device=None)
                     request_obj = dist.isend(chunk, send_rank, tag=chunk_tag)
                     request_objects.append(request_obj)
-
-        return request_objects
+                    sent_items.append(chunk)
+        return request_objects, sent_items
 
     def send_activations_p2p(self, x, batch_idx):
         return self._send_tensors_p2p(x, batch_idx, self.send_ranks.items())

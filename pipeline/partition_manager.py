@@ -281,12 +281,13 @@ class SinglePartitionManager:
         for done_fwds in range(num_batches):
 
             sent_request_objects = self.run_batch_forward(done_fwds)
-
-            self.async_fwd_objects[done_fwds] = sent_request_objects
+            
+            if sent_request_objects:  # last partition returns empty...
+                self.async_fwd_objects[done_fwds] = sent_request_objects
 
             if len(self.async_fwd_objects) > 1:
                 # Pop the item that was increaced first.
-                _, tmp_send_objects = self.async_fwd_objects.popitem(
+                _, (tmp_send_objects, tmp_sent_items) = self.async_fwd_objects.popitem(
                     last=False)
                 for i in tmp_send_objects:
                     i.wait()
@@ -296,7 +297,7 @@ class SinglePartitionManager:
             # TODO: don't wait every time, add option to accum by depth
 
         # Also clear in the end, just in case...
-        for sent_request_objects in self.async_fwd_objects.values():
+        for (sent_request_objects, tmp_sent_items) in self.async_fwd_objects.values():
             for i in sent_request_objects:
                 i.wait()
 
@@ -345,14 +346,14 @@ class SinglePartitionManager:
             # wait on the first,
             if len(self.async_fwd_objects) > 1:
                 # Pop the item that was increaced first.
-                _, sent_request_objects = self.async_fwd_objects.popitem(
+                _, (sent_request_objects, tmp_sent_items) = self.async_fwd_objects.popitem(
                     last=False)
                 for i in sent_request_objects:
                     i.wait()
 
             if len(self.async_bwd_objects) > 1:
                 # Pop the item that was increaced first.
-                _, sent_request_objects = self.async_bwd_objects.popitem(
+                _, (sent_request_objects, tmp_sent_items) = self.async_bwd_objects.popitem(
                     last=False)
                 for i in sent_request_objects:
                     i.wait()
@@ -364,12 +365,12 @@ class SinglePartitionManager:
 
         # FIXME: maybe more than 1...
         while len(self.async_fwd_objects) > 0:
-            _, o1 = self.async_fwd_objects.popitem(last=False)                    
+            _, (o1, t1) = self.async_fwd_objects.popitem(last=False)                    
             for i in o1:
                 i.wait()
     
         while len(self.async_bwd_objects) > 0:
-            _, o2 = self.async_bwd_objects.popitem(last=False)
+            _, (o2, t2) = self.async_bwd_objects.popitem(last=False)
             for i in o2:
                 i.wait()
 
