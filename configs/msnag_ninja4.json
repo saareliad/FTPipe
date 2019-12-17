@@ -1,0 +1,45 @@
+{
+    "logdir": "logs/",
+    "out_dir":"results/",
+    "out_filename": "ninja_msnag_clone_chunks_after_fix",
+    "distributed_backend": "mpi",
+    "task": "cv",
+    "statistics": "cv",
+    "model": "wrn_16x4_p2",
+    "dataset": "cifar10",
+    "trainer": "cv",
+    "bs_train": 128,
+    "bs_test": 200,
+    "num_data_workers": 6,
+    "optimizer": {
+        "type": "sgd1",
+        "args": {
+            "lr": 0.1,
+            "weight_decay": 0.0005,
+            "momentum": 0.9,
+            "nesterov": false
+        }
+    },
+    "lr_scheduler": {
+        "type": "get_multi_step_lr_schedule_with_warmup",
+        "args": {
+            "num_warmup_steps": 5,
+            "milestones": [60, 120, 160],
+            "gamma": 0.2,
+            "last_epoch": -1
+        }
+    },
+    "weight_prediction": {
+        "type": "msnag",
+        "args": {
+            "pred_mem": "clone",
+            "nag_with_predictor": true
+        }
+    },
+    "epochs": 200,
+    "steps": -1,
+    "seed": 42,
+    "num_chunks": 4,
+    "verbose_comm": false,
+    "flush_rate": -1
+}

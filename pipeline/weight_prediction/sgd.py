@@ -71,7 +71,7 @@ class SGDClonedWeightPrediction(WeightPredictor):
                         p.data = bp.data
 
 
-class SGD1MSNAG(FixFunction):
+class SGD2MSNAG(FixFunction):
     """ 
     SGD version mention in Sutskever et al, also used in tensorflow.
     Mentioned as eq 10 Goyal et al.
@@ -86,7 +86,7 @@ class SGD1MSNAG(FixFunction):
         # return torch.tensor(gamma).pow_(d + 1).add_(- gamma).div_(gamma - 1)
 
 
-class SGD2MSNAG(SGD1MSNAG):
+class SGD1MSNAG(SGD2MSNAG):
     """ Pytorch SGD. Mentioned as eq 9 Goyal et al. """
     def __call__(self, p: WeightPredictor, pg):
         return pg['lr'] * super().__call__(p, pg)
