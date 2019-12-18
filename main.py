@@ -10,6 +10,7 @@ from pipeline.gap_aware import get_sgd_gap_aware_cls
 from optimizers import AVAILBALE_OPTIMIZERS
 from pipeline.util import get_world_size
 import optimizers.lr_scheduler
+from pipeline.work_schedulers import AVAILABLE_WORK_SCHEDULERS
 
 import models
 import numpy as np
@@ -80,6 +81,9 @@ def parse_cli():
 
     parser.add_argument('--out-filename', '-n', type=str,
                         help='Name of output file', required=False)
+
+    parser.add_argument('--work_scheduler', type=str, help="scheduling policy to indicate when to perform forward pass",
+                        choices=AVAILABLE_WORK_SCHEDULERS.keys(), default='1F1B')
 
     parser.add_argument('--cpu', action='store_true',
                         default=False, help="run partition on cpu")
@@ -389,7 +393,7 @@ def get_gap_aware(args, optimizer):
         return None
     gap_aware_args = getattr(args, 'gap_aware')['args']
     optimizer_type = getattr(args, 'optimizer')['type']
-    
+
     # if gap_aware_args['penatly_for_weight_decay']:
     #     if not (hasattr(args, "weight_predictor")):
     #         raise ValueError("Do not use penatly_for_weight_decay with msnag/DANA weight predictor")
@@ -425,6 +429,7 @@ def get_weight_predictor(args, optimizer, scheduler=None):
         return weight_predictor, nag_with_predictor
     else:
         raise NotImplementedError()
+
 
 def hack_trainer_to_gap_aware(args):
     if hasattr(args, 'gap_aware'):
@@ -487,7 +492,7 @@ def main():
 
     if use_gap_aware:
         logger.info(f"Stage {args.stage} will use Gap Aware")
-    
+
     # Here is a dummy for For CIFAR10 network
     # TODO: best practice is env var for choosing gpu
     device = torch.device('cpu' if args.cpu else f"cuda:{args.local_rank}")
@@ -546,16 +551,17 @@ def main():
     # init_dist(args)
 
     training_tensor_shapes, eval_tensor_shapes = shapes
-    
+
     trainer_cls = AVAILABLE_TRAINERS.get(args.trainer)
     task_cls = AVAILABLE_TASKS.get(args.task)
     optimizer_cls = AVAILBALE_OPTIMIZERS.get(args.optimizer_type)
     statistics = AVAILBALE_STATS.get(args.statistics)
+    work_scheduler = AVAILABLE_WORK_SCHEDULERS.get(args.work_scheduler)
 
     partition = SinglePartitionManager(
         stage,
         configs, configs[stage]['model'],
-        comm_handler, training_tensor_shapes,
+        comm_handler, work_scheduler, training_tensor_shapes,
         eval_tensor_shapes,
         device, is_last_partition, is_first_partition)
 
@@ -577,7 +583,7 @@ def main():
     #                     scheduler=scheduler, statistics=statistics)
 
     # is_almost_last_partition = args.local_rank == args.world_size - 2
-    
+
     if hasattr(trainer_cls, "HAS_GAP_AWARE"):
         gap_aware = get_gap_aware(args, optimizer)
         # trainer_args['gap_aware'] = gap_aware

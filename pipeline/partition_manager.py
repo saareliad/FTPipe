@@ -10,12 +10,14 @@ from .tasks import DLTask
 from .weight_prediction.interface import WeightPredictor
 from .itertools import grouper
 from .gap_aware import GapAware  # TODO: change to interface.
+from .work_schedulers import WorkScheduler
 
 # from gpu_mem_track import MemTracker
 
 
 class SinglePartitionManager:
     def __init__(self, stage, configs: Dict, partition: torch.nn.Module, comm_handler: CommunicationHandler,
+                 work_scheduler: WorkScheduler,
                  training_tensor_shapes, eval_tensor_shapes,
                  device, is_last_partition, is_first_partition, statistics=None):
 
@@ -35,10 +37,11 @@ class SinglePartitionManager:
         self.is_first_partition = is_first_partition
         self.stage = stage
         self.num_stages = len(configs)  # FIXME:
-        
+        self.work_scheduler = work_scheduler
+
         self.weight_predictor = None
         self.gap_aware = None
-        
+
         # State for train logging
         self.log_frequency = 100  # FIXME: magic number
         self.batches = 0
@@ -150,14 +153,15 @@ class SinglePartitionManager:
             # x = self.comm_handler.create_activations_recv_buffers(self.device)
 
             request_objects = self.comm_handler.recv_activations(x, batch_idx)
-            
+
             # recv for fwd
             for obj in request_objects:
                 # print(f"-I- {self.stage} waiting on rcv")
                 obj.wait()
                 # print(f"-I- {self.stage} DONE waiting on rcv")
 
-            x = [torch.cat(group) for group in grouper(x, self.comm_handler.num_chunks)]
+            x = [torch.cat(group)
+                 for group in grouper(x, self.comm_handler.num_chunks)]
 
             x, *ctx = self.task.unpack_data_for_partition(x)
 
@@ -217,34 +221,6 @@ class SinglePartitionManager:
 
         return request_objects
 
-    def policy_scheduler_is_fwd(self, num_steps, done_bwds, done_fwds):
-        # TODO: implement...
-        # and generically/nicely.
-        # FIXME: Here is a dummy sequential implementation with dummy args.
-        # stage = self.stage
-        # num_stages = self.num_stages
-
-        POLICY = 'P1'
-
-        if POLICY == 'SEQ':
-            if self.is_last_partition:
-                return True
-            else:
-                if not (done_bwds < done_fwds):
-                    return True
-                else:
-                    return False
-        elif POLICY == 'P1':
-            if self.is_last_partition:
-                return True
-            if done_fwds == num_steps:
-                return False
-            allowed_staleness = self.num_stages - 1 - self.stage
-            current_staleness = done_fwds - done_bwds
-            return current_staleness <= allowed_staleness
-
-        # return True
-
     def run_batch_backward(self, batch_idx):
         # TODO: implement
 
@@ -259,7 +235,8 @@ class SinglePartitionManager:
         for obj in request_objects:
             obj.wait()
 
-        g = [torch.cat(group) for group in grouper(g, self.comm_handler.num_chunks)]
+        g = [torch.cat(group)
+             for group in grouper(g, self.comm_handler.num_chunks)]
         # g = torch.cat(g, self.comm_handler.
 
         self.partition.recompute_and_backward(g, batch_idx)
@@ -288,7 +265,7 @@ class SinglePartitionManager:
         for done_fwds in range(num_batches):
 
             sent_request_objects = self.run_batch_forward(done_fwds)
-            
+
             if sent_request_objects:  # last partition returns empty...
                 self.async_fwd_objects[done_fwds] = sent_request_objects
 
@@ -329,8 +306,8 @@ class SinglePartitionManager:
         while done_bwds < num_batches:
             # for step_index in range(num_steps):
             # Act according to some policy
-            action_is_fwd = self.policy_scheduler_is_fwd(
-                num_steps, done_bwds, done_fwds)
+            action_is_fwd = self.work_scheduler(self.stage, self.num_stages,
+                                                num_steps, done_fwds, done_bwds)
             if action_is_fwd:
                 sent_request_objects = self.run_batch_forward(
                     done_fwds, done_bwds)
@@ -366,16 +343,17 @@ class SinglePartitionManager:
                     i.wait()
 
         # FIXME: just for even numbers.
-        print(self.stage, len(self.async_bwd_objects), len(self.async_fwd_objects))
+        print(self.stage, len(self.async_bwd_objects),
+              len(self.async_fwd_objects))
         # assert len(self.async_bwd_objects) == 1
         # assert len(self.async_fwd_objects) == 1
 
         # FIXME: maybe more than 1...
         while len(self.async_fwd_objects) > 0:
-            _, (o1, t1) = self.async_fwd_objects.popitem(last=False)                    
+            _, (o1, t1) = self.async_fwd_objects.popitem(last=False)
             for i in o1:
                 i.wait()
-    
+
         while len(self.async_bwd_objects) > 0:
             _, (o2, t2) = self.async_bwd_objects.popitem(last=False)
             for i in o2:
