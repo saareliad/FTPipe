@@ -6,6 +6,7 @@ from pipeline.training import AVAILABLE_TRAINERS
 from pipeline.tasks import AVAILABLE_TASKS
 from pipeline.stats import AVAILBALE_STATS
 from pipeline.weight_prediction import get_sgd_weight_predictor
+from pipeline.gap_aware import get_sgd_gap_aware_cls
 from optimizers import AVAILBALE_OPTIMIZERS
 from pipeline.util import get_world_size
 import optimizers.lr_scheduler
@@ -74,7 +75,8 @@ def parse_cli():
     parser.add_argument('--out-dir', '-o', type=str, help='Output folder for results',
                         default='./results', required=False)
 
-    parser.add_argument('--data-dir', type=str, help="Data directory", required=False)  # DEFAULT_DATA_DIR
+    parser.add_argument('--data-dir', type=str,
+                        help="Data directory", required=False)  # DEFAULT_DATA_DIR
 
     parser.add_argument('--out-filename', '-n', type=str,
                         help='Name of output file', required=False)
@@ -382,7 +384,28 @@ def get_scheduler(args, optimizer):
         return scheduler
 
 
+def get_gap_aware(args, optimizer):
+    if not hasattr(args, 'gap_aware'):
+        return None
+    gap_aware_args = getattr(args, 'gap_aware')['args']
+    optimizer_type = getattr(args, 'optimizer')['type']
+    
+    # if gap_aware_args['penatly_for_weight_decay']:
+    #     if not (hasattr(args, "weight_predictor")):
+    #         raise ValueError("Do not use penatly_for_weight_decay with msnag/DANA weight predictor")
+
+    if not optimizer_type == 'sgd1':  # pytorch
+        raise NotImplementedError()
+    gap_aware_cls = get_sgd_gap_aware_cls(optimizer_type)
+    return gap_aware_cls(optimizer, **gap_aware_args)
+
+
 def get_weight_predictor(args, optimizer, scheduler=None):
+    """
+        Returns:
+            weight_predictor,
+            nag_with_predictor: bool
+    """
     if not hasattr(args, 'weight_prediction'):
         return None, None
 
@@ -403,11 +426,26 @@ def get_weight_predictor(args, optimizer, scheduler=None):
     else:
         raise NotImplementedError()
 
+def hack_trainer_to_gap_aware(args):
+    if hasattr(args, 'gap_aware'):
+        # on = args.gap_aware['on']
+        assert args.gap_aware['policy'] == 'almost_last_partition'
+
+        is_almost_last_partition = args.local_rank == args.world_size - 2
+
+        # HACK: change trainer name
+        if is_almost_last_partition:
+            args.trainer += "_gap_aware"
+            return True
+
+    return False
+
 
 def main():
     args = parse_cli()
     parse_json_config(args)
     parse_env_vars(args)
+    use_gap_aware = hack_trainer_to_gap_aware(args)
 
     if args.debug:
         import ptvsd
@@ -420,6 +458,7 @@ def main():
 
     logger = FileLogger(args.logdir, global_rank=args.rank,
                         local_rank=args.local_rank, name='msnag', world_size=args.world_size)
+
     assert_args(args)
     configs = models.get_partitioning(args.model, model_instance=None)
 
@@ -446,6 +485,9 @@ def main():
     assert(not (stage is None))
     args.stage = stage
 
+    if use_gap_aware:
+        logger.info(f"Stage {args.stage} will use Gap Aware")
+    
     # Here is a dummy for For CIFAR10 network
     # TODO: best practice is env var for choosing gpu
     device = torch.device('cpu' if args.cpu else f"cuda:{args.local_rank}")
@@ -504,7 +546,7 @@ def main():
     # init_dist(args)
 
     training_tensor_shapes, eval_tensor_shapes = shapes
-
+    
     trainer_cls = AVAILABLE_TRAINERS.get(args.trainer)
     task_cls = AVAILABLE_TASKS.get(args.task)
     optimizer_cls = AVAILBALE_OPTIMIZERS.get(args.optimizer_type)
@@ -531,8 +573,19 @@ def main():
     weight_predictor, nag_with_predictor = get_weight_predictor(
         args, optimizer, scheduler=scheduler)
 
-    trainer = trainer_cls(partition.partition,
-                          optimizer=optimizer, scheduler=scheduler, statistics=statistics)
+    # trainer_args = dict(optimizer=optimizer,
+    #                     scheduler=scheduler, statistics=statistics)
+
+    # is_almost_last_partition = args.local_rank == args.world_size - 2
+    
+    if hasattr(trainer_cls, "HAS_GAP_AWARE"):
+        gap_aware = get_gap_aware(args, optimizer)
+        # trainer_args['gap_aware'] = gap_aware
+        trainer = trainer_cls(gap_aware, partition.partition, optimizer=optimizer,
+                              scheduler=scheduler, statistics=statistics)
+    else:
+        trainer = trainer_cls(partition.partition, optimizer=optimizer,
+                              scheduler=scheduler, statistics=statistics)
 
     partition.set_trainer(trainer)
     if weight_predictor:
@@ -578,18 +631,24 @@ def main():
                     statistics.train()
                 if args.flush_rate > 0:
                     for _ in range(0, TRAIN_BATCHES_TO_RUN, args.flush_rate):
+                        if use_gap_aware:
+                            # Gap calculation assumes staleness 1, so skipping first batch in flush.
+                            gap_aware.skip_one_apply()
                         partition.run_until_flush(
                             min(args.flush_rate, len(train_dl)))
 
                     reminder = len(train_dl) % args.flush_rate
                     if reminder > 0:
+                        if use_gap_aware:
+                            gap_aware.skip_one_apply()
                         partition.run_until_flush(reminder)
                 else:
                     partition.run_until_flush(
                         min(TRAIN_BATCHES_TO_RUN, len(train_dl)))
 
                 scheduler.step()
-
+                if use_gap_aware:
+                    gap_aware.update_max_lr()
             else:
                 # Set Dataloader
                 # sets only to first partition

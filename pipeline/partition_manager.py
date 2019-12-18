@@ -9,6 +9,7 @@ from .training.interface import AnyTrainer
 from .tasks import DLTask
 from .weight_prediction.interface import WeightPredictor
 from .itertools import grouper
+from .gap_aware import GapAware  # TODO: change to interface.
 
 # from gpu_mem_track import MemTracker
 
@@ -34,8 +35,10 @@ class SinglePartitionManager:
         self.is_first_partition = is_first_partition
         self.stage = stage
         self.num_stages = len(configs)  # FIXME:
+        
         self.weight_predictor = None
-
+        self.gap_aware = None
+        
         # State for train logging
         self.log_frequency = 100  # FIXME: magic number
         self.batches = 0
@@ -58,6 +61,7 @@ class SinglePartitionManager:
         self.task: DLTask
         self.trainer: AnyTrainer
         self.weight_predictor: WeightPredictor
+        self.gap_aware: GapAware
 
     def set_task(self, task: DLTask):
         self.task = task
@@ -73,6 +77,9 @@ class SinglePartitionManager:
     def set_weight_predictor(self, weight_predictor: WeightPredictor, nag_with_predictor: bool):
         self.weight_predictor = weight_predictor
         self.nag_with_predictor = nag_with_predictor
+
+    def set_gap_aware(self, gap_aware):
+        self.gap_aware = gap_aware
 
     def train(self):
         self.tensor_shapes = self.training_tensor_shapes

@@ -1,7 +1,7 @@
 {
     "logdir": "logs/",
     "out_dir":"results/",
-    "out_filename": "dummy_ga_no_wd",
+    "out_filename": "ninja_msnag_calc",
     "distributed_backend": "mpi",
     "task": "cv",
     "statistics": "cv",
@@ -32,23 +32,14 @@
     "weight_prediction": {
         "type": "msnag",
         "args": {
-            "pred_mem": "clone",
+            "pred_mem": "calc",
             "nag_with_predictor": true
-        }
-    },
-    "gap_aware": {
-        "type": "sgd1",
-        "policy": "almost_last_partition",
-        "args": {
-            "big_gamma": 0.999,
-            "epsilon": 1e-8,
-            "penatly_for_weight_decay": true
         }
     },
     "epochs": 200,
     "steps": -1,
     "seed": 42,
-    "num_chunks": 8,
+    "num_chunks": 4,
     "verbose_comm": false,
     "flush_rate": -1
 }

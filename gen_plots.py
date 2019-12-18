@@ -30,8 +30,12 @@ if __name__ == "__main__":
     fig, ax = add_plot("results/stale_weights_ninja4.json", "ninja_stale_weights", fig=fig)
     fig, ax = add_plot("results/ninja_msnag_clone_chunks_after_fix.json", "ninja_msnag", fig=fig)
 
-    fig, ax = add_plot("results/stale_weights_rambo2.json", "rambo_stale_weights", fig=fig)
+    fig, ax = add_plot("results/stale_weights_rambo2_1.json", "rambo_stale_weights", fig=fig)  # TODO: rerun
     fig, ax = add_plot("results/rambo2_msnag_clone_chunks_after_fix.json", "rambo_msnag", fig=fig)
+
+    # Memory efficient...
+    fig, ax = add_plot("results/ninja_msnag_calc.json", "ninja_msnag_calc", fig=fig)
+    # ninja_msnag_calc 
 
     # ninja_msnag_clone_chunks_after_fix
     
