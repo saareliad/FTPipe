@@ -23,7 +23,7 @@ class SinglePartitionManager:
         elif is_first_partition:
             partition_cls = FirstPartition
         else:
-            partition_cls: Partition
+            partition_cls = Partition
 
         self.partition = partition_cls(partition, device, to_device=True)
         self.comm_handler = comm_handler

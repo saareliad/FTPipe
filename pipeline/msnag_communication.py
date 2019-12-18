@@ -170,10 +170,15 @@ class CommunicationHandler(object):
         sent_items = []  # Used to save them somewere.
         for tensor, (tensor_name, send_ranks) in zip(x, ranks_dict_items):
             # tag for minibatch idx too
+            tensor = tensor.data
             tensor_tag = self.tensor_tags[tensor_name] + \
                 (self.TOTAL_TAGS * batch_idx)
-
-            tensor.detach_()
+            # try:
+            #     tensor.detach_()
+            # except RuntimeError as e:
+            #     self.logger.debug(f"isend, tag={tensor_tag}, name={tensor_name}, rank={self.local_rank}")
+            #     self.logger.debug(tensor)
+            #     raise e
             # One message per tensor, regardles of number of chunks.
             for send_rank in send_ranks:
                 if self.verbose:

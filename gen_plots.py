@@ -28,9 +28,10 @@ if __name__ == "__main__":
         return fig, ax
 
     fig, ax = add_plot("results/stale_weights_ninja4.json", "ninja_stale_weights", fig=fig)
-    fig, ax = add_plot("results/rambo2_stale_weights.json", "rambo_stale_weights", fig=fig)  # FIXME: do again.
-    fig, ax = add_plot("results/rambo2_msnag_clone_chunks_after_fix.json", "rambo_msnag", fig=fig)
     fig, ax = add_plot("results/ninja_msnag_clone_chunks_after_fix.json", "ninja_msnag", fig=fig)
+
+    fig, ax = add_plot("results/stale_weights_rambo2.json", "rambo_stale_weights", fig=fig)
+    fig, ax = add_plot("results/rambo2_msnag_clone_chunks_after_fix.json", "rambo_msnag", fig=fig)
 
     # ninja_msnag_clone_chunks_after_fix
     

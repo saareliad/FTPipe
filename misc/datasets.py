@@ -7,7 +7,7 @@ from torchvision.datasets import CIFAR10, CIFAR100
 
 # TODO: remove hardcoded DATA_DIR
 # read DATA_DIR from env or some config.yml file.
-DATA_DIR = os.path.expanduser('~/.pytorch-datasets')
+DEFAULT_DATA_DIR = os.path.expanduser('~/.pytorch-datasets')
 
 # torch.backends.cudnn.deterministic = True
 # torch.backends.cudnn.benchmark = False
@@ -16,7 +16,7 @@ DATA_DIR = os.path.expanduser('~/.pytorch-datasets')
 # torch.backends.cudnn.benchmark = False
 
 
-def get_cifar_10_train_test_ds():
+def get_cifar_10_train_test_ds(DATA_DIR=DEFAULT_DATA_DIR):
     mean = np.array([0.49139968, 0.48215841, 0.44653091])
     std = np.array([0.24703223, 0.24348513, 0.26158784])
 
@@ -38,7 +38,7 @@ def get_cifar_train_test_dl(ds_train, ds_test, bs_train, bs_test, shuffle_train=
     return dl_train, dl_test
 
 
-def get_cifar_100_train_test_ds():
+def get_cifar_100_train_test_ds(DATA_DIR=DEFAULT_DATA_DIR):
     mean = np.array([0.5071, 0.4867, 0.4408])
     std = np.array([0.2675, 0.2565, 0.2761])
 
@@ -77,10 +77,10 @@ DATASET_TO_DL_FN = {
 }
 
 
-def get_train_test_ds(dataset):
+def get_train_test_ds(dataset, DATA_DIR=DEFAULT_DATA_DIR):
     get_dataset_fn = DATASET_TO_DS_FN.get(dataset, None)
     if get_dataset_fn:
-        return get_dataset_fn()
+        return get_dataset_fn(DATA_DIR=DATA_DIR)
     else:
         raise ValueError(dataset)
 
@@ -93,8 +93,9 @@ def get_train_test_dl(dataset, *args, **kw):
         raise ValueError(dataset)
 
 
-def simplified_get_train_test_dl(dataset, bs_train, bs_test, shuffle_train=True, verbose=True, **kw):
-    ds_train, ds_test = get_train_test_ds(dataset)
+def simplified_get_train_test_dl(dataset, bs_train, bs_test, shuffle_train=True, verbose=True,
+                                 DATA_DIR=DEFAULT_DATA_DIR, **kw):
+    ds_train, ds_test = get_train_test_ds(dataset, DATA_DIR=DATA_DIR)
 
     dl_train, dl_test = get_train_test_dl(
         dataset, ds_train, ds_test, bs_train, bs_test, shuffle_train=shuffle_train, **kw)
@@ -107,8 +108,13 @@ def simplified_get_train_test_dl(dataset, bs_train, bs_test, shuffle_train=True,
 
 
 def simplified_get_train_test_dl_from_args(args, shuffle_train=True, verbose=True, **kw):
+
+    DATA_DIR = getattr(args, "data_dir", DEFAULT_DATA_DIR)
+    DATA_DIR = DATA_DIR if DATA_DIR else DEFAULT_DATA_DIR
+
     return simplified_get_train_test_dl(args.dataset, args.bs_train,
-                                        args.bs_test, shuffle_train=shuffle_train, verbose=verbose, **kw)
+                                        args.bs_test, shuffle_train=shuffle_train, verbose=verbose,
+                                        DATA_DIR=DATA_DIR, **kw)
 
 
 def add_dataset_argument(parser, default='cifar10', required=False):

@@ -1,11 +1,11 @@
 {
     "logdir": "logs/",
     "out_dir":"results/",
-    "out_filename": "rambo2_stale_weights",
+    "out_filename": "stale_weights_wrn_16x4_p4_cifar10",
     "distributed_backend": "mpi",
     "task": "cv",
     "statistics": "cv",
-    "model": "wrn_16x4_p2",
+    "model": "wrn_16x4_p4",
     "dataset": "cifar10",
     "trainer": "cv",
     "bs_train": 128,
@@ -32,5 +32,6 @@
     "epochs": 200,
     "steps": -1,
     "seed": 42,
+    "num_chunks": 8,
     "flush_rate": -1
 }

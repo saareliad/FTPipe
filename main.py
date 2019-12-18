@@ -74,6 +74,8 @@ def parse_cli():
     parser.add_argument('--out-dir', '-o', type=str, help='Output folder for results',
                         default='./results', required=False)
 
+    parser.add_argument('--data-dir', type=str, help="Data directory", required=False)  # DEFAULT_DATA_DIR
+
     parser.add_argument('--out-filename', '-n', type=str,
                         help='Name of output file', required=False)
 
