@@ -561,7 +561,7 @@ def main():
     partition = SinglePartitionManager(
         stage,
         configs, configs[stage]['model'],
-        comm_handler, work_scheduler, training_tensor_shapes,
+        comm_handler, work_scheduler(), training_tensor_shapes,
         eval_tensor_shapes,
         device, is_last_partition, is_first_partition)
 
@@ -610,15 +610,17 @@ def main():
         TRAIN_BATCHES_TO_RUN = len(train_dl)
     else:
         TRAIN_BATCHES_TO_RUN = getattr(args, "train_batches_limit") if getattr(
-            args, "train_batches_limit") > 0 else len(train_dl)
+            args, "train_batches_limit") >= 0 else len(train_dl)
 
     if not hasattr(args, "test_batches_limit"):
         TEST_BATCHES_TO_RUN = len(test_dl)
     else:
         TEST_BATCHES_TO_RUN = getattr(args, "test_batches_limit") if getattr(
-            args, "test_batches_limit") > 0 else len(test_dl)
+            args, "test_batches_limit") >= 0 else len(test_dl)
 
     while epochs < args.epochs or args.epochs < 0:
+        did_train = False
+        did_eval = False
         epoch_start_time = time.time()
         # steps_at_epoch_start = steps
         for TRAIN in [True, False]:
@@ -655,9 +657,12 @@ def main():
                 scheduler.step()
                 if use_gap_aware:
                     gap_aware.update_max_lr()
+                did_train = True
             else:
                 # Set Dataloader
                 # sets only to first partition
+                if TEST_BATCHES_TO_RUN == 0:
+                    continue
                 partition.set_dataloader(test_dl)
                 partition.eval()
 
@@ -667,18 +672,23 @@ def main():
                         partition.run_forward_until_flush(
                             min(TEST_BATCHES_TO_RUN, len(test_dl)))
 
+                did_eval = True
             if args.local_rank == args.world_size - 1:
                 statistics.on_epoch_end()
+        
         epochs += 1
-        steps += TRAIN_BATCHES_TO_RUN
+        if did_train:
+            steps += TRAIN_BATCHES_TO_RUN
 
         if args.local_rank == args.world_size - 1:
             logger.info('-' * 89)
             # ms/batch {:5.2f}
             info_str = '| end of epoch {:3d} | time: {:5.2f}s | steps: {:5d}'.format(
                 epochs, (time.time() - epoch_start_time), steps)
-            info_str += statistics.get_epoch_info_str(is_train=True)
-            info_str += statistics.get_epoch_info_str(is_train=False)
+            if did_train:
+                info_str += statistics.get_epoch_info_str(is_train=True)
+            if did_eval:
+                info_str += statistics.get_epoch_info_str(is_train=False)
 
             logger.info(info_str)
             logger.info('-' * 89)
