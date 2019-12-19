@@ -40,8 +40,9 @@ def gap_aware():
     fig = None
     # Gap aware:
     fig, ax = add_plot("results/dummy_ga.json", "gap_aware", fig=fig)
+    fig, ax = add_plot("results/dummy_ga_no_wd.json", "gap_aware_no_wd", fig=fig)
 
-    gen_plot(out_dir='results', out_base_name='gaw_aware.png')
+    gen_plot(out_dir='results', out_base_name='gap_aware.png')
 
 
 def gen_plot(out_dir='results', out_base_name='current_status.png'):

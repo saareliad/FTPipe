@@ -630,6 +630,8 @@ def main():
             # TEST_BATCHES_TO_RUN = 30
 
             if TRAIN:
+                if TRAIN_BATCHES_TO_RUN == 0:
+                    continue
                 # Set Dataloader
                 # sets only to first partition
                 partition.set_dataloader(train_dl)

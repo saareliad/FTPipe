@@ -62,6 +62,7 @@ class CommunicationHandler(object):
         self.num_ranks_in_next_stage = len(ranks_in_next_stage)
         self.TOTAL_TAGS = TOTAL_TAGS
         self.comm_policy = to_policy(backend, cpu)
+        self.cpu = cpu
 
         # TODO: pass from argparse/config
         self.num_chunks = 4  # we split the batches to chunks
@@ -168,6 +169,7 @@ class CommunicationHandler(object):
     def _send_tensors_p2p(self, x, batch_idx, ranks_dict_items):
         request_objects = []
         sent_items = []  # Used to save them somewere.
+
         for tensor, (tensor_name, send_ranks) in zip(x, ranks_dict_items):
             # tag for minibatch idx too
             tensor = tensor.data
@@ -191,7 +193,14 @@ class CommunicationHandler(object):
                         self.logger.info(
                             f"isend, dst={send_rank}, tag={chunk_tag}, shape={chunk.shape}, rank={self.local_rank}")
                     # HACK: synchronize...
-                    torch.cuda.synchronize(device=None)
+                    if not self.cpu:
+                        torch.cuda.synchronize(device=None)
+
+                    # if torch.isnan(chunk).any():
+                    #     self.logger.info(f"isend, dst={send_rank}, tag={chunk_tag}, shape={chunk.shape}, rank={self.local_rank}")
+                    #     self.logger.info(f"Sent chunk {chunk}")
+                    #     raise RuntimeError()
+
                     request_obj = dist.isend(chunk, send_rank, tag=chunk_tag)
                     request_objects.append(request_obj)
                     sent_items.append(chunk)

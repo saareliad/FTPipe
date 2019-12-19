@@ -75,8 +75,7 @@ python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_nod
 ## Debugging
 
 * [debugging mpi python applications with vscode](https://gist.github.com/asroy/ca018117e5dbbf53569b696a8c89204f)
-  * TODO: debug for MPI stopped working somehow, need to fix. Can debug gloo on cpu if lazy.
-
+  * debug work only when dataloading is on main thread. (`num_data_workers=0`).
   * run same thing, with `--debug` flag, then wait for attachment:
   
   >> ```bash

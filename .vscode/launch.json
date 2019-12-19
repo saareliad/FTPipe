@@ -76,7 +76,7 @@
             "localRoot": "${workspaceRoot}",
             "remoteRoot": "${workspaceRoot}",
             "port": 3001,
-            "secret": "my_secret",
+            // "secret": "my_secret",
             "host": "localhost"
         },
         { 
