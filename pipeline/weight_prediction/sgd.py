@@ -52,6 +52,8 @@ class SGDClonedWeightPrediction(WeightPredictor):
     def forward(self):
         with torch.no_grad():
             # init theta for clone
+            # TODO: we are doing unneccery clone for batches without staleness.
+            # e.g first batch in run_until_flush()
             self.theta_buffer = [[p.data.clone() for p in pg['params']]
                                  for pg in self.optimizer.param_groups]
 

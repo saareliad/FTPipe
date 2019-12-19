@@ -8,7 +8,8 @@ def convert_child(model, b4, after):
     for child_name, child in model.named_children():
         if child is b4:
             setattr(model, child_name, after)
-            # print(f"Converted {child_name}")
+            # print(f"Converted {child_name} to {after}")
+            # print(f"New State Dict: {after.state_dict()}")
         else:
             convert_child(child, b4, after)
 
@@ -21,6 +22,7 @@ class DummyForwardMonkeyPatcher:
         self.models = []
         self.encapsulators = []
         self.fmodels = []
+        self.state_is_dummy = False
 
         for model_to_patch in self.classes_to_patch:
             found = []  # list of tuples: (access_string, model)
@@ -37,12 +39,17 @@ class DummyForwardMonkeyPatcher:
             self.encapsulators += [i[1] for i in monkey_patched_enc_tuples]
 
     def replace_for_dummy(self):
-        for m, fm in zip(self.models, self.fmodels):
-            convert_child(self.model, m, fm)
+        if not self.state_is_dummy:
+            for m, fm in zip(self.models, self.fmodels):
+                convert_child(self.model, m, fm)
+            self.state_is_dummy = True
 
     def replace_for_forward(self):
-        for m, fm in zip(self.models, self.fmodels):
-            convert_child(self.model, fm, m)
+        if self.state_is_dummy:
+            for m, fm in zip(self.models, self.fmodels):
+                convert_child(self.model, fm, m)
+
+            self.state_is_dummy = False
 
     def sync(self):
         for encapsulator, fmodule, module in zip(self.encapsulators, self.fmodels, self.models):
@@ -99,7 +106,28 @@ def test():
     print(model[1].state_dict())
 
 
+def test_no_grad_and_bwd():
+    import torch
+    features = 3
+    batch = 3
+    model = torch.nn.Sequential(torch.nn.Linear(
+        features, features), torch.nn.BatchNorm1d(features))
+
+    patcher = DummyForwardMonkeyPatcher(
+        model, classes_list_to_patch=[torch.nn.BatchNorm1d])
+    patcher.sync()
+    patcher.replace_for_dummy()
+
+    with torch.no_grad():
+        res = model(torch.randn(batch, features))
+
+    patcher.replace_for_forward()
+    torch.nn.functional.mse_loss(model(torch.randn(batch, features)), torch.randn(batch, features)).backward()
+
+
 if __name__ == "__main__":
-    # Unit test...
+    # Unit test.
+    # From pipeline dir:
     # python -m monkey_patch.dummy_forward_monkey_patcher
     test()
+    test_no_grad_and_bwd()

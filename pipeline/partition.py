@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch import Tensor
 from typing import Tuple, Union
 from .monkey_patch import DummyForwardMonkeyPatcher
+# import logging
 Tensors = Tuple[Tensor, ...]
 TensorOrTensors = Union[Tensor, Tensors]
 
@@ -87,7 +88,6 @@ class Partition(nn.Module):
             # stash rng state
             # save input for later (recomputation)
             # TODO: can spare the detach
-            self.rng_stasher.stash_rng_state(micro_batch_idx)
 
             if self.dummy_forward_monkey_patcher:
                 self.dummy_forward_monkey_patcher.sync()
@@ -103,20 +103,24 @@ class Partition(nn.Module):
                     # but I'm afrait that due to cuda async operations it will get overriden by next step.
                     x = x.data.clone().requires_grad_(self._REQ_GRAD)
                     self.input_buffer[micro_batch_idx] = x
+                    self.rng_stasher.stash_rng_state(micro_batch_idx)
                     x = self.layers(x)
                 else:
                     # for tensor in x:
                     x = [tensor.data.clone().requires_grad_(self._REQ_GRAD)
                          for tensor in x]
                     self.input_buffer[micro_batch_idx] = x
+                    self.rng_stasher.stash_rng_state(micro_batch_idx)
                     x = self.layers(*x)
 
-            if self.dummy_forward_monkey_patcher:
-                self.dummy_forward_monkey_patcher.replace_for_forward()
+                if self.dummy_forward_monkey_patcher:
+                    self.dummy_forward_monkey_patcher.replace_for_forward()
             return x
 
         else:
             with torch.no_grad():
+                if self.dummy_forward_monkey_patcher:
+                    self.dummy_forward_monkey_patcher.replace_for_forward()
                 if isinstance(x, Tensor):
                     # x = x.to(self.device)
                     x = self.layers(x)
@@ -128,19 +132,26 @@ class Partition(nn.Module):
     def recompute_and_backward(self, g, micro_batch_idx):
         # TODO: can make these two functions (recompute, backwards)
         # To enable scheduling the recompute
-        with torch.random.fork_rng(devices=self.rng_stasher.devices):
-            self.rng_stasher.restore_rng_state(micro_batch_idx)
+        with torch.autograd.detect_anomaly():
             x = self.input_buffer[micro_batch_idx]  # Note: still not poping!
-            if isinstance(x, Tensor):
-                x = self.layers(x)
-                torch.autograd.backward(x, g)
-            else:
-                x = self.layers(*x)
-                torch.autograd.backward(x, g)
+            with torch.random.fork_rng(devices=self.rng_stasher.devices):
+                self.rng_stasher.restore_rng_state(micro_batch_idx)
+                if self.dummy_forward_monkey_patcher:
+                    self.dummy_forward_monkey_patcher.replace_for_forward()
+                if isinstance(x, Tensor):
+                    x = self.layers(x)
+                    torch.autograd.backward(x, g)
+                    # logging.getLogger("msnag").info(f"device:{self.layers.__class__.__name__[-1]} max x:{[z.data.max() for z in x]}, max grad:{[z.max() for z in g]}")
+                    # for p in self.parameters():
+                    #     print(p.abs().max())
+                else:
+                    x = self.layers(*x)
+                    torch.autograd.backward(x, g)
 
     def get_grad(self, micro_batch_idx):
         x = self.input_buffer.pop(micro_batch_idx)
         if isinstance(x, Tensor):
+            # logging.getLogger("msnag").info(f"device:{self.layers.__class__.__name__[-1]} max_grad_norm:{x.grad.norm()}")
             return x.grad
         else:
             return [y.grad for y in x]
@@ -167,6 +178,9 @@ class FirstPartition(Partition):
             if isinstance(x, Tensor):
                 x = self.layers(x)
                 torch.autograd.backward(x, g)
+                # logging.getLogger("msnag").info(f"device:{self.layers.__class__.__name__[-1]} max x:{[z.data.max() for z in x]}, max grad:{[z.max() for z in g]}")
+                # for p in self.parameters():
+                #     print(p.abs().max())
             else:
                 x = self.layers(*x)
                 torch.autograd.backward(x, g)

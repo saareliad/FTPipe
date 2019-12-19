@@ -217,7 +217,8 @@ class SinglePartitionManager:
                 # Not sure its needed at all. probobly not needed anymore.
                 # FIXME: I removed this because nothing else works...
                 # for i in self.fwd_rcev_buffers:
-                #     i.grad = None
+                #     # if not (i.grad is None):
+                #     #     i.grad.zero_()
 
         return request_objects
 
@@ -228,6 +229,13 @@ class SinglePartitionManager:
             self.bwd_rcev_buffers = self.comm_handler.create_gradients_rcv_buffers(
                 self.device)
         g = self.bwd_rcev_buffers
+        
+        # Solution to the DAMN bug with 4 partitions.
+        for b in g:
+            # b.detach_()
+            b.zero_()
+            # if not (b.grad is None):
+            #     b.grad._zero()
 
         request_objects = self.comm_handler.recv_gradients(g, batch_idx)
 
@@ -307,6 +315,8 @@ class SinglePartitionManager:
             if action_is_fwd:
                 sent_request_objects = self.run_batch_forward(
                     done_fwds, done_bwds)
+                # FIXME: last partition inserts its gradints into async_fwd_objects,
+                # it works, but it can be trouble.
                 self.async_fwd_objects[done_fwds] = sent_request_objects
             else:
                 sent_request_objects = self.run_batch_backward(done_bwds)

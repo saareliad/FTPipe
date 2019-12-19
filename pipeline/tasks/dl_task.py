@@ -75,4 +75,4 @@ class CVTask(DLTask):
 
     def pack_send_context(self, model_out, *ctx):
         # ctx here is just the label y
-        return(*model_out, *ctx)
+        return (*model_out, *ctx)

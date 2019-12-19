@@ -79,6 +79,26 @@
             // "secret": "my_secret",
             "host": "localhost"
         },
+        {
+            "name": "Python Attach (local) proc 2",
+            "type": "python",
+            "request": "attach",
+            "localRoot": "${workspaceRoot}",
+            "remoteRoot": "${workspaceRoot}",
+            "port": 3002,
+            // "secret": "my_secret",
+            "host": "localhost"
+        },
+        {
+            "name": "Python Attach (local) proc 3",
+            "type": "python",
+            "request": "attach",
+            "localRoot": "${workspaceRoot}",
+            "remoteRoot": "${workspaceRoot}",
+            "port": 3003,
+            // "secret": "my_secret",
+            "host": "localhost"
+        },
         { 
             "name": "GDB Attach proc 0",
             "type": "cppdbg",

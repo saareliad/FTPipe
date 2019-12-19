@@ -453,6 +453,7 @@ def main():
     use_gap_aware = hack_trainer_to_gap_aware(args)
 
     if args.debug:
+        # TODO: by specific ranks
         import ptvsd
         port = 3000 + args.local_rank
         ptvsd.enable_attach(address=('127.0.0.1', port))

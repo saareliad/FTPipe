@@ -1,16 +1,16 @@
 {
     "logdir": "logs/",
     "out_dir":"results/",
-    "out_filename": "wrn_16x4_p4_msnag_clone_ga_no_wd",
+    "out_filename": "dummy_ga_no_wd",
     "distributed_backend": "mpi",
     "task": "cv",
     "statistics": "cv",
     "model": "wrn_16x4_p4",
     "dataset": "cifar10",
     "trainer": "cv",
-    "bs_train": 128,
+    "bs_train": 32,
     "bs_test": 200,
-    "num_data_workers": 6,
+    "num_data_workers": 0,
     "optimizer": {
         "type": "sgd1",
         "args": {
@@ -48,7 +48,9 @@
     "epochs": 200,
     "steps": -1,
     "seed": 42,
-    "num_chunks": 4,
-    "verbose_comm": true,
-    "flush_rate": -1
+    "num_chunks": 2,
+    "verbose_comm": false,
+    "flush_rate": -1,
+    "train_batches_limit": 1,
+    "test_batches_limit":0
 }
