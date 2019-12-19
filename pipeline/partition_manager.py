@@ -1,4 +1,3 @@
-import time
 import torch
 import logging
 from typing import Dict
@@ -13,6 +12,7 @@ from .gap_aware import GapAware  # TODO: change to interface.
 from .work_schedulers import WorkScheduler
 
 # from gpu_mem_track import MemTracker
+# import time
 
 
 class SinglePartitionManager:
@@ -258,15 +258,11 @@ class SinglePartitionManager:
             return done_fwds - done_bwds
 
     def run_forward_until_flush(self, num_batches):
-        # TODO: write fwd only for last partition..
-        # if self.is_first_partition and (self.dl_iter is None):
-        #     self.dl_iter = iter(self.dataloader)
 
         for done_fwds in range(num_batches):
 
             sent_request_objects = self.run_batch_forward(done_fwds)
-
-            if sent_request_objects:  # last partition returns empty...
+            if sent_request_objects:  # last partition returns empty list.
                 self.async_fwd_objects[done_fwds] = sent_request_objects
 
             if len(self.async_fwd_objects) > 1:
@@ -325,7 +321,8 @@ class SinglePartitionManager:
                     done_fwds += 1
                 else:
                     done_bwds += 1
-            # TODO: can write the entire thing MUCH more nicely if we just save asside and insert the new objects at the end...
+            # TODO: can write the entire thing MUCH more nicely
+            # if we just save asside and insert the new objects at the end.
 
             # wait on the first,
             if len(self.async_fwd_objects) > 1:
@@ -342,13 +339,10 @@ class SinglePartitionManager:
                 for i in sent_request_objects:
                     i.wait()
 
-        # FIXME: just for even numbers.
+        # FIXME: remove this print later, its used to debug how much we have in pipe.
         print(self.stage, len(self.async_bwd_objects),
               len(self.async_fwd_objects))
-        # assert len(self.async_bwd_objects) == 1
-        # assert len(self.async_fwd_objects) == 1
-
-        # FIXME: maybe more than 1...
+        # FIXME: maybe more than 1.
         while len(self.async_fwd_objects) > 0:
             _, (o1, t1) = self.async_fwd_objects.popitem(last=False)
             for i in o1:
@@ -358,18 +352,3 @@ class SinglePartitionManager:
             _, (o2, t2) = self.async_bwd_objects.popitem(last=False)
             for i in o2:
                 i.wait()
-
-        # # TODO: wait on all objects
-        # for sent_request_objects in self.async_bwd_objects.values():
-        #     for i in sent_request_objects:
-        #         i.wait()
-
-        # for sent_request_objects in self.async_fwd_objects.values():
-        #     for i in sent_request_objects:
-        #         i.wait()
-
-        # self.async_bwd_objects.clear()
-        # self.async_fwd_objects.clear()
-
-        # self.logger.info(f"Done running until flush stage:{self.stage}")
-        # torch.distributed.barrier()
