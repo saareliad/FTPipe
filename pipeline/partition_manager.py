@@ -2,12 +2,11 @@ import torch
 import logging
 from typing import Dict
 from collections import OrderedDict
-from . import CommunicationHandler
+from . import CommunicationHandlerBase
 from .partition import Partition, LastPartition, FirstPartition
 from .training.interface import AnyTrainer
 from .tasks import DLTask
 from .weight_prediction.interface import WeightPredictor
-from .itertools import grouper
 from .gap_aware import GapAware  # TODO: change to interface.
 from .work_schedulers import WorkScheduler
 
@@ -16,7 +15,7 @@ from .work_schedulers import WorkScheduler
 
 
 class SinglePartitionManager:
-    def __init__(self, stage, configs: Dict, partition: torch.nn.Module, comm_handler: CommunicationHandler,
+    def __init__(self, stage, configs: Dict, partition: torch.nn.Module, comm_handler: CommunicationHandlerBase,
                  work_scheduler: WorkScheduler,
                  training_tensor_shapes, eval_tensor_shapes,
                  device, is_last_partition, is_first_partition, statistics=None):
@@ -160,8 +159,8 @@ class SinglePartitionManager:
                 obj.wait()
                 # print(f"-I- {self.stage} DONE waiting on rcv")
 
-            x = [torch.cat(group)
-                 for group in grouper(x, self.comm_handler.num_chunks)]
+            # For comm handler with chunks we have to fix. For others its no-op.
+            x = self.comm_handler.fix_after_recv(x)
 
             x, *ctx = self.task.unpack_data_for_partition(x)
 
@@ -231,9 +230,12 @@ class SinglePartitionManager:
         g = self.bwd_rcev_buffers
         
         # Solution to the DAMN bug with 4 partitions.
+        # TODO: understnad why zero_() is the solution
+        # I added detach just in case.
         for b in g:
             # b.detach_()
-            b.zero_()
+            b.detach_().zero_()
+            # b.zero_()
             # if not (b.grad is None):
             #     b.grad._zero()
 
@@ -243,9 +245,7 @@ class SinglePartitionManager:
         for obj in request_objects:
             obj.wait()
 
-        g = [torch.cat(group)
-             for group in grouper(g, self.comm_handler.num_chunks)]
-        # g = torch.cat(g, self.comm_handler.
+        g = self.comm_handler.fix_after_recv(g)
 
         self.partition.recompute_and_backward(g, batch_idx)
         self.trainer.step_on_computed_grads()

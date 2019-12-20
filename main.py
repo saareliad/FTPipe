@@ -164,18 +164,20 @@ def assert_args(args):
     assert (args.epochs >= 1 or args.steps >= 1)
 
 
-def create_comm_handler(args, initialize_args):
+def create_comm_handler(args, initialize_args, device):
 
     # get the parameters to create the comm handler
     comm_handler = CommunicationHandler(
         args.rank,
         args.local_rank,
         args.distributed_backend,
+        get_world_size(args.distributed_backend),
         args.num_stages,
         args.stage,
         *initialize_args,
         args.cpu,
         args.num_chunks,
+        device,
         GRAD_UGLY_SHAMEFUL_NAME="_grad",
         verbose=args.verbose_comm if hasattr(args, "verbose_comm") else False)
 
@@ -258,16 +260,12 @@ def create_distributed_communcation_context(args, config, stage, stage_to_rank_m
     # training_tensor_dtypes
     # training_tensor_shapes
     # eval_tensor_shapes
-    # rank_in_stage
-    # num_ranks_in_stage
     # ranks_in_previous_stage
     # ranks_in_next_stage
 
     # TODO: eval_tensor_dtypes
 
     #     dtypes = {"input0": torch.int64, "target": torch.int64}
-
-    # eval_tensor_shapes = {**training_tensor_shapes}
 
     tensor_tags, TOTAL_TAGS = tensor_tags_from_config(
         config, target_tensor_names, args.num_chunks, GRAD_UGLY_SHAMEFUL_NAME="_grad")
@@ -339,10 +337,10 @@ def create_distributed_communcation_context(args, config, stage, stage_to_rank_m
     # ranks_in_next_stage
 
     # rank = args.local_rank
-    rank_in_stage = stage_to_rank_map[stage].index(
-        args.local_rank) if stage_to_rank_map else 0
-    num_ranks_in_stage = len(
-        stage_to_rank_map[stage]) if stage_to_rank_map else 1
+    # rank_in_stage = stage_to_rank_map[stage].index(
+    #     args.local_rank) if stage_to_rank_map else 0
+    # num_ranks_in_stage = len(
+    #     stage_to_rank_map[stage]) if stage_to_rank_map else 1
 
     # TODO: can create these by th econfig too.
     ranks_in_previous_stage = ranks_in_stage(
@@ -355,8 +353,6 @@ def create_distributed_communcation_context(args, config, stage, stage_to_rank_m
                  tensor_tags,
                  target_tensor_names,
                  training_tensor_dtypes,
-                 rank_in_stage,
-                 num_ranks_in_stage,
                  ranks_in_previous_stage,
                  ranks_in_next_stage,
                  TOTAL_TAGS)
@@ -452,11 +448,17 @@ def main():
     parse_env_vars(args)
     use_gap_aware = hack_trainer_to_gap_aware(args)
 
+    device = torch.device('cpu' if args.cpu else f"cuda:{args.local_rank}")
+    if not args.cpu:
+        torch.cuda.set_device(device)
+    
     if args.debug:
         # TODO: by specific ranks
         import ptvsd
         port = 3000 + args.local_rank
-        ptvsd.enable_attach(address=('127.0.0.1', port))
+        address = ('127.0.0.1', port)
+        print(f"-I- waiting for attachment on {address}")
+        ptvsd.enable_attach(address=address)
         ptvsd.wait_for_attach()
 
     args.world_size = get_world_size(args.distributed_backend)
@@ -471,7 +473,7 @@ def main():
     input_names = configs.pop('model inputs')
     output_names = configs.pop('model outputs')
 
-    if not args.seed:
+    if args.seed is None:
         args.seed = random.randint(0, 2 ** 31)
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -496,9 +498,6 @@ def main():
 
     # Here is a dummy for For CIFAR10 network
     # TODO: best practice is env var for choosing gpu
-    device = torch.device('cpu' if args.cpu else f"cuda:{args.local_rank}")
-    if not args.cpu:
-        torch.cuda.set_device(device)
 
     dl_kw = dict()
     if args.cpu:
@@ -548,7 +547,7 @@ def main():
                                                 bs_train=bs_train,
                                                 bs_test=bs_test)
 
-    comm_handler = create_comm_handler(args, comm_init_args)
+    comm_handler = create_comm_handler(args, comm_init_args, device)
     # init_dist(args)
 
     training_tensor_shapes, eval_tensor_shapes = shapes

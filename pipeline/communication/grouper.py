@@ -17,3 +17,9 @@ def grouper(iterable, n):
     # grouper('ABCDEFG', 3,) --> ABC DEF Gxx"
     args = [iter(iterable)] * n
     return zip_discard_compr(*args)
+
+
+# Fixed recved:
+# [torch.cat(group) for group in grouper(x, num_chunks)]
+
+# [torch.cat(group) for group in grouper(x, self.comm_handler.num_chunks)]
