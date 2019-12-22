@@ -59,6 +59,8 @@ class SinglePartitionManager:
         self.logger = logging.getLogger("msnag")
         self.dl_iter = None
 
+        # self.mb_to_fix_by_ga = {}
+
         # Hints
         self.task: DLTask
         self.trainer: AnyTrainer
@@ -168,6 +170,7 @@ class SinglePartitionManager:
             if self.weight_predictor and self.partition.training:
                 self.weight_predictor.setup(
                     self.expected_staleness(batch_idx, done_bwds))
+                # self.mb_to_fix_by_ga[batch_idx] = ((batch_idx - done_bwds) == 1)
                 self.weight_predictor.forward()
                 x = self.partition(x, batch_idx)
                 self.weight_predictor.revert()
@@ -260,8 +263,8 @@ class SinglePartitionManager:
             return request_objects
 
     def expected_staleness(self, done_fwds, done_bwds):
-        if self.nag_with_predictor:
-            return min(1, done_fwds - done_bwds)
+        if self.nag_with_predictor and (done_fwds - done_bwds) == 0:
+            return 1
         else:
             return done_fwds - done_bwds
 

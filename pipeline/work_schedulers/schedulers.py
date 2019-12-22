@@ -13,6 +13,10 @@ class WorkScheduler(abc.ABC):
 
 
 class FBScheduler(WorkScheduler):
+    """ Note: this is not like the scheduler in pipedream.
+        In pipedream all partititions excpet last do D forwards in "warmup state",
+        here every partitions does a different number of forwards in "warmup state" 
+    """
 
     def __call__(self, stage, num_stages, num_steps, done_fwds, done_bwds):
         assert 0 <= stage < num_stages
@@ -26,6 +30,39 @@ class FBScheduler(WorkScheduler):
 
         delta = done_fwds - done_bwds
         # allowed_staleness = num_stages-stage-1
+
+        return delta < num_stages-stage
+
+
+class PipeDream1F1BScheduler(WorkScheduler):
+    def __init__(self):
+        super().__init__()
+        self.warmup = True
+
+    def set_warmup(self, warmup=True):
+        self.warmup = warmup
+    
+    def __call__(self, stage, num_stages, num_steps, done_fwds, done_bwds):
+        assert 0 <= stage < num_stages
+
+        # Last stage
+        if stage == num_stages - 1:
+            return True
+
+        if done_fwds == num_steps:
+            return False
+
+        delta = done_fwds - done_bwds
+        # allowed_staleness = num_stages-stage-1
+        if done_fwds == 0:
+            self.warmup = True
+
+        # Reached
+        if delta == num_stages:
+            self.warmup = False
+
+        if self.warmup:
+            return True
 
         return delta < num_stages-stage
 
@@ -58,12 +95,14 @@ class GpipeScheduler(WorkScheduler):
 
 if __name__ == "__main__":
     num_stages = 4
+    EXTRA = 5
     # stage = 0  # Should test the edge case.
-    num_batches = 9
+    num_batches = num_stages*2 + 1 + EXTRA
 
     def print_for_stage(stage):
         f = 0
         b = 0
+        # scheduler = PipeDream1F1BScheduler()
         scheduler = FBScheduler()
         s = ""
         while b < num_batches:
@@ -77,9 +116,11 @@ if __name__ == "__main__":
                 s += "B"
                 b += 1
         print(s)
+        return s
 
+    stage_strings = dict()  # just for pretty printing
     for stage in range(num_stages):
         print(f"Stage {stage}")
-        print_for_stage(stage)
+        s = print_for_stage(stage)
+        stage_strings[stage] = s
         print()
-
