@@ -132,21 +132,20 @@ class Partition(nn.Module):
     def recompute_and_backward(self, g, micro_batch_idx):
         # TODO: can make these two functions (recompute, backwards)
         # To enable scheduling the recompute
-        with torch.autograd.detect_anomaly():
-            x = self.input_buffer[micro_batch_idx]  # Note: still not poping!
-            with torch.random.fork_rng(devices=self.rng_stasher.devices):
-                self.rng_stasher.restore_rng_state(micro_batch_idx)
-                if self.dummy_forward_monkey_patcher:
-                    self.dummy_forward_monkey_patcher.replace_for_forward()
-                if isinstance(x, Tensor):
-                    x = self.layers(x)
-                    torch.autograd.backward(x, g)
-                    # logging.getLogger("msnag").info(f"device:{self.layers.__class__.__name__[-1]} max x:{[z.data.max() for z in x]}, max grad:{[z.max() for z in g]}")
-                    # for p in self.parameters():
-                    #     print(p.abs().max())
-                else:
-                    x = self.layers(*x)
-                    torch.autograd.backward(x, g)
+        x = self.input_buffer[micro_batch_idx]  # Note: still not poping!
+        with torch.random.fork_rng(devices=self.rng_stasher.devices):
+            self.rng_stasher.restore_rng_state(micro_batch_idx)
+            if self.dummy_forward_monkey_patcher:
+                self.dummy_forward_monkey_patcher.replace_for_forward()
+            if isinstance(x, Tensor):
+                x = self.layers(x)
+                torch.autograd.backward(x, g)
+                # logging.getLogger("msnag").info(f"device:{self.layers.__class__.__name__[-1]} max x:{[z.data.max() for z in x]}, max grad:{[z.max() for z in g]}")
+                # for p in self.parameters():
+                #     print(p.abs().max())
+            else:
+                x = self.layers(*x)
+                torch.autograd.backward(x, g)
 
     def get_grad(self, micro_batch_idx):
         x = self.input_buffer.pop(micro_batch_idx)
@@ -203,8 +202,8 @@ class LastPartition(Partition):
             # we do not plan to do any recomputation.
             if isinstance(x, Tensor):
                 # # See note on option 1 below.
-                # x.detach_().requires_grad_()
-                x = x.data.clone().requires_grad_()
+                x.detach_().requires_grad_()
+                # x = x.data.clone().requires_grad_()
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(x)
             else:
