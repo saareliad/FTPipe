@@ -35,8 +35,8 @@ class SinglePartitionManager:
         self.is_last_partition = is_last_partition
         self.is_first_partition = is_first_partition
         self.stage = stage
-        self.num_stages = len(configs)  # FIXME:
-        self.work_scheduler = work_scheduler
+        self.num_stages = len(configs)
+        self.work_scheduler = work_scheduler()
 
         self.weight_predictor = None
         self.gap_aware = None
@@ -293,6 +293,10 @@ class SinglePartitionManager:
         # FIXME: not sure if this needed.
         # For now I leave this for debugging/safety.
 
+        if not self.comm_handler.cpu:
+            # HACK: synchronize.
+            torch.cuda.synchronize(device=self.device)
+
     def run_until_flush(self, num_batches):
         """
         Requires:
@@ -362,3 +366,7 @@ class SinglePartitionManager:
             _, (o2, t2) = self.async_bwd_objects.popitem(last=False)
             for i in o2:
                 i.wait()
+
+        if not self.comm_handler.cpu:
+            # HACK: synchronize.
+            torch.cuda.synchronize(device=self.device)

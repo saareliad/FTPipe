@@ -4,8 +4,6 @@ from .grouper import grouper
 from .common_simple_comm import SimpleCommBase
 
 
-
-
 class P2PCommunicationHandler(SimpleCommBase):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
@@ -46,8 +44,9 @@ class P2PCommunicationHandler(SimpleCommBase):
             for tensor, (tensor_name, send_ranks) in zip(x, ranks_dict_items):
                 # tag for minibatch idx too
                 tensor = tensor.data
+                tensor = tensor.chunk(self.num_chunks)
                 tensor_tag = self.tensor_tags[tensor_name] + \
-                    (self.TOTAL_TAGS * batch_idx)
+                    (self.TOTAL_TAGS * batch_idx)                
                 # try:
                 #     tensor.detach_()
                 # except RuntimeError as e:
@@ -60,11 +59,13 @@ class P2PCommunicationHandler(SimpleCommBase):
                         self.logger.info(
                             f"isend, dst={send_rank}, tag={tensor_tag}, name={tensor_name}, rank={self.local_rank}")
 
-                    if not self.cpu:
-                        # HACK: synchronize.
-                        torch.cuda.synchronize(device=self.device)
+                    # FIXME: accuracy crashes with num_chunks > 1 if we synchronize here once
+                    # if not self.cpu:
+                    #     # HACK: synchronize.
+                    #     torch.cuda.synchronize(device=self.device)
+
                     # TODO: if self.num_chunks > 1:
-                    for i, chunk in enumerate(tensor.chunk(self.num_chunks)):
+                    for i, chunk in enumerate(tensor):
                         chunk_tag = tensor_tag + i
                         if self.verbose:
                             self.logger.info(
@@ -74,6 +75,10 @@ class P2PCommunicationHandler(SimpleCommBase):
                         #     self.logger.info(f"isend, dst={send_rank}, tag={chunk_tag}, shape={chunk.shape}, rank={self.local_rank}")
                         #     self.logger.info(f"Sent chunk {chunk}")
                         #     raise RuntimeError()
+
+                        if not self.cpu:
+                            # HACK: synchronize.
+                            torch.cuda.synchronize(device=self.device)
 
                         request_obj = dist.isend(
                             chunk, send_rank, tag=chunk_tag)

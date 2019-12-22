@@ -561,7 +561,7 @@ def main():
     partition = SinglePartitionManager(
         stage,
         configs, configs[stage]['model'],
-        comm_handler, work_scheduler(), training_tensor_shapes,
+        comm_handler, work_scheduler, training_tensor_shapes,
         eval_tensor_shapes,
         device, is_last_partition, is_first_partition)
 

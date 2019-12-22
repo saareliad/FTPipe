@@ -52,7 +52,14 @@ def gen_plot(out_dir='results', out_base_name='current_status.png'):
     print(f"-I- Generated: \"{out_file_name}\"")
 
 
+def four_partitions():
+    fig = None
+    fig, ax = add_plot("results/wrn_16x4_p4_msnag_clone_ga_no_wd.json", "wrn_16x4_msnag_ga_1chunk", fig=fig)
+    gen_plot(out_dir='results', out_base_name='4p.png')
+
+
 if __name__ == "__main__":
-    current_status()
-    gap_aware()
+    # current_status()
+    # gap_aware()
+    four_partitions()
     exit(0)
