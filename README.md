@@ -90,6 +90,19 @@ python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_nod
 
 * Before you debug, you may want to check run the error is cuda specific and not cpu
 
+## Systems stuff
+After talk with Amit Nadav
+
+* maybe do fork to share pinned memory. (need to be done before cuda)
+* ```sudo ./pcm.x``` to check data transfers between cpus. (git clone https://github.com/opcm/pcm.git)
+* use node 0 : ```numactl --cpunodebind=0 ``` (sudo apt install numactl) 
+  * checking this: either ```lstopo``` or ```lspci -vvv | less```. 
+* ```less /proc/$PID/maps``` to check memory mapping
+* check allocated sutff with ```strace -f python -v ```
+* There was 
+  * ```sudo apt install hwloc``` for something.
+  * ```modprobe msr``` for something.
+
 ## Crazy ideas
 
 * connect all layers to the last one to improve optimization. (theoretical works show this can eliminate bad local minima). (Competitors can't do it, their partitioning does not support it)

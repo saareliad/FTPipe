@@ -46,7 +46,7 @@ class P2PCommunicationHandler(SimpleCommBase):
                 tensor = tensor.data
                 tensor = tensor.chunk(self.num_chunks)
                 tensor_tag = self.tensor_tags[tensor_name] + \
-                    (self.TOTAL_TAGS * batch_idx)                
+                    (self.TOTAL_TAGS * batch_idx)
                 # try:
                 #     tensor.detach_()
                 # except RuntimeError as e:
@@ -67,9 +67,9 @@ class P2PCommunicationHandler(SimpleCommBase):
                     # TODO: if self.num_chunks > 1:
                     for i, chunk in enumerate(tensor):
                         chunk_tag = tensor_tag + i
-                        if self.verbose:
-                            self.logger.info(
-                                f"isend, dst={send_rank}, tag={chunk_tag}, shape={chunk.shape}, rank={self.local_rank}")
+                        # if self.verbose:
+                        #     self.logger.info(
+                        #         f"isend, dst={send_rank}, tag={chunk_tag}, shape={chunk.shape}, rank={self.local_rank}")
 
                         # if torch.isnan(chunk).any():
                         #     self.logger.info(f"isend, dst={send_rank}, tag={chunk_tag}, shape={chunk.shape}, rank={self.local_rank}")
@@ -79,7 +79,7 @@ class P2PCommunicationHandler(SimpleCommBase):
                         if not self.cpu:
                             # HACK: synchronize.
                             torch.cuda.synchronize(device=self.device)
-
+                        
                         request_obj = dist.isend(
                             chunk, send_rank, tag=chunk_tag)
                         request_objects.append(request_obj)

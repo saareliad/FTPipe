@@ -660,6 +660,8 @@ def main():
                 if use_gap_aware:
                     gap_aware.update_max_lr()
                 did_train = True
+                if args.local_rank == args.world_size - 1:
+                    statistics.on_epoch_end()
             else:
                 # Set Dataloader
                 # sets only to first partition
@@ -675,8 +677,8 @@ def main():
                             min(TEST_BATCHES_TO_RUN, len(test_dl)))
 
                 did_eval = True
-            if args.local_rank == args.world_size - 1:
-                statistics.on_epoch_end()
+                if args.local_rank == args.world_size - 1:
+                    statistics.on_epoch_end()
         
         epochs += 1
         if did_train:

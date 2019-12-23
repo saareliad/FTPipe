@@ -1,5 +1,5 @@
 from .interface import DLTask
-
+import torch
 
 class CVTask(DLTask):
     def __init__(self, device, is_last_partition, is_first_partition):
@@ -20,12 +20,14 @@ class CVTask(DLTask):
     def unpack_data_for_last_partition(self, data):
         x, y = data
         # x = x.to(self.device, non_blocking=True)
-        y = y.to(self.device, non_blocking=True)
+        with torch.no_grad():
+            y = y.to(self.device, non_blocking=True)
         return x, y
 
     def unpack_data_for_first_partition(self, data):
         x, y = data
-        x = x.to(self.device, non_blocking=True)
+        with torch.no_grad():
+            x = x.to(self.device, non_blocking=True)
         # Note: we don't send the y to GPU if we don't use it in this partition.
         return x, y
 
