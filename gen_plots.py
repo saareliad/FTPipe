@@ -54,7 +54,12 @@ def gen_plot(out_dir='results', out_base_name='current_status.png'):
 
 def four_partitions():
     fig = None
-    fig, ax = add_plot("results/wrn_16x4_p4_msnag_clone_ga_no_wd.json", "wrn_16x4_msnag_ga_1chunk", fig=fig)
+    fig, ax = add_plot("results/wrn_16x4_p4_stale_weights_1.json", "4p_stale_5_warmup", fig=fig)
+    fig, ax = add_plot("results/wrn_16x4_p4_stale_weights_15_warmup.json", "4p_stale_15_warmup", fig=fig)
+
+    # TODO: add after run done, change name to json json
+    # fig, ax = add_plot("results/wrn_16x4_p4_stale_weights_35_warmup.json", "4p_stale_35_warmup", fig=fig)
+
     gen_plot(out_dir='results', out_base_name='4p.png')
 
 

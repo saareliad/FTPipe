@@ -9,6 +9,7 @@ from .tasks import DLTask
 from .weight_prediction.interface import WeightPredictor
 from .gap_aware import GapAware  # TODO: change to interface.
 from .work_schedulers import WorkScheduler
+from .weight_stashing import WeightStasher
 
 # from gpu_mem_track import MemTracker
 # import time
@@ -40,6 +41,7 @@ class SinglePartitionManager:
 
         self.weight_predictor = None
         self.gap_aware = None
+        self.weight_stasher = None
 
         # State for train logging
         self.log_frequency = 100  # FIXME: magic number
@@ -62,6 +64,7 @@ class SinglePartitionManager:
         self.trainer: AnyTrainer
         self.weight_predictor: WeightPredictor
         self.gap_aware: GapAware
+        self.weight_stasher: WeightStasher
 
     def set_task(self, task: DLTask):
         self.task = task
@@ -80,6 +83,9 @@ class SinglePartitionManager:
 
     def set_gap_aware(self, gap_aware):
         self.gap_aware = gap_aware
+    
+    def set_weight_stasher(self, weight_stasher: WeightStasher):
+        self.weight_stasher = WeightStasher
 
     def train(self):
         self.comm_handler.set_tensor_shapes(self.training_tensor_shapes)
@@ -147,6 +153,10 @@ class SinglePartitionManager:
             x = self.comm_handler.fix_after_recv(x)
 
             x, *ctx = self.task.unpack_data_for_partition(x)
+
+            # Stash parameters for later.
+            if self.weight_stasher and self.partition.training:
+                self.weight_stasher.stash_current(batch_idx)
 
             # TODO: last partition can do bengio nesterov instead of predicting.
             # Requires per partition optimizer config, or some hack.
@@ -220,7 +230,20 @@ class SinglePartitionManager:
 
         g = self.comm_handler.fix_after_recv(g)
 
+        if self.weight_stasher:
+            # Stash parameters if they are not already stashed
+            self.weight_stasher.stash_if_current_is_last(batch_idx)
+            # Restore to parameters which the fwd was run on
+            self.weight_stasher.pop_restore_stashed(batch_idx)
+
+        # Compute gradeints
         self.partition.recompute_and_backward(g, batch_idx)
+
+        if self.weight_stasher:
+            # Restore to previosly saved parameters, we we can do the step on them.
+            self.weight_stasher.restore_last(batch_idx)
+            # TODO: look to pipedream implementation and udnerstand what they do with the weight decay.
+
         self.trainer.step_on_computed_grads()
 
         if not (self.is_first_partition):
@@ -230,7 +253,7 @@ class SinglePartitionManager:
             return request_objects
 
     def expected_staleness(self, done_fwds, done_bwds):
-        if self.nag_with_predictor and (done_fwds - done_bwds) == 0:
+        if self.nag_with_predictor and ((done_fwds - done_bwds) == 0):
             return 1
         else:
             return done_fwds - done_bwds
@@ -272,10 +295,6 @@ class SinglePartitionManager:
         done_bwds = 0
         done_fwds = 0
 
-        # if self.is_first_partition and (self.dl_iter is None):
-        #     self.dl_iter = iter(self.dataloader)
-
-        # if not (self.is_last_partition) else num_batches // 2
         num_steps = num_batches
         while done_bwds < num_batches:
             # for step_index in range(num_steps):
