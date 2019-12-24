@@ -4,7 +4,7 @@ import torch
 """ CODE TO TEST MANY ISENDS MPI """
 
 BACKAND = 'mpi'
-NUM_ISEND = 128
+NUM_ISEND = 32
 shape = (512, 32, 32, 64)
 
 
@@ -37,5 +37,6 @@ if __name__ == "__main__":
         assert torch.all(tensors[i] == torch.ones(*shape, device=device))
     print(f"Done {dist.get_rank()}")
 
-# CUDA_VISIBLE_DEVICES="5,6" python -m torch.distributed.launch --nproc_per_node 2 many_isend.py
 # CUDA_VISIBLE_DEVICES="5,6" mpirun -np 2 python many_isend.py
+# For CPU:
+# CUDA_VISIBLE_DEVICES="5,6" python -m torch.distributed.launch --nproc_per_node 2 many_isend.py

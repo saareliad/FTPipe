@@ -52,10 +52,6 @@ class SinglePartitionManager:
         self.async_fwd_objects = OrderedDict()
         self.async_bwd_objects = OrderedDict()
 
-        # # TODO: read real values from config...
-        # self.base_fwd_send_tensors = 1
-        # self.base_bwd_send_tensors = 1
-
         self.logger = logging.getLogger("msnag")
         self.dl_iter = None
 
@@ -74,9 +70,9 @@ class SinglePartitionManager:
         self.trainer = trainer
 
     def set_dataloader(self, dataloader):
-        if self.is_first_partition:
-            self.dataloader = dataloader
-            self.dl_iter = iter(self.dataloader)
+        assert self.is_first_partition
+        self.dataloader = dataloader
+        self.dl_iter = iter(self.dataloader)
 
     def set_weight_predictor(self, weight_predictor: WeightPredictor, nag_with_predictor: bool):
         self.weight_predictor = weight_predictor
@@ -86,10 +82,7 @@ class SinglePartitionManager:
         self.gap_aware = gap_aware
 
     def train(self):
-        self.tensor_shapes = self.training_tensor_shapes
-        # self.forward_only = False
-
-        self.comm_handler.set_tensor_shapes(self.tensor_shapes)
+        self.comm_handler.set_tensor_shapes(self.training_tensor_shapes)
 
         self.partition.train()
 
@@ -99,12 +92,7 @@ class SinglePartitionManager:
                 self.device)
 
     def eval(self):
-        self.tensor_shapes = self.eval_tensor_shapes
-
-        # self.tensor_shapes["ack"] = (1,)
-        # self.forward_only = True  # TODO: work that out.
-
-        self.comm_handler.set_tensor_shapes(self.tensor_shapes)
+        self.comm_handler.set_tensor_shapes(self.eval_tensor_shapes)
 
         self.partition.eval()
 
@@ -117,7 +105,6 @@ class SinglePartitionManager:
         if self.is_first_partition:
             data = next(self.dl_iter)
             # TODO: handle y with separate coordinated dataloader
-            # TODO: generic data handling.
             # Can be according to trainer.
 
             x, *ctx = self.task.unpack_data_for_partition(data)
@@ -139,19 +126,14 @@ class SinglePartitionManager:
             request_objects = self.comm_handler.send_activations(
                 send_ctx, batch_idx)
 
-            # # FIXME
-            # # FIXME
-            # # FIXME
-            # for i in request_objects:
-            #     i.wait()
-
         else:
             if not self.fwd_rcev_buffers:
                 self.fwd_rcev_buffers = self.comm_handler.create_activations_recv_buffers(
                     self.device)
             x = self.fwd_rcev_buffers
 
-            # x = self.comm_handler.create_activations_recv_buffers(self.device)
+            for z in x:
+                z.zero_()  # FIXME: trying this.
 
             request_objects = self.comm_handler.recv_activations(x, batch_idx)
 
@@ -167,6 +149,7 @@ class SinglePartitionManager:
             x, *ctx = self.task.unpack_data_for_partition(x)
 
             # TODO: last partition can do bengio nesterov instead of predicting.
+            # Requires per partition optimizer config, or some hack.
             if self.weight_predictor and self.partition.training:
                 self.weight_predictor.setup(
                     self.expected_staleness(batch_idx, done_bwds))
@@ -177,50 +160,37 @@ class SinglePartitionManager:
             else:
                 x = self.partition(x, batch_idx)
 
-            if (not self.partition.training) and self.is_last_partition:
-                # print(*ctx, ctx[0].shape)
-                self.trainer.calc_test_stats(x, *ctx)
-                return []
-
-            # if self.partition.training:
             if not self.is_last_partition:
                 send_ctx = self.task.pack_send_context(x, *ctx)
                 request_objects = self.comm_handler.send_activations(
                     send_ctx, batch_idx)
             else:
                 # Last partition
-                # Also do backward and step
+                if not self.partition.training:
+                    # In Eval: Just calculate statistics.
+                    # print(*ctx, ctx[0].shape)
+                    self.trainer.calc_test_stats(x, *ctx)
+                    return []
+                # Train, calculate and send gradients to previous partition.
                 self.trainer.do_your_job(x, *ctx)
-                # TODO: save the gradient - (later to be passed to previous partition)
                 grads = self.partition.get_grad(batch_idx)
-                # TODO: this is a little ugly, maybe find a better way later
                 if isinstance(grads, torch.Tensor):
                     grads = (grads,)
-                # Send gradients async
                 request_objects = self.comm_handler.send_gradients(
                     grads, batch_idx)
 
-                # TODO: can print here
-        #          {:5d}/{:5d} batches | '
-        # #           'lr {:02.2f} | ms/batch {:5.2f} | '
-        # #           'loss {:5.2f} | ppl {:8.2f}'
-
-                # if self.is_last_partition
+                # Print training statistics.
                 if self.partition.training:
                     self.batches += 1
                     if self.batches % self.log_frequency == 0:
-                        # TODO: scheduler could be None.
-                        # TODO: could be more than one LR
-                        lr = self.trainer.scheduler.get_last_lr()[0]
-                        # TODO: add more stats..
-                        log_str = '| lr {:02.4f}'.format(lr)
-                        self.logger.info(log_str)
-
-                # Not sure its needed at all. probobly not needed anymore.
-                # FIXME: I removed this because nothing else works...
-                # for i in self.fwd_rcev_buffers:
-                #     # if not (i.grad is None):
-                #     #     i.grad.zero_()
+                        batch_log_str = ''
+                        if hasattr(self.trainer, "scheduler"):
+                            # Note: could be more than one LR, but we ignor this for simplicity.
+                            lr = self.trainer.scheduler.get_last_lr()[0]
+                            batch_log_str += '| lr {:02.4f}'.format(lr)
+                        
+                        # TODO: add more stats. e.g can print here time, ' ms/batch {:5.2f} | ' ,...
+                        self.logger.info(batch_log_str)
 
         return request_objects
 
@@ -253,9 +223,6 @@ class SinglePartitionManager:
         self.partition.recompute_and_backward(g, batch_idx)
         self.trainer.step_on_computed_grads()
 
-        # for z in self.bwd_rcev_buffers:
-        #     z.detach_().zero_()
-
         if not (self.is_first_partition):
             g = self.partition.get_grad(batch_idx)
             request_objects = self.comm_handler.send_gradients(g, batch_idx)
@@ -283,10 +250,6 @@ class SinglePartitionManager:
                 for i in tmp_send_objects:
                     i.wait()
 
-            # TODO, wait on first
-
-            # TODO: don't wait every time, add option to accum by depth
-
         # Also clear in the end, just in case...
         for (sent_request_objects, tmp_sent_items) in self.async_fwd_objects.values():
             for i in sent_request_objects:
@@ -303,8 +266,8 @@ class SinglePartitionManager:
     def run_until_flush(self, num_batches):
         """
         Requires:
-            set_dataloader() was called
-            train() or eval()
+            set_dataloader() was called (if first partition)
+            train() or eval() was called
         """
         done_bwds = 0
         done_fwds = 0

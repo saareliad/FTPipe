@@ -1,5 +1,5 @@
 import argparse
-from pipeline import CommunicationHandler
+from pipeline import CommunicationHandlerBase, get_auto_comm_handler_cls
 from pipeline import SinglePartitionManager
 
 from pipeline.training import AVAILABLE_TRAINERS
@@ -167,7 +167,8 @@ def assert_args(args):
 def create_comm_handler(args, initialize_args, device):
 
     # get the parameters to create the comm handler
-    comm_handler = CommunicationHandler(
+    handler_cls = get_auto_comm_handler_cls(args.distributed_backend, args.cpu)
+    comm_handler = handler_cls(
         args.rank,
         args.local_rank,
         args.distributed_backend,
@@ -247,26 +248,23 @@ def create_distributed_communcation_context(args, config, stage, stage_to_rank_m
                                             random_input_sample=None,
                                             bs_train=(1,),
                                             bs_test=(1,)):
+    """
+    Returns:
+        target_tensor_names (input)
+        tensor_tags
+        receive_ranks
+        send_ranks
+        training_tensor_dtypes
+        training_tensor_shapes
+        eval_tensor_shapes
+        ranks_in_previous_stage
+        ranks_in_next_stage
 
+    TODO: 
+        eval_tensor_dtypes
+        support weight sharing
+    """
     assert(len(training_tensor_shapes) == len(training_tensor_dtypes))
-    # training_tensor_shapes = {"input0": input_size, "target": [args.batch_size]}
-    # inputs_module_destinations={"input0": [0]} Not needed, already taken care of by config.
-
-    # Creates and returns the following
-    # target_tensor_names (input)
-    # tensor_tags
-    # receive_ranks
-    # send_ranks
-    # training_tensor_dtypes
-    # training_tensor_shapes
-    # eval_tensor_shapes
-    # ranks_in_previous_stage
-    # ranks_in_next_stage
-
-    # TODO: eval_tensor_dtypes
-
-    #     dtypes = {"input0": torch.int64, "target": torch.int64}
-
     tensor_tags, TOTAL_TAGS = tensor_tags_from_config(
         config, target_tensor_names, args.num_chunks, GRAD_UGLY_SHAMEFUL_NAME="_grad")
 
@@ -276,8 +274,8 @@ def create_distributed_communcation_context(args, config, stage, stage_to_rank_m
         else:
             return [given_stage]
 
-    # TODO: support weight sharing
-    # TODO: asset this is same order with Alon's code/config...
+    # TODO: We assume this is same order with Alon's code/config, after poped some stuff.
+    # Alon config is outside of the project, this is dangerous programing...
     receive_ranks = OrderedDict()
     send_ranks = OrderedDict()
 
@@ -634,7 +632,8 @@ def main():
                     continue
                 # Set Dataloader
                 # sets only to first partition
-                partition.set_dataloader(train_dl)
+                if is_first_partition:
+                    partition.set_dataloader(train_dl)
                 # Start training
                 partition.train()
                 if statistics:
@@ -667,7 +666,8 @@ def main():
                 # sets only to first partition
                 if TEST_BATCHES_TO_RUN == 0:
                     continue
-                partition.set_dataloader(test_dl)
+                if is_first_partition:
+                    partition.set_dataloader(test_dl)
                 partition.eval()
 
                 if statistics:
@@ -684,6 +684,7 @@ def main():
         if did_train:
             steps += TRAIN_BATCHES_TO_RUN
 
+        # if is_last_partition
         if args.local_rank == args.world_size - 1:
             logger.info('-' * 89)
             # ms/batch {:5.2f}
@@ -700,15 +701,13 @@ def main():
         if args.steps > 0 and steps >= args.steps:
             break  # steps condition met
 
-    # FIXME: If last state
+    # if is_last_partition
     if args.rank == get_world_size(args.distributed_backend) - 1:
         if statistics:
             fit_res = statistics.get_stats()
-            config = vars(args)  # FIXME: TODO:
+            config = vars(args)  # FIXME: TODO: remove unneeded added args
             save_experiment(args.out_filename, args.out_dir, config, fit_res)
     torch.distributed.barrier()
-
-    # TODO:
 
 
 if __name__ == "__main__":

@@ -12,21 +12,33 @@ class BCASTCommunicationHandler(SimpleCommBase):
     def init_proccess_groups(self, stage, num_stages):
         # Init all proccess groups
         # And remember my groups
-        self.my_right_group = None
-        self.my_left_group = None
+        self.my_right_group = {}
+        self.my_left_group = {}
 
-        for i in range(num_stages-1):
-            pg = torch.distributed.new_group([i, i+1])
-            if i == stage:
-                self.my_right_group = pg
-            elif i+1 == stage:
-                self.my_left_group = pg
+        self.SUPPORTED_BATCHS_IN_SYS = 16  # FIXME
 
-    def _send_tensors_bcast(self, x, batch_idx, pg):
+        for batch_index in range(self.SUPPORTED_BATCHS_IN_SYS):
+            for i in range(num_stages-1):
+                pg = torch.distributed.new_group([i, i+1])
+                if i == stage:
+                    self.my_right_group[batch_index] = pg  # [me, her]
+                elif i+1 == stage:
+                    self.my_left_group[batch_index] = pg  # [her, me]
+
+    def _send_tensors_bcast(self, x, batch_idx, pg, is_grad):
         # TODO: Double buffering like p2p
         request_objects = []
+        sent_items = []
         for tensor in x:
-            tensor.detach_()
+            # tensor.detach_()  # RuntimeError: Can't detach views in-place. Use detach() instead
+            # FIXME: see https://github.com/pytorch/pytorch/issues/25814
+            # (its problematic with the tensor.grad, which we plan to avoid anyway.)
+            if is_grad:
+                with torch.no_grad():
+                    tensor = tensor.clone().detach_()
+            else:
+                tensor.detach_()
+
             if self.verbose:
                 self.logger.info(
                     f"ibcast, (send) src={self.local_rank}, batch_idx={batch_idx}")
@@ -34,7 +46,10 @@ class BCASTCommunicationHandler(SimpleCommBase):
             request_obj = dist.broadcast(
                 tensor, self.local_rank, group=pg, async_op=True)
             request_objects.append(request_obj)
-        return request_objects
+
+            sent_items.append(tensor)
+
+        return request_objects, sent_items
 
     def _recv_tensors_bcast(self, x, batch_idx, src, pg):
         # TODO: Double buffering like p2p
@@ -57,17 +72,20 @@ class BCASTCommunicationHandler(SimpleCommBase):
 
     def send_gradients(self, x, batch_idx):
         # TODO support multiple right/left ranks
-        return self._send_tensors_bcast(x, batch_idx, self.my_left_group)
+        return self._send_tensors_bcast(x, batch_idx,
+                                        self.my_left_group[batch_idx % self.SUPPORTED_BATCHS_IN_SYS], True)
 
     def send_activations(self, x, batch_idx):
         # TODO support multiple right/left ranks
-        return self._send_tensors_bcast(x, batch_idx, self.my_right_group)
+        return self._send_tensors_bcast(x, batch_idx,
+                                        self.my_right_group[batch_idx % self.SUPPORTED_BATCHS_IN_SYS], False)
 
     def recv_activations(self, x, batch_idx):
         # TODO support multiple right/left ranks
-        return self._recv_tensors_bcast(x, batch_idx, self.ranks_in_previous_stage[0], self.my_left_group)
+        return self._recv_tensors_bcast(x, batch_idx, self.ranks_in_previous_stage[0],
+                                        self.my_left_group[batch_idx % self.SUPPORTED_BATCHS_IN_SYS])
 
     def recv_gradients(self, x, batch_idx):
         # TODO support multiple right/left ranks
-        return self._recv_tensors_bcast(x, batch_idx, self.ranks_in_next_stage[0], self.my_right_group)
-
+        return self._recv_tensors_bcast(x, batch_idx, self.ranks_in_next_stage[0],
+                                        self.my_right_group[batch_idx % self.SUPPORTED_BATCHS_IN_SYS])

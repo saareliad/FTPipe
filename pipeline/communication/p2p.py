@@ -36,14 +36,18 @@ class P2PCommunicationHandler(SimpleCommBase):
     def recv_gradients(self, x, batch_idx):
         return self._recv_tensors_p2p(x, batch_idx, self.grad_rcv_items)
 
-    def _send_tensors_p2p(self, x, batch_idx, ranks_dict_items):
+    def _send_tensors_p2p(self, x, batch_idx, ranks_dict_items, is_grad):
         with torch.no_grad():
             request_objects = []
             sent_items = []  # Used to save them somewere.
 
             for tensor, (tensor_name, send_ranks) in zip(x, ranks_dict_items):
                 # tag for minibatch idx too
-                tensor = tensor.data
+                if is_grad:
+                    with torch.no_grad():
+                        tensor = tensor.clone().detach_()
+                else:
+                    tensor.detach_()
                 tensor = tensor.chunk(self.num_chunks)
                 tensor_tag = self.tensor_tags[tensor_name] + \
                     (self.TOTAL_TAGS * batch_idx)
@@ -79,7 +83,7 @@ class P2PCommunicationHandler(SimpleCommBase):
                         if not self.cpu:
                             # HACK: synchronize.
                             torch.cuda.synchronize(device=self.device)
-                        
+                        assert chunk.is_contiguous()
                         request_obj = dist.isend(
                             chunk, send_rank, tag=chunk_tag)
                         request_objects.append(request_obj)
@@ -87,10 +91,10 @@ class P2PCommunicationHandler(SimpleCommBase):
         return request_objects, sent_items
 
     def send_activations(self, x, batch_idx):
-        return self._send_tensors_p2p(x, batch_idx, self.send_ranks.items())
+        return self._send_tensors_p2p(x, batch_idx, self.send_ranks.items(), False)
 
     def send_gradients(self, x, batch_idx):
-        return self._send_tensors_p2p(x, batch_idx, self.grad_send_items)
+        return self._send_tensors_p2p(x, batch_idx, self.grad_send_items, True)
 
     def fix_after_recv(self, x):
         """ Fixes recved buffer after sync wait ends"""
