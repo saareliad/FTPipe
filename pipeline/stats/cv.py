@@ -1,6 +1,7 @@
 from typing import List, Dict, NamedTuple
 from .interface import Stats
 from types import SimpleNamespace
+import logging
 
 
 def fit_res_to_dict(fit_res) -> Dict:
@@ -115,8 +116,9 @@ class CVStats(Stats):
             meter.reset()
 
     def non_latst_partition_on_epoch_end(self):
-        for meter in self.epoch_meters:
-            meter.reset()
+        pass  # FIXME:
+        # for meter in self.epoch_meters:
+        #     meter.reset()
 
     def get_stats(self, *args):
         return fit_res_to_dict(self.fit_res)
@@ -155,7 +157,7 @@ class NormCVstats(CVStats):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
         self.epoch_grad_norm_meter = AverageMeter()
-        self.epoch_meters.append(self.epoch_grad_norm_meter)
+        # self.epoch_meters.append(self.epoch_grad_norm_meter)
         assert not (self.fit_res is None)
 
     def fit_result_init_dict(self):
@@ -171,13 +173,18 @@ class NormCVstats(CVStats):
 
             self.epoch_grad_norm_meter.update(grad_norm)
 
-    def non_last_partition_on_batch_end(self, grad_norm=None):
+    def non_last_partition_on_batch_end(self, grad_norm):
         # Called just for train
         if self.training:
             if self.record_loss_per_batch:
                 self.fit_res.append(grad_norm)
 
-            self.epoch_grad_norm_meter.update(grad_norm)
+            if not (grad_norm is None):
+                self.epoch_grad_norm_meter.update(grad_norm)
+            else:
+                logger = logging.getLogger("msnag")
+                logger.warning(f"-W- grad norm is None for a non last partition. updating as 0")
+                self.epoch_grad_norm_meter.update(0)
 
     def on_epoch_end(self):
         if self.training:
@@ -187,11 +194,12 @@ class NormCVstats(CVStats):
         super().on_epoch_end()
 
     def non_latst_partition_on_epoch_end(self):
-        if self.training:
-            if not self.record_loss_per_batch:
-                self.fit_res.grad_norm.append(
-                    self.epoch_grad_norm_meter.get_avg())
-        super().non_latst_partition_on_epoch_end()
+        assert(self.training)
+        if not self.record_loss_per_batch:
+            self.fit_res.grad_norm.append(
+                self.epoch_grad_norm_meter.get_avg())
+        self.epoch_grad_norm_meter.reset()
+        # super().non_latst_partition_on_epoch_end()
 
     def get_epoch_info_str(self, is_train):
         if is_train:

@@ -665,6 +665,8 @@ def main():
                             gap_aware.skip_one_apply()
                         partition.run_until_flush(reminder)
                 else:
+                    if use_gap_aware:
+                        gap_aware.skip_one_apply()
                     partition.run_until_flush(
                         min(TRAIN_BATCHES_TO_RUN, len(train_dl)))
 

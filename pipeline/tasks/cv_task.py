@@ -1,6 +1,7 @@
 from .interface import DLTask
 import torch
 
+
 class CVTask(DLTask):
     def __init__(self, device, is_last_partition, is_first_partition):
         self.device = device

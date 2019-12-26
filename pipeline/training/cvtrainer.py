@@ -19,7 +19,7 @@ def calc_norm(parameters, norm_type=2):
 
 
 class CVTrainer(PartitionedSupervisedTrainer):
-    def __init__(self, model, optimizer, scheduler, statistics, max_grad_norm=None, always_calc_grad_norm=True):
+    def __init__(self, model, optimizer, scheduler, statistics, max_grad_norm=None, always_calc_grad_norm=False):
         self.loss_fn = torch.nn.CrossEntropyLoss()
         self.optimizer = optimizer
         self.scheduler = scheduler
@@ -68,7 +68,7 @@ class CVTrainer(PartitionedSupervisedTrainer):
 
     def non_last_partition_step(self):
         max_grad_norm = self.step_on_computed_grads()
-        if max_grad_norm:  # Handles different classes of statistics. not so nice, should be fixed
+        if not (max_grad_norm is None):  # Handles different classes of statistics. not so nice, should be fixed
             self.statistics.non_last_partition_on_batch_end(max_grad_norm)
 
     def step_on_computed_grads(self):

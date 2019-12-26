@@ -3,6 +3,7 @@ import os
 from enum import Enum, auto
 from collections import deque
 
+
 def get_world_size(backend) -> int:
     """Returns world size (from env), or 1 if not set"""
     if backend != 'mpi':
