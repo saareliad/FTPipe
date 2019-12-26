@@ -10,7 +10,6 @@
     "trainer": {
         "type": "cv",
         "args": {
-
             "always_calc_grad_norm": true
         }
     },
@@ -23,7 +22,7 @@
             "lr": 0.1,
             "weight_decay": 0.0005,
             "momentum": 0.9,
-            "nesterov": false
+            "nesterov": true
         }
     },
     "lr_scheduler": {

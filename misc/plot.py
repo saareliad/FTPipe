@@ -51,3 +51,40 @@ def plot_fit(fit_res: Union[NamedTuple, dict], fig=None, log_loss=False, legend=
             ax.legend()
 
     return fig, axes
+
+
+def plot_grad_norm(fit_res: Union[NamedTuple, dict], fig=None, legend=None, **kw):
+    total_norms = sum("grad_norm" in key for key in fit_res.keys())
+    assert(total_norms % 2)  # TODO support for un-even...
+    total_norms / 2
+    if fig is None:
+        fig, axes = plt.subplots(nrows=1+total_norms, ncols=2, figsize=(16, 10),
+                                 sharex='col', sharey=False)
+        axes = axes.reshape(-1)
+    else:
+        axes = fig.axes
+
+    all_norms = [key for key in fit_res.keys() if "grad_norm" in key]
+    p = all_norms + ["train_acc", "test_acc"]
+    for idx, attr in enumerate(p):
+        ax = axes[idx]
+        if isinstance(fit_res, NamedTuple):
+            data = getattr(fit_res, attr)
+        else:
+            data = fit_res[attr]
+
+        h = ax.plot(np.arange(1, len(data) + 1), data, label=legend)
+        # bwd compatability...
+        attr = "last_partition_grad_norm" if attr == "total_grad_norm" else attr
+        ax.set_title(attr)
+        ax.set_xlabel('Epoch #')
+
+        if "acc" in attr:
+            ax.set_ylabel('Accuracy (%)')
+        else:
+            ax.set_ylabel('Norm')
+
+        if legend:
+            ax.legend()
+
+    return fig, axes

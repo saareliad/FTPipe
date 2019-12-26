@@ -4,7 +4,7 @@ from typing import Dict
 from collections import OrderedDict
 from . import CommunicationHandlerBase
 from .partition import Partition, LastPartition, FirstPartition
-from .training.interface import AnyTrainer
+from .training.interface import PartitionedTrainer
 from .tasks import DLTask
 from .weight_prediction.interface import WeightPredictor
 from .gap_aware import GapAware  # TODO: change to interface.
@@ -61,7 +61,7 @@ class SinglePartitionManager:
 
         # Hints
         self.task: DLTask
-        self.trainer: AnyTrainer
+        self.trainer: PartitionedTrainer
         self.weight_predictor: WeightPredictor
         self.gap_aware: GapAware
         self.weight_stasher: WeightStasher
@@ -69,7 +69,7 @@ class SinglePartitionManager:
     def set_task(self, task: DLTask):
         self.task = task
 
-    def set_trainer(self, trainer: AnyTrainer):
+    def set_trainer(self, trainer: PartitionedTrainer):
         self.trainer = trainer
 
     def set_dataloader(self, dataloader):
@@ -83,7 +83,7 @@ class SinglePartitionManager:
 
     def set_gap_aware(self, gap_aware):
         self.gap_aware = gap_aware
-    
+
     def set_weight_stasher(self, weight_stasher: WeightStasher):
         self.weight_stasher = WeightStasher
 
@@ -154,10 +154,6 @@ class SinglePartitionManager:
 
             x, *ctx = self.task.unpack_data_for_partition(x)
 
-            # Stash parameters for later.
-            if self.weight_stasher and self.partition.training:
-                self.weight_stasher.stash_current(batch_idx)
-
             # TODO: last partition can do bengio nesterov instead of predicting.
             # Requires per partition optimizer config, or some hack.
             if self.weight_predictor and self.partition.training:
@@ -165,9 +161,18 @@ class SinglePartitionManager:
                     self.expected_staleness(batch_idx, done_bwds))
                 # self.mb_to_fix_by_ga[batch_idx] = ((batch_idx - done_bwds) == 1)
                 self.weight_predictor.forward()
+
+                # Stash parameters for later. # TODO: wait stasher should not be in last partition.
+                if self.weight_stasher and self.partition.training:
+                    self.weight_stasher.stash_current(batch_idx)
+
                 x = self.partition(x, batch_idx)
                 self.weight_predictor.revert()
             else:
+                # Stash parameters for later.
+                if self.weight_stasher and self.partition.training:
+                    self.weight_stasher.stash_current(batch_idx)
+
                 x = self.partition(x, batch_idx)
 
             if not self.is_last_partition:
@@ -198,7 +203,7 @@ class SinglePartitionManager:
                             # Note: could be more than one LR, but we ignor this for simplicity.
                             lr = self.trainer.scheduler.get_last_lr()[0]
                             batch_log_str += '| lr {:02.4f}'.format(lr)
-                        
+
                         # TODO: add more stats. e.g can print here time, ' ms/batch {:5.2f} | ' ,...
                         self.logger.info(batch_log_str)
 
@@ -211,7 +216,7 @@ class SinglePartitionManager:
             self.bwd_rcev_buffers = self.comm_handler.create_gradients_rcv_buffers(
                 self.device)
         g = self.bwd_rcev_buffers
-        
+
         # Solution to the DAMN bug with 4 partitions.
         # TODO: understnad why zero_() is the solution
         # I added detach just in case.
@@ -244,7 +249,8 @@ class SinglePartitionManager:
             self.weight_stasher.restore_last(batch_idx)
             # TODO: look to pipedream implementation and udnerstand what they do with the weight decay.
 
-        self.trainer.step_on_computed_grads()
+        # Step and statistics
+        self.trainer.non_last_partition_step()
 
         if not (self.is_first_partition):
             g = self.partition.get_grad(batch_idx)

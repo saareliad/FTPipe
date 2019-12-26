@@ -1,6 +1,17 @@
-from typing import List
+from typing import List, Dict, NamedTuple
 from .interface import Stats
 from types import SimpleNamespace
+
+
+def fit_res_to_dict(fit_res) -> Dict:
+    if isinstance(fit_res, NamedTuple):
+        fit_res = fit_res._asdict()
+    elif isinstance(fit_res, SimpleNamespace):
+        fit_res = fit_res.__dict__
+    # elif isinstance(fit_res, dict)
+    #     pass
+
+    return fit_res
 
 
 class FitResult(SimpleNamespace):
@@ -53,19 +64,22 @@ class AccuracyMeter(AverageMeter):
 
 class CVStats(Stats):
     """ Class to handle statistics collection for CV Tasks """
+    FIT_RESULTS_CLASS = FitResult
 
     def __init__(self, record_loss_per_batch=False):
         # Stats
-        self.fit_res = FitResult(
-            num_epochs=0, train_loss=[], train_acc=[], test_loss=[], test_acc=[])
+        self.fit_res = self.FIT_RESULTS_CLASS(**self.fit_result_init_dict())
+        assert not (self.fit_res is None)
         self.epoch_loss = AverageMeter()
         self.epoch_acc = AccuracyMeter()
 
-        self.fit_loss = AverageMeter()
-        # self.fit_acc = AverageMeter()
+        self.epoch_meters = [self.epoch_loss, self.epoch_acc]
 
         self.record_loss_per_batch = record_loss_per_batch
         self.training = True
+
+    def fit_result_init_dict(self):
+        return dict(num_epochs=0, train_loss=[], train_acc=[], test_loss=[], test_acc=[])
 
     def train(self):
         self.training = True
@@ -89,18 +103,23 @@ class CVStats(Stats):
                 self.fit_res.train_loss.append(self.epoch_loss.get_avg())
 
             self.fit_res.train_acc.append(self.epoch_acc.get_avg() * 100)
-            self.fit_res.num_epochs += 1  # FIXME: its only here, currently assuming test are same as train.
+            # FIXME: its only here, currently assuming test are same as train.
+            self.fit_res.num_epochs += 1
         else:
             if not self.record_loss_per_batch:
                 self.fit_res.test_loss.append(self.epoch_loss.get_avg())
 
             self.fit_res.test_acc.append(self.epoch_acc.get_avg() * 100)
 
-        self.epoch_acc.reset()
-        self.epoch_loss.reset()
+        for meter in self.epoch_meters:
+            meter.reset()
 
-    def get_stats(self):
-        return self.fit_res
+    def non_latst_partition_on_epoch_end(self):
+        for meter in self.epoch_meters:
+            meter.reset()
+
+    def get_stats(self, *args):
+        return fit_res_to_dict(self.fit_res)
 
     def get_epoch_info_str(self, is_train):
         if is_train:
@@ -112,4 +131,78 @@ class CVStats(Stats):
             loss = self.fit_res.test_loss[-1]
             acc = self.fit_res.test_acc[-1]
 
-        return ' | {} loss {:5.2f} | {} acc {:8.2f}'.format(name, loss, name, acc)
+        return ' | {} loss {:5.2f} | {} acc {:4.2f}'.format(name, loss, name, acc)
+
+
+class FitResultWithGradNorm(FitResult):
+    """
+    Represents the result of fitting a model for multiple epochs given a
+    training and test (or validation) set.
+    The losses are for each batch (or per epoch, depends on config)
+    and the accuracies are per epoch.
+    """
+    num_epochs: int
+    grad_norm: List[float]
+    train_loss: List[float]
+    train_acc: List[float]
+    test_loss: List[float]
+    test_acc: List[float]
+
+
+class NormCVstats(CVStats):
+    FIT_RESULTS_CLASS = FitResultWithGradNorm
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.epoch_grad_norm_meter = AverageMeter()
+        self.epoch_meters.append(self.epoch_grad_norm_meter)
+        assert not (self.fit_res is None)
+
+    def fit_result_init_dict(self):
+        return dict(grad_norm=[], **super().fit_result_init_dict())
+
+    def on_batch_end(self, loss, num_correct, batch_size, grad_norm=None):
+        # Note: This is also called for test
+        super().on_batch_end(loss, num_correct, batch_size)
+
+        if self.training:
+            if self.record_loss_per_batch:
+                self.fit_res.append(grad_norm)
+
+            self.epoch_grad_norm_meter.update(grad_norm)
+
+    def non_last_partition_on_batch_end(self, grad_norm=None):
+        # Called just for train
+        if self.training:
+            if self.record_loss_per_batch:
+                self.fit_res.append(grad_norm)
+
+            self.epoch_grad_norm_meter.update(grad_norm)
+
+    def on_epoch_end(self):
+        if self.training:
+            if not self.record_loss_per_batch:
+                self.fit_res.grad_norm.append(
+                    self.epoch_grad_norm_meter.get_avg())
+        super().on_epoch_end()
+
+    def non_latst_partition_on_epoch_end(self):
+        if self.training:
+            if not self.record_loss_per_batch:
+                self.fit_res.grad_norm.append(
+                    self.epoch_grad_norm_meter.get_avg())
+        super().non_latst_partition_on_epoch_end()
+
+    def get_epoch_info_str(self, is_train):
+        if is_train:
+            my_addition = ' | grad_norm {:6.3f}'.format(
+                self.fit_res.grad_norm[-1])
+            return super().get_epoch_info_str(is_train) + my_addition
+        return super().get_epoch_info_str(is_train)
+
+    def get_stats(self, stage_id):
+        fit_res = super().get_stats()
+        new_name = f"p{stage_id}_grad_norm"
+        old_name = 'grad_norm'
+        fit_res[new_name] = fit_res.pop(old_name)
+        return fit_res

@@ -1,5 +1,4 @@
 import abc
-from typing import List
 
 # class LossTrainer(abc.ABC):
 #     # TODO: for models which returns only loss...
@@ -31,3 +30,13 @@ class SupervisedTrainer(AnyTrainer):
         We currently assume its the last partition for simplicity
         """
         pass
+
+
+class PartitionedTrainer(AnyTrainer):
+    @abc.abstractmethod
+    def non_last_partition_step(self, *args, **kw):
+        pass
+
+
+class PartitionedSupervisedTrainer(PartitionedTrainer, SupervisedTrainer):
+    pass

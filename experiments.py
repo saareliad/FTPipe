@@ -1,6 +1,6 @@
 
 import json
-from typing import NamedTuple
+from typing import NamedTuple, Dict
 import os
 from types import SimpleNamespace
 
@@ -15,12 +15,24 @@ def load_experiment(filename):
     return config, fit_res
 
 
-def save_experiment(run_name, out_dir, config, fit_res):
+def load_experiment_for_update(run_name, out_dir):
+    output_filename = f'{os.path.join(out_dir, run_name)}.json'
+    with open(output_filename, 'r') as f:
+        output = json.load(f)
 
+    config = output['config']
+    fit_res = output['results']
+
+    return config, fit_res
+
+
+def save_experiment(run_name, out_dir, config, fit_res: Dict):
     if isinstance(fit_res, NamedTuple):
         fit_res = fit_res._asdict()
     elif isinstance(fit_res, SimpleNamespace):
         fit_res = fit_res.__dict__
+    # elif isinstance(fit_res, dict):
+    #     pass
 
     output = dict(
         config=config,

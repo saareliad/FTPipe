@@ -4,7 +4,7 @@ from pipeline import SinglePartitionManager
 
 from pipeline.training import AVAILABLE_TRAINERS
 from pipeline.tasks import AVAILABLE_TASKS
-from pipeline.stats import AVAILBALE_STATS
+from pipeline.stats import AVAILBALE_STATS  # , Stats
 from pipeline.weight_prediction import get_sgd_weight_predictor
 from pipeline.gap_aware import get_sgd_gap_aware_cls
 from optimizers import AVAILBALE_OPTIMIZERS
@@ -20,12 +20,16 @@ from misc.datasets import add_dataset_argument, simplified_get_train_test_dl_fro
 from misc.filelogger import FileLogger
 import os
 import json
-from experiments import save_experiment
+from experiments import save_experiment, load_experiment_for_update
 import time
 import random
 
 
 def parse_cli():
+    # TODO: replace all this
+    # with a function to tell the avaialble options to the user,
+    # as we overrride the entire thing by json config anyway.
+
     parser = argparse.ArgumentParser(
         description='PyTorch partition as part of Async Pipeline')
     # parser.add_argument('--master_addr', default='127.0.0.1', type=str,
@@ -90,8 +94,9 @@ def parse_cli():
     parser.add_argument('--num-data-workers', type=int,
                         help='Number of workers to use for dataloading', default=0)
 
-    parser.add_argument('--trainer', help='Trainer to use',
-                        choices=AVAILABLE_TRAINERS.keys(), default='dummy')
+    # parser.add_argument('--trainer', help='Trainer to use',
+    #                     choices=AVAILABLE_TRAINERS.keys(), default='cv') # TODO: Deprecated
+
     parser.add_argument('--task', help='Task type to use',
                         choices=AVAILABLE_TASKS.keys(), default='cv')
 
@@ -115,6 +120,9 @@ def parse_cli():
 
     parser.add_argument(
         "--num_chunks", help="Number of chunks for Double Buffering", type=int, default=4)
+
+    # TODO: Deprecated
+    # parser.add_argument("--max_grad_norm", required=False, default=None, help="Max value for gradient norm")
 
     args = parser.parse_args()
 
@@ -164,7 +172,7 @@ def assert_args(args):
     assert (args.epochs >= 1 or args.steps >= 1)
 
 
-def create_comm_handler(args, initialize_args, device):
+def create_comm_handler(args, initialize_args, device) -> CommunicationHandlerBase:
 
     # get the parameters to create the comm handler
     handler_cls = get_auto_comm_handler_cls(args.distributed_backend, args.cpu)
@@ -260,7 +268,7 @@ def create_distributed_communcation_context(args, config, stage, stage_to_rank_m
         ranks_in_previous_stage
         ranks_in_next_stage
 
-    TODO: 
+    TODO:
         eval_tensor_dtypes
         support weight sharing
     """
@@ -434,7 +442,7 @@ def hack_trainer_to_gap_aware(args):
 
         # HACK: change trainer name
         if is_almost_last_partition:
-            args.trainer += "_gap_aware"
+            args.trainer['type'] += "_gap_aware"
             return True
 
     return False
@@ -449,7 +457,7 @@ def main():
     device = torch.device('cpu' if args.cpu else f"cuda:{args.local_rank}")
     if not args.cpu:
         torch.cuda.set_device(device)
-    
+
     if args.debug:
         # TODO: by specific ranks
         import ptvsd
@@ -468,8 +476,9 @@ def main():
     assert_args(args)
     configs = models.get_partitioning(args.model, model_instance=None)
 
-    input_names = configs.pop('model inputs')
-    output_names = configs.pop('model outputs')
+    # pop input_names, output_names
+    configs.pop('model inputs')
+    configs.pop('model outputs')
 
     if args.seed is None:
         args.seed = random.randint(0, 2 ** 31)
@@ -550,10 +559,11 @@ def main():
 
     training_tensor_shapes, eval_tensor_shapes = shapes
 
-    trainer_cls = AVAILABLE_TRAINERS.get(args.trainer)
+    trainer_cls = AVAILABLE_TRAINERS.get(args.trainer['type'])
     task_cls = AVAILABLE_TASKS.get(args.task)
     optimizer_cls = AVAILBALE_OPTIMIZERS.get(args.optimizer_type)
     statistics = AVAILBALE_STATS.get(args.statistics)
+    assert not (statistics is None)
     work_scheduler = AVAILABLE_WORK_SCHEDULERS.get(args.work_scheduler)
 
     partition = SinglePartitionManager(
@@ -582,14 +592,14 @@ def main():
 
     # is_almost_last_partition = args.local_rank == args.world_size - 2
 
+    trainer_extra_args = args.trainer['args']
     if hasattr(trainer_cls, "HAS_GAP_AWARE"):
         gap_aware = get_gap_aware(args, optimizer)
-        # trainer_args['gap_aware'] = gap_aware
         trainer = trainer_cls(gap_aware, partition.partition, optimizer=optimizer,
-                              scheduler=scheduler, statistics=statistics)
+                              scheduler=scheduler, statistics=statistics, **trainer_extra_args)
     else:
         trainer = trainer_cls(partition.partition, optimizer=optimizer,
-                              scheduler=scheduler, statistics=statistics)
+                              scheduler=scheduler, statistics=statistics, **trainer_extra_args)
 
     partition.set_trainer(trainer)
     if weight_predictor:
@@ -661,7 +671,9 @@ def main():
                 did_train = True
                 if args.local_rank == args.world_size - 1:
                     statistics.on_epoch_end()
-            else:
+                else:
+                    statistics.non_latst_partition_on_epoch_end()
+            else:  # EVAL
                 # Set Dataloader
                 # sets only to first partition
                 if TEST_BATCHES_TO_RUN == 0:
@@ -679,7 +691,7 @@ def main():
                 did_eval = True
                 if args.local_rank == args.world_size - 1:
                     statistics.on_epoch_end()
-        
+
         epochs += 1
         if did_train:
             steps += TRAIN_BATCHES_TO_RUN
@@ -701,13 +713,36 @@ def main():
         if args.steps > 0 and steps >= args.steps:
             break  # steps condition met
 
+    # TODO: sync statistics from other partitions too.
     # if is_last_partition
     if args.rank == get_world_size(args.distributed_backend) - 1:
         if statistics:
-            fit_res = statistics.get_stats()
-            config = vars(args)  # FIXME: TODO: remove unneeded added args
+            fit_res = statistics.get_stats(args.stage)
+            config = vars(args)
+            # remove unneeded added args
+            del config['stage']
+            del config['rank']
+            del config['local_rank']
             save_experiment(args.out_filename, args.out_dir, config, fit_res)
     torch.distributed.barrier()
+
+    # Update statistics one by one:
+    for current_rank in reversed(range(get_world_size(args.distributed_backend) - 1)):
+        if args.rank == current_rank:
+            if statistics:
+                my_fit_res = statistics.get_stats(args.stage)
+                config, fit_res = load_experiment_for_update(
+                    args.out_filename, args.out_dir)
+
+                # Update just the fit res
+                for k, v in my_fit_res.items():
+                    if k not in fit_res:
+                        fit_res[k] = v
+                # save it
+                save_experiment(args.out_filename,
+                                args.out_dir, config, fit_res)
+
+        torch.distributed.barrier()
 
 
 if __name__ == "__main__":

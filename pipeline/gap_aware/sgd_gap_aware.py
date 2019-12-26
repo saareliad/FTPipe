@@ -17,6 +17,10 @@ class GapAware:
     Warning:
         Will not work with gradient accumulation as it changes grad !!!
 
+        This implementaion assumes staleness=1, so it should shut down for the first batch, with
+            skip_one_apply()
+
+
     Usage:
 
         After backward:
@@ -49,10 +53,14 @@ class GapAware:
 
         ga.update_max_lr()
 
+    Note:
+
+
     """
     # 2 main improvments form original implementation.
-    # (1) better mem, (2) option to shut down changing WD. (I susspect its the "correct" usage with DANA).
-    # TODO: assuming staleness=1, shut down for the first batch
+    # (1) better mem,
+    # (2) option to shut down changing WD.
+    # Note: (2) will allow checking L2 instead, as WD suffers from staleness)
 
     MAX_LR_NAME = "max_lr"
 
@@ -174,3 +182,7 @@ def get_sgd_gap_aware_cls(sgd_type: str) -> GapAware:
     gap_aware_cls = SGD_TYPE_TO_GAP_AWARE_CLASS.get(sgd_type, None)
     return gap_aware_cls
     # return gap_aware_cls(*args, **kw)
+
+
+
+# class GAStats:

@@ -1,12 +1,31 @@
 import torch
-from .interface import SupervisedTrainer
+from .interface import PartitionedSupervisedTrainer
+from torch.nn.utils import clip_grad_norm_
+# TODO: typehint for statistics. maybe it should actuallt sit under stats
 
 
-class CVTrainer(SupervisedTrainer):
-    def __init__(self, model, optimizer, scheduler, statistics):
+def calc_norm(parameters, norm_type=2):
+    """ Exactly like clip_grad_norm_, but without the clip. """
+    if isinstance(parameters, torch.Tensor):
+        parameters = [parameters]
+    parameters = list(filter(lambda p: p.grad is not None, parameters))
+    norm_type = float(norm_type)
+    total_norm = 0
+    for p in parameters:
+        param_norm = p.grad.data.norm(norm_type)
+        total_norm += param_norm.item() ** norm_type
+    total_norm = total_norm ** (1. / norm_type)
+    return total_norm
+
+
+class CVTrainer(PartitionedSupervisedTrainer):
+    def __init__(self, model, optimizer, scheduler, statistics, max_grad_norm=None, always_calc_grad_norm=True):
         self.loss_fn = torch.nn.CrossEntropyLoss()
         self.optimizer = optimizer
         self.scheduler = scheduler
+        self.model = model
+        self.max_grad_norm = max_grad_norm
+        self.ALWAYS_CALC_NORM = always_calc_grad_norm
 
         # Stats
         self.statistics = statistics
@@ -36,18 +55,42 @@ class CVTrainer(SupervisedTrainer):
         y_pred = torch.argmax(x, 1)
         num_correct = torch.sum(y == y_pred).item()
 
+        max_grad_norm = None
         if step:
-            self.step_on_computed_grads()
+            max_grad_norm = self.step_on_computed_grads()
 
-        # Save stats
-        self.statistics.on_batch_end(loss.item(), num_correct, batch_size)
+        if max_grad_norm:  # Handles different classes of statistics. not so nice, should be fixed
+            self.statistics.on_batch_end(
+                loss.item(), num_correct, batch_size, max_grad_norm)
+        else:
+            self.statistics.on_batch_end(
+                loss.item(), num_correct, batch_size)
+
+    def non_last_partition_step(self):
+        max_grad_norm = self.step_on_computed_grads()
+        if max_grad_norm:  # Handles different classes of statistics. not so nice, should be fixed
+            self.statistics.non_last_partition_on_batch_end(max_grad_norm)
 
     def step_on_computed_grads(self):
         # TODO: implement gradient statistics later
+        max_grad_norm = None
+        if self.max_grad_norm:
+            with torch.no_grad():
+                max_grad_norm = clip_grad_norm_(
+                    self.model.parameters(), self.max_grad_norm, norm_type=2)
+        elif self.ALWAYS_CALC_NORM:
+            with torch.no_grad():
+                max_grad_norm = calc_norm(self.model.parameters(), norm_type=2)
+
         self.optimizer.step()
         self.optimizer.zero_grad()
         # TODO: per step scheduler
         # self.scheduler.step()
+
+        return max_grad_norm
+
+# TODO: it is also possible to do the entire thing on activation gradients,
+#  avoiding the need to do it over all gradeints.
 
 
 class GapAwareCVTrainer(CVTrainer):
@@ -79,10 +122,16 @@ class GapAwareCVTrainer(CVTrainer):
         y_pred = torch.argmax(x, 1)
         num_correct = torch.sum(y == y_pred).item()
 
+        # Step and stats. Code copied from paraent.
+        max_grad_norm = None
         if step:
-            self.step_on_computed_grads()
+            max_grad_norm = self.step_on_computed_grads()
+
+        if max_grad_norm:  # Handles different classes of statistics. not so nice, should be fixed
+            self.statistics.on_batch_end(
+                loss.item(), num_correct, batch_size, max_grad_norm)
+        else:
+            self.statistics.on_batch_end(
+                loss.item(), num_correct, batch_size)
 
         # TODO: self.ga.update_max_lr() add when we have per step scheduler
-        
-        # Save stats
-        self.statistics.on_batch_end(loss.item(), num_correct, batch_size)

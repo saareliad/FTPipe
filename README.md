@@ -10,6 +10,16 @@ make env
 
 ## Run
 
+### Choosing a config
+
+Note the the examples below run the `configs/dummy.json` config (for dev usage).
+
+To choose a spesific config, add it as an option, e.g:
+
+```bash
+mpirun -np 2 python main.py --config configs/<CONFIG_NAME> 
+```
+
 ### MPI
 
 cuda aware openmpi:
@@ -53,7 +63,8 @@ python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_nod
 ## TODOs
 
 * Double Buffering (Remember credit to Mark)
-* Monkey patch batch normalization
+* Monkey patch batch normalization: is just a moneky patch.
+  * can write spesific class to every case (e.g Batch Norm) to make it more efficient.
 * timing (ms per batch, fwd, bwd, etc)
 * schedule: find way to eliminate bubbles
 * Target_tensor_names:
@@ -66,6 +77,11 @@ python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_nod
 
 * Support multi node after everything works.
 * later change `batch_idx` to `micro_batch_index` to be consistent with the paper.
+
+* Can do gap aware at step 2 even on deeper partitions (effective only once per epoch)
+* gap aware with wieght stashing
+* "send the layer not the gradient"
+* add "scheduler aware prediction".
 
 ## References
 

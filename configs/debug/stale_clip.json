@@ -1,7 +1,7 @@
 {
     "logdir": "logs/",
     "out_dir":"results/",
-    "out_filename": "stale",
+    "out_filename": "stale_clip",
     "distributed_backend": "mpi",
     "task": "cv",
     "statistics": "cv_grad_norm",
@@ -10,8 +10,8 @@
     "trainer": {
         "type": "cv",
         "args": {
-
-            "always_calc_grad_norm": true
+            "max_grad_norm": 0.25,
+            "always_calc_grad_norm": false
         }
     },
     "bs_train": 128,
@@ -23,7 +23,7 @@
             "lr": 0.1,
             "weight_decay": 0.0005,
             "momentum": 0.9,
-            "nesterov": false
+            "nesterov": true
         }
     },
     "lr_scheduler": {
