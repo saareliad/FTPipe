@@ -55,7 +55,7 @@ class SinglePartitionManager:
         self.async_bwd_objects = OrderedDict()
 
         self.logger = logging.getLogger("msnag")
-        self.dl_iter = None
+        # self.dl_iter = None
 
         # self.mb_to_fix_by_ga = {}
 
@@ -233,6 +233,7 @@ class SinglePartitionManager:
         for obj in request_objects:
             obj.wait()
 
+
         g = self.comm_handler.fix_after_recv(g)
 
         if self.weight_stasher:
@@ -250,13 +251,14 @@ class SinglePartitionManager:
             # TODO: look to pipedream implementation and udnerstand what they do with the weight decay.
 
         # Step and statistics
-        self.trainer.non_last_partition_step()
-
+        request_objects = None
+        # we may want to get the grad for sending before the step.
         if not (self.is_first_partition):
             g = self.partition.get_grad(batch_idx)
             request_objects = self.comm_handler.send_gradients(g, batch_idx)
-
-            return request_objects
+        
+        self.trainer.non_last_partition_step()
+        return request_objects
 
     def expected_staleness(self, done_fwds, done_bwds):
         if self.nag_with_predictor and ((done_fwds - done_bwds) == 0):

@@ -136,28 +136,28 @@ class Partition(nn.Module):
         # TODO: can make these two functions (recompute, backwards)
         # To enable scheduling the recompute
         x = self.input_buffer[micro_batch_idx]  # Note: still not poping!
+        if self.dummy_forward_monkey_patcher:
+            self.dummy_forward_monkey_patcher.replace_for_forward()
+        # TODO: maybe changing the rng state messes up with MPI?
         with torch.random.fork_rng(devices=self.rng_stasher.devices):
             self.rng_stasher.restore_rng_state(micro_batch_idx)
-            if self.dummy_forward_monkey_patcher:
-                self.dummy_forward_monkey_patcher.replace_for_forward()
             if isinstance(x, Tensor):
                 x = self.layers(x)
-                torch.autograd.backward(x, g)
                 # logging.getLogger("msnag").info(f"device:{self.layers.__class__.__name__[-1]} max x:{[z.data.max() for z in x]}, max grad:{[z.max() for z in g]}")
                 # for p in self.parameters():
                 #     print(p.abs().max())
             else:
                 raise NotImplementedError()
                 x = self.layers(*x)
-                torch.autograd.backward(x, g)
+        torch.autograd.backward(x, g)
 
     def get_grad(self, micro_batch_idx):
         x = self.input_buffer.pop(micro_batch_idx)
         if isinstance(x, Tensor):
             # logging.getLogger("msnag").info(f"device:{self.layers.__class__.__name__[-1]} max_grad_norm:{x.grad.norm()}")
-            return x.grad
+            return x.grad.data
         else:
-            return [y.grad for y in x]
+            return [y.grad.data for y in x]
 
     def backward(self, g, **kw):
         raise NotImplementedError()
@@ -174,20 +174,21 @@ class FirstPartition(Partition):
         super(FirstPartition, self).__init__(*args, **kw)
 
     def recompute_and_backward(self, g, micro_batch_idx):
-        # Unlike normal partition, here we pop the gradients when we read from buffer
+        # Unlike normal partition, here we pop the activations when we read from buffer
+        x = self.input_buffer.pop(micro_batch_idx)  # Note: here we pop.
+        if self.dummy_forward_monkey_patcher:
+            self.dummy_forward_monkey_patcher.replace_for_forward()
         with torch.random.fork_rng(devices=self.rng_stasher.devices):
             self.rng_stasher.restore_rng_state(micro_batch_idx)
-            x = self.input_buffer.pop(micro_batch_idx)  # Note: here we pop.
             if isinstance(x, Tensor):
                 x = self.layers(x)
-                torch.autograd.backward(x, g)
                 # logging.getLogger("msnag").info(f"device:{self.layers.__class__.__name__[-1]} max x:{[z.data.max() for z in x]}, max grad:{[z.max() for z in g]}")
                 # for p in self.parameters():
                 #     print(p.abs().max())
             else:
                 raise NotImplementedError()
                 x = self.layers(*x)
-                torch.autograd.backward(x, g)
+        torch.autograd.backward(x, g)
 
     def get_grad(self, micro_batch_idx):
         return None
@@ -232,6 +233,7 @@ class LastPartition(Partition):
                     x = x.data.clone().requires_grad_()
                     x = self.layers(x)
                 else:
+                    raise NotImplementedError()
                     # x = [y.to(self.device) for y in x]
                     x = self.layers(*x)
 

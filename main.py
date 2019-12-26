@@ -542,7 +542,10 @@ def main():
 
     eval_tensor_shapes = {"input0": (
         *bs_test, *BASE_INPUT_SHAPE), "target": (*bs_test, *BASE_TARGET_SHAPE)}
-
+    
+    del x
+    del y
+    
     comm_init_args, shapes = \
         create_distributed_communcation_context(args, configs, stage,
                                                 stage_to_rank_map=None,
@@ -684,9 +687,10 @@ def main():
 
                 if statistics:
                     statistics.eval()
-                    with torch.no_grad():
-                        partition.run_forward_until_flush(
-                            min(TEST_BATCHES_TO_RUN, len(test_dl)))
+
+                with torch.no_grad():  # TODO maybe remove this?
+                    partition.run_forward_until_flush(
+                        min(TEST_BATCHES_TO_RUN, len(test_dl)))
 
                 did_eval = True
                 if args.local_rank == args.world_size - 1:
