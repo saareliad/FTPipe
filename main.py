@@ -726,9 +726,9 @@ def main():
             fit_res = statistics.get_stats(args.stage)
             config = vars(args)
             # remove unneeded added args
-            del config['stage']
-            del config['rank']
-            del config['local_rank']
+            # del config['stage']
+            # del config['rank'] # FIXME: if we do this we cant use args.rank later...
+            # del config['local_rank']
             save_experiment(args.out_filename, args.out_dir, config, fit_res)
     torch.distributed.barrier()
 

@@ -55,10 +55,10 @@ def plot_fit(fit_res: Union[NamedTuple, dict], fig=None, log_loss=False, legend=
 
 def plot_grad_norm(fit_res: Union[NamedTuple, dict], fig=None, legend=None, **kw):
     total_norms = sum("grad_norm" in key for key in fit_res.keys())
-    assert(total_norms % 2)  # TODO support for un-even...
-    total_norms / 2
+    assert(total_norms % 2 == 0)  # TODO support for un-even...
+    # total_norms / 2
     if fig is None:
-        fig, axes = plt.subplots(nrows=1+total_norms, ncols=2, figsize=(16, 10),
+        fig, axes = plt.subplots(nrows=1+ total_norms//2, ncols=2, figsize=(16, 10),
                                  sharex='col', sharey=False)
         axes = axes.reshape(-1)
     else:

@@ -107,14 +107,35 @@ def debug_4p_with_grad_norm():
         "results/stale.json", "4p_stale", **d)
     d['fig'], ax = add_plot(
         "results/stale_clip.json", "4p_stale_clip", **d)
-   d['fig'], ax = add_plot(
-        "results/low_lr.json", "4p_low_lr", **d)
+    d['fig'], ax = add_plot(
+        "results/stale_low_lr.json", "4p_low_lr", **d)
     
     gen_plot(out_dir='results', out_base_name='4p_debug_grad_norm.png')
+
+
+def debug_4p_fit_plot():
+
+    d = dict(fig=None, plot_fn=plot.plot_fit)
+    # 5 warm up  for all
+    d['fig'], ax = add_plot(
+        "results/stale.json", "4p_stale", **d)
+    d['fig'], ax = add_plot(
+        "results/stale_clip.json", "4p_stale_clip", **d)
+    d['fig'], ax = add_plot(
+        "results/stale_low_lr.json", "4p_low_lr", **d)
+    
+    gen_plot(out_dir='results', out_base_name='debug_4p_fit_plot.png')
+
 
 if __name__ == "__main__":
     # current_status()
     # gap_aware()
-    four_partitions()
-    four_partitions_grad_norm()
+    # four_partitions()
+    # four_partitions_grad_norm()
+
+
+    debug_4p_with_grad_norm()
+    debug_4p_fit_plot()
+
+    
     exit(0)
