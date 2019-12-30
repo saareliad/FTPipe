@@ -106,7 +106,7 @@ class Partition(nn.Module):
                     self.rng_stasher.stash_rng_state(micro_batch_idx)
                     x = self.layers(x)
                 else:
-                    raise NotImplementedError()
+                    # raise NotImplementedError()
                     # for tensor in x:
                     x = [tensor.data.clone().requires_grad_(self._REQ_GRAD)
                          for tensor in x]
@@ -124,11 +124,10 @@ class Partition(nn.Module):
                     self.dummy_forward_monkey_patcher.replace_for_forward()
                 if isinstance(x, Tensor):
                     # x = x.to(self.device)
-                    x.data.clone().requires_grad_(self._REQ_GRAD)
-                    x = self.layers(x)
+                    x = self.layers(x.data.clone())
                 else:
-                    raise NotImplementedError()
-                    # x = [y.to(self.device) for y in x]
+                    # raise NotImplementedError()
+                    x = [y.data.clone() for y in x]
                     x = self.layers(*x)
                 return x
 
@@ -147,7 +146,7 @@ class Partition(nn.Module):
                 # for p in self.parameters():
                 #     print(p.abs().max())
             else:
-                raise NotImplementedError()
+                # raise NotImplementedError()
                 x = self.layers(*x)
         torch.autograd.backward(x, g)
 
@@ -186,7 +185,7 @@ class FirstPartition(Partition):
                 # for p in self.parameters():
                 #     print(p.abs().max())
             else:
-                raise NotImplementedError()
+                # raise NotImplementedError()
                 x = self.layers(*x)
         torch.autograd.backward(x, g)
 
@@ -210,13 +209,14 @@ class LastPartition(Partition):
                 # # See note on option 1 below.
                 # x.detach_().requires_grad_()
                 with torch.no_grad():
-                    x = x.data.clone().detach_().requires_grad_()
+                    x = x.data.clone().requires_grad_()
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(x)
             else:
-                raise NotImplementedError()
+                # raise NotImplementedError()
                 # Option 2
-                x = [tensor.data.clone().requires_grad_() for tensor in x]
+                with torch.no_grad():
+                    x = [tensor.data.clone().requires_grad_() for tensor in x]
 
                 # for tensor in x:
                 #     # Option 1: we don't copy the tnesor here to save memory,
@@ -230,11 +230,10 @@ class LastPartition(Partition):
             with torch.no_grad():
                 if isinstance(x, Tensor):
                     # x = x.to(self.device)
-                    x = x.data.clone().requires_grad_()
-                    x = self.layers(x)
+                    x = self.layers(x.data.clone())
                 else:
-                    raise NotImplementedError()
-                    # x = [y.to(self.device) for y in x]
+                    # raise NotImplementedError()
+                    x = [y.data.clone() for y in x]
                     x = self.layers(*x)
 
         #  Last partition outputs results in a non tensor format

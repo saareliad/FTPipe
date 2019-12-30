@@ -19,7 +19,7 @@ class CVTask(DLTask):
         return self.unpack_cls(data)
 
     def unpack_data_for_last_partition(self, data):
-        x, y = data
+        *x, y = data
         # x = x.to(self.device, non_blocking=True)
         with torch.no_grad():
             y = y.to(self.device, non_blocking=True)
@@ -35,7 +35,10 @@ class CVTask(DLTask):
     def unpack_data_for_mid_partition(self, data):
         # x we already be on our device :)
         # we don't need the y.
-        x, y = data
+        # try:
+        *x, y = data
+        # FIXME
+
         return x, y
         # x, y = data
         # x = x.to(self.device, non_blocking=True)

@@ -55,7 +55,6 @@ class SimpleCommBase(CommunicationHandlerBase):
         self.logger.info(f"Initialized process group; backend: {backend}, rank: {rank}, "
                          f"local_rank: {local_rank}, world_size: {world_size}")
 
-
         # GRAD_UGLY_SHAMEFUL_NAME = "_grad"
         # can spare the if, intentionally ugly.
         self.grad_rcv_items = [
@@ -101,7 +100,7 @@ class SimpleCommBase(CommunicationHandlerBase):
                 # Yo dawg, heard you allocate buffers so we could do double buffering with your buffers :-)
                 for chunk in rcv_buffer.chunk(self.num_chunks):
                     # buffers.append(chunk.pin_memory().to(device))
-                    buffers.append(chunk.requires_grad_(requires_grad))
+                    buffers.append(chunk.requires_grad_(requires_grad).share_memory_())
         return buffers
 
     def create_activations_recv_buffers(self, device, requires_grad=False):

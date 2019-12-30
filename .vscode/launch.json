@@ -36,8 +36,11 @@
                 "--master_port",
                 "6003",
                 "main.py",
+                "--config",
+                "configs/gloo.json"
+
             ],
-            "justMyCode": false,
+            "justMyCode": true,
             "subProcess": true
         },
 //     ]

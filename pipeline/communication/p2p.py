@@ -8,7 +8,7 @@ class P2PCommunicationHandler(SimpleCommBase):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
 
-    def init_proccess_groups(*args, **kw):
+    def init_proccess_groups(self, *args, **kw):
         pass
 
     def _recv_tensors_p2p(self, x, batch_idx, ranks_dict_items):
@@ -25,7 +25,7 @@ class P2PCommunicationHandler(SimpleCommBase):
 
                 for chunk, chunk_tag in zip(tensor, range(tensor_tag, tensor_tag + self.num_chunks)):
                     request_obj = dist.irecv(
-                        chunk, receive_rank, tag=chunk_tag)
+                        chunk.data, receive_rank, tag=chunk_tag)
                     request_objects.append(request_obj)
 
         return request_objects
@@ -64,9 +64,9 @@ class P2PCommunicationHandler(SimpleCommBase):
                             f"isend, dst={send_rank}, tag={tensor_tag}, name={tensor_name}, rank={self.local_rank}")
 
                     # FIXME: accuracy crashes with num_chunks > 1 if we synchronize here once
-                    # if not self.cpu:
-                    #     # HACK: synchronize.
-                    #     torch.cuda.synchronize(device=self.device)
+                    if not self.cpu:
+                        # HACK: synchronize.
+                        torch.cuda.synchronize(device=self.device)
 
                     # TODO: if self.num_chunks > 1:
                     for i, chunk in enumerate(tensor):
@@ -80,9 +80,9 @@ class P2PCommunicationHandler(SimpleCommBase):
                         #     self.logger.info(f"Sent chunk {chunk}")
                         #     raise RuntimeError()
 
-                        if not self.cpu:
-                            # HACK: synchronize.
-                            torch.cuda.synchronize(device=self.device)
+                        # if not self.cpu:
+                        #     # HACK: synchronize.
+                        #     torch.cuda.synchronize(device=self.device)
                         assert chunk.is_contiguous()
                         request_obj = dist.isend(
                             chunk, send_rank, tag=chunk_tag)

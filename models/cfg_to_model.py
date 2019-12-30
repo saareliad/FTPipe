@@ -1,5 +1,5 @@
 import importlib
-from .normal import WideResNet
+from .normal import WideResNet, WideResNetNonInplace
 
 _PARTITIONED_MODELS_PACKAGE = "models.partitioned"
 _WIDE_RESNETS = dict(
@@ -15,8 +15,14 @@ _WIDE_RESNETS = dict(
     # wrn_28x10_c100_dr03=dict(depth=28, num_classes=100, widen_factor=10, drop_rate=0.3),
     # wrn_28x10_c100=dict(depth=28, num_classes=100, widen_factor=10, drop_rate=0),
 )
-MODEL_CFG_TO_SAMPLE_MODEL = {k: WideResNet for k in _WIDE_RESNETS.keys()}
-MODEL_CONFIGS = {**_WIDE_RESNETS}
+_NON_INPLACE_WIDE_RESNETS = dict(
+    wrn_28x10_c100_dr03_p4=dict(
+        depth=28, num_classes=100, widen_factor=10, drop_rate=0.3),
+)
+MODEL_CFG_TO_SAMPLE_MODEL = {**{k: WideResNet for k in _WIDE_RESNETS.keys()},
+                             **{k: WideResNetNonInplace for k in _NON_INPLACE_WIDE_RESNETS.keys()},
+                             }
+MODEL_CONFIGS = {**_WIDE_RESNETS, **_NON_INPLACE_WIDE_RESNETS}
 CFG_TO_GENERATED_FILE_NAME = {i: i for i in MODEL_CONFIGS.keys()}
 
 
