@@ -23,7 +23,6 @@ def post_process_partition(graph: Graph, part: List[int]):
         node.part = idx
 
     cannonize_partition_indices(graph)
-    # graph.save("raw", ".", show_weights=False, show_buffs_params=True)
 
     graph_root_fix(graph)
     remove_backward_edges(graph)

@@ -339,15 +339,15 @@ def train(args, train_dataset, model, tokenizer):
             from pytorch_Gpipe.utils import traverse_model
             # graph = pipe_model(model, (inputs, labels), DEBUG=False)
             # graph.save("GPT2", ".", show_weights=False)
-            if False:
-                graph = graph_builder(model, inputs, use_profiler=False,
-                                      max_depth=3)
-                graph = partition(graph, 4)
-                graph.save("GPT2_with_profiler", ".",
-                           show_weights=False, show_buffs_params=True)
-                generatePartitionModules(graph, model, verbose=False,
-                                         output_file="gpt2_profiler_4")
+            if True:
+                # this is enough
+                graph = graph_builder(model, (inputs,), n_iter=100, use_profiler=True,
+                                      max_depth=2)
 
+                partition(graph, 4)
+
+                graph.save("gpt2_Profiler", ".", show_weights=False,
+                           show_buffs_params=True)
                 with open("trace.txt", "w") as f:
                     graph, _ = torch.jit.get_trace_graph(model,
                                                          (inputs))

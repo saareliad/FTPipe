@@ -45,6 +45,12 @@ def create_random_sample(args):
     return sample
 
 
+def by_time(w):
+    if hasattr(w, 'forward_time') and hasattr(w, 'backward_time'):
+        return max(int(200 * (0 + w.backward_time) / 2), 1)
+    return 0
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Partitioning models")
@@ -85,7 +91,23 @@ if __name__ == "__main__":
     # if the model needs kwargs pass a dictionary
     # DEBUG switches between verbose generated code and compressed code
     graph = pipe_model(model, sample, kwargs=None, nparts=args.n_partitions,
-                       DEBUG=VERBOSE_PARTITIONING, output_file=args.output_file)
+                       DEBUG=VERBOSE_PARTITIONING, output_file=args.output_file, weight_func=by_time)
+
+    graph.save(args.output_file, ".")
+
+    parts_volume = {i: 0 for i in range(args.n_partitions)}
+
+    cutting_edges = 0
+    for n in graph.nodes:
+        parts_volume[n.part] += by_time(n.weight)
+        for u in n.out_nodes:
+            if n.part != u.part:
+                cutting_edges += 1
+    print(parts_volume)
+
+    print(
+        f"imbalance factor:{min(parts_volume.values()) / max(parts_volume.values())}")
+    print(f"number of cutting edges: {cutting_edges}")
 
     generated = importlib.import_module(args.output_file)
     createConfig = generated.createConfig

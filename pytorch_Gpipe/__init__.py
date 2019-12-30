@@ -15,7 +15,8 @@ __all__ = ['pipe_model', 'partition_with_profiler',
 
 # TODO pytorch jit trace / get_trace_graph do not support kwargs
 
-def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, n_iter=10, nparts: int = 4, partition_by_memory: bool = False, output_file: str = None, DEBUG=False):
+def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, n_iter=10, nparts: int = 4,
+               partition_by_memory: bool = False, output_file: str = None, DEBUG=False, weight_func=None, **METIS_opt):
     '''attemps to partition a model to given number of parts using our profiler
        this will produce a python file with the partition config
 
@@ -40,20 +41,22 @@ def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] =
     def by_time(w):
         if hasattr(w, 'forward_time') and hasattr(w, 'backward_time'):
             return max(int(100 * (w.forward_time + w.backward_time) / 2), 1)
-        return 1
+        return 0
 
     def by_memory(w):
         if hasattr(w, 'cuda_memory_forward') and hasattr(w, 'cuda_memory_backward'):
             return max(int(100 * (w.cuda_memory_forward + w.cuda_memory_backward) / 2), 1)
         return 1
 
-    if partition_by_memory:
+    if weight_func != None:
+        w_func = weight_func
+    elif partition_by_memory:
         w_func = by_memory
     else:
         w_func = by_time
 
     graph = partition_with_profiler(model, sample_batch, kwargs=kwargs, n_iter=n_iter, nparts=nparts,
-                                    weighting_function=w_func)
+                                    weighting_function=w_func, METIS_opt=METIS_opt)
 
     generatePartitionModules(graph, model,
                              output_file=output_file, verbose=DEBUG)
@@ -61,7 +64,7 @@ def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] =
     return graph
 
 
-def partition_with_profiler(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, n_iter=10, nparts=4, max_depth=100, basic_blocks: Optional[List[nn.Module]] = None, weighting_function: Optional[Callable[[Any], int]] = None) -> Graph:
+def partition_with_profiler(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, n_iter=10, nparts=4, max_depth=100, basic_blocks: Optional[List[nn.Module]] = None, weighting_function: Optional[Callable[[Any], int]] = None, **METIS_opt) -> Graph:
     '''
     return a graph representing the partitioned model with the weights given by the profiler
     this method does not distribute the model accross devices
@@ -83,6 +86,7 @@ def partition_with_profiler(model: nn.Module, sample_batch: Tensors, kwargs: Opt
     graph = graph_builder(model, sample_batch, kwargs=kwargs, max_depth=max_depth,
                           basic_blocks=basic_blocks, n_iter=n_iter, use_profiler=True)
 
-    graph = partition(graph, nparts, weighting_function=weighting_function)
+    graph = partition(graph, nparts, weighting_function=weighting_function,
+                      **METIS_opt)
 
     return graph

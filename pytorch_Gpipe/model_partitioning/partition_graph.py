@@ -22,9 +22,8 @@ def partiton_graph(graph: Graph, num_partitions: int, weighting_function: Option
 
     G = graph.asNetworkx()
     nx.set_node_attributes(G, weights, 'weight')
-
-    _, parts = nxmetis.partition(G, num_partitions)
-
+    options = nxmetis.MetisOptions(**METIS_opts)
+    objval, parts = nxmetis.partition(G, num_partitions, options=options)
     parts = sorted((idx, n) for n, p in enumerate(parts)for idx in p)
     parts = [n for _, n in parts]
 
