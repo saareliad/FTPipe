@@ -121,6 +121,9 @@ def parse_cli():
     parser.add_argument(
         "--num_chunks", help="Number of chunks for Double Buffering", type=int, default=4)
 
+    parser.add_argument("--weight_stashing", action="store_true", default=False, help="Do weight Stashing")
+    # TODO: option for weigth stashing just statistics.
+
     # TODO: Deprecated
     # parser.add_argument("--max_grad_norm", required=False, default=None, help="Max value for gradient norm")
 
@@ -630,6 +633,9 @@ def main():
             args, "test_batches_limit") >= 0 else len(test_dl)
 
     while epochs < args.epochs or args.epochs < 0:
+        if args.steps > 0:
+            TRAIN_BATCHES_TO_RUN = min(TRAIN_BATCHES_TO_RUN, args.steps - steps)
+
         did_train = False
         did_eval = False
         epoch_start_time = time.time()
@@ -717,6 +723,7 @@ def main():
             logger.info('-' * 89)
 
         if args.steps > 0 and steps >= args.steps:
+            logger.info(f"Finished all steps. Total steps:{steps}, rank:{args.local_rank}")
             break  # steps condition met
 
     # TODO: sync statistics from other partitions too.

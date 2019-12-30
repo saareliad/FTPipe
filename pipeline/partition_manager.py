@@ -138,15 +138,14 @@ class SinglePartitionManager:
                     self.device)
             x = self.fwd_rcev_buffers
 
-            for z in x:
-                z.zero_()  # FIXME: trying this.
-
             request_objects = self.comm_handler.recv_activations(x, batch_idx)
 
             # recv for fwd
             for obj in request_objects:
                 # print(f"-I- {self.stage} waiting on rcv")
-                obj.wait()
+                while(not obj.is_completed()):
+                    pass
+                    # obj.wait()
                 # print(f"-I- {self.stage} DONE waiting on rcv")
 
             # For comm handler with chunks we have to fix. For others its no-op.
@@ -188,6 +187,7 @@ class SinglePartitionManager:
                     return []
                 # Train, calculate and send gradients to previous partition.
                 self.trainer.do_your_job(x, *ctx)
+                del x, ctx
                 grads = self.partition.get_grad(batch_idx)
                 if isinstance(grads, torch.Tensor):
                     grads = (grads,)
@@ -231,9 +231,11 @@ class SinglePartitionManager:
 
         # recv for bwd
         for obj in request_objects:
-            obj.wait()
+            while not obj.is_completed():
+                pass
+                # obj.wait()
 
-
+        # TODO: maybe a different fix for gradients?
         g = self.comm_handler.fix_after_recv(g)
 
         if self.weight_stasher:
@@ -255,6 +257,9 @@ class SinglePartitionManager:
         # we may want to get the grad for sending before the step.
         if not (self.is_first_partition):
             g = self.partition.get_grad(batch_idx)
+            # TODO: this is super ugly. Caused huge bug.
+            if isinstance(g, torch.Tensor):
+                g = (g,)
             request_objects = self.comm_handler.send_gradients(g, batch_idx)
         
         self.trainer.non_last_partition_step()
@@ -279,12 +284,16 @@ class SinglePartitionManager:
                 _, (tmp_send_objects, tmp_sent_items) = self.async_fwd_objects.popitem(
                     last=False)
                 for i in tmp_send_objects:
-                    i.wait()
+                    while not i.is_completed():
+                        pass
+                        # i.wait()
 
         # Also clear in the end, just in case...
         for (sent_request_objects, tmp_sent_items) in self.async_fwd_objects.values():
             for i in sent_request_objects:
-                i.wait()
+                while not i.is_completed():
+                    pass
+                    # i.wait()
 
         self.async_fwd_objects.clear()
         # FIXME: not sure if this needed.
@@ -337,14 +346,18 @@ class SinglePartitionManager:
                 _, (sent_request_objects, tmp_sent_items) = self.async_fwd_objects.popitem(
                     last=False)
                 for i in sent_request_objects:
-                    i.wait()
+                    while(not i.is_completed()):
+                        pass
+                        # i.wait()
 
             if len(self.async_bwd_objects) > 1:
                 # Pop the item that was increaced first.
                 _, (sent_request_objects, tmp_sent_items) = self.async_bwd_objects.popitem(
                     last=False)
                 for i in sent_request_objects:
-                    i.wait()
+                    while(not i.is_completed()):
+                        pass
+                        # i.wait()
 
         # FIXME: remove this print later, its used to debug how much we have in pipe.
         print(self.stage, len(self.async_bwd_objects),
@@ -353,12 +366,16 @@ class SinglePartitionManager:
         while len(self.async_fwd_objects) > 0:
             _, (o1, t1) = self.async_fwd_objects.popitem(last=False)
             for i in o1:
-                i.wait()
+                while(not i.is_completed()):
+                    pass
+                    # i.wait()
 
         while len(self.async_bwd_objects) > 0:
             _, (o2, t2) = self.async_bwd_objects.popitem(last=False)
             for i in o2:
-                i.wait()
+                while(not i.is_completed()):
+                    pass
+                    # i.wait()
 
         if not self.comm_handler.cpu:
             # HACK: synchronize.

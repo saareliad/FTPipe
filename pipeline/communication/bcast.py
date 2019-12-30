@@ -64,7 +64,7 @@ class BCASTCommunicationHandler(SimpleCommBase):
 
             if self.verbose:
                 self.logger.info(
-                    f"ibcast, (recv), src={src}, batch_idx={batch_idx}")
+                    f"ibcast, (recv), src={src}, batch_idx={batch_idx}, my_rank:{self.local_rank}")
 
             request_obj = dist.broadcast(tensor, src, group=pg, async_op=True)
             request_objects.append(request_obj)
