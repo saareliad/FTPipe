@@ -197,22 +197,39 @@ if __name__ == "__main__":
         # pass gradients to the pipeline and compute the backward pass
         pipe.backward(grads)
 
+    # TODO assumes sequential partition with no skip connections between parts aka i->i+1... and not i->i+2
+    # can generalize
     def actual_imbalance(sample, partitions, forward=False):
         times = {i: 0 for i in range(args.n_partitions)}
+
+        communication_volume = {}
+
         if not isinstance(sample, tuple):
             sample = (sample,)
+
         for _ in range(n_iter):
             out = sample
-            for i, p in enumerate(partitions):
+            for idx, p in enumerate(partitions):
+                in_size = 0
+                for i in out:
+                    in_size += (i.nelement() * i.element_size()) / 1e6
+                inOut = f"in: {in_size} MB "
+
                 if torch.cuda.is_available():
                     exec_time, out = cuda_time(p, out, forward=forward)
                 else:
                     exec_time, out = cpu_time(p, out, forward=forward)
-                times[i] += exec_time
+
+                out_size = 0
+                for o in out:
+                    out_size += (o.nelement() * o.element_size()) / 1e6
+
+                communication_volume[idx] = f"{inOut} out: {out_size} MB"
+                times[idx] += exec_time
 
         avg_times = {i: v/n_iter for i, v in times.items()}
 
-        return avg_times
+        return avg_times, communication_volume
 
     cutting_edges = 0
     theoretical_times = {i: 0 for i in range(args.n_partitions)}
@@ -224,7 +241,8 @@ if __name__ == "__main__":
                 cutting_edges += 1
     print(f"number of cutting edges: {cutting_edges}")
 
-    actual_times = actual_imbalance(sample, partitions, forward=False)
+    actual_times, comm_volume = actual_imbalance(sample,
+                                                 partitions, forward=False)
     theoretical_imbalance = min(
         theoretical_times.values()) / max(theoretical_times.values())
 
@@ -233,5 +251,6 @@ if __name__ == "__main__":
     print(f"real imbalance is: {real_imbalance}")
     print(f"theoretical times ms {theoretical_times}")
     print(f"real times ms {actual_times}")
-
+    print(
+        f"communication volumes size of activations of each partition\n{comm_volume}")
     # test_gpipe_stuff()
