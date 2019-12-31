@@ -25,7 +25,7 @@ class P2PCommunicationHandler(SimpleCommBase):
 
                 for chunk, chunk_tag in zip(tensor, range(tensor_tag, tensor_tag + self.num_chunks)):
                     request_obj = dist.irecv(
-                        chunk.data, receive_rank, tag=chunk_tag)
+                        chunk, receive_rank, tag=chunk_tag)
                     request_objects.append(request_obj)
 
         return request_objects
