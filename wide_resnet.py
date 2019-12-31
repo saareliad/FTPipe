@@ -147,8 +147,9 @@ if __name__ == "__main__":
     # if the model need multiple inputs pass a tuple
     # if the model needs kwargs pass a dictionary
     # DEBUG switches between verbose generated code and compressed code
+    n_iter = 10
     graph = pipe_model(model, sample, kwargs=None, nparts=args.n_partitions,
-                       DEBUG=VERBOSE_PARTITIONING, output_file=args.output_file, weight_func=by_time)
+                       DEBUG=VERBOSE_PARTITIONING, output_file=args.output_file, weight_func=by_time, n_iter=n_iter)
     graph.save(args.output_file, ".")
 
     generated = importlib.import_module(args.output_file)
@@ -197,19 +198,21 @@ if __name__ == "__main__":
         pipe.backward(grads)
 
     def actual_imbalance(sample, partitions, forward=False):
-        backward_times = {i: 0 for i in range(args.n_partitions)}
+        times = {i: 0 for i in range(args.n_partitions)}
         if not isinstance(sample, tuple):
             sample = (sample,)
-        out = sample
+        for _ in range(n_iter):
+            out = sample
+            for i, p in enumerate(partitions):
+                if torch.cuda.is_available():
+                    exec_time, out = cuda_time(p, out, forward=forward)
+                else:
+                    exec_time, out = cpu_time(p, out, forward=forward)
+                times[i] += exec_time
 
-        for i, p in enumerate(partitions):
-            if torch.cuda.is_available():
-                exec_time, out = cuda_time(p, out, forward=forward)
-            else:
-                exec_time, out = cpu_time(p, out, forward=forward)
-            backward_times[i] = exec_time
+        avg_times = {i: v/n_iter for i, v in times.items()}
 
-        return backward_times
+        return avg_times
 
     cutting_edges = 0
     theoretical_times = {i: 0 for i in range(args.n_partitions)}
@@ -228,5 +231,7 @@ if __name__ == "__main__":
     real_imbalance = min(actual_times.values())/max(actual_times.values())
     print(f"theoretical imbalance is: {theoretical_imbalance}")
     print(f"real imbalance is: {real_imbalance}")
+    print(f"theoretical times ms {theoretical_times}")
+    print(f"real times ms {actual_times}")
 
     # test_gpipe_stuff()
