@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch import Tensor
 from typing import Tuple, Union
 from .monkey_patch import DummyForwardMonkeyPatcher
+from .replace_inplace import replace_inplace_for_first_innermost_layer_
 # import logging
 Tensors = Tuple[Tensor, ...]
 TensorOrTensors = Union[Tensor, Tensors]
@@ -68,6 +69,10 @@ class Partition(nn.Module):
             self.layers = nn.Sequential(*layers)
         elif isinstance(layers, nn.Module):
             self.layers = layers
+
+        if self._HAS_DUMMY_FORWARD:
+            # TODO: can print if is_replaced
+            replace_inplace_for_first_innermost_layer_(self.layers)
 
         self.dummy_forward_monkey_patcher = DummyForwardMonkeyPatcher(self.layers, classes_list_to_patch) \
             if self._HAS_DUMMY_FORWARD else None
@@ -244,6 +249,7 @@ class LastPartition(Partition):
 
     def recompute_and_backward(self, *args):
         raise NotImplementedError()
+
 
 ##################################################
 # Unrelated but still here, may be useful later

@@ -82,6 +82,11 @@ python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_nod
 * gap aware with wieght stashing
 * "send the layer not the gradient"
 * add "scheduler aware prediction".
+* can wait in the last layer (extra irecv) to overlap (more) communication with computation.
+  * this requires another rcv buffer but in the last partition we don't have mem problems.
+
+* change c code in torch mpigroup to drop the tensor (and its pointers) once completed, so we won't have to handle mem cleaning (this can reduce peak memory memory).
+
 
 ## References
 

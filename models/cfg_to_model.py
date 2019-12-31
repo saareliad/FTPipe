@@ -7,6 +7,8 @@ _WIDE_RESNETS = dict(
                      drop_rate=0.0),
     wrn_16x4_p4=dict(depth=16, num_classes=10, widen_factor=4,
                      drop_rate=0.0),
+    wrn_28x10_c100_dr03_p4=dict(
+        depth=28, num_classes=100, widen_factor=10, drop_rate=0.3),
     # wrn_16x4_c10=dict(depth=16, num_classes=10, widen_factor=4, drop_rate=0.0),
     # wrn_28x10_c10_dr03=dict(depth=28, num_classes=10, widen_factor=10, drop_rate=0.3),
     # wrn_28x10_c10=dict(depth=28, num_classes=10, widen_factor=10, drop_rate=0),
@@ -16,8 +18,8 @@ _WIDE_RESNETS = dict(
     # wrn_28x10_c100=dict(depth=28, num_classes=100, widen_factor=10, drop_rate=0),
 )
 _NON_INPLACE_WIDE_RESNETS = dict(
-    wrn_28x10_c100_dr03_p4=dict(
-        depth=28, num_classes=100, widen_factor=10, drop_rate=0.3),
+    # wrn_28x10_c100_dr03_p4=dict(
+    #     depth=28, num_classes=100, widen_factor=10, drop_rate=0.3),
 )
 MODEL_CFG_TO_SAMPLE_MODEL = {**{k: WideResNet for k in _WIDE_RESNETS.keys()},
                              **{k: WideResNetNonInplace for k in _NON_INPLACE_WIDE_RESNETS.keys()},
