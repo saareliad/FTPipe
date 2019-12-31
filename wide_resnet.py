@@ -3,6 +3,7 @@ from sample_models import WideResNet
 from pytorch_Gpipe import pipe_model
 import argparse
 import importlib
+import time
 
 _WIDE_RESNETS = dict(
     wrn_16x4=dict(depth=16, num_classes=10, widen_factor=4,
@@ -51,6 +52,62 @@ def by_time(w):
     return 0
 
 
+def extract_time(w, forward=False):
+    if not hasattr(w, "forward_time"):
+        return 0
+    if forward:
+        return w.forward_time
+    return w.backward_time
+
+
+def cuda_time(model, inputs, forward=False):
+    model = model.cuda()
+    inputs = [i.detach().cuda() for i in inputs]
+    torch.cuda.synchronize(device='cuda')
+    start = torch.cuda.Event(enable_timing=True)
+    end = torch.cuda.Event(enable_timing=True)
+    start.record()
+    out = model(*inputs)
+    end.record()
+    torch.cuda.synchronize(device='cuda')
+    exec_time = (start.elapsed_time(end))
+
+    if forward:
+        return exec_time, out
+
+    loss = sum(o.norm() for o in out)
+    torch.cuda.synchronize(device='cuda')
+    start = torch.cuda.Event(enable_timing=True)
+    end = torch.cuda.Event(enable_timing=True)
+    start.record()
+    loss.backward()
+    end.record()
+    torch.cuda.synchronize(device='cuda')
+    exec_time = (start.elapsed_time(end))
+
+    return exec_time, out
+
+
+def cpu_time(model, inputs, forward=False):
+    model = model.cpu()
+    inputs = [i.detach().cpu() for i in inputs]
+    start = time.time()
+    out = model(*inputs)
+    end = time.time()
+    exec_time = 1000 * (end - start)
+
+    if forward:
+        return exec_time, out
+
+    loss = sum(o.norm() for o in out)
+    start = time.time()
+    loss.backward()
+    end = time.time()
+    exec_time = 1000 * (end - start)
+
+    return exec_time, out
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Partitioning models")
@@ -92,22 +149,7 @@ if __name__ == "__main__":
     # DEBUG switches between verbose generated code and compressed code
     graph = pipe_model(model, sample, kwargs=None, nparts=args.n_partitions,
                        DEBUG=VERBOSE_PARTITIONING, output_file=args.output_file, weight_func=by_time)
-
     graph.save(args.output_file, ".")
-
-    parts_volume = {i: 0 for i in range(args.n_partitions)}
-
-    cutting_edges = 0
-    for n in graph.nodes:
-        parts_volume[n.part] += by_time(n.weight)
-        for u in n.out_nodes:
-            if n.part != u.part:
-                cutting_edges += 1
-    print(parts_volume)
-
-    print(
-        f"imbalance factor:{min(parts_volume.values()) / max(parts_volume.values())}")
-    print(f"number of cutting edges: {cutting_edges}")
 
     generated = importlib.import_module(args.output_file)
     createConfig = generated.createConfig
@@ -153,5 +195,38 @@ if __name__ == "__main__":
 
         # pass gradients to the pipeline and compute the backward pass
         pipe.backward(grads)
+
+    def actual_imbalance(sample, partitions, forward=False):
+        backward_times = {i: 0 for i in range(args.n_partitions)}
+        if not isinstance(sample, tuple):
+            sample = (sample,)
+        out = sample
+
+        for i, p in enumerate(partitions):
+            if torch.cuda.is_available():
+                exec_time, out = cuda_time(p, out, forward=forward)
+            else:
+                exec_time, out = cpu_time(p, out, forward=forward)
+            backward_times[i] = exec_time
+
+        return backward_times
+
+    cutting_edges = 0
+    theoretical_times = {i: 0 for i in range(args.n_partitions)}
+    for n in graph.nodes:
+        theoretical_times[n.part] += extract_time(n.weight,
+                                                  forward=False)
+        for u in n.out_nodes:
+            if n.part != u.part:
+                cutting_edges += 1
+    print(f"number of cutting edges: {cutting_edges}")
+
+    actual_times = actual_imbalance(sample, partitions, forward=False)
+    theoretical_imbalance = min(
+        theoretical_times.values()) / max(theoretical_times.values())
+
+    real_imbalance = min(actual_times.values())/max(actual_times.values())
+    print(f"theoretical imbalance is: {theoretical_imbalance}")
+    print(f"real imbalance is: {real_imbalance}")
 
     # test_gpipe_stuff()
