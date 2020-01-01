@@ -6,8 +6,13 @@ import abc
 
 
 class AnyTrainer(abc.ABC):
+
     @abc.abstractmethod
-    def do_your_job(self, *args, **kw):
+    def backprop_last_partition(self, *args, **kw):
+        pass
+
+    @abc.abstractmethod
+    def last_partition_step_and_statistics(self, *args, **kw):
         pass
 
     @abc.abstractmethod
@@ -21,8 +26,13 @@ class AnyTrainer(abc.ABC):
 
 class SupervisedTrainer(AnyTrainer):
     # added *args just to make it a true subtype.
+
     @abc.abstractmethod
-    def do_your_job(self, x, y, *args, **kw):
+    def backprop_last_partition(self, x, y, *args, **kw):
+        pass
+
+    @abc.abstractmethod
+    def last_partition_step_and_statistics(self, x, y, *args, **kw):
         """
         Usually used for the last partiton (or any other partiton were x,y are needed)
         to calculate loss, gradients and do training steps

@@ -39,17 +39,18 @@ class CVTrainer(PartitionedSupervisedTrainer):
         # acc = num_correct / batch_size
         self.statistics.on_batch_end(loss.item(), num_correct, batch_size)
 
-    def do_your_job(self, x, y, step=True):
+    def backprop_last_partition(self, x, y):
+        loss = self.loss_fn(x, y)
+        loss.backward()  # this does backward() only for the last partition
+        return loss
+
+    def last_partition_step_and_statistics(self, x, y, loss, step=True):
         """
-        Loss
-        Backward
         step
         stats
 
         step can be used later for grad accumulations
         """
-        loss = self.loss_fn(x, y)
-        loss.backward()  # this does backward() only for the last partition
 
         batch_size = len(y)
         y_pred = torch.argmax(x, 1)
@@ -100,18 +101,13 @@ class GapAwareCVTrainer(CVTrainer):
         super().__init__(*args, **kw)
         self.gap_aware = gap_aware
 
-    def do_your_job(self, x, y, step=True):
+    def last_partition_step_and_statistics(self, x, y, loss, step=True):
         """
-        Loss
-        Backward
         step
         stats
 
         step can be used later for grad accumulations
         """
-        loss = self.loss_fn(x, y)
-        loss.backward()  # this does backward() only for the last partition
-
         # TODO: we may want to save some statistics before we modify grad.
 
         self.gap_aware.update_running_avg()

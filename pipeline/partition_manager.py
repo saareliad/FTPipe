@@ -161,7 +161,9 @@ class SinglePartitionManager:
                 # self.mb_to_fix_by_ga[batch_idx] = ((batch_idx - done_bwds) == 1)
                 self.weight_predictor.forward()
 
-                # Stash parameters for later. # TODO: wait stasher should not be in last partition.
+                # Stash parameters for later.
+                # Note: wait stasher should not be in last partition.
+                # and not self.is_last_partition
                 if self.weight_stasher and self.partition.training:
                     self.weight_stasher.stash_current(batch_idx)
 
@@ -182,17 +184,22 @@ class SinglePartitionManager:
                 # Last partition
                 if not self.partition.training:
                     # In Eval: Just calculate statistics.
-                    # print(*ctx, ctx[0].shape)
                     self.trainer.calc_test_stats(x, *ctx)
                     return []
-                # Train, calculate and send gradients to previous partition.
-                self.trainer.do_your_job(x, *ctx)
-                del x, ctx
+
+                # Backprop
+                step_and_stats_ctx = self.trainer.backprop_last_partition(x, *ctx)                
+
+                # Send partition border gradients
                 grads = self.partition.get_grad(batch_idx)
                 if isinstance(grads, torch.Tensor):
                     grads = (grads,)
                 request_objects = self.comm_handler.send_gradients(
                     grads, batch_idx)
+
+                # Step
+                self.trainer.last_partition_step_and_statistics(x, *ctx, step_and_stats_ctx)
+                del x, ctx, step_and_stats_ctx
 
                 # Print training statistics.
                 if self.partition.training:
@@ -261,7 +268,7 @@ class SinglePartitionManager:
             if isinstance(g, torch.Tensor):
                 g = (g,)
             request_objects = self.comm_handler.send_gradients(g, batch_idx)
-        
+
         self.trainer.non_last_partition_step()
         return request_objects
 
