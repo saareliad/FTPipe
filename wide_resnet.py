@@ -3,8 +3,8 @@ from sample_models import WideResNet
 from pytorch_Gpipe import pipe_model
 import argparse
 import importlib
-import time
 from collections import deque
+from misc import run_analysis
 
 _WIDE_RESNETS = dict(
     wrn_16x4=dict(depth=16, num_classes=10, widen_factor=4,
@@ -53,62 +53,6 @@ def by_time(w):
     return 0
 
 
-def extract_time(w, forward=False):
-    if not hasattr(w, "forward_time"):
-        return 0
-    if forward:
-        return w.forward_time
-    return w.backward_time
-
-
-def cuda_time(partition, inputs, forward=False):
-    partition = partition.cuda()
-    inputs = [i.detach().cuda() for i in inputs]
-    torch.cuda.synchronize(device='cuda')
-    start = torch.cuda.Event(enable_timing=True)
-    end = torch.cuda.Event(enable_timing=True)
-    start.record()
-    outputs = partition(*inputs)
-    end.record()
-    torch.cuda.synchronize(device='cuda')
-    exec_time = (start.elapsed_time(end))
-
-    if forward:
-        return exec_time, outputs
-
-    loss = sum(o.norm() for o in outputs)
-    torch.cuda.synchronize(device='cuda')
-    start = torch.cuda.Event(enable_timing=True)
-    end = torch.cuda.Event(enable_timing=True)
-    start.record()
-    loss.backward()
-    end.record()
-    torch.cuda.synchronize(device='cuda')
-    exec_time = (start.elapsed_time(end))
-
-    return exec_time, outputs
-
-
-def cpu_time(partition, inputs, forward=False):
-    partition = partition.cpu()
-    inputs = [i.detach().cpu() for i in inputs]
-    start = time.time()
-    outputs = partition(*inputs)
-    end = time.time()
-    exec_time = 1000 * (end - start)
-
-    if forward:
-        return exec_time, outputs
-
-    loss = sum(o.norm() for o in outputs)
-    start = time.time()
-    loss.backward()
-    end = time.time()
-    exec_time = 1000 * (end - start)
-
-    return exec_time, outputs
-
-
 def run_partitions(model_inputs, partition_config):
     n_partitions = sum([1 for k in partition_config if isinstance(k, int)])
 
@@ -136,55 +80,6 @@ def run_partitions(model_inputs, partition_config):
             parts.append(idx)
 
     return [activations[o] for o in partition_config['model outputs']]
-
-
-def actual_imbalance(model_inputs, partition_config, n, forward=False):
-    n_partitions = sum([1 for k in partition_config if isinstance(k, int)])
-    times = {i: 0 for i in range(n_partitions)}
-
-    communication_volume = {}
-    if not isinstance(model_inputs, tuple):
-        model_inputs = (model_inputs,)
-
-    for _ in range(n):
-        parts = deque(range(n_partitions))
-        activations = {}
-        for i, t in zip(partition_config['model inputs'], model_inputs):
-            activations[i] = t
-
-        # perform one run of the partitions
-        while len(parts) > 0:
-            idx = parts.popleft()
-            if all(tensor in activations for tensor in partition_config[idx]['inputs']):
-                inputs = [activations[tensor]
-                          for tensor in partition_config[idx]['inputs']]
-                # input size
-                in_size = 0
-                for t in inputs:
-                    in_size += (t.nelement() * t.element_size()) / 1e6
-
-                # time measurement
-                if torch.cuda.is_available():
-                    exec_time, outputs = cuda_time(partition_config[idx]['model'],
-                                                   inputs, forward=forward)
-                else:
-                    exec_time, outputs = cpu_time(partition_config[idx]['model'],
-                                                  inputs, forward=forward)
-
-                # output size
-                out_size = 0
-                for o, t in zip(partition_config[idx]['outputs'], outputs):
-                    activations[o] = t
-                    out_size += (t.nelement() * t.element_size()) / 1e6
-
-                communication_volume[idx] = f"in: {in_size} MB out: {out_size} MB"
-                times[idx] += exec_time
-            else:
-                parts.append(idx)
-
-    avg_times = {i: v/n for i, v in times.items()}
-
-    return avg_times, communication_volume
 
 
 def test_gpipe_stuff():
@@ -269,26 +164,5 @@ if __name__ == "__main__":
 
     out = run_partitions(sample, config)
 
-    cutting_edges = 0
-    theoretical_times = {i: 0 for i in range(args.n_partitions)}
-    for n in graph.nodes:
-        theoretical_times[n.part] += extract_time(n.weight,
-                                                  forward=False)
-        for u in n.out_nodes:
-            if n.part != u.part:
-                cutting_edges += 1
-    print(f"number of cutting edges: {cutting_edges}")
-
-    actual_times, comm_volume = actual_imbalance(sample, config,
-                                                 n_iter, forward=False)
-    theoretical_imbalance = min(
-        theoretical_times.values()) / max(theoretical_times.values())
-
-    real_imbalance = min(actual_times.values())/max(actual_times.values())
-    print(f"theoretical imbalance is: {theoretical_imbalance}")
-    print(f"real imbalance is: {real_imbalance}")
-    print(f"theoretical times ms {theoretical_times}")
-    print(f"real times ms {actual_times}")
-    print(
-        f"communication volumes size of activations of each partition\n{comm_volume}")
+    run_analysis(sample, graph, config, n_iter)
     # test_gpipe_stuff()
