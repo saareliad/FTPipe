@@ -26,6 +26,7 @@ def run_analysis(sample, graph, config, n_iter):
     # real statistics based on generated partitions
     real_f_times, real_b_times, comm_volume = profile_execution(sample, config,
                                                                 n_iter)
+
     real_b_imbalance = worst_imbalance(real_b_times)
 
     real_f_imbalance = worst_imbalance(real_f_times)
@@ -173,6 +174,7 @@ def theoretical_analysis(graph):
     for n in graph.nodes:
         b_times[n.part] += extract_time(n.weight,
                                         forward=False)
+        b_times[n.part] += extract_time(n.weight, forward=True)
         f_times[n.part] += extract_time(n.weight,
                                         forward=True)
         for u in n.out_nodes:
@@ -183,35 +185,57 @@ def theoretical_analysis(graph):
 
 
 def cuda_time(partition, inputs):
+    b_time, outputs = cuda_backward(partition, inputs)
+    f_time = cuda_forward(partition, inputs)
+
+    return f_time, b_time, outputs
+
+
+def cuda_backward(partition, inputs):
     ''' measure forward/backward time of a partition on the GPU
     '''
     partition = partition.cuda()
     inputs = [i.detach().cuda() for i in inputs]
-    torch.cuda.synchronize(device='cuda')
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
+    torch.cuda.synchronize(device='cuda')
     start.record()
     outputs = partition(*inputs)
-    end.record()
-    torch.cuda.synchronize(device='cuda')
-    f_time = (start.elapsed_time(end))
-
     loss = sum(o.norm() for o in outputs)
-    torch.cuda.synchronize(device='cuda')
-    start = torch.cuda.Event(enable_timing=True)
-    end = torch.cuda.Event(enable_timing=True)
-    start.record()
     loss.backward()
     end.record()
     torch.cuda.synchronize(device='cuda')
     b_time = (start.elapsed_time(end))
 
-    return f_time, b_time, outputs
+    return b_time, outputs
+
+
+def cuda_forward(partition, inputs):
+    partition = partition.cuda()
+    inputs = [i.detach().cuda() for i in inputs]
+    start = torch.cuda.Event(enable_timing=True)
+    end = torch.cuda.Event(enable_timing=True)
+    torch.cuda.synchronize(device='cuda')
+    with torch.no_grad():
+        start.record()
+        outputs = partition(*inputs)
+        end.record()
+        torch.cuda.synchronize(device='cuda')
+        f_time = (start.elapsed_time(end))
+
+        return f_time
 
 
 def cpu_time(partition, inputs):
     ''' measure forward/backward time of a partition on the CPU
     '''
+    b_time, outputs = cpu_backward(partition, inputs)
+    f_time = cpu_forward(partition, inputs)
+
+    return f_time, b_time, outputs
+
+
+def cpu_forward(partition, inputs):
     partition = partition.cpu()
     inputs = [i.detach().cpu() for i in inputs]
     start = time.time()
@@ -219,13 +243,20 @@ def cpu_time(partition, inputs):
     end = time.time()
     f_time = 1000 * (end - start)
 
-    loss = sum(o.norm() for o in outputs)
+    return f_time
+
+
+def cpu_backward(partition, inputs):
+    partition = partition.cpu()
+    inputs = [i.detach().cpu() for i in inputs]
     start = time.time()
+    outputs = partition(*inputs)
+    loss = sum(o.norm() for o in outputs)
     loss.backward()
     end = time.time()
     b_time = 1000 * (end - start)
 
-    return f_time, b_time, outputs
+    return b_time, outputs
 
 
 def extract_time(w, forward=False):

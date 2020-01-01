@@ -149,7 +149,7 @@ if __name__ == "__main__":
     # if the model need multiple inputs pass a tuple
     # if the model needs kwargs pass a dictionary
     # DEBUG switches between verbose generated code and compressed code
-    n_iter = 10
+    n_iter = 100
     graph = pipe_model(model, sample, kwargs=None, nparts=args.n_partitions,
                        DEBUG=VERBOSE_PARTITIONING, output_file=args.output_file, weight_func=by_time, n_iter=n_iter)
     graph.save(args.output_file, ".")
@@ -162,7 +162,7 @@ if __name__ == "__main__":
     config = createConfig(
         model, partitions_only=False, DEBUG=GET_PARTITIONS_ON_CPU)
 
-    out = run_partitions(sample, config)
+    # out = run_partitions(sample, config)
 
     run_analysis(sample, graph, config, n_iter)
     # test_gpipe_stuff()
