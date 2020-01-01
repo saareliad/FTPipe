@@ -4,6 +4,7 @@ from pytorch_Gpipe import pipe_model
 import argparse
 import importlib
 import time
+from collections import deque
 
 _WIDE_RESNETS = dict(
     wrn_16x4=dict(depth=16, num_classes=10, widen_factor=4,
@@ -60,22 +61,22 @@ def extract_time(w, forward=False):
     return w.backward_time
 
 
-def cuda_time(model, inputs, forward=False):
-    model = model.cuda()
+def cuda_time(partition, inputs, forward=False):
+    partition = partition.cuda()
     inputs = [i.detach().cuda() for i in inputs]
     torch.cuda.synchronize(device='cuda')
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
     start.record()
-    out = model(*inputs)
+    outputs = partition(*inputs)
     end.record()
     torch.cuda.synchronize(device='cuda')
     exec_time = (start.elapsed_time(end))
 
     if forward:
-        return exec_time, out
+        return exec_time, outputs
 
-    loss = sum(o.norm() for o in out)
+    loss = sum(o.norm() for o in outputs)
     torch.cuda.synchronize(device='cuda')
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
@@ -85,27 +86,133 @@ def cuda_time(model, inputs, forward=False):
     torch.cuda.synchronize(device='cuda')
     exec_time = (start.elapsed_time(end))
 
-    return exec_time, out
+    return exec_time, outputs
 
 
-def cpu_time(model, inputs, forward=False):
-    model = model.cpu()
+def cpu_time(partition, inputs, forward=False):
+    partition = partition.cpu()
     inputs = [i.detach().cpu() for i in inputs]
     start = time.time()
-    out = model(*inputs)
+    outputs = partition(*inputs)
     end = time.time()
     exec_time = 1000 * (end - start)
 
     if forward:
-        return exec_time, out
+        return exec_time, outputs
 
-    loss = sum(o.norm() for o in out)
+    loss = sum(o.norm() for o in outputs)
     start = time.time()
     loss.backward()
     end = time.time()
     exec_time = 1000 * (end - start)
 
-    return exec_time, out
+    return exec_time, outputs
+
+
+def run_partitions(model_inputs, partition_config):
+    n_partitions = sum([1 for k in partition_config if isinstance(k, int)])
+
+    if not isinstance(model_inputs, tuple):
+        model_inputs = (model_inputs,)
+
+    activations = {}
+
+    for i, t in zip(partition_config['model inputs'], model_inputs):
+        activations[i] = t
+
+    parts = deque(range(n_partitions))
+
+    while len(parts) > 0:
+        idx = parts.popleft()
+
+        # if all inputs are ready run partition
+        if all(tensor in activations for tensor in partition_config[idx]['inputs']):
+            inputs = [activations[tensor]
+                      for tensor in partition_config[idx]['inputs']]
+            outs = partition_config[idx]['model'](*inputs)
+            for o, t in zip(partition_config[idx]['outputs'], outs):
+                activations[o] = t
+        else:
+            parts.append(idx)
+
+    return [activations[o] for o in partition_config['model outputs']]
+
+
+def actual_imbalance(model_inputs, partition_config, n, forward=False):
+    n_partitions = sum([1 for k in partition_config if isinstance(k, int)])
+    times = {i: 0 for i in range(n_partitions)}
+
+    communication_volume = {}
+    if not isinstance(model_inputs, tuple):
+        model_inputs = (model_inputs,)
+
+    for _ in range(n):
+        parts = deque(range(n_partitions))
+        activations = {}
+        for i, t in zip(partition_config['model inputs'], model_inputs):
+            activations[i] = t
+
+        # perform one run of the partitions
+        while len(parts) > 0:
+            idx = parts.popleft()
+            if all(tensor in activations for tensor in partition_config[idx]['inputs']):
+                inputs = [activations[tensor]
+                          for tensor in partition_config[idx]['inputs']]
+                # input size
+                in_size = 0
+                for t in inputs:
+                    in_size += (t.nelement() * t.element_size()) / 1e6
+
+                # time measurement
+                if torch.cuda.is_available():
+                    exec_time, outputs = cuda_time(partition_config[idx]['model'],
+                                                   inputs, forward=forward)
+                else:
+                    exec_time, outputs = cpu_time(partition_config[idx]['model'],
+                                                  inputs, forward=forward)
+
+                # output size
+                out_size = 0
+                for o, t in zip(partition_config[idx]['outputs'], outputs):
+                    activations[o] = t
+                    out_size += (t.nelement() * t.element_size()) / 1e6
+
+                communication_volume[idx] = f"in: {in_size} MB out: {out_size} MB"
+                times[idx] += exec_time
+            else:
+                parts.append(idx)
+
+    avg_times = {i: v/n for i, v in times.items()}
+
+    return avg_times, communication_volume
+
+
+def test_gpipe_stuff():
+
+    # create a pipeLine from the given model
+    # split dim the dim to split inputs and gradients across
+    # DEBUG switches between running workers on CPU or GPUS
+
+    partition_config = createConfig(model, partitions_only=False,
+                                    DEBUG=GET_PARTITIONS_ON_CPU)
+    output_device = 'cpu' if GET_PARTITIONS_ON_CPU else 'cuda'
+
+    from pytorch_Gpipe import Pipeline
+    pipe = Pipeline(partition_config, output_device=output_device,
+                    split_dim=0, use_delayedNorm=False)
+
+    output = pipe(sample.cpu())
+
+    # compute loss
+    loss0 = output.sum()
+    loss1 = output.abs().sum()
+    losses = [loss0, loss1]
+
+    # compute gradients of the losses in respect to model outputs
+    grads = torch.autograd.grad(losses, [output])
+
+    # pass gradients to the pipeline and compute the backward pass
+    pipe.backward(grads)
 
 
 if __name__ == "__main__":
@@ -157,79 +264,10 @@ if __name__ == "__main__":
 
     if GET_PARTITIONS_ON_CPU:
         sample = sample.to('cpu')
-    partitions = createConfig(
-        model, partitions_only=True, DEBUG=GET_PARTITIONS_ON_CPU)
+    config = createConfig(
+        model, partitions_only=False, DEBUG=GET_PARTITIONS_ON_CPU)
 
-    def run_sequential(sample, partitions):
-        if not isinstance(sample, tuple):
-            sample = (sample,)
-        out = sample
-        for p in partitions:
-            out = p(*out)
-        return out
-
-    out = run_sequential(sample, partitions)
-
-    def test_gpipe_stuff():
-
-        # create a pipeLine from the given model
-        # split dim the dim to split inputs and gradients across
-        # DEBUG switches between running workers on CPU or GPUS
-
-        config = createConfig(model, partitions_only=False,
-                              DEBUG=GET_PARTITIONS_ON_CPU)
-        output_device = 'cpu' if GET_PARTITIONS_ON_CPU else 'cuda'
-
-        from pytorch_Gpipe import Pipeline
-        pipe = Pipeline(config, output_device=output_device,
-                        split_dim=0, use_delayedNorm=False)
-
-        output = pipe(sample.cpu())
-
-        # compute loss
-        loss0 = output.sum()
-        loss1 = output.abs().sum()
-        losses = [loss0, loss1]
-
-        # compute gradients of the losses in respect to model outputs
-        grads = torch.autograd.grad(losses, [output])
-
-        # pass gradients to the pipeline and compute the backward pass
-        pipe.backward(grads)
-
-    # TODO assumes sequential partition with no skip connections between parts aka i->i+1... and not i->i+2
-    # can generalize
-    def actual_imbalance(sample, partitions, forward=False):
-        times = {i: 0 for i in range(args.n_partitions)}
-
-        communication_volume = {}
-
-        if not isinstance(sample, tuple):
-            sample = (sample,)
-
-        for _ in range(n_iter):
-            out = sample
-            for idx, p in enumerate(partitions):
-                in_size = 0
-                for i in out:
-                    in_size += (i.nelement() * i.element_size()) / 1e6
-                inOut = f"in: {in_size} MB "
-
-                if torch.cuda.is_available():
-                    exec_time, out = cuda_time(p, out, forward=forward)
-                else:
-                    exec_time, out = cpu_time(p, out, forward=forward)
-
-                out_size = 0
-                for o in out:
-                    out_size += (o.nelement() * o.element_size()) / 1e6
-
-                communication_volume[idx] = f"{inOut} out: {out_size} MB"
-                times[idx] += exec_time
-
-        avg_times = {i: v/n_iter for i, v in times.items()}
-
-        return avg_times, communication_volume
+    out = run_partitions(sample, config)
 
     cutting_edges = 0
     theoretical_times = {i: 0 for i in range(args.n_partitions)}
@@ -241,8 +279,8 @@ if __name__ == "__main__":
                 cutting_edges += 1
     print(f"number of cutting edges: {cutting_edges}")
 
-    actual_times, comm_volume = actual_imbalance(sample,
-                                                 partitions, forward=False)
+    actual_times, comm_volume = actual_imbalance(sample, config,
+                                                 n_iter, forward=False)
     theoretical_imbalance = min(
         theoretical_times.values()) / max(theoretical_times.values())
 
