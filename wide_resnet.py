@@ -127,6 +127,8 @@ if __name__ == "__main__":
                         help="number of iteration used in order to profile the network and run analysis")
     parser.add_argument('--bandwidth_gps', type=float,
                         default=12, help="data transfer rate between gpus in gigabaytes per second")
+    parser.add_argument('--no_recomputation', action='store_true',
+                        default=False, help="wether to use recomputation for the backward pass")
 
     args = parser.parse_args()
 
@@ -168,5 +170,7 @@ if __name__ == "__main__":
 
     # out = run_partitions(sample, config)
     bandwidth_gps = args.bandwidth_gps
-    run_analysis(sample, graph, config, n_iter, bandwidth_gps=bandwidth_gps)
+    recomputation = not args.no_recomputation
+    run_analysis(sample, graph, config, n_iter,
+                 recomputation=recomputation, bandwidth_gps=bandwidth_gps)
     # test_gpipe_stuff()

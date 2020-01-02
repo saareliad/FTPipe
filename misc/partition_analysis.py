@@ -1,11 +1,12 @@
 import torch
 from collections import deque
 import time
+from contextlib import nullcontext
 
 
-def run_analysis(sample, graph, config, n_iter, bandwidth_gps=16):
-    edges, theoretical_f_times, theoretical_b_times = theoretical_analysis(
-        graph)
+def run_analysis(sample, graph, config, n_iter, recomputation=True, bandwidth_gps=16):
+    edges, theoretical_f_times, theoretical_b_times = theoretical_analysis(graph,
+                                                                           recomputation=recomputation)
 
     forward_dependencies, backward_dependencies = find_dependencies(edges,
                                                                     len(theoretical_f_times))
@@ -24,8 +25,8 @@ def run_analysis(sample, graph, config, n_iter, bandwidth_gps=16):
                                                                                           theoretical_b_times, edges)
 
     # real statistics based on generated partitions
-    real_f_times, real_b_times, comm_volume = profile_execution(sample, config,
-                                                                n_iter, bandwidth_gps=bandwidth_gps)
+    real_f_times, real_b_times, comm_volume = profile_execution(sample, config, n_iter,
+                                                                recomputation=recomputation, bandwidth_gps=bandwidth_gps)
 
     real_b_imbalance = worst_imbalance(real_b_times)
 
@@ -40,10 +41,14 @@ def run_analysis(sample, graph, config, n_iter, bandwidth_gps=16):
                                                                                           real_b_times, edges)
 
     print("cutting edges are edges between partitions")
-    print(f"number of cutting edges: {len(edges)}")
+    print(f"number of cutting edges: {len(edges)}\n")
 
+    if recomputation:
+        print("backward times include recomputation")
+    else:
+        print("backward times do not include recomputation")
     print(
-        f"\ntheoretical times are exectution time based on sum of graph weights ms\nforward {theoretical_f_times}\nbackward {theoretical_b_times}")
+        f"\ntheoretical times are execution time based on sum of graph weights ms\nforward {theoretical_f_times}\nbackward {theoretical_b_times}")
     print(
         f"\nreal times are based on real measurements of execution time of generated partitions ms\nforward {real_f_times}\nbackward {real_b_times}")
 
@@ -73,7 +78,7 @@ def run_analysis(sample, graph, config, n_iter, bandwidth_gps=16):
         f"\nideal real latencies ms\nforward {ideal_a_f_latency}\nbackward {ideal_a_b_latency}")
 
 
-def profile_execution(model_inputs, partition_config, n, bandwidth_gps=16):
+def profile_execution(model_inputs, partition_config, n, recomputation=True, bandwidth_gps=16):
     '''perfrom forward/backward passes and measure execution times accross n batches
     '''
     n_partitions = sum([1 for k in partition_config if isinstance(k, int)])
@@ -110,10 +115,10 @@ def profile_execution(model_inputs, partition_config, n, bandwidth_gps=16):
                 # time measurement
                 if torch.cuda.is_available():
                     f_time, b_time, outputs = cuda_time(partition_config[idx]['model'],
-                                                        inputs)
+                                                        inputs, recomputation=recomputation)
                 else:
                     f_time, b_time, outputs = cpu_time(partition_config[idx]['model'],
-                                                       inputs)
+                                                       inputs, recomputation=recomputation)
 
                 # output statistics
                 out_size_mb = 0
@@ -178,7 +183,7 @@ def find_dependencies(cutting_edges, n_parts):
     return forward_dependencies, backward_dependencies
 
 
-def theoretical_analysis(graph):
+def theoretical_analysis(graph, recomputation=True):
     ''' find cutting edges and execution time of partitions based on the model's graph
     '''
     n_parts = len(set(n.part for n in graph.nodes))
@@ -188,7 +193,8 @@ def theoretical_analysis(graph):
     for n in graph.nodes:
         b_times[n.part] += extract_time(n.weight,
                                         forward=False)
-        b_times[n.part] += extract_time(n.weight, forward=True)
+        if recomputation:
+            b_times[n.part] += extract_time(n.weight, forward=True)
         f_times[n.part] += extract_time(n.weight,
                                         forward=True)
         for u in n.out_nodes:
@@ -198,14 +204,15 @@ def theoretical_analysis(graph):
     return edges, f_times, b_times
 
 
-def cuda_time(partition, inputs):
-    b_time, outputs = cuda_backward(partition, inputs)
-    f_time = cuda_forward(partition, inputs)
+def cuda_time(partition, inputs, recomputation=True):
+    b_time, outputs = cuda_backward(partition, inputs,
+                                    recomputation=recomputation)
+    f_time = cuda_forward(partition, inputs, recomputation=recomputation)
 
     return f_time, b_time, outputs
 
 
-def cuda_backward(partition, inputs):
+def cuda_backward(partition, inputs, recomputation=True):
     ''' measure forward/backward time of a partition on the GPU
     '''
     partition = partition.cuda()
@@ -215,6 +222,10 @@ def cuda_backward(partition, inputs):
     torch.cuda.synchronize(device='cuda')
     start.record()
     outputs = partition(*inputs)
+    if not recomputation:
+        start = torch.cuda.Event(enable_timing=True)
+        torch.cuda.synchronize(device='cuda')
+        start.record()
     loss = sum(o.norm() for o in outputs)
     loss.backward()
     end.record()
@@ -224,13 +235,13 @@ def cuda_backward(partition, inputs):
     return b_time, outputs
 
 
-def cuda_forward(partition, inputs):
+def cuda_forward(partition, inputs, recomputation=True):
     partition = partition.cuda()
     inputs = [i.detach().cuda() for i in inputs]
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
     torch.cuda.synchronize(device='cuda')
-    with torch.no_grad():
+    with torch.no_grad() if recomputation else nullcontext():
         start.record()
         outputs = partition(*inputs)
         end.record()
@@ -240,31 +251,35 @@ def cuda_forward(partition, inputs):
         return f_time
 
 
-def cpu_time(partition, inputs):
+def cpu_time(partition, inputs, recomputation=True):
     ''' measure forward/backward time of a partition on the CPU
     '''
-    b_time, outputs = cpu_backward(partition, inputs)
-    f_time = cpu_forward(partition, inputs)
+    b_time, outputs = cpu_backward(partition, inputs,
+                                   recomputation=recomputation)
+    f_time = cpu_forward(partition, inputs, recomputation=recomputation)
 
     return f_time, b_time, outputs
 
 
-def cpu_forward(partition, inputs):
+def cpu_forward(partition, inputs, recomputation=True):
+    partition = partition.cpu()
+    inputs = [i.detach().cpu() for i in inputs]
+    with torch.no_grad() if recomputation else nullcontext():
+        start = time.time()
+        outputs = partition(*inputs)
+        end = time.time()
+        f_time = 1000 * (end - start)
+
+        return f_time
+
+
+def cpu_backward(partition, inputs, recomputation=True):
     partition = partition.cpu()
     inputs = [i.detach().cpu() for i in inputs]
     start = time.time()
     outputs = partition(*inputs)
-    end = time.time()
-    f_time = 1000 * (end - start)
-
-    return f_time
-
-
-def cpu_backward(partition, inputs):
-    partition = partition.cpu()
-    inputs = [i.detach().cpu() for i in inputs]
-    start = time.time()
-    outputs = partition(*inputs)
+    if not recomputation:
+        start = time.time()
     loss = sum(o.norm() for o in outputs)
     loss.backward()
     end = time.time()
