@@ -23,6 +23,9 @@ class AnyTrainer(abc.ABC):
     def calc_test_stats(self, *args, **kw):
         pass
 
+    def modify_gradients(self, *args, **kw):
+        pass
+
 
 class SupervisedTrainer(AnyTrainer):
     # added *args just to make it a true subtype.

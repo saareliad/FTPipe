@@ -58,6 +58,7 @@ class SinglePartitionManager:
         # self.dl_iter = None
 
         # self.mb_to_fix_by_ga = {}
+        self.modify_gradients_before_send = True  # FIXME add as option
 
         # Hints
         self.task: DLTask
@@ -85,6 +86,9 @@ class SinglePartitionManager:
         self.gap_aware = gap_aware
 
     def set_weight_stasher(self, weight_stasher: WeightStasher):
+        if self.is_last_partition:
+            raise NotImplementedError()
+
         self.weight_stasher = WeightStasher
 
     def train(self):
@@ -107,7 +111,7 @@ class SinglePartitionManager:
             self.fwd_rcev_buffers = self.comm_handler.create_activations_recv_buffers(
                 self.device)
 
-    def run_batch_forward(self, batch_idx, done_bwds=None):
+    def run_batch_forward(self, batch_idx, num_batches, done_bwds=None):
         if self.is_first_partition:
             data = next(self.dl_iter)
             # TODO: handle y with separate coordinated dataloader
@@ -188,7 +192,8 @@ class SinglePartitionManager:
                     return []
 
                 # Backprop
-                step_and_stats_ctx = self.trainer.backprop_last_partition(x, *ctx)                
+                step_and_stats_ctx = self.trainer.backprop_last_partition(
+                    x, *ctx)
 
                 # Send partition border gradients
                 grads = self.partition.get_grad(batch_idx)
@@ -198,7 +203,8 @@ class SinglePartitionManager:
                     grads, batch_idx)
 
                 # Step
-                self.trainer.last_partition_step_and_statistics(x, *ctx, step_and_stats_ctx)
+                self.trainer.last_partition_step_and_statistics(
+                    x, *ctx, step_and_stats_ctx)
                 del x, ctx, step_and_stats_ctx
 
                 # Print training statistics.
@@ -254,6 +260,11 @@ class SinglePartitionManager:
         # Compute gradeints
         self.partition.recompute_and_backward(g, batch_idx)
 
+        # TODO: optionaly modify gradients b4 send.
+        if self.modify_gradients_before_send:
+            # Modify gradients
+            self.trainer.modify_gradients()
+
         if self.weight_stasher:
             # Restore to previosly saved parameters, we we can do the step on them.
             self.weight_stasher.restore_last(batch_idx)
@@ -269,6 +280,10 @@ class SinglePartitionManager:
                 g = (g,)
             request_objects = self.comm_handler.send_gradients(g, batch_idx)
 
+        if not self.modify_gradients_before_send:
+            # Modify gradients
+            self.trainer.modify_gradients()
+
         self.trainer.non_last_partition_step()
         return request_objects
 
@@ -282,7 +297,7 @@ class SinglePartitionManager:
 
         for done_fwds in range(num_batches):
 
-            sent_request_objects = self.run_batch_forward(done_fwds)
+            sent_request_objects = self.run_batch_forward(done_fwds, num_batches)
             if sent_request_objects:  # last partition returns empty list.
                 self.async_fwd_objects[done_fwds] = sent_request_objects
 
@@ -327,7 +342,7 @@ class SinglePartitionManager:
                                                 num_steps, done_fwds, done_bwds)
             if action_is_fwd:
                 sent_request_objects = self.run_batch_forward(
-                    done_fwds, done_bwds)
+                    done_fwds, num_batches, done_bwds)
                 # FIXME: last partition inserts its gradints into async_fwd_objects,
                 # it works, but it can be trouble.
                 self.async_fwd_objects[done_fwds] = sent_request_objects

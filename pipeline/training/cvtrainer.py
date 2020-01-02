@@ -69,7 +69,8 @@ class CVTrainer(PartitionedSupervisedTrainer):
 
     def non_last_partition_step(self):
         max_grad_norm = self.step_on_computed_grads()
-        if not (max_grad_norm is None):  # Handles different classes of statistics. not so nice, should be fixed
+        # Handles different classes of statistics. not so nice, should be fixed
+        if not (max_grad_norm is None):
             self.statistics.non_last_partition_on_batch_end(max_grad_norm)
 
     def step_on_computed_grads(self):
@@ -101,6 +102,12 @@ class GapAwareCVTrainer(CVTrainer):
         super().__init__(*args, **kw)
         self.gap_aware = gap_aware
 
+    def modify_gradients(self):
+        # TODO: we may want to save some statistics before we modify grad.
+        self.gap_aware.update_running_avg()
+        self.gap_aware.inc_step_count()
+        self.gap_aware.apply()  # Modifys gradients.
+
     def last_partition_step_and_statistics(self, x, y, loss, step=True):
         """
         step
@@ -108,26 +115,5 @@ class GapAwareCVTrainer(CVTrainer):
 
         step can be used later for grad accumulations
         """
-        # TODO: we may want to save some statistics before we modify grad.
-
-        self.gap_aware.update_running_avg()
-        self.gap_aware.inc_step_count()
-        self.gap_aware.apply()  # Modifys gradients.
-
-        batch_size = len(y)
-        y_pred = torch.argmax(x, 1)
-        num_correct = torch.sum(y == y_pred).item()
-
-        # Step and stats. Code copied from paraent.
-        max_grad_norm = None
-        if step:
-            max_grad_norm = self.step_on_computed_grads()
-
-        if max_grad_norm:  # Handles different classes of statistics. not so nice, should be fixed
-            self.statistics.on_batch_end(
-                loss.item(), num_correct, batch_size, max_grad_norm)
-        else:
-            self.statistics.on_batch_end(
-                loss.item(), num_correct, batch_size)
-
+        super().last_partition_step_and_statistics(x, y, loss, step=step)
         # TODO: self.ga.update_max_lr() add when we have per step scheduler

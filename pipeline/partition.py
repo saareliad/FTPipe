@@ -216,13 +216,13 @@ class LastPartition(Partition):
             if isinstance(x, Tensor):
                 # # See note on option 1 below.
                 with torch.no_grad():
-                    x = x.detach_().requires_grad_()
+                    x = x.data.detach_().requires_grad_()
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(x)
             else:
                 # Option 2
                 with torch.no_grad():
-                    x = [tensor.detach_().requires_grad_() for tensor in x]
+                    x = [tensor.data.detach_().requires_grad_() for tensor in x]
 
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(*x)

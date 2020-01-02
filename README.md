@@ -87,6 +87,9 @@ python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_nod
 
 * change c code in torch mpigroup to drop the tensor (and its pointers) once completed, so we won't have to handle mem cleaning (this can reduce peak memory memory).
 
+* option in GA to change gradient before sending! (I put this default True).
+* look at detach_(), remove uneeded.
+
 
 ## References
 
@@ -130,4 +133,6 @@ After talk with Amit Nadav
 
 * we can utilize idle/spare time to do gradient smoothing.
   * inspired from [this stupid nips paper](http://papers.nips.cc/paper/9402-theoretical-limits-of-pipeline-parallel-optimization-and-application-to-distributed-deep-learning)
-  
+
+## NOTICE
+* some ga resulst ran without GA! re running.... (some: thous after thier application was before decoupling step for last partition) I rerun all gap aware just in case...

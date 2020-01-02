@@ -45,7 +45,8 @@ class P2PCommunicationHandler(SimpleCommBase):
                 # tag for minibatch idx too
                 if is_grad:
                     with torch.no_grad():
-                        tensor = tensor.clone().detach_()
+                        # we do not clone. so don't torch it until then.
+                        tensor = tensor.data
                 else:
                     tensor.detach_()
                 tensor = tensor.chunk(self.num_chunks)
@@ -83,11 +84,11 @@ class P2PCommunicationHandler(SimpleCommBase):
                         # if not self.cpu:
                         #     # HACK: synchronize.
                         #     torch.cuda.synchronize(device=self.device)
-                        assert chunk.is_contiguous()
+                        # assert chunk.is_contiguous()
                         request_obj = dist.isend(
                             chunk, send_rank, tag=chunk_tag)
                         request_objects.append(request_obj)
-                        sent_items.append(chunk)
+                        sent_items.append(None)  # FIXME: stop saving this.
         return request_objects, sent_items
 
     def send_activations(self, x, batch_idx):

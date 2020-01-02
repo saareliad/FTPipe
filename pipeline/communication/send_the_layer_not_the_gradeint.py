@@ -1,5 +1,6 @@
 import torch
 from torch.nn import Module
+from torch.autograd import Function
 
 
 def get_innermost_last_layer(partition: Module):
@@ -40,11 +41,12 @@ class DummyLayerHelper(Module):
     def __init__(self, sender_partition: Module, is_sender):
         # Get last layer
         # Requires that the layer is registered last.
+        super(DummyLayerHelper, self).__init__()
         self.is_sender = is_sender
         self.layer = get_innermost_first_layer(sender_partition)
 
     def create_grad_buffers_for_rcv(self):
-        assert self.is_sender
+        assert not self.is_sender
         # TODO check on batch norm, were we need to create buffers for buffers too (yo dawg).
         state_dict = self.layer.state_dict(keep_vars=True)
         for k, v in state_dict.items():
@@ -61,13 +63,57 @@ class DummyLayerHelper(Module):
 
         return [v.data for v in state_dict.values()] + list(grads_dict.values())
 
+    def gen_dummy_layer(self):
+
+        def printgradnorm(self, grad_input, grad_output):
+            print('Inside ' + self.__class__.__name__ + ' backward')
+            print('Inside class:' + self.__class__.__name__)
+            print('')
+            print('grad_input: ', type(grad_input),
+                  [x.shape for x in grad_input])
+            print('grad_input[0]: ', type(grad_input[0]))
+
+            print('grad_output: ', type(grad_output), grad_output)
+            print('grad_output[0]: ', type(grad_output[0]))
+            print('')
+            print('grad_input size:', grad_input[0].size())
+            print('grad_output size:', grad_output[0].size())
+            print('grad_input norm:', grad_input[0].norm())
+            return tuple(torch.zeros_like(v) for v in grad_input)
+
+        self.layer.register_backward_hook(printgradnorm)
+        return
+
+        class DummyLayer(Function):
+            @staticmethod
+            def forward(ctx, x):
+                ctx.save_for_backward(self.layer.weight.grad)
+                return torch.tensor([1, 1], dtype=torch.float)
+
+            @staticmethod
+            def backward(ctx, grad_output):
+
+                g, = ctx.saved_tensors
+                print("grad_output", grad_output)
+                return grad_output * g.t()
+
+        return DummyLayer
+
     def recompute_and_backwards(self, x):
         # TODO...
         assert not self.is_sender
+        # dummy_function = self.gen_dummy_layer()
 
-        # Build the comutation graph.
+        self.gen_dummy_layer()
+        # Build the comutation graph
         out = self.layer(x)
-        raise NotImplementedError()
+        t = out.sum()
+        one = t / t
+        one.backward()
+
+        # one = dummy_function.apply(self.layer(x))
+        # # to the backward lady.
+        # one.backward()
 
         # TODO: and now? sum()? 1? ...
 
@@ -92,6 +138,13 @@ class DummyLayerHelper(Module):
 
     #         for cur_p, real_p in zip(filter(lambda p: p.requires_grad, self.layer.parameters()), grads):
     #             cur_p.grad.data = real_p
+
+
+def create_activation_grad_from_param_grad(a, p):
+    # a (batch, m)
+    # p (m, n)
+    return  a * p.grad.t()
+
 
 
 if __name__ == "__main__":
@@ -121,12 +174,12 @@ if __name__ == "__main__":
         f"cuda:{dist.get_rank()}" if CUDA and BACKAND == 'mpi' else "cpu")
     if dist.get_rank() == 0:
 
-        model = torch.nn.Sequential(
-            torch.nn.Linear(5, 10), torch.nn.Linear(10, 1))
+        sender_model = torch.nn.Sequential(
+            torch.nn.Linear(3, 4, bias=False), torch.nn.Linear(4, 1))
 
-        ll = DummyLayerHelper(model, is_sender=True)
-        x = torch.randn(1, 5)
-        model(x).sum().backward()
+        ll = DummyLayerHelper(sender_model, is_sender=True)
+        x = torch.randn(2, 3)
+        sender_model(x).sum().backward()
         tensors = ll.tensors_to_sync()
 
         print(f"Printing sent items out of {len(tensors)} send items")
@@ -136,13 +189,12 @@ if __name__ == "__main__":
         handlers = [dist.isend(p, 1, tag=i+1) for i, p in enumerate(tensors)]
 
     else:
+        sender_model = torch.nn.Sequential(
+            torch.nn.Linear(3, 4, bias=False), torch.nn.Linear(4, 1))
         # Note: there is an agreement about the dummy model.
-        dummy_model = torch.nn.Linear(10, 1)
-
-        ll = DummyLayerHelper(dummy_model, is_sender=False)
+        ll = DummyLayerHelper(sender_model, is_sender=False)
         ll.create_grad_buffers_for_rcv()  # create buffers for recv
         tensors = ll.tensors_to_sync()
-
         handlers = [dist.irecv(p, 0, tag=i+1) for i, p in enumerate(tensors)]
 
     wait(handlers)
@@ -150,8 +202,19 @@ if __name__ == "__main__":
     if dist.get_rank() == 0:
         pass
     else:
+        ll.gen_dummy_layer()
         print("Recved:")
         for p in ll.layer.parameters():
             print(p)
             print("Gradinet:")
             print(p.grad)
+
+        real_model = torch.nn.Linear(2, 3)
+        batch_size = 10
+        x = torch.randn(batch_size, 2)
+        a = real_model(x)
+
+        y = ll.layer(a)
+        y.backward(torch.ones_like(y))
+        # ll.recompute_and_backwards(a)
+        print(real_model.weight.grad)

@@ -124,7 +124,7 @@ class GapAware:
     # and i'm afraid of it...
     def apply(self, from_grad=True):
         if self.skip_next_apply:
-            self.self.skip_next_apply = False
+            self.skip_next_apply = False
             return
 
         with torch.no_grad():

@@ -56,5 +56,8 @@
     "seed": 42,
     "num_chunks": 4,
     "verbose_comm": true,
-    "flush_rate": -1
+    "flush_rate": -1,
+    "train_batches_limit":-1,
+    "test_batches_limit":-1
+
 }
