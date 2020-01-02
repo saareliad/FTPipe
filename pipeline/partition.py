@@ -101,18 +101,14 @@ class Partition(nn.Module):
             with torch.no_grad():
                 # EXPLICITLY DO CLONE
                 if isinstance(x, Tensor):
-                    # x = x.data.clone().requires_grad_(self._REQ_GRAD)
-                    # TODO: I wonder what would happen if we do some relu inplace....
-                    # it can destroy our activation!
-                    # therefore, we may like to run on the original x before clone
-                    # but I'm afrait that due to cuda async operations it will get overriden by next step.
+                    # Note - we clone here because we don't want the tensor to get overriden.
+                    # TODO: it could be done better if we use multiple input buffers instead of allocating
+                    # In pytorch it can happen auto matically with THCCashingAlocator.
                     x = x.data.clone().requires_grad_(self._REQ_GRAD)
                     self.input_buffer[micro_batch_idx] = x
                     self.rng_stasher.stash_rng_state(micro_batch_idx)
                     x = self.layers(x)
                 else:
-                    # raise NotImplementedError()
-                    # for tensor in x:
                     x = [tensor.data.clone().requires_grad_(self._REQ_GRAD)
                          for tensor in x]
                     self.input_buffer[micro_batch_idx] = x
@@ -129,10 +125,10 @@ class Partition(nn.Module):
                     self.dummy_forward_monkey_patcher.replace_for_forward()
                 if isinstance(x, Tensor):
                     # x = x.to(self.device)
-                    x = self.layers(x.data.clone())
+                    x = self.layers(x)
                 else:
                     # raise NotImplementedError()
-                    x = [y.data.clone() for y in x]
+                    x = [y for y in x]
                     x = self.layers(*x)
                 return x
 
@@ -210,35 +206,32 @@ class LastPartition(Partition):
         if self.training:
             # Note that here we save the input just to get its gradeint later
             # we do not plan to do any recomputation.
+
+            # Note: we don't copy the tensor here to save memory,
+            #     # we don't care that the next recv will override it,
+            #     # as all we need from it is its grad, imidaitly after.
+            #     # (otherwise, we have to do synchrounous recvs)
+            # TODO: can we avoid the detach?
+
             if isinstance(x, Tensor):
                 # # See note on option 1 below.
-                # x.detach_().requires_grad_()
                 with torch.no_grad():
-                    x = x.data.clone().requires_grad_()
+                    x = x.detach_().requires_grad_()
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(x)
             else:
-                # raise NotImplementedError()
                 # Option 2
                 with torch.no_grad():
-                    x = [tensor.data.clone().requires_grad_() for tensor in x]
+                    x = [tensor.detach_().requires_grad_() for tensor in x]
 
-                # for tensor in x:
-                #     # Option 1: we don't copy the tnesor here to save memory,
-                #     # we don't care that the next recv will override it,
-                #     # as all we need from it is its grad, imidaitly after.
-                #     # (otherwise, we have to do synchrounous recvs)
-                #     tensor.detach_().requires_grad_()
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(*x)
         else:
             with torch.no_grad():
                 if isinstance(x, Tensor):
-                    # x = x.to(self.device)
-                    x = self.layers(x.data.clone())
+                    x = self.layers(x.data)
                 else:
-                    # raise NotImplementedError()
-                    x = [y.data.clone() for y in x]
+                    x = [y.data for y in x]
                     x = self.layers(*x)
 
         #  Last partition outputs results in a non tensor format
