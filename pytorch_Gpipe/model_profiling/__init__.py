@@ -50,8 +50,12 @@ def graph_builder(model: nn.Module, sample_batch: Tensors = (), kwargs: Optional
 
     # trace the model and build a graph
     with torch.no_grad():
-        trace_graph, _ = torch.jit.get_trace_graph(
-            model, sample_batch, kwargs)
+        if hasattr(torch.jit, "get_trace_graph"):
+            get_trace_graph = torch.jit.get_trace_graph
+        else:
+            assert hasattr(torch.jit, "_get_trace_graph")
+            get_trace_graph = torch.jit._get_trace_graph
+        trace_graph, _ = get_trace_graph(model, sample_batch, kwargs)
         trace_graph = trace_graph.graph()
 
     num_inputs = _count_elements(*sample_batch) + len(kwargs)
