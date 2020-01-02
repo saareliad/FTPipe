@@ -3,7 +3,7 @@ from collections import deque
 import time
 
 
-def run_analysis(sample, graph, config, n_iter):
+def run_analysis(sample, graph, config, n_iter, bandwidth_gps=16):
     edges, theoretical_f_times, theoretical_b_times = theoretical_analysis(
         graph)
 
@@ -25,7 +25,7 @@ def run_analysis(sample, graph, config, n_iter):
 
     # real statistics based on generated partitions
     real_f_times, real_b_times, comm_volume = profile_execution(sample, config,
-                                                                n_iter)
+                                                                n_iter, bandwidth_gps=bandwidth_gps)
 
     real_b_imbalance = worst_imbalance(real_b_times)
 
@@ -60,7 +60,10 @@ def run_analysis(sample, graph, config, n_iter):
         f"\nreal topology aware imbalance:\nforwad {topology_aware_a_f_imbalance}\nbackward {topology_aware_a_b_imbalance}")
 
     print(
-        f"\ncommunication volumes size of activations of each partition\n{comm_volume}")
+        f"\ncommunication volumes size of activations of each partition")
+
+    for idx, volume in comm_volume.items():
+        print(f"{idx}: {volume}")
 
     print(
         f"\nideal latency is the time that passes for a forward/backward pass to reach and leave the partition")
@@ -70,7 +73,7 @@ def run_analysis(sample, graph, config, n_iter):
         f"\nideal real latencies ms\nforward {ideal_a_f_latency}\nbackward {ideal_a_b_latency}")
 
 
-def profile_execution(model_inputs, partition_config, n):
+def profile_execution(model_inputs, partition_config, n, bandwidth_gps=16):
     '''perfrom forward/backward passes and measure execution times accross n batches
     '''
     n_partitions = sum([1 for k in partition_config if isinstance(k, int)])
@@ -93,10 +96,16 @@ def profile_execution(model_inputs, partition_config, n):
             if all(tensor in activations for tensor in partition_config[idx]['inputs']):
                 inputs = [activations[tensor]
                           for tensor in partition_config[idx]['inputs']]
-                # input size
-                in_size = 0
+
+                # input statistics
+                in_size_mb = 0
+                recv_time = 0
                 for t in inputs:
-                    in_size += (t.nelement() * t.element_size()) / 1e6
+                    t_mb = (t.nelement() * t.element_size()) / 1e6
+                    t_recv = (t_mb/(bandwidth_gps*1e3))
+                    in_size_mb += t_mb
+                    recv_time = max(recv_time, t_recv)
+                recv_time *= 1e3
 
                 # time measurement
                 if torch.cuda.is_available():
@@ -106,13 +115,18 @@ def profile_execution(model_inputs, partition_config, n):
                     f_time, b_time, outputs = cpu_time(partition_config[idx]['model'],
                                                        inputs)
 
-                # output size
-                out_size = 0
+                # output statistics
+                out_size_mb = 0
+                send_time = 0
                 for o, t in zip(partition_config[idx]['outputs'], outputs):
                     activations[o] = t
-                    out_size += (t.nelement() * t.element_size()) / 1e6
+                    t_mb = (t.nelement() * t.element_size()) / 1e6
+                    t_send = (t_mb/(bandwidth_gps*1e3))
+                    out_size_mb += t_mb
+                    send_time = max(t_send, send_time)
 
-                communication_volume[idx] = f"in: {in_size} MB out: {out_size} MB"
+                send_time *= 1e3
+                communication_volume[idx] = f"input size: {in_size_mb} MB recieve_time: {recv_time} ms out: {out_size_mb} MB send time: {send_time} ms"
                 f_times[idx] += f_time
                 b_times[idx] += b_time
             else:

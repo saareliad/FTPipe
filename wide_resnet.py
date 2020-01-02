@@ -49,7 +49,7 @@ def create_random_sample(args):
 
 def by_time(w):
     if hasattr(w, 'forward_time') and hasattr(w, 'backward_time'):
-        return max(int(200 * (0 + w.backward_time) / 2), 1)
+        return max(int(2 * (0 + w.backward_time) / 2), 1)
     return 0
 
 
@@ -123,6 +123,10 @@ if __name__ == "__main__":
     parser.add_argument('--output_file', default='wrn_16x4')
     parser.add_argument('--auto_file_name', action='store_true',
                         default=False, help="create file name automatically")
+    parser.add_argument('--n_iter', type=int, default=10,
+                        help="number of iteration used in order to profile the network and run analysis")
+    parser.add_argument('--bandwidth_gps', type=float,
+                        default=12, help="data transfer rate between gpus in gigabaytes per second")
 
     args = parser.parse_args()
 
@@ -149,7 +153,7 @@ if __name__ == "__main__":
     # if the model need multiple inputs pass a tuple
     # if the model needs kwargs pass a dictionary
     # DEBUG switches between verbose generated code and compressed code
-    n_iter = 100
+    n_iter = args.n_iter
     graph = pipe_model(model, sample, kwargs=None, nparts=args.n_partitions,
                        DEBUG=VERBOSE_PARTITIONING, output_file=args.output_file, weight_func=by_time, n_iter=n_iter)
     graph.save(args.output_file, ".")
@@ -163,6 +167,6 @@ if __name__ == "__main__":
         model, partitions_only=False, DEBUG=GET_PARTITIONS_ON_CPU)
 
     # out = run_partitions(sample, config)
-
-    run_analysis(sample, graph, config, n_iter)
+    bandwidth_gps = args.bandwidth_gps
+    run_analysis(sample, graph, config, n_iter, bandwidth_gps=bandwidth_gps)
     # test_gpipe_stuff()
