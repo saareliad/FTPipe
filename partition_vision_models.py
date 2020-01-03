@@ -152,7 +152,7 @@ if __name__ == "__main__":
     config = createConfig(
         model, partitions_only=False, DEBUG=GET_PARTITIONS_ON_CPU)
 
-    # out = run_partitions(sample, config)
+    _ = run_partitions(sample, config)
     bandwidth_gps = args.bandwidth_gps
     recomputation = not args.no_recomputation
     if not args.no_analysis:

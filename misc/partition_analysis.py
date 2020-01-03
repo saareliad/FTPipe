@@ -89,11 +89,16 @@ def profile_execution(model_inputs, partition_config, n, recomputation=True, ban
     if not isinstance(model_inputs, tuple):
         model_inputs = (model_inputs,)
 
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    for i in range(n_partitions):
+        partition_config[i]['model'] = partition_config[i]['model'].to(device)
+        partition_config[i]['model'].device = device
+
     for _ in range(n):
         parts = deque(range(n_partitions))
         activations = {}
         for i, t in zip(partition_config['model inputs'], model_inputs):
-            activations[i] = t
+            activations[i] = t.to(device)
 
         # perform one run of the partitions
         while len(parts) > 0:
@@ -215,8 +220,7 @@ def cuda_time(partition, inputs, recomputation=True):
 def cuda_backward(partition, inputs, recomputation=True):
     ''' measure forward/backward time of a partition on the GPU
     '''
-    partition = partition.cuda()
-    inputs = [i.detach().cuda() for i in inputs]
+    inputs = [i.detach() for i in inputs]
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
     torch.cuda.synchronize(device='cuda')
@@ -236,8 +240,7 @@ def cuda_backward(partition, inputs, recomputation=True):
 
 
 def cuda_forward(partition, inputs, recomputation=True):
-    partition = partition.cuda()
-    inputs = [i.detach().cuda() for i in inputs]
+    inputs = [i.detach() for i in inputs]
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
     torch.cuda.synchronize(device='cuda')
@@ -262,8 +265,7 @@ def cpu_time(partition, inputs, recomputation=True):
 
 
 def cpu_forward(partition, inputs, recomputation=True):
-    partition = partition.cpu()
-    inputs = [i.detach().cpu() for i in inputs]
+    inputs = [i.detach() for i in inputs]
     with torch.no_grad() if recomputation else nullcontext():
         start = time.time()
         outputs = partition(*inputs)
@@ -274,8 +276,7 @@ def cpu_forward(partition, inputs, recomputation=True):
 
 
 def cpu_backward(partition, inputs, recomputation=True):
-    partition = partition.cpu()
-    inputs = [i.detach().cpu() for i in inputs]
+    inputs = [i.detach() for i in inputs]
     start = time.time()
     outputs = partition(*inputs)
     if not recomputation:
@@ -328,8 +329,14 @@ def run_partitions(model_inputs, partition_config):
 
     activations = {}
 
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    for i in range(n_partitions):
+        partition_config[i]['model'] = partition_config[i]['model'].to(device)
+        partition_config[i]['model'].device = device
+
     for i, t in zip(partition_config['model inputs'], model_inputs):
-        activations[i] = t
+        activations[i] = t.to(device)
 
     parts = deque(range(n_partitions))
 

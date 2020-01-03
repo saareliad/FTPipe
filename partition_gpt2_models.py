@@ -176,6 +176,7 @@ def partition_model(args, train_dataset, model, tokenizer):
     bandwidth_gps = args.bandwidth_gps
     recomputation = not args.no_recomputation
 
+    _ = run_partitions(sample, config)
     if not args.no_analysis:
         run_analysis(sample, graph, config, args.n_iter,
                      recomputation=recomputation, bandwidth_gps=bandwidth_gps)
