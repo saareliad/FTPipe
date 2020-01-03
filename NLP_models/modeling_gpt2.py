@@ -602,6 +602,7 @@ class GPT2Model(GPT2PreTrainedModel):
         self.wte = nn.Embedding(config.vocab_size, config.n_embd)
         self.wpe = nn.Embedding(config.n_positions, config.n_embd)
         self.drop = nn.Dropout(config.embd_pdrop)
+        self.output_shape = (-1,config.n_positions,config.n_embd)
         # self.h = nn.ModuleList(
         #     [Block(config.n_ctx, config, scale=True) for _ in range(1)])
         self.num_layers = config.n_layer
@@ -689,7 +690,7 @@ class GPT2Model(GPT2PreTrainedModel):
         hidden_states = inputs_embeds + position_embeds + token_type_embeds
         hidden_states = self.drop(hidden_states)
 
-        output_shape = input_shape + (hidden_states.size(-1),)
+        # output_shape = input_shape + (hidden_states.size(-1),)
 
         presents = ()
         all_attentions = []
@@ -699,7 +700,7 @@ class GPT2Model(GPT2PreTrainedModel):
             block = getattr(self, str(i))
             if self.output_hidden_states:
                 all_hidden_states = all_hidden_states + \
-                    (hidden_states.view(*output_shape),)
+                    (hidden_states.view(*self.output_shape,))
 
             outputs = block(hidden_states,
                             layer_past=layer_past,
@@ -715,7 +716,7 @@ class GPT2Model(GPT2PreTrainedModel):
 
         hidden_states = self.ln_f(hidden_states)
         attention_output_shape=hidden_states.shape
-        hidden_states = hidden_states.view(*output_shape)
+        # hidden_states = hidden_states.view(*output_shape)
         # Add last hidden state
         if self.output_hidden_states:
             all_hidden_states = all_hidden_states + (hidden_states,)
@@ -785,6 +786,8 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
 
         self.init_weights()
         self.tie_weights()
+        # self.n_embed=config.n_embd
+        # self.n_positions=config.n_positions
 
     def tie_weights(self):
         """ Make sure we are sharing the input and output embeddings.
@@ -801,7 +804,10 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
                                                token_type_ids=token_type_ids,
                                                position_ids=position_ids,
                                                head_mask=head_mask)
+        
         hidden_states = transformer_outputs[0]
+        # hidden_states should be torch.Size([1, 1024, 768]) after reshape
+        # hidden_states=hidden_states.view(-1,self.n_positions,self.n_embed)
         lm_logits = self.lm_head(hidden_states)
         outputs = (lm_logits,) + transformer_outputs[1:]
         if labels is not None:

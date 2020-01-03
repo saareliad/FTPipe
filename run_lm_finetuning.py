@@ -335,27 +335,19 @@ def train(args, train_dataset, model, tokenizer):
             inputs = inputs.to(args.device)
             labels = labels.to(args.device)
             model.train()
-            from pytorch_Gpipe import pipe_model, graph_builder, partition, generatePartitionModules
-            from pytorch_Gpipe.utils import traverse_model
-            # graph = pipe_model(model, (inputs, labels), DEBUG=False)
-            # graph.save("GPT2", ".", show_weights=False)
+            from pytorch_Gpipe import pipe_model
+            from misc import run_analysis
             if True:
                 # this is enough
-                graph = graph_builder(model, (inputs,), n_iter=100, use_profiler=True,
-                                      max_depth=2)
+                def weight_func(w):
+                    if hasattr(w, 'forward_time') and hasattr(w, 'backward_time'):
+                        return max(int(2 * (0 + w.backward_time) / 2), 1)
+                    return 0
 
-                partition(graph, 4)
-
-                graph.save("gpt2_Profiler", ".", show_weights=False,
-                           show_buffs_params=True)
-                with open("trace.txt", "w") as f:
-                    graph, _ = torch.jit.get_trace_graph(model,
-                                                         (inputs))
-                    f.write(str(graph.graph()))
-            else:
-                from NLP_models.partitioned_gpt2 import createConfig
-                config = createConfig(model, DEBUG=True, partitions_only=False)
-                create_buffer_configs((inputs, labels), config)
+                graph = pipe_model(model, (inputs, labels), n_iter=50,
+                                   weight_func=weight_func, output_file="gpt2_4p_by_backward")
+                graph.save("gpt2_4p_by_backward", ".", show_weights=False)
+            model(inputs)
             assert False
             outputs = model(inputs, masked_lm_labels=labels) if args.mlm else model(
                 inputs, labels=labels)

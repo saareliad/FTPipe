@@ -318,3 +318,32 @@ def topology_aware_imbalance(f_times, b_times, cutting_edges):
             b_imbalance = b_ratio
 
     return f_imbalance, b_imbalance
+
+
+def run_partitions(model_inputs, partition_config):
+    n_partitions = sum([1 for k in partition_config if isinstance(k, int)])
+
+    if not isinstance(model_inputs, tuple):
+        model_inputs = (model_inputs,)
+
+    activations = {}
+
+    for i, t in zip(partition_config['model inputs'], model_inputs):
+        activations[i] = t
+
+    parts = deque(range(n_partitions))
+
+    while len(parts) > 0:
+        idx = parts.popleft()
+
+        # if all inputs are ready run partition
+        if all(tensor in activations for tensor in partition_config[idx]['inputs']):
+            inputs = [activations[tensor]
+                      for tensor in partition_config[idx]['inputs']]
+            outs = partition_config[idx]['model'](*inputs)
+            for o, t in zip(partition_config[idx]['outputs'], outs):
+                activations[o] = t
+        else:
+            parts.append(idx)
+
+    return [activations[o] for o in partition_config['model outputs']]

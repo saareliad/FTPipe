@@ -4,7 +4,7 @@ from pytorch_Gpipe import pipe_model
 import argparse
 import importlib
 from collections import deque
-from misc import run_analysis
+from misc import run_analysis, run_partitions
 
 _WIDE_RESNETS = dict(
     wrn_16x4=dict(depth=16, num_classes=10, widen_factor=4,
@@ -60,35 +60,6 @@ def by_time(w):
     return 0
 
 
-def run_partitions(model_inputs, partition_config):
-    n_partitions = sum([1 for k in partition_config if isinstance(k, int)])
-
-    if not isinstance(model_inputs, tuple):
-        model_inputs = (model_inputs,)
-
-    activations = {}
-
-    for i, t in zip(partition_config['model inputs'], model_inputs):
-        activations[i] = t
-
-    parts = deque(range(n_partitions))
-
-    while len(parts) > 0:
-        idx = parts.popleft()
-
-        # if all inputs are ready run partition
-        if all(tensor in activations for tensor in partition_config[idx]['inputs']):
-            inputs = [activations[tensor]
-                      for tensor in partition_config[idx]['inputs']]
-            outs = partition_config[idx]['model'](*inputs)
-            for o, t in zip(partition_config[idx]['outputs'], outs):
-                activations[o] = t
-        else:
-            parts.append(idx)
-
-    return [activations[o] for o in partition_config['model outputs']]
-
-
 def test_gpipe_stuff():
 
     # create a pipeLine from the given model
@@ -136,6 +107,8 @@ if __name__ == "__main__":
                         default=12, help="data transfer rate between gpus in gigabaytes per second")
     parser.add_argument('--no_recomputation', action='store_true',
                         default=False, help="wether to use recomputation for the backward pass")
+    parser.add_argument('--no_analysis', action='store_true',
+                        default=False, help="disable partition analysis")
 
     args = parser.parse_args()
 
@@ -182,6 +155,7 @@ if __name__ == "__main__":
     # out = run_partitions(sample, config)
     bandwidth_gps = args.bandwidth_gps
     recomputation = not args.no_recomputation
-    run_analysis(sample, graph, config, n_iter,
-                 recomputation=recomputation, bandwidth_gps=bandwidth_gps)
+    if not args.no_analysis:
+        run_analysis(sample, graph, config, n_iter,
+                     recomputation=recomputation, bandwidth_gps=bandwidth_gps)
     # test_gpipe_stuff()
