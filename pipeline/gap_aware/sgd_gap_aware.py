@@ -28,12 +28,20 @@ class GapAware:
 
         Before apply:
             inc_step_count()
+        
+        # Apply on gradients:
+            apply_grad_only()
+
+            WARNINING: MUST HAVE A CORRESPONDING CALL TO try_apply_wd_correction_before_step()
 
         Before optimizer.step():
-            apply()
+            try_apply_wd_correction_before_step()
 
         After each scheduler.step():
             update_max_lr()
+
+    Note:
+        For non-pipline settings, just call apply() instad of two sperate calles.
 
     Example:
 
@@ -46,21 +54,31 @@ class GapAware:
 
         ga.update_running_avg()
         ga.inc_step_count()
-        ga.apply()
+        ga.apply_grad_only()
+
+        # Send gradients in pipeline
 
         optimizer.step()
         scheduler.step()
 
         ga.update_max_lr()
 
-    Note:
-
-
+    TODO:
+        Support working for all layers of pipeline
+        Think about implmentation with L2.
+        Think about implementation with hooks. (can be tricky)
     """
-    # 2 main improvments form original implementation.
-    # (1) better mem,
+    # 3 main changes form original implementation.
+    # (1) better mem trick for WD.
     # (2) option to shut down changing WD.
-    # Note: (2) will allow checking L2 instead, as WD suffers from staleness)
+    #
+    # Note: (2) will allow checking L2 regularization instead of WD.
+    #    (as WD suffers from staleness)
+    #
+    # (3) For pipeline, we can send the "mitigated" gradeints backwards, (before step),
+    #       And thus avoid using GA on all layers.
+    #       For WD mem trick, this requires applying a WD correction later.
+    #       Better used with SGD+L2 than WD.
 
     MAX_LR_NAME = "max_lr"
 
@@ -122,16 +140,26 @@ class GapAware:
     # Note: I wanted to decorate the function, but seems like there is a bug
     # https://discuss.pytorch.org/t/combining-no-grad-decorator-and-with-torch-no-grad-operator-causes-gradients-to-be-enabled/39203
     # and i'm afraid of it...
-    def apply(self, from_grad=True):
-        if self.skip_next_apply:
+    def apply(self, from_grad=True, on_grad=True, try_on_wd=True, ignore_skip_apply=False):
+        assert (on_grad or try_on_wd)
+        
+        if self.skip_next_apply and not ignore_skip_apply:
+            # Flip
             self.skip_next_apply = False
+        
+        if self.skip_next_apply:
+            # Skip (not, we sometime only Skip, but don't Flip)
+            return
+        
+        if (not on_grad) and (try_on_wd and (not self.penatly_for_weight_decay)):
+            # nothing to do.
             return
 
-        with torch.no_grad():
-            if not from_grad:
-                raise NotImplementedError(
-                    "Gap claculation is supported only from grad")
+        if not from_grad:
+            raise NotImplementedError(
+                "Gap claculation is supported only from grad")
 
+        with torch.no_grad():
             bias_correction = 1 - (self.big_gamma ** self.step_count)
             # Calculate gap from grad
             for pg in self.optimizer.param_groups:
@@ -151,7 +179,8 @@ class GapAware:
                     penalty = 1 + (pg['lr'] * p.grad.abs() / avg_steps_needed)
 
                     # Apply penalty to gradient
-                    p.grad.data /= penalty
+                    if on_grad:
+                        p.grad.data /= penalty
                     # Apply penalty to weight decay (as it will be part of the gradient)
                     # HACK: we know that sgd does
                     #   d_p += p*wd
@@ -164,15 +193,28 @@ class GapAware:
                     # so we do
                     #   d_p += z
                     # z =  p.data * weight_decay * ((1 - penalty) / penalty)
-                    if self.penatly_for_weight_decay:
-                        p.grad.data += p.data.mul(weight_decay *
-                                                  ((1 - penalty) / penalty))
+                    if try_on_wd:
+                        if self.penatly_for_weight_decay:
+                            p.grad.data += p.data.mul(weight_decay *
+                                                      ((1 - penalty) / penalty))
+
+    def try_apply_wd_correction_before_step(self, from_grad=True):
+        # This call also flips the "skip one apply".
+        self.apply(from_grad=from_grad, on_grad=False,
+                   try_on_wd=True, ignore_skip_apply=False)
+
+    def apply_grad_only(self, from_grad=True):
+        # This call does not flips the "skip one apply"
+        # a following call to
+        # `try_apply_wd_correction_before_step() must be done.
+        self.apply(from_grad=from_grad, on_grad=True,
+                   try_on_wd=False, ignore_skip_apply=True)
 
 
 # FIXME: keys are hardcoded from optimizers...
 SGD_TYPE_TO_GAP_AWARE_CLASS = {
     'sgd1': GapAware,  # Pytorch
-    # 'sgd2': SGD2MSNAG   # TF
+    # 'sgd2':   # TF # TODO
 }
 
 # optimizer, big_gamma=0.999, epsilon=1e-8, penatly_for_weight_decay=True
@@ -182,7 +224,6 @@ def get_sgd_gap_aware_cls(sgd_type: str) -> GapAware:
     gap_aware_cls = SGD_TYPE_TO_GAP_AWARE_CLASS.get(sgd_type, None)
     return gap_aware_cls
     # return gap_aware_cls(*args, **kw)
-
 
 
 # class GAStats:

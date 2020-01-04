@@ -86,10 +86,10 @@ class SinglePartitionManager:
         self.gap_aware = gap_aware
 
     def set_weight_stasher(self, weight_stasher: WeightStasher):
-        if self.is_last_partition:
+        if self.is_last_partition and not (weight_stasher is None) :
             raise NotImplementedError()
 
-        self.weight_stasher = WeightStasher
+        self.weight_stasher = weight_stasher
 
     def train(self):
         self.comm_handler.set_tensor_shapes(self.training_tensor_shapes)
@@ -252,7 +252,19 @@ class SinglePartitionManager:
         g = self.comm_handler.fix_after_recv(g)
 
         if self.weight_stasher:
-            # Stash parameters if they are not already stashed
+            # FIXME
+            raise NotImplementedError()
+            
+            # Possible problem:
+            # what we are about to do is:
+            # restore stashed wieghts.data
+            # compute backward on them
+            # restore back current, up to date weights.data, with restore_last().
+            # however, there is possibility that current `batch_index` is not last.
+            # (This can happen in case of several backwards one after another)
+            # In this case, we need to stash the currect version of weight so it will be the last.
+            # This is problematic,
+            # TODO
             self.weight_stasher.stash_if_current_is_last(batch_idx)
             # Restore to parameters which the fwd was run on
             self.weight_stasher.pop_restore_stashed(batch_idx)
@@ -260,14 +272,14 @@ class SinglePartitionManager:
         # Compute gradeints
         self.partition.recompute_and_backward(g, batch_idx)
 
-        # TODO: optionaly modify gradients b4 send.
+        # TODO: we can modify just the gradeint of the first layer.
         if self.modify_gradients_before_send:
             # Modify gradients
             self.trainer.modify_gradients()
 
         if self.weight_stasher:
             # Restore to previosly saved parameters, we we can do the step on them.
-            self.weight_stasher.restore_last(batch_idx)
+            self.weight_stasher.restore_last()
             # TODO: look to pipedream implementation and udnerstand what they do with the weight decay.
 
         # Step and statistics

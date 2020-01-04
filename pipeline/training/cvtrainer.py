@@ -106,7 +106,7 @@ class GapAwareCVTrainer(CVTrainer):
         # TODO: we may want to save some statistics before we modify grad.
         self.gap_aware.update_running_avg()
         self.gap_aware.inc_step_count()
-        self.gap_aware.apply()  # Modifys gradients.
+        self.gap_aware.apply_grad_only()  # Modifys gradients, don't
 
     def last_partition_step_and_statistics(self, x, y, loss, step=True):
         """
@@ -115,5 +115,6 @@ class GapAwareCVTrainer(CVTrainer):
 
         step can be used later for grad accumulations
         """
+        self.gap_aware.try_apply_wd_correction_before_step()
         super().last_partition_step_and_statistics(x, y, loss, step=step)
         # TODO: self.ga.update_max_lr() add when we have per step scheduler
