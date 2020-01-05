@@ -1,0 +1,96 @@
+python partition_vision_models.py --model=amoebanet_4x512_c10 --batch_size=4 --dataset=imagenet --auto_file_name --n_iter=50
+cutting edges are edges between partitions
+number of cutting edges: 10
+
+backward times include recomputation
+
+theoretical times are execution time based on sum of graph weights ms
+forward {0: 36.56251330457627, 1: 43.02799873426554, 2: 46.72389183737339, 3: 44.827516707852475}
+backward {0: 171.36305918715914, 1: 178.61170556083317, 2: 166.52261956013749, 3: 223.43983604289588}
+
+real times are based on real measurements of execution time of generated partitions ms
+forward {0: 17.974924278259277, 1: 22.232363510131837, 2: 26.400901756286622, 3: 18.965998039245605}
+backward {0: 71.50876235961914, 1: 67.00939208984374, 2: 66.21449188232423, 3: 93.31653274536133}
+
+imbalance is ratio of computation time between fastest and slowest parts between 0 and 1 higher is better
+theoretical imbalance:
+forward 0.7825228564400267
+backward 0.7452682677773204
+
+real imbalance:
+forward 0.6808450879515531
+backward 0.7095687112915764
+
+topology aware imbalance is worst imbalance between 2 connected partitions
+theoretical topology aware imbalance:
+forwad 0.8497377145142367
+backward 0.7452682677773204
+
+real topology aware imbalance:
+forwad 0.7183844784668915
+backward 0.7095687112915764
+
+communication volumes size of activations of each partition
+0: input size: 2.408448 MB recieve_time: 0.200704 ms out: 57.802752 MB send time: 1.605632 ms
+1: input size: 57.802752 MB recieve_time: 1.605632 ms out: 12.845056 MB send time: 0.802816 ms
+2: input size: 12.845056 MB recieve_time: 0.802816 ms out: 16.05632 MB send time: 0.5352106666666667 ms
+3: input size: 16.05632 MB recieve_time: 0.5352106666666667 ms out: 0.00016 MB send time: 1.3333333333333333e-05 ms
+
+ideal latency is the time that passes for a forward/backward pass to reach and leave the partition
+ideal theoretical latencies ms
+forward {0: 36.56251330457627, 1: 79.59051203884181, 2: 126.3144038762152, 3: 171.14192058406766}
+backward {0: 739.9372203510256, 1: 568.5741611638666, 2: 389.9624556030334, 3: 223.43983604289588}
+
+ideal real latencies ms
+forward {0: 17.974924278259277, 1: 40.20728778839111, 2: 66.60818954467774, 3: 85.57418758392335}
+backward {0: 298.04917907714844, 1: 226.5404167175293, 2: 159.53102462768555, 3: 93.31653274536133}
+
+
+
+
+python partition_vision_models.py --model=amoebanet_4x512_c10 --batch_size=4 --dataset=imagenet --auto_file_name --n_iter=50 --no_recomputation
+cutting edges are edges between partitions
+number of cutting edges: 10
+
+backward times do not include recomputation
+
+theoretical times are execution time based on sum of graph weights ms
+forward {0: 37.34155520811677, 1: 42.5077638154477, 2: 46.80358269296588, 3: 45.04414840660991}
+backward {0: 138.5753146025539, 1: 136.77676357328895, 2: 121.96041022807358, 3: 180.56821946501742}
+
+real times are based on real measurements of execution time of generated partitions ms
+forward {0: 18.25617607116699, 1: 22.505909080505372, 2: 26.244375038146973, 3: 19.247387466430663}
+backward {0: 54.97085975646973, 1: 44.10177391052246, 2: 41.42689224243164, 3: 74.43851486206054}
+
+imbalance is ratio of computation time between fastest and slowest parts between 0 and 1 higher is better
+theoretical imbalance:
+forward 0.7978354018981723
+backward 0.675425667868989
+
+real imbalance:
+forward 0.6956224350791779
+backward 0.5565249698922445
+
+topology aware imbalance is worst imbalance between 2 connected partitions
+theoretical topology aware imbalance:
+forwad 0.8784643523060726
+backward 0.675425667868989
+
+real topology aware imbalance:
+forwad 0.7333909623854261
+backward 0.5565249698922445
+
+communication volumes size of activations of each partition
+0: input size: 2.408448 MB recieve_time: 0.200704 ms out: 44.957696 MB send time: 1.605632 ms
+1: input size: 44.957696 MB recieve_time: 1.605632 ms out: 12.845056 MB send time: 0.802816 ms
+2: input size: 12.845056 MB recieve_time: 0.802816 ms out: 16.05632 MB send time: 0.5352106666666667 ms
+3: input size: 16.05632 MB recieve_time: 0.5352106666666667 ms out: 0.00016 MB send time: 1.3333333333333333e-05 ms
+
+ideal latency is the time that passes for a forward/backward pass to reach and leave the partition
+ideal theoretical latencies ms
+forward {0: 37.34155520811677, 1: 79.84931902356448, 2: 126.65290171653035, 3: 171.69705012314026}
+backward {0: 577.8807078689339, 1: 439.30539326637995, 2: 302.52862969309103, 3: 180.56821946501742}
+
+ideal real latencies ms
+forward {0: 18.25617607116699, 1: 40.762085151672366, 2: 67.00646018981934, 3: 86.25384765625}
+backward {0: 214.9380407714844, 1: 159.96718101501466, 2: 115.86540710449219, 3: 74.43851486206054}
