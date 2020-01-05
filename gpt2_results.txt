@@ -1,0 +1,94 @@
+python partition_gpt2_models.py --train_data_file=$TRAIN_FILE --batch_size=1 --n_partitions=4  --n_iter=100  --auto_file_name
+
+cutting edges are edges between partitions
+number of cutting edges: 6
+
+backward times include recomputation
+
+theoretical times are execution time based on sum of graph weights ms
+forward {0: 6.3457984013482935, 1: 7.1283001580089325, 2: 6.58803392469883, 3: 12.49970501959324}
+backward {0: 26.473986899219458, 1: 26.80979936905205, 2: 24.73929728329182, 3: 38.7170605711639}
+
+real times are based on real measurements of execution time of generated partitions ms
+forward {0: 10.828360328674316, 1: 11.266380805969238, 2: 10.863835201263427, 3: 25.809545593261717}
+backward {0: 29.583561210632325, 1: 30.275753879547118, 2: 29.382874526977538, 3: 80.29840393066407}
+
+imbalance is ratio of computation time between fastest and slowest parts between 0 and 1 higher is better
+theoretical imbalance:
+forward 0.5076758524622205
+backward 0.6389766402286596
+
+real imbalance:
+forward 0.4195486623174549
+backward 0.36592102817322514
+
+topology aware imbalance is worst imbalance between 2 connected partitions
+theoretical topology aware imbalance:
+forwad 0.527055151651348
+backward 0.6389766402286596
+
+real topology aware imbalance:
+forwad 0.4209231488407036
+backward 0.36592102817322514
+
+communication volumes size of activations of each partition
+0: input size: 0.008192 MB recieve_time: 0.0006826666666666666 ms out: 34.603008 MB send time: 1.0485760000000002 ms
+1: input size: 15.72864 MB recieve_time: 1.0485760000000002 ms out: 22.020096000000002 MB send time: 0.5242880000000001 ms
+2: input size: 3.145728 MB recieve_time: 0.26214400000000004 ms out: 25.165824 MB send time: 0.5242880000000001 ms
+3: input size: 6.299648 MB recieve_time: 0.26214400000000004 ms out: 224.727044 MB send time: 17.154389333333334 ms
+
+ideal latency is the time that passes for a forward/backward pass to reach and leave the partition
+ideal theoretical latencies ms
+forward {0: 6.3457984013482935, 1: 13.474098559357227, 2: 20.062132484056058, 3: 32.5618375036493}
+backward {0: 116.74014412272723, 1: 90.26615722350778, 2: 63.45635785445572, 3: 38.7170605711639}
+
+ideal real latencies ms
+forward {0: 10.828360328674316, 1: 22.094741134643556, 2: 32.95857633590698, 3: 58.7681219291687}
+
+
+python partition_gpt2_models.py --train_data_file=$TRAIN_FILE --batch_size=1 --n_partitions=4  --n_iter=100  --auto_file_name --no_recomputation
+
+number of cutting edges: 6
+
+backward times do not include recomputation
+
+theoretical times are execution time based on sum of graph weights ms
+forward {0: 6.356078717187048, 1: 7.136023680120706, 2: 6.605385281071067, 3: 12.468888304680586}
+backward {0: 19.833754240870473, 1: 19.192713598012922, 2: 17.910776008069515, 3: 25.972826886326068}
+
+real times are based on real measurements of execution time of generated partitions ms
+forward {0: 10.702656021118164, 1: 11.175321598052978, 2: 10.815456657409667, 3: 25.699629764556885}
+backward {0: 19.868926105499266, 1: 19.7481308555603, 2: 19.393600902557374, 3: 55.802997779846194}
+
+imbalance is ratio of computation time between fastest and slowest parts between 0 and 1 higher is better
+theoretical imbalance:
+forward 0.5097550448664373
+backward 0.6895967114576586
+
+real imbalance:
+forward 0.4164517590007663
+backward 0.34753690077850197
+
+topology aware imbalance is worst imbalance between 2 connected partitions
+theoretical topology aware imbalance:
+forwad 0.5297493344768779
+backward 0.6895967114576586
+
+real topology aware imbalance:
+forwad 0.42084095204848365
+backward 0.34753690077850197
+
+communication volumes size of activations of each partition
+0: input size: 0.008192 MB recieve_time: 0.0006826666666666666 ms out: 34.603008 MB send time: 1.0485760000000002 ms
+1: input size: 15.72864 MB recieve_time: 1.0485760000000002 ms out: 22.020096000000002 MB send time: 0.5242880000000001 ms
+2: input size: 3.145728 MB recieve_time: 0.26214400000000004 ms out: 25.165824 MB send time: 0.5242880000000001 ms
+3: input size: 6.299648 MB recieve_time: 0.26214400000000004 ms out: 224.727044 MB send time: 17.154389333333334 ms
+
+ideal latency is the time that passes for a forward/backward pass to reach and leave the partition
+ideal theoretical latencies ms
+forward {0: 6.356078717187048, 1: 13.492102397307754, 2: 20.09748767837882, 3: 32.5663759830594}
+backward {0: 82.91007073327897, 1: 63.0763164924085, 2: 43.88360289439558, 3: 25.972826886326068}
+
+ideal real latencies ms
+forward {0: 10.702656021118164, 1: 21.87797761917114, 2: 32.69343427658081, 3: 58.39306404113769}
+backward {0: 114.81365564346314, 1: 94.94472953796387, 2: 75.19659868240356, 3: 55.802997779846194}

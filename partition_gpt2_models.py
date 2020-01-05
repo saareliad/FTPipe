@@ -68,6 +68,7 @@ class TextDataset(Dataset):
             with open(cached_features_file, 'rb') as handle:
                 self.examples = pickle.load(handle)
 
+        else:
             self.examples = []
             with open(file_path, encoding="utf-8") as f:
                 text = f.read()
