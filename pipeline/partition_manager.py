@@ -86,7 +86,7 @@ class SinglePartitionManager:
         self.gap_aware = gap_aware
 
     def set_weight_stasher(self, weight_stasher: WeightStasher):
-        if self.is_last_partition and not (weight_stasher is None) :
+        if self.is_last_partition and not (weight_stasher is None):
             raise NotImplementedError()
 
         self.weight_stasher = weight_stasher
@@ -124,9 +124,17 @@ class SinglePartitionManager:
                     self.expected_staleness(batch_idx, done_bwds))
                 self.weight_predictor.forward()
                 x = self.partition(x, batch_idx)
+
+                if self.weight_stasher and self.partition.training:
+                    self.weight_stasher.stash_current(
+                        batch_idx, batch_idx - done_bwds)
+
                 self.weight_predictor.revert()
             else:
                 x = self.partition(x, batch_idx)
+                if self.weight_stasher and self.partition.training:
+                    self.weight_stasher.stash_current(
+                        batch_idx, batch_idx - done_bwds)
 
             send_ctx = self.task.pack_send_context(x, *ctx)
             # print("Sending", *ctx, ctx[0].shape)
@@ -162,23 +170,26 @@ class SinglePartitionManager:
             if self.weight_predictor and self.partition.training:
                 self.weight_predictor.setup(
                     self.expected_staleness(batch_idx, done_bwds))
-                # self.mb_to_fix_by_ga[batch_idx] = ((batch_idx - done_bwds) == 1)
                 self.weight_predictor.forward()
 
                 # Stash parameters for later.
                 # Note: wait stasher should not be in last partition.
                 # and not self.is_last_partition
-                if self.weight_stasher and self.partition.training:
-                    self.weight_stasher.stash_current(batch_idx)
 
                 x = self.partition(x, batch_idx)
+
+                if self.weight_stasher and self.partition.training:
+                    self.weight_stasher.stash_current(
+                        batch_idx, batch_idx - done_bwds)
+
                 self.weight_predictor.revert()
             else:
                 # Stash parameters for later.
-                if self.weight_stasher and self.partition.training:
-                    self.weight_stasher.stash_current(batch_idx)
-
                 x = self.partition(x, batch_idx)
+
+                if self.weight_stasher and self.partition.training:
+                    self.weight_stasher.stash_current(
+                        batch_idx, batch_idx - done_bwds)
 
             if not self.is_last_partition:
                 send_ctx = self.task.pack_send_context(x, *ctx)
@@ -252,20 +263,7 @@ class SinglePartitionManager:
         g = self.comm_handler.fix_after_recv(g)
 
         if self.weight_stasher:
-            # FIXME
-            raise NotImplementedError()
-            
-            # Possible problem:
-            # what we are about to do is:
-            # restore stashed wieghts.data
-            # compute backward on them
-            # restore back current, up to date weights.data, with restore_last().
-            # however, there is possibility that current `batch_index` is not last.
-            # (This can happen in case of several backwards one after another)
-            # In this case, we need to stash the currect version of weight so it will be the last.
-            # This is problematic,
-            # TODO
-            self.weight_stasher.stash_if_current_is_last(batch_idx)
+            self.weight_stasher.ensure_correct_post_restore(batch_idx)
             # Restore to parameters which the fwd was run on
             self.weight_stasher.pop_restore_stashed(batch_idx)
 
@@ -278,9 +276,8 @@ class SinglePartitionManager:
             self.trainer.modify_gradients()
 
         if self.weight_stasher:
-            # Restore to previosly saved parameters, we we can do the step on them.
-            self.weight_stasher.restore_last()
-            # TODO: look to pipedream implementation and udnerstand what they do with the weight decay.
+            # Restore to previosly saved parameters, so we can do the step on them.
+            self.weight_stasher.post_restore(batch_idx)
 
         # Step and statistics
         request_objects = None
@@ -297,6 +294,7 @@ class SinglePartitionManager:
             self.trainer.modify_gradients()
 
         self.trainer.non_last_partition_step()
+        self.weight_stasher.mark_stashed_as_dirty()
         return request_objects
 
     def expected_staleness(self, done_fwds, done_bwds):
@@ -309,7 +307,8 @@ class SinglePartitionManager:
 
         for done_fwds in range(num_batches):
 
-            sent_request_objects = self.run_batch_forward(done_fwds, num_batches)
+            sent_request_objects = self.run_batch_forward(
+                done_fwds, num_batches)
             if sent_request_objects:  # last partition returns empty list.
                 self.async_fwd_objects[done_fwds] = sent_request_objects
 

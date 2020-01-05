@@ -11,6 +11,7 @@ from optimizers import AVAILBALE_OPTIMIZERS
 from pipeline.util import get_world_size
 import optimizers.lr_scheduler
 from pipeline.work_schedulers import AVAILABLE_WORK_SCHEDULERS
+from pipeline.weight_stashing import WeightStasher
 
 import models
 import numpy as np
@@ -121,7 +122,8 @@ def parse_cli():
     parser.add_argument(
         "--num_chunks", help="Number of chunks for Double Buffering", type=int, default=4)
 
-    parser.add_argument("--weight_stashing", action="store_true", default=False, help="Do weight Stashing")
+    parser.add_argument("--weight_stashing", action="store_true",
+                        default=False, help="Do weight Stashing")
     # TODO: option for weigth stashing just statistics.
 
     # TODO: Deprecated
@@ -545,10 +547,10 @@ def main():
 
     eval_tensor_shapes = {"input0": (
         *bs_test, *BASE_INPUT_SHAPE), "target": (*bs_test, *BASE_TARGET_SHAPE)}
-    
+
     del x
     del y
-    
+
     comm_init_args, shapes = \
         create_distributed_communcation_context(args, configs, stage,
                                                 stage_to_rank_map=None,
@@ -572,6 +574,7 @@ def main():
     assert not (statistics is None)
     work_scheduler = AVAILABLE_WORK_SCHEDULERS.get(args.work_scheduler)
 
+    # Init the partition
     partition = SinglePartitionManager(
         stage,
         configs, configs[stage]['model'],
@@ -580,10 +583,8 @@ def main():
         device, is_last_partition, is_first_partition)
 
     # Set Trainer
-    # FIXME: this `if` is just to support trainers hardcoded with their own default optimizer.
-    # currently thats just the `dummy` trainer,
-    # This is to be removed
-
+    # Set optimizer, (after the partition is on its device)
+    # and other classes which need a reference to the optimizer
     optimizer = optimizer_cls(
         partition.partition.parameters(), **args.optimizer['args'])
 
@@ -592,6 +593,9 @@ def main():
     # TODO: scheduler for sched aware prediction
     weight_predictor, nag_with_predictor = get_weight_predictor(
         args, optimizer, scheduler=scheduler)
+
+    weight_stasher = WeightStasher(optimizer) if hasattr(
+        args, "weight_stashing") and args.weight_stashing else None
 
     # trainer_args = dict(optimizer=optimizer,
     #                     scheduler=scheduler, statistics=statistics)
@@ -610,6 +614,9 @@ def main():
     partition.set_trainer(trainer)
     if weight_predictor:
         partition.set_weight_predictor(weight_predictor, nag_with_predictor)
+
+    if weight_stasher and not is_last_partition:
+        partition.set_weight_stasher(weight_stasher)
 
     # Set Task
     task = task_cls(device, is_last_partition, is_first_partition)
@@ -634,7 +641,8 @@ def main():
 
     while epochs < args.epochs or args.epochs < 0:
         if args.steps > 0:
-            TRAIN_BATCHES_TO_RUN = min(TRAIN_BATCHES_TO_RUN, args.steps - steps)
+            TRAIN_BATCHES_TO_RUN = min(
+                TRAIN_BATCHES_TO_RUN, args.steps - steps)
 
         did_train = False
         did_eval = False
@@ -723,7 +731,8 @@ def main():
             logger.info('-' * 89)
 
         if args.steps > 0 and steps >= args.steps:
-            logger.info(f"Finished all steps. Total steps:{steps}, rank:{args.local_rank}")
+            logger.info(
+                f"Finished all steps. Total steps:{steps}, rank:{args.local_rank}")
             break  # steps condition met
 
     # TODO: sync statistics from other partitions too.
@@ -759,4 +768,6 @@ def main():
 
 
 if __name__ == "__main__":
+
+    print(f"Using {torch.get_num_threads()} Threads")
     main()
