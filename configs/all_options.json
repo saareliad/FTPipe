@@ -61,6 +61,7 @@
     "test_batches_limit":-1,
     "weight_stashing": true,
     "work_scheduler": "1F1B",
-    "cpu": false
-
+    "cpu": false,
+    "seed_from_cmd": true,
+    "auto_file_name": true
 }

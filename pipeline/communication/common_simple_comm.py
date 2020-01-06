@@ -16,8 +16,8 @@ class SimpleCommBase(CommunicationHandlerBase):
                  receive_ranks, send_ranks,
                  tensor_tags, target_tensor_names,
                  training_tensor_dtypes,
-                 ranks_in_previous_stage,
-                 ranks_in_next_stage,
+                 ranks_in_previous_stage,  # TODO: Remove these
+                 ranks_in_next_stage,  # TODO: Remove these
                  TOTAL_TAGS,
                  cpu,
                  num_chunks,

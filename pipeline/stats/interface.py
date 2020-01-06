@@ -31,3 +31,21 @@ class Stats(abc.ABC):
 
     def get_epoch_info_str(self, is_train):
         return ''
+
+    def update_statistic_after_batch(self, name, value):
+        if hasattr(self, f"epoch_{name}_meter"):
+            meter = getattr(self, f"epoch_{name}_meter")
+            if not (value is None):
+                meter.update(value)
+                # print(f"update_statistic_after_batch for {name}, val: {value}")
+            else:
+                print(f"-W- NONE VALUE for {name}, val: {value}")
+
+        else:
+            raise NotImplementedError(name)
+
+    def has_statistic(self, name):
+        return hasattr(self, f"epoch_{name}_meter")
+
+    def add_statistic(self, name, meter):
+        setattr(self, f"epoch_{name}_meter", meter)

@@ -1,16 +1,22 @@
 {
     "logdir": "logs/",
     "out_dir":"results/",
-    "out_filename": "dummy_ga_no_wd",
+    "out_filename": "exp",
+    "auto_file_name": true,
     "distributed_backend": "mpi",
     "task": "cv",
-    "statistics": "cv",
-    "model": "wrn_16x4_p2",
-    "dataset": "cifar10",
-    "trainer": "cv",
+    "statistics": "cv_theta_dist_grad_norm",
+    "model": "wrn_28x10_c100_dr03_p4",
+    "dataset": "cifar100",
+    "trainer": {
+        "type": "cv",
+        "args": {
+            "always_calc_grad_norm": true
+        }
+    },
     "bs_train": 128,
     "bs_test": 200,
-    "num_data_workers": 6,
+    "num_data_workers": 10,
     "optimizer": {
         "type": "sgd1",
         "args": {
@@ -38,17 +44,19 @@
     },
     "gap_aware": {
         "type": "sgd1",
-        "policy": "almost_last_partition",
+        "policy": "all_except_last",
         "args": {
             "big_gamma": 0.999,
             "epsilon": 1e-8,
-            "penatly_for_weight_decay": false
+            "penatly_for_weight_decay": true
         }
     },
-    "epochs": 200,
+    "epochs": 205,
     "steps": -1,
     "seed": 42,
-    "num_chunks": 2,
+    "num_chunks": 1,
     "verbose_comm": false,
-    "flush_rate": -1
+    "flush_rate": -1,
+    "weight_stashing": true,
+    "work_scheduler": "1F1B"
 }

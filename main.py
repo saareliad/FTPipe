@@ -143,7 +143,8 @@ def parse_json_config(args):
 
     # replace
     for key, value in output.items():
-        # if hasattr(args, key):
+        if key == 'seed' and 'seed_from_cmd' in output:
+            continue
         setattr(args, key, value)
 
     # Explicit yuck replace
@@ -439,18 +440,196 @@ def get_weight_predictor(args, optimizer, scheduler=None):
 
 
 def hack_trainer_to_gap_aware(args):
+
+    def hack():
+        args.trainer['type'] += "_gap_aware"
+
     if hasattr(args, 'gap_aware'):
         # on = args.gap_aware['on']
-        assert args.gap_aware['policy'] == 'almost_last_partition'
+        if args.gap_aware['policy'] == 'almost_last_partition':
+            is_almost_last_partition = args.local_rank == args.world_size - 2
 
-        is_almost_last_partition = args.local_rank == args.world_size - 2
+            # HACK: change trainer name
+            if is_almost_last_partition:
+                hack()
+                return True
 
-        # HACK: change trainer name
-        if is_almost_last_partition:
-            args.trainer['type'] += "_gap_aware"
-            return True
+        elif args.gap_aware['policy'] == 'all_except_last':
+            is_last_partition = args.local_rank == args.world_size - 1
+            if not is_last_partition:
+                hack()
+                return True
+        else:
+            SUPPORTED_POLICIES = {'almost_last_partition', 'all_except_last'}
+            raise ValueError(f"Uknown policy for GA {args.gap_aware['policy']}.\
+                             suported policies are {SUPPORTED_POLICIES}")
 
     return False
+
+
+def auto_file_name(args):
+    assert hasattr(args, "auto_file_name")
+    wp = args.weight_prediction['type'] if args.weight_prediction else 'stale'
+    ws = "ws_" if (hasattr(args, "weight_stashing")
+                   and args.weight_stashing) else ""
+    ga = "ga_" if hasattr(args, "gap_aware") else ""
+    s = f'{args.model}_{args.dataset}_{wp}_{ws}{ga}seed_{args.seed}'
+    args.out_filename = f"{args.out_filename}_{s}"
+
+
+def save_distributed_experiment(statistics, args, world_size, rank, local_rank, stage):
+
+    def carefull_del(config, name):
+        if name in config:
+            del config[name]
+
+    UN_NEEDED_ARGS = ['stage', 'rank', 'local_rank']
+
+    if rank == world_size - 1:
+        if statistics:
+            fit_res = statistics.get_stats(stage)
+            config = vars(args)
+
+            # remove unneeded added args
+            for name in UN_NEEDED_ARGS:
+                carefull_del(config, name)
+
+            save_experiment(args.out_filename, args.out_dir, config, fit_res)
+    torch.distributed.barrier()
+
+    # Update statistics one by one:
+    for current_rank in reversed(range(world_size - 1)):
+        if rank == current_rank:
+            if statistics:
+                my_fit_res = statistics.get_stats(stage)
+                config, fit_res = load_experiment_for_update(
+                    args.out_filename, args.out_dir)
+
+                # Update just the fit res
+                for k, v in my_fit_res.items():
+                    if k not in fit_res:
+                        fit_res[k] = v
+                # save it
+                save_experiment(args.out_filename,
+                                args.out_dir, config, fit_res)
+
+        torch.distributed.barrier()
+
+
+def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition,
+                  gap_aware, use_gap_aware, scheduler, statistics):
+    epochs = 0
+    steps = 0
+    logger.info(f"flush rate {args.flush_rate}")
+    logger.info(f"Running for {args.epochs} epochs and {args.steps} steps")
+
+    if not hasattr(args, "train_batches_limit"):
+        TRAIN_BATCHES_TO_RUN = len(train_dl)
+    else:
+        TRAIN_BATCHES_TO_RUN = getattr(args, "train_batches_limit") if getattr(
+            args, "train_batches_limit") >= 0 else len(train_dl)
+
+    if not hasattr(args, "test_batches_limit"):
+        TEST_BATCHES_TO_RUN = len(test_dl)
+    else:
+        TEST_BATCHES_TO_RUN = getattr(args, "test_batches_limit") if getattr(
+            args, "test_batches_limit") >= 0 else len(test_dl)
+
+    while epochs < args.epochs or args.epochs < 0:
+        if args.steps > 0:
+            TRAIN_BATCHES_TO_RUN = min(
+                TRAIN_BATCHES_TO_RUN, args.steps - steps)
+
+        did_train = False
+        did_eval = False
+        epoch_start_time = time.time()
+        # steps_at_epoch_start = steps
+        for TRAIN in [True, False]:
+            logger.info(f"Running {'train' if TRAIN else 'eval'}")
+
+            # TRAIN_BATCHES_TO_RUN = 4
+            # TEST_BATCHES_TO_RUN = 30
+
+            if TRAIN:
+                if TRAIN_BATCHES_TO_RUN == 0:
+                    continue
+                # Set Dataloader
+                # sets only to first partition
+                if is_first_partition:
+                    partition.set_dataloader(train_dl)
+                # Start training
+                partition.train()
+                if statistics:
+                    statistics.train()
+                if args.flush_rate > 0:
+                    for _ in range(0, TRAIN_BATCHES_TO_RUN, args.flush_rate):
+                        if use_gap_aware:
+                            # Gap calculation assumes staleness 1, so skipping first batch in flush.
+                            gap_aware.skip_one_apply()
+                        partition.run_until_flush(
+                            min(args.flush_rate, len(train_dl)))
+
+                    reminder = len(train_dl) % args.flush_rate
+                    if reminder > 0:
+                        if use_gap_aware:
+                            gap_aware.skip_one_apply()
+                        partition.run_until_flush(reminder)
+                else:
+                    if use_gap_aware:
+                        gap_aware.skip_one_apply()
+                    partition.run_until_flush(
+                        min(TRAIN_BATCHES_TO_RUN, len(train_dl)))
+
+                scheduler.step()
+                if use_gap_aware:
+                    gap_aware.update_max_lr()
+                did_train = True
+                if args.local_rank == args.world_size - 1:
+                    statistics.on_epoch_end()
+                else:
+                    statistics.non_latst_partition_on_epoch_end()
+            else:  # EVAL
+                # Set Dataloader
+                # sets only to first partition
+                if TEST_BATCHES_TO_RUN == 0:
+                    continue
+                if is_first_partition:
+                    partition.set_dataloader(test_dl)
+                partition.eval()
+
+                if statistics:
+                    statistics.eval()
+
+                with torch.no_grad():  # TODO maybe remove this?
+                    partition.run_forward_until_flush(
+                        min(TEST_BATCHES_TO_RUN, len(test_dl)))
+
+                did_eval = True
+                if args.local_rank == args.world_size - 1:
+                    statistics.on_epoch_end()
+
+        epochs += 1
+        if did_train:
+            steps += TRAIN_BATCHES_TO_RUN
+
+        # if is_last_partition
+        if args.local_rank == args.world_size - 1:
+            logger.info('-' * 89)
+            # ms/batch {:5.2f}
+            info_str = '| end of epoch {:3d} | time: {:5.2f}s | steps: {:5d}'.format(
+                epochs, (time.time() - epoch_start_time), steps)
+            if did_train:
+                info_str += statistics.get_epoch_info_str(is_train=True)
+            if did_eval:
+                info_str += statistics.get_epoch_info_str(is_train=False)
+
+            logger.info(info_str)
+            logger.info('-' * 89)
+
+        if args.steps > 0 and steps >= args.steps:
+            logger.info(
+                f"Finished all steps. Total steps:{steps}, rank:{args.local_rank}")
+            break  # steps condition met
 
 
 def main():
@@ -597,17 +776,13 @@ def main():
     weight_stasher = WeightStasher(optimizer) if hasattr(
         args, "weight_stashing") and args.weight_stashing else None
 
-    # trainer_args = dict(optimizer=optimizer,
-    #                     scheduler=scheduler, statistics=statistics)
-
-    # is_almost_last_partition = args.local_rank == args.world_size - 2
-
     trainer_extra_args = args.trainer['args']
     if hasattr(trainer_cls, "HAS_GAP_AWARE"):
         gap_aware = get_gap_aware(args, optimizer)
         trainer = trainer_cls(gap_aware, partition.partition, optimizer=optimizer,
                               scheduler=scheduler, statistics=statistics, **trainer_extra_args)
     else:
+        gap_aware = None
         trainer = trainer_cls(partition.partition, optimizer=optimizer,
                               scheduler=scheduler, statistics=statistics, **trainer_extra_args)
 
@@ -621,150 +796,21 @@ def main():
     # Set Task
     task = task_cls(device, is_last_partition, is_first_partition)
     partition.set_task(task)
+    training_loop(args, logger, train_dl, test_dl, is_first_partition, partition,
+                  gap_aware, use_gap_aware, scheduler, statistics)
 
-    epochs = 0
-    steps = 0
-    logger.info(f"flush rate {args.flush_rate}")
-    logger.info(f"Running for {args.epochs} epochs and {args.steps} steps")
+    if hasattr(args, "auto_file_name"):
+        auto_file_name(args)
 
-    if not hasattr(args, "train_batches_limit"):
-        TRAIN_BATCHES_TO_RUN = len(train_dl)
-    else:
-        TRAIN_BATCHES_TO_RUN = getattr(args, "train_batches_limit") if getattr(
-            args, "train_batches_limit") >= 0 else len(train_dl)
-
-    if not hasattr(args, "test_batches_limit"):
-        TEST_BATCHES_TO_RUN = len(test_dl)
-    else:
-        TEST_BATCHES_TO_RUN = getattr(args, "test_batches_limit") if getattr(
-            args, "test_batches_limit") >= 0 else len(test_dl)
-
-    while epochs < args.epochs or args.epochs < 0:
-        if args.steps > 0:
-            TRAIN_BATCHES_TO_RUN = min(
-                TRAIN_BATCHES_TO_RUN, args.steps - steps)
-
-        did_train = False
-        did_eval = False
-        epoch_start_time = time.time()
-        # steps_at_epoch_start = steps
-        for TRAIN in [True, False]:
-            logger.info(f"Running {'train' if TRAIN else 'eval'}")
-
-            # TRAIN_BATCHES_TO_RUN = 4
-            # TEST_BATCHES_TO_RUN = 30
-
-            if TRAIN:
-                if TRAIN_BATCHES_TO_RUN == 0:
-                    continue
-                # Set Dataloader
-                # sets only to first partition
-                if is_first_partition:
-                    partition.set_dataloader(train_dl)
-                # Start training
-                partition.train()
-                if statistics:
-                    statistics.train()
-                if args.flush_rate > 0:
-                    for _ in range(0, TRAIN_BATCHES_TO_RUN, args.flush_rate):
-                        if use_gap_aware:
-                            # Gap calculation assumes staleness 1, so skipping first batch in flush.
-                            gap_aware.skip_one_apply()
-                        partition.run_until_flush(
-                            min(args.flush_rate, len(train_dl)))
-
-                    reminder = len(train_dl) % args.flush_rate
-                    if reminder > 0:
-                        if use_gap_aware:
-                            gap_aware.skip_one_apply()
-                        partition.run_until_flush(reminder)
-                else:
-                    if use_gap_aware:
-                        gap_aware.skip_one_apply()
-                    partition.run_until_flush(
-                        min(TRAIN_BATCHES_TO_RUN, len(train_dl)))
-
-                scheduler.step()
-                if use_gap_aware:
-                    gap_aware.update_max_lr()
-                did_train = True
-                if args.local_rank == args.world_size - 1:
-                    statistics.on_epoch_end()
-                else:
-                    statistics.non_latst_partition_on_epoch_end()
-            else:  # EVAL
-                # Set Dataloader
-                # sets only to first partition
-                if TEST_BATCHES_TO_RUN == 0:
-                    continue
-                if is_first_partition:
-                    partition.set_dataloader(test_dl)
-                partition.eval()
-
-                if statistics:
-                    statistics.eval()
-
-                with torch.no_grad():  # TODO maybe remove this?
-                    partition.run_forward_until_flush(
-                        min(TEST_BATCHES_TO_RUN, len(test_dl)))
-
-                did_eval = True
-                if args.local_rank == args.world_size - 1:
-                    statistics.on_epoch_end()
-
-        epochs += 1
-        if did_train:
-            steps += TRAIN_BATCHES_TO_RUN
-
-        # if is_last_partition
-        if args.local_rank == args.world_size - 1:
-            logger.info('-' * 89)
-            # ms/batch {:5.2f}
-            info_str = '| end of epoch {:3d} | time: {:5.2f}s | steps: {:5d}'.format(
-                epochs, (time.time() - epoch_start_time), steps)
-            if did_train:
-                info_str += statistics.get_epoch_info_str(is_train=True)
-            if did_eval:
-                info_str += statistics.get_epoch_info_str(is_train=False)
-
-            logger.info(info_str)
-            logger.info('-' * 89)
-
-        if args.steps > 0 and steps >= args.steps:
-            logger.info(
-                f"Finished all steps. Total steps:{steps}, rank:{args.local_rank}")
-            break  # steps condition met
-
-    # TODO: sync statistics from other partitions too.
+    # sync statistics from other partitions too.
     # if is_last_partition
-    if args.rank == get_world_size(args.distributed_backend) - 1:
-        if statistics:
-            fit_res = statistics.get_stats(args.stage)
-            config = vars(args)
-            # remove unneeded added args
-            # del config['stage']
-            # del config['rank'] # FIXME: if we do this we cant use args.rank later...
-            # del config['local_rank']
-            save_experiment(args.out_filename, args.out_dir, config, fit_res)
-    torch.distributed.barrier()
 
-    # Update statistics one by one:
-    for current_rank in reversed(range(get_world_size(args.distributed_backend) - 1)):
-        if args.rank == current_rank:
-            if statistics:
-                my_fit_res = statistics.get_stats(args.stage)
-                config, fit_res = load_experiment_for_update(
-                    args.out_filename, args.out_dir)
-
-                # Update just the fit res
-                for k, v in my_fit_res.items():
-                    if k not in fit_res:
-                        fit_res[k] = v
-                # save it
-                save_experiment(args.out_filename,
-                                args.out_dir, config, fit_res)
-
-        torch.distributed.barrier()
+    world_size = get_world_size(args.distributed_backend)
+    rank = args.rank
+    local_rank = args.local_rank
+    stage = args.stage
+    save_distributed_experiment(
+        statistics, args, world_size, rank, local_rank, stage)
 
 
 if __name__ == "__main__":

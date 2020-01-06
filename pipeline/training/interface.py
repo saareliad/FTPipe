@@ -1,4 +1,6 @@
 import abc
+from itertools import chain
+import torch
 
 # class LossTrainer(abc.ABC):
 #     # TODO: for models which returns only loss...
@@ -49,6 +51,30 @@ class PartitionedTrainer(AnyTrainer):
     @abc.abstractmethod
     def non_last_partition_step(self, *args, **kw):
         pass
+
+    @staticmethod
+    def calc_gap(i1, i2, p=2):
+        # i1 = chain.from_iterable([[p for p in pg['params']] for pg in self.trainer.optimizer.param_groups])
+        # i2 = chain.from_iterable(real_theta)
+
+        with torch.no_grad():
+            total_norm = sum([torch.dist(a, b, p=p).item()
+                              for a, b in zip(i1, i2)])
+
+            # total_norm = torch.stack([torch.dist(a, b, p=p) for a, b in zip(i1, i2)]).sum().item()
+
+        return total_norm
+
+    def try_record_real_gap_from_current(self, real_theta):
+        if self.statistics.has_statistic("gap"):
+            with torch.no_grad():
+                gap = sum([torch.dist(a, b, p=2).item() for a, b in
+                           zip(chain.from_iterable([[p for p in pg['params']]
+                                                    for pg in self.optimizer.param_groups]),
+                               chain.from_iterable(real_theta))])
+
+            self.statistics.update_statistic_after_batch(
+                "gap", gap)
 
 
 class PartitionedSupervisedTrainer(PartitionedTrainer, SupervisedTrainer):

@@ -359,6 +359,7 @@ def make_functional(
     # setattr(MonkeyPatched, "forward", _patched_forward)
     # setattr(MonkeyPatched, "forward", _patched_forward)
 
+    # FIXME: can remove thous actually.
     setattr(MonkeyPatched, "parameters", _patched_parameters)
     setattr(MonkeyPatched, "update_params", _update_params)
 

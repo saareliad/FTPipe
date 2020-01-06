@@ -99,3 +99,12 @@ class WeightStasher:
     # Exposed for statistics and alike
     def get_stashed_buff(self, batch_index, default=None):
         return self.theta_buffer.get(batch_index, default)
+
+    def tmp_buff_top(self):
+        """ if tmp_buff, returns its top. else returns None.
+        a None return value means that current weight is "correct".
+        """
+        if self.temporery_short_term_buff:
+            return self.temporery_short_term_buff[-1]
+        
+        # return None

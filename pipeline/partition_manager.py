@@ -58,7 +58,8 @@ class SinglePartitionManager:
         # self.dl_iter = None
 
         # self.mb_to_fix_by_ga = {}
-        self.modify_gradients_before_send = True  # FIXME add as option
+        self.modify_gradients_before_send = False  # FIXME add as option
+        self.delay_at_batch = {}
 
         # Hints
         self.task: DLTask
@@ -112,6 +113,10 @@ class SinglePartitionManager:
                 self.device)
 
     def run_batch_forward(self, batch_idx, num_batches, done_bwds=None):
+
+        if self.gap_aware and self.partition.training:
+            self.delay_at_batch[batch_idx] = batch_idx - done_bwds
+
         if self.is_first_partition:
             data = next(self.dl_iter)
             # TODO: handle y with separate coordinated dataloader
@@ -262,22 +267,15 @@ class SinglePartitionManager:
         # TODO: maybe a different fix for gradients?
         g = self.comm_handler.fix_after_recv(g)
 
+        real_theta = None
         if self.weight_stasher:
             self.weight_stasher.ensure_correct_post_restore(batch_idx)
             # Restore to parameters which the fwd was run on
             self.weight_stasher.pop_restore_stashed(batch_idx)
+            real_theta = self.weight_stasher.tmp_buff_top()
 
         # Compute gradeints
         self.partition.recompute_and_backward(g, batch_idx)
-
-        # TODO: we can modify just the gradeint of the first layer.
-        if self.modify_gradients_before_send:
-            # Modify gradients
-            self.trainer.modify_gradients()
-
-        if self.weight_stasher:
-            # Restore to previosly saved parameters, so we can do the step on them.
-            self.weight_stasher.post_restore(batch_idx)
 
         # Step and statistics
         request_objects = None
@@ -289,9 +287,21 @@ class SinglePartitionManager:
                 g = (g,)
             request_objects = self.comm_handler.send_gradients(g, batch_idx)
 
-        if not self.modify_gradients_before_send:
-            # Modify gradients
-            self.trainer.modify_gradients()
+        if real_theta:
+            self.trainer.try_record_real_gap_from_current(real_theta)
+
+        delay = self.delay_at_batch.pop(batch_idx, None)
+
+        # TODO: remove. its for debug.
+        if self.gap_aware and (delay is None):
+            raise RuntimeError(f"delay is None for batch:{batch_idx}")
+
+        # possible Modify gradients (e.g Gap aware)
+        self.trainer.modify_gradients(real_theta, delay)
+
+        if self.weight_stasher:
+            # Restore to previosly saved parameters, so we can do the step on them.
+            self.weight_stasher.post_restore(batch_idx)
 
         self.trainer.non_last_partition_step()
         self.weight_stasher.mark_stashed_as_dirty()

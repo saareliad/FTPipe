@@ -28,7 +28,7 @@ class GapAware:
 
         Before apply:
             inc_step_count()
-        
+
         # Apply on gradients:
             apply_grad_only()
 
@@ -54,7 +54,7 @@ class GapAware:
 
         ga.update_running_avg()
         ga.inc_step_count()
-        ga.apply_grad_only()
+        ga.apply()
 
         # Send gradients in pipeline
 
@@ -142,15 +142,15 @@ class GapAware:
     # and i'm afraid of it...
     def apply(self, from_grad=True, on_grad=True, try_on_wd=True, ignore_skip_apply=False):
         assert (on_grad or try_on_wd)
-        
+
         if self.skip_next_apply and not ignore_skip_apply:
             # Flip
             self.skip_next_apply = False
-        
+
         if self.skip_next_apply:
             # Skip (not, we sometime only Skip, but don't Flip)
             return
-        
+
         if (not on_grad) and (try_on_wd and (not self.penatly_for_weight_decay)):
             # nothing to do.
             return
@@ -198,10 +198,67 @@ class GapAware:
                             p.grad.data += p.data.mul(weight_decay *
                                                       ((1 - penalty) / penalty))
 
-    def try_apply_wd_correction_before_step(self, from_grad=True):
-        # This call also flips the "skip one apply".
-        self.apply(from_grad=from_grad, on_grad=False,
-                   try_on_wd=True, ignore_skip_apply=False)
+    def apply_on_theta(self, real_theta, delay, from_grad=False, on_grad=True, try_on_wd=True, ignore_skip_apply=False):
+        assert (on_grad or try_on_wd)
+
+        if self.skip_next_apply and not ignore_skip_apply:
+            # Flip
+            self.skip_next_apply = False
+
+        if self.skip_next_apply:
+            # Skip (not, we sometime only Skip, but don't Flip)
+            return
+
+        if (not on_grad) and (try_on_wd and (not self.penatly_for_weight_decay)):
+            # nothing to do.
+            return
+
+        if from_grad:
+            raise NotImplementedError(
+                "Use the other function")
+
+        with torch.no_grad():
+            bias_correction = 1 - (self.big_gamma ** self.step_count)
+            # Calculate gap from grad
+            for pg, rpg in zip(self.optimizer.param_groups, real_theta):
+                if pg[self.MAX_LR_NAME] <= 0:
+                    continue
+                weight_decay = pg['weight_decay']
+                for p, rp in zip(pg['params'], rpg):
+                    # if p.grad is None:
+                    #     continue
+                    # calculate C coefficient per-element
+                    # Note: can remove the "data". but whatever.
+                    avg_steps_needed = pg[self.MAX_LR_NAME] * \
+                        (((self.running_avg_step[id(
+                            p)].data / bias_correction) ** 0.5) + self.epsilon)
+
+                    avg_steps_needed *= delay
+                    gap = (p - rp).abs()
+                    # pg['lr'] * p.grad.abs()
+
+                    # calculate the gap per-element
+                    penalty = 1 + (gap / avg_steps_needed)
+
+                    # Apply penalty to gradient
+                    if on_grad:
+                        p.grad.data /= penalty
+                    # Apply penalty to weight decay (as it will be part of the gradient)
+                    # HACK: we know that sgd does
+                    #   d_p += p*wd
+                    # and we want:
+                    #   d_p += p*wd/penalty
+                    # so we solve:
+                    # x + z + p*wd = x + (p*wd / penalty)
+                    # giving:
+                    # z = p*wd ((1/penalty) - 1) = ((1 - penalty) / penalty)
+                    # so we do
+                    #   d_p += z
+                    # z =  p.data * weight_decay * ((1 - penalty) / penalty)
+                    if try_on_wd:
+                        if self.penatly_for_weight_decay:
+                            p.grad.data += p.data.mul(weight_decay *
+                                                      ((1 - penalty) / penalty))
 
     def apply_grad_only(self, from_grad=True):
         # This call does not flips the "skip one apply"
@@ -209,6 +266,11 @@ class GapAware:
         # `try_apply_wd_correction_before_step() must be done.
         self.apply(from_grad=from_grad, on_grad=True,
                    try_on_wd=False, ignore_skip_apply=True)
+
+    def try_apply_wd_correction_before_step(self, from_grad=True):
+        # This call also flips the "skip one apply".
+        self.apply(from_grad=from_grad, on_grad=False,
+                   try_on_wd=True, ignore_skip_apply=False)
 
 
 # FIXME: keys are hardcoded from optimizers...

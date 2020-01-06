@@ -1,23 +1,29 @@
 {
     "logdir": "logs/",
     "out_dir":"results/",
-    "out_filename": "ninja_msnag_calc",
+    "out_filename": "exp",
+    "auto_file_name": true,
     "distributed_backend": "mpi",
     "task": "cv",
-    "statistics": "cv",
-    "model": "wrn_16x4_p2",
-    "dataset": "cifar10",
-    "trainer": "cv",
+    "statistics": "cv_theta_dist_grad_norm",
+    "model": "wrn_28x10_c100_dr03_p4",
+    "dataset": "cifar100",
+    "trainer": {
+        "type": "cv",
+        "args": {
+            "always_calc_grad_norm": true
+        }
+    },
     "bs_train": 128,
     "bs_test": 200,
-    "num_data_workers": 6,
+    "num_data_workers": 10,
     "optimizer": {
         "type": "sgd1",
         "args": {
             "lr": 0.1,
             "weight_decay": 0.0005,
             "momentum": 0.9,
-            "nesterov": false
+            "nesterov": true
         }
     },
     "lr_scheduler": {
@@ -29,17 +35,21 @@
             "last_epoch": -1
         }
     },
-    "weight_prediction": {
-        "type": "msnag",
+    "gap_aware": {
+        "type": "sgd1",
+        "policy": "all_except_last",
         "args": {
-            "pred_mem": "calc",
-            "nag_with_predictor": true
+            "big_gamma": 0.999,
+            "epsilon": 1e-8,
+            "penatly_for_weight_decay": true
         }
     },
-    "epochs": 200,
+    "epochs": 205,
     "steps": -1,
     "seed": 42,
-    "num_chunks": 4,
+    "num_chunks": 1,
     "verbose_comm": false,
-    "flush_rate": -1
+    "flush_rate": -1,
+    "weight_stashing": true,
+    "work_scheduler": "1F1B"
 }

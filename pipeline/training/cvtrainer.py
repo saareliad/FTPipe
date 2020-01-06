@@ -18,8 +18,20 @@ def calc_norm(parameters, norm_type=2):
     return total_norm
 
 
+def calc_gap(i1, i2, p=2):
+    # i1 = chain.from_iterable([[p for p in pg['params']] for pg in self.trainer.optimizer.param_groups])
+    # i2 = chain.from_iterable(real_theta)
+
+    with torch.no_grad():
+        total_norm = torch.sum([torch.dist(a, b, p=p)
+                                for a, b in zip(i1, i2)]).item()
+
+    return total_norm
+
+
 class CVTrainer(PartitionedSupervisedTrainer):
-    def __init__(self, model, optimizer, scheduler, statistics, max_grad_norm=None, always_calc_grad_norm=False):
+    def __init__(self, model, optimizer, scheduler, statistics, max_grad_norm=None,
+                 always_calc_grad_norm=False):
         self.loss_fn = torch.nn.CrossEntropyLoss()
         self.optimizer = optimizer
         self.scheduler = scheduler
@@ -102,11 +114,18 @@ class GapAwareCVTrainer(CVTrainer):
         super().__init__(*args, **kw)
         self.gap_aware = gap_aware
 
-    def modify_gradients(self):
+    def modify_gradients(self, real_theta=None, delay=None):
         # TODO: we may want to save some statistics before we modify grad.
         self.gap_aware.update_running_avg()
         self.gap_aware.inc_step_count()
-        self.gap_aware.apply_grad_only()  # Modifys gradients, don't
+        # It does not help to modify the (Gap Aware) gradients before we send,
+        # so do everything here.
+        if real_theta is None or delay is None:
+            self.gap_aware.apply()
+        else:
+            self.gap_aware.apply_on_theta(real_theta, delay)
+
+        # self.gap_aware.apply_grad_only()  # Modifys gradients, don't
 
     def last_partition_step_and_statistics(self, x, y, loss, step=True):
         """
@@ -115,6 +134,6 @@ class GapAwareCVTrainer(CVTrainer):
 
         step can be used later for grad accumulations
         """
-        self.gap_aware.try_apply_wd_correction_before_step()
+        # self.gap_aware.try_apply_wd_correction_before_step()
         super().last_partition_step_and_statistics(x, y, loss, step=step)
         # TODO: self.ga.update_max_lr() add when we have per step scheduler

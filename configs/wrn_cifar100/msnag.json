@@ -41,7 +41,7 @@
             "nag_with_predictor": true
         }
     },
-    "epochs": 200,
+    "epochs": 205,
     "steps": -1,
     "seed": 42,
     "num_chunks": 1,
