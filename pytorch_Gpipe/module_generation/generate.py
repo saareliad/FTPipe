@@ -142,7 +142,7 @@ def createConfig(graph: Graph, partitions: List[List[Node]], model: Module, ios:
     # function header
     lines = [
         f"def createConfig(model,DEBUG=False,partitions_only=False):",
-        "layer_dict = layerDict(model)",
+        f"layer_dict = layerDict(model,depth={graph.depth})",
         "tensor_dict = tensorDict(model)",
         f"\n{tab}# now constructing the partitions in order"
     ]

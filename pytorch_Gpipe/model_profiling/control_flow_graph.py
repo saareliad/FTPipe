@@ -6,6 +6,9 @@ import inspect
 import torch
 import re
 from copy import deepcopy
+
+#TODO support list and tuple layer outputs
+
 class Graph():
     '''
     a Graph data structure that model a pytorch network built from a pytorch trace\n

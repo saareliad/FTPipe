@@ -89,8 +89,8 @@ def traverse_params_buffs(module: nn.Module, prefix: Optional[str] = None) -> It
         yield from traverse_params_buffs(sub_module, prefix + "/" + type(sub_module).__name__ + f"[{name}]")
 
 
-def layerDict(model: nn.Module):
-    return {s: l for l, s, _ in traverse_model(model, 1000)}
+def layerDict(model: nn.Module, depth=1000):
+    return {s: l for l, s, _ in traverse_model(model, depth)}
 
 
 def tensorDict(model: nn.Module):

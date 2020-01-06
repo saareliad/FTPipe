@@ -42,9 +42,12 @@ def create_model(cfg='wrn_16x4'):
     return MODEL_CFG_TO_SAMPLE_MODEL[cfg](**MODEL_CONFIGS[cfg])
 
 
-def create_random_sample(args):
+def create_random_sample(args, analysis=False):
     dataset = args.dataset
-    batch_size = args.batch_size
+    if analysis:
+        batch_size = args.analysis_batch_size
+    else:
+        batch_size = args.batch_size
 
     if dataset == 'cifar10' or dataset == 'cifar100':
         sample = torch.randn(batch_size, 3, 32, 32)
@@ -109,6 +112,10 @@ if __name__ == "__main__":
                         default=False, help="wether to use recomputation for the backward pass")
     parser.add_argument('--no_analysis', action='store_true',
                         default=False, help="disable partition analysis")
+    parser.add_argument("--depth", default=1000, type=int,
+                        help="the depth in which we will partition the model")
+    parser.add_argument("--analysis_batch_size", default=8, type=int,
+                        help="batch size to use during the post partition analysis")
 
     args = parser.parse_args()
 
@@ -122,7 +129,7 @@ if __name__ == "__main__":
     # and drink a cup of coffee in the meantime
     # define model and sample batch
     model = create_model(args.model)
-    sample = create_random_sample(args)
+    sample = create_random_sample(args, analysis=False)
 
     if isinstance(model, AmoebaNet_D) and args.dataset != 'imagenet':
         error = "amoebanet supported input size is 3x224x244, use imagenet dataset instead"
@@ -140,7 +147,7 @@ if __name__ == "__main__":
     # if the model needs kwargs pass a dictionary
     # DEBUG switches between verbose generated code and compressed code
     n_iter = args.n_iter
-    graph = pipe_model(model, sample, kwargs=None, nparts=args.n_partitions,
+    graph = pipe_model(model, sample, depth=args.depth, kwargs=None, nparts=args.n_partitions,
                        DEBUG=VERBOSE_PARTITIONING, output_file=args.output_file, weight_func=by_time, n_iter=n_iter)
     graph.save(args.output_file, ".")
 
@@ -156,6 +163,7 @@ if __name__ == "__main__":
     bandwidth_gps = args.bandwidth_gps
     recomputation = not args.no_recomputation
     if not args.no_analysis:
+        sample = create_random_sample(args, analysis=True)
         run_analysis(sample, graph, config, n_iter,
                      recomputation=recomputation, bandwidth_gps=bandwidth_gps)
     # test_gpipe_stuff()

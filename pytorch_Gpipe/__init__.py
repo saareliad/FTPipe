@@ -16,7 +16,7 @@ __all__ = ['pipe_model', 'partition_with_profiler',
 # TODO pytorch jit trace / get_trace_graph do not support kwargs
 
 def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, n_iter=10, nparts: int = 4,
-               partition_by_memory: bool = False, output_file: str = None, DEBUG=False, weight_func=None, **METIS_opt):
+               depth=1000, partition_by_memory: bool = False, output_file: str = None, DEBUG=False, weight_func=None, **METIS_opt):
     '''attemps to partition a model to given number of parts using our profiler
        this will produce a python file with the partition config
 
@@ -55,7 +55,7 @@ def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] =
     else:
         w_func = by_time
 
-    graph = partition_with_profiler(model, sample_batch, kwargs=kwargs, n_iter=n_iter, nparts=nparts,
+    graph = partition_with_profiler(model, sample_batch, kwargs=kwargs, max_depth=depth, n_iter=n_iter, nparts=nparts,
                                     weighting_function=w_func, METIS_opt=METIS_opt)
 
     generatePartitionModules(graph, model,

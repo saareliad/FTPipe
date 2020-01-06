@@ -5,40 +5,28 @@ from contextlib import nullcontext
 
 
 def run_analysis(sample, graph, config, n_iter, recomputation=True, bandwidth_gps=16):
-    edges, theoretical_f_times, theoretical_b_times = theoretical_analysis(graph,
-                                                                           recomputation=recomputation)
+    # thoeretical analysis
+    sequential_f, sequential_b, parallel_f, parallel_b = theoretical_analysis(graph, config,
+                                                                              recomputation=recomputation)
+    edges = edge_cut(graph)
+    # theoretical analysis based on the graph assuming the computation is sequential
+    theoretical_sequential_b_imbalance = worst_imbalance(sequential_b)
+    theoretical_sequential_f_imbalance = worst_imbalance(sequential_f)
+    topology_aware_sequential_f_imbalance, topology_aware_sequential_b_imbalance = topology_aware_imbalance(sequential_f,
+                                                                                                            sequential_b, edges)
+    # theoretical anaysis based on the graph assuming the computation is fully parallel
+    theoretical_parallel_b_imbalance = worst_imbalance(parallel_b)
+    theoretical_parallel_f_imbalance = worst_imbalance(parallel_f)
+    topology_aware_parallel_f_imbalance, topology_aware_parallel_b_imbalance = topology_aware_imbalance(parallel_f,
 
-    forward_dependencies, backward_dependencies = find_dependencies(edges,
-                                                                    len(theoretical_f_times))
-
-    # theoretical statistics based on the graph
-    theoretical_b_imbalance = worst_imbalance(theoretical_b_times)
-
-    theoretical_f_imbalance = worst_imbalance(theoretical_f_times)
-
-    ideal_t_f_latency = calculate_ideal_latency(forward_dependencies,
-                                                theoretical_f_times)
-    ideal_t_b_latency = calculate_ideal_latency(backward_dependencies,
-                                                theoretical_b_times)
-
-    topology_aware_t_f_imbalance, topology_aware_t_b_imbalance = topology_aware_imbalance(theoretical_f_times,
-                                                                                          theoretical_b_times, edges)
-
+                                                                                                        parallel_b, edges)
     # real statistics based on generated partitions
     real_f_times, real_b_times, comm_volume = profile_execution(sample, config, n_iter,
                                                                 recomputation=recomputation, bandwidth_gps=bandwidth_gps)
-
     real_b_imbalance = worst_imbalance(real_b_times)
-
     real_f_imbalance = worst_imbalance(real_f_times)
-
-    ideal_a_f_latency = calculate_ideal_latency(forward_dependencies,
-                                                real_f_times)
-    ideal_a_b_latency = calculate_ideal_latency(backward_dependencies,
-                                                real_b_times)
-
-    topology_aware_a_f_imbalance, topology_aware_a_b_imbalance = topology_aware_imbalance(real_f_times,
-                                                                                          real_b_times, edges)
+    topology_aware_real_f_imbalance, topology_aware_real_b_imbalance = topology_aware_imbalance(real_f_times,
+                                                                                                real_b_times, edges)
 
     print("cutting edges are edges between partitions")
     print(f"number of cutting edges: {len(edges)}\n")
@@ -47,22 +35,29 @@ def run_analysis(sample, graph, config, n_iter, recomputation=True, bandwidth_gp
         print("backward times include recomputation")
     else:
         print("backward times do not include recomputation")
+
     print(
-        f"\ntheoretical times are execution time based on sum of graph weights ms\nforward {theoretical_f_times}\nbackward {theoretical_b_times}")
+        f"\ntheoretical times are execution time based on sum of graph weights ms\nsequential forward {sequential_f}\nsequential backward {sequential_b}")
+    print(f"parallel forward {parallel_f}\nparallel backward {parallel_b}")
+
     print(
         f"\nreal times are based on real measurements of execution time of generated partitions ms\nforward {real_f_times}\nbackward {real_b_times}")
 
     print("\nimbalance is ratio of computation time between fastest and slowest parts between 0 and 1 higher is better")
     print(
-        f"theoretical imbalance:\nforward {theoretical_f_imbalance}\nbackward {theoretical_b_imbalance}")
+        f"theoretical sequential imbalance:\nforward {theoretical_sequential_f_imbalance}\nbackward {theoretical_sequential_b_imbalance}")
+    print(
+        f"theoretical parallel imbalance:\nforward {theoretical_parallel_f_imbalance}\nbackward {theoretical_parallel_b_imbalance}")
     print(
         f"\nreal imbalance:\nforward {real_f_imbalance}\nbackward {real_b_imbalance}")
 
     print("\ntopology aware imbalance is worst imbalance between 2 connected partitions")
     print(
-        f"theoretical topology aware imbalance:\nforwad {topology_aware_t_f_imbalance}\nbackward {topology_aware_t_b_imbalance}")
+        f"theoretical sequential topology aware imbalance:\nforwad {topology_aware_sequential_f_imbalance}\nbackward {topology_aware_sequential_b_imbalance}")
     print(
-        f"\nreal topology aware imbalance:\nforwad {topology_aware_a_f_imbalance}\nbackward {topology_aware_a_b_imbalance}")
+        f"theoretical parallel topology aware imbalance:\nforwad {topology_aware_parallel_f_imbalance}\nbackward {topology_aware_parallel_b_imbalance}")
+    print(
+        f"\nreal topology aware imbalance:\nforwad {topology_aware_real_f_imbalance}\nbackward {topology_aware_real_b_imbalance}")
 
     print(
         f"\ncommunication volumes size of activations of each partition")
@@ -70,12 +65,27 @@ def run_analysis(sample, graph, config, n_iter, recomputation=True, bandwidth_gp
     for idx, volume in comm_volume.items():
         print(f"{idx}: {volume}")
 
-    print(
-        f"\nideal latency is the time that passes for a forward/backward pass to reach and leave the partition")
-    print(
-        f"ideal theoretical latencies ms\nforward {ideal_t_f_latency}\nbackward {ideal_t_b_latency}")
-    print(
-        f"\nideal real latencies ms\nforward {ideal_a_f_latency}\nbackward {ideal_a_b_latency}")
+    # latency stuff not in use right now
+    # forward_dependencies, backward_dependencies = find_dependencies(edges,
+    #                                                                 len(theoretical_f_times))
+    # ideal_t_f_latency = calculate_ideal_latency(forward_dependencies,
+    #                                             theoretical_f_times)
+    # ideal_t_b_latency = calculate_ideal_latency(backward_dependencies,
+    #                                             theoretical_b_times)
+    # ideal_sum_t_f_latency = calculate_ideal_latency(forward_dependencies,
+    #                                                 f_sum)
+    # ideal_sum_t_b_latency = calculate_ideal_latency(backward_dependencies,
+    #                                                 b_sum)
+    # ideal_a_f_latency = calculate_ideal_latency(forward_dependencies,
+    #                                             real_f_times)
+    # ideal_a_b_latency = calculate_ideal_latency(backward_dependencies,
+    #                                             real_b_times)
+    # print(
+    #     f"\nideal latency is the time that passes for a forward/backward pass to reach and leave the partition")
+    # print(
+    #     f"ideal theoretical latencies ms\nforward {ideal_t_f_latency}\nbackward {ideal_t_b_latency}")
+    # print(
+    #     f"\nideal real latencies ms\nforward {ideal_a_f_latency}\nbackward {ideal_a_b_latency}")
 
 
 def profile_execution(model_inputs, partition_config, n, recomputation=True, bandwidth_gps=16):
@@ -145,65 +155,84 @@ def profile_execution(model_inputs, partition_config, n, recomputation=True, ban
     return avg_f_times, avg_b_times, communication_volume
 
 
-def calculate_ideal_latency(dependencies, times):
-    '''calculates latency as sum of exec time of partition dependencies
+def edge_cut(graph):
     '''
-    n_parts = len(times)
-
-    ideal = {i: times[i]+sum(times[j] for j in dependencies[i])
-             for i in range(n_parts)}
-
-    return ideal
-
-
-def find_dependencies(cutting_edges, n_parts):
-    ''' find input/output dependencies between all partitions
-        a partiton is dependent on another if there is a path between them in the graph
+    find the cutting edges of the graph
     '''
-    forward_dependencies = {i: set() for i in range(n_parts)}
-    backward_dependencies = {i: set() for i in range(n_parts)}
-    while True:
-        changed = False
-        for u, v in cutting_edges:
-            # update input paths
-            prev = len(forward_dependencies[v.part])
-            forward_dependencies[v.part].add(u.part)
-            forward_dependencies[v.part].update(forward_dependencies[u.part])
-            if len(forward_dependencies[v.part]) > prev:
-                changed = True
-
-            # update output paths:
-            prev = len(backward_dependencies[u.part])
-            backward_dependencies[u.part].add(v.part)
-            backward_dependencies[u.part].update(backward_dependencies[v.part])
-            if len(backward_dependencies[u.part]) > prev:
-                changed = True
-
-        if not changed:
-            break
-
-    return forward_dependencies, backward_dependencies
-
-
-def theoretical_analysis(graph, recomputation=True):
-    ''' find cutting edges and execution time of partitions based on the model's graph
-    '''
-    n_parts = len(set(n.part for n in graph.nodes))
     edges = []
-    b_times = {i: 0 for i in range(n_parts)}
-    f_times = {i: 0 for i in range(n_parts)}
     for n in graph.nodes:
-        b_times[n.part] += extract_time(n.weight,
-                                        forward=False)
-        if recomputation:
-            b_times[n.part] += extract_time(n.weight, forward=True)
-        f_times[n.part] += extract_time(n.weight,
-                                        forward=True)
         for u in n.out_nodes:
             if n.part != u.part:
                 edges.append((n, u))
 
-    return edges, f_times, b_times
+    return edges
+
+
+def theoretical_analysis(graph, partition_config, recomputation=True):
+    ''' find execution time of partitions based on the model's graph using 2 a sequential assumption and parallel assumption
+        the sequential assumption is that in the partition all operation are linear.
+        the parallel assumption assumes that all computation paths are concurrent.
+    '''
+    n_parts = len(set(n.part for n in graph.nodes))
+    parallel_b = dict()
+    parallel_f = dict()
+
+    tensor_names = set()
+    for i in range(n_parts):
+        tensor_names.update(partition_config[i]['outputs'])
+
+    sequential_f = {i: 0 for i in range(n_parts)}
+    sequential_b = {i: 0 for i in range(n_parts)}
+
+    nodes = dict()
+    for node in graph.nodes:
+        # cache relevant nodes to make fetching them faster
+        if node.scope in tensor_names:
+            nodes[node.scope] = node
+
+        # old way of measuring time as sum of all computation
+        sequential_f[node.part] += extract_time(node.weight, forward=True)
+        sequential_b[node.part] += extract_time(node.weight, forward=False)
+
+    # new way of measuring time as longest path where all paths are concurrent
+    for i in range(n_parts):
+        outputs = [nodes[name] for name in partition_config[i]['outputs']]
+        cache = dict()
+        parallel_f[i] = 0
+        parallel_b[i] = 0
+        for o in outputs:
+            f, b = parallel_execution_analysis(o, i, cache)
+            parallel_f[i] = max(parallel_f[i], f)
+            parallel_b[i] = max(parallel_b[i], b)
+
+        if recomputation:
+            sequential_b[i] += sequential_f[i]
+            parallel_b[i] += parallel_f[i]
+
+    return sequential_f, sequential_b, parallel_f, parallel_b
+
+
+def parallel_execution_analysis(node, part_idx, cache):
+    # use cache in order to remember common subpaths
+    if node.scope in cache:
+        return cache[node.scope]
+    elif node.part != part_idx:
+        cache[node.scope] = (0, 0)
+        return 0, 0
+
+    longest_f, longest_b = 0, 0
+
+    for n in node.in_nodes:
+        f, b = parallel_execution_analysis(n, part_idx, cache)
+        longest_f = max(f, longest_f)
+        longest_b = max(b, longest_b)
+
+    longest_f += extract_time(node.weight, forward=True)
+    longest_b += extract_time(node.weight, forward=False)
+
+    cache[node.scope] = (longest_f, longest_b)
+
+    return longest_f, longest_b
 
 
 def cuda_time(partition, inputs, recomputation=True):
@@ -213,7 +242,8 @@ def cuda_time(partition, inputs, recomputation=True):
     b_time, outputs = cuda_backward(partition, inputs,
                                     recomputation=recomputation)
     f_time = cuda_forward(partition, inputs, recomputation=recomputation)
-
+    partition = partition.cpu()
+    partition.device = 'cpu'
     return f_time, b_time, outputs
 
 
@@ -294,6 +324,8 @@ def cpu_backward(partition, inputs, recomputation=True):
 
 
 def extract_time(w, forward=False):
+    if hasattr(w, "weight"):
+        w = w.weight
     if not hasattr(w, "forward_time"):
         return 0
     if forward:
@@ -358,3 +390,44 @@ def run_partitions(model_inputs, partition_config):
             parts.append(idx)
 
     return [activations[o] for o in partition_config['model outputs']]
+
+
+# latency stuff not in use
+def calculate_ideal_latency(dependencies, times):
+    '''calculates latency as sum of exec time of partition dependencies
+    '''
+    n_parts = len(times)
+
+    ideal = {i: times[i]+sum(times[j] for j in dependencies[i])
+             for i in range(n_parts)}
+
+    return ideal
+
+
+def find_dependencies(cutting_edges, n_parts):
+    ''' find input/output dependencies between all partitions
+        a partiton is dependent on another if there is a path between them in the graph
+    '''
+    forward_dependencies = {i: set() for i in range(n_parts)}
+    backward_dependencies = {i: set() for i in range(n_parts)}
+    while True:
+        changed = False
+        for u, v in cutting_edges:
+            # update input paths
+            prev = len(forward_dependencies[v.part])
+            forward_dependencies[v.part].add(u.part)
+            forward_dependencies[v.part].update(forward_dependencies[u.part])
+            if len(forward_dependencies[v.part]) > prev:
+                changed = True
+
+            # update output paths:
+            prev = len(backward_dependencies[u.part])
+            backward_dependencies[u.part].add(v.part)
+            backward_dependencies[u.part].update(backward_dependencies[v.part])
+            if len(backward_dependencies[u.part]) > prev:
+                changed = True
+
+        if not changed:
+            break
+
+    return forward_dependencies, backward_dependencies

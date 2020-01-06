@@ -146,7 +146,7 @@ def weight_func(w):
 def partition_model(args, train_dataset, model, tokenizer):
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(
-        train_dataset, sampler=train_sampler, batch_size=args.batch_size)
+        train_dataset, sampler=train_sampler, batch_size=args.partitioning_batch_size)
 
     model_to_resize = model.module if hasattr(model, 'module') else model
     model_to_resize.resize_token_embeddings(len(tokenizer))
@@ -160,8 +160,7 @@ def partition_model(args, train_dataset, model, tokenizer):
     labels = labels.to(args.device)
     sample = (inputs, labels)
     model.train()
-
-    graph = pipe_model(model, sample, n_iter=args.n_iter, nparts=args.n_partitions,
+    graph = pipe_model(model, sample, depth=args.depth, n_iter=args.n_iter, nparts=args.n_partitions,
                        weight_func=weight_func, output_file=args.output_file, DEBUG=False)
     graph.save(args.output_file, ".")
 
@@ -177,9 +176,17 @@ def partition_model(args, train_dataset, model, tokenizer):
     bandwidth_gps = args.bandwidth_gps
     recomputation = not args.no_recomputation
 
-    _ = run_partitions(sample, config)
+    # _ = run_partitions(sample, config)
     if not args.no_analysis:
-        run_analysis(sample, graph, config, args.n_iter,
+        # TODO assumes batch is first
+        shape = (args.analysis_batch_size, inputs.shape[1])
+        expanded_inputs = inputs[0].unsqueeze(0).expand(shape)
+        shape = (args.analysis_batch_size, labels.shape[1])
+        expanded_labels = labels[0].unsqueeze(0).expand(shape)
+
+        analysis_sample = (expanded_inputs, expanded_labels)
+
+        run_analysis(analysis_sample, graph, config, args.n_iter,
                      recomputation=recomputation, bandwidth_gps=bandwidth_gps)
 
     # model(inputs)
@@ -221,7 +228,8 @@ def main():
                         help="random seed for initialization")
 
     # parameters of the partitioning script
-    parser.add_argument('--batch_size', type=int, default=1)
+    parser.add_argument('--partitioning_batch_size', type=int, default=1,
+                        help="batch size to use when partitioning the model")
     parser.add_argument('--model_too_big', action='store_true', default=False,
                         help="if the model is too big run the whole partitioning process on CPU, and drink a cup of coffee in the meantime")
     parser.add_argument('--n_partitions', type=int, default=4)
@@ -234,8 +242,12 @@ def main():
                         default=12, help="data transfer rate between gpus in gigabaytes per second")
     parser.add_argument('--no_recomputation', action='store_true',
                         default=False, help="wether to use recomputation for the backward pass")
+    parser.add_argument('--analysis_batch_size', type=int, default=1,
+                        help="batch size to use when analysing the generated partititon")
     parser.add_argument('--no_analysis', action='store_true',
                         default=False, help="disable partition analysis")
+    parser.add_argument("--depth", default=1000, type=int,
+                        help="the depth in which we will partition the model")
 
     args = parser.parse_args()
 
