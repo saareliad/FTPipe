@@ -51,5 +51,6 @@
     "verbose_comm": false,
     "flush_rate": -1,
     "weight_stashing": true,
-    "work_scheduler": "1F1B"
+    "work_scheduler": "1F1B",
+    "seed_from_cmd": true
 }

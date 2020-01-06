@@ -1,8 +1,8 @@
 {
     "logdir": "logs/",
     "out_dir":"results/",
-    "out_filename": "exp",
     "auto_file_name": true,
+    "out_filename": "exp",
     "distributed_backend": "mpi",
     "task": "cv",
     "statistics": "cv_theta_dist_grad_norm",
@@ -44,12 +44,14 @@
             "penatly_for_weight_decay": true
         }
     },
-    "epochs": 205,
+    "epochs": 220,
     "steps": -1,
     "seed": 42,
     "num_chunks": 1,
     "verbose_comm": false,
     "flush_rate": -1,
     "weight_stashing": true,
-    "work_scheduler": "1F1B"
+    "work_scheduler": "1F1B",
+    "seed_from_cmd": true
+
 }

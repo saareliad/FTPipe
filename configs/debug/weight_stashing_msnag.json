@@ -1,10 +1,11 @@
 {
     "logdir": "logs/",
     "out_dir":"results/",
-    "out_filename": "weight_stashing_msnag",
+    "out_filename": "exp",
+    "auto_file_name": true,
     "distributed_backend": "mpi",
     "task": "cv",
-    "statistics": "cv_grad_norm",
+    "statistics": "cv_theta_dist_grad_norm",
     "model": "wrn_16x4_p4",
     "dataset": "cifar10",
     "trainer": {
@@ -48,5 +49,6 @@
     "verbose_comm": false,
     "flush_rate": -1,
     "weight_stashing": true,
-    "work_scheduler": "1F1B"
+    "work_scheduler": "1F1B",
+    "seed_from_cmd": true
 }

@@ -1,7 +1,8 @@
 {
     "logdir": "logs/",
     "out_dir":"results/",
-    "out_filename": "msnag",
+    "out_filename": "exp",
+    "auto_file_name": true,
     "distributed_backend": "mpi",
     "task": "cv",
     "statistics": "cv_grad_norm",
@@ -46,5 +47,6 @@
     "seed": 42,
     "num_chunks": 1,
     "verbose_comm": false,
-    "flush_rate": -1
+    "flush_rate": -1,
+    "seed_from_cmd": true
 }
