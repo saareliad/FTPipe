@@ -1,6 +1,6 @@
 name: msnag
 channels:
-  - saareliad # should be explicitly set first, to gain priority over pytorch, however anaconda got channel priority problems (*)
+  - saareliad  # should be explicitly set first, to gain priority over pytorch, however anaconda got channel priority problems (*)
   - pytorch
   - defaults
   - conda-forge
@@ -9,7 +9,7 @@ dependencies:
   - pip
 #  - pytorch # (*) therefore I removed this, and add script in makefile.
 #  - torchvision # Remove it too, as it requires pytorch...
-  - se-msnag1 # cuda aware openmpi
+  - se-msnag1  # cuda aware openmpi
   - cudatoolkit
   - jupyterlab
   - numpy
@@ -20,8 +20,12 @@ dependencies:
   - cython
   - pytest
   - tqdm
-  # - pybind11 # For binding c++ code to python, may be used to increace performance.
+  # - pybind11  # For binding c++ code to python, may be used to increace performance.
+  - graphviz  # For partitioning visualization
+  - python-graphviz  # For partitioning visualization
+  - networkx  # For partitioning
   - pip:
+    - git+https://github.com/networkx/networkx-metis.git  # For partitioning
     - matplotlib
     - nbmerge
     - pytest-xdist
