@@ -15,7 +15,6 @@ class SimpleCommBase(CommunicationHandlerBase):
                  stage,
                  receive_ranks, send_ranks,
                  tensor_tags, target_tensor_names,
-                 training_tensor_dtypes,
                  ranks_in_previous_stage,  # TODO: Remove these
                  ranks_in_next_stage,  # TODO: Remove these
                  TOTAL_TAGS,
@@ -35,14 +34,12 @@ class SimpleCommBase(CommunicationHandlerBase):
         self.receive_ranks = receive_ranks
         self.send_ranks = send_ranks
         self.tensor_tags = tensor_tags
+        self.TOTAL_TAGS = TOTAL_TAGS
         self.target_tensor_names = target_tensor_names
-        self.training_tensor_dtypes = training_tensor_dtypes
         self.ranks_in_previous_stage = ranks_in_previous_stage
         self.num_ranks_in_previous_stage = len(ranks_in_previous_stage)
         self.ranks_in_next_stage = ranks_in_next_stage
         self.num_ranks_in_next_stage = len(ranks_in_next_stage)
-        self.TOTAL_TAGS = TOTAL_TAGS
-        # self.comm_policy = to_policy(backend, cpu)
         self.cpu = cpu
         self.device = device
         self.world_size = world_size
@@ -55,7 +52,6 @@ class SimpleCommBase(CommunicationHandlerBase):
         self.logger.info(f"Initialized process group; backend: {backend}, rank: {rank}, "
                          f"local_rank: {local_rank}, world_size: {world_size}")
 
-        # GRAD_UGLY_SHAMEFUL_NAME = "_grad"
         # can spare the if, intentionally ugly.
         self.grad_rcv_items = [
             (i + GRAD_UGLY_SHAMEFUL_NAME, v) for i, v in self.send_ranks.items() if not (i in target_tensor_names)]
@@ -84,12 +80,15 @@ class SimpleCommBase(CommunicationHandlerBase):
     def set_tensor_shapes(self, tensor_shapes):
         self.tensor_shapes = tensor_shapes
 
+    def set_tensor_dtypes(self, tensor_dtypes):
+        self.tensor_dtypes = tensor_dtypes
+
     def _create_recv_buffers(self, device, tensor_names, requires_grad=False):
         # FIXME chunk
         with torch.no_grad():
             buffers = []
             for tensor_name in tensor_names:
-                dtype = self.training_tensor_dtypes[tensor_name]
+                dtype = self.tensor_dtypes[tensor_name]
                 # TODO: also eval dtype
                 shape = self.tensor_shapes[tensor_name]
                 # rcv_buffer = torch.empty(shape, dtype=dtype, requires_grad=requires_grad)

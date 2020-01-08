@@ -25,40 +25,29 @@ from experiments import save_experiment, load_experiment_for_update
 import time
 import random
 
+# TODO: support multiple servers,
+# TODO heterogenous servers
+# TODO: support mix precision, in the future
+
 
 def parse_cli():
+    # TODO: note, some arguments are supported only through config and not argparse.
     # TODO: replace all this
     # with a function to tell the avaialble options to the user,
     # as we overrride the entire thing by json config anyway.
 
     parser = argparse.ArgumentParser(
         description='PyTorch partition as part of Async Pipeline')
-    # parser.add_argument('--master_addr', default='127.0.0.1', type=str,
-    #                     help="IP address of master(machine with rank 0)."
-    #                     "DEPRECATED: Currently taken from env and not in use.")
-    # parser.add_argument('--master_port', default=6001,
-    #                     type=int, help="Port of master."
-    #                     "DEPRECATED: Currently taken from env and not in use.")
 
     parser.add_argument('--rank', default=None,
                         type=int, help="Rank of worker")
     parser.add_argument('--local_rank', default=0,
                         type=int, help="Local rank of worker")
 
-    # TODO: support multiple servers,
-    # TODO heterogenous servers...
-    # parser.add_argument('--num_ranks_in_server', default=1,
-    #                     type=int, help="number of gpus per machine")
-
-    # TODO: support mix precision, in the future
-    # parser.add_argument('--fp16', action='store_true',
-    #                     help='train model in fp16 precision')
-
     parser.add_argument('--distributed_backend',
                         choices=['gloo', 'nccl', 'mpi'], default='mpi', type=str,
                         help='distributed backend to use')
 
-    #
     parser.add_argument('--model', choices=list(models.SUPPORTED_CONFIGS), default='wrn_16x4_p2',
                         type=str, help="name of the file with partitioning definitions")
 
@@ -95,9 +84,6 @@ def parse_cli():
     parser.add_argument('--num-data-workers', type=int,
                         help='Number of workers to use for dataloading', default=0)
 
-    # parser.add_argument('--trainer', help='Trainer to use',
-    #                     choices=AVAILABLE_TRAINERS.keys(), default='cv') # TODO: Deprecated
-
     parser.add_argument('--task', help='Task type to use',
                         choices=AVAILABLE_TASKS.keys(), default='cv')
 
@@ -126,12 +112,8 @@ def parse_cli():
                         default=False, help="Do weight Stashing")
     # TODO: option for weigth stashing just statistics.
 
-    # TODO: Deprecated
-    # parser.add_argument("--max_grad_norm", required=False, default=None, help="Max value for gradient norm")
-
     args = parser.parse_args()
 
-    # TODO: note, some arguments are supported only through config and not argparse.
     return args
 
 
@@ -171,11 +153,13 @@ def parse_env_vars(args):
     if args.distributed_backend == 'mpi':
         args.rank = int(os.environ['OMPI_COMM_WORLD_RANK'])
         args.local_rank = int(os.environ['OMPI_COMM_WORLD_LOCAL_RANK'])
+        # Note this is overriden later.
         args.world_size = int(os.environ['OMPI_COMM_WORLD_SIZE'])
 
 
 def assert_args(args):
     assert (args.epochs >= 1 or args.steps >= 1)
+    assert(not (args.stage is None))
 
 
 def create_comm_handler(args, initialize_args, device) -> CommunicationHandlerBase:
@@ -186,7 +170,7 @@ def create_comm_handler(args, initialize_args, device) -> CommunicationHandlerBa
         args.rank,
         args.local_rank,
         args.distributed_backend,
-        get_world_size(args.distributed_backend),
+        args.world_size,
         args.num_stages,
         args.stage,
         *initialize_args,
@@ -199,19 +183,18 @@ def create_comm_handler(args, initialize_args, device) -> CommunicationHandlerBa
     return comm_handler
 
 
-def config_to_tuples_generator(configs):
-    """ allows iterating with the tuple: (stage_id, inputs, outputs) """
-    for i, v in configs.items():
-        yield i, v['inputs'], v['outputs']
-
-
-def config_to_tuples_array(configs):
-    return np.array(list(config_to_tuples_generator(configs)))
-
-
 # target_tensor_names = {"target", "target_length"}
 # target_tensor_names = {"target"}
 def tensor_tags_from_config(config, target_tensor_names, num_chunks, GRAD_UGLY_SHAMEFUL_NAME="_grad"):
+
+    def config_to_tuples_array(config):
+
+        def config_to_tuples_generator(config):
+            """ allows iterating with the tuple: (stage_id, inputs, outputs) """
+            for i, v in config.items():
+                yield i, v['inputs'], v['outputs']
+
+        return np.array(list(config_to_tuples_generator(config)))
 
     # Note: same tags for all proccess
 
@@ -251,36 +234,7 @@ def tensor_tags_from_config(config, target_tensor_names, num_chunks, GRAD_UGLY_S
     return tensor_tags, tensor_tag
 
 
-def create_distributed_communcation_context(args, config, stage, stage_to_rank_map=None,
-                                            target_tensor_names={"target"},
-                                            training_tensor_dtypes={
-                                                "input0": torch.int64, "target": torch.int64},
-                                            training_tensor_shapes={
-                                                "input0": None, "target": None},
-                                            eval_tensor_shapes={
-                                                "input0": None, "target": None},
-                                            random_input_sample=None,
-                                            bs_train=(1,),
-                                            bs_test=(1,)):
-    """
-    Returns:
-        target_tensor_names (input)
-        tensor_tags
-        receive_ranks
-        send_ranks
-        training_tensor_dtypes
-        training_tensor_shapes
-        eval_tensor_shapes
-        ranks_in_previous_stage
-        ranks_in_next_stage
-
-    TODO:
-        eval_tensor_dtypes
-        support weight sharing
-    """
-    assert(len(training_tensor_shapes) == len(training_tensor_dtypes))
-    tensor_tags, TOTAL_TAGS = tensor_tags_from_config(
-        config, target_tensor_names, args.num_chunks, GRAD_UGLY_SHAMEFUL_NAME="_grad")
+def get_my_send_recv_ranks(config, stage, stage_to_rank_map=None):
 
     def ranks_in_stage(given_stage):
         if stage_to_rank_map:
@@ -307,32 +261,40 @@ def create_distributed_communcation_context(args, config, stage, stage_to_rank_m
                         receive_ranks[tensor_name] = ranks_in_stage(i)
                     else:
                         send_ranks[tensor_name] = ranks_in_stage(j)
-    # this_stage = config['stage']
-    # this_stage_tensors = set(config['stage']['inputs'] + config['stage']['outputs'])
 
-    # Run a sequential forward pass to determine:
-    # training_tensor_dtypes
-    # training_tensor_shapes
-    # eval_tensor_shapes
-    # TODO: eval_tensor_dtypes
+    return send_ranks, receive_ranks
 
-    # with torch.no_grad():
+
+def infer_dtypes_and_shapes(config, bs_train, bs_test, random_input_sample,
+                            training_tensor_dtypes, training_tensor_shapes, eval_tensor_shapes):
+    """
+    Runs a sequential forward pass to determine:
+        # training_tensor_dtypes
+        # training_tensor_shapes
+        # eval_tensor_shapes
+        # TODO: eval_tensor_dtypes
+    """
+    assert(len(training_tensor_shapes) == len(training_tensor_dtypes))
+
+    bs_train = to_tuple(bs_train)
+    bs_test = to_tuple(bs_test)
+    len_bs = len(bs_train)
+
     for i, v in config.items():
         partition = v['model']
         if i == 0:
-            a = partition(random_input_sample)
+            with torch.no_grad():
+                a = partition(random_input_sample)
         else:
-            a = partition(*a)
+            with torch.no_grad():
+                a = partition(*a)
 
         outputs = v['outputs']
         dtypes = tuple(j.data.dtype for j in a)
 
         # Concatenate shapes with expected bs_train/bs_test
         # the batch size can be a collection (e.g (batch, seq_len) in NLP)
-        bs_train = to_tuple(bs_train)
-        bs_test = to_tuple(bs_test)
         # TODO: this assume that batch is first
-        len_bs = len(bs_train)
         train_shapes = tuple(
             tuple(list(bs_train) + list(j.data.size()[len_bs:])) for j in a)
         eval_shapes = tuple(
@@ -342,35 +304,65 @@ def create_distributed_communcation_context(args, config, stage, stage_to_rank_m
         training_tensor_shapes.update(zip(outputs, train_shapes))
         eval_tensor_shapes.update(zip(outputs, eval_shapes))
 
+    return training_tensor_dtypes, training_tensor_shapes, eval_tensor_shapes
+
+
+def create_distributed_communcation_context(args, config, stage,
+                                            target_tensor_names={"target"},
+                                            # training_tensor_dtypes={},
+                                            # training_tensor_shapes={}, eval_tensor_shapes={},
+                                            # random_input_sample=None,
+                                            # bs_train=(1,),
+                                            # bs_test=(1,),
+                                            stage_to_rank_map=None):
+    """
+    Returns:
+        target_tensor_names (input)
+        tensor_tags
+        receive_ranks
+        send_ranks
+        training_tensor_dtypes
+        training_tensor_shapes
+        eval_tensor_shapes
+        ranks_in_previous_stage
+        ranks_in_next_stage
+
+    TODO:
+        eval_tensor_dtypes
+        support weight sharing
+    """
+    tensor_tags, TOTAL_TAGS = tensor_tags_from_config(
+        config, target_tensor_names, args.num_chunks, GRAD_UGLY_SHAMEFUL_NAME="_grad")
+
+    send_ranks, receive_ranks = get_my_send_recv_ranks(
+        config, stage, stage_to_rank_map=stage_to_rank_map)
+
     # Create:
-    # rank_in_stage
-    # num_ranks_in_stage
     # ranks_in_previous_stage
     # ranks_in_next_stage
 
-    # rank = args.local_rank
-    # rank_in_stage = stage_to_rank_map[stage].index(
-    #     args.local_rank) if stage_to_rank_map else 0
-    # num_ranks_in_stage = len(
-    #     stage_to_rank_map[stage]) if stage_to_rank_map else 1
-
     # TODO: can create these by th econfig too.
+    def ranks_in_stage(given_stage):
+        if stage_to_rank_map:
+            return stage_to_rank_map[given_stage]
+        else:
+            return [given_stage]
+
     ranks_in_previous_stage = ranks_in_stage(
         stage - 1) if stage > 0 else []
     ranks_in_next_stage = ranks_in_stage(
         stage + 1) if stage < args.num_stages - 1 else []
 
+    # Note that we don't need shapes for the comm, just the datatypes.
     comm_args = (receive_ranks,
                  send_ranks,
                  tensor_tags,
                  target_tensor_names,
-                 training_tensor_dtypes,
                  ranks_in_previous_stage,
                  ranks_in_next_stage,
                  TOTAL_TAGS)
-    shapes = (training_tensor_shapes, eval_tensor_shapes)
 
-    return comm_args, shapes
+    return comm_args
 
 
 def to_tuple(x):
@@ -439,7 +431,7 @@ def get_weight_predictor(args, optimizer, scheduler=None):
         raise NotImplementedError()
 
 
-def hack_trainer_to_gap_aware(args):
+def hack_trainer_type_to_gap_aware(args):
 
     def hack():
         args.trainer['type'] += "_gap_aware"
@@ -469,12 +461,14 @@ def hack_trainer_to_gap_aware(args):
 
 def auto_file_name(args):
     assert hasattr(args, "auto_file_name")
-    wp = args.weight_prediction['type'] if args.weight_prediction else 'stale'
+    wp = args.weight_prediction['type'] if hasattr(
+        args, "weight_prediction") else 'stale'
     ws = "ws_" if (hasattr(args, "weight_stashing")
                    and args.weight_stashing) else ""
     ga = "ga_" if hasattr(args, "gap_aware") else ""
     s = f'{args.model}_{args.dataset}_{wp}_{ws}{ga}seed_{args.seed}'
     args.out_filename = f"{args.out_filename}_{s}"
+    print(f"Out File Name will be: {args.out_filename}")
 
 
 def save_distributed_experiment(statistics, args, world_size, rank, local_rank, stage):
@@ -517,7 +511,7 @@ def save_distributed_experiment(statistics, args, world_size, rank, local_rank, 
 
 
 def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition,
-                  gap_aware, use_gap_aware, scheduler, statistics):
+                  gap_aware, partition_using_gap_aware, scheduler, statistics):
     epochs = 0
     steps = 0
     logger.info(f"flush rate {args.flush_rate}")
@@ -563,7 +557,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition
                     statistics.train()
                 if args.flush_rate > 0:
                     for _ in range(0, TRAIN_BATCHES_TO_RUN, args.flush_rate):
-                        if use_gap_aware:
+                        if partition_using_gap_aware:
                             # Gap calculation assumes staleness 1, so skipping first batch in flush.
                             gap_aware.skip_one_apply()
                         partition.run_until_flush(
@@ -571,17 +565,17 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition
 
                     reminder = len(train_dl) % args.flush_rate
                     if reminder > 0:
-                        if use_gap_aware:
+                        if partition_using_gap_aware:
                             gap_aware.skip_one_apply()
                         partition.run_until_flush(reminder)
                 else:
-                    if use_gap_aware:
+                    if partition_using_gap_aware:
                         gap_aware.skip_one_apply()
                     partition.run_until_flush(
                         min(TRAIN_BATCHES_TO_RUN, len(train_dl)))
 
                 scheduler.step()
-                if use_gap_aware:
+                if partition_using_gap_aware:
                     gap_aware.update_max_lr()
                 did_train = True
                 if args.local_rank == args.world_size - 1:
@@ -632,64 +626,8 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition
             break  # steps condition met
 
 
-def main():
-    args = parse_cli()
-    parse_json_config(args)
-    parse_env_vars(args)
-    use_gap_aware = hack_trainer_to_gap_aware(args)
-
-    device = torch.device('cpu' if args.cpu else f"cuda:{args.local_rank}")
-    if not args.cpu:
-        torch.cuda.set_device(device)
-
-    if args.debug:
-        # TODO: by specific ranks
-        import ptvsd
-        port = 3000 + args.local_rank
-        address = ('127.0.0.1', port)
-        print(f"-I- waiting for attachment on {address}")
-        ptvsd.enable_attach(address=address)
-        ptvsd.wait_for_attach()
-
-    args.world_size = get_world_size(args.distributed_backend)
-    # is_last_rank = args.local_rank == get_world_size(args.distributed_backend) - 1
-
-    logger = FileLogger(args.logdir, global_rank=args.rank,
-                        local_rank=args.local_rank, name='msnag', world_size=args.world_size)
-
-    assert_args(args)
-    configs = models.get_partitioning(args.model, model_instance=None)
-
-    # pop input_names, output_names
-    configs.pop('model inputs')
-    configs.pop('model outputs')
-
-    if args.seed is None:
-        args.seed = random.randint(0, 2 ** 31)
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
-
-    NO_DP = True
-    # TODO: make it nicer.
-    stage = None
-    if NO_DP:
-        args.num_stages = len(configs)
-        stage = args.local_rank
-        is_first_partition = args.local_rank == 0
-        is_last_partition = args.local_rank == len(configs) - 1
-        args.num_ranks = len(configs)
-    else:
-        raise NotImplementedError()
-
-    assert(not (stage is None))
-    args.stage = stage
-
-    if use_gap_aware:
-        logger.info(f"Stage {args.stage} will use Gap Aware")
-
+def get_dataloaders(args):
     # Here is a dummy for For CIFAR10 network
-    # TODO: best practice is env var for choosing gpu
-
     dl_kw = dict()
     if args.cpu:
         dl_kw['pin_memory'] = False
@@ -702,23 +640,75 @@ def main():
     train_dl, test_dl = simplified_get_train_test_dl_from_args(
         args, verbose=False, **dl_kw)
 
-    # TODO: do the following block generically and automatically using tasks.
-    # May need to extend tasks a little to produce all targets, etc.
-    # Will be easier when we work we precise example from NLP which is different from CV.
+    return train_dl, test_dl
+
+
+def main():
+    args = parse_cli()
+    parse_json_config(args)
+    parse_env_vars(args)
+    args.world_size = get_world_size(args.distributed_backend)
+
+    device = torch.device('cpu' if args.cpu else f"cuda:{args.local_rank}")
+    if not args.cpu:
+        torch.cuda.set_device(device)
+
+    # Set Random Seed
+    if args.seed is None:
+        args.seed = random.randint(0, 2 ** 31)
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
+
+    # Get partitioning config
+    configs = models.get_partitioning(args.model, model_instance=None)
+    configs.pop('model inputs')  # We don't use thous.
+    configs.pop('model outputs')  # We don't use thous.
+
+    NO_DP = True
+    # TODO: make it nicer.
+    args.stage = None
+    if NO_DP:
+        args.num_stages = len(configs)
+        args.stage = args.local_rank
+        is_first_partition = args.local_rank == 0
+        is_last_partition = args.local_rank == len(configs) - 1
+        # args.num_ranks = len(configs)
+    else:
+        raise NotImplementedError()
+
+    assert_args(args)
+
+    if args.debug:
+        # TODO: by specific ranks
+        import ptvsd
+        port = 3000 + args.local_rank
+        address = ('127.0.0.1', port)
+        print(f"-I- waiting for attachment on {address}")
+        ptvsd.enable_attach(address=address)
+        ptvsd.wait_for_attach()
+
+    logger = FileLogger(args.logdir, global_rank=args.rank,
+                        local_rank=args.local_rank, name='msnag', world_size=args.world_size)
+
+    partition_using_gap_aware = hack_trainer_type_to_gap_aware(args)
+    if partition_using_gap_aware:
+        logger.info(f"Stage {args.stage} will use Gap Aware")
+
+    # Get dataloaders
+    train_dl, test_dl = get_dataloaders(args)
+
+    ######################################## Start OF UGLY BLOCK ########################################
+    # TODO: do the following block generically and automatically using tasks, or alon's code.
     x, y = next(iter(train_dl))
+    bs_train = to_tuple(args.bs_train)
+    bs_test = to_tuple(args.bs_test)
+
     BASE_INPUT_SHAPE = x.shape[1:]
     BASE_TARGET_SHAPE = y.shape[1:]
 
-    bs_train = to_tuple(args.bs_train)
-    bs_test = to_tuple(args.bs_test)
-    # Smallest batch as possible.
-    # we will determine the rest of the shape with bs_train, bs_test
-    SAMPLE_BATCH_SIZE = 1
-    random_input_sample = torch.randn(SAMPLE_BATCH_SIZE, *BASE_INPUT_SHAPE)
-
     # TODO formalize with function according to dataset/task
     target_tensor_names = {"target"}
-    # training_tensor_dtypes = {"input0": torch.int64, "target": torch.int64}
+
     training_tensor_dtypes = {"input0": x.dtype, "target": y.dtype}
 
     training_tensor_shapes = {"input0": (
@@ -727,24 +717,29 @@ def main():
     eval_tensor_shapes = {"input0": (
         *bs_test, *BASE_INPUT_SHAPE), "target": (*bs_test, *BASE_TARGET_SHAPE)}
 
+    SAMPLE_BATCH_SIZE = 1  # Smallest batch as possible.
+    random_input_sample = torch.randn(SAMPLE_BATCH_SIZE, *BASE_INPUT_SHAPE)
+
     del x
     del y
 
-    comm_init_args, shapes = \
-        create_distributed_communcation_context(args, configs, stage,
-                                                stage_to_rank_map=None,
+    # eval_tensor_shapes, training_tensor_shapes, target_tensor_names, random_input_sample
+
+    comm_init_args = \
+        create_distributed_communcation_context(args, configs, args.stage,
                                                 target_tensor_names=target_tensor_names,
-                                                training_tensor_dtypes=training_tensor_dtypes,
-                                                training_tensor_shapes=training_tensor_shapes,
-                                                eval_tensor_shapes=eval_tensor_shapes,
-                                                random_input_sample=random_input_sample,
-                                                bs_train=bs_train,
-                                                bs_test=bs_test)
+                                                stage_to_rank_map=None)
 
     comm_handler = create_comm_handler(args, comm_init_args, device)
-    # init_dist(args)
 
-    training_tensor_shapes, eval_tensor_shapes = shapes
+    (training_tensor_dtypes,
+     training_tensor_shapes,
+     eval_tensor_shapes) = \
+        infer_dtypes_and_shapes(
+        configs, bs_train, bs_test, random_input_sample,
+        training_tensor_dtypes, training_tensor_shapes, eval_tensor_shapes)
+
+    ######################################## END OF UGLY BLOCK ########################################
 
     trainer_cls = AVAILABLE_TRAINERS.get(args.trainer['type'])
     task_cls = AVAILABLE_TASKS.get(args.task)
@@ -753,29 +748,24 @@ def main():
     assert not (statistics is None)
     work_scheduler = AVAILABLE_WORK_SCHEDULERS.get(args.work_scheduler)
 
-    # Init the partition
+    # Init the partition manager
     partition = SinglePartitionManager(
-        stage,
-        configs, configs[stage]['model'],
-        comm_handler, work_scheduler, training_tensor_shapes,
-        eval_tensor_shapes,
+        args.stage,
+        configs, configs[args.stage]['model'],
+        comm_handler, work_scheduler,
+        training_tensor_shapes, eval_tensor_shapes, training_tensor_dtypes,
         device, is_last_partition, is_first_partition)
 
-    # Set Trainer
-    # Set optimizer, (after the partition is on its device)
-    # and other classes which need a reference to the optimizer
+    # After the partition is on its device:
+    # Set optimizer
     optimizer = optimizer_cls(
         partition.partition.parameters(), **args.optimizer['args'])
 
+    # Set Scheduler
+    # TODO: scheduler for sched aware prediction
     scheduler = get_scheduler(args, optimizer)
 
-    # TODO: scheduler for sched aware prediction
-    weight_predictor, nag_with_predictor = get_weight_predictor(
-        args, optimizer, scheduler=scheduler)
-
-    weight_stasher = WeightStasher(optimizer) if hasattr(
-        args, "weight_stashing") and args.weight_stashing else None
-
+    # Set Trainer (and Gap Aware)
     trainer_extra_args = args.trainer['args']
     if hasattr(trainer_cls, "HAS_GAP_AWARE"):
         gap_aware = get_gap_aware(args, optimizer)
@@ -785,32 +775,34 @@ def main():
         gap_aware = None
         trainer = trainer_cls(partition.partition, optimizer=optimizer,
                               scheduler=scheduler, statistics=statistics, **trainer_extra_args)
-
     partition.set_trainer(trainer)
+
+    # Set Weight predictor
+    weight_predictor, nag_with_predictor = get_weight_predictor(
+        args, optimizer, scheduler=scheduler)
     if weight_predictor:
         partition.set_weight_predictor(weight_predictor, nag_with_predictor)
 
+    # Set Weight Stashing
+    weight_stasher = WeightStasher(optimizer) if hasattr(
+        args, "weight_stashing") and args.weight_stashing else None
     if weight_stasher and not is_last_partition:
         partition.set_weight_stasher(weight_stasher)
 
     # Set Task
     task = task_cls(device, is_last_partition, is_first_partition)
     partition.set_task(task)
-    training_loop(args, logger, train_dl, test_dl, is_first_partition, partition,
-                  gap_aware, use_gap_aware, scheduler, statistics)
 
     if hasattr(args, "auto_file_name"):
         auto_file_name(args)
 
-    # sync statistics from other partitions too.
-    # if is_last_partition
+    # Main Training Loop
+    training_loop(args, logger, train_dl, test_dl, is_first_partition, partition,
+                  gap_aware, partition_using_gap_aware, scheduler, statistics)
 
-    world_size = get_world_size(args.distributed_backend)
-    rank = args.rank
-    local_rank = args.local_rank
-    stage = args.stage
+    # Synchronize and save statistics from all partitions
     save_distributed_experiment(
-        statistics, args, world_size, rank, local_rank, stage)
+        statistics, args, args.world_size, args.rank, args.local_rank, args.stage)
 
 
 if __name__ == "__main__":

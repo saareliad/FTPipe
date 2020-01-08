@@ -1,9 +1,11 @@
 import abc
 
+
 class CommunicationHandlerBase(abc.ABC):
     """ Base class for all communication handlers.
             Handles communication between stages.
     """
+
     def __init__(self):
         pass
 
@@ -65,6 +67,6 @@ class CommunicationHandlerBase(abc.ABC):
     def init_proccess_groups(self, *args):  # stage, num_stages
         # TODO: arguments.
         pass
-    
+
     def fix_after_recv(self, x):
         return x  # No-op.

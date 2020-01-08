@@ -18,7 +18,7 @@ from .weight_stashing import WeightStasher
 class SinglePartitionManager:
     def __init__(self, stage, configs: Dict, partition: torch.nn.Module, comm_handler: CommunicationHandlerBase,
                  work_scheduler: WorkScheduler,
-                 training_tensor_shapes, eval_tensor_shapes,
+                 training_tensor_shapes, eval_tensor_shapes, training_tensor_dtypes,  # FIXME
                  device, is_last_partition, is_first_partition, statistics=None):
 
         if is_last_partition:
@@ -32,6 +32,7 @@ class SinglePartitionManager:
         self.comm_handler = comm_handler
         self.training_tensor_shapes = training_tensor_shapes
         self.eval_tensor_shapes = eval_tensor_shapes
+        self.training_tensor_dtypes = training_tensor_dtypes
         self.device = device
         self.is_last_partition = is_last_partition
         self.is_first_partition = is_first_partition
@@ -94,6 +95,7 @@ class SinglePartitionManager:
 
     def train(self):
         self.comm_handler.set_tensor_shapes(self.training_tensor_shapes)
+        self.comm_handler.set_tensor_dtypes(self.training_tensor_dtypes)
 
         self.partition.train()
 
@@ -104,6 +106,7 @@ class SinglePartitionManager:
 
     def eval(self):
         self.comm_handler.set_tensor_shapes(self.eval_tensor_shapes)
+        self.comm_handler.set_tensor_dtypes(self.training_tensor_dtypes)  # FIXME:
 
         self.partition.eval()
 
