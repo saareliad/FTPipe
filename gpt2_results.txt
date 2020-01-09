@@ -1,45 +1,49 @@
- python partition_gpt2_models.py --train_data_file=$TRAIN_FILE --n_iter=100 --partitioning_batch_size=4 --depth=3  --auto_file_name
+python partition_gpt2_models.py --train_data_file=$TRAIN_FILE --n_iter=100 --analysis_batch_size=1 --depth=3
  
-number of cutting edges: 5
+cutting edges are edges between partitions
+number of cutting edges: 6
 
 backward times include recomputation
 
 theoretical times are execution time based on sum of graph weights ms
-sequential forward {0: 64.14569984778761, 1: 71.05328130856157, 2: 67.44509121090174, 3: 61.0710827767849}
-sequential backward {0: 139.6478054331243, 1: 149.1629024116695, 2: 141.540129121542, 3: 133.35336621940135}
-parallel forward {0: 63.877782088965176, 1: 71.05328130856157, 2: 67.44509121090174, 3: 61.0710827767849}
-parallel backward {0: 138.03684063598513, 1: 149.1629024116695, 2: 141.540129121542, 3: 133.35336621940135}
+sequential forward {0: 15.257272641509772, 1: 18.691171215325596, 2: 18.559264333397145, 3: 22.04674082353711}
+sequential backward {0: 44.93089503392578, 1: 48.93922274261713, 2: 48.409781450927255, 3: 54.062987170219415}
+parallel forward {0: 15.134735041409732, 1: 18.691171215325596, 2: 18.559264333397145, 3: 22.04674082353711}
+parallel backward {0: 43.617220152169466, 1: 48.93922274261713, 2: 48.409781450927255, 3: 54.062987170219415}
 
 real times are based on real measurements of execution time of generated partitions ms
-forward {0: 37.81100364685059, 1: 39.627785263061526, 2: 38.72627704620361, 3: 32.80198709487915}
-backward {0: 103.14814422607422, 1: 103.05521163940429, 2: 100.74416725158692, 3: 127.79658027648925}
+forward {0: 29.06242519378662, 1: 37.26200588226318, 2: 35.9077853012085, 3: 45.47105686187744}
+backward {0: 80.45442192077637, 1: 97.3022738647461, 2: 92.46670097351074, 3: 162.57930572509767}
+variance of real execution times ms
+forward{0: 0.13881304385381554, 1: 0.15031249676076186, 2: 0.13087562668783903, 3: 0.07331513883627849}
+backward{0: 0.5680862995495772, 1: 0.5039042185289873, 2: 0.5032058937613328, 3: 0.4535194009367842}
 
 imbalance is ratio of computation time between fastest and slowest parts between 0 and 1 higher is better
 theoretical sequential imbalance:
-forward 0.8595110831204658
-backward 0.894011607868584
+forward 0.6920420920094049
+backward 0.8310842109493342
 theoretical parallel imbalance:
-forward 0.8595110831204658
-backward 0.894011607868584
+forward 0.6864840097023267
+backward 0.8067852413489279
 
 real imbalance:
-forward 0.8277522167118195
-backward 0.7883166124917103
+forward 0.6391411856132229
+backward 0.4948626245016402
 
 topology aware imbalance is worst imbalance between 2 connected partitions
 theoretical sequential topology aware imbalance:
-forwad 0.9027830758332391
-backward 0.9362100306128073
+forwad 0.8162823220515876
+backward 0.895432975216615
 theoretical parallel topology aware imbalance:
-forwad 0.8990124159300187
-backward 0.925409994068244
+forwad 0.8097264139873799
+backward 0.8912528174295425
 
 real topology aware imbalance:
-forwad 0.8470214437536482
-backward 0.7883166124917103
+forwad 0.7799479524965781
+backward 0.568748282944823
 
 communication volumes size of activations of each partition
-0: input size: 0.008192 MB recieve_time: 0.0006826666666666666 ms out: 40.894464 MB send time: 1.0485760000000002 ms
-1: input size: 15.72864 MB recieve_time: 1.0485760000000002 ms out: 31.457279999999997 MB send time: 0.5242880000000001 ms
-2: input size: 6.291456 MB recieve_time: 0.26214400000000004 ms out: 28.311552000000002 MB send time: 0.5242880000000001 ms
-3: input size: 3.1539200000000003 MB recieve_time: 0.26214400000000004 ms out: 205.852676 MB send time: 17.154389333333334 ms
+0: input size: 0.008192 MB recieve_time: 0.0006826666666666666 ms out: 22.020096000000002 MB send time: 0.5242880000000001 ms
+1: input size: 3.145728 MB recieve_time: 0.26214400000000004 ms out: 40.894464 MB send time: 1.0485760000000002 ms
+2: input size: 15.72864 MB recieve_time: 1.0485760000000002 ms out: 28.311552000000002 MB send time: 0.5242880000000001 ms
+3: input size: 3.1539200000000003 MB recieve_time: 0.26214400000000004 ms out: 212.144132 MB send time: 17.154389333333334 ms

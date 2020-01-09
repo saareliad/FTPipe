@@ -21,7 +21,7 @@ def run_analysis(sample, graph, config, n_iter, recomputation=True, bandwidth_gp
 
                                                                                                         parallel_b, edges)
     # real statistics based on generated partitions
-    real_f_times, real_b_times, comm_volume = profile_execution(sample, config, n_iter,
+    (real_f_times,f_vars), (real_b_times,b_vars), comm_volume = profile_execution(sample, config, n_iter,
                                                                 recomputation=recomputation, bandwidth_gps=bandwidth_gps)
     real_b_imbalance = worst_imbalance(real_b_times)
     real_f_imbalance = worst_imbalance(real_f_times)
@@ -42,6 +42,7 @@ def run_analysis(sample, graph, config, n_iter, recomputation=True, bandwidth_gp
 
     print(
         f"\nreal times are based on real measurements of execution time of generated partitions ms\nforward {real_f_times}\nbackward {real_b_times}")
+    print(f"variance of real execution times ms\nforward{f_vars}\nbackward{b_vars}")
 
     print("\nimbalance is ratio of computation time between fastest and slowest parts between 0 and 1 higher is better")
     print(
@@ -92,8 +93,8 @@ def profile_execution(model_inputs, partition_config, n, recomputation=True, ban
     '''perfrom forward/backward passes and measure execution times accross n batches
     '''
     n_partitions = sum([1 for k in partition_config if isinstance(k, int)])
-    f_times = {i: 0 for i in range(n_partitions)}
-    b_times = {i: 0 for i in range(n_partitions)}
+    f_times = {i: [] for i in range(n_partitions)}
+    b_times = {i: [] for i in range(n_partitions)}
 
     communication_volume = {}
     if not isinstance(model_inputs, tuple):
@@ -144,15 +145,13 @@ def profile_execution(model_inputs, partition_config, n, recomputation=True, ban
 
                 send_time *= 1e3
                 communication_volume[idx] = f"input size: {in_size_mb} MB recieve_time: {recv_time} ms out: {out_size_mb} MB send time: {send_time} ms"
-                f_times[idx] += f_time
-                b_times[idx] += b_time
+                f_times[idx].append(f_time)
+                b_times[idx].append(b_time)
             else:
                 parts.append(idx)
 
-    avg_f_times = {i: v/n for i, v in f_times.items()}
-    avg_b_times = {i: v/n for i, v in b_times.items()}
-
-    return avg_f_times, avg_b_times, communication_volume
+    # calculate mean and variance
+    return mean_var(f_times),mean_var(b_times), communication_volume
 
 
 def edge_cut(graph):
@@ -431,3 +430,18 @@ def find_dependencies(cutting_edges, n_parts):
             break
 
     return forward_dependencies, backward_dependencies
+
+
+def mean_var(times):
+    means=dict()
+    variances=dict()
+    for i,ts in times.items():
+        sum_t = sum(ts)
+        sum_squares = sum(t**2 for t in ts)
+
+        mean = sum_t/len(ts)
+        mean_squares = sum_squares/len(ts)
+        means[i]=mean
+        variances[i]=mean_squares-(mean**2)
+        
+    return means,variances
