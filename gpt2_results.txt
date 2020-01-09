@@ -1,3 +1,4 @@
+GeForce GTX 1070
 python partition_gpt2_models.py --train_data_file=$TRAIN_FILE --n_iter=100 --analysis_batch_size=1 --depth=3
  
 cutting edges are edges between partitions
@@ -47,3 +48,60 @@ communication volumes size of activations of each partition
 1: input size: 3.145728 MB recieve_time: 0.26214400000000004 ms out: 40.894464 MB send time: 1.0485760000000002 ms
 2: input size: 15.72864 MB recieve_time: 1.0485760000000002 ms out: 28.311552000000002 MB send time: 0.5242880000000001 ms
 3: input size: 3.1539200000000003 MB recieve_time: 0.26214400000000004 ms out: 212.144132 MB send time: 17.154389333333334 ms
+
+
+
+
+
+
+
+
+
+GeForce GTX 1080 Ti
+python partition_gpt2_models.py --train_data_file=$TRAIN_FILE --n_iter=100 --analysis_batch_size=1 --depth=3
+number of cutting edges: 6
+
+backward times include recomputation
+
+theoretical times are execution time based on sum of graph weights ms
+sequential forward {0: 7.946790392026305, 1: 8.952704619914293, 2: 8.291612477153539, 3: 13.273960301578045}
+sequential backward {0: 30.137932797148828, 1: 30.53103773236276, 2: 28.40093950986862, 3: 36.53461210787297}
+parallel forward {0: 7.862618553191424, 1: 8.952704619914293, 2: 8.291612477153539, 3: 13.273960301578045}
+parallel backward {0: 29.0828777641058, 1: 30.53103773236276, 2: 28.40093950986862, 3: 36.53461210787297}
+
+real times are based on real measurements of execution time of generated partitions ms
+forward {0: 15.674007682800292, 1: 18.47265464782715, 2: 16.321795539855955, 3: 29.55298496246338}
+backward {0: 43.18593852996826, 1: 48.11459651947021, 2: 43.744543800354, 3: 91.07087516784668}
+variance of real execution times ms
+forward{0: 0.03708443954104723, 1: 0.029927599875975375, 2: 0.015442574127860098, 3: 0.08610070922020441}
+backward{0: 0.29592279116150166, 1: 0.21635607180041916, 2: 0.1552280260277712, 3: 0.3711267797407345}
+
+imbalance is ratio of computation time between fastest and slowest parts between 0 and 1 higher is better
+theoretical sequential imbalance:
+forward 0.5986751663768023
+backward 0.7773707690124458
+theoretical parallel imbalance:
+forward 0.5923340415788869
+backward 0.7773707690124458
+
+real imbalance:
+forward 0.5303696970951861
+backward 0.4742014222480582
+
+topology aware imbalance is worst imbalance between 2 connected partitions
+theoretical sequential topology aware imbalance:
+forwad 0.6246524992370068
+backward 0.7773707690124458
+theoretical parallel topology aware imbalance:
+forwad 0.6246524992370068
+backward 0.7773707690124458
+
+real topology aware imbalance:
+forwad 0.5522892378075185
+backward 0.4803351644500104
+
+communication volumes size of activations of each partition
+0: input size: 0.008192 MB recieve_time: 0.0006826666666666666 ms out: 22.020096000000002 MB send time: 0.5242880000000001 ms
+1: input size: 3.145728 MB recieve_time: 0.26214400000000004 ms out: 28.311552 MB send time: 0.5242880000000001 ms
+2: input size: 3.145728 MB recieve_time: 0.26214400000000004 ms out: 34.603008 MB send time: 1.0485760000000002 ms
+3: input size: 15.736832 MB recieve_time: 1.0485760000000002 ms out: 218.435588 MB send time: 17.154389333333334 ms
