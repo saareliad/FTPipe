@@ -92,7 +92,7 @@ class SimpleCommBase(CommunicationHandlerBase):
                 # TODO: also eval dtype
                 shape = self.tensor_shapes[tensor_name]
                 # rcv_buffer = torch.empty(shape, dtype=dtype, requires_grad=requires_grad)
-                rcv_buffer = torch.empty(
+                rcv_buffer = torch.zeros(
                     shape, dtype=dtype, device=device, requires_grad=requires_grad)
 
                 # Alocate buffer for double buffering

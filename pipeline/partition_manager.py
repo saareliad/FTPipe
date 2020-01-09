@@ -10,7 +10,7 @@ from .weight_prediction.interface import WeightPredictor
 from .gap_aware import GapAware  # TODO: change to interface.
 from .work_schedulers import WorkScheduler
 from .weight_stashing import WeightStasher
-
+from .buffer import Buffers
 # from gpu_mem_track import MemTracker
 # import time
 
@@ -19,7 +19,7 @@ class SinglePartitionManager:
     def __init__(self, stage, configs: Dict, partition: torch.nn.Module, comm_handler: CommunicationHandlerBase,
                  work_scheduler: WorkScheduler,
                  training_tensor_shapes, eval_tensor_shapes, training_tensor_dtypes,  # FIXME
-                 device, is_last_partition, is_first_partition, statistics=None):
+                 device, is_last_partition, is_first_partition, statistics=None, log_frequency=100, max_buffers=2):
 
         if is_last_partition:
             partition_cls = LastPartition
@@ -45,11 +45,12 @@ class SinglePartitionManager:
         self.weight_stasher = None
 
         # State for train logging
-        self.log_frequency = 100  # FIXME: magic number
+        self.log_frequency = log_frequency
         self.batches = 0
+        self.fwd_rcev_buffers = Buffers(max_buffers, self.comm_handler.create_activations_recv_buffers, self.device, self.comm_handler.recv_activations)
+        self.bwd_rcev_buffers = Buffers(max_buffers, self.comm_handler.create_gradients_rcv_buffers, self.device, self.comm_handler.recv_gradients, is_grad=True)
+        self.recv_all_bwd = True
 
-        self.fwd_rcev_buffers = None
-        self.bwd_rcev_buffers = None
 
         # Async handle objects
         self.async_fwd_objects = OrderedDict()
@@ -58,8 +59,7 @@ class SinglePartitionManager:
         self.logger = logging.getLogger("msnag")
         # self.dl_iter = None
 
-        # self.mb_to_fix_by_ga = {}
-        self.modify_gradients_before_send = False  # FIXME add as option
+        # self.modify_gradients_before_send = False  # FIXME add as option
         self.delay_at_batch = {}
 
         # Hints
@@ -100,9 +100,9 @@ class SinglePartitionManager:
         self.partition.train()
 
         # Handles the transition : eval -> train
-        if not (self.fwd_rcev_buffers is None):
-            self.fwd_rcev_buffers = self.comm_handler.create_activations_recv_buffers(
-                self.device)
+
+        if self.fwd_rcev_buffers.is_initialized():
+            self.fwd_rcev_buffers.create()
 
     def eval(self):
         self.comm_handler.set_tensor_shapes(self.eval_tensor_shapes)
@@ -111,9 +111,10 @@ class SinglePartitionManager:
         self.partition.eval()
 
         # Handles the transition : train -> eval
-        if not (self.fwd_rcev_buffers is None):
-            self.fwd_rcev_buffers = self.comm_handler.create_activations_recv_buffers(
-                self.device)
+        if self.fwd_rcev_buffers.is_initialized():
+            self.fwd_rcev_buffers.create()
+
+        self.recv_all_bwd = True  # TODO: i don't like this hack
 
     def run_batch_forward(self, batch_idx, num_batches, done_bwds=None):
 
@@ -153,23 +154,25 @@ class SinglePartitionManager:
                 send_ctx, batch_idx)
 
         else:
-            if not self.fwd_rcev_buffers:
-                self.fwd_rcev_buffers = self.comm_handler.create_activations_recv_buffers(
-                    self.device)
-            x = self.fwd_rcev_buffers
+            if not self.fwd_rcev_buffers.is_initialized():
+                self.fwd_rcev_buffers.create()
 
-            request_objects = self.comm_handler.recv_activations(x, batch_idx)
+            recved_all = False
+            if self.fwd_rcev_buffers.first_rcv_after_created or self.fwd_rcev_buffers.max_buffers == 1:
+                self.fwd_rcev_buffers.recv_all(batch_idx, num_batches)
+                recved_all = True
 
-            # recv for fwd
-            for obj in request_objects:
-                # print(f"-I- {self.stage} waiting on rcv")
-                while(not obj.is_completed()):
-                    pass
-                    # obj.wait()
-                # print(f"-I- {self.stage} DONE waiting on rcv")
-
-            # For comm handler with chunks we have to fix. For others its no-op.
+            x = self.fwd_rcev_buffers.wait_first()
             x = self.comm_handler.fix_after_recv(x)
+            # with torch.no_grad():
+            #     x = [a.clone() for a in x] # FIXME
+
+            # This make sure we don't overrun the buffer.
+            # actually, many times we clone the input anyway inside the partition (for re-computation)
+            # and if so, we can use less recv buffers for forward to save memory, 
+            # while stil getting the same speed/parallelism.
+            if (not recved_all) and batch_idx - 1 + self.fwd_rcev_buffers.max_buffers < num_batches:
+                self.fwd_rcev_buffers.recv_next(batch_idx-1)
 
             x, *ctx = self.task.unpack_data_for_partition(x)
 
@@ -241,34 +244,38 @@ class SinglePartitionManager:
 
         return request_objects
 
-    def run_batch_backward(self, batch_idx):
+    def run_batch_backward(self, batch_idx, num_batches):
         # TODO: implement
 
-        if not self.bwd_rcev_buffers:
-            self.bwd_rcev_buffers = self.comm_handler.create_gradients_rcv_buffers(
-                self.device)
-        g = self.bwd_rcev_buffers
+        if not self.bwd_rcev_buffers.is_initialized():
+            self.bwd_rcev_buffers.create()
 
-        # Solution to the DAMN bug with 4 partitions.
-        # TODO: understnad why zero_() is the solution
-        # I added detach just in case.
-        for b in g:
-            # b.detach_()
-            b.detach_().zero_()
-            # b.zero_()
-            # if not (b.grad is None):
-            #     b.grad._zero()
+        recved_all = False
+        if self.recv_all_bwd or self.bwd_rcev_buffers.first_rcv_after_created or self.bwd_rcev_buffers.max_buffers == 1:
+            self.recv_all_bwd = False
+            self.bwd_rcev_buffers.recv_all(batch_idx, num_batches)
+            recved_all = True
 
-        request_objects = self.comm_handler.recv_gradients(g, batch_idx)
+        # TODO: need to detach and zero grad!
+        # # Solution to the DAMN bug with 4 partitions.
+        # # TODO: understnad why zero_() is the solution
+        # # I added detach just in case.
+        # for b in g:
+        #     # b.detach_()
+        #     b.detach_().zero_()
+        #     # b.zero_()
+        #     # if not (b.grad is None):
+        #     #     b.grad._zero()
 
-        # recv for bwd
-        for obj in request_objects:
-            while not obj.is_completed():
-                pass
-                # obj.wait()
-
-        # TODO: maybe a different fix for gradients?
+        g = self.bwd_rcev_buffers.wait_first()
         g = self.comm_handler.fix_after_recv(g)
+        # FIXME:
+        # with torch.no_grad():
+        #     g = [a.clone() for a in g]
+
+        # if batch_idx + self.bwd_rcev_buffers.max_buffers < num_batches:
+        if (not recved_all) and batch_idx - 1 + self.bwd_rcev_buffers.max_buffers < num_batches:
+            self.bwd_rcev_buffers.recv_next(batch_idx-1)
 
         real_theta = None
         if self.weight_stasher:
@@ -305,9 +312,9 @@ class SinglePartitionManager:
         if self.weight_stasher:
             # Restore to previosly saved parameters, so we can do the step on them.
             self.weight_stasher.post_restore(batch_idx)
+            self.weight_stasher.mark_stashed_as_dirty()  # because next thing is a step.
 
         self.trainer.non_last_partition_step()
-        self.weight_stasher.mark_stashed_as_dirty()
         return request_objects
 
     def expected_staleness(self, done_fwds, done_bwds):
@@ -345,9 +352,9 @@ class SinglePartitionManager:
         # FIXME: not sure if this needed.
         # For now I leave this for debugging/safety.
 
-        if not self.comm_handler.cpu:
-            # HACK: synchronize.
-            torch.cuda.synchronize(device=self.device)
+        # if not self.comm_handler.cpu:
+        #     # HACK: synchronize.
+        #     torch.cuda.synchronize(device=self.device)
 
     def run_until_flush(self, num_batches):
         """
@@ -371,7 +378,7 @@ class SinglePartitionManager:
                 # it works, but it can be trouble.
                 self.async_fwd_objects[done_fwds] = sent_request_objects
             else:
-                sent_request_objects = self.run_batch_backward(done_bwds)
+                sent_request_objects = self.run_batch_backward(done_bwds, num_batches)
                 if not (self.is_first_partition):
                     self.async_bwd_objects[done_bwds] = sent_request_objects
             # Increase counters
@@ -423,6 +430,6 @@ class SinglePartitionManager:
                     pass
                     # i.wait()
 
-        if not self.comm_handler.cpu:
-            # HACK: synchronize.
-            torch.cuda.synchronize(device=self.device)
+        # if not self.comm_handler.cpu:
+        #     # HACK: synchronize.
+        #     torch.cuda.synchronize(device=self.device)
