@@ -190,8 +190,8 @@ def generateLayerActivationExpression(scope_to_class_field: Dict[str, str],
 def generatePrimitiveExpression(ready_expressions: Dict[str, str], expression_len: Dict[str, int], node: Node,
                                 arg_gen: Iterator[str], verbose=False) -> str:
 
-    if 'ListConstruct' in node.scope:
-        return generateListExpression(ready_expressions, expression_len, node, arg_gen, verbose=verbose)
+    if 'ListConstruct' in node.scope or 'TupleConstruct' in node.scope:
+        return generateListOrTupleExpression(ready_expressions, expression_len, node, arg_gen, verbose=verbose)
     elif 'ListUnpack' in node.scope:
         return generateUnpackExpression(ready_expressions, expression_len, node, arg_gen, verbose=verbose)
     elif 'NumToTensor' in node.scope or 'ImplicitTensorToNum' in node.scope:
@@ -204,14 +204,17 @@ def generatePrimitiveExpression(ready_expressions: Dict[str, str], expression_le
         assert False, f"unsupported primitive {node.scope}"
 
 
-def generateListExpression(ready_expressions: Dict[str, str], expression_len: Dict[str, int], node: Node,
+def generateListOrTupleExpression(ready_expressions: Dict[str, str], expression_len: Dict[str, int], node: Node,
                            arg_gen: Iterator[str], verbose=False) -> str:
-    ''' generates a python list construction to be embedded in use site\n
-        does not produce a temporary variable
+    ''' generates a python list/tuple construction
     '''
     operand_scopes = [n.scope for n in node.in_nodes]
     args = [ready_expressions[operand] for operand in operand_scopes]
-    expression = '[' + ', '.join(args) + ']'
+    if 'ListConstruct' in node.scope:
+        expression = '[' + ', '.join(args) + ']'
+    else:
+        assert 'TupleConstruct' in node.scope
+        expression = '(' + ', '.join(args) + ')'
     exp_len = 1 + max(expression_len[s] for s in operand_scopes)
 
     if (not verbose) and (exp_len < 10) and canEmbedInUseSite(node):

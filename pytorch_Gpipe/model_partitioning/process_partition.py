@@ -103,7 +103,7 @@ def remove_backward_edges(graph: Graph):
 
 def do_not_send_lists(graph: Graph):
     for node in graph.nodes:
-        if not ('ListConstruct' in node.scope):
+        if not ('ListConstruct' in node.scope) or not ('TupleConstruct' in node.scope):
             continue
 
         # nodes that have a list input such as torch.cat

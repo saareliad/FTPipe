@@ -7,7 +7,8 @@ import torch
 import re
 from copy import deepcopy
 
-#TODO support list and tuple layer outputs
+# TODO support list and tuple layer outputs
+
 
 class Graph():
     '''
@@ -30,26 +31,32 @@ class Graph():
         self.basic_blocks = basic_blocks
         self.depth = depth
         self.num_parts = 0
-        
+
         for node in self.nodes:
             node.weight = weights.get(node.scope, node.weight)
 
     def _build_graph(self, trace_graph):
         self._add_IO_nodes(trace_graph.inputs())
         self._add_OP_nodes(trace_graph.nodes())
-        #TODO we've disabled output shape untill we can think about full support
+        # TODO we've disabled output shape untill we can think about full support
         # self._add_shapes(trace_graph)
+        self.save(f"verbose", ".")
         self._set_outputs(trace_graph.outputs())
-        
-        self.remove_useless_clone()   
+        self.remove_useless_clone()
+        self.save(f"remove_clones", ".")
         self.remove_empty_view()
+        self.save(f"remove_empty_views", ".")
         optimize_graph(self)
+        self.save(f"optimized", ".")
         self._remove_nodes_that_go_nowhere(trace_graph)
+        self.save(f"remove_goes_nowhere", ".")
         for idx, node in enumerate(self.nodes):
             node.idx = idx
         self.remove_useless_node_inputs()
+        self.save(f"removed_useless_inputs", ".")
         self.add_missing_types()
         self.remove_tensor_int_tensor()
+        self.save(f"remove_tensor_int_tensor", ".")
         for idx, node in enumerate(self.nodes):
             node.idx = idx
 
@@ -57,7 +64,7 @@ class Graph():
         '''
         add nodes representing the input and params/buffs of the model
         '''
-        for idx, trace_node in enumerate(input_nodes):
+        for idx, trace_node in enumerate(list(input_nodes)[1:]):
             node_weight = 1
             # input/buff/parm weight is it's size
             for d in trace_node.type().sizes():
@@ -71,7 +78,7 @@ class Graph():
                 node_scope = self.buffer_param_names[idx - self.num_inputs]
 
             new_node = Node(node_scope, idx, node_type, weight=node_weight)
-            new_node.value_type=torch.Tensor
+            new_node.value_type = torch.Tensor
             self.nodes.append(new_node)
 
             self.num_inputs_buffs_params += 1
@@ -83,8 +90,9 @@ class Graph():
         num_extra_nodes = 0
         for idx, trace_node in enumerate(sorted(OP_nodes, key=lambda n: next(n.outputs()).unique())):
             node_scope = self._find_encasing_layer(trace_node.scopeName())
-            input_nodes = OrderedSet([self.nodes[i.unique()]
-                           for i in trace_node.inputs()])
+
+            input_nodes = OrderedSet([self.nodes[i.unique()-2]
+                                      for i in trace_node.inputs()])
             node_idx = self.num_inputs_buffs_params + idx + num_extra_nodes
             new_node = None
 
@@ -92,7 +100,7 @@ class Graph():
             if node_scope != "":
                 new_node = Node(node_scope, node_idx,
                                 NodeTypes.LAYER, input_nodes)
-                new_node.value_type=torch.Tensor
+                new_node.value_type = torch.Tensor
             # unprofiled constant value
             elif 'prim::Constant' in trace_node.kind():
                 node_scope = trace_node.scopeName() + \
@@ -126,23 +134,23 @@ class Graph():
             nOuts = 1
             # add node for each output
             for i, output in enumerate(trace_node.outputs()):
-                if i==0 and output.isCompleteTensor():
-                    self.nodes[-1].value_type=torch.Tensor
+                if i == 0 and output.isCompleteTensor():
+                    self.nodes[-1].value_type = torch.Tensor
                 if i != 0:
                     out_scope = new_node.scope
                     if self._find_encasing_layer(new_node.scope) == "":
                         out_scope += f"{i} "
                     out_idx = new_node.idx+i
-                    out_node = Node(out_scope,out_idx,new_node.type)
+                    out_node = Node(out_scope, out_idx, new_node.type)
                     out_node.add_in_node(new_node.in_nodes[0])
                     new_node.in_nodes[0].add_out_node(out_node)
                     if output.isCompleteTensor():
-                        out_node.value_type=torch.Tensor
+                        out_node.value_type = torch.Tensor
                     self.nodes.append(out_node)
                     num_extra_nodes += 1
-                    nOuts+=1
+                    nOuts += 1
             if nOuts > 1 and self._find_encasing_layer(self.nodes[-nOuts].scope) == "":
-                self.nodes[-nOuts].scope+=f"{0} "
+                self.nodes[-nOuts].scope += f"{0} "
 
     def _add_shapes(self, trace_graph):
         '''
@@ -167,7 +175,7 @@ class Graph():
             u = self.nodes[idx]
             layer_out = LayerOutput(output_idx, u.scope, get_shape(node))
             u.outputs.add(layer_out)
-            out_scopes=OrderedSet()
+            out_scopes = OrderedSet()
 
             for use in node.uses():
                 target_node = use.user
@@ -176,7 +184,7 @@ class Graph():
                     v = self.nodes[out.unique()]
                     v.inputs.add(layer_out)
                     out_scopes.add(v.scope)
-            layer_out.out_scopes=out_scopes
+            layer_out.out_scopes = out_scopes
 
             output_idx += 1
             idx += 1
@@ -186,7 +194,7 @@ class Graph():
                 u = self.nodes[idx]
                 layer_out = LayerOutput(output_idx, u.scope, get_shape(out))
                 u.outputs.add(layer_out)
-                out_scopes=OrderedSet()
+                out_scopes = OrderedSet()
                 for use in out.uses():
                     target_node = use.user
                     for target_out in target_node.outputs():
@@ -194,7 +202,7 @@ class Graph():
                         v.inputs.add(layer_out)
                         out_scopes.add(v.scope)
 
-                layer_out.out_scopes=out_scopes
+                layer_out.out_scopes = out_scopes
                 idx += 1
                 output_idx += 1
 
@@ -202,13 +210,13 @@ class Graph():
         for node in self.nodes:
             if node.valueType() is type(None):
                 if 'aten::size' in node.scope or 'aten::Int' in node.scope:
-                    node.value_type=int
-                elif 'prim::ListConstruct' in node.scope or 'aten::chunk' in node.scope:
-                    node.value_type=list
+                    node.value_type = int
+                elif 'prim::ListConstruct' in node.scope or 'aten::chunk' in node.scope or 'prim::TupleConstruct':
+                    node.value_type = list
                 elif 'ImplicitTensorToNum' in node.scope:
-                    node.value_type=int
+                    node.value_type = int
             elif 'NumToTensor' in node.scope:
-                node.value_type=int
+                node.value_type = int
 
     def remove_tensor_int_tensor(self):
         def predicate(node):
@@ -220,39 +228,40 @@ class Graph():
 
         self._remove_nodes(predicate)
 
-
     def remove_useless_clone(self):
-        def predicate(n:Node):
+        def predicate(n: Node):
             return ('aten::clone' in n.scope) and (len(n.out_nodes) == 0)
         self._remove_nodes(predicate)
 
     def remove_empty_view(self):
-        def predicate(n:Node):
+        def predicate(n: Node):
             if ('aten::view' in n.scope):
                 if len(n.in_nodes) < 2:
                     return True
                 sizes = list(n.in_nodes)[1]
                 return len(sizes.in_nodes) == 0
-            return('prim::ListConstruct' in n.scope) and (len(n.in_nodes) == 0)
+            return('prim::ListConstruct' in n.scope or 'prim::TupleConstruct' in n.scope) and (len(n.in_nodes) == 0)
         self._remove_nodes(predicate)
 
     def remove_useless_node_inputs(self):
         # stupid fix where for some odd reason arithmetic ops have a third input with value 1
         # and Tensor.contiguous has a second input with value 0
         # and torch.arange having a zero input
-        def pred(node:Node):
-            if node.type == NodeTypes.CONSTANT and (node.value in [0,1]):
-                assert len(node.out_nodes) == 1 , "Constant should have one use"
+        def pred(node: Node):
+            if node.type == NodeTypes.CONSTANT and (node.value in [0, 1]):
+                assert len(node.out_nodes) == 1, "Constant should have one use"
                 out = node.out_nodes[0]
-                arithmetic_ops = ['aten::add','aten::div','aten::mul','aten::sub']
-                arithmetic = any(opMatch(out.scope,o) for o in arithmetic_ops) and (out.in_nodes.indexOf(node) == 2)
+                arithmetic_ops = ['aten::add',
+                                  'aten::div', 'aten::mul', 'aten::sub']
+                arithmetic = any(opMatch(out.scope, o) for o in arithmetic_ops) and (
+                    out.in_nodes.indexOf(node) == 2)
                 contiguous_input = ('aten::contiguous' in out.scope) and (
                     out.in_nodes.indexOf(node) == 1)
                 arange_input = ('aten::arange' in out.scope) and (
                     out.in_nodes.indexOf(node) == (len(out.in_nodes) - 3))
                 return arithmetic or contiguous_input or arange_input
             return False
-        self._remove_nodes(pred) 
+        self._remove_nodes(pred)
 
     def _find_encasing_layer(self, scopeName: str):
         '''
@@ -270,9 +279,9 @@ class Graph():
     def _remove_nodes_that_go_nowhere(self, trace_graph):
         '''remove nodes without out edges that are not outputs of the model'''
         # necessary because the trace can contain such nodes for certain ops
-        # those nodes provide no additional info to the graph    
-        out_indices=[self._get_id(out) for out in trace_graph.outputs()]
-        
+        # those nodes provide no additional info to the graph
+        out_indices = [self._get_id(out) for out in trace_graph.outputs()]
+
         def going_nowhere(node):
             if node.type is NodeTypes.OP and 'aten::' in node.scope:
                 func_name = node.scope.split('aten::')[1].rstrip(string.digits)
@@ -282,12 +291,12 @@ class Graph():
 
             if node.scope in self.output_scopes:
                 return False
-                    
+
             return (not node.out_nodes) and (not node.idx in out_indices)
 
         self._remove_nodes(going_nowhere)
 
-    def _get_id(self,out):
+    def _get_id(self, out):
         # we need this method for compatibility issues
         # in pytorch 1.2.0 the API changed the method name from uniqueName to debugName
         # maybe it's a sign that we should not relay on it but it's simple and effective...
@@ -299,9 +308,9 @@ class Graph():
             # before 1.2.0
             assert hasattr(out, 'uniqueName')
             n = out.uniqueName()
-        return int(n)
+        return int(n)-2
 
-    def _remove_nodes(self, condition, reverse:bool=False):
+    def _remove_nodes(self, condition, reverse: bool = False):
         changed = True
         while changed:
             changed = False
@@ -315,12 +324,12 @@ class Graph():
                     # connect inputs to outputs directly
                     # TODO we do not remove/add inputs or outputs might revisit
                     for in_node in node.in_nodes:
-                        in_node.replace_out_node(node,node.out_nodes)
+                        in_node.replace_out_node(node, node.out_nodes)
                         if node.value_type:
-                            in_node.value_type=node.value_type
-                            in_node.value=None
+                            in_node.value_type = node.value_type
+                            in_node.value = None
                     for out_node in node.out_nodes:
-                        out_node.replace_in_node(node,node.in_nodes)
+                        out_node.replace_in_node(node, node.in_nodes)
                         out_node.inputs.difference_update(node.outputs)
                         out_node.inputs.update(node.inputs)
                 else:
@@ -328,20 +337,20 @@ class Graph():
 
             self.nodes = optimized_graph
 
-    def _set_outputs(self,trace_outputs):
-        outputs=OrderedSet()
+    def _set_outputs(self, trace_outputs):
+        outputs = OrderedSet()
         for out in trace_outputs:
-            node=out.node()
-            scope=self._find_encasing_layer(node.scopeName())
+            node = out.node()
+            scope = self._find_encasing_layer(node.scopeName())
             if scope == '':
                 idx = self._get_id(out) - self.num_inputs_buffs_params
-                scope=node.scopeName() + \
+                scope = node.scopeName() + \
                     "/" + node.kind() + str(idx)
             outputs.add(scope)
-        self.output_scopes=outputs
+        self.output_scopes = outputs
 
     def __getitem__(self, key):
-        if isinstance(key,int):
+        if isinstance(key, int):
             return self.nodes[key]
         # assume key is scopeName
         for node in self.nodes:
@@ -349,8 +358,8 @@ class Graph():
                 return node
         return None
 
-    def scopes(self)->List[str]:
-        return list(map(lambda n:n.scope,self.nodes))
+    def scopes(self) -> List[str]:
+        return list(map(lambda n: n.scope, self.nodes))
 
     def __len__(self):
         return len(self.nodes)
@@ -364,10 +373,10 @@ class Graph():
     def get_nodes(self):
         return self.nodes
 
-    def get_weights(self)->Dict[str,Any]:
-        return {node.scope:node.weight for node in self.nodes}
+    def get_weights(self) -> Dict[str, Any]:
+        return {node.scope: node.weight for node in self.nodes}
 
-    def adjacency_list(self, directed=False)->List[List[int]]:
+    def adjacency_list(self, directed=False) -> List[List[int]]:
         '''
         returns an adjacency list of the graph
         Parameters
@@ -385,34 +394,34 @@ class Graph():
         except ImportError as _:
             print("networkx package not found")
             return
-        
-        #edge_list
-        edge_list=[]
+
+        # edge_list
+        edge_list = []
         for u in self.nodes:
             for v in u.in_nodes:
-                edge_list.append((u.idx,v.idx))
+                edge_list.append((u.idx, v.idx))
 
         G = nx.from_edgelist(edge_list)
         for n in self.nodes:
-            G.nodes[n.idx]['weight']=n.weight
-            G.nodes[n.idx]['scope']=n.scope
-            G.nodes[n.idx]['part']=n.part
-        
-        return G
+            G.nodes[n.idx]['weight'] = n.weight
+            G.nodes[n.idx]['scope'] = n.scope
+            G.nodes[n.idx]['part'] = n.part
 
+        return G
 
     def layers_graph(self):
         copy_graph = deepcopy(self)
 
-        copy_graph._remove_nodes(lambda n: n.type not in [NodeTypes.LAYER,NodeTypes.IN],reverse=True)
+        copy_graph._remove_nodes(lambda n: n.type not in [
+                                 NodeTypes.LAYER, NodeTypes.IN], reverse=True)
 
-        for idx,n in enumerate(copy_graph.nodes):
-            n.idx=idx
+        for idx, n in enumerate(copy_graph.nodes):
+            n.idx = idx
             assert n.type in [NodeTypes.IN, NodeTypes.LAYER]
             for o in n.out_nodes:
                 assert o.type == NodeTypes.LAYER
             for i in n.in_nodes:
-                assert i.type in [NodeTypes.IN,NodeTypes.LAYER]
+                assert i.type in [NodeTypes.IN, NodeTypes.LAYER]
 
         return copy_graph
 
@@ -465,7 +474,8 @@ class Graph():
 
         # TODO split big graphs to multiple pdfs
 
-        colors = {0:'grey',1:'green',2:'red',3:'yellow',4:'orange',5:'brown',6:'purple',7:'pink'}
+        colors = {0: 'grey', 1: 'green', 2: 'red', 3: 'yellow',
+                  4: 'orange', 5: 'brown', 6: 'purple', 7: 'pink'}
 
         def hide_node(node):
             return (node.type == NodeTypes.BUFF_PARAM) and (not show_buffs_params)
@@ -478,7 +488,7 @@ class Graph():
             if not node.out_nodes:
                 outputs = list(map(str, node.outputs))
                 outputs = ",".join(outputs)
-                label=f"{label}\n {outputs}"
+                label = f"{label}\n {outputs}"
 
             if show_weights and node.weight != 0:
                 label = f"{label}\n {node.weight}"
@@ -486,7 +496,7 @@ class Graph():
             label = f"{label}\n type: {node.valueType()}"
             if not (node.value is None):
                 label = f"{label}\n value={node.value}"
-            
+
             dot.node(str(node.idx), label, fillcolor=colors[node.part])
 
         for node in self.nodes:
@@ -496,10 +506,10 @@ class Graph():
                 if hide_node(in_node):
                     continue
                 edge_label = filter(lambda layer_in: layer_in.scope ==
-                               in_node.scope, node.inputs)
+                                    in_node.scope, node.inputs)
 
-                edge_label=list(map(str,edge_label))
-                edge_label=",".join(edge_label)
+                edge_label = list(map(str, edge_label))
+                edge_label = ",".join(edge_label)
                 dot.edge(str(in_node.idx), str(node.idx), label=edge_label)
 
         return dot
@@ -517,11 +527,12 @@ class Graph():
         '''
         try:
             from IPython.core.display import display_svg
-            display_svg(self.build_dot(show_buffs_params, show_weights=show_weights), raw=False)
+            display_svg(self.build_dot(show_buffs_params,
+                                       show_weights=show_weights), raw=False)
         except ImportError as _:
             print("only works in python notebooks")
 
-    def save(self, file_name,directory, show_buffs_params=True,show_weights=False):
+    def save(self, file_name, directory, show_buffs_params=True, show_weights=False):
         '''
         save the rendered graph to a file
 
@@ -542,10 +553,11 @@ class Graph():
     def serialize(self, file_name):
         import sys
         import pickle
-        rec=sys.getrecursionlimit()
+        rec = sys.getrecursionlimit()
         sys.setrecursionlimit(10000)
         pickle.dump(self, open(file_name, "wb"))
         sys.setrecursionlimit(rec)
+
 
 class NodeTypes(Enum):
     '''
@@ -555,8 +567,8 @@ class NodeTypes(Enum):
     BUFF_PARAM = 2
     LAYER = 3
     OP = 4
-    CONSTANT=5
-    PYTHON_PRIMITIVE=6
+    CONSTANT = 5
+    PYTHON_PRIMITIVE = 6
 
     def __repr__(self):
         return self.name
@@ -586,11 +598,11 @@ class Node():
         the weight of the edge can be anything
     part:
         partition idx determines the color of the Node
-    
+
      parallel edges in the same direction are not allowed
     '''
 
-    def __init__(self, scope:str, idx:int, node_type: NodeTypes, incoming_nodes=None, weight=0, part=0,value=None):
+    def __init__(self, scope: str, idx: int, node_type: NodeTypes, incoming_nodes=None, weight=0, part=0, value=None):
         self.scope = scope
         self.idx = idx
         self.type = node_type
@@ -601,8 +613,8 @@ class Node():
             incoming_nodes, OrderedSet) else OrderedSet()
         self.outputs = OrderedSet()
         self.inputs = OrderedSet()
-        self.value=value
-        self.value_type=None
+        self.value = value
+        self.value_type = None
 
     def valueType(self):
         if self.value_type:
@@ -631,28 +643,29 @@ class Node():
     def remove_out_node(self, node):
         if isinstance(node, Node):
             self.out_nodes.discard(node)
-        if isinstance(node, (set,OrderedSet)):
+        if isinstance(node, (set, OrderedSet)):
             self.out_nodes.difference_update(node)
 
-    def replace_out_node(self,to_replace,value):
+    def replace_out_node(self, to_replace, value):
         if to_replace not in self.out_nodes:
             return
-        
+
         values = list(self.out_nodes)
         idx = values.index(to_replace)
 
-        before,after=values[:idx],values[idx+1:]
+        before, after = values[:idx], values[idx+1:]
         try:
             # we handle the case for iterable, if value is not then we recall with [value]
             iter(value)
-            keys=value
-            to_add = [v for v in keys if (v not in before) and (v not in after)]
-            self.out_nodes=OrderedSet(before+to_add+after)
+            keys = value
+            to_add = [v for v in keys if (
+                v not in before) and (v not in after)]
+            self.out_nodes = OrderedSet(before+to_add+after)
 
         except TypeError as _:
-            self.replace_out_node(to_replace,[value])
+            self.replace_out_node(to_replace, [value])
 
-    def replace_in_node(self,to_replace,value):
+    def replace_in_node(self, to_replace, value):
         if to_replace not in self.in_nodes:
             return
 
@@ -663,8 +676,9 @@ class Node():
         try:
             # we handle the case for iterable, if value is not then we recall with [value]
             iter(value)
-            keys=value
-            to_add = [v for v in keys if (v not in before) and (v not in after)]
+            keys = value
+            to_add = [v for v in keys if (
+                v not in before) and (v not in after)]
             self.in_nodes = OrderedSet(before + to_add + after)
 
         except TypeError as _:
@@ -689,6 +703,7 @@ class LayerOutput():
     output_shape:
         the shape of this output
     '''
+
     def __init__(self, idx, origin_scope, output_shape):
         self.idx = idx
         self.scope = origin_scope
@@ -696,7 +711,7 @@ class LayerOutput():
         self.out_scopes = set()
 
     def __eq__(self, other):
-        if isinstance(other,tuple):
+        if isinstance(other, tuple):
             return other == tuple(self.output_shape)
 
         if not isinstance(other, LayerOutput):
@@ -792,5 +807,6 @@ def _merge_op_chains(graph: Graph):
     # op chains need to be placed on the same device anyways
     graph._remove_nodes(to_remove)
 
-def opMatch(scope,op_name):
-    return re.search(f"{op_name}[{string.digits}]",scope)
+
+def opMatch(scope, op_name):
+    return re.search(f"{op_name}[{string.digits}]", scope)
