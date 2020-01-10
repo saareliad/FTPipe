@@ -10,12 +10,9 @@ _WIDE_RESNETS = dict(
     wrn_16x4=dict(depth=16, num_classes=10, widen_factor=4,
                   drop_rate=0.0),  # FOR BACKWARD COMPATABILITY
     wrn_16x4_c10=dict(depth=16, num_classes=10, widen_factor=4, drop_rate=0.0),
-    wrn_28x10_c10_dr03=dict(depth=28, num_classes=10,
-                            widen_factor=10, drop_rate=0.3),
+    wrn_16x4_c100=dict(depth=16, num_classes=100, widen_factor=4, drop_rate=0.0),
+    wrn_28x10_c10_dr03=dict(depth=28, num_classes=10,widen_factor=10, drop_rate=0.3),
     wrn_28x10_c10=dict(depth=28, num_classes=10, widen_factor=10, drop_rate=0),
-
-    wrn_16x4_c100=dict(depth=16, num_classes=100,
-                       widen_factor=4, drop_rate=0.0),
     wrn_28x10_c100_dr03=dict(depth=28, num_classes=100,
                              widen_factor=10, drop_rate=0.3),
     wrn_28x10_c100=dict(depth=28, num_classes=100,
@@ -102,9 +99,9 @@ if __name__ == "__main__":
                         help="if the model is too big run the whole partitioning process on CPU, and drink a cup of coffee in the meantime")
     parser.add_argument('--n_partitions', type=int, default=4)
     parser.add_argument('--output_file', default='wrn_16x4')
-    parser.add_argument('--auto_file_name', action='store_true',
-                        default=False, help="create file name automatically")
-    parser.add_argument('--n_iter', type=int, default=10,
+    parser.add_argument('--no_auto_file_name', action='store_true',
+                        default=False, help="do not create file name automatically")
+    parser.add_argument('--n_iter', type=int, default=100,
                         help="number of iteration used in order to profile the network and run analysis")
     parser.add_argument('--bandwidth_gps', type=float,
                         default=12, help="data transfer rate between gpus in gigabaytes per second")
@@ -118,7 +115,7 @@ if __name__ == "__main__":
                         help="batch size to use during the post partition analysis")
 
     args = parser.parse_args()
-
+    args.auto_file_name = not args.no_auto_file_name
     if args.auto_file_name:
         args.output_file = f"{args.model}_p{args.n_partitions}"
 

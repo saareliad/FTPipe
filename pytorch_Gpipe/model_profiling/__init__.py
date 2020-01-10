@@ -52,11 +52,17 @@ def graph_builder(model: nn.Module, sample_batch: Tensors = (), kwargs: Optional
     with torch.no_grad():
         if hasattr(torch.jit, "get_trace_graph"):
             get_trace_graph = torch.jit.get_trace_graph
+            trace_graph, _ = get_trace_graph(model, sample_batch, kwargs)
+            trace_graph = trace_graph.graph()
         else:
             assert hasattr(torch.jit, "_get_trace_graph")
-            get_trace_graph = torch.jit._get_trace_graph
-        trace_graph, _ = get_trace_graph(model, sample_batch, kwargs)
-        trace_graph = trace_graph.graph()
+            # get_trace_graph = torch.jit._get_trace_graph
+            # trace_graph, _ = get_trace_graph(model, sample_batch, kwargs)
+            assert not kwargs
+            trace_graph = torch.jit.trace(model, sample_batch)  # TODO: Should be tuple?
+            trace_graph = trace_graph.graph
+            # https://github.com/pytorch/pytorch/commit/e7d25a3e4da80ef6b3e22bfc5f7a24c1ac59d89e
+
 
     num_inputs = _count_elements(*sample_batch) + len(kwargs)
 
