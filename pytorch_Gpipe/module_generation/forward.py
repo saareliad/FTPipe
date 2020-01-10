@@ -336,10 +336,12 @@ def specialCases(ready_expressions: Dict[str, str], node: Node, operand_scopes: 
         expression = f"{operand}[{args}]"
         return expression
     else:
-        print(
-            f"unsupported function {func_name}\ntypes: {types}\nvalues: {values}\noperands: {operand_scopes}\n{node.scope}")
         args = ", ".join([ready_expressions[scope]
                           for scope in operand_scopes])
+        print(
+            f"could not resolve function {namespace}.{func_name}\nwith arg types{types}\noperands:{operand_scopes}")
+        print(
+            f"falling back to default case generating {namespace}.{func_name}({args})")
         return f"{namespace}.{func_name}({args})"
 
 

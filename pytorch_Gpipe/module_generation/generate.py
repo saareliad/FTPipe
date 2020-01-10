@@ -12,6 +12,8 @@ from .misc import generateMiscMethods
 from typing import List, Tuple, Dict
 from collections import OrderedDict
 import inspect
+import os
+import pathlib
 
 tab = '    '
 dtab = tab + tab
@@ -57,7 +59,13 @@ def generatePartitionModules(graph: Graph, model: Module, verbose=False, output_
 
     output_file = output_file + '.py'
 
-    with open(output_file, 'w') as f:
+    path = pathlib.Path(output_file)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    print(path.absolute())
+    if path.exists():
+        os.remove(path)
+    with open(path, 'w') as f:
         f.write('\n'.join(lines))
 
 

@@ -2,7 +2,7 @@ import torch
 from collections import deque
 import time
 from contextlib import nullcontext
-
+import numpy as np
 
 def run_analysis(sample, graph, config, n_iter, recomputation=True, bandwidth_gps=16):
     # thoeretical analysis
@@ -21,8 +21,8 @@ def run_analysis(sample, graph, config, n_iter, recomputation=True, bandwidth_gp
 
                                                                                                         parallel_b, edges)
     # real statistics based on generated partitions
-    (real_f_times,f_vars), (real_b_times,b_vars), comm_volume = profile_execution(sample, config, n_iter,
-                                                                recomputation=recomputation, bandwidth_gps=bandwidth_gps)
+    (real_f_times, f_vars, f_deviance), (real_b_times, b_vars, b_deviance), comm_volume = profile_execution(sample, config, n_iter,
+                                                                                    recomputation=recomputation, bandwidth_gps=bandwidth_gps)
     real_b_imbalance = worst_imbalance(real_b_times)
     real_f_imbalance = worst_imbalance(real_f_times)
     topology_aware_real_f_imbalance, topology_aware_real_b_imbalance = topology_aware_imbalance(real_f_times,
@@ -42,7 +42,10 @@ def run_analysis(sample, graph, config, n_iter, recomputation=True, bandwidth_gp
 
     print(
         f"\nreal times are based on real measurements of execution time of generated partitions ms\nforward {real_f_times}\nbackward {real_b_times}")
-    print(f"variance of real execution times ms\nforward{f_vars}\nbackward{b_vars}")
+    print(
+        f"variance of real execution times ms\nforward{f_vars}\nbackward{b_vars}")
+    print(
+        f"avg diviation from the mean of real execution times ms\nforward{f_deviance}\nbackward{b_deviance}")
 
     print("\nimbalance is ratio of computation time between fastest and slowest parts between 0 and 1 higher is better")
     print(
@@ -88,6 +91,8 @@ def run_analysis(sample, graph, config, n_iter, recomputation=True, bandwidth_gp
     # print(
     #     f"\nideal real latencies ms\nforward {ideal_a_f_latency}\nbackward {ideal_a_b_latency}")
 
+
+#######################analyze generated partitions#######################
 
 def profile_execution(model_inputs, partition_config, n, recomputation=True, bandwidth_gps=16):
     '''perfrom forward/backward passes and measure execution times accross n batches
@@ -151,88 +156,20 @@ def profile_execution(model_inputs, partition_config, n, recomputation=True, ban
                 parts.append(idx)
 
     # calculate mean and variance
-    return mean_var(f_times),mean_var(b_times), communication_volume
+    return mean_var(f_times), mean_var(b_times), communication_volume
 
 
-def edge_cut(graph):
-    '''
-    find the cutting edges of the graph
-    '''
-    edges = []
-    for n in graph.nodes:
-        for u in n.out_nodes:
-            if n.part != u.part:
-                edges.append((n, u))
+def mean_var(times):
+    means = dict()
+    variances = dict()
+    avg_deviations = dict()
+    for i, ts in times.items():
+        arr = np.array(ts)
+        means[i] = np.mean(arr)
+        variances[i] = np.var(arr)
+        avg_deviations[i] = np.abs((arr-means[i])).mean()
 
-    return edges
-
-
-def theoretical_analysis(graph, partition_config, recomputation=True):
-    ''' find execution time of partitions based on the model's graph using 2 a sequential assumption and parallel assumption
-        the sequential assumption is that in the partition all operation are linear.
-        the parallel assumption assumes that all computation paths are concurrent.
-    '''
-    n_parts = len(set(n.part for n in graph.nodes))
-    parallel_b = dict()
-    parallel_f = dict()
-
-    tensor_names = set()
-    for i in range(n_parts):
-        tensor_names.update(partition_config[i]['outputs'])
-
-    sequential_f = {i: 0 for i in range(n_parts)}
-    sequential_b = {i: 0 for i in range(n_parts)}
-
-    nodes = dict()
-    for node in graph.nodes:
-        # cache relevant nodes to make fetching them faster
-        if node.scope in tensor_names:
-            nodes[node.scope] = node
-
-        # old way of measuring time as sum of all computation
-        sequential_f[node.part] += extract_time(node.weight, forward=True)
-        sequential_b[node.part] += extract_time(node.weight, forward=False)
-
-    # new way of measuring time as longest path where all paths are concurrent
-    for i in range(n_parts):
-        outputs = [nodes[name] for name in partition_config[i]['outputs']]
-        cache = dict()
-        parallel_f[i] = 0
-        parallel_b[i] = 0
-        for o in outputs:
-            f, b = parallel_execution_analysis(o, i, cache)
-            parallel_f[i] = max(parallel_f[i], f)
-            parallel_b[i] = max(parallel_b[i], b)
-
-        if recomputation:
-            sequential_b[i] += sequential_f[i]
-            parallel_b[i] += parallel_f[i]
-
-    return sequential_f, sequential_b, parallel_f, parallel_b
-
-
-def parallel_execution_analysis(node, part_idx, cache):
-    # use cache in order to remember common subpaths
-    if node.scope in cache:
-        return cache[node.scope]
-    elif node.part != part_idx:
-        cache[node.scope] = (0, 0)
-        return 0, 0
-
-    longest_f, longest_b = 0, 0
-
-    for n in node.in_nodes:
-        f, b = parallel_execution_analysis(n, part_idx, cache)
-        longest_f = max(f, longest_f)
-        longest_b = max(b, longest_b)
-
-    longest_f += extract_time(node.weight, forward=True)
-    longest_b += extract_time(node.weight, forward=False)
-
-    cache[node.scope] = (longest_f, longest_b)
-
-    return longest_f, longest_b
-
+    return means, variances, avg_deviations
 
 def cuda_time(partition, inputs, recomputation=True):
     # now we move partition to GPU
@@ -322,6 +259,89 @@ def cpu_backward(partition, inputs, recomputation=True):
     return b_time, outputs
 
 
+#####################analysis based on the graph##################################
+
+
+def edge_cut(graph):
+    '''
+    find the cutting edges of the graph
+    '''
+    edges = []
+    for n in graph.nodes:
+        for u in n.out_nodes:
+            if n.part != u.part:
+                edges.append((n, u))
+
+    return edges
+
+
+def theoretical_analysis(graph, partition_config, recomputation=True):
+    ''' find execution time of partitions based on the model's graph using 2 a sequential assumption and parallel assumption
+        the sequential assumption is that in the partition all operation are linear.
+        the parallel assumption assumes that all computation paths are concurrent.
+    '''
+    n_parts = len(set(n.part for n in graph.nodes))
+    parallel_b = dict()
+    parallel_f = dict()
+
+    tensor_names = set()
+    for i in range(n_parts):
+        tensor_names.update(partition_config[i]['outputs'])
+
+    sequential_f = {i: 0 for i in range(n_parts)}
+    sequential_b = {i: 0 for i in range(n_parts)}
+
+    nodes = dict()
+    for node in graph.nodes:
+        # cache relevant nodes to make fetching them faster
+        if node.scope in tensor_names:
+            nodes[node.scope] = node
+
+        # old way of measuring time as sum of all computation
+        sequential_f[node.part] += extract_time(node.weight, forward=True)
+        sequential_b[node.part] += extract_time(node.weight, forward=False)
+
+    # new way of measuring time as longest path where all paths are concurrent
+    for i in range(n_parts):
+        outputs = [nodes[name] for name in partition_config[i]['outputs']]
+        cache = dict()
+        parallel_f[i] = 0
+        parallel_b[i] = 0
+        for o in outputs:
+            f, b = parallel_execution_analysis(o, i, cache)
+            parallel_f[i] = max(parallel_f[i], f)
+            parallel_b[i] = max(parallel_b[i], b)
+
+        if recomputation:
+            sequential_b[i] += sequential_f[i]
+            parallel_b[i] += parallel_f[i]
+
+    return sequential_f, sequential_b, parallel_f, parallel_b
+
+
+def parallel_execution_analysis(node, part_idx, cache):
+    # use cache in order to remember common subpaths
+    if node.scope in cache:
+        return cache[node.scope]
+    elif node.part != part_idx:
+        cache[node.scope] = (0, 0)
+        return 0, 0
+
+    longest_f, longest_b = 0, 0
+
+    for n in node.in_nodes:
+        f, b = parallel_execution_analysis(n, part_idx, cache)
+        longest_f = max(f, longest_f)
+        longest_b = max(b, longest_b)
+
+    longest_f += extract_time(node.weight, forward=True)
+    longest_b += extract_time(node.weight, forward=False)
+
+    cache[node.scope] = (longest_f, longest_b)
+
+    return longest_f, longest_b
+
+
 def extract_time(w, forward=False):
     if hasattr(w, "weight"):
         w = w.weight
@@ -331,6 +351,7 @@ def extract_time(w, forward=False):
         return w.forward_time
     return w.backward_time
 
+#####################imbalance computation##################################
 
 def worst_imbalance(times):
     return min(times.values()) / max(times.values())
@@ -356,6 +377,7 @@ def topology_aware_imbalance(f_times, b_times, cutting_edges):
     return f_imbalance, b_imbalance
 
 
+######################unused code######################################
 def run_partitions(model_inputs, partition_config):
     n_partitions = sum([1 for k in partition_config if isinstance(k, int)])
 
@@ -430,18 +452,3 @@ def find_dependencies(cutting_edges, n_parts):
             break
 
     return forward_dependencies, backward_dependencies
-
-
-def mean_var(times):
-    means=dict()
-    variances=dict()
-    for i,ts in times.items():
-        sum_t = sum(ts)
-        sum_squares = sum(t**2 for t in ts)
-
-        mean = sum_t/len(ts)
-        mean_squares = sum_squares/len(ts)
-        means[i]=mean
-        variances[i]=mean_squares-(mean**2)
-        
-    return means,variances
