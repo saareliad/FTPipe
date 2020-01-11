@@ -43,7 +43,7 @@ class Graph():
         self._add_OP_nodes(list(trace_graph.nodes())[self.offset-self.num_inputs:])
         # TODO we've disabled output shape untill we can think about full support
         # self._add_shapes(trace_graph)
-        self.save(f"verbose", f"playground_out/graphs/{self.model_name}")
+        # self.save(f"verbose", f"playground_out/graphs/{self.model_name}")
         self._set_outputs(trace_graph.outputs())
         self.remove_useless_clone()
         # self.save(f"remove_clones", f"playground_out/graphs/{self.model_name}")
@@ -51,7 +51,7 @@ class Graph():
         # self.save(f"remove_empty_views",
                 #   f"playground_out/graphs/{self.model_name}")
         optimize_graph(self)
-        self.save(f"optimized", f"playground_out/graphs/{self.model_name}")
+        # self.save(f"optimized", f"playground_out/graphs/{self.model_name}")
         self._remove_nodes_that_go_nowhere(trace_graph)
         # self.save(f"remove_goes_nowhere",
                 #   f"playground_out/graphs/{self.model_name}")
@@ -119,10 +119,6 @@ class Graph():
             node_type = None
             value_type = None
             value = None
-            print()
-            print(trace_node)
-            print(trace_node.scopeName())
-            print(node_scope)
             if node_scope != "":
                 # profiled Layer
                 node_type = NodeTypes.LAYER
@@ -145,6 +141,7 @@ class Graph():
                     assert False, f"unknown scope {trace_node.scopeName()}"
 
             if node_scope.startswith("/"):
+                #TODO this is a bug in jit.trace it works fine with jit.get_trace
                 # weird case where we don not have the model class as prefix
                 node_scope = self.model_name+node_scope
 
@@ -374,6 +371,7 @@ class Graph():
                 scope = node.scopeName() + \
                     "/" + node.kind() + str(idx)
                 if scope.startswith("/"):
+                    #TODO this is a bug in jit.trace it works fine with jit.get_trace
                     # weird case where we do not start with model class as prefix
                     scope = self.model_name+scope
             outputs.add(scope)
