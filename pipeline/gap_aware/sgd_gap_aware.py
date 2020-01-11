@@ -108,6 +108,11 @@ class GapAware:
         self.penatly_for_weight_decay = penatly_for_weight_decay
         self.skip_next_apply = True
 
+        # Ugly hack, init momentum buffer to zeros before we start
+        for pg in self.optimizer.param_groups:
+            for p in pg['params']:
+                if not 'momentum_buffer' in self.optimizer.state[p]:
+                    self.optimizer.state[p]['momentum_buffer'] = torch.zeros_like(p)
     def update_max_lr(self):
         """ should be called after scheduler step. """
         for pg in self.optimizer.param_groups:

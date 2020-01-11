@@ -88,3 +88,47 @@ def plot_grad_norm(fit_res: Union[NamedTuple, dict], fig=None, legend=None, **kw
             ax.legend()
 
     return fig, axes
+
+
+
+def plot_gap(fit_res: Union[NamedTuple, dict], fig=None, legend=None, **kw):
+    total = sum("gap" in key for key in fit_res.keys())
+    assert(total % 2 == 0)  # TODO support for un-even...
+    # total_norms / 2
+    if fig is None:
+        fig, axes = plt.subplots(nrows=1+ total//2, ncols=2, figsize=(16, 10),
+                                 sharex='col', sharey=False)
+        axes = axes.reshape(-1)
+    else:
+        axes = fig.axes
+
+    all_ = [key for key in fit_res.keys() if "gap" in key]
+    max_len = max(len(key) for key in all_)
+    for key in all_:
+        if len(key) == 0:
+            key += [0]*max_len
+
+    p = all_ + ["train_acc", "test_acc"]
+    for idx, attr in enumerate(p):
+        ax = axes[idx]
+        if isinstance(fit_res, NamedTuple):
+            data = getattr(fit_res, attr)
+        else:
+            data = fit_res[attr]
+
+        h = ax.plot(np.arange(1, len(data) + 1), data, label=legend)
+        # bwd compatability...
+        # attr = "last_partition_grad_norm" if attr == "total_grad_norm" else attr
+        ax.set_title(attr)
+        ax.set_xlabel('Epoch #')
+
+        if "acc" in attr:
+            ax.set_ylabel('Accuracy (%)')
+        else:
+            ax.set_ylabel('Gap [sum of L2 norms]')
+
+        if legend:
+            ax.legend()
+
+    return fig, axes
+
