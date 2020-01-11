@@ -25,7 +25,7 @@ def generatePartitionModules(graph: Graph, model: Module, verbose=False, output_
     is_param_dict = {scope: t.requires_grad for t,
                      scope in traverse_params_buffs(model)}
 
-    parts = groupByPartition(graph.nodes)
+    parts = groupByPartition(graph.nodes.values())
 
     lines = generateImports(layer_classes)
     lines.append(connections(graph))
@@ -201,7 +201,7 @@ def connections(graph: Graph):
     adj_matrix = [{"inputs": set(), "outputs": set()}
                   for i in range(graph.num_parts + 2)]
 
-    for node in graph.nodes:
+    for node in graph.nodes.values():
         if node.idx < graph.num_inputs:
             for n in node.out_nodes:
                 adj_matrix[n.part + 1]["inputs"].add(node.scope)
