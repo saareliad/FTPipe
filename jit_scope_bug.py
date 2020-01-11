@@ -10,14 +10,11 @@ class Tuples(nn.Module):
         super(Tuples, self).__init__()
         self.l0 = TupleOut()
         self.l1 = TupleOut()
-        self.l2 = TupleOut()
 
     def forward(self, x):
-        a, b = self.l0(x, x)
+        t = self.l0(x, x)
 
-        t = self.l1(b, a)
-
-        return self.l2(*t)
+        return self.l1(*t)
 
 
 class TupleOut(nn.Module):
@@ -36,29 +33,22 @@ class TupleOut(nn.Module):
         return y, x
 
 
-def generate_graph(model, sample, save_jit_trace=False, generate_code=False, save_graph=False, output_path="jit_trace_bug"):
+def generate_graph(model, sample, save_jit_trace=False, output_path="jit_trace_bug"):
     name = model.__class__.__name__
 
     traced = torch.jit.trace(model, sample, check_trace=False)
     if save_jit_trace:
-        clear_file(f"{output_path}/jit_trace/{name}.txt")
-        with open(f"{output_path}/jit_trace/{name}.txt", "w") as f:
+        clear_file(f"{output_path}/{name}.txt")
+        with open(f"{output_path}/{name}.txt", "w") as f:
             f.write(str(traced.graph))
-
-    graph = graph_builder(model, sample, max_depth=0)
-    partition(graph, 2)
-    if save_graph:
-        graph.save(name, f"{output_path}/graphs",
-                   show_buffs_params=True, show_weights=False)
-
-    if generate_code:
-        generatePartitionModules(graph, model, verbose=True,
-                                 output_file=f"{output_path}/generated/{name}")
 
     for node in traced.graph.nodes():
         if node.scopeName() == "":
             print(
                 f"the node {node}does not have a scopeName that's a bug causing incorrect code generation")
+            return
+
+    print("the trace is correct and does not have the bug")
 
 
 def clear_file(path):
@@ -71,5 +61,4 @@ def clear_file(path):
 if __name__ == "__main__":
     model = Tuples()
     sample = torch.randn(100, 100)
-    generate_graph(model, sample, save_jit_trace=True,
-                   generate_code=True, save_graph=True)
+    generate_graph(model, sample, save_jit_trace=True)
