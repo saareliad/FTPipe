@@ -40,30 +40,28 @@ class Graph():
     def _build_graph(self, trace_graph):
         self.offset = self._add_IO_nodes(trace_graph)
         self.delta = self.offset-self.num_inputs_buffs_params
-        self._add_OP_nodes(list(trace_graph.nodes())[self.offset-1:])
+        self._add_OP_nodes(list(trace_graph.nodes())[self.offset-self.num_inputs:])
         # TODO we've disabled output shape untill we can think about full support
         # self._add_shapes(trace_graph)
         self.save(f"verbose", f"playground_out/graphs/{self.model_name}")
         self._set_outputs(trace_graph.outputs())
         self.remove_useless_clone()
-        self.save(f"remove_clones", f"playground_out/graphs/{self.model_name}")
+        # self.save(f"remove_clones", f"playground_out/graphs/{self.model_name}")
         self.remove_empty_view()
-        self.save(f"remove_empty_views",
-                  f"playground_out/graphs/{self.model_name}")
+        # self.save(f"remove_empty_views",
+                #   f"playground_out/graphs/{self.model_name}")
         optimize_graph(self)
         self.save(f"optimized", f"playground_out/graphs/{self.model_name}")
         self._remove_nodes_that_go_nowhere(trace_graph)
-        self.save(f"remove_goes_nowhere",
-                  f"playground_out/graphs/{self.model_name}")
-        # # for idx, node in enumerate(self.nodes):
-        # #     node.idx = idx
+        # self.save(f"remove_goes_nowhere",
+                #   f"playground_out/graphs/{self.model_name}")
         self.remove_useless_node_inputs()
-        self.save(f"removed_useless_inputs",
-                  f"playground_out/graphs/{self.model_name}")
+        # self.save(f"removed_useless_inputs",
+                #   f"playground_out/graphs/{self.model_name}")
         self.add_missing_types()
         self.remove_tensor_int_tensor()
-        self.save(f"remove_tensor_int_tensor",
-                  f"playground_out/graphs/{self.model_name}")
+        # self.save(f"remove_tensor_int_tensor",
+                #   f"playground_out/graphs/{self.model_name}")
 
     def _add_IO_nodes(self, trace_graph):
         '''
@@ -74,7 +72,6 @@ class Graph():
             if self.num_inputs_buffs_params == (self.num_inputs+len(self.buffer_param_names)):
                 offset = idx
                 break
-
             # each graph starts with input and buff/param declarations and getattr nodes used to access the buff/param
             # we add only nodes whoes type is Tensor(buff/param) or nodes that represent inputs the first num_inputs nodes
 
@@ -95,7 +92,7 @@ class Graph():
                     unique_id = trace_node.output().unique()
 
                 new_node = Node(node_scope, unique_id, node_type,
-                                                    weight=node_weight)
+                                weight=node_weight)
                 new_node.value_type = torch.Tensor
                 self.nodes[unique_id] = new_node
                 self.num_inputs_buffs_params += 1
@@ -106,14 +103,14 @@ class Graph():
         '''
         add nodes representing the layers/ops of the model
         '''
-        for idx, trace_node in enumerate(sorted(OP_nodes, key=lambda n: next(n.outputs()).unique())):
+        for trace_node in sorted(OP_nodes, key=lambda n: next(n.outputs()).unique()):
             node_scope = self._find_encasing_layer(trace_node.scopeName())
             try:
                 input_nodes = OrderedSet([self.nodes[i.unique()]
                                           for i in trace_node.inputs()])
             except Exception as e:
                 print(trace_node)
-                print(f"graph nodes are{self.nodes.keys()}")
+                print(f"graph nodes are {self.nodes.keys()}")
                 for i in trace_node.inputs():
                     print(i.unique())
                 raise e
@@ -122,7 +119,10 @@ class Graph():
             node_type = None
             value_type = None
             value = None
-
+            print()
+            print(trace_node)
+            print(trace_node.scopeName())
+            print(node_scope)
             if node_scope != "":
                 # profiled Layer
                 node_type = NodeTypes.LAYER
@@ -135,7 +135,7 @@ class Graph():
                     value = trace_node.output().toIValue()
                 elif 'prim::' in trace_node.kind():
                     # unprofiled List or Tuple
-                    node_type=NodeTypes.PYTHON_PRIMITIVE
+                    node_type = NodeTypes.PYTHON_PRIMITIVE
                 elif 'aten::' in trace_node.kind():
                     # unprofiled torch op
                     # TODO should we specialize the aten:: and prim:: cases
@@ -148,31 +148,30 @@ class Graph():
                 # weird case where we don not have the model class as prefix
                 node_scope = self.model_name+node_scope
 
-
             nOuts = 1
             # add node for each output
             for i, output in enumerate(trace_node.outputs()):
                 unique_id = output.unique()
-                
+
                 # to differentiate different non layer ops that are in the same scope
                 if i == 0 and node_type != NodeTypes.LAYER:
                     node_scope += str(unique_id)
+                # create new node
+                new_node = Node(node_scope, unique_id,
+                                node_type, input_nodes, value=value)
 
-                #create new node
-                new_node = Node(node_scope,unique_id,node_type,input_nodes,value=value)
-                
                 # add incoming edges
                 for node in input_nodes:
                     node.add_out_node(new_node)
 
-                new_node.value_type=value_type
-                self.nodes[unique_id]=new_node
+                new_node.value_type = value_type
+                self.nodes[unique_id] = new_node
 
-                #if tensor node set type accordingly
+                # if tensor node set type accordingly
                 if output.isCompleteTensor():
-                    new_node.value_type=torch.Tensor
+                    new_node.value_type = torch.Tensor
 
-                #secondery output
+                # secondery output
                 if i != 0:
                     if self._find_encasing_layer(node_scope) == "":
                         new_node.scope += f"{i} "
@@ -284,7 +283,7 @@ class Graph():
                 out = node.out_nodes[0]
                 arithmetic_ops = ['aten::add',
                                   'aten::div', 'aten::mul', 'aten::sub']
-                arithmetic = any(opMatch(out.scope, o) for o in arithmetic_ops) and (
+                arithmetic = any(opMatch(out.scope, o) or opMatch(out.scope, o+"_") for o in arithmetic_ops) and (
                     out.in_nodes.indexOf(node) == 2)
                 contiguous_input = ('aten::contiguous' in out.scope) and (
                     out.in_nodes.indexOf(node) == 1)
@@ -359,7 +358,7 @@ class Graph():
                         out_node.inputs.difference_update(node.outputs)
                         out_node.inputs.update(node.inputs)
                 else:
-                    optimized_graph[unique_id]=node
+                    optimized_graph[unique_id] = node
 
             self.nodes = optimized_graph
             if not changed:
@@ -398,24 +397,6 @@ class Graph():
             discription = f"{discription}\n{node}"
         return discription
 
-    def get_nodes(self):
-        return self.nodes
-
-    def get_weights(self) -> Dict[str, Any]:
-        return {node.scope: node.weight for node in self.nodes}
-
-    def adjacency_list(self, directed=False) -> List[List[int]]:
-        '''
-        returns an adjacency list of the graph
-        Parameters
-        ----------
-        directed:
-            whether the adjacency list will be of the directed graph or the undirected graph 
-        '''
-        if not directed:
-            return [[n.idx for n in node.out_nodes.union(node.in_nodes)] for node in self.nodes]
-        return [[n.idx for n in node.out_nodes] for node in self.nodes]
-
     def asNetworkx(self):
         try:
             import networkx as nx
@@ -425,12 +406,12 @@ class Graph():
 
         # edge_list
         edge_list = []
-        for u in self.nodes:
+        for u in self.nodes.values():
             for v in u.in_nodes:
                 edge_list.append((u.idx, v.idx))
 
         G = nx.from_edgelist(edge_list)
-        for n in self.nodes:
+        for n in self.nodes.values():
             G.nodes[n.idx]['weight'] = n.weight
             G.nodes[n.idx]['scope'] = n.scope
             G.nodes[n.idx]['part'] = n.part
@@ -562,14 +543,6 @@ class Graph():
             os.remove(f"{directory}/{file_name}.pdf")
         dot.render(file_name, directory=directory, cleanup=True)
 
-    def serialize(self, file_name):
-        import sys
-        import pickle
-        rec = sys.getrecursionlimit()
-        sys.setrecursionlimit(10000)
-        pickle.dump(self, open(file_name, "wb"))
-        sys.setrecursionlimit(rec)
-
 
 class NodeTypes(Enum):
     '''
@@ -646,17 +619,6 @@ class Node():
         if isinstance(node, (set, OrderedSet)):
             self.in_nodes.update(node)
 
-    def remove_in_node(self, node):
-        if isinstance(node, Node):
-            self.in_nodes.discard(node)
-        if isinstance(node, (set, OrderedSet)):
-            self.in_nodes.difference_update(node)
-
-    def remove_out_node(self, node):
-        if isinstance(node, Node):
-            self.out_nodes.discard(node)
-        if isinstance(node, (set, OrderedSet)):
-            self.out_nodes.difference_update(node)
 
     def replace_out_node(self, to_replace, value):
         if to_replace not in self.out_nodes:
@@ -764,7 +726,7 @@ def _combine_OP_nodes_under_the_same_scope(nodes: OrderedDict) -> OrderedDict:
     optimized_graph = OrderedDict()
 
     # get the nodes of the optimized graph
-    for unique_id,node in nodes.items():
+    for unique_id, node in nodes.items():
         if not node.scope in scope_representative:
             optimized_graph[unique_id] = node
             scope_representative[node.scope] = node
