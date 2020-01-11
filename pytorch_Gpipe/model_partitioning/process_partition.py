@@ -19,7 +19,7 @@ def post_process_partition(graph: Graph, part: List[int]):
         a list of the nodes partition indices
     '''
 
-    for node, idx in zip(graph.nodes, part):
+    for node, idx in zip(graph.nodes.values(), part):
         node.part = idx
 
     cannonize_partition_indices(graph)
@@ -41,9 +41,9 @@ def post_process_partition(graph: Graph, part: List[int]):
 
 
 def cannonize_partition_indices(graph: Graph):
-    num_parts = len({n.part for n in graph.nodes})
+    num_parts = len({n.part for n in graph.nodes.values()})
     num_taken = 0
-    model_inputs = [node for node in graph.nodes if node.type == NodeTypes.IN]
+    model_inputs = [node for node in graph.nodes.values() if node.type == NodeTypes.IN]
     open_nodes = deque(model_inputs)
     closed = set()
     cannonical_parts = dict()
@@ -61,7 +61,7 @@ def cannonize_partition_indices(graph: Graph):
         nodes = edges.difference(closed, set(open_nodes))
         open_nodes.extendleft(nodes)
 
-    for node in graph.nodes:
+    for node in graph.nodes.values():
         node.part = cannonical_parts[node.part]
 
     graph.num_parts = len(cannonical_parts)
@@ -71,7 +71,7 @@ def graph_root_fix(graph: Graph):
     fixed = False
     while True:
         changed = False
-        for node in graph.nodes:
+        for node in graph.nodes.values():
             for n in node.in_nodes:
                 if n.part != node.part and len(n.in_nodes) == 0:
                     n.part = node.part
@@ -87,7 +87,7 @@ def remove_backward_edges(graph: Graph):
     fixed = False
     while True:
         backward_edges = []
-        for node in graph.nodes:
+        for node in graph.nodes.values():
             for n in node.in_nodes:
                 if n.part > node.part:
                     backward_edges.append((n, node))
@@ -102,7 +102,7 @@ def remove_backward_edges(graph: Graph):
 
 
 def do_not_send_lists(graph: Graph):
-    for node in graph.nodes:
+    for node in graph.nodes.values():
         if not ('ListConstruct' in node.scope) or not ('TupleConstruct' in node.scope):
             continue
 
@@ -116,6 +116,9 @@ def do_not_send_lists(graph: Graph):
                 for i in out.in_nodes:
                     i.part = node.part
 
+
+
+# #######################################################################################################################
 # TODO the follwing functions are deprecated (residual from before code generation) might be repurposed later
 
 

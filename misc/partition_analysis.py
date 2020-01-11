@@ -267,7 +267,7 @@ def edge_cut(graph):
     find the cutting edges of the graph
     '''
     edges = []
-    for n in graph.nodes:
+    for n in graph.nodes.values():
         for u in n.out_nodes:
             if n.part != u.part:
                 edges.append((n, u))
@@ -280,7 +280,7 @@ def theoretical_analysis(graph, partition_config, recomputation=True):
         the sequential assumption is that in the partition all operation are linear.
         the parallel assumption assumes that all computation paths are concurrent.
     '''
-    n_parts = len(set(n.part for n in graph.nodes))
+    n_parts = len(set(n.part for n in graph.nodes.values()))
     parallel_b = dict()
     parallel_f = dict()
 
@@ -292,7 +292,7 @@ def theoretical_analysis(graph, partition_config, recomputation=True):
     sequential_b = {i: 0 for i in range(n_parts)}
 
     nodes = dict()
-    for node in graph.nodes:
+    for node in graph.nodes.values():
         # cache relevant nodes to make fetching them faster
         if node.scope in tensor_names:
             nodes[node.scope] = node

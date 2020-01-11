@@ -18,7 +18,7 @@ def default_weight_func(w):
 def partiton_graph(graph: Graph, num_partitions: int, weighting_function: Optional[Callable[[Any], int]] = None, **METIS_opts):
     wfunc = weighting_function if weighting_function != None else default_weight_func
 
-    weights = {node.idx: wfunc(node.weight) for node in graph.nodes}
+    weights = {node.idx: wfunc(node.weight) for node in graph.nodes.values()}
 
     G = graph.asNetworkx()
     nx.set_node_attributes(G, weights, 'weight')
@@ -29,7 +29,7 @@ def partiton_graph(graph: Graph, num_partitions: int, weighting_function: Option
 
     post_process_partition(graph, parts)
 
-    actual_nparts = len({n.part for n in graph.nodes})
+    actual_nparts = len({n.part for n in graph.nodes.values()})
 
     if(actual_nparts < num_partitions):
         print(

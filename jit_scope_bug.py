@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
 import pathlib
 import os
-from pytorch_Gpipe import graph_builder, generatePartitionModules
+from pytorch_Gpipe import graph_builder, generatePartitionModules, partition
 
 
 class Tuples(nn.Module):
@@ -46,6 +46,7 @@ def generate_graph(model, sample, save_jit_trace=False, generate_code=False, sav
             f.write(str(traced.graph))
 
     graph = graph_builder(model, sample, max_depth=0)
+    partition(graph, 2)
     if save_graph:
         graph.save(name, f"{output_path}/graphs",
                    show_buffs_params=True, show_weights=False)
