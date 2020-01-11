@@ -62,7 +62,6 @@ def generatePartitionModules(graph: Graph, model: Module, verbose=False, output_
     path = pathlib.Path(output_file)
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    print(path.absolute())
     if path.exists():
         os.remove(path)
     with open(path, 'w') as f:
@@ -112,7 +111,8 @@ def generateImports(layer_classes: Dict[str, Module]) -> List[str]:
     imports = 'import torch\nfrom torch import Tensor\nimport torch.nn as nn\nimport torch.nn.functional as F\n'
     imports += 'from itertools import chain\n'
     imports += 'import operator\n'
-    imports += 'from typing import Optional, Tuple, Iterator, Iterable'
+    imports += 'from typing import Optional, Tuple, Iterator, Iterable\n'
+    imports += 'import collections'
     imports += '\n'
     unique_classes = set(layer_classes.values())
 

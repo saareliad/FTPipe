@@ -94,7 +94,7 @@ def layerDict(model: nn.Module, depth=1000):
 
 
 def tensorDict(model: nn.Module):
-    return {s: t for t, s in traverse_params_buffs(model)}
+    return collections.OrderedDict((s,t)for t, s in traverse_params_buffs(model))
 
 
 INCORRECT_INPUT_TYPE = '''currently supported input types are torch.Tensor, List,Tuple or combination of them found: '''

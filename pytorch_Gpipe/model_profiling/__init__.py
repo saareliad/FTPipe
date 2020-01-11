@@ -57,7 +57,7 @@ def graph_builder(model: nn.Module, sample_batch: Tensors = (), kwargs: Optional
         #     get_trace_graph = torch.jit._get_trace_graph
         # trace_graph, _ = get_trace_graph(model, sample_batch, kwargs)
         # trace_graph = trace_graph.graph()
-        trace_graph = torch.jit.trace(model, sample_batch).graph
+        trace_graph = torch.jit.trace(model, sample_batch,check_trace=False).graph
     num_inputs = _count_elements(*sample_batch) + len(kwargs)
 
     graph = Graph(layerNames, num_inputs, buffer_param_names,
