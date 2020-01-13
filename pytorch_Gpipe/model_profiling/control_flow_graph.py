@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any, Dict, List,Tuple
 from ..utils import OrderedSet
 import string
 import inspect
@@ -21,25 +21,24 @@ class Graph():
     do not instanciate this class directly use the graph_builder method provided with this module
     '''
 
-    def __init__(self, profiled_layers: List[str], num_inputs: int, buffer_param_names: List[str], trace_graph, weights: Dict[str, Any], depth: int,use_jit_trace=True):
-        assert use_jit_trace, "_get_trace_graph is currently broken"
-
+    def __init__(self, profiled_layers: List[str], num_inputs: int, tensors: List[Tuple[str,Tuple[int]]], trace_graph, weights: Dict[str, Any], depth: int,use_jit_trace=False):
+        # assert use_jit_trace, "_get_trace_graph is currently broken"
         self.nodes = OrderedDict()
         self.profiled_layers = set(profiled_layers)
         self.num_inputs = num_inputs
-        self._build_graph(trace_graph,buffer_param_names)
+        self._build_graph(trace_graph, tensors, use_jit_trace)
         self.depth = depth
 
         for node in self.nodes.values():
             node.weight = weights.get(node.scope, node.weight)
 
-    def _build_graph(self, trace_graph,buffer_param_names):
-        offset = self._add_IO_nodes(trace_graph,buffer_param_names)
-        self._add_OP_nodes(list(trace_graph.nodes())[offset-self.num_inputs:])
+    def _build_graph(self, trace_graph,tensors,use_jit_trace):
+        offset = self._add_IO_nodes(trace_graph,tensors,use_jit_trace)
+        self._add_OP_nodes(list(trace_graph.nodes())[offset-self.num_inputs:],use_jit_trace)
         # TODO we've disabled output shape untill we can think about full support
         # self._add_shapes(trace_graph)
         # self.save(f"verbose", f"playground_out/graphs/{self.model_name}")
-        self._set_outputs(trace_graph.outputs())
+        self._set_outputs(trace_graph.outputs(),use_jit_trace)
         self.remove_useless_clone()
         # self.save(f"remove_clones", f"playground_out/graphs/{self.model_name}")
         self.remove_empty_view()
@@ -58,34 +57,35 @@ class Graph():
         # self.save(f"remove_tensor_int_tensor",
                 #   f"playground_out/graphs/{self.model_name}")
 
-    def _add_IO_nodes(self, trace_graph, buffer_param_names):
+    def _add_IO_nodes(self, trace_graph, tensors,use_jit_trace):
         '''
         add nodes representing the input and params/buffs of the model
         '''
-        offset = 0
         num_inputs_buffs_params=0
-        for idx, trace_node in enumerate(list(trace_graph.inputs())[1:]+list(trace_graph.nodes())):
-            if num_inputs_buffs_params == (self.num_inputs+len(buffer_param_names)):
-                offset = idx
-                break
+        if use_jit_trace:
+            nodes = list(trace_graph.inputs())[1:]+list(trace_graph.nodes())
+        else:
+            nodes = trace_graph.inputs()
+
+        for idx, trace_node in enumerate(nodes):
+            #break condition for jit.trace because they do not include buffers/parameters as inputs
+            if num_inputs_buffs_params == len(tensors):
+                return idx
             # each graph starts with input and buff/param declarations and getattr nodes used to access the buff/param
             # we add only nodes whoes type is Tensor(buff/param) or nodes that represent inputs the first num_inputs nodes
-
-            if idx < self.num_inputs or trace_node.output().type().str() == "Tensor":
-                node_weight = 1
-                # input/buff/parm weight is it's size
-                # TODO cannot access size like this anymore
-                # for d in trace_node.type().sizes():
-                #     node_weight *= d
-
+            if (not use_jit_trace) or (idx < self.num_inputs or (trace_node.output().type().str() == "Tensor")):
                 if num_inputs_buffs_params < self.num_inputs:
                     node_type = NodeTypes.IN
-                    node_scope = f"input{num_inputs_buffs_params}"
                     unique_id = trace_node.unique()
                 else:
                     node_type = NodeTypes.BUFF_PARAM
-                    node_scope = buffer_param_names[num_inputs_buffs_params - self.num_inputs]
-                    unique_id = trace_node.output().unique()
+                    unique_id = trace_node.output().unique() if use_jit_trace else trace_node.unique()
+                
+                node_scope = tensors[num_inputs_buffs_params][0]
+                node_weight = 1
+                # input/buff/parm weight is it's size
+                for d in tensors[num_inputs_buffs_params][1]:
+                    node_weight *= d
 
                 new_node = Node(node_scope, unique_id, node_type,
                                 weight=node_weight)
@@ -93,9 +93,9 @@ class Graph():
                 self.nodes[unique_id] = new_node
                 num_inputs_buffs_params += 1
 
-        return offset
+        return self.num_inputs
 
-    def _add_OP_nodes(self, OP_nodes):
+    def _add_OP_nodes(self, OP_nodes,use_jit_trace):
         '''
         add nodes representing the layers/ops of the model
         '''
@@ -136,9 +136,10 @@ class Graph():
                     # unprofiled other
                     assert False, f"unknown scope {trace_node.scopeName()}"
 
-            if node_scope.startswith("/"):
+            if use_jit_trace and node_scope.startswith("/"):
                 #TODO this is a bug in jit.trace it works fine with jit.get_trace
                 # weird case where we don not have the model class as prefix
+                print(f"node without a legal scope\n got {trace_node.scopeName()}\n{trace_node}")
                 node_scope = self.model_name+node_scope
 
             nOuts = 1
@@ -357,7 +358,7 @@ class Graph():
             if not changed:
                 break
 
-    def _set_outputs(self, trace_outputs):
+    def _set_outputs(self, trace_outputs,use_jit_trace):
         outputs = OrderedSet()
         for out in trace_outputs:
             node = out.node()
@@ -366,7 +367,7 @@ class Graph():
                 idx = self._get_id(out)
                 scope = node.scopeName() + \
                     "/" + node.kind() + str(idx)
-                if scope.startswith("/"):
+                if use_jit_trace and scope.startswith("/"):
                     #TODO this is a bug in jit.trace it works fine with jit.get_trace
                     # weird case where we do not start with model class as prefix
                     scope = self.model_name+scope

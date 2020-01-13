@@ -113,6 +113,8 @@ if __name__ == "__main__":
                         help="the depth in which we will partition the model")
     parser.add_argument("--analysis_batch_size", default=8, type=int,
                         help="batch size to use during the post partition analysis")
+    parser.add_argument("--use_jit_trace", action='store_true',
+                        default=False, help="wether to use jit_trace in order to build the graph")
 
     args = parser.parse_args()
     args.auto_file_name = not args.no_auto_file_name
@@ -145,7 +147,8 @@ if __name__ == "__main__":
     # DEBUG switches between verbose generated code and compressed code
     n_iter = args.n_iter
     graph = pipe_model(model, sample, depth=args.depth, kwargs=None, nparts=args.n_partitions,
-                       DEBUG=VERBOSE_PARTITIONING, output_file=args.output_file, weighting_function=by_time, n_iter=n_iter)
+                       DEBUG=VERBOSE_PARTITIONING, output_file=args.output_file, weighting_function=by_time, n_iter=n_iter,
+                       use_jit_trace=args.use_jit_trace)
     graph.save(args.output_file, ".")
 
     generated = importlib.import_module(args.output_file)

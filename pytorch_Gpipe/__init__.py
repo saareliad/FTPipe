@@ -18,7 +18,7 @@ __all__ = ['pipe_model', 'partition_with_profiler',
 
 
 def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, n_iter=10, nparts: int = 4,
-               depth=1000, basic_blocks: Optional[List[nn.Module]] = None, use_jit_trace=True,
+               depth=1000, basic_blocks: Optional[List[nn.Module]] = None, use_jit_trace=False,
                partition_by_memory: bool = False, weighting_function=None, output_file: str = None, DEBUG=False, **METIS_opt):
     '''attemps to partition a model to given number of parts using our profiler
        this will produce a python file with the partition config
@@ -82,7 +82,7 @@ def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] =
 
 
 def partition_with_profiler(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, n_iter=10, nparts=4, max_depth=100, basic_blocks: Optional[List[nn.Module]] = None,
-                            use_jit_trace=True, weighting_function: Optional[Callable[[Any], int]] = None, **METIS_opt) -> Graph:
+                            use_jit_trace=False, weighting_function: Optional[Callable[[Any], int]] = None, **METIS_opt) -> Graph:
     '''
     return a graph representing the partitioned model with the weights given by the profiler
     this method does not distribute the model accross devices

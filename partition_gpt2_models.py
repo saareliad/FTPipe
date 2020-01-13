@@ -161,7 +161,7 @@ def partition_model(args, train_dataset, model, tokenizer):
     sample = (inputs, labels)
     model.train()
     graph = pipe_model(model, sample, depth=args.depth, n_iter=args.n_iter, nparts=args.n_partitions,
-                       weighting_function=weighting_function, output_file=args.output_file, DEBUG=False)
+                       weighting_function=weighting_function, output_file=args.output_file, DEBUG=False,use_jit_trace=args.use_jit_trace)
     graph.save(args.output_file, ".")
 
     generated = importlib.import_module(args.output_file)
@@ -248,6 +248,8 @@ def main():
                         default=False, help="disable partition analysis")
     parser.add_argument("--depth", default=1000, type=int,
                         help="the depth in which we will partition the model")
+    parser.add_argument("--use_jit_trace", action='store_true',
+                        default=False, help="wether to use jit_trace in order to build the graph")
 
     args = parser.parse_args()
 

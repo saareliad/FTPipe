@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 import torch
 import torch.nn as nn
 
-from ..utils import Tensors, traverse_model, traverse_params_buffs, model_scopes, _count_elements
+from ..utils import Tensors, traverse_model, tensorDict, model_scopes, _count_elements
 from .control_flow_graph import Graph, NodeTypes
 from .network_profiler import profileNetwork
 
@@ -11,7 +11,7 @@ __all__ = ['graph_builder', 'profileNetwork']
 
 
 def graph_builder(model: nn.Module, sample_batch: Tensors = (), kwargs: Optional[Dict] = None, max_depth: int = 1000,
-                  basic_blocks: Optional[List[nn.Module]] = None, use_profiler=False, n_iter=1, use_jit_trace=True) -> Graph:
+                  basic_blocks: Optional[List[nn.Module]] = None, use_profiler=False, n_iter=1, use_jit_trace=False) -> Graph:
     '''
     returns a graph that models the control flow of the given network by tracing it's forward pass
 
@@ -37,6 +37,9 @@ def graph_builder(model: nn.Module, sample_batch: Tensors = (), kwargs: Optional
     weights = dict()
     if kwargs is None:
         kwargs = dict()
+        # TODO tracing not tested with kwargs
+    assert len(kwargs) == 0, "kwargs not supported yet"
+
     if not isinstance(sample_batch, tuple):
         sample_batch = (sample_batch,)
 
@@ -44,8 +47,8 @@ def graph_builder(model: nn.Module, sample_batch: Tensors = (), kwargs: Optional
         weights = profileNetwork(model, sample_batch, kwargs=kwargs, n_iter=n_iter, max_depth=max_depth,
                                  basic_blocks=basic_blocks)
 
-    buffer_param_names = map(lambda t: t[1], traverse_params_buffs(model))
-    buffer_param_names = list(buffer_param_names)
+    tensors = [(f"input{i}", t.size()) for i, t in enumerate(sample_batch)] +\
+              [(k, t.size()) for k, t in tensorDict(model).items()]
 
     layerNames = model_scopes(model, depth=max_depth,
                               basic_blocks=basic_blocks)
@@ -67,7 +70,7 @@ def graph_builder(model: nn.Module, sample_batch: Tensors = (), kwargs: Optional
 
     num_inputs = _count_elements(*sample_batch) + len(kwargs)
 
-    graph = Graph(layerNames, num_inputs, buffer_param_names,
+    graph = Graph(layerNames, num_inputs, tensors,
                   trace_graph, weights, max_depth, use_jit_trace=use_jit_trace)
 
     return graph
