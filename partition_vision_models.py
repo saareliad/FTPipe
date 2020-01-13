@@ -145,7 +145,7 @@ if __name__ == "__main__":
     # DEBUG switches between verbose generated code and compressed code
     n_iter = args.n_iter
     graph = pipe_model(model, sample, depth=args.depth, kwargs=None, nparts=args.n_partitions,
-                       DEBUG=VERBOSE_PARTITIONING, output_file=args.output_file, weight_func=by_time, n_iter=n_iter)
+                       DEBUG=VERBOSE_PARTITIONING, output_file=args.output_file, weighting_function=by_time, n_iter=n_iter)
     graph.save(args.output_file, ".")
 
     generated = importlib.import_module(args.output_file)

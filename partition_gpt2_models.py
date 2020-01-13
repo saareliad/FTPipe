@@ -137,7 +137,7 @@ def mask_tokens(inputs, tokenizer, args):
     return inputs, labels
 
 
-def weight_func(w):
+def weighting_function(w):
     if hasattr(w, 'forward_time') and hasattr(w, 'backward_time'):
         return max(int(2 * (0 + w.backward_time) / 2), 1)
     return 0
@@ -161,7 +161,7 @@ def partition_model(args, train_dataset, model, tokenizer):
     sample = (inputs, labels)
     model.train()
     graph = pipe_model(model, sample, depth=args.depth, n_iter=args.n_iter, nparts=args.n_partitions,
-                       weight_func=weight_func, output_file=args.output_file, DEBUG=False)
+                       weighting_function=weighting_function, output_file=args.output_file, DEBUG=False)
     graph.save(args.output_file, ".")
 
     generated = importlib.import_module(args.output_file)

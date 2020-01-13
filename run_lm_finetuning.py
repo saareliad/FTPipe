@@ -339,13 +339,13 @@ def train(args, train_dataset, model, tokenizer):
             from misc import run_analysis
             if True:
                 # this is enough
-                def weight_func(w):
+                def weighting_function(w):
                     if hasattr(w, 'forward_time') and hasattr(w, 'backward_time'):
                         return max(int(2 * (0 + w.backward_time) / 2), 1)
                     return 0
 
                 graph = pipe_model(model, (inputs, labels), n_iter=50,
-                                   weight_func=weight_func, output_file="gpt2_4p_by_backward")
+                                   weighting_function=weighting_function, output_file="gpt2_4p_by_backward")
                 graph.save("gpt2_4p_by_backward", ".", show_weights=False)
             model(inputs)
             assert False

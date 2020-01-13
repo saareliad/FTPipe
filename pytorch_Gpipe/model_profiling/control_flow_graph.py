@@ -21,26 +21,21 @@ class Graph():
     do not instanciate this class directly use the graph_builder method provided with this module
     '''
 
-    def __init__(self, profiled_layers: List[str], num_inputs: int, buffer_param_names: List[str], trace_graph, weights: Dict[str, Any], basic_blocks: List, depth: int):
-        self.nodes = OrderedDict()
-        self.profiled_layers = profiled_layers
-        self.num_inputs_buffs_params = 0
-        self.num_inputs = num_inputs
-        self.buffer_param_names = buffer_param_names
-        self.model_name = profiled_layers[0].split('/')[0]
-        self._build_graph(trace_graph)
-        self.basic_blocks = basic_blocks
-        self.depth = depth
+    def __init__(self, profiled_layers: List[str], num_inputs: int, buffer_param_names: List[str], trace_graph, weights: Dict[str, Any], depth: int,use_jit_trace=True):
+        assert use_jit_trace, "_get_trace_graph is currently broken"
 
-        self.num_parts = 0
+        self.nodes = OrderedDict()
+        self.profiled_layers = set(profiled_layers)
+        self.num_inputs = num_inputs
+        self._build_graph(trace_graph,buffer_param_names)
+        self.depth = depth
 
         for node in self.nodes.values():
             node.weight = weights.get(node.scope, node.weight)
 
-    def _build_graph(self, trace_graph):
-        self.offset = self._add_IO_nodes(trace_graph)
-        self.delta = self.offset-self.num_inputs_buffs_params
-        self._add_OP_nodes(list(trace_graph.nodes())[self.offset-self.num_inputs:])
+    def _build_graph(self, trace_graph,buffer_param_names):
+        offset = self._add_IO_nodes(trace_graph,buffer_param_names)
+        self._add_OP_nodes(list(trace_graph.nodes())[offset-self.num_inputs:])
         # TODO we've disabled output shape untill we can think about full support
         # self._add_shapes(trace_graph)
         # self.save(f"verbose", f"playground_out/graphs/{self.model_name}")
@@ -63,13 +58,14 @@ class Graph():
         # self.save(f"remove_tensor_int_tensor",
                 #   f"playground_out/graphs/{self.model_name}")
 
-    def _add_IO_nodes(self, trace_graph):
+    def _add_IO_nodes(self, trace_graph, buffer_param_names):
         '''
         add nodes representing the input and params/buffs of the model
         '''
         offset = 0
+        num_inputs_buffs_params=0
         for idx, trace_node in enumerate(list(trace_graph.inputs())[1:]+list(trace_graph.nodes())):
-            if self.num_inputs_buffs_params == (self.num_inputs+len(self.buffer_param_names)):
+            if num_inputs_buffs_params == (self.num_inputs+len(buffer_param_names)):
                 offset = idx
                 break
             # each graph starts with input and buff/param declarations and getattr nodes used to access the buff/param
@@ -82,20 +78,20 @@ class Graph():
                 # for d in trace_node.type().sizes():
                 #     node_weight *= d
 
-                if self.num_inputs_buffs_params < self.num_inputs:
+                if num_inputs_buffs_params < self.num_inputs:
                     node_type = NodeTypes.IN
-                    node_scope = f"input{self.num_inputs_buffs_params}"
+                    node_scope = f"input{num_inputs_buffs_params}"
                     unique_id = trace_node.unique()
                 else:
                     node_type = NodeTypes.BUFF_PARAM
-                    node_scope = self.buffer_param_names[self.num_inputs_buffs_params - self.num_inputs]
+                    node_scope = buffer_param_names[num_inputs_buffs_params - self.num_inputs]
                     unique_id = trace_node.output().unique()
 
                 new_node = Node(node_scope, unique_id, node_type,
                                 weight=node_weight)
                 new_node.value_type = torch.Tensor
                 self.nodes[unique_id] = new_node
-                self.num_inputs_buffs_params += 1
+                num_inputs_buffs_params += 1
 
         return offset
 
@@ -541,7 +537,17 @@ class Graph():
             os.remove(f"{directory}/{file_name}.pdf")
         dot.render(file_name, directory=directory, cleanup=True)
 
+    @property
+    def model_name(self):
+        for n in self.nodes.values():
+            if n.type == NodeTypes.LAYER:
+                return n.scope.split("/")[0]
 
+    @property
+    def num_partitions(self,):
+        return len({node.part for node in self.nodes.values()})
+    
+    
 class NodeTypes(Enum):
     '''
     Enum representing the possible types of Nodes in the Graph

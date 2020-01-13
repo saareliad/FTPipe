@@ -64,8 +64,6 @@ def cannonize_partition_indices(graph: Graph):
     for node in graph.nodes.values():
         node.part = cannonical_parts[node.part]
 
-    graph.num_parts = len(cannonical_parts)
-
 
 def graph_root_fix(graph: Graph):
     fixed = False

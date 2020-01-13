@@ -148,6 +148,7 @@ def createConfig(graph: Graph, partitions: List[List[Node]], model: Module, ios:
                          if t.requires_grad}
     model_class = model.__class__.__name__
     # function header
+    # TODO we need to take basic blocks into account
     lines = [
         f"def createConfig(model,DEBUG=False,partitions_only=False):",
         f"layer_dict = layerDict(model,depth={graph.depth})",
@@ -198,8 +199,9 @@ def createConfig(graph: Graph, partitions: List[List[Node]], model: Module, ios:
 
 
 def connections(graph: Graph):
+    num_partitions = graph.num_partitions
     adj_matrix = [{"inputs": set(), "outputs": set()}
-                  for i in range(graph.num_parts + 2)]
+                  for i in range(num_partitions + 2)]
 
     for node in graph.nodes.values():
         if node.idx < graph.num_inputs:
@@ -210,7 +212,7 @@ def connections(graph: Graph):
         idx = graph.output_scopes.indexOf(node.scope)
 
         if idx >= 0:
-            adj_matrix[graph.num_parts + 1]["inputs"].add(node.part)
+            adj_matrix[num_partitions + 1]["inputs"].add(node.part)
             adj_matrix[node.part + 1]["outputs"].add(f"output{idx}")
 
         for n in node.out_nodes:
@@ -223,5 +225,5 @@ def connections(graph: Graph):
     for i, line in enumerate(adj_matrix[1:-1:]):
         lines.append(f"# partition {i} {line}")
     lines.append(
-        f"# model outputs {adj_matrix[graph.num_parts + 1]['inputs']}")
+        f"# model outputs {adj_matrix[num_partitions + 1]['inputs']}")
     return '\n'.join(lines) + '\n'
