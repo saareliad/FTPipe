@@ -21,7 +21,7 @@ dtab = tab + tab
 
 def generatePartitionModules(graph: Graph, model: Module, verbose=False, output_file=None):
     layer_classes = {scope: type(layer) for layer, scope, _
-                     in traverse_model(model, depth=graph.depth)}
+                     in traverse_model(model, depth=graph.depth, basic_blocks=graph.basic_blocks)}
     is_param_dict = {scope: t.requires_grad for t,
                      scope in traverse_params_buffs(model)}
 
@@ -50,7 +50,7 @@ def generatePartitionModules(graph: Graph, model: Module, verbose=False, output_
         partitions_code.append(misc_functions)
         ios[idx] = io
 
-    lines.append(createConfig(graph, parts, model, ios))
+    lines.append(createConfig(graph, parts, model, ios,layer_classes))
     lines += partitions_code
     lines.append(generateHelpFunctions())
 
@@ -141,17 +141,22 @@ def getFunctionName(scope: str) -> str:
     return scope.split(sep)[1].rstrip(string.digits)
 
 
-def createConfig(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, Dict[str, List[str]]]):
+def createConfig(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, Dict[str, List[str]]],basic_blocks:Dict[str,Module]):
     model_buffers = {scope: t for t, scope in traverse_params_buffs(model)
                      if not t.requires_grad}
     model_parameteres = {scope: t for t, scope in traverse_params_buffs(model)
                          if t.requires_grad}
     model_class = model.__class__.__name__
+    basic_blocks=[cls.__name__ for cls in set(basic_blocks.values())] if graph.basic_blocks else []
+    if len(basic_blocks) == 1:
+        basic_blocks = f"{basic_blocks[0]},"
+    else:
+        basic_blocks = ",".join(basic_blocks)
+
     # function header
-    # TODO we need to take basic blocks into account
     lines = [
         f"def createConfig(model,DEBUG=False,partitions_only=False):",
-        f"layer_dict = layerDict(model,depth={graph.depth})",
+        f"layer_dict = layerDict(model,depth={graph.depth},basic_blocks=({basic_blocks}))",
         "tensor_dict = tensorDict(model)",
         f"\n{tab}# now constructing the partitions in order"
     ]

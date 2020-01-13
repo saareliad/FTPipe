@@ -1,9 +1,10 @@
 from enum import Enum
-from typing import Any, Dict, List,Tuple
+from typing import Any, Dict, List, Tuple,Optional
 from ..utils import OrderedSet
 import string
 import inspect
 import torch
+import torch.nn as nn
 import re
 from copy import deepcopy
 from collections import OrderedDict
@@ -21,54 +22,56 @@ class Graph():
     do not instanciate this class directly use the graph_builder method provided with this module
     '''
 
-    def __init__(self, profiled_layers: List[str], num_inputs: int, tensors: List[Tuple[str,Tuple[int]]], trace_graph, weights: Dict[str, Any], depth: int,use_jit_trace=False):
+    def __init__(self, profiled_layers: List[str], num_inputs: int, tensors: List[Tuple[str, Tuple[int]]], trace_graph, weights: Dict[str, Any], depth: int, basic_blocks: Optional[List[nn.Module]] = None, use_jit_trace=False):
         # assert use_jit_trace, "_get_trace_graph is currently broken"
         self.nodes = OrderedDict()
         self.profiled_layers = set(profiled_layers)
         self.num_inputs = num_inputs
         self._build_graph(trace_graph, tensors, use_jit_trace)
         self.depth = depth
+        self.basic_blocks=tuple() if basic_blocks is None else tuple(basic_blocks)
 
         for node in self.nodes.values():
             node.weight = weights.get(node.scope, node.weight)
 
-    def _build_graph(self, trace_graph,tensors,use_jit_trace):
-        offset = self._add_IO_nodes(trace_graph,tensors,use_jit_trace)
-        self._add_OP_nodes(list(trace_graph.nodes())[offset-self.num_inputs:],use_jit_trace)
+    def _build_graph(self, trace_graph, tensors, use_jit_trace):
+        offset = self._add_IO_nodes(trace_graph, tensors, use_jit_trace)
+        self._add_OP_nodes(list(trace_graph.nodes())[
+                           offset-self.num_inputs:], use_jit_trace)
         # TODO we've disabled output shape untill we can think about full support
         # self._add_shapes(trace_graph)
         # self.save(f"verbose", f"playground_out/graphs/{self.model_name}")
-        self._set_outputs(trace_graph.outputs(),use_jit_trace)
+        self._set_outputs(trace_graph.outputs(), use_jit_trace)
         self.remove_useless_clone()
         # self.save(f"remove_clones", f"playground_out/graphs/{self.model_name}")
         self.remove_empty_view()
         # self.save(f"remove_empty_views",
-                #   f"playground_out/graphs/{self.model_name}")
+        #   f"playground_out/graphs/{self.model_name}")
         optimize_graph(self)
         # self.save(f"optimized", f"playground_out/graphs/{self.model_name}")
         self._remove_nodes_that_go_nowhere(trace_graph)
         # self.save(f"remove_goes_nowhere",
-                #   f"playground_out/graphs/{self.model_name}")
+        #   f"playground_out/graphs/{self.model_name}")
         self.remove_useless_node_inputs()
         # self.save(f"removed_useless_inputs",
-                #   f"playground_out/graphs/{self.model_name}")
+        #   f"playground_out/graphs/{self.model_name}")
         self.add_missing_types()
         self.remove_tensor_int_tensor()
         # self.save(f"remove_tensor_int_tensor",
-                #   f"playground_out/graphs/{self.model_name}")
+        #   f"playground_out/graphs/{self.model_name}")
 
-    def _add_IO_nodes(self, trace_graph, tensors,use_jit_trace):
+    def _add_IO_nodes(self, trace_graph, tensors, use_jit_trace):
         '''
         add nodes representing the input and params/buffs of the model
         '''
-        num_inputs_buffs_params=0
+        num_inputs_buffs_params = 0
         if use_jit_trace:
             nodes = list(trace_graph.inputs())[1:]+list(trace_graph.nodes())
         else:
             nodes = trace_graph.inputs()
 
         for idx, trace_node in enumerate(nodes):
-            #break condition for jit.trace because they do not include buffers/parameters as inputs
+            # break condition for jit.trace because they do not include buffers/parameters as inputs
             if num_inputs_buffs_params == len(tensors):
                 return idx
             # each graph starts with input and buff/param declarations and getattr nodes used to access the buff/param
@@ -80,7 +83,7 @@ class Graph():
                 else:
                     node_type = NodeTypes.BUFF_PARAM
                     unique_id = trace_node.output().unique() if use_jit_trace else trace_node.unique()
-                
+
                 node_scope = tensors[num_inputs_buffs_params][0]
                 node_weight = 1
                 # input/buff/parm weight is it's size
@@ -95,7 +98,7 @@ class Graph():
 
         return self.num_inputs
 
-    def _add_OP_nodes(self, OP_nodes,use_jit_trace):
+    def _add_OP_nodes(self, OP_nodes, use_jit_trace):
         '''
         add nodes representing the layers/ops of the model
         '''
@@ -137,9 +140,10 @@ class Graph():
                     assert False, f"unknown scope {trace_node.scopeName()}"
 
             if use_jit_trace and node_scope.startswith("/"):
-                #TODO this is a bug in jit.trace it works fine with jit.get_trace
+                # TODO this is a bug in jit.trace it works fine with jit.get_trace
                 # weird case where we don not have the model class as prefix
-                print(f"node without a legal scope\n got {trace_node.scopeName()}\n{trace_node}")
+                print(
+                    f"node without a legal scope\n got {trace_node.scopeName()}\n{trace_node}")
                 node_scope = self.model_name+node_scope
 
             nOuts = 1
@@ -305,6 +309,7 @@ class Graph():
         # necessary because the trace can contain such nodes for certain ops
         # those nodes provide no additional info to the graph
         out_indices = [self._get_id(out) for out in trace_graph.outputs()]
+
         def going_nowhere(node):
             if node.type is NodeTypes.OP and 'aten::' in node.scope:
                 func_name = node.scope.split('aten::')[1].rstrip(string.digits)
@@ -358,7 +363,7 @@ class Graph():
             if not changed:
                 break
 
-    def _set_outputs(self, trace_outputs,use_jit_trace):
+    def _set_outputs(self, trace_outputs, use_jit_trace):
         outputs = OrderedSet()
         for out in trace_outputs:
             node = out.node()
@@ -368,7 +373,7 @@ class Graph():
                 scope = node.scopeName() + \
                     "/" + node.kind() + str(idx)
                 if use_jit_trace and scope.startswith("/"):
-                    #TODO this is a bug in jit.trace it works fine with jit.get_trace
+                    # TODO this is a bug in jit.trace it works fine with jit.get_trace
                     # weird case where we do not start with model class as prefix
                     scope = self.model_name+scope
             outputs.add(scope)
@@ -547,8 +552,8 @@ class Graph():
     @property
     def num_partitions(self,):
         return len({node.part for node in self.nodes.values()})
-    
-    
+
+
 class NodeTypes(Enum):
     '''
     Enum representing the possible types of Nodes in the Graph
@@ -623,7 +628,6 @@ class Node():
             self.in_nodes.add(node)
         if isinstance(node, (set, OrderedSet)):
             self.in_nodes.update(node)
-
 
     def replace_out_node(self, to_replace, value):
         if to_replace not in self.out_nodes:

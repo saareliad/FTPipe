@@ -14,7 +14,6 @@ __all__ = ['pipe_model', 'partition_with_profiler',
 
 
 # TODO pytorch jit trace / get_trace_graph do not support kwargs
-# TODO support basic blocks
 
 
 def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, n_iter=10, nparts: int = 4,

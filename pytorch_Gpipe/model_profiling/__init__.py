@@ -43,6 +43,11 @@ def graph_builder(model: nn.Module, sample_batch: Tensors = (), kwargs: Optional
     if not isinstance(sample_batch, tuple):
         sample_batch = (sample_batch,)
 
+    if basic_blocks is None:
+        basic_blocks = ()
+    else:
+        basic_blocks = tuple(basic_blocks)
+
     if use_profiler:
         weights = profileNetwork(model, sample_batch, kwargs=kwargs, n_iter=n_iter, max_depth=max_depth,
                                  basic_blocks=basic_blocks)
@@ -71,6 +76,6 @@ def graph_builder(model: nn.Module, sample_batch: Tensors = (), kwargs: Optional
     num_inputs = _count_elements(*sample_batch) + len(kwargs)
 
     graph = Graph(layerNames, num_inputs, tensors,
-                  trace_graph, weights, max_depth, use_jit_trace=use_jit_trace)
+                  trace_graph, weights, max_depth, basic_blocks, use_jit_trace=use_jit_trace)
 
     return graph
