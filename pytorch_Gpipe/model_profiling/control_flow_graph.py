@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Dict, List, Tuple,Optional
+from typing import Any, Dict, List, Tuple, Optional
 from ..utils import OrderedSet
 import string
 import inspect
@@ -29,10 +29,15 @@ class Graph():
         self.num_inputs = num_inputs
         self._build_graph(trace_graph, tensors, use_jit_trace)
         self.depth = depth
-        self.basic_blocks=tuple() if basic_blocks is None else tuple(basic_blocks)
+        self.basic_blocks = tuple() if basic_blocks is None else tuple(basic_blocks)
 
-        for node in self.nodes.values():
+        normalized_nodes = OrderedDict()
+        for idx, node in enumerate(self.nodes.values()):
             node.weight = weights.get(node.scope, node.weight)
+            node.idx = idx
+            normalized_nodes[idx] = node
+
+        self.nodes = normalized_nodes
 
     def _build_graph(self, trace_graph, tensors, use_jit_trace):
         offset = self._add_IO_nodes(trace_graph, tensors, use_jit_trace)
@@ -149,6 +154,12 @@ class Graph():
             nOuts = 1
             # add node for each output
             for i, output in enumerate(trace_node.outputs()):
+                # TODO in some cases we can know the shape of the tensor per edge
+                try:
+                    print(output.type().sizes())
+                except Exception:
+                    print(node_scope)
+
                 unique_id = output.unique()
 
                 # to differentiate different non layer ops that are in the same scope
@@ -552,6 +563,16 @@ class Graph():
     @property
     def num_partitions(self,):
         return len({node.part for node in self.nodes.values()})
+
+    def predecessors(self):
+        predecessors = {idx: set() for idx in self.nodes.keys()}
+
+        for idx, n in enumerate(self.nodes.values()):
+            for i in n.in_nodes:
+                predecessors[idx].update(predecessors[i.idx])
+                predecessors[idx].add(i.idx)
+
+        return predecessors
 
 
 class NodeTypes(Enum):

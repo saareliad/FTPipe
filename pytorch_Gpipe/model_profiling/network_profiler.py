@@ -10,7 +10,7 @@ from ..utils import Tensors, _detach_inputs, _get_size, get_device, traverse_mod
 __all__ = ['profileNetwork', 'Profile']
 
 Profile = namedtuple('Profile',
-                     'forward_time backward_time cuda_memory_forward cuda_memory_backward  layer_size')
+                     'forward_time backward_time cuda_memory_forward cuda_memory_backward layer_size input_size output_size')
 
 
 def profileNetwork(net: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, basic_blocks: Optional[List[nn.Module]] = None, max_depth=100, n_iter=10) -> Dict[str, Profile]:
@@ -76,7 +76,7 @@ def profileNetwork(net: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict]
                    for layer in layers_dict.values()]
 
     # prepare profiling results
-    layers_profile = {name: Profile(forward, backward, *cuda_mem, param_size + buffer_size + in_size + out_size) for name, forward, backward, param_size, buffer_size, in_size, out_size, cuda_mem in zip(
+    layers_profile = {name: Profile(forward, backward, *cuda_mem, param_size + buffer_size, in_size, out_size) for name, forward, backward, param_size, buffer_size, in_size, out_size, cuda_mem in zip(
         layers_dict.keys(), forward_times, backward_times, param_sizes, buffer_sizes, layer_input_sizes, layer_output_sizes, cuda_memory)}
 
     _unwrap_layers(net)
