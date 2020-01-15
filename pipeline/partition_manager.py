@@ -47,22 +47,29 @@ class SinglePartitionManager:
         # State for train logging
         self.log_frequency = log_frequency
         self.batches = 0
-        self.fwd_rcev_buffers = Buffers(max_buffers, self.comm_handler.create_activations_recv_buffers, self.device, self.comm_handler.recv_activations)
-        self.bwd_rcev_buffers = Buffers(max_buffers, self.comm_handler.create_gradients_rcv_buffers, self.device, self.comm_handler.recv_gradients, is_grad=True)
+
+        # State for recv buffers
+        if max_buffers > 2:  # FIXME
+            raise NotImplementedError()
+        self.fwd_rcev_buffers = Buffers(
+            max_buffers, self.comm_handler.create_activations_recv_buffers,
+            self.device, self.comm_handler.recv_activations, is_grad=False)
+        self.bwd_rcev_buffers = Buffers(
+            max_buffers, self.comm_handler.create_gradients_rcv_buffers,
+            self.device, self.comm_handler.recv_gradients, is_grad=True)
         self.recv_all_bwd = True
 
-
-        # Async handle objects
+        # Holds Async handle objects (for isends)
         self.async_fwd_objects = OrderedDict()
         self.async_bwd_objects = OrderedDict()
 
         self.logger = logging.getLogger("msnag")
-        # self.dl_iter = None
 
-        # self.modify_gradients_before_send = False  # FIXME add as option
+        # self.modify_gradients_before_send = False  # TODO add as option
         self.delay_at_batch = {}
 
-        # Hints
+        # Hints,May be set later.
+        # self.dl_iter = None
         self.task: DLTask
         self.trainer: PartitionedTrainer
         self.weight_predictor: WeightPredictor
@@ -106,7 +113,8 @@ class SinglePartitionManager:
 
     def eval(self):
         self.comm_handler.set_tensor_shapes(self.eval_tensor_shapes)
-        self.comm_handler.set_tensor_dtypes(self.training_tensor_dtypes)  # FIXME:
+        # FIXME: we set eval dtypes as training too.
+        self.comm_handler.set_tensor_dtypes(self.training_tensor_dtypes)
 
         self.partition.eval()
 
@@ -115,6 +123,19 @@ class SinglePartitionManager:
             self.fwd_rcev_buffers.create()
 
         self.recv_all_bwd = True  # TODO: i don't like this hack
+
+    def wait_on_sent_object(self, is_fwd):
+        # TODO: can write the entire thing MUCH more nicely
+        # if we just save asside and insert the new objects at the end.
+
+        obj_holder = self.async_fwd_objects if is_fwd else self.async_bwd_objects
+
+        # Pop the item that was increaced first.
+        _, (sent_request_objects, tmp_sent_items) = obj_holder.popitem(
+            last=False)
+        for i in sent_request_objects:
+            while(not i.is_completed()):
+                pass
 
     def run_batch_forward(self, batch_idx, num_batches, done_bwds=None):
 
@@ -164,12 +185,10 @@ class SinglePartitionManager:
 
             x = self.fwd_rcev_buffers.wait_first()
             x = self.comm_handler.fix_after_recv(x)
-            # with torch.no_grad():
-            #     x = [a.clone() for a in x] # FIXME
 
-            # This make sure we don't overrun the buffer.
+            # This makes sure we don't overrun the buffer.
             # actually, many times we clone the input anyway inside the partition (for re-computation)
-            # and if so, we can use less recv buffers for forward to save memory, 
+            # and if so, we can use less recv buffers for forward to save memory,
             # while stil getting the same speed/parallelism.
             if (not recved_all) and batch_idx - 1 + self.fwd_rcev_buffers.max_buffers < num_batches:
                 self.fwd_rcev_buffers.recv_next(batch_idx-1)
@@ -219,8 +238,6 @@ class SinglePartitionManager:
 
                 # Send partition border gradients
                 grads = self.partition.get_grad(batch_idx)
-                if isinstance(grads, torch.Tensor):
-                    grads = (grads,)
                 request_objects = self.comm_handler.send_gradients(
                     grads, batch_idx)
 
@@ -235,7 +252,7 @@ class SinglePartitionManager:
                     if self.batches % self.log_frequency == 0:
                         batch_log_str = ''
                         if hasattr(self.trainer, "scheduler"):
-                            # Note: could be more than one LR, but we ignor this for simplicity.
+                            # Note: could be more than one LR, but we ignore this for simplicity.
                             lr = self.trainer.scheduler.get_last_lr()[0]
                             batch_log_str += '| lr {:02.4f}'.format(lr)
 
@@ -245,7 +262,7 @@ class SinglePartitionManager:
         return request_objects
 
     def run_batch_backward(self, batch_idx, num_batches):
-        # TODO: implement
+        """ Runs the backwards pass + step for all except the last partition """
 
         if not self.bwd_rcev_buffers.is_initialized():
             self.bwd_rcev_buffers.create()
@@ -256,24 +273,12 @@ class SinglePartitionManager:
             self.bwd_rcev_buffers.recv_all(batch_idx, num_batches)
             recved_all = True
 
-        # TODO: need to detach and zero grad!
-        # # Solution to the DAMN bug with 4 partitions.
-        # # TODO: understnad why zero_() is the solution
-        # # I added detach just in case.
-        # for b in g:
-        #     # b.detach_()
-        #     b.detach_().zero_()
-        #     # b.zero_()
-        #     # if not (b.grad is None):
-        #     #     b.grad._zero()
-
+        #  Recompute before waiting to the first, so parallelize communication and computation
+        self.partition.recompute(batch_idx)
         g = self.bwd_rcev_buffers.wait_first()
         g = self.comm_handler.fix_after_recv(g)
-        # FIXME:
-        # with torch.no_grad():
-        #     g = [a.clone() for a in g]
 
-        # if batch_idx + self.bwd_rcev_buffers.max_buffers < num_batches:
+        # Wait for next if appropriate
         if (not recved_all) and batch_idx - 1 + self.bwd_rcev_buffers.max_buffers < num_batches:
             self.bwd_rcev_buffers.recv_next(batch_idx-1)
 
@@ -285,26 +290,19 @@ class SinglePartitionManager:
             real_theta = self.weight_stasher.tmp_buff_top()
 
         # Compute gradeints
-        self.partition.recompute_and_backward(g, batch_idx)
+        self.partition.backward_from_recomputed(g, batch_idx)
 
         # Step and statistics
         request_objects = None
-        # we may want to get the grad for sending before the step.
         if not (self.is_first_partition):
             g = self.partition.get_grad(batch_idx)
-            # TODO: this is super ugly. Caused huge bug.
-            if isinstance(g, torch.Tensor):
-                g = (g,)
             request_objects = self.comm_handler.send_gradients(g, batch_idx)
 
         if real_theta:
             self.trainer.try_record_real_gap_from_current(real_theta)
 
         delay = self.delay_at_batch.pop(batch_idx, None)
-
-        # TODO: remove. its for debug.
-        if self.gap_aware and (delay is None):
-            raise RuntimeError(f"delay is None for batch:{batch_idx}")
+        # assert not (self.gap_aware and (delay is None)):
 
         # possible Modify gradients (e.g Gap aware)
         self.trainer.modify_gradients(real_theta, delay)
@@ -312,7 +310,8 @@ class SinglePartitionManager:
         if self.weight_stasher:
             # Restore to previosly saved parameters, so we can do the step on them.
             self.weight_stasher.post_restore(batch_idx)
-            self.weight_stasher.mark_stashed_as_dirty()  # because next thing is a step.
+            # Mark previously stashed weights as dirty
+            self.weight_stasher.mark_stashed_as_dirty()
 
         self.trainer.non_last_partition_step()
         return request_objects
@@ -333,24 +332,11 @@ class SinglePartitionManager:
                 self.async_fwd_objects[done_fwds] = sent_request_objects
 
             if len(self.async_fwd_objects) > 1:
-                # Pop the item that was increaced first.
-                _, (tmp_send_objects, tmp_sent_items) = self.async_fwd_objects.popitem(
-                    last=False)
-                for i in tmp_send_objects:
-                    while not i.is_completed():
-                        pass
-                        # i.wait()
+                self.wait_on_sent_object(is_fwd=True)
 
         # Also clear in the end, just in case...
-        for (sent_request_objects, tmp_sent_items) in self.async_fwd_objects.values():
-            for i in sent_request_objects:
-                while not i.is_completed():
-                    pass
-                    # i.wait()
-
-        self.async_fwd_objects.clear()
-        # FIXME: not sure if this needed.
-        # For now I leave this for debugging/safety.
+        while len(self.async_fwd_objects) > 0:
+            self.wait_on_sent_object(is_fwd=True)
 
         # if not self.comm_handler.cpu:
         #     # HACK: synchronize.
@@ -374,11 +360,11 @@ class SinglePartitionManager:
             if action_is_fwd:
                 sent_request_objects = self.run_batch_forward(
                     done_fwds, num_batches, done_bwds)
-                # FIXME: last partition inserts its gradints into async_fwd_objects,
-                # it works, but it can be trouble.
-                self.async_fwd_objects[done_fwds] = sent_request_objects
+                # Last partition inserts its gradints into async_fwd_objects,
+                self.async_bwd_objects[done_fwds] = sent_request_objects
             else:
-                sent_request_objects = self.run_batch_backward(done_bwds, num_batches)
+                sent_request_objects = self.run_batch_backward(
+                    done_bwds, num_batches)
                 if not (self.is_first_partition):
                     self.async_bwd_objects[done_bwds] = sent_request_objects
             # Increase counters
@@ -395,40 +381,20 @@ class SinglePartitionManager:
 
             # wait on the first,
             if len(self.async_fwd_objects) > 1:
-                # Pop the item that was increaced first.
-                _, (sent_request_objects, tmp_sent_items) = self.async_fwd_objects.popitem(
-                    last=False)
-                for i in sent_request_objects:
-                    while(not i.is_completed()):
-                        pass
-                        # i.wait()
+                self.wait_on_sent_object(is_fwd=True)
 
             if len(self.async_bwd_objects) > 1:
-                # Pop the item that was increaced first.
-                _, (sent_request_objects, tmp_sent_items) = self.async_bwd_objects.popitem(
-                    last=False)
-                for i in sent_request_objects:
-                    while(not i.is_completed()):
-                        pass
-                        # i.wait()
+                self.wait_on_sent_object(is_fwd=False)
 
-        # FIXME: remove this print later, its used to debug how much we have in pipe.
-        print(self.stage, len(self.async_bwd_objects),
-              len(self.async_fwd_objects))
-        # FIXME: maybe more than 1.
+        # This print its used to debug how much we have in pipe.
+        # print(self.stage, len(self.async_bwd_objects),
+        #       len(self.async_fwd_objects))
+
         while len(self.async_fwd_objects) > 0:
-            _, (o1, t1) = self.async_fwd_objects.popitem(last=False)
-            for i in o1:
-                while(not i.is_completed()):
-                    pass
-                    # i.wait()
+            self.wait_on_sent_object(is_fwd=True)
 
         while len(self.async_bwd_objects) > 0:
-            _, (o2, t2) = self.async_bwd_objects.popitem(last=False)
-            for i in o2:
-                while(not i.is_completed()):
-                    pass
-                    # i.wait()
+            self.wait_on_sent_object(is_fwd=False)
 
         # if not self.comm_handler.cpu:
         #     # HACK: synchronize.

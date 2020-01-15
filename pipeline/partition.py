@@ -127,11 +127,12 @@ class Partition(nn.Module):
         # torch.autograd.backward(x, g)
 
     def get_grad(self, micro_batch_idx):
+        """ returns an iteretable of grads """
         x = self.input_buffer.pop(micro_batch_idx)
         if isinstance(x, Tensor):
             # logging.getLogger("msnag").info(f"device:{self.layers.__class__.__name__[-1]} \
             # max_grad_norm:{x.grad.norm()}")
-            return x.grad.data
+            return (x.grad.data,)
         else:
             return [y.grad.data for y in x]
 

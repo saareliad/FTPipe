@@ -142,9 +142,8 @@ class DummyLayerHelper(Module):
 
 def create_activation_grad_from_param_grad(a, p):
     # a (batch, m)
-    # p (m, n)
-    return  a * p.grad.t()
-
+    # p Linear layer (m, n)
+    return a.matmul(p.weight.grad.t())
 
 
 if __name__ == "__main__":
@@ -212,9 +211,16 @@ if __name__ == "__main__":
         real_model = torch.nn.Linear(2, 3)
         batch_size = 10
         x = torch.randn(batch_size, 2)
-        a = real_model(x)
+        x.retain_grad()
+        v1 = real_model(x)
+        v1.retain_grad()
+        v2 = ll.layer(v1)
+        torch.autograd.backward(list(ll.parameters()), [p.grad for p in ll.parameters()])
+        for name, p in real_model.named_parameters():
+            print(name, p.grad)
+        print("x.grad", x.grad)
+        print("v2.grad", v2.grad)
 
-        y = ll.layer(a)
-        y.backward(torch.ones_like(y))
-        # ll.recompute_and_backwards(a)
-        print(real_model.weight.grad)
+
+
+

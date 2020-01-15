@@ -8,12 +8,13 @@ def zero_grad_fn(g):
     for b in g:
         b.detach_().zero_()
 
+
 class PreProcIter:
 
     def __init__(self, itr, preproc_fn):
         self.itr = itr
         self.preproc_fn = preproc_fn
-    
+
     def __next__(self):
         x = next(self.itr)
         self.preproc_fn(x)
@@ -21,7 +22,6 @@ class PreProcIter:
 
     def __iter__(self):
         raise NotImplementedError()
-
 
 
 class Buffers:
@@ -33,7 +33,7 @@ class Buffers:
         self.irecv_fn = irecv_fn
         self.handlers = deque()
         self.pointer = 0
-        self.is_grad=is_grad
+        self.is_grad = is_grad
 
     def create(self):
         self._is_initialized = True
@@ -67,13 +67,28 @@ class Buffers:
 
     def recv_all(self, batch_idx, num_limit_batches):
         self.first_rcv_after_created = False
-        assert batch_idx==0 or self.max_buffers == 1
+        assert batch_idx == 0 or self.max_buffers == 1
         num = min(num_limit_batches - batch_idx, self.max_buffers)
         # print(f"recv_all:{num}")
         self.handlers.extend([self.irecv_fn(next(self.itr), b)
                               for b in range(batch_idx, num + batch_idx)])
-        
+
         self.last_irecv = num + batch_idx - 1
+
+    def recv_two(self, batch_idx, num_limit_batches):
+        self.first_rcv_after_created = False
+        assert batch_idx == 0 or self.max_buffers == 1
+        num = min(num_limit_batches - batch_idx, self.max_buffers, 2)
+        self.handlers.extend([self.irecv_fn(next(self.itr), b)
+                              for b in range(batch_idx, num + batch_idx)])
+
+        self.last_irecv = num + batch_idx - 1
+
+    def recv_next_vtwo(self, batch_idx):
+        assert(self.last_irecv == batch_idx + min(self.max_buffers, 2) - 1)
+        self.handlers.append(self.irecv_fn(
+            next(self.itr), batch_idx + min(self.max_buffers, 2)))
+        self.last_irecv += 1
 
     def recv_next(self, batch_idx):
         # print(f"recv_next {batch_idx}")
@@ -81,7 +96,7 @@ class Buffers:
         assert(self.last_irecv == batch_idx + self.max_buffers - 1)
         self.handlers.append(self.irecv_fn(
             next(self.itr), batch_idx + self.max_buffers))
-        self.last_irecv +=1
+        self.last_irecv += 1
 
     def wait_first(self):
         # print(f"waiting for {self.pointer}")
