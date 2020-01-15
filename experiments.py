@@ -6,6 +6,9 @@ from types import SimpleNamespace
 
 
 def load_experiment(filename):
+    """ Returns:
+            config, fit_res
+    """
     with open(filename, 'r') as f:
         output = json.load(f)
 

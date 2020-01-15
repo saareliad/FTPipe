@@ -24,6 +24,7 @@ dependencies:
   - graphviz  # For partitioning visualization
   - python-graphviz  # For partitioning visualization
   - networkx  # For partitioning
+  - seaborn
   - pip:
     - git+https://github.com/networkx/networkx-metis.git  # For partitioning
     - matplotlib
