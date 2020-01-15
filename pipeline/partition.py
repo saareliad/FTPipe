@@ -4,6 +4,7 @@ from torch import Tensor
 from typing import Tuple, Union
 from .monkey_patch import DummyForwardMonkeyPatcher
 from .replace_inplace import replace_inplace_for_first_innermost_layer_
+from .rng_stasher import PartitionRngStasher
 # import logging
 Tensors = Tuple[Tensor, ...]
 TensorOrTensors = Union[Tensor, Tensors]
@@ -12,40 +13,6 @@ __all__ = ['Partition', 'LastPartition', 'FirstPartition']
 
 DEFAULT_CLASSES_LIST_TO_PATCH = [nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d,
                                  nn.SyncBatchNorm, nn.InstanceNorm1d, nn.InstanceNorm2d, nn.InstanceNorm3d]
-
-
-class PartitionRngStasher:
-    """
-    Utility class to stash and restore RNG state
-    pop happens when re restore the state (therefore we can only restore once).
-    """
-
-    def __init__(self, device=torch.device('cpu')):
-        self.device = device
-        self.state = {}
-
-        # devices list for `fork_rng` method
-        self.devices = [self.device] if self.device.type == 'cuda' else []
-
-    def stash_rng_state(self, micro_batch_index):
-        """ Stash RNG state """
-        cpu_rng_state = torch.get_rng_state()
-        if self.device.type == 'cuda':
-            with torch.cuda.device(self.device):
-                gpu_rng_state = torch.cuda.get_rng_state()
-        else:
-            gpu_rng_state = None
-
-        self.state[micro_batch_index] = (cpu_rng_state, gpu_rng_state)
-
-    def restore_rng_state(self, micro_batch_index):
-        cpu_rng_state, gpu_rng_state = self.state.pop(micro_batch_index)
-        torch.set_rng_state(cpu_rng_state)
-        if not (gpu_rng_state is None):
-            torch.cuda.set_rng_state(gpu_rng_state, self.device)
-
-    def clear_state(self):
-        self.state.clear()
 
 
 class Partition(nn.Module):
@@ -76,7 +43,8 @@ class Partition(nn.Module):
 
         self.dummy_forward_monkey_patcher = DummyForwardMonkeyPatcher(self.layers, classes_list_to_patch) \
             if self._HAS_DUMMY_FORWARD else None
-        self.input_buffer = {}
+        self.input_buffer = {}  # For saving activations
+        self.bwd_graph_head_buffer = {}  # For recompute
         self.rng_stasher = PartitionRngStasher(device=self.device)
 
         if to_device:
@@ -92,8 +60,6 @@ class Partition(nn.Module):
             # do the dummy forward
             # stash rng state
             # save input for later (recomputation)
-            # TODO: can spare the detach
-
             if self.dummy_forward_monkey_patcher:
                 self.dummy_forward_monkey_patcher.sync()
                 self.dummy_forward_monkey_patcher.replace_for_dummy()
@@ -103,6 +69,7 @@ class Partition(nn.Module):
                 if isinstance(x, Tensor):
                     # Note - we clone here because we don't want the tensor to get overriden.
                     # TODO: it could be done better if we use multiple input buffers instead of allocating
+                    # (when #buffers==#max(len(input_buffer)))
                     # In pytorch it can happen auto matically with THCCashingAlocator.
                     x = x.data.clone().requires_grad_(self._REQ_GRAD)
                     self.input_buffer[micro_batch_idx] = x
@@ -124,17 +91,13 @@ class Partition(nn.Module):
                 if self.dummy_forward_monkey_patcher:
                     self.dummy_forward_monkey_patcher.replace_for_forward()
                 if isinstance(x, Tensor):
-                    # x = x.to(self.device)
                     x = self.layers(x)
                 else:
-                    # raise NotImplementedError()
                     x = [y for y in x]
                     x = self.layers(*x)
                 return x
 
-    def recompute_and_backward(self, g, micro_batch_idx):
-        # TODO: can make these two functions (recompute, backwards)
-        # To enable scheduling the recompute
+    def recompute(self, micro_batch_idx):
         x = self.input_buffer[micro_batch_idx]  # Note: still not poping!
         if self.dummy_forward_monkey_patcher:
             self.dummy_forward_monkey_patcher.replace_for_forward()
@@ -143,18 +106,31 @@ class Partition(nn.Module):
             self.rng_stasher.restore_rng_state(micro_batch_idx)
             if isinstance(x, Tensor):
                 x = self.layers(x)
-                # logging.getLogger("msnag").info(f"device:{self.layers.__class__.__name__[-1]} max x:{[z.data.max() for z in x]}, max grad:{[z.max() for z in g]}")
+                # logging.getLogger("msnag").info(f"device:{self.layers.__class__.__name__[-1]} \
+                #  max x:{[z.data.max() for z in x]}, max grad:{[z.max() for z in g]}")
                 # for p in self.parameters():
                 #     print(p.abs().max())
             else:
-                # raise NotImplementedError()
                 x = self.layers(*x)
+
+        self.bwd_graph_head_buffer[micro_batch_idx] = x
+        # TODO: check if its possible to delete x.data ?
+
+    def backward_from_recomputed(self, g, micro_batch_idx):
+        x = self.bwd_graph_head_buffer.pop(micro_batch_idx)
         torch.autograd.backward(x, g)
+
+    def recompute_and_backward(self, g, micro_batch_idx):
+        self.recompute(micro_batch_idx)
+        self.backward_from_recomputed(g, micro_batch_idx)
+        # x = self.bwd_graph_head_buffer.pop(micro_batch_idx)
+        # torch.autograd.backward(x, g)
 
     def get_grad(self, micro_batch_idx):
         x = self.input_buffer.pop(micro_batch_idx)
         if isinstance(x, Tensor):
-            # logging.getLogger("msnag").info(f"device:{self.layers.__class__.__name__[-1]} max_grad_norm:{x.grad.norm()}")
+            # logging.getLogger("msnag").info(f"device:{self.layers.__class__.__name__[-1]} \
+            # max_grad_norm:{x.grad.norm()}")
             return x.grad.data
         else:
             return [y.grad.data for y in x]
@@ -173,25 +149,26 @@ class FirstPartition(Partition):
     def __init__(self, *args, **kw):
         super(FirstPartition, self).__init__(*args, **kw)
 
-    def recompute_and_backward(self, g, micro_batch_idx):
-        # Unlike normal partition, here we pop the activations when we read from buffer
+    def recompute(self, micro_batch_idx):
+        # Unlike normal partition, here we pop the activations after we read from buffer
+        # This is a sperate function with code copy,
+        # because we want to pop as early as possible to possibly save memory.
         x = self.input_buffer.pop(micro_batch_idx)  # Note: here we pop.
+
+        # #### CODE COPY FROM super().recompute ########
         if self.dummy_forward_monkey_patcher:
             self.dummy_forward_monkey_patcher.replace_for_forward()
         with torch.random.fork_rng(devices=self.rng_stasher.devices):
             self.rng_stasher.restore_rng_state(micro_batch_idx)
             if isinstance(x, Tensor):
                 x = self.layers(x)
-                # logging.getLogger("msnag").info(f"device:{self.layers.__class__.__name__[-1]} max x:{[z.data.max() for z in x]}, max grad:{[z.max() for z in g]}")
-                # for p in self.parameters():
-                #     print(p.abs().max())
             else:
-                # raise NotImplementedError()
                 x = self.layers(*x)
-        torch.autograd.backward(x, g)
+        self.bwd_graph_head_buffer[micro_batch_idx] = x
+        # #### CODE COPY FROM super().recompute ########
 
     def get_grad(self, micro_batch_idx):
-        return None
+        return NotImplementedError()
 
 
 class LastPartition(Partition):
@@ -222,7 +199,8 @@ class LastPartition(Partition):
             else:
                 # Option 2
                 with torch.no_grad():
-                    x = [tensor.data.detach_().requires_grad_() for tensor in x]
+                    x = [tensor.data.detach_().requires_grad_()
+                         for tensor in x]
 
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(*x)
