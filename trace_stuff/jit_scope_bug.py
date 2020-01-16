@@ -2,7 +2,8 @@ import torch.nn as nn
 import torch
 import pathlib
 import os
-from pytorch_Gpipe import graph_builder, generatePartitionModules, partition
+import inspect
+from itertools import chain
 
 
 class Tuples(nn.Module):
@@ -20,8 +21,8 @@ class Tuples(nn.Module):
 class TupleOut(nn.Module):
     def __init__(self):
         super(TupleOut, self).__init__()
-        self.l0 = nn.ReLU()
-        self.l1 = nn.Sigmoid()
+        self.l0 = Act(nn.ReLU())
+        self.l1 = Act(nn.Sigmoid())
 
     def forward(self, x, y):
         x = self.l0(x)
@@ -33,22 +34,38 @@ class TupleOut(nn.Module):
         return y, x
 
 
+class Act(nn.Module):
+    def __init__(self, act):
+        super(Act, self).__init__()
+        self.act = act
+
+    def forward(self, x):
+        return self.act(x)*5
+
+
 def generate_graph(model, sample, save_jit_trace=False, output_path="jit_trace_bug"):
     name = model.__class__.__name__
+    torch._C._jit_set_inline_everything_mode(True)
+    verbose = torch.jit.trace(model, sample, check_trace=False).graph
+    torch._C._jit_set_inline_everything_mode(False)
+    minimal = torch.jit.trace(model, sample, check_trace=False).graph
 
-    traced = torch.jit.trace(model, sample, check_trace=False)
     if save_jit_trace:
         clear_file(f"{output_path}/{name}.txt")
         with open(f"{output_path}/{name}.txt", "w") as f:
-            f.write(str(traced.graph))
+            f.write(str(minimal))
+            f.write("\n")
+            f.write(str(verbose))
 
-    for node in traced.graph.nodes():
-        if node.scopeName() == "":
-            print(
-                f"the node {node}does not have a scopeName that's a bug causing incorrect code generation")
-            return
+    if any(node.scopeName() != "" for node in verbose.nodes()):
+        print("verbose trace has scopes")
+    else:
+        print("verbose trace des not have scopes")
 
-    print("the trace is correct and does not have the bug")
+    if any(node.scopeName() != "" for node in minimal.nodes()):
+        print("minimal trace has scopes")
+    else:
+        print("minimal trace des not have scopes")
 
 
 def clear_file(path):
