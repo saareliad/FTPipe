@@ -9,14 +9,14 @@ import nxmetis
 __all__ = ["partiton_graph"]
 
 
-def default_weight_func(w):
+def default_weighting_function(w):
     if hasattr(w, 'forward_time') and hasattr(w, 'backward_time'):
         return max(int(100 * (w.forward_time + w.backward_time) / 2), 1)
     return 1
 
 
 def partiton_graph(graph: Graph, num_partitions: int, weighting_function: Optional[Callable[[Any], int]] = None, **METIS_opts):
-    wfunc = weighting_function if weighting_function != None else default_weight_func
+    wfunc = weighting_function if weighting_function != None else default_weighting_function
 
     weights = {node.idx: wfunc(node.weight) for node in graph.nodes.values()}
 

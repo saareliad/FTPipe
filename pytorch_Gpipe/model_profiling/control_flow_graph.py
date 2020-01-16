@@ -1,9 +1,10 @@
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple, Optional
 from ..utils import OrderedSet
 import string
 import inspect
 import torch
+import torch.nn as nn
 import re
 from copy import deepcopy
 from collections import OrderedDict
@@ -21,85 +22,88 @@ class Graph():
     do not instanciate this class directly use the graph_builder method provided with this module
     '''
 
-    def __init__(self, profiled_layers: List[str], num_inputs: int, buffer_param_names: List[str], trace_graph, weights: Dict[str, Any], basic_blocks: List, depth: int):
+    def __init__(self, profiled_layers: List[str], num_inputs: int, tensors: List[Tuple[str, Tuple[int]]], trace_graph, weights: Dict[str, Any], depth: int, basic_blocks: Optional[List[nn.Module]] = None, use_jit_trace=False):
+        # assert use_jit_trace, "_get_trace_graph is currently broken"
         self.nodes = OrderedDict()
-        self.profiled_layers = profiled_layers
-        self.num_inputs_buffs_params = 0
+        self.profiled_layers = set(profiled_layers)
         self.num_inputs = num_inputs
-        self.buffer_param_names = buffer_param_names
-        self.model_name = profiled_layers[0].split('/')[0]
-        self._build_graph(trace_graph)
-        self.basic_blocks = basic_blocks
+        self._build_graph(trace_graph, tensors, use_jit_trace)
         self.depth = depth
+        self.basic_blocks = tuple() if basic_blocks is None else tuple(basic_blocks)
 
-        self.num_parts = 0
-
-        for node in self.nodes.values():
+        normalized_nodes = OrderedDict()
+        for idx, node in enumerate(self.nodes.values()):
             node.weight = weights.get(node.scope, node.weight)
+            node.idx = idx
+            normalized_nodes[idx] = node
 
-    def _build_graph(self, trace_graph):
-        self.offset = self._add_IO_nodes(trace_graph)
-        self.delta = self.offset-self.num_inputs_buffs_params
-        self._add_OP_nodes(list(trace_graph.nodes())[self.offset-self.num_inputs:])
+        self.nodes = normalized_nodes
+
+    def _build_graph(self, trace_graph, tensors, use_jit_trace):
+        offset = self._add_IO_nodes(trace_graph, tensors, use_jit_trace)
+        self._add_OP_nodes(list(trace_graph.nodes())[
+                           offset-self.num_inputs:], use_jit_trace)
         # TODO we've disabled output shape untill we can think about full support
         # self._add_shapes(trace_graph)
         # self.save(f"verbose", f"playground_out/graphs/{self.model_name}")
-        self._set_outputs(trace_graph.outputs())
+        self._set_outputs(trace_graph.outputs(), use_jit_trace)
         self.remove_useless_clone()
         # self.save(f"remove_clones", f"playground_out/graphs/{self.model_name}")
         self.remove_empty_view()
         # self.save(f"remove_empty_views",
-                #   f"playground_out/graphs/{self.model_name}")
+        #   f"playground_out/graphs/{self.model_name}")
         optimize_graph(self)
         # self.save(f"optimized", f"playground_out/graphs/{self.model_name}")
         self._remove_nodes_that_go_nowhere(trace_graph)
         # self.save(f"remove_goes_nowhere",
-                #   f"playground_out/graphs/{self.model_name}")
+        #   f"playground_out/graphs/{self.model_name}")
         self.remove_useless_node_inputs()
         # self.save(f"removed_useless_inputs",
-                #   f"playground_out/graphs/{self.model_name}")
+        #   f"playground_out/graphs/{self.model_name}")
         self.add_missing_types()
         self.remove_tensor_int_tensor()
         # self.save(f"remove_tensor_int_tensor",
-                #   f"playground_out/graphs/{self.model_name}")
+        #   f"playground_out/graphs/{self.model_name}")
 
-    def _add_IO_nodes(self, trace_graph):
+    def _add_IO_nodes(self, trace_graph, tensors, use_jit_trace):
         '''
         add nodes representing the input and params/buffs of the model
         '''
-        offset = 0
-        for idx, trace_node in enumerate(list(trace_graph.inputs())[1:]+list(trace_graph.nodes())):
-            if self.num_inputs_buffs_params == (self.num_inputs+len(self.buffer_param_names)):
-                offset = idx
-                break
+        num_inputs_buffs_params = 0
+        if use_jit_trace:
+            nodes = list(trace_graph.inputs())[1:]+list(trace_graph.nodes())
+        else:
+            nodes = trace_graph.inputs()
+
+        for idx, trace_node in enumerate(nodes):
+            # break condition for jit.trace because they do not include buffers/parameters as inputs
+            if num_inputs_buffs_params == len(tensors):
+                return idx
             # each graph starts with input and buff/param declarations and getattr nodes used to access the buff/param
             # we add only nodes whoes type is Tensor(buff/param) or nodes that represent inputs the first num_inputs nodes
-
-            if idx < self.num_inputs or trace_node.output().type().str() == "Tensor":
-                node_weight = 1
-                # input/buff/parm weight is it's size
-                # TODO cannot access size like this anymore
-                # for d in trace_node.type().sizes():
-                #     node_weight *= d
-
-                if self.num_inputs_buffs_params < self.num_inputs:
+            if (not use_jit_trace) or (idx < self.num_inputs or (trace_node.output().type().str() == "Tensor")):
+                if num_inputs_buffs_params < self.num_inputs:
                     node_type = NodeTypes.IN
-                    node_scope = f"input{self.num_inputs_buffs_params}"
                     unique_id = trace_node.unique()
                 else:
                     node_type = NodeTypes.BUFF_PARAM
-                    node_scope = self.buffer_param_names[self.num_inputs_buffs_params - self.num_inputs]
-                    unique_id = trace_node.output().unique()
+                    unique_id = trace_node.output().unique() if use_jit_trace else trace_node.unique()
+
+                node_scope = tensors[num_inputs_buffs_params][0]
+                node_weight = 1
+                # input/buff/parm weight is it's size
+                for d in tensors[num_inputs_buffs_params][1]:
+                    node_weight *= d
 
                 new_node = Node(node_scope, unique_id, node_type,
                                 weight=node_weight)
                 new_node.value_type = torch.Tensor
                 self.nodes[unique_id] = new_node
-                self.num_inputs_buffs_params += 1
+                num_inputs_buffs_params += 1
 
-        return offset
+        return self.num_inputs
 
-    def _add_OP_nodes(self, OP_nodes):
+    def _add_OP_nodes(self, OP_nodes, use_jit_trace):
         '''
         add nodes representing the layers/ops of the model
         '''
@@ -140,14 +144,22 @@ class Graph():
                     # unprofiled other
                     assert False, f"unknown scope {trace_node.scopeName()}"
 
-            if node_scope.startswith("/"):
-                #TODO this is a bug in jit.trace it works fine with jit.get_trace
+            if use_jit_trace and node_scope.startswith("/"):
+                # TODO this is a bug in jit.trace it works fine with jit.get_trace
                 # weird case where we don not have the model class as prefix
+                print(
+                    f"node without a legal scope\n got {trace_node.scopeName()}\n{trace_node}")
                 node_scope = self.model_name+node_scope
 
             nOuts = 1
             # add node for each output
             for i, output in enumerate(trace_node.outputs()):
+                # TODO in some cases we can know the shape of the tensor per edge
+                try:
+                    print(output.type().sizes())
+                except Exception:
+                    print(node_scope)
+
                 unique_id = output.unique()
 
                 # to differentiate different non layer ops that are in the same scope
@@ -308,6 +320,7 @@ class Graph():
         # necessary because the trace can contain such nodes for certain ops
         # those nodes provide no additional info to the graph
         out_indices = [self._get_id(out) for out in trace_graph.outputs()]
+
         def going_nowhere(node):
             if node.type is NodeTypes.OP and 'aten::' in node.scope:
                 func_name = node.scope.split('aten::')[1].rstrip(string.digits)
@@ -361,7 +374,7 @@ class Graph():
             if not changed:
                 break
 
-    def _set_outputs(self, trace_outputs):
+    def _set_outputs(self, trace_outputs, use_jit_trace):
         outputs = OrderedSet()
         for out in trace_outputs:
             node = out.node()
@@ -370,8 +383,8 @@ class Graph():
                 idx = self._get_id(out)
                 scope = node.scopeName() + \
                     "/" + node.kind() + str(idx)
-                if scope.startswith("/"):
-                    #TODO this is a bug in jit.trace it works fine with jit.get_trace
+                if use_jit_trace and scope.startswith("/"):
+                    # TODO this is a bug in jit.trace it works fine with jit.get_trace
                     # weird case where we do not start with model class as prefix
                     scope = self.model_name+scope
             outputs.add(scope)
@@ -541,6 +554,26 @@ class Graph():
             os.remove(f"{directory}/{file_name}.pdf")
         dot.render(file_name, directory=directory, cleanup=True)
 
+    @property
+    def model_name(self):
+        for n in self.nodes.values():
+            if n.type == NodeTypes.LAYER:
+                return n.scope.split("/")[0]
+
+    @property
+    def num_partitions(self,):
+        return len({node.part for node in self.nodes.values()})
+
+    def predecessors(self):
+        predecessors = {idx: set() for idx in self.nodes.keys()}
+
+        for idx, n in enumerate(self.nodes.values()):
+            for i in n.in_nodes:
+                predecessors[idx].update(predecessors[i.idx])
+                predecessors[idx].add(i.idx)
+
+        return predecessors
+
 
 class NodeTypes(Enum):
     '''
@@ -616,7 +649,6 @@ class Node():
             self.in_nodes.add(node)
         if isinstance(node, (set, OrderedSet)):
             self.in_nodes.update(node)
-
 
     def replace_out_node(self, to_replace, value):
         if to_replace not in self.out_nodes:
