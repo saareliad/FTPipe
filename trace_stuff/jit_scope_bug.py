@@ -1,9 +1,13 @@
+import re
 import torch.nn as nn
 import torch
 import pathlib
 import os
 import inspect
 from itertools import chain
+import sys
+sys.path.append("../")
+from pytorch_Gpipe import graph_builder
 
 
 class Tuples(nn.Module):
@@ -40,7 +44,7 @@ class Act(nn.Module):
         self.act = act
 
     def forward(self, x):
-        return self.act(x)*5
+        return self.act(x) * 5
 
 
 def generate_graph(model, sample, save_jit_trace=False, output_path="jit_trace_bug"):
@@ -66,6 +70,10 @@ def generate_graph(model, sample, save_jit_trace=False, output_path="jit_trace_b
         print("minimal trace has scopes")
     else:
         print("minimal trace des not have scopes")
+
+    torch._C._jit_set_inline_everything_mode(True)
+    graph = graph_builder(model, sample, use_jit_trace=True)
+    graph.save("jit_traced", ".")
 
 
 def clear_file(path):

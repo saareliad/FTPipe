@@ -11,25 +11,25 @@ graph(%self.1 : __torch__.torch.nn.modules.module.___torch_mangle_20.Module,
 
 graph(%self.1 : __torch__.torch.nn.modules.module.___torch_mangle_9.Module,
       %input.1 : Float(100, 100)):
-  %86 : Float(100, 100) = aten::relu(%input.1), scope: __module.l0/__module.l0.l0/__module.l0.l0.act # /home/alonde-jager/miniconda3/envs/Gpipe/lib/python3.7/site-packages/torch/nn/functional.py:914:0
-  %87 : Long() = prim::Constant[value={5}](), scope: __module.l0/__module.l0.l0 # jit_scope_bug.py:43:0
-  %x.1 : Float(100, 100) = aten::mul(%86, %87), scope: __module.l0/__module.l0.l0 # jit_scope_bug.py:43:0
-  %89 : Float(100, 100) = aten::sigmoid(%input.1), scope: __module.l0/__module.l0.l1/__module.l0.l1.act # /home/alonde-jager/miniconda3/envs/Gpipe/lib/python3.7/site-packages/torch/nn/modules/activation.py:271:0
-  %90 : Long() = prim::Constant[value={5}](), scope: __module.l0/__module.l0.l1 # jit_scope_bug.py:43:0
-  %y.1 : Float(100, 100) = aten::mul(%89, %90), scope: __module.l0/__module.l0.l1 # jit_scope_bug.py:43:0
-  %92 : Long() = prim::Constant[value={2}](), scope: __module.l0 # jit_scope_bug.py:31:0
-  %input.2 : Float(100, 100) = aten::mul_(%y.1, %92), scope: __module.l0 # jit_scope_bug.py:31:0
-  %94 : Long() = prim::Constant[value={3}](), scope: __module.l0 # jit_scope_bug.py:32:0
-  %input : Float(100, 100) = aten::mul_(%x.1, %94), scope: __module.l0 # jit_scope_bug.py:32:0
-  %97 : Float(100, 100) = aten::relu(%input.2), scope: __module.l1/__module.l1.l0/__module.l1.l0.act # /home/alonde-jager/miniconda3/envs/Gpipe/lib/python3.7/site-packages/torch/nn/functional.py:914:0
-  %98 : Long() = prim::Constant[value={5}](), scope: __module.l1/__module.l1.l0 # jit_scope_bug.py:43:0
-  %x : Float(100, 100) = aten::mul(%97, %98), scope: __module.l1/__module.l1.l0 # jit_scope_bug.py:43:0
-  %100 : Float(100, 100) = aten::sigmoid(%input), scope: __module.l1/__module.l1.l1/__module.l1.l1.act # /home/alonde-jager/miniconda3/envs/Gpipe/lib/python3.7/site-packages/torch/nn/modules/activation.py:271:0
-  %101 : Long() = prim::Constant[value={5}](), scope: __module.l1/__module.l1.l1 # jit_scope_bug.py:43:0
-  %y : Float(100, 100) = aten::mul(%100, %101), scope: __module.l1/__module.l1.l1 # jit_scope_bug.py:43:0
-  %103 : Long() = prim::Constant[value={2}](), scope: __module.l1 # jit_scope_bug.py:31:0
-  %104 : Float(100, 100) = aten::mul_(%y, %103), scope: __module.l1 # jit_scope_bug.py:31:0
-  %105 : Long() = prim::Constant[value={3}](), scope: __module.l1 # jit_scope_bug.py:32:0
-  %106 : Float(100, 100) = aten::mul_(%x, %105), scope: __module.l1 # jit_scope_bug.py:32:0
+  %86 : Float(100, 100) = aten::relu(%input.1), scope: __module.l0/__module.l0.l0/__module.l0.l0.act # C:\Users\alond\Anaconda3\envs\Gpipe\lib\site-packages\torch\nn\functional.py:914:0
+  %87 : Long() = prim::Constant[value={5}](), scope: __module.l0/__module.l0.l0 # jit_scope_bug.py:47:0
+  %x.1 : Float(100, 100) = aten::mul(%86, %87), scope: __module.l0/__module.l0.l0 # jit_scope_bug.py:47:0
+  %89 : Float(100, 100) = aten::sigmoid(%input.1), scope: __module.l0/__module.l0.l1/__module.l0.l1.act # C:\Users\alond\Anaconda3\envs\Gpipe\lib\site-packages\torch\nn\modules\activation.py:271:0
+  %90 : Long() = prim::Constant[value={5}](), scope: __module.l0/__module.l0.l1 # jit_scope_bug.py:47:0
+  %y.1 : Float(100, 100) = aten::mul(%89, %90), scope: __module.l0/__module.l0.l1 # jit_scope_bug.py:47:0
+  %92 : Long() = prim::Constant[value={2}](), scope: __module.l0 # jit_scope_bug.py:35:0
+  %input.2 : Float(100, 100) = aten::mul_(%y.1, %92), scope: __module.l0 # jit_scope_bug.py:35:0
+  %94 : Long() = prim::Constant[value={3}](), scope: __module.l0 # jit_scope_bug.py:36:0
+  %input : Float(100, 100) = aten::mul_(%x.1, %94), scope: __module.l0 # jit_scope_bug.py:36:0
+  %97 : Float(100, 100) = aten::relu(%input.2), scope: __module.l1/__module.l1.l0/__module.l1.l0.act # C:\Users\alond\Anaconda3\envs\Gpipe\lib\site-packages\torch\nn\functional.py:914:0
+  %98 : Long() = prim::Constant[value={5}](), scope: __module.l1/__module.l1.l0 # jit_scope_bug.py:47:0
+  %x : Float(100, 100) = aten::mul(%97, %98), scope: __module.l1/__module.l1.l0 # jit_scope_bug.py:47:0
+  %100 : Float(100, 100) = aten::sigmoid(%input), scope: __module.l1/__module.l1.l1/__module.l1.l1.act # C:\Users\alond\Anaconda3\envs\Gpipe\lib\site-packages\torch\nn\modules\activation.py:271:0
+  %101 : Long() = prim::Constant[value={5}](), scope: __module.l1/__module.l1.l1 # jit_scope_bug.py:47:0
+  %y : Float(100, 100) = aten::mul(%100, %101), scope: __module.l1/__module.l1.l1 # jit_scope_bug.py:47:0
+  %103 : Long() = prim::Constant[value={2}](), scope: __module.l1 # jit_scope_bug.py:35:0
+  %104 : Float(100, 100) = aten::mul_(%y, %103), scope: __module.l1 # jit_scope_bug.py:35:0
+  %105 : Long() = prim::Constant[value={3}](), scope: __module.l1 # jit_scope_bug.py:36:0
+  %106 : Float(100, 100) = aten::mul_(%x, %105), scope: __module.l1 # jit_scope_bug.py:36:0
   %43 : (Float(100, 100), Float(100, 100)) = prim::TupleConstruct(%104, %106)
   return (%43)

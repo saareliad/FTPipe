@@ -25,7 +25,8 @@ class Graph():
     def __init__(self, profiled_layers: List[str], num_inputs: int, tensors: List[Tuple[str, Tuple[int]]], trace_graph, weights: Dict[str, Any], depth: int, basic_blocks: Optional[List[nn.Module]] = None, use_jit_trace=False):
         # assert use_jit_trace, "_get_trace_graph is currently broken"
         self.nodes = OrderedDict()
-        self.profiled_layers = set(profiled_layers)
+        self.profiled_layers = translate_scopes(profiled_layers)
+        self.partial_scopes = partial_scopes(profiled_layers)
         self.num_inputs = num_inputs
         self._build_graph(trace_graph, tensors, use_jit_trace)
         self.depth = depth
@@ -42,7 +43,7 @@ class Graph():
     def _build_graph(self, trace_graph, tensors, use_jit_trace):
         offset = self._add_IO_nodes(trace_graph, tensors, use_jit_trace)
         self._add_OP_nodes(list(trace_graph.nodes())[
-                           offset-self.num_inputs:], use_jit_trace)
+                           offset - self.num_inputs:], use_jit_trace)
         # TODO we've disabled output shape untill we can think about full support
         # self._add_shapes(trace_graph)
         # self.save(f"verbose", f"playground_out/graphs/{self.model_name}")
@@ -71,7 +72,7 @@ class Graph():
         '''
         num_inputs_buffs_params = 0
         if use_jit_trace:
-            nodes = list(trace_graph.inputs())[1:]+list(trace_graph.nodes())
+            nodes = list(trace_graph.inputs())[1:] + list(trace_graph.nodes())
         else:
             nodes = trace_graph.inputs()
 
@@ -107,7 +108,10 @@ class Graph():
         '''
         add nodes representing the layers/ops of the model
         '''
-        for trace_node in sorted(OP_nodes, key=lambda n: next(n.outputs()).unique()):
+        # TODO this is for 1.3.1
+        # for trace_node in sorted(OP_nodes, key=lambda n: next(n.outputs()).unique()):
+        # in 1.4 the output scope can is not largest id but he is last
+        for trace_node in OP_nodes:
             node_scope = self._find_encasing_layer(trace_node.scopeName())
             try:
                 input_nodes = OrderedSet([self.nodes[i.unique()]
@@ -128,7 +132,8 @@ class Graph():
                 node_type = NodeTypes.LAYER
                 value_type = torch.Tensor
             else:
-                node_scope = trace_node.scopeName() + "/" + trace_node.kind()
+                node_scope = self._find_partial_match(
+                    trace_node.scopeName()) + "/" + trace_node.kind()
                 if 'prim::Constant' in trace_node.kind():
                     # unprofiled constant value
                     node_type = NodeTypes.CONSTANT
@@ -149,16 +154,16 @@ class Graph():
                 # weird case where we don not have the model class as prefix
                 print(
                     f"node without a legal scope\n got {trace_node.scopeName()}\n{trace_node}")
-                node_scope = self.model_name+node_scope
+                node_scope = self.model_name + node_scope
 
             nOuts = 1
             # add node for each output
             for i, output in enumerate(trace_node.outputs()):
                 # TODO in some cases we can know the shape of the tensor per edge
-                try:
-                    print(output.type().sizes())
-                except Exception:
-                    print(node_scope)
+                # try:
+                #     print(output.type().sizes())
+                # except Exception:
+                #     print(node_scope)
 
                 unique_id = output.unique()
 
@@ -184,12 +189,13 @@ class Graph():
                 if i != 0:
                     if self._find_encasing_layer(node_scope) == "":
                         new_node.scope += f"{i} "
-                    new_node.add_in_node(self.nodes[unique_id-i].in_nodes[0])
-                    self.nodes[unique_id-i].in_nodes[0].add_out_node(new_node)
+                    new_node.add_in_node(self.nodes[unique_id - i].in_nodes[0])
+                    self.nodes[unique_id -
+                               i].in_nodes[0].add_out_node(new_node)
                     nOuts += 1
 
-            if nOuts > 1 and self._find_encasing_layer(self.nodes[unique_id-i].scope) == "":
-                self.nodes[unique_id-i].scope += "0 "
+            if nOuts > 1 and self._find_encasing_layer(self.nodes[unique_id - i].scope) == "":
+                self.nodes[unique_id - i].scope += "0 "
 
     def _add_shapes(self, trace_graph):
         '''
@@ -292,7 +298,7 @@ class Graph():
                 out = node.out_nodes[0]
                 arithmetic_ops = ['aten::add',
                                   'aten::div', 'aten::mul', 'aten::sub']
-                arithmetic = any(opMatch(out.scope, o) or opMatch(out.scope, o+"_") for o in arithmetic_ops) and (
+                arithmetic = any(opMatch(out.scope, o) or opMatch(out.scope, o + "_") for o in arithmetic_ops) and (
                     out.in_nodes.indexOf(node) == 2)
                 contiguous_input = ('aten::contiguous' in out.scope) and (
                     out.in_nodes.indexOf(node) == 1)
@@ -309,10 +315,20 @@ class Graph():
         # unfortunately the trace graph shows only basic layers and ops
         # so we need to manually find a profiled layer that encases the op
         most_specific_scope = ""
+        scopeName = extract_new_scope(scopeName)
         for layer_scope in self.profiled_layers:
             if scopeName.startswith(layer_scope):
-                most_specific_scope = layer_scope
+                most_specific_scope = self.profiled_layers[layer_scope]
                 break
+        return most_specific_scope
+
+    def _find_partial_match(self, scopeName: str):
+        most_specific_scope = ""
+        print(len(scopeName))
+        scopeName = extract_new_scope(scopeName)
+        for layer_scope in self.partial_scopes:
+            if scopeName.startswith(layer_scope) and len(layer_scope) > len(most_specific_scope):
+                most_specific_scope = self.partial_scopes[layer_scope]
         return most_specific_scope
 
     def _remove_nodes_that_go_nowhere(self, trace_graph):
@@ -386,7 +402,7 @@ class Graph():
                 if use_jit_trace and scope.startswith("/"):
                     # TODO this is a bug in jit.trace it works fine with jit.get_trace
                     # weird case where we do not start with model class as prefix
-                    scope = self.model_name+scope
+                    scope = self.model_name + scope
             outputs.add(scope)
         self.output_scopes = outputs
 
@@ -447,7 +463,7 @@ class Graph():
                  "font_name": "Times",
                  "font_size": "10",
                  "margin": "0,0",
-                 "padding":  "1.0,0.5"}
+                 "padding": "1.0,0.5"}
         from graphviz import Digraph
 
         dot = Digraph()
@@ -556,9 +572,8 @@ class Graph():
 
     @property
     def model_name(self):
-        for n in self.nodes.values():
-            if n.type == NodeTypes.LAYER:
-                return n.scope.split("/")[0]
+        for scope in self.profiled_layers.values():
+            return scope.split("/")[0]
 
     @property
     def num_partitions(self,):
@@ -657,14 +672,14 @@ class Node():
         values = list(self.out_nodes)
         idx = values.index(to_replace)
 
-        before, after = values[:idx], values[idx+1:]
+        before, after = values[:idx], values[idx + 1:]
         try:
             # we handle the case for iterable, if value is not then we recall with [value]
             iter(value)
             keys = value
             to_add = [v for v in keys if (
                 v not in before) and (v not in after)]
-            self.out_nodes = OrderedSet(before+to_add+after)
+            self.out_nodes = OrderedSet(before + to_add + after)
 
         except TypeError as _:
             self.replace_out_node(to_replace, [value])
@@ -804,3 +819,34 @@ def _combine_params_and_buffers_into_OP_nodes(graph: Graph):
 
 def opMatch(scope, op_name):
     return re.search(f"{op_name}[{string.digits}]", scope)
+
+
+def translate_scopes(old_scopes):
+    translation = dict()
+
+    pattern = r'\[.*?\]'
+    matcher = re.compile(pattern)
+    for scope in old_scopes:
+        search_results = matcher.finditer(scope)
+        translated = ("__module." + ".".join(s.group()
+                                             [1:-1] for s in search_results))
+        translation[translated] = scope
+
+    return translation
+
+
+def extract_new_scope(new_scope):
+    return new_scope[new_scope.rfind("/__module") + 1:]
+
+
+def partial_scopes(old_scopes):
+    partials = dict()
+    for scope in old_scopes:
+        base = "__module"
+        new_base = ""
+        for part in scope.split("/"):
+            identifier = part[part.find("[") + 1:-1]
+            new_base += f"/{part}"
+            partials[base] = new_base[1:]
+            base += f".{identifier}"
+    return partials
