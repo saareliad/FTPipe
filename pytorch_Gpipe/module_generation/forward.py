@@ -102,7 +102,7 @@ def generateStatements(partition: List[Node], scope_to_class_field: Dict[str, st
             open_nodes.append(node)
             continue
         i += 1
-        if i > (2*len(partition)):
+        if i > (2 * len(partition)):
             # cycle detection
             print(f"we've detected that the code generation performed {(2*len(partition))} iterations\n"
                   f"while the partition has only {(len(partition))} statements\n"
@@ -149,6 +149,9 @@ def generateReturnStatement(output_scopes: OrderedSet[str], ready_expressions: D
     scopes = [ready_expressions[scope] for scope in output_scopes]
     if len(scopes) > 1:
         result_tuple = ", ".join(scopes)
+    elif "TupleConstruct" in output_scopes[0] or "ListConstruct" in output_scopes[0]:
+        # if we already return an iterable no need to wrap it again
+        return f'{dtab}{comment}\n{dtab}return {scopes[0]}\n'
     else:
         result_tuple = scopes[0] + ','
     return f'{dtab}{comment}\n{dtab}return ({result_tuple})\n'
@@ -205,7 +208,7 @@ def generatePrimitiveExpression(ready_expressions: Dict[str, str], expression_le
 
 
 def generateListOrTupleExpression(ready_expressions: Dict[str, str], expression_len: Dict[str, int], node: Node,
-                           arg_gen: Iterator[str], verbose=False) -> str:
+                                  arg_gen: Iterator[str], verbose=False) -> str:
     ''' generates a python list/tuple construction
     '''
     operand_scopes = [n.scope for n in node.in_nodes]
