@@ -6,8 +6,9 @@ import torch.nn as nn
 from ..utils import Tensors, traverse_model, tensorDict, model_scopes, _count_elements
 from .control_flow_graph import Graph, NodeTypes
 from .network_profiler import profileNetwork
+from .graph_builder import build_graph
 
-__all__ = ['graph_builder', 'profileNetwork']
+__all__ = ['graph_builder', 'profileNetwork', 'build_graph']
 
 
 def graph_builder(model: nn.Module, sample_batch: Tensors = (), kwargs: Optional[Dict] = None, max_depth: int = 1000,
@@ -62,8 +63,11 @@ def graph_builder(model: nn.Module, sample_batch: Tensors = (), kwargs: Optional
     # trace the model and build a graph
     with torch.no_grad():
         if use_jit_trace:
+            old_value = torch._C._jit_get_inline_everything_mode()
+            torch._C._jit_set_inline_everything_mode(True)
             trace_graph = torch.jit.trace(model, sample_batch,
                                           check_trace=False).graph
+            torch._C._jit_set_inline_everything_mode(old_value)
         else:
             if hasattr(torch.jit, "get_trace_graph"):
                 get_trace_graph = torch.jit.get_trace_graph

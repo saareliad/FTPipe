@@ -89,12 +89,12 @@ def traverse_params_buffs(module: nn.Module, prefix: Optional[str] = None) -> It
         yield from traverse_params_buffs(sub_module, prefix + "/" + type(sub_module).__name__ + f"[{name}]")
 
 
-def layerDict(model: nn.Module, depth=1000,basic_blocks=None):
-    return {s: l for l, s, _ in traverse_model(model, depth,basic_blocks=basic_blocks)}
+def layerDict(model: nn.Module, depth=1000, basic_blocks=None):
+    return {s: l for l, s, _ in traverse_model(model, depth, basic_blocks=basic_blocks)}
 
 
 def tensorDict(model: nn.Module):
-    return collections.OrderedDict((s,t)for t, s in traverse_params_buffs(model))
+    return collections.OrderedDict((s, t)for t, s in traverse_params_buffs(model))
 
 
 INCORRECT_INPUT_TYPE = '''currently supported input types are torch.Tensor, List,Tuple or combination of them found: '''

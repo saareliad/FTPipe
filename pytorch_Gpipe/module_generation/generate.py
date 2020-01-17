@@ -50,7 +50,7 @@ def generatePartitionModules(graph: Graph, model: Module, verbose=False, output_
         partitions_code.append(misc_functions)
         ios[idx] = io
 
-    lines.append(createConfig(graph, parts, model, ios,layer_classes))
+    lines.append(createConfig(graph, parts, model, ios, layer_classes))
     lines += partitions_code
     lines.append(generateHelpFunctions())
 
@@ -141,13 +141,16 @@ def getFunctionName(scope: str) -> str:
     return scope.split(sep)[1].rstrip(string.digits)
 
 
-def createConfig(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, Dict[str, List[str]]],basic_blocks:Dict[str,Module]):
+def createConfig(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, Dict[str, List[str]]], basic_blocks: Dict[str, Module]):
     model_buffers = {scope: t for t, scope in traverse_params_buffs(model)
                      if not t.requires_grad}
     model_parameteres = {scope: t for t, scope in traverse_params_buffs(model)
                          if t.requires_grad}
     model_class = model.__class__.__name__
-    basic_blocks=[cls.__name__ for cls in set(basic_blocks.values())] if graph.basic_blocks else []
+    if graph.basic_blocks:
+        basic_blocks = [cls.__name__ for cls in set(basic_blocks.values())]
+    else:
+        basic_blocks = []
     if len(basic_blocks) == 1:
         basic_blocks = f"{basic_blocks[0]},"
     else:
@@ -209,7 +212,7 @@ def connections(graph: Graph):
                   for i in range(num_partitions + 2)]
 
     for node in graph.nodes.values():
-        if node.idx < graph.num_inputs:
+        if node.type is NodeTypes.IN:
             for n in node.out_nodes:
                 adj_matrix[n.part + 1]["inputs"].add(node.scope)
                 adj_matrix[0]["outputs"].add(n.part)

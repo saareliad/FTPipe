@@ -12,7 +12,7 @@ from collections import OrderedDict
 # TODO support list and tuple layer outputs
 
 
-class Graph():
+class OLDGraph():
     '''
     a Graph data structure that model a pytorch network built from a pytorch trace\n
     the nodes operations like layer,Tensor ops etc.
@@ -153,7 +153,7 @@ class Graph():
                 # TODO this is a bug in jit.trace it works fine with jit.get_trace
                 # weird case where we don not have the model class as prefix
                 print(
-                    f"node without a legal scope\n got {trace_node.scopeName()}\n{trace_node}")
+                    f"node without a legal scope\n got {trace_node.scopeName()}\n{trace_node}assuming a top level node")
                 node_scope = self.model_name + node_scope
 
             nOuts = 1
@@ -324,7 +324,6 @@ class Graph():
 
     def _find_partial_match(self, scopeName: str):
         most_specific_scope = ""
-        print(len(scopeName))
         scopeName = extract_new_scope(scopeName)
         for layer_scope in self.partial_scopes:
             if scopeName.startswith(layer_scope) and len(layer_scope) > len(most_specific_scope):
@@ -503,7 +502,7 @@ class Graph():
         for node in self.nodes.values():
             if hide_node(node):
                 continue
-            label = f"{node.scope} {node.idx}"
+            label = node.scope
 
             if not node.out_nodes:
                 outputs = list(map(str, node.outputs))
@@ -751,7 +750,7 @@ class LayerOutput():
         return str(self)
 
 
-def optimize_graph(graph: Graph):
+def optimize_graph(graph: OLDGraph):
     '''
     this module takes the raw Graph and removes/merges nodes in order to get the requested graph.
     this method is called as part of graph_builder method
@@ -810,7 +809,7 @@ def _combine_OP_nodes_under_the_same_scope(nodes: OrderedDict) -> OrderedDict:
     return optimized_graph
 
 
-def _combine_params_and_buffers_into_OP_nodes(graph: Graph):
+def _combine_params_and_buffers_into_OP_nodes(graph: OLDGraph):
     def is_buffer_or_param(n):
         return n.type == NodeTypes.BUFF_PARAM and graph._find_encasing_layer(n.scope) != ''
 
@@ -850,3 +849,171 @@ def partial_scopes(old_scopes):
             partials[base] = new_base[1:]
             base += f".{identifier}"
     return partials
+
+
+class Graph():
+    def __init__(self, nodes, graph_output_scopes, depth, basic_blocks):
+        self.nodes = nodes
+        self.output_scopes = graph_output_scopes
+        self.depth = depth
+        self.basic_blocks = basic_blocks
+
+    @property
+    def num_inputs(self):
+        return len([1 for node in self.nodes.values() if node.type is NodeTypes.IN])
+
+    @property
+    def model_name(self):
+        for node in self.nodes.values():
+            if node.type != NodeTypes.IN:
+                return node.scope[:node.scope.find("/")]
+
+    @property
+    def num_partitions(self):
+        return len(set(node.part for node in self.nodes.values()))
+
+    def asNetworkx(self):
+        try:
+            import networkx as nx
+        except ImportError as _:
+            print("networkx package not found")
+            return
+
+        # edge_list
+        edge_list = []
+        for u in self.nodes.values():
+            for v in u.in_nodes:
+                edge_list.append((u.idx, v.idx))
+
+        G = nx.from_edgelist(edge_list)
+        for n in self.nodes.values():
+            G.nodes[n.idx]['weight'] = n.weight
+            G.nodes[n.idx]['scope'] = n.scope
+            G.nodes[n.idx]['part'] = n.part
+
+        return G
+
+    def build_dot(self, show_buffs_params=False, show_weights=True):
+        '''
+        return a graphviz representation of the graph
+        Parameters
+        ----------
+        show_buffs_params:
+            whether to display also buffers and parameters which are not encased in the graph scopes
+        show_weights:
+            whether to display the nodes weight
+        '''
+
+        theme = {"background_color": "#FFFFFF",
+                 "fill_color": "#E8E8E8",
+                 "outline_color": "#000000",
+                 "font_color": "#000000",
+                 "font_name": "Times",
+                 "font_size": "10",
+                 "margin": "0,0",
+                 "padding": "1.0,0.5"}
+        from graphviz import Digraph
+
+        dot = Digraph()
+        dot.attr("graph",
+                 concentrate="true",
+                 bgcolor=theme["background_color"],
+                 color=theme["outline_color"],
+                 fontsize=theme["font_size"],
+                 fontcolor=theme["font_color"],
+                 fontname=theme["font_name"],
+                 margin=theme["margin"],
+                 rankdir="TB",
+                 pad=theme["padding"])
+
+        dot.attr("node", shape="box",
+                 style="filled", margin="0,0",
+                 fillcolor=theme["fill_color"],
+                 color=theme["outline_color"],
+                 fontsize=theme["font_size"],
+                 fontcolor=theme["font_color"],
+                 fontname=theme["font_name"])
+
+        dot.attr("edge", style="solid",
+                 color=theme["outline_color"],
+                 fontsize=theme["font_size"],
+                 fontcolor=theme["font_color"],
+                 fontname=theme["font_name"])
+
+        # TODO split big graphs to multiple pdfs
+
+        colors = {0: 'grey', 1: 'green', 2: 'red', 3: 'yellow',
+                  4: 'orange', 5: 'brown', 6: 'purple', 7: 'pink'}
+
+        def hide_node(node):
+            return (node.type == NodeTypes.BUFF_PARAM) and (not show_buffs_params)
+
+        for node in self.nodes.values():
+            if hide_node(node):
+                continue
+            label = node.scope
+
+            if not node.out_nodes:
+                outputs = list(map(str, node.outputs))
+                outputs = ",".join(outputs)
+                label = f"{label}\n {outputs}"
+
+            if show_weights and node.weight != 0:
+                label = f"{label}\n {node.weight}"
+
+            label = f"{label}\n type: {node.valueType()}"
+            if not (node.value is None):
+                label = f"{label}\n value={node.value}"
+
+            dot.node(str(node.idx), label, fillcolor=colors[node.part])
+
+        for node in self.nodes.values():
+            if hide_node(node):
+                continue
+            for in_node in node.in_nodes:
+                if hide_node(in_node):
+                    continue
+                edge_label = filter(lambda layer_in: layer_in.scope ==
+                                    in_node.scope, node.inputs)
+
+                edge_label = list(map(str, edge_label))
+                edge_label = ",".join(edge_label)
+                dot.edge(str(in_node.idx), str(node.idx), label=edge_label)
+
+        return dot
+
+    def display(self, show_buffs_params=False, show_weights=True):
+        '''
+        display the graph in Jupyter
+
+        Parameters
+        ----------
+        show_buffs_params:
+            whether to display also buffers and parameters which are not encased in the graph scopes
+        show_weights:
+            whether to display the nodes weight
+        '''
+        try:
+            from IPython.core.display import display_svg
+            display_svg(self.build_dot(show_buffs_params,
+                                       show_weights=show_weights), raw=False)
+        except ImportError as _:
+            print("only works in python notebooks")
+
+    def save(self, file_name, directory, show_buffs_params=True, show_weights=False):
+        '''
+        save the rendered graph to a file
+
+        Parameters
+        ----------
+        show_buffs_params:
+            whether to display also buffers and parameters which are not encased in the graph scopes
+        show_weights:
+            whether to display the nodes weight
+        '''
+        dot = self.build_dot(show_buffs_params, show_weights=show_weights)
+        dot.format = "pdf"
+        import os
+        if os.path.exists(f"{directory}/{file_name}.pdf"):
+            os.remove(f"{directory}/{file_name}.pdf")
+        dot.render(file_name, directory=directory, cleanup=True)
