@@ -1,12 +1,12 @@
 from typing import Iterable, Iterator, List, Optional,\
-    Tuple, Union, TypeVar, Generic, Callable, Any
+    Tuple, Union, TypeVar, Generic, OrderedDict, Dict
 import collections
 import torch
 import torch.nn as nn
 from torch import Tensor
 
 __all__ = ["traverse_model", "traverse_params_buffs",
-           "model_scopes", "get_device", "_detach_inputs", "_get_size", "_get_shape",
+           "get_device", "_detach_inputs", "_get_size",
            "Tensors", "TensorsShape", "Devices", "OrderedSet", "layerDict", "tensorDict"]
 
 # the officially supported input types
@@ -45,23 +45,6 @@ def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None, 
                 sub_module).__name__ + f"[{name}]", basic_blocks, full)
 
 
-def model_scopes(model: nn.Module, depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None, full=False) -> List[str]:
-    '''
-    return a list of all model scopes for the given configuration
-     Parameters:
-    -----------
-    model:
-        the model to iterate over
-    depth:
-        how far down in the model tree to go
-    basic_blocks:
-        a list of modules that if encountered will not be broken down
-    full:
-        whether to return only scopes specified by the depth and basick_block options or to yield all scopes up to them
-    '''
-    return list(map(lambda t: t[1], traverse_model(model, depth=depth, basic_blocks=basic_blocks, full=full)))
-
-
 def traverse_params_buffs(module: nn.Module, prefix: Optional[str] = None) -> Iterator[Tuple[torch.tensor, str]]:
     '''
     iterate over model's buffers and parameters yielding obj,obj_scope
@@ -89,11 +72,11 @@ def traverse_params_buffs(module: nn.Module, prefix: Optional[str] = None) -> It
         yield from traverse_params_buffs(sub_module, prefix + "/" + type(sub_module).__name__ + f"[{name}]")
 
 
-def layerDict(model: nn.Module, depth=1000, basic_blocks=None):
+def layerDict(model: nn.Module, depth=1000, basic_blocks=None) -> Dict[str, nn.Module]:
     return {s: l for l, s, _ in traverse_model(model, depth, basic_blocks=basic_blocks)}
 
 
-def tensorDict(model: nn.Module):
+def tensorDict(model: nn.Module) -> OrderedDict[str, Tensor]:
     return collections.OrderedDict((s, t)for t, s in traverse_params_buffs(model))
 
 
@@ -124,22 +107,6 @@ def _detach_inputs(*inputs: Tensors):
     return detached[0] if len(detached) == 1 else tuple(detached)
 
 
-# for example
-# ((5,10,5),(5,55,4)) => ((10,5),(55,4))
-def _get_shape(*inputs: Tensors) -> TensorsShape:
-
-    shapes = []
-    for x in inputs:
-        if isinstance(x, torch.Tensor):
-            shapes.append(x.shape[1:])
-        elif isinstance(x, (list, tuple)):
-            shapes.append(type(x)(_get_shape(*x)))
-        else:
-            raise ValueError(INCORRECT_INPUT_TYPE + f"{type(x)} ")
-
-    return tuple(shapes)
-
-
 def _get_size(*inputs: Tensors) -> int:
     size = 0
     for x in inputs:
@@ -162,19 +129,6 @@ def flatten(x: Tensors):
         ts.extend(flatten(t))
 
     return ts
-
-
-def _count_elements(*inputs: Tensors) -> int:
-    c = 0
-    for x in inputs:
-        if isinstance(x, torch.Tensor):
-            c += 1
-        elif isinstance(x, (list, tuple)):
-            c += _count_elements(*x)
-        else:
-            raise ValueError(INCORRECT_INPUT_TYPE + f"{type(x)} ")
-
-    return c
 
 
 T = TypeVar('T')

@@ -7,7 +7,7 @@ import os
 import re
 from enum import Enum
 import operator
-from .supportedTypes import generateTypes, AnyType
+from .supported_types import generateTypes, AnyType
 
 dtype_lookup = {'11': torch.bool,
                 '4': torch.int64,

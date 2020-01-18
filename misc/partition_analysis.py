@@ -4,6 +4,7 @@ import time
 from contextlib import nullcontext
 import numpy as np
 
+
 def run_analysis(sample, graph, config, n_iter, recomputation=True, bandwidth_gps=16):
     # thoeretical analysis
     sequential_f, sequential_b, parallel_f, parallel_b = theoretical_analysis(graph, config,
@@ -22,7 +23,7 @@ def run_analysis(sample, graph, config, n_iter, recomputation=True, bandwidth_gp
                                                                                                         parallel_b, edges)
     # real statistics based on generated partitions
     (real_f_times, f_vars, f_deviance), (real_b_times, b_vars, b_deviance), comm_volume = profile_execution(sample, config, n_iter,
-                                                                                    recomputation=recomputation, bandwidth_gps=bandwidth_gps)
+                                                                                                            recomputation=recomputation, bandwidth_gps=bandwidth_gps)
     real_b_imbalance = worst_imbalance(real_b_times)
     real_f_imbalance = worst_imbalance(real_f_times)
     topology_aware_real_f_imbalance, topology_aware_real_b_imbalance = topology_aware_imbalance(real_f_times,
@@ -124,7 +125,7 @@ def profile_execution(model_inputs, partition_config, n, recomputation=True, ban
                 recv_time = 0
                 for t in inputs:
                     t_mb = (t.nelement() * t.element_size()) / 1e6
-                    t_recv = (t_mb/(bandwidth_gps*1e3))
+                    t_recv = (t_mb / (bandwidth_gps * 1e3))
                     in_size_mb += t_mb
                     recv_time = max(recv_time, t_recv)
                 recv_time *= 1e3
@@ -144,7 +145,7 @@ def profile_execution(model_inputs, partition_config, n, recomputation=True, ban
                     # save activation on CPU in order to save GPU memory
                     activations[o] = t.cpu()
                     t_mb = (t.nelement() * t.element_size()) / 1e6
-                    t_send = (t_mb/(bandwidth_gps*1e3))
+                    t_send = (t_mb / (bandwidth_gps * 1e3))
                     out_size_mb += t_mb
                     send_time = max(t_send, send_time)
 
@@ -167,9 +168,10 @@ def mean_var(times):
         arr = np.array(ts)
         means[i] = np.mean(arr)
         variances[i] = np.var(arr)
-        avg_deviations[i] = np.abs((arr-means[i])).mean()
+        avg_deviations[i] = np.abs((arr - means[i])).mean()
 
     return means, variances, avg_deviations
+
 
 def cuda_time(partition, inputs, recomputation=True):
     # now we move partition to GPU
@@ -267,7 +269,7 @@ def edge_cut(graph):
     find the cutting edges of the graph
     '''
     edges = []
-    for n in graph.nodes.values():
+    for n in graph.nodes:
         for u in n.out_nodes:
             if n.part != u.part:
                 edges.append((n, u))
@@ -280,7 +282,7 @@ def theoretical_analysis(graph, partition_config, recomputation=True):
         the sequential assumption is that in the partition all operation are linear.
         the parallel assumption assumes that all computation paths are concurrent.
     '''
-    n_parts = len(set(n.part for n in graph.nodes.values()))
+    n_parts = len(set(n.part for n in graph.nodes))
     parallel_b = dict()
     parallel_f = dict()
 
@@ -292,7 +294,7 @@ def theoretical_analysis(graph, partition_config, recomputation=True):
     sequential_b = {i: 0 for i in range(n_parts)}
 
     nodes = dict()
-    for node in graph.nodes.values():
+    for node in graph.nodes:
         # cache relevant nodes to make fetching them faster
         if node.scope in tensor_names:
             nodes[node.scope] = node
@@ -352,6 +354,7 @@ def extract_time(w, forward=False):
     return w.backward_time
 
 #####################imbalance computation##################################
+
 
 def worst_imbalance(times):
     return min(times.values()) / max(times.values())
@@ -419,7 +422,7 @@ def calculate_ideal_latency(dependencies, times):
     '''
     n_parts = len(times)
 
-    ideal = {i: times[i]+sum(times[j] for j in dependencies[i])
+    ideal = {i: times[i] + sum(times[j] for j in dependencies[i])
              for i in range(n_parts)}
 
     return ideal

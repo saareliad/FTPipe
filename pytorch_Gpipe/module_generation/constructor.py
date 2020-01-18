@@ -70,6 +70,9 @@ def generate__init__assertGuards(nlayers: int) -> str:
 
 
 def generate__init__BuffParamStatements(buffers: List[str], parameters: List[str]) -> str:
+    ''' generate the init statements to initialize the partitions free floating bufferes and parameters
+        free floating means tat those tensors are not part of any layer in this partition
+    '''
     tensor_ids = {}
     lines = [f"\n{dtab}# initializing partition buffers",
              f"assert isinstance(buffers,dict), f'expected buffers to be of type dict got {{type(buffers)}}'",
@@ -96,7 +99,7 @@ def generate__init__BuffParamStatements(buffers: List[str], parameters: List[str
     return f'\n{dtab}'.join(lines), tensor_ids
 
 
-def generateLookup(layers_to_id, tensors_to_id):
+def generateLookup(layers_to_id: Dict[str, str], tensors_to_id: Dict[str, str]) -> str:
     # first generate lookup table
     {'p_0': 'w',
      'l_1': 'module0.sub1.linear'}

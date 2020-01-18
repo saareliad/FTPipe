@@ -1,10 +1,12 @@
-from typing import List, Tuple, Dict, Set
-from torch.nn import Module
+
 tab = '    '
 dtab = tab + tab
 
 
-def generateMiscMethods():
+def generateMiscMethods() -> str:
+    ''' generate partition methods state_dict() load_state_dict() named_buffers() and named_parameters()
+        our custom implementation gurrentees 100% compatibility with the original model same names will be used
+    '''
     state_dict = generateStateDictFunction()
     load_state_dict = generateLoadStateDict()
     named_parameters = generateNamedParametersFunction()
@@ -13,7 +15,9 @@ def generateMiscMethods():
     return "\n".join([state_dict, load_state_dict, named_parameters, named_buffers]) + "\n\n"
 
 
-def generateStateDictFunction():
+def generateStateDictFunction() -> str:
+    '''generates the state_dict function ensuring same keys are used as in the base model
+    '''
     state_dict_function = ["def state_dict(self,device):",
                            f"# we return the state dict of this part as it should be in the original model",
                            "state = super().state_dict()",
@@ -32,7 +36,9 @@ def generateStateDictFunction():
     return f"{tab}" + f"\n{dtab}".join(state_dict_function)
 
 
-def generateNamedParametersFunction():
+def generateNamedParametersFunction() -> str:
+    ''' generates the named_parameters method ensuring we use the names given to the parametes in the unpartitioned model
+    '''
     named_parameters_function = ["def named_parameters(self,recurse=True):",
                                  f"# we return the named parameters of this part as it should be in the original model",
                                  "params = super().named_parameters(recurse=recurse)",
@@ -48,7 +54,9 @@ def generateNamedParametersFunction():
     return f"\n{tab}" + f"\n{dtab}".join(named_parameters_function)
 
 
-def generateNamedBuffersFunction():
+def generateNamedBuffersFunction() -> str:
+    ''' generates the named_buffers method ensuring we use the names given to the buffers in the unpartitioned model
+    '''
     named_buffers_function = ["def named_buffers(self,recurse=True):",
                               f"# we return the named buffers of this part as it should be in the original model",
                               "params = super().named_buffers(recurse=recurse)",
@@ -64,7 +72,9 @@ def generateNamedBuffersFunction():
     return f"\n{tab}" + f"\n{dtab}".join(named_buffers_function)
 
 
-def generateLoadStateDict():
+def generateLoadStateDict() -> str:
+    '''generates the load_state_dict method ensures that weights will be assigned to thier correct counterparts inside the partition
+    '''
     func = ['def load_state_dict(self, state):',
             'reverse_lookup = {v: k for k, v in self.lookup.items()}',
             'ts = chain(self.named_parameters(), self.named_buffers())',

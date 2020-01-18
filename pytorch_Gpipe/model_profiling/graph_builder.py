@@ -1,16 +1,19 @@
 import torch
 from torch import Tensor
 
-from ..utils import tensorDict, layerDict, OrderedSet
-from .control_flow_graph import NodeTypes, Node, Graph
+from ..utils import tensorDict, layerDict, OrderedSet, Tensors
+from .control_flow_graph import NodeTypes, Node, Graph, GraphNodes
 from .network_profiler import profileNetwork
 
 from collections import OrderedDict
 import re
 import string
+from typing import Callable, List, Dict, OrderedDict as OrderedDictType, Optional, Any, Tuple
+
+__all__ = ["build_graph"]
 
 
-def build_graph(model, sample_batch, kwargs, max_depth, basic_blocks, use_profiler=True, n_iter=10, weights=None, minimal=False) -> Graph:
+def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, max_depth: int = 1000, basic_blocks: Optional[Tuple[torch.nn.Module, ...]] = None, use_profiler: bool = True, n_iter: int = 10, weights: Optional[Dict[str, Any]] = None, minimal: bool = False) -> Graph:
     if weights is None:
         weights = dict()
     if kwargs is None:
@@ -31,8 +34,8 @@ def build_graph(model, sample_batch, kwargs, max_depth, basic_blocks, use_profil
                                  basic_blocks=basic_blocks)
 
     tensors = tensorDict(model)
-    profiled_layers = layerDict(
-        model, depth=max_depth, basic_blocks=basic_blocks)
+    profiled_layers = list(layerDict(model, depth=max_depth,
+                                     basic_blocks=basic_blocks).keys())
     new_to_old = translate_scopes(profiled_layers)
     partials = partial_scopes(profiled_layers)
 
@@ -42,25 +45,26 @@ def build_graph(model, sample_batch, kwargs, max_depth, basic_blocks, use_profil
     for k, t in kwargs.items():
         tensors[k] = t
 
+    # perform the trace
     old_value = torch._C._jit_get_inline_everything_mode()
     torch._C._jit_set_inline_everything_mode(not minimal)
     trace_graph = torch.jit.trace(model, sample_batch, check_trace=False).graph
     torch._C._jit_set_inline_everything_mode(old_value)
 
+    # build the graph from trace
     nodes = add_nodes(trace_graph, new_to_old, partials, tensors)
+
     outputs = output_scopes(trace_graph, nodes)
 
+    # optimization passes
     nodes = remove_useless_clone(nodes)
     nodes = remove_empty_view(nodes)
-
     nodes = optimize_graph(nodes, profiled_layers)
-
     nodes = _remove_nodes_that_go_nowhere(nodes, outputs)
-
     nodes = remove_useless_node_inputs(nodes)
+    nodes = remove_tensor_int_tensor(nodes)
 
     nodes = add_missing_types(nodes)
-    nodes = remove_tensor_int_tensor(nodes)
 
     for node in nodes.values():
         node.weight = weights.get(node.scope, node.weight)
@@ -70,12 +74,11 @@ def build_graph(model, sample_batch, kwargs, max_depth, basic_blocks, use_profil
         node.idx = idx
         tmp[idx] = node
     nodes = tmp
-    graph = Graph(nodes, outputs, max_depth, basic_blocks)
 
-    return graph
+    return Graph(nodes, outputs, max_depth, basic_blocks)
 
 
-def add_nodes(trace_graph, new_to_old, partials, tensors):
+def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials: Dict[str, str], tensors: OrderedDictType[str, Tensor]) -> GraphNodes:
     items = list(tensors.items())
     for k, t in items:
         partial_key = k[:k.rfind("/")] + "/" + k[k.rfind("["):]
@@ -202,7 +205,7 @@ def add_nodes(trace_graph, new_to_old, partials, tensors):
     return nodes
 
 
-def translate_scopes(old_scopes):
+def translate_scopes(old_scopes: List[str]) -> Dict[str, str]:
     translation = dict()
 
     pattern = r'\[.*?\]'
@@ -216,11 +219,11 @@ def translate_scopes(old_scopes):
     return translation
 
 
-def extract_new_scope(new_scope):
+def extract_new_scope(new_scope: str) -> str:
     return new_scope[new_scope.rfind("/__module") + 1:]
 
 
-def partial_scopes(old_scopes):
+def partial_scopes(old_scopes: List[str]) -> Dict[str, str]:
     partials = dict()
     for scope in old_scopes:
         old_partial = ""
@@ -237,7 +240,7 @@ def partial_scopes(old_scopes):
     return partials
 
 
-def longest_prefix(strings, scope):
+def longest_prefix(strings: List[str], scope: str) -> str:
     most_specific = ""
     for s in strings:
         if scope.startswith(s) and len(s) > len(most_specific):
@@ -246,11 +249,11 @@ def longest_prefix(strings, scope):
     return strings[most_specific] if most_specific != "" else ""
 
 
-def output_scopes(trace_graph, nodes):
+def output_scopes(trace_graph, nodes: GraphNodes) -> OrderedSet[str]:
     return OrderedSet(nodes[output.unique()].scope for output in trace_graph.outputs())
 
 
-def remove_tensor_int_tensor(nodes):
+def remove_tensor_int_tensor(nodes) -> GraphNodes:
     def predicate(node):
         if 'prim::ImplicitTensorToNum' in node.scope or 'aten::Int' in node.scope or 'prim::NumToTensor' in node.scope:
             for n in node.in_nodes:
@@ -261,13 +264,13 @@ def remove_tensor_int_tensor(nodes):
     return _remove_nodes(nodes, predicate)
 
 
-def remove_useless_clone(nodes):
+def remove_useless_clone(nodes: GraphNodes) -> GraphNodes:
     def predicate(n: Node):
         return ('aten::clone' in n.scope) and (len(n.out_nodes) == 0)
     return _remove_nodes(nodes, predicate)
 
 
-def remove_empty_view(nodes):
+def remove_empty_view(nodes: GraphNodes) -> GraphNodes:
     def predicate(n: Node):
         if ('aten::view' in n.scope):
             if len(n.in_nodes) < 2:
@@ -278,7 +281,7 @@ def remove_empty_view(nodes):
     return _remove_nodes(nodes, predicate)
 
 
-def remove_useless_node_inputs(nodes):
+def remove_useless_node_inputs(nodes: GraphNodes) -> GraphNodes:
     # stupid fix where for some odd reason arithmetic ops have a third input with value 1
     # and Tensor.contiguous has a second input with value 0
     # and torch.arange having a zero input
@@ -299,7 +302,7 @@ def remove_useless_node_inputs(nodes):
     return _remove_nodes(nodes, pred)
 
 
-def _remove_nodes_that_go_nowhere(nodes, scopes):
+def _remove_nodes_that_go_nowhere(nodes: GraphNodes, scopes: OrderedSet[str]) -> GraphNodes:
     '''remove nodes without out edges that are not outputs of the model'''
     # necessary because the trace can contain such nodes for certain ops
     # those nodes provide no additional info to the graph
@@ -318,7 +321,7 @@ def _remove_nodes_that_go_nowhere(nodes, scopes):
     return _remove_nodes(nodes, going_nowhere)
 
 
-def _remove_nodes(nodes, condition):
+def _remove_nodes(nodes: GraphNodes, condition: Callable[[Node], bool]) -> GraphNodes:
     while True:
         changed = False
         optimized_graph = OrderedDict()
@@ -342,11 +345,11 @@ def _remove_nodes(nodes, condition):
     return nodes
 
 
-def opMatch(scope, op_name):
-    return re.search(f"{op_name}[{string.digits}]", scope)
+def opMatch(scope: str, op_name: str) -> bool:
+    return re.search(f"{op_name}[{string.digits}]", scope) != None
 
 
-def optimize_graph(nodes, layer_scopes):
+def optimize_graph(nodes: GraphNodes, layer_scopes: List[str]) -> GraphNodes:
     '''
     this module takes the raw Graph and removes/merges nodes in order to get the requested graph.
     this method is called as part of graph_builder method
@@ -356,7 +359,7 @@ def optimize_graph(nodes, layer_scopes):
     return nodes
 
 
-def _combine_OP_nodes_under_the_same_scope(nodes: OrderedDict) -> OrderedDict:
+def _combine_OP_nodes_under_the_same_scope(nodes: GraphNodes) -> GraphNodes:
     # optimization that reduces number of nodes in the graph
     # combine nodes that have a commom scope we do this because\n
     # if nodes have the same scopeName than they were profiled together
@@ -372,10 +375,8 @@ def _combine_OP_nodes_under_the_same_scope(nodes: OrderedDict) -> OrderedDict:
         else:
             # add edges create the super set of all edeges in the scope
             scope_representative[node.scope].add_in_node(node.in_nodes)
-            scope_representative[node.scope].inputs.update(node.inputs)
 
             scope_representative[node.scope].add_out_node(node.out_nodes)
-            scope_representative[node.scope].outputs.update(node.outputs)
 
     for node in optimized_graph.values():
         # get the sets of all incoming/outgoing scopes
@@ -386,11 +387,6 @@ def _combine_OP_nodes_under_the_same_scope(nodes: OrderedDict) -> OrderedDict:
         outgoing_scopes = OrderedSet(n.scope for n in node.out_nodes
                                      if n.scope != node.scope)
 
-        inputs = OrderedSet(layer_in for layer_in in node.inputs
-                            if layer_in.scope != node.scope)
-        outputs = {layer_out for layer_out in node.outputs
-                   if node.scope not in layer_out.out_scopes}
-
         out_nodes = OrderedSet(scope_representative[out_node]
                                for out_node in outgoing_scopes)
         in_nodes = OrderedSet(scope_representative[in_node]
@@ -398,20 +394,18 @@ def _combine_OP_nodes_under_the_same_scope(nodes: OrderedDict) -> OrderedDict:
 
         node.in_nodes = in_nodes
         node.out_nodes = out_nodes
-        node.inputs = inputs
-        node.outputs = outputs
 
     return optimized_graph
 
 
-def _combine_params_and_buffers_into_OP_nodes(nodes: OrderedDict, layer_scopes) -> OrderedDict:
+def _combine_params_and_buffers_into_OP_nodes(nodes: GraphNodes, layer_scopes: List[str]) -> GraphNodes:
     def is_buffer_or_param(n):
         return n.type == NodeTypes.BUFF_PARAM and any(n.scope.startswith(layer_scope) for layer_scope in layer_scopes)
 
     return _remove_nodes(nodes, is_buffer_or_param)
 
 
-def add_missing_types(nodes):
+def add_missing_types(nodes: GraphNodes) -> GraphNodes:
     for node in nodes.values():
         if node.valueType() is type(None):
             if 'aten::size' in node.scope or 'aten::Int' in node.scope:

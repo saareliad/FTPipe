@@ -23,6 +23,8 @@ __all__ = ['generateForwardFunction']
 
 def generateForwardFunction(partition: List[Node], model_outputs: List[str],
                             scope_to_class_field: Dict[str, str], verbose=False) -> Tuple[List[str], Dict[str, OrderedSet[str]]]:
+    '''the gateway to generate a forward function of a partition
+    '''
     # function arguments are x0...xn
     # function arguments correspond to sorted input scopes
     # functions outputs are o0,o1,... sorted by their scopes
@@ -74,6 +76,8 @@ def generateDeclaration(input_ids: List[str], scope_to_class_field: Dict[str, st
 
 def generateBody(output_scopes: OrderedSet[str], partition: List[Node],
                  scope_to_class_field: Dict[str, str], ready_expressions: Dict[str, str], verbose=False) -> str:
+    '''generates the forwad function body and return statement
+    '''
     body = generateStatements(partition, scope_to_class_field,
                               ready_expressions, verbose=verbose)
     return_statement = generateReturnStatement(output_scopes,
@@ -192,10 +196,11 @@ def generateLayerActivationExpression(scope_to_class_field: Dict[str, str],
 
 def generatePrimitiveExpression(ready_expressions: Dict[str, str], expression_len: Dict[str, int], node: Node,
                                 arg_gen: Iterator[str], verbose=False) -> str:
-
+    '''gateway to all pythonPrimitive ops
+    '''
     if 'ListConstruct' in node.scope or 'TupleConstruct' in node.scope:
         return generateListOrTupleExpression(ready_expressions, expression_len, node, arg_gen, verbose=verbose)
-    elif 'ListUnpack' in node.scope:
+    elif 'ListUnpack' in node.scope or 'TupleUnpack' in node.scope:
         return generateUnpackExpression(ready_expressions, expression_len, node, arg_gen, verbose=verbose)
     elif 'NumToTensor' in node.scope or 'ImplicitTensorToNum' in node.scope:
         assert len(
@@ -237,6 +242,8 @@ def generateListOrTupleExpression(ready_expressions: Dict[str, str], expression_
 
 def generateUnpackExpression(ready_expressions: Dict[str, str], expression_len: Dict[str, int], node: Node,
                              arg_gen: Iterator[str], verbose=False) -> str:
+    '''generates a list/tuple unpack expression T[idx]
+    '''
     father = node.in_nodes[0]
     father_exp = ready_expressions[father.scope]
     idx = father.out_nodes.indexOf(node)
@@ -352,6 +359,8 @@ def specialCases(ready_expressions: Dict[str, str], node: Node, operand_scopes: 
 
 
 def getAtenFunctionNameAndScope(scope: str) -> Tuple[str, str]:
+    ''' determines the name and namespace of an OP Node
+    '''
     func_name = scope.split('aten::')[1].rstrip(string.digits)
     # determine namespace
     if hasattr(torch, func_name):
@@ -377,6 +386,9 @@ def getAtenFunctionNameAndScope(scope: str) -> Tuple[str, str]:
 
 
 def generateToArgs(ready_expressions: Dict[str, str], node: Node,) -> str:
+    '''generates args of a Tensor.to expression
+    needs special handling because we need to override the device used with the partition's device
+    '''
     tensor_id = ready_expressions[node.in_nodes[0].scope]
     args = f"{tensor_id}, "
     if len(node.in_nodes) == 4:
@@ -405,6 +417,8 @@ def generateToArgs(ready_expressions: Dict[str, str], node: Node,) -> str:
 
 
 def inputsNotReady(node: Node, ready_expressions: Dict[str, str]) -> bool:
+    '''a predicate to check wether we have not generated code for any of this nodes dependencies
+    '''
     return any(operand.scope not in ready_expressions for operand in node.in_nodes)
 
 
@@ -459,5 +473,7 @@ def sortedPartitionOutputs(partition: List[Node], model_outputs: List[str]) -> O
 
 
 def sortNodes(nodes: List[Node]) -> List[Node]:
+    '''sorts Node by idx in ascending order
+    '''
     nodes = list(sorted(nodes, key=lambda node: node.idx))
     return nodes

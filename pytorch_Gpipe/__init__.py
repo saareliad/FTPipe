@@ -5,7 +5,7 @@ import torch.nn as nn
 
 from .model_partitioning import partition
 from .module_generation import generatePartitionModules
-from .model_profiling import Graph, graph_builder, profileNetwork, build_graph
+from .model_profiling import Graph, profileNetwork, build_graph
 from .pipeline import Pipeline
 from .utils import Devices, Tensors
 
@@ -54,13 +54,13 @@ def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] =
     '''
     def by_time(w):
         if hasattr(w, 'forward_time') and hasattr(w, 'backward_time'):
-            return max(int(100 * (w.forward_time + w.backward_time) / 2), 1)
+            return max(int(2 * (w.forward_time + w.backward_time) / 2), 1)
         return 0
 
     def by_memory(w):
         if hasattr(w, 'cuda_memory_forward') and hasattr(w, 'cuda_memory_backward'):
-            return max(int(100 * (w.cuda_memory_forward + w.cuda_memory_backward) / 2), 1)
-        return 1
+            return max(int(2 * (w.cuda_memory_forward + w.cuda_memory_backward) / 2), 1)
+        return 0
 
     if weighting_function != None:
         w_func = weighting_function

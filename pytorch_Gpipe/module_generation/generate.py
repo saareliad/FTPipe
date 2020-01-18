@@ -9,7 +9,7 @@ import string
 from .forward import generateForwardFunction
 from .constructor import generateConstructor
 from .misc import generateMiscMethods
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 from collections import OrderedDict
 import inspect
 import os
@@ -19,13 +19,25 @@ tab = '    '
 dtab = tab + tab
 
 
-def generatePartitionModules(graph: Graph, model: Module, verbose=False, output_file=None):
+def generatePartitionModules(graph: Graph, model: Module, verbose: bool = False, output_file: Optional[str] = None):
+    '''generates the code for the partitioned model. the partitions can be consumed using the createConfig method in the generated code
+
+    Parameters:
+    graph:
+        the partitoned graph of the module
+    module:
+        the module itself
+    verbose:
+        wether to generate each statement of the forward function in a seperate line (usefull for debugging)
+    output_file:
+        optional path to the generated code. if None uses generated_{model_name}{numberOfPatitions}.py
+    '''
     layer_classes = {scope: type(layer) for layer, scope, _
                      in traverse_model(model, depth=graph.depth, basic_blocks=graph.basic_blocks)}
     is_param_dict = {scope: t.requires_grad for t,
                      scope in traverse_params_buffs(model)}
 
-    parts = groupByPartition(graph.nodes.values())
+    parts = groupByPartition(graph.nodes)
 
     lines = generateImports(layer_classes)
     lines.append(connections(graph))
@@ -69,6 +81,8 @@ def generatePartitionModules(graph: Graph, model: Module, verbose=False, output_
 
 
 def groupByPartition(nodes: List[Node]) -> List[Tuple[int, List[Node]]]:
+    '''groups nodes to their respective partitions for OP Nodes ensure we recognize thier namespace
+    '''
     # groups layers and their respective nodes according to their partition
     idxs = {n.part for n in nodes}
     parts = OrderedDict()
@@ -95,7 +109,6 @@ def groupByPartition(nodes: List[Node]) -> List[Tuple[int, List[Node]]]:
         elif n.type == NodeTypes.PYTHON_PRIMITIVE:
             scope = n.scope
             assert 'prim::' in scope, f'primitive does not have prim:: prefix {scope}'
-            func_name = scope.split('prim::')[1].rstrip(string.digits)
             parts[n.part].append(n)
         else:
             assert n.type == NodeTypes.CONSTANT, f'got type {n.type}'
@@ -111,7 +124,7 @@ def generateImports(layer_classes: Dict[str, Module]) -> List[str]:
     imports = 'import torch\nfrom torch import Tensor\nimport torch.nn as nn\nimport torch.nn.functional as F\n'
     imports += 'from itertools import chain\n'
     imports += 'import operator\n'
-    imports += 'from typing import Optional, Tuple, Iterator, Iterable\n'
+    imports += 'from typing import Optional, Tuple, Iterator, Iterable,OrderedDict,Dict\n'
     imports += 'import collections'
     imports += '\n'
     unique_classes = set(layer_classes.values())
@@ -124,7 +137,10 @@ def generateImports(layer_classes: Dict[str, Module]) -> List[str]:
     return imports.splitlines() + [disclaimer]
 
 
-def generateHelpFunctions():
+def generateHelpFunctions() -> str:
+    '''generates traverse_model, layerDict, traverse_params_buffs, tensorDict functions
+    to be used in the CreateConfig function 
+    '''
     lines = [inspect.getsource(f) for f in
              [traverse_model, layerDict, traverse_params_buffs, tensorDict]]
 
@@ -132,6 +148,8 @@ def generateHelpFunctions():
 
 
 def getFunctionName(scope: str) -> str:
+    '''returns the name of a function belonging to the aten/prim namespaces
+    '''
     if 'aten::' in scope:
         sep = 'aten::'
     else:
@@ -141,7 +159,9 @@ def getFunctionName(scope: str) -> str:
     return scope.split(sep)[1].rstrip(string.digits)
 
 
-def createConfig(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, Dict[str, List[str]]], basic_blocks: Dict[str, Module]):
+def createConfig(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, Dict[str, List[str]]], basic_blocks: Dict[str, Module]) -> str:
+    '''generates the createConfig method which given a model creates his partitioned counterpart
+    '''
     model_buffers = {scope: t for t, scope in traverse_params_buffs(model)
                      if not t.requires_grad}
     model_parameteres = {scope: t for t, scope in traverse_params_buffs(model)
@@ -206,12 +226,15 @@ def createConfig(graph: Graph, partitions: List[List[Node]], model: Module, ios:
     return f"\n{tab}".join(lines) + "\n"
 
 
-def connections(graph: Graph):
+def connections(graph: Graph) -> str:
+    '''creates a diagram that illustrates the connectins between partitions,
+    to be embeded in the generated file
+    '''
     num_partitions = graph.num_partitions
     adj_matrix = [{"inputs": set(), "outputs": set()}
                   for i in range(num_partitions + 2)]
 
-    for node in graph.nodes.values():
+    for node in graph.nodes:
         if node.type is NodeTypes.IN:
             for n in node.out_nodes:
                 adj_matrix[n.part + 1]["inputs"].add(node.scope)

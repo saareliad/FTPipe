@@ -37,7 +37,9 @@ def profileNetwork(net: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict]
     max_depth:
         determins how far the profiler will go in the model tree
 
-
+    n_iter:
+        number of iteration to use for profiling
+        the profiling will be averaged accross all iterations
 
     '''
     if kwargs is None:
@@ -60,7 +62,7 @@ def profileNetwork(net: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict]
     # gather forward and backward execution times
     backward_times = [layer.backward_time / n_iter
                       for layer in layers_dict.values()]
-    forward_times = [layer.forward_time/n_iter
+    forward_times = [layer.forward_time / n_iter
                      for layer in layers_dict.values()]
 
     # gather input and output sizes
@@ -197,7 +199,7 @@ class Wrapper(nn.Module):
         # reduce outputs to calculate dummy loss
         loss = torch.zeros(1, requires_grad=True, device=device)
         for out in flatten(outputs):
-            loss = loss+out.norm()
+            loss = loss + out.norm()
 
         # measure backward execution time
         backward_time, _, self.backward_cuda_mem = self._time_op(

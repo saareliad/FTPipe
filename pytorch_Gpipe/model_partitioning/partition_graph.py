@@ -1,7 +1,7 @@
 
-from typing import Any, Callable, Optional
+from typing import Callable, Optional, Dict, Union
 
-from ..model_profiling import Graph
+from ..model_profiling import Graph, Profile
 from .process_partition import post_process_partition
 import networkx as nx
 import nxmetis
@@ -9,16 +9,9 @@ import nxmetis
 __all__ = ["partiton_graph"]
 
 
-def default_weighting_function(w):
-    if hasattr(w, 'forward_time') and hasattr(w, 'backward_time'):
-        return max(int(100 * (w.forward_time + w.backward_time) / 2), 1)
-    return 1
-
-
-def partiton_graph(graph: Graph, num_partitions: int, weighting_function: Optional[Callable[[Any], int]] = None, **METIS_opts):
-    wfunc = weighting_function if weighting_function != None else default_weighting_function
-
-    weights = {node.idx: wfunc(node.weight) for node in graph.nodes.values()}
+def partiton_graph(graph: Graph, num_partitions: int, weighting_function: Callable[[Union[Profile, int]], int], **METIS_opts: Dict) -> Graph:
+    weights = {node.idx: weighting_function(node.weight)
+               for node in graph.nodes}
 
     G = graph.asNetworkx()
     nx.set_node_attributes(G, weights, 'weight')
@@ -29,7 +22,7 @@ def partiton_graph(graph: Graph, num_partitions: int, weighting_function: Option
 
     post_process_partition(graph, parts)
 
-    actual_nparts = len({n.part for n in graph.nodes.values()})
+    actual_nparts = len({n.part for n in graph.nodes})
 
     if(actual_nparts < num_partitions):
         print(
