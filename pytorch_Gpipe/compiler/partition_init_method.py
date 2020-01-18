@@ -6,8 +6,8 @@ tab = '    '
 dtab = tab + tab
 
 
-def generateConstructor(class_name: str, full_names: List[str], layer_classes: Dict[str, Module],
-                        is_param_dict: Dict[str, bool], buff_param_names: Set[str]) -> Tuple[str, Dict[str, str]]:
+def generate_init_method(class_name: str, full_names: List[str], layer_classes: Dict[str, Module],
+                         is_param_dict: Dict[str, bool], buff_param_names: Set[str]) -> Tuple[str, Dict[str, str]]:
     '''creates the partition constructor and the mapping between layers and field ids
     '''
     class_decl = f"class {class_name}(nn.Module):"

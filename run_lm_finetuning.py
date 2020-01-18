@@ -206,7 +206,7 @@ def create_buffer_configs(xs, partitions_config):
         the input for the model
 
     partitions_config:
-        the configuration we generated, aka the output of createConfig()
+        the configuration we generated, aka the output of create_partition_configuration()
 
     Return:
     -------

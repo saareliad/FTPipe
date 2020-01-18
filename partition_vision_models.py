@@ -10,8 +10,10 @@ _WIDE_RESNETS = dict(
     wrn_16x4=dict(depth=16, num_classes=10, widen_factor=4,
                   drop_rate=0.0),  # FOR BACKWARD COMPATABILITY
     wrn_16x4_c10=dict(depth=16, num_classes=10, widen_factor=4, drop_rate=0.0),
-    wrn_16x4_c100=dict(depth=16, num_classes=100, widen_factor=4, drop_rate=0.0),
-    wrn_28x10_c10_dr03=dict(depth=28, num_classes=10,widen_factor=10, drop_rate=0.3),
+    wrn_16x4_c100=dict(depth=16, num_classes=100,
+                       widen_factor=4, drop_rate=0.0),
+    wrn_28x10_c10_dr03=dict(depth=28, num_classes=10,
+                            widen_factor=10, drop_rate=0.3),
     wrn_28x10_c10=dict(depth=28, num_classes=10, widen_factor=10, drop_rate=0),
     wrn_28x10_c100_dr03=dict(depth=28, num_classes=100,
                              widen_factor=10, drop_rate=0.3),
@@ -66,8 +68,8 @@ def test_gpipe_stuff():
     # split dim the dim to split inputs and gradients across
     # DEBUG switches between running workers on CPU or GPUS
 
-    partition_config = createConfig(model, partitions_only=False,
-                                    DEBUG=GET_PARTITIONS_ON_CPU)
+    partition_config = create_partition_configuration(model, partitions_only=False,
+                                                      DEBUG=GET_PARTITIONS_ON_CPU)
     output_device = 'cpu' if GET_PARTITIONS_ON_CPU else 'cuda'
 
     from pytorch_Gpipe import Pipeline
@@ -152,11 +154,11 @@ if __name__ == "__main__":
     graph.save(args.output_file, ".")
 
     generated = importlib.import_module(args.output_file)
-    createConfig = generated.createConfig
+    create_partition_configuration = generated.create_partition_configuration
 
     if GET_PARTITIONS_ON_CPU:
         sample = sample.to('cpu')
-    config = createConfig(
+    config = create_partition_configuration(
         model, partitions_only=False, DEBUG=GET_PARTITIONS_ON_CPU)
 
     _ = run_partitions(sample, config)

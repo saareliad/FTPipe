@@ -1,16 +1,16 @@
-from typing import Any, Callable, List, Dict, Optional
+from typing import Any, Callable, List, Dict, Optional, Union
 
 import torch
 import torch.nn as nn
 
 from .model_partitioning import partition
-from .module_generation import generatePartitionModules
-from .model_profiling import Graph, profileNetwork, build_graph
+from .compiler import compile_partitoned_model
+from .model_profiling import Graph, profile_network, build_graph, Profile
 from .pipeline import Pipeline
 from .utils import Devices, Tensors
 
-__all__ = ['pipe_model', 'partition_with_profiler',
-           'partition', 'Pipeline', 'build_graph']
+__all__ = ['pipe_model', 'profile_network',
+           'build_graph', 'partition_with_profiler', 'partition', 'Pipeline']
 
 
 # TODO pytorch jit trace / get_trace_graph do not support kwargs
@@ -18,11 +18,11 @@ __all__ = ['pipe_model', 'partition_with_profiler',
 
 def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, n_iter=10, nparts: int = 4,
                depth=1000, basic_blocks: Optional[List[nn.Module]] = None,
-               partition_by_memory: bool = False, weighting_function=None, output_file: str = None, DEBUG=False, **METIS_opt) -> Graph:
+               partition_by_memory: bool = False, weighting_function: Optional[Callable[[Union[Profile, int]], int]] = None, output_file: str = None, DEBUG=False, **METIS_opt) -> Graph:
     '''attemps to partition a model to given number of parts using our profiler
        this will produce a python file with the partition config
 
-    the generated python file exposes a method named {modelClass}Pipeline that creates the pipeline
+    the generated python file exposes a method named create_partition_configuration which can be consumed by Pipeline or by the user directly
     for this specific model config
 
     Parameters:
@@ -72,7 +72,7 @@ def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] =
     graph = partition_with_profiler(model, sample_batch, kwargs=kwargs, max_depth=depth, n_iter=n_iter, nparts=nparts,
                                     basic_blocks=basic_blocks, weighting_function=w_func, METIS_opt=METIS_opt)
 
-    generatePartitionModules(graph, model,
+    compile_partitoned_model(graph, model,
                              output_file=output_file, verbose=DEBUG)
 
     return graph

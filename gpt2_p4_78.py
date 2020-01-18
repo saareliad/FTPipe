@@ -21,7 +21,7 @@ from torch.nn.modules.normalization import LayerNorm
 # partition 3 {'inputs': {2, 'input1'}, 'outputs': {'output1', 'output0'}}
 # model outputs {0, 1, 2, 3}
 
-def createConfig(model,DEBUG=False,partitions_only=False):
+def create_partition_configuration(model,DEBUG=False,partitions_only=False):
     layer_dict = layerDict(model,depth=3)
     tensor_dict = tensorDict(model)
     

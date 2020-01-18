@@ -165,11 +165,11 @@ def partition_model(args, train_dataset, model, tokenizer):
     graph.save(args.output_file, ".")
 
     generated = importlib.import_module(args.output_file)
-    createConfig = generated.createConfig
+    create_partition_configuration = generated.create_partition_configuration
 
     GET_PARTITIONS_ON_CPU = True
 
-    config = createConfig(model, partitions_only=False,
+    config = create_partition_configuration(model, partitions_only=False,
                           DEBUG=GET_PARTITIONS_ON_CPU)
 
     # out = run_partitions(sample, config)

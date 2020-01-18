@@ -7,13 +7,13 @@ import torch.nn as nn
 
 from ..utils import Tensors, _detach_inputs, _get_size, get_device, traverse_model, flatten
 
-__all__ = ['profileNetwork', 'Profile']
+__all__ = ['profile_network', 'Profile']
 
 Profile = namedtuple('Profile',
                      'forward_time backward_time cuda_memory_forward cuda_memory_backward layer_size input_size output_size')
 
 
-def profileNetwork(net: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, basic_blocks: Optional[List[nn.Module]] = None, max_depth=100, n_iter=10) -> Dict[str, Profile]:
+def profile_network(net: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, basic_blocks: Optional[List[nn.Module]] = None, max_depth=100, n_iter=10) -> Dict[str, Profile]:
     '''
     profiles a network's computation time(forward/backward) and memory consumption
     returns a dictionary from layer_scope to Profile

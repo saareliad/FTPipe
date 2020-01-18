@@ -18,10 +18,10 @@ dtab = tab + tab
 SupportedFunctions = parse_functions()
 
 
-__all__ = ['generateForwardFunction']
+__all__ = ['generate_forward_method']
 
 
-def generateForwardFunction(partition: List[Node], model_outputs: List[str],
+def generate_forward_method(partition: List[Node], model_outputs: List[str],
                             scope_to_class_field: Dict[str, str], verbose=False) -> Tuple[List[str], Dict[str, OrderedSet[str]]]:
     '''the gateway to generate a forward function of a partition
     '''

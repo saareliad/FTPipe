@@ -6,9 +6,9 @@ import torch.nn.functional as F
 from pytorch_Gpipe.model_profiling.control_flow_graph import Node, NodeTypes, Graph
 from pytorch_Gpipe.utils import traverse_model, traverse_params_buffs, layerDict, tensorDict
 import string
-from .forward import generateForwardFunction
-from .constructor import generateConstructor
-from .misc import generateMiscMethods
+from .partition_forward_method import generate_forward_method
+from .partition_init_method import generate_init_method
+from .state_methods import generate_state_methods
 from typing import List, Tuple, Dict, Optional
 from collections import OrderedDict
 import inspect
@@ -19,8 +19,8 @@ tab = '    '
 dtab = tab + tab
 
 
-def generatePartitionModules(graph: Graph, model: Module, verbose: bool = False, output_file: Optional[str] = None):
-    '''generates the code for the partitioned model. the partitions can be consumed using the createConfig method in the generated code
+def compile_partitoned_model(graph: Graph, model: Module, verbose: bool = False, output_file: Optional[str] = None):
+    '''generates the code for the partitioned model. the partitions can be consumed using the create_partition_configuration method in the generated code
 
     Parameters:
     graph:
@@ -51,18 +51,19 @@ def generatePartitionModules(graph: Graph, model: Module, verbose: bool = False,
         layer_names = [n.scope for n in part if n.type == NodeTypes.LAYER]
         buff_param_names = {n.scope for n in part
                             if n.type == NodeTypes.BUFF_PARAM}
-        class_decl, scope_to_class_field = generateConstructor(class_name, layer_names,
-                                                               layer_classes, is_param_dict,
-                                                               buff_param_names)
-        misc_functions = generateMiscMethods()
-        forward_function, io = generateForwardFunction(part, graph.output_scopes, scope_to_class_field,
+        class_decl, scope_to_class_field = generate_init_method(class_name, layer_names,
+                                                                layer_classes, is_param_dict,
+                                                                buff_param_names)
+        state_methods_functions = generate_state_methods()
+        forward_function, io = generate_forward_method(part, graph.output_scopes, scope_to_class_field,
                                                        verbose=verbose)
         partitions_code.append(class_decl)
         partitions_code.extend(forward_function)
-        partitions_code.append(misc_functions)
+        partitions_code.append(state_methods_functions)
         ios[idx] = io
 
-    lines.append(createConfig(graph, parts, model, ios, layer_classes))
+    lines.append(create_partition_configuration(
+        graph, parts, model, ios, layer_classes))
     lines += partitions_code
     lines.append(generateHelpFunctions())
 
@@ -139,7 +140,7 @@ def generateImports(layer_classes: Dict[str, Module]) -> List[str]:
 
 def generateHelpFunctions() -> str:
     '''generates traverse_model, layerDict, traverse_params_buffs, tensorDict functions
-    to be used in the CreateConfig function 
+    to be used in the create_partition_configuration function 
     '''
     lines = [inspect.getsource(f) for f in
              [traverse_model, layerDict, traverse_params_buffs, tensorDict]]
@@ -159,8 +160,8 @@ def getFunctionName(scope: str) -> str:
     return scope.split(sep)[1].rstrip(string.digits)
 
 
-def createConfig(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, Dict[str, List[str]]], basic_blocks: Dict[str, Module]) -> str:
-    '''generates the createConfig method which given a model creates his partitioned counterpart
+def create_partition_configuration(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, Dict[str, List[str]]], basic_blocks: Dict[str, Module]) -> str:
+    '''generates the create_partition_configuration method which given a model creates his partitioned counterpart
     '''
     model_buffers = {scope: t for t, scope in traverse_params_buffs(model)
                      if not t.requires_grad}
@@ -178,7 +179,7 @@ def createConfig(graph: Graph, partitions: List[List[Node]], model: Module, ios:
 
     # function header
     lines = [
-        f"def createConfig(model,DEBUG=False,partitions_only=False):",
+        f"def create_partition_configuration(model,DEBUG=False,partitions_only=False):",
         f"layer_dict = layerDict(model,depth={graph.depth},basic_blocks=({basic_blocks}))",
         "tensor_dict = tensorDict(model)",
         f"\n{tab}# now constructing the partitions in order"

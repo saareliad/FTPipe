@@ -3,7 +3,7 @@ from torch import Tensor
 
 from ..utils import tensorDict, layerDict, OrderedSet, Tensors
 from .control_flow_graph import NodeTypes, Node, Graph, GraphNodes
-from .network_profiler import profileNetwork
+from .network_profiler import profile_network
 
 from collections import OrderedDict
 import re
@@ -30,8 +30,8 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
         basic_blocks = tuple(basic_blocks)
 
     if use_profiler:
-        weights = profileNetwork(model, sample_batch, kwargs=kwargs, n_iter=n_iter, max_depth=max_depth,
-                                 basic_blocks=basic_blocks)
+        weights = profile_network(model, sample_batch, kwargs=kwargs, n_iter=n_iter, max_depth=max_depth,
+                                  basic_blocks=basic_blocks)
 
     tensors = tensorDict(model)
     profiled_layers = list(layerDict(model, depth=max_depth,

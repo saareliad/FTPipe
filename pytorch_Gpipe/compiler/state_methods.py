@@ -3,7 +3,7 @@ tab = '    '
 dtab = tab + tab
 
 
-def generateMiscMethods() -> str:
+def generate_state_methods() -> str:
     ''' generate partition methods state_dict() load_state_dict() named_buffers() and named_parameters()
         our custom implementation gurrentees 100% compatibility with the original model same names will be used
     '''
