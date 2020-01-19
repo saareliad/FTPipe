@@ -3,6 +3,9 @@ from typing import Any, Union, List, Tuple, Optional, OrderedDict, Type
 from ..utils import OrderedSet
 from .network_profiler import Profile
 from torch.nn import Module
+import pickle
+import collections
+
 # TODO support list and tuple layer outputs
 
 
@@ -51,10 +54,10 @@ class Node():
         self.scope = scope
         self.idx = idx
         self.type = node_type
-        self.out_nodes = OrderedSet()
+        self.out_nodes: OrderedSet[Node] = OrderedSet()
         self.weight = weight
         self.part = part
-        self.in_nodes = incoming_nodes if isinstance(
+        self.in_nodes: OrderedSet[Node] = incoming_nodes if isinstance(
             incoming_nodes, OrderedSet) else OrderedSet()
         self.value = value
         self.value_type: Optional[Type] = None
@@ -288,7 +291,7 @@ class Graph():
         except ImportError as _:
             print("only works in python notebooks")
 
-    def save(self, file_name: str, directory: str, show_buffs_params: bool = True, show_weights: bool = False):
+    def save_as_pdf(self, file_name: str, directory: str, show_buffs_params: bool = True, show_weights: bool = False):
         '''
         save the rendered graph to a file
 
@@ -305,3 +308,73 @@ class Graph():
         if os.path.exists(f"{directory}/{file_name}.pdf"):
             os.remove(f"{directory}/{file_name}.pdf")
         dot.render(file_name, directory=directory, cleanup=True)
+
+    def serialize(self, path: str):
+        '''
+        serializes the graph to the given path
+        can later be restored using Graph.deserialize(path)
+
+        Parameters:
+        -----------
+        path:
+            the path to store the graph object file will be called path.graph
+        '''
+        path += ".graph"
+
+        graph_output_scopes = self.output_scopes
+        graph_depth = self.depth
+        graph_basic_blocks = self.basic_blocks
+        graph_nodes_data = []
+        for u in self.nodes:
+            in_nodes = [v.idx for v in u.in_nodes]
+            out_nodes = [v.idx for v in u.out_nodes]
+            node_data = {"idx": u.idx, "part": u.part, "weight": u.weight,
+                         "scope": u.scope, "type": u.type, "value": u.value,
+                         "value_type": u.value_type,
+                         "in_nodes": in_nodes, "out_nodes": out_nodes}
+            graph_nodes_data.append(node_data)
+
+        graph = {"depth": graph_depth,
+                 "output_scopes": graph_output_scopes,
+                 "basic_blocks": graph_basic_blocks,
+                 "nodes_data": graph_nodes_data}
+
+        pickle.dump(graph, open(path, "wb"))
+
+    @classmethod
+    def deserialize(cls, path: str) -> "Graph":
+        '''
+        deserializes the graph from the path returning a Graph object
+
+        Parameters:
+        -------------
+        path:
+        the path to where the graph is stored
+        '''
+        if not path.endswith(".graph"):
+            path += ".graph"
+
+        graph_data = pickle.load(open(path, "rb"))
+        nodes = collections.OrderedDict()
+
+        # load node data
+        for node in graph_data["nodes_data"]:
+            idx = node["idx"]
+            part = node["part"]
+            weight = node["weight"]
+            scope = node["scope"]
+            node_type = node["type"]
+            value = node["value"]
+            value_type = node["value_type"]
+            nodes[idx] = Node(scope, idx, node_type,
+                              weight=weight, part=part, value=value)
+            nodes[idx].value_type = value_type
+
+        # add edges
+        for node in graph_data["nodes_data"]:
+            nodes[node["idx"]].in_nodes = OrderedSet([nodes[u]
+                                                      for u in node["in_nodes"]])
+            nodes[node["idx"]].out_nodes = OrderedSet([nodes[u]
+                                                       for u in node["out_nodes"]])
+
+        return cls(nodes, graph_data["output_scopes"], graph_data["depth"], graph_data["basic_blocks"])

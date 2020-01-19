@@ -7,7 +7,7 @@ import inspect
 from itertools import chain
 import sys
 sys.path.append("../")
-from pytorch_Gpipe import graph_builder
+from pytorch_Gpipe import build_graph
 
 
 class Tuples(nn.Module):
@@ -72,8 +72,8 @@ def generate_graph(model, sample, save_jit_trace=False, output_path="jit_trace_b
         print("minimal trace des not have scopes")
 
     torch._C._jit_set_inline_everything_mode(True)
-    graph = graph_builder(model, sample, use_jit_trace=True)
-    graph.save("jit_traced", ".")
+    graph = build_graph(model, sample, use_jit_trace=True)
+    graph.save_as_pdf("jit_traced", ".")
 
 
 def clear_file(path):

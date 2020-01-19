@@ -69,7 +69,7 @@ def test_gpipe_stuff():
     # DEBUG switches between running workers on CPU or GPUS
 
     partition_config = create_pipeline_configuration(model, partitions_only=False,
-                                                      DEBUG=GET_PARTITIONS_ON_CPU)
+                                                     DEBUG=GET_PARTITIONS_ON_CPU)
     output_device = 'cpu' if GET_PARTITIONS_ON_CPU else 'cuda'
 
     from pytorch_Gpipe import Pipeline
@@ -151,7 +151,7 @@ if __name__ == "__main__":
     graph = pipe_model(model, sample, depth=args.depth, kwargs=None, nparts=args.n_partitions,
                        DEBUG=VERBOSE_PARTITIONING, output_file=args.output_file, weighting_function=by_time, n_iter=n_iter,
                        use_jit_trace=args.use_jit_trace)
-    graph.save(args.output_file, ".")
+    graph.save_as_pdf(args.output_file, ".")
 
     generated = importlib.import_module(args.output_file)
     create_pipeline_configuration = generated.create_pipeline_configuration
