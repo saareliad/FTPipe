@@ -1,6 +1,7 @@
 from enum import Enum
-from typing import Any, List, Tuple, Optional, OrderedDict, Type, Callable
+from typing import Any, List, Tuple, Optional, OrderedDict, Type, Callable, Union
 from ..utils import OrderedSet
+from .network_profiler import Profile
 from torch.nn import Module
 import pickle
 import collections
@@ -49,7 +50,7 @@ class Node():
      parallel edges in the same direction are not allowed
     '''
 
-    def __init__(self, scope: str, idx: int, node_type: NodeTypes, incoming_nodes: Optional[OrderedSet["Node"]] = None, weight: Node = 0, part: int = 0, value: Optional[Any] = None):
+    def __init__(self, scope: str, idx: int, node_type: NodeTypes, incoming_nodes: Optional[OrderedSet["Node"]] = None, weight: Union[Profile, int] = 0, part: int = 0, value: Optional[Any] = None):
         self.scope = scope
         self.idx = idx
         self.type = node_type
