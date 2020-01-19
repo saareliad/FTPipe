@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Union, List, Tuple, Optional, OrderedDict, Type
+from typing import Any, Union, List, Tuple, Optional, OrderedDict, Type, Dict, Callable
 from ..utils import OrderedSet
 from .network_profiler import Profile
 from torch.nn import Module
@@ -125,6 +125,8 @@ class Node():
 
 
 GraphNodes = OrderedDict[int, Node]
+NodeWeightFunction = Callable[[Union[Profile, int]], int]
+EdgeWeightFunction = Callable[[Tuple[Node, Node]], int]
 
 
 class Graph():
@@ -173,22 +175,52 @@ class Graph():
     def num_partitions(self) -> int:
         return len(set(node.part for node in self.nodes))
 
-    def asNetworkx(self):
+    def asNetworkx(self, directed: bool = False,
+                   node_weight_function: Optional[NodeWeightFunction] = None,
+                   edge_weight_function: Optional[EdgeWeightFunction] = None):
+        '''
+        convert the graph into a weighted networkx graph.\n
+        each node will have a scope,partition idx and weight associated with it.\n
+        each weight will be weighted\n
+        graph can be directed or undirected for a directed graph weighting functions can be given
+        if not then weight will be set to 1.\n
+
+        Parameters:
+        ------------
+        directed:
+            wether to return a directed graph default is undirected
+        node_weight_function:
+            an optional weight function for the nodes should be a function from Node to int
+            if not given a default weight of 1 will be given to all nodes
+        edge_weight_function:
+            an optional weight function for the edges should be a function (Node,Node) to int
+            if not given a default value of 1 will be given to all edges
+        '''
         try:
             import networkx as nx
         except ImportError as _:
             print("networkx package not found")
             return
 
-        # edge_list
-        edge_list = []
-        for u in self.nodes:
-            for v in u.in_nodes:
-                edge_list.append((u.idx, v.idx))
+        if directed:
+            G = nx.DiGraph()
+        else:
+            G = nx.Graph()
 
-        G = nx.from_edgelist(edge_list)
+        for u in self.nodes:
+            for v in u.out_nodes:
+                if edge_weight_function is None:
+                    w = 1
+                else:
+                    w = int(edge_weight_function(u, v))
+                G.add_edge(u.idx, v.idx, weight=w)
+
         for n in self.nodes:
-            G.nodes[n.idx]['weight'] = n.weight
+            if node_weight_function is None:
+                w = 1
+            else:
+                w = int(node_weight_function(n))
+            G.nodes[n.idx]['weight'] = w
             G.nodes[n.idx]['scope'] = n.scope
             G.nodes[n.idx]['part'] = n.part
 
@@ -293,10 +325,14 @@ class Graph():
 
     def save_as_pdf(self, file_name: str, directory: str, show_buffs_params: bool = True, show_weights: bool = False):
         '''
-        save the rendered graph to a file
+        save the rendered graph to a pdf file
 
         Parameters
         ----------
+        file_name:
+            the name of the saved file
+        directory:
+            directory to store the file in
         show_buffs_params:
             whether to display also buffers and parameters which are not encased in the graph scopes
         show_weights:

@@ -40,17 +40,26 @@ our high level API can be described as follows in a hierarchical order
 ```python
 def pipe_model(model, sample_batch, kwargs, n_iter, nparts,
                depth, basic_blocks,partition_by_memory, 
-               weighting_function, output_file, DEBUG, **METIS_opt)
+               node_weight_function,edge_weight_function,
+               output_file, DEBUG, **METIS_opt)
 ```
 this function does partitioning end to end using profiling and code generation
 returns a partitioned graph object.
 
 ```python
 def partition_with_profiler(model, sample_batch, kwargs, n_iter, nparts, max_depth,
-                              basic_blocks,weighting_function, **METIS_opt)
+                              basic_blocks,node_weight_function,edge_weight_function, **METIS_opt)
    ```
 this function profiles and partitions the model without code generation
 returns a partitioned graph object
+
+```python
+def METIS_partition(graph,num_partitions,node_weight_function,edge_weight_function,**METIS_opts)
+```
+
+this functions performs METIS kway partitioning on our graph
+we support custom weighting functions for nodes and edges
+if not specified a deafualt value of 1 will be given
 
 ```python
 def profile_network(net, sample_batch,kwargs, basic_blocks, max_depth,n_iter)
@@ -123,7 +132,7 @@ our Graph is a simple data structre that holds nodes and does not have special l
 this module involves the necessary calls in order to perform METIS partKway method on our graph
 
 ```python
-def partiton_graph(graph, num_partitions, weighting_function, **METIS_opts)
+def METIS_partition(graph, num_partitions,node_weight_function,edge_weight_function,**METIS_opts)
 ```
 
 ## Pipedream Partitioning

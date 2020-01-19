@@ -1,9 +1,9 @@
 import torch
 from sample_models import WideResNet, AmoebaNet_D
 from pytorch_Gpipe import pipe_model
+from pytorch_Gpipe.model_profiling import Node, NodeTypes
 import argparse
 import importlib
-from collections import deque
 from misc import run_analysis, run_partitions
 
 _WIDE_RESNETS = dict(
@@ -56,10 +56,20 @@ def create_random_sample(args, analysis=False):
     return sample
 
 
-def by_time(w):
-    if hasattr(w, 'forward_time') and hasattr(w, 'backward_time'):
-        return max(int(2 * (0 + w.backward_time) / 2), 1)
-    return 0
+def node_weight_function(node: Node):
+    if node.type is NodeTypes.LAYER:
+        return node.weight.forward_time + node.weight.backward_time
+    return 1
+
+
+def edge_weight_function(bandwidth_gps):
+    def f(u: Node, v: Node):
+        if u.type is NodeTypes.LAYER:
+            return u.weight.output_size / (bandwidth_gps * 1e3)
+        if v.type is NodeTypes.LAYER:
+            return v.weight.input_size / (bandwidth_gps * 1e3)
+        return 1
+    return f
 
 
 def test_gpipe_stuff():
@@ -115,8 +125,6 @@ if __name__ == "__main__":
                         help="the depth in which we will partition the model")
     parser.add_argument("--analysis_batch_size", default=8, type=int,
                         help="batch size to use during the post partition analysis")
-    parser.add_argument("--use_jit_trace", action='store_true',
-                        default=False, help="wether to use jit_trace in order to build the graph")
 
     args = parser.parse_args()
     args.auto_file_name = not args.no_auto_file_name
@@ -149,8 +157,11 @@ if __name__ == "__main__":
     # DEBUG switches between verbose generated code and compressed code
     n_iter = args.n_iter
     graph = pipe_model(model, sample, depth=args.depth, kwargs=None, nparts=args.n_partitions,
-                       DEBUG=VERBOSE_PARTITIONING, output_file=args.output_file, weighting_function=by_time, n_iter=n_iter,
-                       use_jit_trace=args.use_jit_trace)
+                       DEBUG=VERBOSE_PARTITIONING, output_file=args.output_file,
+                       node_weight_function=node_weight_function,
+                       edge_weight_function=edge_weight_function(
+                           args.bandwidth_gps),
+                       n_iter=n_iter)
     graph.save_as_pdf(args.output_file, ".")
 
     generated = importlib.import_module(args.output_file)

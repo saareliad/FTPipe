@@ -1,4 +1,4 @@
-from .control_flow_graph import Graph, NodeTypes
+from .control_flow_graph import Graph, NodeTypes, Node
 from .network_profiler import profile_network, Profile
 from .graph_builder import build_graph
 

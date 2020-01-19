@@ -46,6 +46,7 @@ from sample_models import GPT2LMHeadModel
 
 from pytorch_Gpipe import pipe_model
 from misc import run_analysis, run_partitions
+from pytorch_Gpipe.model_profiling import Node, NodeTypes
 
 MODEL_CLASSES = {
     'gpt2': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
@@ -137,10 +138,20 @@ def mask_tokens(inputs, tokenizer, args):
     return inputs, labels
 
 
-def weighting_function(w):
-    if hasattr(w, 'forward_time') and hasattr(w, 'backward_time'):
-        return max(int(2 * (0 + w.backward_time) / 2), 1)
-    return 0
+def node_weight_function(node: Node):
+    if node.type is NodeTypes.LAYER:
+        return node.weight.forward_time + node.weight.backward_time
+    return 1
+
+
+def edge_weight_function(bandwidth_gps):
+    def f(u: Node, v: Node):
+        if u.type is NodeTypes.LAYER:
+            return u.weight.output_size / (bandwidth_gps * 1e3)
+        if v.type is NodeTypes.LAYER:
+            return v.weight.input_size / (bandwidth_gps * 1e3)
+        return 1
+    return f
 
 
 def partition_model(args, train_dataset, model, tokenizer):
@@ -161,7 +172,10 @@ def partition_model(args, train_dataset, model, tokenizer):
     sample = (inputs, labels)
     model.train()
     graph = pipe_model(model, sample, depth=args.depth, n_iter=args.n_iter, nparts=args.n_partitions,
-                       weighting_function=weighting_function, output_file=args.output_file, DEBUG=False, use_jit_trace=args.use_jit_trace)
+                       node_weight_function=node_weight_function,
+                       edge_weight_function=edge_weight_function(
+                           args.bandwidth_gps),
+                       output_file=args.output_file, DEBUG=False)
     graph.save_as_pdf(args.output_file, ".")
 
     generated = importlib.import_module(args.output_file)
@@ -248,8 +262,6 @@ def main():
                         default=False, help="disable partition analysis")
     parser.add_argument("--depth", default=1000, type=int,
                         help="the depth in which we will partition the model")
-    parser.add_argument("--use_jit_trace", action='store_true',
-                        default=False, help="wether to use jit_trace in order to build the graph")
 
     args = parser.parse_args()
 

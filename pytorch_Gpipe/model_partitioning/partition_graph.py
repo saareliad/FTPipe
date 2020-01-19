@@ -1,20 +1,26 @@
 
-from typing import Callable, Optional, Dict, Union
+from typing import Callable, Optional, Dict, Union, Tuple
 
-from ..model_profiling import Graph, Profile
+from ..model_profiling import Graph, Profile, Node
 from .process_partition import post_process_partition
-import networkx as nx
-import nxmetis
 
-__all__ = ["partiton_graph"]
+__all__ = ["METIS_partition"]
 
 
-def partiton_graph(graph: Graph, num_partitions: int, weighting_function: Callable[[Union[Profile, int]], int], **METIS_opts: Dict) -> Graph:
-    weights = {node.idx: weighting_function(node.weight)
-               for node in graph.nodes}
+NodeWeightFunction = Callable[[Union[Profile, int]], int]
+EdgeWeightFunction = Callable[[Tuple[Node, Node]], int]
 
-    G = graph.asNetworkx()
-    nx.set_node_attributes(G, weights, 'weight')
+
+def METIS_partition(graph: Graph, num_partitions: int,
+                    node_weight_function: Optional[NodeWeightFunction] = None,
+                    edge_weight_function: Optional[EdgeWeightFunction] = None,
+                    **METIS_opts: Dict) -> Graph:
+    import nxmetis
+
+    G = graph.asNetworkx(directed=False,
+                         node_weight_function=node_weight_function,
+                         edge_weight_function=edge_weight_function)
+
     options = nxmetis.MetisOptions(**METIS_opts)
     objval, parts = nxmetis.partition(G, num_partitions, options=options)
     parts = sorted((idx, n) for n, p in enumerate(parts)for idx in p)
