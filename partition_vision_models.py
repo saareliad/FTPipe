@@ -68,7 +68,7 @@ def test_gpipe_stuff():
     # split dim the dim to split inputs and gradients across
     # DEBUG switches between running workers on CPU or GPUS
 
-    partition_config = create_partition_configuration(model, partitions_only=False,
+    partition_config = create_pipeline_configuration(model, partitions_only=False,
                                                       DEBUG=GET_PARTITIONS_ON_CPU)
     output_device = 'cpu' if GET_PARTITIONS_ON_CPU else 'cuda'
 
@@ -154,11 +154,11 @@ if __name__ == "__main__":
     graph.save(args.output_file, ".")
 
     generated = importlib.import_module(args.output_file)
-    create_partition_configuration = generated.create_partition_configuration
+    create_pipeline_configuration = generated.create_pipeline_configuration
 
     if GET_PARTITIONS_ON_CPU:
         sample = sample.to('cpu')
-    config = create_partition_configuration(
+    config = create_pipeline_configuration(
         model, partitions_only=False, DEBUG=GET_PARTITIONS_ON_CPU)
 
     _ = run_partitions(sample, config)

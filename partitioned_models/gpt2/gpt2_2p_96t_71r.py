@@ -19,7 +19,7 @@ from torch.nn.modules.normalization import LayerNorm
 # partition 1 {'inputs': {0, 'input1'}, 'outputs': {'output1', 'output12', 'output10', 'output13', 'output9', 'output0', 'output11'}}
 # model outputs {0, 1}
 
-def create_partition_configuration(model,DEBUG=False,partitions_only=False):
+def create_pipeline_configuration(model,DEBUG=False,partitions_only=False):
     layer_dict = layerDict(model,depth=3)
     tensor_dict = tensorDict(model)
     

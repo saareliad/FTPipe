@@ -42,7 +42,7 @@ from transformers import (BertConfig, BertForMaskedLM, BertTokenizer,
                           #   CamembertConfig, CamembertForMaskedLM, CamembertTokenizer
                           )
 
-from NLP_models import GPT2LMHeadModel
+from sample_models import GPT2LMHeadModel
 
 from pytorch_Gpipe import pipe_model
 from misc import run_analysis, run_partitions
@@ -77,9 +77,9 @@ class TextDataset(Dataset):
                 tokenizer.tokenize(text))
 
             # Truncate in block of block_size
-            for i in range(0, len(tokenized_text)-block_size+1, block_size):
+            for i in range(0, len(tokenized_text) - block_size + 1, block_size):
                 self.examples.append(tokenizer.build_inputs_with_special_tokens(
-                    tokenized_text[i:i+block_size]))
+                    tokenized_text[i:i + block_size]))
             # Note that we are loosing the last truncated example here for the sake of simplicity (no padding)
             # If your dataset is small, first you should loook for a bigger one :-) and second you
             # can change this behavior by adding (model specific) padding.
@@ -161,16 +161,16 @@ def partition_model(args, train_dataset, model, tokenizer):
     sample = (inputs, labels)
     model.train()
     graph = pipe_model(model, sample, depth=args.depth, n_iter=args.n_iter, nparts=args.n_partitions,
-                       weighting_function=weighting_function, output_file=args.output_file, DEBUG=False,use_jit_trace=args.use_jit_trace)
+                       weighting_function=weighting_function, output_file=args.output_file, DEBUG=False, use_jit_trace=args.use_jit_trace)
     graph.save(args.output_file, ".")
 
     generated = importlib.import_module(args.output_file)
-    create_partition_configuration = generated.create_partition_configuration
+    create_pipeline_configuration = generated.create_pipeline_configuration
 
     GET_PARTITIONS_ON_CPU = True
 
-    config = create_partition_configuration(model, partitions_only=False,
-                          DEBUG=GET_PARTITIONS_ON_CPU)
+    config = create_pipeline_configuration(model, partitions_only=False,
+                                           DEBUG=GET_PARTITIONS_ON_CPU)
 
     # out = run_partitions(sample, config)
     bandwidth_gps = args.bandwidth_gps

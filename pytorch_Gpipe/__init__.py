@@ -22,7 +22,7 @@ def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] =
     '''attemps to partition a model to given number of parts using our profiler
        this will produce a python file with the partition config
 
-    the generated python file exposes a method named create_partition_configuration which can be consumed by Pipeline or by the user directly
+    the generated python file exposes a method named create_pipeline_configuration which can be consumed by Pipeline or by the user directly
     for this specific model config
 
     Parameters:

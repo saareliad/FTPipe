@@ -157,7 +157,7 @@ the verbose argument makes the code generator to emit each statement in forward 
 the partitions can be consumed later by calling the generated method:
 
 ```python
-def create_partition_configuration(model,DEBUG,partitions_only)
+def create_pipeline_configuration(model,DEBUG,partitions_only)
 ```
 
 DEBUG is wether we want the partitions on the CPU/GPUS

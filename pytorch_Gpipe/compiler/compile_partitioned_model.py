@@ -20,7 +20,7 @@ dtab = tab + tab
 
 
 def compile_partitoned_model(graph: Graph, model: Module, verbose: bool = False, output_file: Optional[str] = None):
-    '''generates the code for the partitioned model. the partitions can be consumed using the create_partition_configuration method in the generated code
+    '''generates the code for the partitioned model. the partitions can be consumed using the create_pipeline_configuration method in the generated code
 
     Parameters:
     graph:
@@ -62,7 +62,7 @@ def compile_partitoned_model(graph: Graph, model: Module, verbose: bool = False,
         partitions_code.append(state_methods_functions)
         ios[idx] = io
 
-    lines.append(create_partition_configuration(
+    lines.append(create_pipeline_configuration(
         graph, parts, model, ios, layer_classes))
     lines += partitions_code
     lines.append(generateHelpFunctions())
@@ -140,7 +140,7 @@ def generateImports(layer_classes: Dict[str, Module]) -> List[str]:
 
 def generateHelpFunctions() -> str:
     '''generates traverse_model, layerDict, traverse_params_buffs, tensorDict functions
-    to be used in the create_partition_configuration function 
+    to be used in the create_pipeline_configuration function 
     '''
     lines = [inspect.getsource(f) for f in
              [traverse_model, layerDict, traverse_params_buffs, tensorDict]]
@@ -160,8 +160,8 @@ def getFunctionName(scope: str) -> str:
     return scope.split(sep)[1].rstrip(string.digits)
 
 
-def create_partition_configuration(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, Dict[str, List[str]]], basic_blocks: Dict[str, Module]) -> str:
-    '''generates the create_partition_configuration method which given a model creates his partitioned counterpart
+def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, Dict[str, List[str]]], basic_blocks: Dict[str, Module]) -> str:
+    '''generates the create_pipeline_configuration method which given a model creates his partitioned counterpart
     '''
     model_buffers = {scope: t for t, scope in traverse_params_buffs(model)
                      if not t.requires_grad}
@@ -179,7 +179,7 @@ def create_partition_configuration(graph: Graph, partitions: List[List[Node]], m
 
     # function header
     lines = [
-        f"def create_partition_configuration(model,DEBUG=False,partitions_only=False):",
+        f"def create_pipeline_configuration(model,DEBUG=False,partitions_only=False):",
         f"layer_dict = layerDict(model,depth={graph.depth},basic_blocks=({basic_blocks}))",
         "tensor_dict = tensorDict(model)",
         f"\n{tab}# now constructing the partitions in order"
