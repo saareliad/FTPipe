@@ -58,8 +58,8 @@ def METIS_partition(graph,num_partitions,node_weight_function,edge_weight_functi
 ```
 
 this functions performs METIS kway partitioning on our graph
-we support custom weighting functions for nodes and edges
-if not specified a deafualt value of 1 will be given
+we support custom weighting functions for nodes and edges\
+if not specified a default value of 1 will be given
 
 ```python
 def profile_network(net, sample_batch,kwargs, basic_blocks, max_depth,n_iter)

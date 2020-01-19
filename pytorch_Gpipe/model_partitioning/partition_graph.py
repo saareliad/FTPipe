@@ -1,14 +1,10 @@
 
-from typing import Callable, Optional, Dict, Union, Tuple
+from typing import Optional, Dict
 
-from ..model_profiling import Graph, Profile, Node
+from ..model_profiling import Graph, NodeWeightFunction, EdgeWeightFunction
 from .process_partition import post_process_partition
 
 __all__ = ["METIS_partition"]
-
-
-NodeWeightFunction = Callable[[Union[Profile, int]], int]
-EdgeWeightFunction = Callable[[Tuple[Node, Node]], int]
 
 
 def METIS_partition(graph: Graph, num_partitions: int,

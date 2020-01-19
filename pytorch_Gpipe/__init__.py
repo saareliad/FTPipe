@@ -3,9 +3,9 @@ from typing import Any, Callable, List, Dict, Optional, Union
 import torch
 import torch.nn as nn
 
-from .model_partitioning import METIS_partition, NodeWeightFunction, EdgeWeightFunction
+from .model_partitioning import METIS_partition
 from .compiler import compile_partitoned_model
-from .model_profiling import Graph, profile_network, build_graph, Profile
+from .model_profiling import Graph, profile_network, build_graph, Profile, NodeWeightFunction, EdgeWeightFunction
 from .pipeline import Pipeline
 from .utils import Devices, Tensors
 
