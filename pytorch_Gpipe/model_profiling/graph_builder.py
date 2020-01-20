@@ -164,10 +164,11 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
             # add node for each output
             for i, output in enumerate(trace_node.outputs()):
                 # TODO in some cases we can know the shape of the tensor per edge
-                # try:
-                #     print(output.type().sizes())
-                # except Exception:
-                #     print(node_scope)
+                # when we merge scopes we need to reliably know how many outputs we have
+                # maybe it's not a problem as layers with multiple outputs are profiled
+                # and there are no functions with multiple outputs (they return a single tuple)
+                if output.isCompleteTensor():
+                    shape = output.type().sizes()
 
                 unique_id = output.unique()
 
