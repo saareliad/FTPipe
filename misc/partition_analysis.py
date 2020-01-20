@@ -5,7 +5,7 @@ from contextlib import nullcontext
 import numpy as np
 
 
-def run_analysis(sample, graph, config, n_iter, recomputation=True, bandwidth_gps=16):
+def run_analysis(sample, graph, config, n_iter, recomputation=True, bandwidth_gps=12):
     # thoeretical analysis
     sequential_f, sequential_b, parallel_f, parallel_b = theoretical_analysis(graph, config,
                                                                               recomputation=recomputation)
@@ -70,32 +70,10 @@ def run_analysis(sample, graph, config, n_iter, recomputation=True, bandwidth_gp
     for idx, volume in comm_volume.items():
         print(f"{idx}: {volume}")
 
-    # latency stuff not in use right now
-    # forward_dependencies, backward_dependencies = find_dependencies(edges,
-    #                                                                 len(theoretical_f_times))
-    # ideal_t_f_latency = calculate_ideal_latency(forward_dependencies,
-    #                                             theoretical_f_times)
-    # ideal_t_b_latency = calculate_ideal_latency(backward_dependencies,
-    #                                             theoretical_b_times)
-    # ideal_sum_t_f_latency = calculate_ideal_latency(forward_dependencies,
-    #                                                 f_sum)
-    # ideal_sum_t_b_latency = calculate_ideal_latency(backward_dependencies,
-    #                                                 b_sum)
-    # ideal_a_f_latency = calculate_ideal_latency(forward_dependencies,
-    #                                             real_f_times)
-    # ideal_a_b_latency = calculate_ideal_latency(backward_dependencies,
-    #                                             real_b_times)
-    # print(
-    #     f"\nideal latency is the time that passes for a forward/backward pass to reach and leave the partition")
-    # print(
-    #     f"ideal theoretical latencies ms\nforward {ideal_t_f_latency}\nbackward {ideal_t_b_latency}")
-    # print(
-    #     f"\nideal real latencies ms\nforward {ideal_a_f_latency}\nbackward {ideal_a_b_latency}")
-
 
 #######################analyze generated partitions#######################
 
-def profile_execution(model_inputs, partition_config, n, recomputation=True, bandwidth_gps=16):
+def profile_execution(model_inputs, partition_config, n, recomputation=True, bandwidth_gps=12):
     '''perfrom forward/backward passes and measure execution times accross n batches
     '''
     n_partitions = sum([1 for k in partition_config if isinstance(k, int)])
@@ -125,10 +103,9 @@ def profile_execution(model_inputs, partition_config, n, recomputation=True, ban
                 recv_time = 0
                 for t in inputs:
                     t_mb = (t.nelement() * t.element_size()) / 1e6
-                    t_recv = (t_mb / (bandwidth_gps * 1e3))
+                    t_recv = t_mb / bandwidth_gps
                     in_size_mb += t_mb
                     recv_time = max(recv_time, t_recv)
-                recv_time *= 1e3
 
                 # time measurement
                 if torch.cuda.is_available():
@@ -145,11 +122,10 @@ def profile_execution(model_inputs, partition_config, n, recomputation=True, ban
                     # save activation on CPU in order to save GPU memory
                     activations[o] = t.cpu()
                     t_mb = (t.nelement() * t.element_size()) / 1e6
-                    t_send = (t_mb / (bandwidth_gps * 1e3))
+                    t_send = t_mb / bandwidth_gps
                     out_size_mb += t_mb
                     send_time = max(t_send, send_time)
 
-                send_time *= 1e3
                 communication_volume[idx] = f"input size: {in_size_mb} MB recieve_time: {recv_time} ms out: {out_size_mb} MB send time: {send_time} ms"
                 f_times[idx].append(f_time)
                 b_times[idx].append(b_time)
@@ -414,44 +390,3 @@ def run_partitions(model_inputs, partition_config):
             parts.append(idx)
 
     return [activations[o] for o in partition_config['model outputs']]
-
-
-# latency stuff not in use
-def calculate_ideal_latency(dependencies, times):
-    '''calculates latency as sum of exec time of partition dependencies
-    '''
-    n_parts = len(times)
-
-    ideal = {i: times[i] + sum(times[j] for j in dependencies[i])
-             for i in range(n_parts)}
-
-    return ideal
-
-
-def find_dependencies(cutting_edges, n_parts):
-    ''' find input/output dependencies between all partitions
-        a partiton is dependent on another if there is a path between them in the graph
-    '''
-    forward_dependencies = {i: set() for i in range(n_parts)}
-    backward_dependencies = {i: set() for i in range(n_parts)}
-    while True:
-        changed = False
-        for u, v in cutting_edges:
-            # update input paths
-            prev = len(forward_dependencies[v.part])
-            forward_dependencies[v.part].add(u.part)
-            forward_dependencies[v.part].update(forward_dependencies[u.part])
-            if len(forward_dependencies[v.part]) > prev:
-                changed = True
-
-            # update output paths:
-            prev = len(backward_dependencies[u.part])
-            backward_dependencies[u.part].add(v.part)
-            backward_dependencies[u.part].update(backward_dependencies[v.part])
-            if len(backward_dependencies[u.part]) > prev:
-                changed = True
-
-        if not changed:
-            break
-
-    return forward_dependencies, backward_dependencies

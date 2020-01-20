@@ -147,9 +147,9 @@ def node_weight_function(node: Node):
 def edge_weight_function(bandwidth_gps):
     def f(u: Node, v: Node):
         if u.type is NodeTypes.LAYER:
-            return u.weight.output_size / (bandwidth_gps * 1e3)
+            return u.weight.output_size / bandwidth_gps
         if v.type is NodeTypes.LAYER:
-            return v.weight.input_size / (bandwidth_gps * 1e3)
+            return v.weight.input_size / bandwidth_gps
         return 1
     return f
 
