@@ -212,17 +212,18 @@ class Graph():
                 if edge_weight_function is None:
                     w = 1
                 else:
-                    w = int(edge_weight_function(u, v))
+                    w = edge_weight_function(u, v)
                 G.add_edge(u.idx, v.idx, weight=w)
 
         for n in self.nodes:
             if node_weight_function is None:
                 w = 1
             else:
-                w = int(node_weight_function(n))
+                w = node_weight_function(n)
             G.nodes[n.idx]['weight'] = w
-            G.nodes[n.idx]['scope'] = n.scope
-            G.nodes[n.idx]['part'] = n.part
+            G.nodes[n.idx]['label'] = n.scope
+            G.nodes[n.idx]['partition_idx'] = n.part
+            G.nodes[n.idx]['original_profile'] = n.weight
 
         return G
 

@@ -140,16 +140,22 @@ def mask_tokens(inputs, tokenizer, args):
 
 def node_weight_function(node: Node):
     if node.type is NodeTypes.LAYER:
-        return node.weight.forward_time + node.weight.backward_time
-    return 1
+        return int(node.weight.forward_time + node.weight.backward_time)
+    if node.type is NodeTypes.CONSTANT:
+        return 0
+    if node.type is NodeTypes.OP:
+        return 1
+    return 0
 
 
 def edge_weight_function(bandwidth_gps):
     def f(u: Node, v: Node):
         if u.type is NodeTypes.LAYER:
-            return u.weight.output_size / bandwidth_gps
+            return int(u.weight.output_size / bandwidth_gps)
         if v.type is NodeTypes.LAYER:
-            return v.weight.input_size / bandwidth_gps
+            return int(v.weight.input_size / bandwidth_gps)
+        if u.type is NodeTypes.CONSTANT:
+            return 0
         return 1
     return f
 
