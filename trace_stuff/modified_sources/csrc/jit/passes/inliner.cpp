@@ -29,7 +29,7 @@ void inlineCalls(Block* block, int depth = 1000) {
         GRAPH_UPDATE(
             "Function body: ",
             *fun_type->function()->optimized_graph(depth - 1));
-        inlineCallTo(cur, fun_type->function(depth - 1));
+        inlineCallTo(cur, fun_type->function(),depth-1);
       } break;
       case prim::CallMethod: {
         const std::string& name = cur->s(attr::name);
