@@ -18,7 +18,7 @@ lineNumberOfOriginalFile => new line
   - lines 29-31 => 
         GRAPH_UPDATE(
             "Function body: ", *fun_type->function()->optimized_graph(depth-1));
-        inlineCallTo(cur, fun_type->function(depth-1));
+        inlineCallTo(cur, fun_type->function(),depth-1);
   - lines 38-39 =>
         GRAPH_UPDATE("Function body: ", *function->optimized_graph(depth-1));
         inlineCallTo(cur, function,depth-1);

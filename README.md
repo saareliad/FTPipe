@@ -179,6 +179,7 @@ the config is composed of a dicionary with the following fields:
 - for each partition from 0 to nParts-1
   - inputs: partition input scopes sorted by name
   - outputs: partition output scopes sorted by name
+  - model: the actual partition module
 
 ## Compiler
 
