@@ -120,7 +120,7 @@ def profile_execution(model_inputs, partition_config, n, recomputation=True, ban
                 send_time = 0
                 for o, t in zip(partition_config[idx]['outputs'], outputs):
                     # save activation on CPU in order to save GPU memory
-                    activations[o] = t.cpu()
+                    activations[o] = t.detach().cpu()
                     t_mb = (t.nelement() * t.element_size()) / 1e6
                     t_send = t_mb / bandwidth_gps
                     out_size_mb += t_mb
@@ -165,7 +165,7 @@ def cuda_backward(partition, inputs, recomputation=True):
     ''' measure forward/backward time of a partition on the GPU
     '''
     # now we move inputs to GPU
-    inputs = [i.to('cuda').detach_() for i in inputs]
+    inputs = [i.to('cuda').requires_grad_() for i in inputs]
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
     torch.cuda.synchronize(device='cuda')
@@ -186,13 +186,13 @@ def cuda_backward(partition, inputs, recomputation=True):
 
 def cuda_forward(partition, inputs, recomputation=True):
     # now we move inputs to GPU
-    inputs = [i.to('cuda').detach_() for i in inputs]
+    inputs = [i.to('cuda').requires_grad_() for i in inputs]
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
     torch.cuda.synchronize(device='cuda')
     with torch.no_grad() if recomputation else nullcontext():
         start.record()
-        outputs = partition(*inputs)
+        partition(*inputs)
         end.record()
         torch.cuda.synchronize(device='cuda')
         f_time = (start.elapsed_time(end))
@@ -213,10 +213,10 @@ def cpu_time(partition, inputs, recomputation=True):
 
 
 def cpu_forward(partition, inputs, recomputation=True):
-    inputs = [i.cpu().detach_() for i in inputs]
+    inputs = [i.cpu().requires_grad_() for i in inputs]
     with torch.no_grad() if recomputation else nullcontext():
         start = time.time()
-        outputs = partition(*inputs)
+        partition(*inputs)
         end = time.time()
         f_time = 1000 * (end - start)
 
@@ -224,7 +224,7 @@ def cpu_forward(partition, inputs, recomputation=True):
 
 
 def cpu_backward(partition, inputs, recomputation=True):
-    inputs = [i.cpu().detach_() for i in inputs]
+    inputs = [i.cpu().requires_grad_() for i in inputs]
     start = time.time()
     outputs = partition(*inputs)
     if not recomputation:
