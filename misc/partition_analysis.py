@@ -22,7 +22,7 @@ def run_analysis(sample, graph, config, n_iter, recomputation=True, bandwidth_gp
 
                                                                                                         parallel_b, edges)
     # real statistics based on generated partitions
-    (real_f_times, f_vars, f_deviance), (real_b_times, b_vars, b_deviance), comm_volume = profile_execution(sample, config, n_iter,
+    (real_f_times, f_vars, f_deviance), (real_b_times, b_vars, b_deviance), comm_volume = profile_execution(sample, config, n_iter + 1,
                                                                                                             recomputation=recomputation, bandwidth_gps=bandwidth_gps)
     real_b_imbalance = worst_imbalance(real_b_times)
     real_f_imbalance = worst_imbalance(real_f_times)
@@ -141,7 +141,8 @@ def mean_var(times):
     variances = dict()
     avg_deviations = dict()
     for i, ts in times.items():
-        arr = np.array(ts)
+        max_v = max(ts)
+        arr = np.array([t for t in ts if t < max_v])
         means[i] = np.mean(arr)
         variances[i] = np.var(arr)
         avg_deviations[i] = np.abs((arr - means[i])).mean()
@@ -165,7 +166,7 @@ def cuda_backward(partition, inputs, recomputation=True):
     ''' measure forward/backward time of a partition on the GPU
     '''
     # now we move inputs to GPU
-    inputs = [i.to('cuda').requires_grad_() for i in inputs]
+    inputs = [i.to('cuda') for i in inputs]
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
     torch.cuda.synchronize(device='cuda')
@@ -186,7 +187,7 @@ def cuda_backward(partition, inputs, recomputation=True):
 
 def cuda_forward(partition, inputs, recomputation=True):
     # now we move inputs to GPU
-    inputs = [i.to('cuda').requires_grad_() for i in inputs]
+    inputs = [i.to('cuda') for i in inputs]
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
     torch.cuda.synchronize(device='cuda')
@@ -213,7 +214,7 @@ def cpu_time(partition, inputs, recomputation=True):
 
 
 def cpu_forward(partition, inputs, recomputation=True):
-    inputs = [i.cpu().requires_grad_() for i in inputs]
+    inputs = [i.cpu() for i in inputs]
     with torch.no_grad() if recomputation else nullcontext():
         start = time.time()
         partition(*inputs)
@@ -224,7 +225,7 @@ def cpu_forward(partition, inputs, recomputation=True):
 
 
 def cpu_backward(partition, inputs, recomputation=True):
-    inputs = [i.cpu().requires_grad_() for i in inputs]
+    inputs = [i.cpu() for i in inputs]
     start = time.time()
     outputs = partition(*inputs)
     if not recomputation:

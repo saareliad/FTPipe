@@ -51,18 +51,13 @@ def profile_network(net: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict
     layers_dict = _wrap_profiled_layers(net, max_depth, basic_blocks)
 
     # perform n_iter symbolic forward backward run first one is warmup as we have seen the first time measurements are higher
-    _perform_forward_backward_pass(net, *sample_batch, **kwargs)
-    for l in layers_dict.values():
-        l.forward_time = 0
-        l.backward_time = 0
-
-    for _ in range(n_iter):
+    for _ in range(n_iter + 1):
         _perform_forward_backward_pass(net, *sample_batch, **kwargs)
 
     # gather forward and backward execution times
-    backward_times = [layer.backward_time / n_iter
+    backward_times = [layer.avg_time(forward=False)
                       for layer in layers_dict.values()]
-    forward_times = [layer.forward_time / n_iter
+    forward_times = [layer.avg_time(forward=True)
                      for layer in layers_dict.values()]
 
     # gather input and output sizes
@@ -150,8 +145,8 @@ class Wrapper(nn.Module):
     def __init__(self, sub_module: nn.Module):
         super(Wrapper, self).__init__()
         self.layer = sub_module
-        self.forward_time = 0
-        self.backward_time = 0
+        self.forward_time = []
+        self.backward_time = []
         self.input_size = 0
         self.output_size = 0
         self.parameters_size, self.buffers_size = self._layer_size()
@@ -195,7 +190,7 @@ class Wrapper(nn.Module):
         forward_time, outputs, self.forward_cuda_mem = self._time_op(
             self.layer, *detached_inputs, **kwargs)
 
-        self.forward_time += forward_time
+        self.forward_time.append(forward_time)
         # reduce outputs to calculate dummy loss
         loss = torch.zeros(1, requires_grad=True, device=device)
         for out in flatten(outputs):
@@ -204,7 +199,7 @@ class Wrapper(nn.Module):
         # measure backward execution time
         backward_time, _, self.backward_cuda_mem = self._time_op(
             torch.autograd.backward, loss)
-        self.backward_time += backward_time
+        self.backward_time.append(backward_time)
 
         # input and output size
         self.input_size = _get_size(inputs)
@@ -249,6 +244,16 @@ class Wrapper(nn.Module):
             exec_time = 1000 * (end - start)
 
         return exec_time, out, cuda_mem
+
+    def avg_time(self, forward=False):
+        if forward:
+            l = self.forward_time
+        else:
+            l = self.backward_time
+
+        max_v = max(l)
+
+        return sum([t for t in l if t < max_v]) / (len(l) - 1)
 
     # just in case those operations are required we pass them to the profiled layer
 
