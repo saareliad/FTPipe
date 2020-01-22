@@ -50,7 +50,6 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
     torch._C._jit_set_inline_everything_mode(not minimal)
     trace_graph = torch.jit.trace(model, sample_batch, check_trace=False).graph
     torch._C._jit_set_inline_everything_mode(old_value)
-
     # build the graph from trace
     nodes = add_nodes(trace_graph, new_to_old, partials, tensors)
 
@@ -83,7 +82,6 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
     for k, t in items:
         partial_key = k[:k.rfind("/")] + "/" + k[k.rfind("["):]
         tensors[partial_key] = t
-
     nodes = OrderedDict()
     accessors = dict()
     # add input nodes and the self node
@@ -116,11 +114,18 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
             output_type = trace_node.output().type()
             # add buffer or parameter
             if str(output_type) == "Tensor":
-                parent_scope = longest_prefix(partials, tensor_scope)
                 node_type = NodeTypes.BUFF_PARAM
-                t = tensors[f"{parent_scope}/[{accessor_name}]"]
-                tensor_scope = f"{parent_scope}/{type(t).__name__}[{accessor_name}]"
-                size_in_mb = (t.nelement() * t.element_size()) / 1e6
+                layer_scope = longest_prefix(new_to_old, tensor_scope)
+                if layer_scope:
+                    # this tensor was profiled so it will be folder into it's layer
+                    # this is a hack as I do not think it should have a special case
+                    size_in_mb = 0
+                    tensor_scope = layer_scope + "/" + accessor_name
+                else:
+                    parent_scope = longest_prefix(partials, tensor_scope)
+                    t = tensors[f"{parent_scope}/[{accessor_name}]"]
+                    tensor_scope = f"{parent_scope}/{type(t).__name__}[{accessor_name}]"
+                    size_in_mb = (t.nelement() * t.element_size()) / 1e6
                 node = Node(tensor_scope, idx, node_type, weight=size_in_mb)
                 node.value_type = Tensor
                 nodes[idx] = node
