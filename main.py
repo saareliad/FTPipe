@@ -688,7 +688,8 @@ def main():
         ptvsd.wait_for_attach()
 
     logger = FileLogger(args.logdir, global_rank=args.rank,
-                        local_rank=args.local_rank, name='msnag', world_size=args.world_size)
+                        local_rank=args.local_rank, name='msnag', world_size=args.world_size, 
+                        name_prefix=args.out_filename)  # TODO: real name
 
     partition_using_gap_aware = hack_trainer_type_to_gap_aware(args)
     if partition_using_gap_aware:

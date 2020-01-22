@@ -3,28 +3,34 @@ import logging
 
 
 class FileLogger:
-    def __init__(self, output_dir: str, global_rank: int, local_rank: int, name: str, world_size: int):
+    def __init__(self, output_dir: str, global_rank: int, local_rank: int, name: str, world_size: int, name_prefix=''):
         self.output_dir = output_dir
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir, exist_ok=True)
         self.logger = FileLogger.get_logger(
-            output_dir, global_rank=global_rank, local_rank=local_rank, name=name, world_size=world_size)
+            output_dir, global_rank=global_rank, local_rank=local_rank,
+            name=name, world_size=world_size, name_prefix=name_prefix)
 
     def exception(self, *args_, **kwargs):
         return self.logger.exception(*args_, **kwargs)
 
     @staticmethod
-    def get_logger(output_dir: str, global_rank: int, local_rank: int, name: str,  world_size: int):
+    def get_logger(output_dir: str, global_rank: int, local_rank: int, name: str,  world_size: int, name_prefix=''):
         logger_ = logging.getLogger(name)
         logger_.setLevel(logging.DEBUG)
         formatter = logging.Formatter('%(message)s')
 
-        vlog = logging.FileHandler(output_dir + f'/info-{global_rank}.log')
+        def get_name(u):
+            curr_name = f'{name_prefix}-{u}-{global_rank}.log'
+            curr_name = os.path.join(output_dir, curr_name)
+            return curr_name
+
+        vlog = logging.FileHandler(get_name('info'))
         vlog.setLevel(logging.INFO)
         vlog.setFormatter(formatter)
         logger_.addHandler(vlog)
 
-        eventlog = logging.FileHandler(output_dir + f'/warn-{global_rank}.log')
+        eventlog = logging.FileHandler(get_name('warn'))
         eventlog.setLevel(logging.WARN)
         eventlog.setFormatter(formatter)
         logger_.addHandler(eventlog)
@@ -32,7 +38,7 @@ class FileLogger:
         time_formatter = logging.Formatter(
             '%(asctime)s - %(filename)s:%(lineno)d - %(message)s')
         debuglog = logging.FileHandler(
-            output_dir + f'/debug-{global_rank}.log')
+            get_name('debug'))
         debuglog.setLevel(logging.DEBUG)
         debuglog.setFormatter(time_formatter)
         logger_.addHandler(debuglog)

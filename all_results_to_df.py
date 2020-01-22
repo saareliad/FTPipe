@@ -5,6 +5,7 @@ from typing import NamedTuple  # for bwd compatibility
 import itertools
 import pandas as pd
 import numpy as np
+import os
 import argparse
 
 
@@ -37,7 +38,7 @@ class InferStuff:
         pass
 
     def infer_experiment_names(self):
-        wp = "weight_prediction" in self.config 
+        wp = "weight_prediction" in self.config
         ga = "gap_aware" in self.config
         ws = "weight_stashing" in self.config and self.config["weight_stashing"]
 
@@ -140,6 +141,7 @@ def proccess_file(f):
     inferer.replicate()
     return inferer.to_df()
 
+
 def all_results_to_csv(root_path, csv_name):
     files = all_files(root_path)
     print(f"-I- There are {len(files)} json files in {path}")
@@ -150,7 +152,9 @@ def all_results_to_csv(root_path, csv_name):
     df.to_csv(csv_name, index=False)
     print("-I- Done")
 
+
 if __name__ == "__main__":
-    path = "results/4partitions"
-    csv_name = "4partitions.csv"
+    path = "results/2partitions"
+    csv_name = "2partitions.csv"
+    csv_name = os.path.join(".", csv_name)
     all_results_to_csv(path, csv_name)

@@ -209,11 +209,12 @@ class NormCVstats(CVStats):
     #         return super().get_epoch_info_str(is_train) + my_addition
     #     return super().get_epoch_info_str(is_train)
 
-    def get_stats(self, stage_id):
+    def get_stats(self, stage_id=None):
         fit_res = super().get_stats()
-        new_name = f"p{stage_id}_grad_norm"
-        old_name = 'grad_norm'
-        fit_res[new_name] = fit_res.pop(old_name)
+        if not (stage_id is None):
+            new_name = f"p{stage_id}_grad_norm"
+            old_name = 'grad_norm'
+            fit_res[new_name] = fit_res.pop(old_name)
         return fit_res
 
 
