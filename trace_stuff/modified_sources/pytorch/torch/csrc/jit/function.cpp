@@ -87,7 +87,7 @@ const FunctionSchema &Function::getSchema() const
   return *schema_;
 }
 
-void preoptimizeGraph(std::shared_ptr<Graph> &graph, int depth = 1000)
+void preoptimizeGraph(std::shared_ptr<Graph> &graph, int depth)
 {
   // TODO: Invoke cleanup passes before and after inlining to reduce amount of
   // code we're copying.

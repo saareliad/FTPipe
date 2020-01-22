@@ -50,7 +50,7 @@ void inlineCalls(Block* block, int depth = 1000) {
   }
 }
 
-void Inline(Graph& graph, int depth = 1000) {
+void Inline(Graph& graph, int depth) {
   GRAPH_DUMP("Before Inlining: ", &graph);
   inlineCalls(graph.block(), depth);
   GRAPH_DUMP("After Inlining: ", &graph);
