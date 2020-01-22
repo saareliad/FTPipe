@@ -27,6 +27,7 @@ def post_process_partition(graph: Graph, part: List[int]) -> Graph:
     graph_root_fix(graph)
     remove_backward_edges(graph)
     do_not_send_lists(graph)
+    graph_root_fix(graph)
 
     return graph
 

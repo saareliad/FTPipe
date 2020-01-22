@@ -101,9 +101,10 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
         else:
             accessors[idx] = "__module"
 
-    # add weights/parameter nodes
     for trace_node in trace_graph.nodes():
         if trace_node.kind() == "prim::GetAttr":
+            # first we do book keeping we remember the accessor to know where are we in the model's hierarchy
+            # we do not add accessor nodes to the graph as they only provide context
             accessor_name = trace_node['name']
             assert len(list(trace_node.inputs())) == 1
             assert len(list(trace_node.outputs())) == 1
@@ -113,6 +114,7 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
             idx = trace_node.output().unique()
             accessors[idx] = tensor_scope
             output_type = trace_node.output().type()
+            # add buffer or parameter
             if str(output_type) == "Tensor":
                 parent_scope = longest_prefix(partials, tensor_scope)
                 node_type = NodeTypes.BUFF_PARAM
@@ -122,86 +124,104 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
                 node = Node(tensor_scope, idx, node_type, weight=size_in_mb)
                 node.value_type = Tensor
                 nodes[idx] = node
+            continue
+
+        if trace_node.kind() == "prim::CallFunction":
+            # this appears in the csrc but we've never encountered it
+            raise NotImplementedError("prim::CallFunction not supported yet")
+        elif trace_node.kind() == 'prim::CallMethod':
+            # this is a layer call
+            accessor_name = trace_node["name"]
+            assert accessor_name == "forward"
+            layer_node = next(trace_node.inputs())
+            layer_scope = accessors[layer_node.unique()]
+            encasing_scope = longest_prefix(new_to_old, layer_scope)
+            assert encasing_scope != "", "an unporfiled layer found should never happen"
+            # inputs without the self arg
+            inputs = OrderedSet([nodes[i.unique()]
+                                 for i in list(trace_node.inputs())[1:]])
         else:
-            # add op nodes
+            # this is an op
             inputs = OrderedSet([nodes[i.unique()]
                                  for i in trace_node.inputs()])
             trace_scope = extract_new_scope(trace_node.scopeName())
             encasing_scope = longest_prefix(new_to_old, trace_scope)
-            value_type = None
-            value = None
-            if encasing_scope != "":
-                # profiled layer
-                node_scope = encasing_scope
-                node_type = NodeTypes.LAYER
-                value_type = Tensor
+
+        value_type = None
+        value = None
+        if encasing_scope != "":
+            # profiled layer
+            node_scope = encasing_scope
+            node_type = NodeTypes.LAYER
+            # TODO this is not correct for layer with multiple outputs should be list or tuple
+            value_type = Tensor
+        else:
+            # unprofiled op
+            if trace_node.scopeName() == "":
+                # unporfiled op to level
+                node_scope = partials["__module"]
             else:
-                # unprofiled op
-                if trace_node.scopeName() == "":
-                    # unporfiled op to level
-                    node_scope = partials["__module"]
-                else:
-                    # unprofiled op nested
-                    node_scope = longest_prefix(partials, trace_scope)
-                node_scope = node_scope + "/" + trace_node.kind()
-                # classify op
-                if 'prim::Constant' in trace_node.kind():
-                    # unprofiled constant value
-                    node_type = NodeTypes.CONSTANT
-                    value = trace_node.output().toIValue()
-                elif 'prim::' in trace_node.kind():
-                    # unprofiled List or Tuple
-                    node_type = NodeTypes.PYTHON_PRIMITIVE
-                elif 'aten::' in trace_node.kind():
-                    # unprofiled torch op
-                    # TODO should we specialize the aten:: and prim:: cases
-                    node_type = NodeTypes.OP
-                else:
-                    # unprofiled other
-                    assert False, f"unknown scope {trace_node.scopeName()}"
+                # unprofiled op nested
+                node_scope = longest_prefix(partials, trace_scope)
+            node_scope = node_scope + "/" + trace_node.kind()
+            # classify op
+            if 'prim::Constant' in trace_node.kind():
+                # unprofiled constant value
+                node_type = NodeTypes.CONSTANT
+                value = trace_node.output().toIValue()
+            elif 'prim::' in trace_node.kind():
+                # unprofiled List or Tuple
+                node_type = NodeTypes.PYTHON_PRIMITIVE
+            elif 'aten::' in trace_node.kind():
+                # unprofiled torch op
+                # TODO should we specialize the aten:: and prim:: cases
+                node_type = NodeTypes.OP
+            else:
+                # unprofiled other
+                assert False, f"unknown scope {trace_node.scopeName()}"
 
-            nOuts = 1
-            # add node for each output
-            for i, output in enumerate(trace_node.outputs()):
-                # TODO in some cases we can know the shape of the tensor per edge
-                # when we merge scopes we need to reliably know how many outputs we have
-                # maybe it's not a problem as layers with multiple outputs are profiled
-                # and there are no functions with multiple outputs (they return a single tuple)
-                if output.isCompleteTensor():
-                    shape = output.type().sizes()
+        nOuts = 1
+        # add node for each output
+        for i, output in enumerate(trace_node.outputs()):
+            # TODO in some cases we can know the shape of the tensor per edge
+            # when we merge scopes we need to reliably know how many outputs we have
+            # maybe it's not a problem as layers with multiple outputs are profiled
+            # and there are no functions with multiple outputs (they return a single tuple)
+            if output.isCompleteTensor():
+                shape = output.type().sizes()
 
-                unique_id = output.unique()
+            unique_id = output.unique()
 
-                # to differentiate different non layer ops that are in the same scope
-                if i == 0 and node_type != NodeTypes.LAYER:
-                    node_scope += str(unique_id)
-                # create new node
-                new_node = Node(node_scope, unique_id,
-                                node_type, incoming_nodes=inputs, value=value)
+            # to differentiate different non layer ops that are in the same scope
+            if i == 0 and node_type != NodeTypes.LAYER:
+                node_scope += str(unique_id)
+            # create new node
+            new_node = Node(node_scope, unique_id,
+                            node_type, incoming_nodes=inputs, value=value)
 
-                # add incoming edges
-                for node in inputs:
-                    node.add_out_node(new_node)
+            # add incoming edges
+            for node in inputs:
+                node.add_out_node(new_node)
 
-                new_node.value_type = value_type
-                nodes[unique_id] = new_node
+            new_node.value_type = value_type
+            nodes[unique_id] = new_node
 
-                # if tensor node set type accordingly
-                if output.isCompleteTensor():
-                    new_node.value_type = torch.Tensor
+            # if tensor node set type accordingly
+            if output.isCompleteTensor():
+                new_node.value_type = torch.Tensor
 
-                # secondery output
-                if i != 0:
-                    if node_type != NodeTypes.LAYER:
-                        new_node.scope += f"{i} "
-                    parent = nodes[unique_id - i]
-                    new_node.add_in_node(parent.in_nodes[0])
-                    parent.in_nodes[0].add_out_node(new_node)
-                    nOuts += 1
+            # secondery output
+            if i != 0:
+                if node_type != NodeTypes.LAYER:
+                    new_node.scope += f"{i} "
+                parent = nodes[unique_id - i]
+                new_node.add_in_node(parent.in_nodes[0])
+                parent.in_nodes[0].add_out_node(new_node)
+                nOuts += 1
 
-            # add output idx for op with multiple outputs
-            if nOuts > 1 and nodes[unique_id - i].type != NodeTypes.LAYER:
-                nodes[unique_id - i].scope += "0 "
+        # add output idx for op with multiple outputs
+        if nOuts > 1 and nodes[unique_id - i].type != NodeTypes.LAYER:
+            nodes[unique_id - i].scope += "0 "
 
     return nodes
 
