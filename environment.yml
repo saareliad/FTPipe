@@ -16,3 +16,4 @@ dependencies:
   - cython
   - pip:
       - git+https://github.com/networkx/networkx-metis.git
+      - transformers
