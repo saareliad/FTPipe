@@ -64,3 +64,9 @@ if __name__ == "__main__":
 
     calss = len([n for n in graph.nodes if "Act" in n.scope])
     assert calls == 4, f"expected 4 graph nodes got {calls}"
+
+    # check default parameter
+    traced = torch.jit.trace(model, sample, check_trace=False).graph
+    torch._C._jit_pass_inline(traced)
+    calls = len([n for n in traced.nodes() if n.kind() == "prim::CallMethod"])
+    assert calls == 5, f"expected 5 calls got {calls}"

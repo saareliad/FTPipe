@@ -68,16 +68,16 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
     nodes = remove_useless_node_inputs(nodes)
     nodes = remove_tensor_int_tensor(nodes)
 
-    nodes = add_missing_types(nodes)
-
-    for node in nodes.values():
-        node.weight = weights.get(node.scope, node.weight)
-
     tmp = OrderedDict()
     for idx, node in enumerate(nodes.values()):
         node.idx = idx
         tmp[idx] = node
     nodes = tmp
+
+    nodes = add_missing_types(nodes)
+
+    for node in nodes.values():
+        node.weight = weights.get(node.scope, node.weight)
 
     return Graph(nodes, outputs, max_depth, basic_blocks)
 
@@ -448,6 +448,21 @@ def add_missing_types(nodes: GraphNodes) -> GraphNodes:
                 node.value_type = list
             elif 'ImplicitTensorToNum' in node.scope:
                 node.value_type = int
+            elif 'prim::ListUnpack' in node.scope or 'prim::TupleUnpack' in node.scope:
+                father = node.in_nodes[0]
+                if 'aten::chunk' in father.scope:
+                    node.value_type = Tensor
+                else:
+                    # if father is a layer we assime all outputs are tensors
+                    # otherwise we assume the pack/unpack are symetric aka first packed value is first unpacked value
+                    # so we propagate the type
+                    idx = father.out_nodes.indexOf(node)
+                    if father.type is NodeTypes.LAYER:
+                        node.value_type = Tensor
+                    else:
+                        matching_input = father.in_nodes[idx]
+                        node.value = matching_input.value
+                        node.value_type = matching_input.value_type
         elif 'NumToTensor' in node.scope:
             node.value_type = int
         if node.valueType() is type(None):
