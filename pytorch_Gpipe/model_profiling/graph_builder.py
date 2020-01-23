@@ -12,6 +12,10 @@ from typing import Callable, List, Dict, OrderedDict as OrderedDictType, Optiona
 
 __all__ = ["build_graph"]
 
+# TODO support list and tuple layer outputs
+# TODO if we have l(x,x) it will register only as 1 input
+#  similarly l(x,y,x) will only have 2 inputs
+
 
 def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, max_depth: int = 1000, basic_blocks: Optional[Tuple[torch.nn.Module, ...]] = None, use_profiler: bool = True, n_iter: int = 10, weights: Optional[Dict[str, Any]] = None, minimal: bool = False) -> Graph:
     if weights is None:
@@ -158,10 +162,12 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
             # profiled layer
             node_scope = encasing_scope
             node_type = NodeTypes.LAYER
-            # TODO this is not correct for layer with multiple outputs should be list or tuple
+            # this is not correct for layer with multiple outputs should be list or tuple
+            # later during add_missing_types() we set it to tuple/list if multiple outputs
             value_type = Tensor
         else:
             # unprofiled op
+            # TODO maybe instead set the value_type according to the declaration file?
             if trace_node.scopeName() == "":
                 # unporfiled op to level
                 node_scope = partials["__module"]
@@ -185,7 +191,6 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
                 # unprofiled other
                 assert False, f"unknown scope {trace_node.scopeName()}"
 
-        nOuts = 1
         # add node for each output
         for i, output in enumerate(trace_node.outputs()):
             # TODO in some cases we can know the shape of the tensor per edge
@@ -210,7 +215,6 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
 
             new_node.value_type = value_type
             nodes[unique_id] = new_node
-
             # if tensor node set type accordingly
             if output.isCompleteTensor():
                 new_node.value_type = torch.Tensor
@@ -219,13 +223,14 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
             if i != 0:
                 if node_type != NodeTypes.LAYER:
                     new_node.scope += f"{i} "
-                parent = nodes[unique_id - i]
-                new_node.add_in_node(parent.in_nodes[0])
-                parent.in_nodes[0].add_out_node(new_node)
-                nOuts += 1
+                first_output_node = nodes[unique_id - i]
+                parent = first_output_node.in_nodes[0]
+                new_node.add_in_node(parent)
+                parent.add_out_node(new_node)
+                parent.value_type = list
 
         # add output idx for op with multiple outputs
-        if nOuts > 1 and nodes[unique_id - i].type != NodeTypes.LAYER:
+        if trace_node.outputsSize() > 1 and nodes[unique_id - i].type != NodeTypes.LAYER:
             nodes[unique_id - i].scope += "0 "
 
     return nodes
@@ -436,10 +441,15 @@ def add_missing_types(nodes: GraphNodes) -> GraphNodes:
         if node.valueType() is type(None):
             if 'aten::size' in node.scope or 'aten::Int' in node.scope:
                 node.value_type = int
-            elif 'prim::ListConstruct' in node.scope or 'aten::chunk' in node.scope or 'prim::TupleConstruct':
+            elif 'aten::chunk' in node.scope or 'prim::TupleConstruct' in node.scope:
+                node.value_type = tuple
+            elif 'prim::ListConstruct' in node.scope:
                 node.value_type = list
             elif 'ImplicitTensorToNum' in node.scope:
                 node.value_type = int
         elif 'NumToTensor' in node.scope:
             node.value_type = int
+        if node.valueType() is type(None):
+            # TODO there are nodes list prim::TupleUnpack for which we do not have a value or a value_type
+            print(node.scope)
     return nodes
