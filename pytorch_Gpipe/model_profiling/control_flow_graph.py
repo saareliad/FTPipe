@@ -6,8 +6,6 @@ from torch.nn import Module
 import pickle
 import collections
 
-# TODO support list and tuple layer outputs
-
 
 class NodeTypes(Enum):
     '''
