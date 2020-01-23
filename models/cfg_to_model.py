@@ -44,7 +44,8 @@ def get_partitioning(cfg, model_instance=None):
     generated_file_name = CFG_TO_GENERATED_FILE_NAME[cfg]
     generated = importlib.import_module(
         "." + generated_file_name, package=_PARTITIONED_MODELS_PACKAGE)
-    createConfig = generated.createConfig
+    
+    createConfig = generated.createConfig if hasattr(generated, "createConfig") else generated.create_pipeline_configuration
 
     # Create instance of normal model
     if model_instance:

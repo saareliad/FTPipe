@@ -643,15 +643,25 @@ def get_dataloaders(args):
     return train_dl, test_dl
 
 
+def get_device(args):
+    if hasattr(args, "stage_to_device_map"):
+        stage_to_device_map = args.stage_to_device_map
+        cuda_device_id = stage_to_device_map[args.stage]
+        device = torch.device('cpu' if args.cpu else f"cuda:{cuda_device_id}")
+    else:
+        device = torch.device('cpu' if args.cpu else f"cuda:{args.local_rank}")
+    return device
+
+
 def main():
     args = parse_cli()
     parse_json_config(args)
     parse_env_vars(args)
     args.world_size = get_world_size(args.distributed_backend)
 
-    device = torch.device('cpu' if args.cpu else f"cuda:{args.local_rank}")
-    if not args.cpu:
-        torch.cuda.set_device(device)
+    # device = get_device(args)  # torch.device('cpu' if args.cpu else f"cuda:{args.local_rank}")
+    # if not args.cpu:
+    #     torch.cuda.set_device(device)
 
     # Set Random Seed
     if args.seed is None:
@@ -676,6 +686,11 @@ def main():
     else:
         raise NotImplementedError()
 
+    # torch.device('cpu' if args.cpu else f"cuda:{args.local_rank}")
+    device = get_device(args)
+    if not args.cpu:
+        torch.cuda.set_device(device)
+
     assert_args(args)
 
     if args.debug:
@@ -688,7 +703,7 @@ def main():
         ptvsd.wait_for_attach()
 
     logger = FileLogger(args.logdir, global_rank=args.rank,
-                        local_rank=args.local_rank, name='msnag', world_size=args.world_size, 
+                        local_rank=args.local_rank, name='msnag', world_size=args.world_size,
                         name_prefix=args.out_filename)  # TODO: real name
 
     partition_using_gap_aware = hack_trainer_type_to_gap_aware(args)

@@ -37,7 +37,7 @@ class Partition(nn.Module):
         elif isinstance(layers, nn.Module):
             self.layers = layers
 
-        if self._HAS_DUMMY_FORWARD:
+        if self._HAS_DUMMY_FORWARD or self._REQ_GRAD:
             # TODO: can print if is_replaced
             replace_inplace_for_first_innermost_layer_(self.layers)
 

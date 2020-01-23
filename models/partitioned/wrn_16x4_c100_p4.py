@@ -4,12 +4,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 from itertools import chain
 import operator
-from typing import Optional, Tuple, Iterator, Iterable
-from torch.nn.modules.pooling import AvgPool2d
-from torch.nn.modules.activation import ReLU
+from typing import Optional, Tuple, Iterator, Iterable,OrderedDict,Dict
+import collections
 from torch.nn.modules.linear import Linear
-from torch.nn.modules.conv import Conv2d
 from torch.nn.modules.batchnorm import BatchNorm2d
+from torch.nn.modules.pooling import AvgPool2d
+from torch.nn.modules.conv import Conv2d
+from torch.nn.modules.activation import ReLU
 # this is an auto generated file do not edit unless you know what you are doing
 
 
@@ -21,8 +22,8 @@ from torch.nn.modules.batchnorm import BatchNorm2d
 # partition 3 {'inputs': {2}, 'outputs': {'output0'}}
 # model outputs {3}
 
-def createConfig(model,DEBUG=False,partitions_only=False):
-    layer_dict = layerDict(model,depth=1000)
+def create_pipeline_configuration(model,DEBUG=False,partitions_only=False):
+    layer_dict = layerDict(model,depth=1000,basic_blocks=())
     tensor_dict = tensorDict(model)
     
     # now constructing the partitions in order
@@ -49,9 +50,6 @@ def createConfig(model,DEBUG=False,partitions_only=False):
         'WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[1]/Conv2d[conv2]',
         'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn1]',
         'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu1]',
-        'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1]',
-        'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2]',
-        'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu2]',
         'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]']
     buffer_scopes = []
     parameter_scopes = []
@@ -60,18 +58,16 @@ def createConfig(model,DEBUG=False,partitions_only=False):
     parameters = {p: tensor_dict[p] for p in parameter_scopes}
     partition1 = WideResNetPartition1(layers,buffers,parameters)
 
-    layer_scopes = ['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2]',
+    layer_scopes = ['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1]',
+        'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2]',
+        'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu2]',
+        'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2]',
         'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn1]',
         'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/ReLU[relu1]',
         'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/Conv2d[conv1]',
         'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn2]',
         'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/ReLU[relu2]',
-        'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/Conv2d[conv2]',
-        'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn1]',
-        'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu1]',
-        'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1]',
-        'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2]',
-        'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]']
+        'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/Conv2d[conv2]']
     buffer_scopes = []
     parameter_scopes = []
     layers = {l: layer_dict[l] for l in layer_scopes}
@@ -79,8 +75,13 @@ def createConfig(model,DEBUG=False,partitions_only=False):
     parameters = {p: tensor_dict[p] for p in parameter_scopes}
     partition2 = WideResNetPartition2(layers,buffers,parameters)
 
-    layer_scopes = ['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu2]',
+    layer_scopes = ['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn1]',
+        'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu1]',
+        'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1]',
+        'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2]',
+        'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu2]',
         'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2]',
+        'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]',
         'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn1]',
         'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/ReLU[relu1]',
         'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/Conv2d[conv1]',
@@ -99,10 +100,10 @@ def createConfig(model,DEBUG=False,partitions_only=False):
     partition3 = WideResNetPartition3(layers,buffers,parameters)
 
     # creating configuration
-    config = {0: {'inputs': ['input0'], 'outputs': ['WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[0]/aten::add211', 'WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[1]/ReLU[relu1]']},
-            1: {'inputs': ['WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[0]/aten::add211', 'WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[1]/ReLU[relu1]'], 'outputs': ['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]', 'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu2]']},
-            2: {'inputs': ['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]', 'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu2]'], 'outputs': ['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2]', 'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]']},
-            3: {'inputs': ['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2]', 'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]'], 'outputs': ['WideResNet/Linear[fc]']}
+    config = {0: {'inputs': ['input0'], 'outputs': ['WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[0]/aten::add1228', 'WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[1]/ReLU[relu1]']},
+            1: {'inputs': ['WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[0]/aten::add1228', 'WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[1]/ReLU[relu1]'], 'outputs': ['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]', 'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu1]']},
+            2: {'inputs': ['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]', 'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu1]'], 'outputs': ['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/aten::add1450']},
+            3: {'inputs': ['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/aten::add1450'], 'outputs': ['WideResNet/Linear[fc]']}
             }
     device = 'cpu' if DEBUG else torch.device('cuda:0')
     partition0.device=device
@@ -214,7 +215,7 @@ class WideResNetPartition0(nn.Module):
         # WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2]
         t_1 = torch.add(input=self.l_7(t_0), other=self.l_6(self.l_5(self.l_4(self.l_3(t_0)))))
         # returing:
-        # WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[0]/aten::add211
+        # WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[0]/aten::add1228
         # WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[1]/ReLU[relu1]
         return (t_1, self.l_9(self.l_8(t_1)))
 
@@ -282,7 +283,7 @@ class WideResNetPartition1(nn.Module):
         super(WideResNetPartition1, self).__init__()
         # initializing partition layers
         assert isinstance(layers,dict), f'expected layers to be of type dict but got type{type(layers)}'
-        assert(len(layers) == 10)
+        assert(len(layers) == 7)
         assert(all(isinstance(k, str) for k in layers.keys())), 'string keys are expected'
         assert(all(isinstance(v, nn.Module) for v in layers.values())), 'Module values are expected'
         # WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[1]/Conv2d[conv1]
@@ -309,22 +310,10 @@ class WideResNetPartition1(nn.Module):
         assert 'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu1]' in layers, 'layer WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu1] was expected but not given'
         self.l_5 = layers['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu1]']
         assert isinstance(self.l_5,ReLU) ,f'layers[WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu1]] is expected to be of type ReLU but was of type {type(self.l_5)}'
-        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1]
-        assert 'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1]' in layers, 'layer WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1] was expected but not given'
-        self.l_6 = layers['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1]']
-        assert isinstance(self.l_6,Conv2d) ,f'layers[WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_6)}'
-        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2]
-        assert 'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2]' in layers, 'layer WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2] was expected but not given'
-        self.l_7 = layers['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2]']
-        assert isinstance(self.l_7,BatchNorm2d) ,f'layers[WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_7)}'
-        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu2]
-        assert 'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu2]' in layers, 'layer WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu2] was expected but not given'
-        self.l_8 = layers['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu2]']
-        assert isinstance(self.l_8,ReLU) ,f'layers[WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu2]] is expected to be of type ReLU but was of type {type(self.l_8)}'
         # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]
         assert 'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]' in layers, 'layer WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut] was expected but not given'
-        self.l_9 = layers['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]']
-        assert isinstance(self.l_9,Conv2d) ,f'layers[WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]] is expected to be of type Conv2d but was of type {type(self.l_9)}'
+        self.l_6 = layers['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]']
+        assert isinstance(self.l_6,Conv2d) ,f'layers[WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]] is expected to be of type Conv2d but was of type {type(self.l_6)}'
 
         # initializing partition buffers
         assert isinstance(buffers,dict), f'expected buffers to be of type dict got {type(buffers)}'
@@ -344,10 +333,7 @@ class WideResNetPartition1(nn.Module):
                         'l_3': 'block1.layer.1.conv2',
                         'l_4': 'block2.layer.0.bn1',
                         'l_5': 'block2.layer.0.relu1',
-                        'l_6': 'block2.layer.0.conv1',
-                        'l_7': 'block2.layer.0.bn2',
-                        'l_8': 'block2.layer.0.relu2',
-                        'l_9': 'block2.layer.0.convShortcut'}
+                        'l_6': 'block2.layer.0.convShortcut'}
 
     def forward(self, x0, x1):
         # WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[1]/Conv2d[conv1] <=> self.l_0
@@ -356,11 +342,8 @@ class WideResNetPartition1(nn.Module):
         # WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[1]/Conv2d[conv2] <=> self.l_3
         # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn1] <=> self.l_4
         # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu1] <=> self.l_5
-        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1] <=> self.l_6
-        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2] <=> self.l_7
-        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu2] <=> self.l_8
-        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut] <=> self.l_9
-        # WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[0]/aten::add211 <=> x0
+        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut] <=> self.l_6
+        # WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[0]/aten::add1228 <=> x0
         # WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[1]/ReLU[relu1] <=> x1
 
         # calling WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu1] with arguments:
@@ -368,8 +351,8 @@ class WideResNetPartition1(nn.Module):
         t_0 = self.l_5(self.l_4(torch.add(input=x0, other=self.l_3(self.l_2(self.l_1(self.l_0(x1)))))))
         # returing:
         # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]
-        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu2]
-        return (self.l_9(t_0), self.l_8(self.l_7(self.l_6(t_0))))
+        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu1]
+        return (self.l_6(t_0), t_0)
 
     def state_dict(self,device):
         # we return the state dict of this part as it should be in the original model
@@ -435,57 +418,49 @@ class WideResNetPartition2(nn.Module):
         super(WideResNetPartition2, self).__init__()
         # initializing partition layers
         assert isinstance(layers,dict), f'expected layers to be of type dict but got type{type(layers)}'
-        assert(len(layers) == 12)
+        assert(len(layers) == 10)
         assert(all(isinstance(k, str) for k in layers.keys())), 'string keys are expected'
         assert(all(isinstance(v, nn.Module) for v in layers.values())), 'Module values are expected'
+        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1]
+        assert 'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1]' in layers, 'layer WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1] was expected but not given'
+        self.l_0 = layers['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1]']
+        assert isinstance(self.l_0,Conv2d) ,f'layers[WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_0)}'
+        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2]
+        assert 'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2]' in layers, 'layer WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2] was expected but not given'
+        self.l_1 = layers['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2]']
+        assert isinstance(self.l_1,BatchNorm2d) ,f'layers[WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_1)}'
+        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu2]
+        assert 'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu2]' in layers, 'layer WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu2] was expected but not given'
+        self.l_2 = layers['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu2]']
+        assert isinstance(self.l_2,ReLU) ,f'layers[WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu2]] is expected to be of type ReLU but was of type {type(self.l_2)}'
         # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2]
         assert 'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2]' in layers, 'layer WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2] was expected but not given'
-        self.l_0 = layers['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2]']
-        assert isinstance(self.l_0,Conv2d) ,f'layers[WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_0)}'
+        self.l_3 = layers['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2]']
+        assert isinstance(self.l_3,Conv2d) ,f'layers[WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_3)}'
         # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn1]
         assert 'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn1]' in layers, 'layer WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn1] was expected but not given'
-        self.l_1 = layers['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn1]']
-        assert isinstance(self.l_1,BatchNorm2d) ,f'layers[WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_1)}'
+        self.l_4 = layers['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn1]']
+        assert isinstance(self.l_4,BatchNorm2d) ,f'layers[WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_4)}'
         # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/ReLU[relu1]
         assert 'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/ReLU[relu1]' in layers, 'layer WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/ReLU[relu1] was expected but not given'
-        self.l_2 = layers['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/ReLU[relu1]']
-        assert isinstance(self.l_2,ReLU) ,f'layers[WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/ReLU[relu1]] is expected to be of type ReLU but was of type {type(self.l_2)}'
+        self.l_5 = layers['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/ReLU[relu1]']
+        assert isinstance(self.l_5,ReLU) ,f'layers[WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/ReLU[relu1]] is expected to be of type ReLU but was of type {type(self.l_5)}'
         # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/Conv2d[conv1]
         assert 'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/Conv2d[conv1]' in layers, 'layer WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/Conv2d[conv1] was expected but not given'
-        self.l_3 = layers['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/Conv2d[conv1]']
-        assert isinstance(self.l_3,Conv2d) ,f'layers[WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_3)}'
+        self.l_6 = layers['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/Conv2d[conv1]']
+        assert isinstance(self.l_6,Conv2d) ,f'layers[WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_6)}'
         # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn2]
         assert 'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn2]' in layers, 'layer WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn2] was expected but not given'
-        self.l_4 = layers['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn2]']
-        assert isinstance(self.l_4,BatchNorm2d) ,f'layers[WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_4)}'
+        self.l_7 = layers['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn2]']
+        assert isinstance(self.l_7,BatchNorm2d) ,f'layers[WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_7)}'
         # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/ReLU[relu2]
         assert 'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/ReLU[relu2]' in layers, 'layer WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/ReLU[relu2] was expected but not given'
-        self.l_5 = layers['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/ReLU[relu2]']
-        assert isinstance(self.l_5,ReLU) ,f'layers[WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/ReLU[relu2]] is expected to be of type ReLU but was of type {type(self.l_5)}'
+        self.l_8 = layers['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/ReLU[relu2]']
+        assert isinstance(self.l_8,ReLU) ,f'layers[WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/ReLU[relu2]] is expected to be of type ReLU but was of type {type(self.l_8)}'
         # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/Conv2d[conv2]
         assert 'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/Conv2d[conv2]' in layers, 'layer WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/Conv2d[conv2] was expected but not given'
-        self.l_6 = layers['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/Conv2d[conv2]']
-        assert isinstance(self.l_6,Conv2d) ,f'layers[WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_6)}'
-        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn1]
-        assert 'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn1]' in layers, 'layer WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn1] was expected but not given'
-        self.l_7 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn1]']
-        assert isinstance(self.l_7,BatchNorm2d) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_7)}'
-        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu1]
-        assert 'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu1]' in layers, 'layer WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu1] was expected but not given'
-        self.l_8 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu1]']
-        assert isinstance(self.l_8,ReLU) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu1]] is expected to be of type ReLU but was of type {type(self.l_8)}'
-        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1]
-        assert 'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1]' in layers, 'layer WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1] was expected but not given'
-        self.l_9 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1]']
-        assert isinstance(self.l_9,Conv2d) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_9)}'
-        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2]
-        assert 'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2]' in layers, 'layer WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2] was expected but not given'
-        self.l_10 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2]']
-        assert isinstance(self.l_10,BatchNorm2d) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_10)}'
-        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]
-        assert 'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]' in layers, 'layer WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut] was expected but not given'
-        self.l_11 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]']
-        assert isinstance(self.l_11,Conv2d) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]] is expected to be of type Conv2d but was of type {type(self.l_11)}'
+        self.l_9 = layers['WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/Conv2d[conv2]']
+        assert isinstance(self.l_9,Conv2d) ,f'layers[WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_9)}'
 
         # initializing partition buffers
         assert isinstance(buffers,dict), f'expected buffers to be of type dict got {type(buffers)}'
@@ -499,46 +474,38 @@ class WideResNetPartition2(nn.Module):
         assert all(isinstance(k,str) for k in parameters.keys()), 'string keys are expected'
         assert all(isinstance(v,Tensor) for v in parameters.values()), 'Tensor values are expected'
         self.device = torch.device('cuda:2')
-        self.lookup = { 'l_0': 'block2.layer.0.conv2',
-                        'l_1': 'block2.layer.1.bn1',
-                        'l_2': 'block2.layer.1.relu1',
-                        'l_3': 'block2.layer.1.conv1',
-                        'l_4': 'block2.layer.1.bn2',
-                        'l_5': 'block2.layer.1.relu2',
-                        'l_6': 'block2.layer.1.conv2',
-                        'l_7': 'block3.layer.0.bn1',
-                        'l_8': 'block3.layer.0.relu1',
-                        'l_9': 'block3.layer.0.conv1',
-                        'l_10': 'block3.layer.0.bn2',
-                        'l_11': 'block3.layer.0.convShortcut'}
+        self.lookup = { 'l_0': 'block2.layer.0.conv1',
+                        'l_1': 'block2.layer.0.bn2',
+                        'l_2': 'block2.layer.0.relu2',
+                        'l_3': 'block2.layer.0.conv2',
+                        'l_4': 'block2.layer.1.bn1',
+                        'l_5': 'block2.layer.1.relu1',
+                        'l_6': 'block2.layer.1.conv1',
+                        'l_7': 'block2.layer.1.bn2',
+                        'l_8': 'block2.layer.1.relu2',
+                        'l_9': 'block2.layer.1.conv2'}
 
     def forward(self, x0, x1):
-        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2] <=> self.l_0
-        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn1] <=> self.l_1
-        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/ReLU[relu1] <=> self.l_2
-        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/Conv2d[conv1] <=> self.l_3
-        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn2] <=> self.l_4
-        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/ReLU[relu2] <=> self.l_5
-        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/Conv2d[conv2] <=> self.l_6
-        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn1] <=> self.l_7
-        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu1] <=> self.l_8
-        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1] <=> self.l_9
-        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2] <=> self.l_10
-        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut] <=> self.l_11
+        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1] <=> self.l_0
+        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2] <=> self.l_1
+        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu2] <=> self.l_2
+        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2] <=> self.l_3
+        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn1] <=> self.l_4
+        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/ReLU[relu1] <=> self.l_5
+        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/Conv2d[conv1] <=> self.l_6
+        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn2] <=> self.l_7
+        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/ReLU[relu2] <=> self.l_8
+        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/Conv2d[conv2] <=> self.l_9
         # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut] <=> x0
-        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu2] <=> x1
+        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu1] <=> x1
 
         # calling torch.add with arguments:
         # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]
         # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2]
-        t_0 = torch.add(input=x0, other=self.l_0(x1))
-        # calling WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu1] with arguments:
-        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn1]
-        t_1 = self.l_8(self.l_7(torch.add(input=t_0, other=self.l_6(self.l_5(self.l_4(self.l_3(self.l_2(self.l_1(t_0)))))))))
+        t_0 = torch.add(input=x0, other=self.l_3(self.l_2(self.l_1(self.l_0(x1)))))
         # returing:
-        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2]
-        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]
-        return (self.l_10(self.l_9(t_1)), self.l_11(t_1))
+        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/aten::add1450
+        return (torch.add(input=t_0, other=self.l_9(self.l_8(self.l_7(self.l_6(self.l_5(self.l_4(t_0))))))),)
 
     def state_dict(self,device):
         # we return the state dict of this part as it should be in the original model
@@ -604,57 +571,77 @@ class WideResNetPartition3(nn.Module):
         super(WideResNetPartition3, self).__init__()
         # initializing partition layers
         assert isinstance(layers,dict), f'expected layers to be of type dict but got type{type(layers)}'
-        assert(len(layers) == 12)
+        assert(len(layers) == 17)
         assert(all(isinstance(k, str) for k in layers.keys())), 'string keys are expected'
         assert(all(isinstance(v, nn.Module) for v in layers.values())), 'Module values are expected'
+        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn1]
+        assert 'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn1]' in layers, 'layer WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn1] was expected but not given'
+        self.l_0 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn1]']
+        assert isinstance(self.l_0,BatchNorm2d) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_0)}'
+        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu1]
+        assert 'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu1]' in layers, 'layer WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu1] was expected but not given'
+        self.l_1 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu1]']
+        assert isinstance(self.l_1,ReLU) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu1]] is expected to be of type ReLU but was of type {type(self.l_1)}'
+        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1]
+        assert 'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1]' in layers, 'layer WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1] was expected but not given'
+        self.l_2 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1]']
+        assert isinstance(self.l_2,Conv2d) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_2)}'
+        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2]
+        assert 'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2]' in layers, 'layer WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2] was expected but not given'
+        self.l_3 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2]']
+        assert isinstance(self.l_3,BatchNorm2d) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_3)}'
         # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu2]
         assert 'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu2]' in layers, 'layer WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu2] was expected but not given'
-        self.l_0 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu2]']
-        assert isinstance(self.l_0,ReLU) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu2]] is expected to be of type ReLU but was of type {type(self.l_0)}'
+        self.l_4 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu2]']
+        assert isinstance(self.l_4,ReLU) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu2]] is expected to be of type ReLU but was of type {type(self.l_4)}'
         # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2]
         assert 'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2]' in layers, 'layer WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2] was expected but not given'
-        self.l_1 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2]']
-        assert isinstance(self.l_1,Conv2d) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_1)}'
+        self.l_5 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2]']
+        assert isinstance(self.l_5,Conv2d) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_5)}'
+        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]
+        assert 'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]' in layers, 'layer WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut] was expected but not given'
+        self.l_6 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]']
+        assert isinstance(self.l_6,Conv2d) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]] is expected to be of type Conv2d but was of type {type(self.l_6)}'
         # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn1]
         assert 'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn1]' in layers, 'layer WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn1] was expected but not given'
-        self.l_2 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn1]']
-        assert isinstance(self.l_2,BatchNorm2d) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_2)}'
+        self.l_7 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn1]']
+        assert isinstance(self.l_7,BatchNorm2d) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_7)}'
         # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/ReLU[relu1]
         assert 'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/ReLU[relu1]' in layers, 'layer WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/ReLU[relu1] was expected but not given'
-        self.l_3 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/ReLU[relu1]']
-        assert isinstance(self.l_3,ReLU) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/ReLU[relu1]] is expected to be of type ReLU but was of type {type(self.l_3)}'
+        self.l_8 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/ReLU[relu1]']
+        assert isinstance(self.l_8,ReLU) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/ReLU[relu1]] is expected to be of type ReLU but was of type {type(self.l_8)}'
         # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/Conv2d[conv1]
         assert 'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/Conv2d[conv1]' in layers, 'layer WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/Conv2d[conv1] was expected but not given'
-        self.l_4 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/Conv2d[conv1]']
-        assert isinstance(self.l_4,Conv2d) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_4)}'
+        self.l_9 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/Conv2d[conv1]']
+        assert isinstance(self.l_9,Conv2d) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_9)}'
         # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn2]
         assert 'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn2]' in layers, 'layer WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn2] was expected but not given'
-        self.l_5 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn2]']
-        assert isinstance(self.l_5,BatchNorm2d) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_5)}'
+        self.l_10 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn2]']
+        assert isinstance(self.l_10,BatchNorm2d) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_10)}'
         # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/ReLU[relu2]
         assert 'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/ReLU[relu2]' in layers, 'layer WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/ReLU[relu2] was expected but not given'
-        self.l_6 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/ReLU[relu2]']
-        assert isinstance(self.l_6,ReLU) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/ReLU[relu2]] is expected to be of type ReLU but was of type {type(self.l_6)}'
+        self.l_11 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/ReLU[relu2]']
+        assert isinstance(self.l_11,ReLU) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/ReLU[relu2]] is expected to be of type ReLU but was of type {type(self.l_11)}'
         # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/Conv2d[conv2]
         assert 'WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/Conv2d[conv2]' in layers, 'layer WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/Conv2d[conv2] was expected but not given'
-        self.l_7 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/Conv2d[conv2]']
-        assert isinstance(self.l_7,Conv2d) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_7)}'
+        self.l_12 = layers['WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/Conv2d[conv2]']
+        assert isinstance(self.l_12,Conv2d) ,f'layers[WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_12)}'
         # WideResNet/BatchNorm2d[bn1]
         assert 'WideResNet/BatchNorm2d[bn1]' in layers, 'layer WideResNet/BatchNorm2d[bn1] was expected but not given'
-        self.l_8 = layers['WideResNet/BatchNorm2d[bn1]']
-        assert isinstance(self.l_8,BatchNorm2d) ,f'layers[WideResNet/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_8)}'
+        self.l_13 = layers['WideResNet/BatchNorm2d[bn1]']
+        assert isinstance(self.l_13,BatchNorm2d) ,f'layers[WideResNet/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_13)}'
         # WideResNet/ReLU[relu]
         assert 'WideResNet/ReLU[relu]' in layers, 'layer WideResNet/ReLU[relu] was expected but not given'
-        self.l_9 = layers['WideResNet/ReLU[relu]']
-        assert isinstance(self.l_9,ReLU) ,f'layers[WideResNet/ReLU[relu]] is expected to be of type ReLU but was of type {type(self.l_9)}'
+        self.l_14 = layers['WideResNet/ReLU[relu]']
+        assert isinstance(self.l_14,ReLU) ,f'layers[WideResNet/ReLU[relu]] is expected to be of type ReLU but was of type {type(self.l_14)}'
         # WideResNet/AvgPool2d[avg_pool]
         assert 'WideResNet/AvgPool2d[avg_pool]' in layers, 'layer WideResNet/AvgPool2d[avg_pool] was expected but not given'
-        self.l_10 = layers['WideResNet/AvgPool2d[avg_pool]']
-        assert isinstance(self.l_10,AvgPool2d) ,f'layers[WideResNet/AvgPool2d[avg_pool]] is expected to be of type AvgPool2d but was of type {type(self.l_10)}'
+        self.l_15 = layers['WideResNet/AvgPool2d[avg_pool]']
+        assert isinstance(self.l_15,AvgPool2d) ,f'layers[WideResNet/AvgPool2d[avg_pool]] is expected to be of type AvgPool2d but was of type {type(self.l_15)}'
         # WideResNet/Linear[fc]
         assert 'WideResNet/Linear[fc]' in layers, 'layer WideResNet/Linear[fc] was expected but not given'
-        self.l_11 = layers['WideResNet/Linear[fc]']
-        assert isinstance(self.l_11,Linear) ,f'layers[WideResNet/Linear[fc]] is expected to be of type Linear but was of type {type(self.l_11)}'
+        self.l_16 = layers['WideResNet/Linear[fc]']
+        assert isinstance(self.l_16,Linear) ,f'layers[WideResNet/Linear[fc]] is expected to be of type Linear but was of type {type(self.l_16)}'
 
         # initializing partition buffers
         assert isinstance(buffers,dict), f'expected buffers to be of type dict got {type(buffers)}'
@@ -668,45 +655,57 @@ class WideResNetPartition3(nn.Module):
         assert all(isinstance(k,str) for k in parameters.keys()), 'string keys are expected'
         assert all(isinstance(v,Tensor) for v in parameters.values()), 'Tensor values are expected'
         self.device = torch.device('cuda:3')
-        self.lookup = { 'l_0': 'block3.layer.0.relu2',
-                        'l_1': 'block3.layer.0.conv2',
-                        'l_2': 'block3.layer.1.bn1',
-                        'l_3': 'block3.layer.1.relu1',
-                        'l_4': 'block3.layer.1.conv1',
-                        'l_5': 'block3.layer.1.bn2',
-                        'l_6': 'block3.layer.1.relu2',
-                        'l_7': 'block3.layer.1.conv2',
-                        'l_8': 'bn1',
-                        'l_9': 'relu',
-                        'l_10': 'avg_pool',
-                        'l_11': 'fc'}
+        self.lookup = { 'l_0': 'block3.layer.0.bn1',
+                        'l_1': 'block3.layer.0.relu1',
+                        'l_2': 'block3.layer.0.conv1',
+                        'l_3': 'block3.layer.0.bn2',
+                        'l_4': 'block3.layer.0.relu2',
+                        'l_5': 'block3.layer.0.conv2',
+                        'l_6': 'block3.layer.0.convShortcut',
+                        'l_7': 'block3.layer.1.bn1',
+                        'l_8': 'block3.layer.1.relu1',
+                        'l_9': 'block3.layer.1.conv1',
+                        'l_10': 'block3.layer.1.bn2',
+                        'l_11': 'block3.layer.1.relu2',
+                        'l_12': 'block3.layer.1.conv2',
+                        'l_13': 'bn1',
+                        'l_14': 'relu',
+                        'l_15': 'avg_pool',
+                        'l_16': 'fc'}
 
-    def forward(self, x0, x1):
-        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu2] <=> self.l_0
-        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2] <=> self.l_1
-        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn1] <=> self.l_2
-        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/ReLU[relu1] <=> self.l_3
-        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/Conv2d[conv1] <=> self.l_4
-        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn2] <=> self.l_5
-        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/ReLU[relu2] <=> self.l_6
-        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/Conv2d[conv2] <=> self.l_7
-        # WideResNet/BatchNorm2d[bn1] <=> self.l_8
-        # WideResNet/ReLU[relu] <=> self.l_9
-        # WideResNet/AvgPool2d[avg_pool] <=> self.l_10
-        # WideResNet/Linear[fc] <=> self.l_11
-        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2] <=> x0
-        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut] <=> x1
+    def forward(self, x0):
+        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn1] <=> self.l_0
+        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu1] <=> self.l_1
+        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv1] <=> self.l_2
+        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn2] <=> self.l_3
+        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu2] <=> self.l_4
+        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2] <=> self.l_5
+        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut] <=> self.l_6
+        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn1] <=> self.l_7
+        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/ReLU[relu1] <=> self.l_8
+        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/Conv2d[conv1] <=> self.l_9
+        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/BatchNorm2d[bn2] <=> self.l_10
+        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/ReLU[relu2] <=> self.l_11
+        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[1]/Conv2d[conv2] <=> self.l_12
+        # WideResNet/BatchNorm2d[bn1] <=> self.l_13
+        # WideResNet/ReLU[relu] <=> self.l_14
+        # WideResNet/AvgPool2d[avg_pool] <=> self.l_15
+        # WideResNet/Linear[fc] <=> self.l_16
+        # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[1]/aten::add1450 <=> x0
 
+        # calling WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/ReLU[relu1] with arguments:
+        # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/BatchNorm2d[bn1]
+        t_0 = self.l_1(self.l_0(x0))
         # calling torch.add with arguments:
         # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[convShortcut]
         # WideResNet/NetworkBlock[block3]/Sequential[layer]/BasicBlock[0]/Conv2d[conv2]
-        t_0 = torch.add(input=x1, other=self.l_1(self.l_0(x0)))
+        t_1 = torch.add(input=self.l_6(t_0), other=self.l_5(self.l_4(self.l_3(self.l_2(t_0)))))
         # calling WideResNet/AvgPool2d[avg_pool] with arguments:
         # WideResNet/ReLU[relu]
-        t_1 = self.l_10(self.l_9(self.l_8(torch.add(input=t_0, other=self.l_7(self.l_6(self.l_5(self.l_4(self.l_3(self.l_2(t_0))))))))))
+        t_2 = self.l_15(self.l_14(self.l_13(torch.add(input=t_1, other=self.l_12(self.l_11(self.l_10(self.l_9(self.l_8(self.l_7(t_1))))))))))
         # returing:
         # WideResNet/Linear[fc]
-        return (self.l_11(Tensor.view(t_1, size=[-1, 256])),)
+        return (self.l_16(Tensor.view(t_2, size=[-1, 256])),)
 
     def state_dict(self,device):
         # we return the state dict of this part as it should be in the original model
@@ -795,8 +794,8 @@ def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None, 
                 sub_module).__name__ + f"[{name}]", basic_blocks, full)
 
 
-def layerDict(model: nn.Module, depth=1000):
-    return {s: l for l, s, _ in traverse_model(model, depth)}
+def layerDict(model: nn.Module, depth=1000, basic_blocks=None) -> Dict[str, nn.Module]:
+    return {s: l for l, s, _ in traverse_model(model, depth, basic_blocks=basic_blocks)}
 
 
 def traverse_params_buffs(module: nn.Module, prefix: Optional[str] = None) -> Iterator[Tuple[torch.tensor, str]]:
@@ -826,5 +825,5 @@ def traverse_params_buffs(module: nn.Module, prefix: Optional[str] = None) -> It
         yield from traverse_params_buffs(sub_module, prefix + "/" + type(sub_module).__name__ + f"[{name}]")
 
 
-def tensorDict(model: nn.Module):
-    return {s: t for t, s in traverse_params_buffs(model)}
+def tensorDict(model: nn.Module) -> OrderedDict[str, Tensor]:
+    return collections.OrderedDict((s, t)for t, s in traverse_params_buffs(model))
