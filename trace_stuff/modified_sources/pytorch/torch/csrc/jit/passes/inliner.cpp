@@ -12,7 +12,7 @@ using namespace ::c10::prim;
 
 void inlineCalls(Block* block, int depth = 1000) {
   if (depth == 0) {
-    return
+    return;
   }
   for (auto it = block->nodes().begin(), end = block->nodes().end();
        it != end;) {
