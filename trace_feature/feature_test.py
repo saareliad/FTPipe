@@ -69,4 +69,4 @@ if __name__ == "__main__":
     traced = torch.jit.trace(model, sample, check_trace=False).graph
     torch._C._jit_pass_inline(traced)
     calls = len([n for n in traced.nodes() if n.kind() == "prim::CallMethod"])
-    assert calls == 5, f"expected 5 calls got {calls}"
+    assert calls == 0, f"expected 0 calls got {calls}"
