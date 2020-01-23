@@ -14,7 +14,7 @@ from itertools import chain
 from pytorch_Gpipe.delayedNorm import DelayedBatchNorm
 
 ExcInfo = Tuple[Type[BaseException], BaseException, TracebackType]
-open('pipelineLog.log', 'w').close()
+
 logging.basicConfig(
     filename="pipelineLog.log", level=logging.DEBUG, format='%(relativeCreated)6d %(message)s')
 

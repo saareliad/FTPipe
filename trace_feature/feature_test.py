@@ -51,16 +51,16 @@ if __name__ == "__main__":
     traced = torch.jit.trace(model, sample, check_trace=False).graph
 
     # check nothing inlined
-    calls = len(n for n in traced.nodes() if n.kind() == "prim::CallMethod")
+    calls = len([n for n in traced.nodes() if n.kind() == "prim::CallMethod"])
     assert calls == 2, f"expected 2 calls got {calls}"
 
     # check we inline TupleOut both in trace and graph
     torch._C._jit_pass_inline(traced, 1)
 
-    calls = len(n for n in traced.nodes() if n.kind() == "prim::CallMethod")
+    calls = len([n for n in traced.nodes() if n.kind() == "prim::CallMethod"])
     assert calls == 4, f"expected 4 calls got {calls}"
 
     graph = build_graph(model, sample, max_depth=1)
 
-    calss = len(n for n in graph.nodes if "Act" in n.scope)
+    calss = len([n for n in graph.nodes if "Act" in n.scope])
     assert calls == 4, f"expected 4 graph nodes got {calls}"
