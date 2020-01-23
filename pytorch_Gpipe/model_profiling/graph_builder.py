@@ -17,7 +17,7 @@ __all__ = ["build_graph"]
 #  similarly l(x,y,x) will only have 2 inputs
 
 
-def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, max_depth: int = 1000, basic_blocks: Optional[Tuple[torch.nn.Module, ...]] = None, use_profiler: bool = True, n_iter: int = 10, weights: Optional[Dict[str, Any]] = None, minimal: bool = False) -> Graph:
+def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, max_depth: int = 1000, basic_blocks: Optional[Tuple[torch.nn.Module, ...]] = None, use_profiler: bool = True, n_iter: int = 10, weights: Optional[Dict[str, Any]] = None) -> Graph:
     if weights is None:
         weights = dict()
     if kwargs is None:
@@ -54,7 +54,7 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
     torch._C._jit_set_inline_everything_mode(False)
     trace_graph = torch.jit.trace(model, sample_batch, check_trace=False).graph
     torch._C._jit_set_inline_everything_mode(old_value)
-    torch._C.torch._C._jit_pass_inline(trace_graph,max_depth)
+    torch._C.torch._C._jit_pass_inline(trace_graph, max_depth)
     # build the graph from trace
     nodes = add_nodes(trace_graph, new_to_old, partials, tensors)
 

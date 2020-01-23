@@ -8,13 +8,10 @@
     we can add depth/basic blocks parameters which will have default non influencing values thus we can have traces and profiles at the same resolution without information loss
 
 ## TODOS
-* implement solution for depth dependent tracing
 * how to handle basic blocks?
   - need to be able to access the nodes class during the trace should be possible via the prim::GetAttr Node
   - same as depth and we can use a dynamic cast
     or std::is_base_of to check if a basic block
-
-* if we inline some calls and not others than will tuple/list packing/ unpacking will be handeled correctly?
 
 
 

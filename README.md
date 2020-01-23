@@ -67,7 +67,7 @@ def profile_network(net, sample_batch,kwargs, basic_blocks, max_depth,n_iter)
 this function performs profiling of the network emiting a Profile object for each layer
 
 ```python
-def build_graph(model, sample_batch, kwargs, max_depth, basic_blocks, use_profiler, n_iter, weights, minimal)
+def build_graph(model, sample_batch, kwargs, max_depth, basic_blocks, use_profiler, n_iter, weights)
 ```
 this function builds a graph representing the model
 
@@ -114,7 +114,7 @@ this module is tasked with converting a model into our graph representation usin
 it digests the raw trace and omits a graph detailing the model according to given depth and basic blocks config
 
 ```python
-def build_graph(model, sample_batch, kwargs, max_depth, basic_blocks, use_profiler, n_iter, weights, minimal)
+def build_graph(model, sample_batch, kwargs, max_depth, basic_blocks, use_profiler, n_iter, weights)
 ```
 
 ### Graph Representation
