@@ -108,7 +108,7 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
         if trace_node.kind() == "prim::GetAttr":
             # first we do book keeping we remember the accessor to know where are we in the model's hierarchy
             # we do not add accessor nodes to the graph as they only provide context
-            accessor_name = trace_node['name']
+            accessor_name = trace_node.s('name')
             assert len(list(trace_node.inputs())) == 1
             assert len(list(trace_node.outputs())) == 1
             parent = trace_node.input()
@@ -141,7 +141,7 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
             raise NotImplementedError("prim::CallFunction not supported yet")
         elif trace_node.kind() == 'prim::CallMethod':
             # this is a layer call
-            accessor_name = trace_node["name"]
+            accessor_name = trace_node.s("name")
             assert accessor_name == "forward"
             layer_node = next(trace_node.inputs())
             layer_scope = accessors[layer_node.unique()]
