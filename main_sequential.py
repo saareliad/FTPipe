@@ -112,7 +112,7 @@ def assert_args(args):
 
 def auto_file_name(args):
     assert hasattr(args, "auto_file_name")
-    s = f'{args.model}_{args.dataset}_seq_seed_{args.seed}'
+    s = f'{args.model}_{args.dataset}_seq_bs_{args.bs_train}_seed_{args.seed}'
     args.out_filename = f"{args.out_filename}_{s}"
     print(f"Out File Name will be: {args.out_filename}")
 

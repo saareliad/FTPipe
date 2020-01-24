@@ -137,3 +137,21 @@ class GapAwareCVTrainer(CVTrainer):
         # self.gap_aware.try_apply_wd_correction_before_step()
         super().last_partition_step_and_statistics(x, y, loss, step=step)
         # TODO: self.ga.update_max_lr() add when we have per step scheduler
+
+
+
+class GBNCVTrainer(CVTrainer):
+    
+    def __init__(self, num_micro_batches, *args, **kw):
+        super().__init__(*args, **kw)
+        self.num_micro_batches = num_micro_batches
+
+    def backprop_last_partition(self, x, y):
+        micro_x = x.chunk(self.num_micro_batches)
+        micro_y = y.chunk(self.num_micro_batches)
+        return torch.cat([super().backprop_last_partition(mx,my) for mx,my in zip(micro_x,micro_y)])
+
+
+
+
+    

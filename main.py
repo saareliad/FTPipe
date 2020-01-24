@@ -127,6 +127,8 @@ def parse_json_config(args):
     for key, value in output.items():
         if key == 'seed' and 'seed_from_cmd' in output:
             continue
+        if key == 'bs_train' and 'bs_train_from_cmd' in output:
+            continue
         setattr(args, key, value)
 
     # Explicit yuck replace
@@ -466,7 +468,7 @@ def auto_file_name(args):
     ws = "ws_" if (hasattr(args, "weight_stashing")
                    and args.weight_stashing) else ""
     ga = "ga_" if hasattr(args, "gap_aware") else ""
-    s = f'{args.model}_{args.dataset}_{wp}_{ws}{ga}seed_{args.seed}'
+    s = f'{args.model}_{args.dataset}_{wp}_{ws}{ga}bs_{args.bs_train}_seed_{args.seed}'
     args.out_filename = f"{args.out_filename}_{s}"
     print(f"Out File Name will be: {args.out_filename}")
 
