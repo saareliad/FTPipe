@@ -63,5 +63,12 @@
     "work_scheduler": "1F1B",
     "cpu": false,
     "seed_from_cmd": true,
-    "auto_file_name": true
+    "bs_train_from_cmd": false,
+    "auto_file_name": true,
+    "stage_to_device_map": [0, 0, 0, 0],
+    "step_every": 1,
+    "base_lr_batch_size": 128,
+    "max_buffers": 2,
+    "log_frequency": 100
+
 }

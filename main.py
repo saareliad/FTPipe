@@ -1,6 +1,7 @@
 import argparse
 from pipeline import CommunicationHandlerBase, get_auto_comm_handler_cls
 from pipeline import SinglePartitionManager
+from pipeline import BigBatchManager
 
 from pipeline.training import AVAILABLE_TRAINERS
 from pipeline.tasks import AVAILABLE_TASKS
@@ -110,6 +111,12 @@ def parse_cli():
 
     parser.add_argument("--weight_stashing", action="store_true",
                         default=False, help="Do weight Stashing")
+    parser.add_argument("--log_frequency", type=int, default=100,
+                        help="Print extra statistics every given number of batches")
+    parser.add_argument("--max_buffers", type=int, default=2,
+                        help="Maximal Number of async recv buffers. "
+                        "With 1: it actaully means the recv is sync.(default=2 for best performance).")
+
     # TODO: option for weigth stashing just statistics.
 
     args = parser.parse_args()
@@ -468,7 +475,8 @@ def auto_file_name(args):
     ws = "ws_" if (hasattr(args, "weight_stashing")
                    and args.weight_stashing) else ""
     ga = "ga_" if hasattr(args, "gap_aware") else ""
-    s = f'{args.model}_{args.dataset}_{wp}_{ws}{ga}bs_{args.bs_train}_seed_{args.seed}'
+    bs = f"bs_{args.bs_train * args.step_every}_"
+    s = f'{args.model}_{args.dataset}_{wp}_{ws}{ga}{bs}seed_{args.seed}'
     args.out_filename = f"{args.out_filename}_{s}"
     print(f"Out File Name will be: {args.out_filename}")
 
@@ -693,6 +701,10 @@ def main():
     if not args.cpu:
         torch.cuda.set_device(device)
 
+    args.step_every = getattr(args, "step_every", 1)
+    args.base_lr_batch_size = getattr(
+        args, "base_lr_batch_size", args.bs_train)
+
     assert_args(args)
 
     if args.debug:
@@ -772,13 +784,25 @@ def main():
         configs, configs[args.stage]['model'],
         comm_handler, work_scheduler,
         training_tensor_shapes, eval_tensor_shapes, training_tensor_dtypes,
-        device, is_last_partition, is_first_partition)
+        device, is_last_partition, is_first_partition,
+        log_frequency=args.log_frequency,
+        max_buffers=args.max_buffers,
+    )
 
     # After the partition is on its device:
     # Set optimizer
     optimizer = optimizer_cls(
         partition.partition.parameters(), **args.optimizer['args'])
 
+    # Create micro-batching (big batch) manger
+    big_batch_mgr = BigBatchManager(
+        args.step_every, optimizer, args.base_lr_batch_size, args.bs_train) if args.step_every > 1 else None
+    if len(train_dl) % args.step_every != 0:
+        raise NotImplementedError()
+    if args.flush_rate > 0 and args.flush_rate < args.step_every:
+        raise NotImplementedError()
+
+    partition.set_big_batch_mgr(big_batch_mgr)
     # Set Scheduler
     # TODO: scheduler for sched aware prediction
     scheduler = get_scheduler(args, optimizer)
