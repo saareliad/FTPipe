@@ -15,8 +15,11 @@ std::string classHierarchy(const Node* node){
   std::string accessorPath = "__module";
 
   while(it->inputs().size() > 0){
-    accessorPath+= it->s(attr::name);
+    accessorPath+=".";
+    accessorPath+=it->s(attr::name);
     it=it->input(0)->node();
+  }
+    return accessorPath;
   }
 
 void inlineCalls(Block* block, int depth = 1000,const std::set<std::string>& basicBlocks=std::set<std::string>()) {
@@ -68,11 +71,6 @@ void Inline(Graph& graph, int depth,const std::set<std::string>& basicBlocks) {
   GRAPH_DUMP("After Inlining: ", &graph);
 }
 
-
-
-
-  return accessorPath;
-}
 
 } // namespace jit
 } // namespace torch
