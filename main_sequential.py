@@ -17,6 +17,7 @@ from pipeline.training import AVAILABLE_TRAINERS
 from pipeline.stats import AVAILBALE_STATS
 
 from pipeline.tasks import DLTask
+from misc import dp_sim
 
 
 class SyncCVTask(DLTask):
@@ -244,6 +245,11 @@ def yuck_from_main():
     # Create the model
     model = create_normal_model_instance(args.model)
     partition = SequentailManager(model, device, log_frequency=100)
+
+    if hasattr(args, "ddp_sim_num_gpus") and args.ddp_sim_num_gpus > 1:
+        print(f"-I- simulating DDP accuracy with {args.ddp_sim_num_gpus} (DDP) GPUs per stage")
+        dp_sim.convert_to_num_gpus(partition.model, args.ddp_sim_num_gpus)
+
     # model.to(device)
 
     assert_args(args)

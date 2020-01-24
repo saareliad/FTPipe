@@ -1,10 +1,10 @@
 {
     "logdir": "logs/",
     "out_dir":"results/",
-    "out_filename": "seq",
+    "out_filename": "ddp_sim",
     "auto_file_name": true,
     "statistics": "cv_grad_norm",
-    "model": "wrn_16x4_c100_p4",
+    "model": "wrn_28x10_c100_dr03_p4",
     "dataset": "cifar100",
     "trainer": {
         "type": "cv",
@@ -12,7 +12,8 @@
             "always_calc_grad_norm": true
         }
     },
-    "bs_train": 128,
+    "bs_train": 512,
+    "ddp_sim_num_gpus": 4,
     "bs_test": 200,
     "num_data_workers": 10,
     "optimizer": {

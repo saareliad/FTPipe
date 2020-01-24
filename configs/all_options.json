@@ -69,6 +69,6 @@
     "step_every": 1,
     "base_lr_batch_size": 128,
     "max_buffers": 2,
-    "log_frequency": 100
-
+    "log_frequency": 100,
+    "ddp_sim_num_gpus": 4
 }

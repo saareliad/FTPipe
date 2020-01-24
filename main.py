@@ -20,6 +20,7 @@ import torch
 from collections import OrderedDict
 from misc.datasets import add_dataset_argument, simplified_get_train_test_dl_from_args
 from misc.filelogger import FileLogger
+from misc import dp_sim
 import os
 import json
 from experiments import save_experiment, load_experiment_for_update
@@ -407,6 +408,7 @@ def get_gap_aware(args, optimizer):
     #     if not (hasattr(args, "weight_predictor")):
     #         raise ValueError("Do not use penatly_for_weight_decay with msnag/DANA weight predictor")
 
+    # TODO: this could be implemented by using the gap...
     if not optimizer_type == 'sgd1':  # pytorch
         raise NotImplementedError()
     gap_aware_cls = get_sgd_gap_aware_cls(optimizer_type)
@@ -789,6 +791,10 @@ def main():
         max_buffers=args.max_buffers,
     )
 
+    if hasattr(args, "ddp_sim_num_gpus") and args.ddp_sim_num_gpus > 1:
+        print(f"-I- simulating DDP accuracy with {args.ddp_sim_num_gpus} (DDP) GPUs per stage")
+        dp_sim.convert_to_num_gpus(partition.partition, args.ddp_sim_num_gpus)
+
     # After the partition is on its device:
     # Set optimizer
     optimizer = optimizer_cls(
@@ -799,6 +805,7 @@ def main():
         args.step_every, optimizer, args.base_lr_batch_size, args.bs_train) if args.step_every > 1 else None
     if len(train_dl) % args.step_every != 0:
         raise NotImplementedError()
+        reminder_to_drop = len(train_dl) % args.step_every
     if args.flush_rate > 0 and args.flush_rate < args.step_every:
         raise NotImplementedError()
 
