@@ -3,6 +3,9 @@
 #include <torch/csrc/jit/ir.h>
 #include <torch/csrc/utils/memory.h>
 #include <mutex>
+#include<string>
+#include<set>
+
 
 namespace torch {
 namespace jit {
@@ -11,7 +14,7 @@ using Kwargs = std::unordered_map<std::string, IValue>;
 
 TORCH_API void preoptimizeGraph(
     std::shared_ptr<Graph>& graph,
-    int depth = 1000);
+    int depth = 1000,const std::set<std::string>& basicBlocks = std::set<std::string>());
 
 // A Function is a pure Graph with no implicit `self` object bound.
 // It contains schema information, and the executor that manages the
@@ -36,13 +39,13 @@ struct TORCH_API Function {
     return graph_;
   }
 
-  std::shared_ptr<Graph> optimized_graph(int depth = 1000) const {
+  std::shared_ptr<Graph> optimized_graph(int depth = 1000,const std::set<std::string>& basicBlocks = std::set<std::string>()) const {
     std::lock_guard<std::recursive_mutex> lock(compile_mutex);
     if (optimized_graph_) {
       return *optimized_graph_;
     }
     optimized_graph_ = graph_->copy();
-    preoptimizeGraph(*optimized_graph_, depth);
+    preoptimizeGraph(*optimized_graph_, depth,basicBlocks);
     return *optimized_graph_;
   }
 

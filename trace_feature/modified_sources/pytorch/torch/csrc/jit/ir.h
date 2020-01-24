@@ -23,6 +23,8 @@
 #include <iostream>
 #include <unordered_set>
 #include <vector>
+#include<string>
+#include<set>
 
 // Forward declare, the real meat is in python_ir.cpp
 template <class T>
@@ -1352,7 +1354,8 @@ TORCH_API std::vector<Value*> insertGraph(
 TORCH_API std::vector<Value*> inlineCallTo(
     Node* to_replace,
     Function* callee,
-    int depth = 1000);
+    int depth = 1000,
+    const std::set<std::string>& basicBlocks = std::set<std::string>());
 
 /** If there is only one value in \p OUTPUTS and its kind is Tuple, insert a
  * tuple unpack node and return the resulting values.

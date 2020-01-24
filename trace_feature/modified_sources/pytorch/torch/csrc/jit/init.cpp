@@ -69,6 +69,7 @@
 #include <string>
 #include <tuple>
 #include <utility>
+#include <set>
 
 namespace torch {
 namespace jit {
@@ -263,7 +264,7 @@ void initJITBindings(PyObject* module) {
       .def("_jit_pass_remove_expands", RemoveExpands)
       .def("_jit_pass_erase_number_types", EraseNumberTypes)
       .def("_jit_pass_inline_fork_wait", InlineForkWait)
-      .def("_jit_pass_inline", Inline,py::arg("graph"),py::arg("depth")=1000)
+      .def("_jit_pass_inline", Inline,py::arg("graph"),py::arg("depth")=1000,py::arg("basic_block")=std::set<std::string>())
       .def("_jit_pass_prepare_division_for_onnx", PrepareDivisionForONNX)
       .def(
           "_jit_pass_lower_graph",

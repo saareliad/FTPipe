@@ -1720,12 +1720,13 @@ at::ArrayRef<Value*> createTupleUnpack(Value* v) {
 std::vector<Value*> inlineCallTo(
     Node* to_replace,
     Function* callee,
-    int depth) {
+    int depth,
+    const std::set<std::string>& basicBlocks) {
   WithInsertPoint guard(to_replace);
   std::unordered_map<Value*, Value*> value_map;
   auto new_outputs = insertGraph(
       *to_replace->owningGraph(),
-      *(callee->optimized_graph(depth)),
+      *(callee->optimized_graph(depth,basicBlocks)),
       to_replace->inputs(),
       value_map);
 

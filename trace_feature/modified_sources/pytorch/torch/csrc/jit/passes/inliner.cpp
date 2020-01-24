@@ -10,7 +10,7 @@ namespace prim {
 using namespace ::c10::prim;
 }
 
-void inlineCalls(Block* block, int depth = 1000) {
+void inlineCalls(Block* block, int depth = 1000,const std::set<std::string>& basicBlocks=std::set<std::string>()) {
   if (depth == 0) {
     return;
   }
@@ -28,32 +28,45 @@ void inlineCalls(Block* block, int depth = 1000) {
             "Inlining function '", fun_type->function()->name(), "' to ", *cur);
         GRAPH_UPDATE(
             "Function body: ",
-            *fun_type->function()->optimized_graph(depth - 1));
-        inlineCallTo(cur, fun_type->function(),depth-1);
+            *fun_type->function()->optimized_graph(depth - 1,basicBlocks));
+        inlineCallTo(cur, fun_type->function(),depth-1,basicBlocks);
       } break;
       case prim::CallMethod: {
         const std::string& name = cur->s(attr::name);
-        if (auto class_type = cur->input(0)->type()->cast<ClassType>()) {
+        if (auto class_type = cur->input(0)->type()->cast<ClassType>() && (basicBlocks.count(classHierarchy(cur)) == 0)) {
           auto function = class_type->getMethod(name);
           GRAPH_UPDATE("Inlining method '", function->name(), "' to ", *cur);
           GRAPH_UPDATE(
-              "Function body: ", *function->optimized_graph(depth - 1));
-          inlineCallTo(cur, function, depth - 1);
+              "Function body: ", *function->optimized_graph(depth - 1,basicBlocks));
+          inlineCallTo(cur, function, depth - 1,basicBlocks);
         }
       } break;
       default: {
         for (auto b : cur->blocks()) {
-          inlineCalls(b, depth - 1);
+          inlineCalls(b, depth - 1,basicBlocks);
         }
       } break;
     }
   }
 }
 
-void Inline(Graph& graph, int depth) {
+void Inline(Graph& graph, int depth,const std::set<std::string>& basicBlocks) {
   GRAPH_DUMP("Before Inlining: ", &graph);
-  inlineCalls(graph.block(), depth);
+  inlineCalls(graph.block(), depth,basicBlocks);
   GRAPH_DUMP("After Inlining: ", &graph);
+}
+
+
+std::string classHierarchy(const Node* node){
+  Node* it = node->inputs(0)->node();
+  std::string accessorPath = "__module";
+
+  while(it->inputs()->size() > 0){
+    accessorPath+= it.s(attr::name);
+    it=it->input(0)->node();
+  }
+
+  return accessorPath;
 }
 
 } // namespace jit
