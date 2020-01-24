@@ -2,17 +2,13 @@ from .patch import dummy_forward_monkeypatch
 from .find_modules import find_modules
 
 
-def convert_child(model, b4, after):
-    # TODO: write another version which is more efficient, can do this for all models in one pass.
-    # (instead of many passes)
+def convert_child_by_dict(model, dict_id_b4_to_after):
     for child_name, child in model.named_children():
-        if child is b4:
-            setattr(model, child_name, after)
-            # print(f"Converted {child_name} to {after}")
-            # print(f"New State Dict: {after.state_dict()}")
+        if id(child) in dict_id_b4_to_after:
+            # print(f"Converted {child_name} to {dict_id_b4_to_after[id(child)]}")
+            setattr(model, child_name, dict_id_b4_to_after[id(child)])
         else:
-            convert_child(child, b4, after)
-
+            convert_child_by_dict(child, dict_id_b4_to_after)
 
 class DummyForwardMonkeyPatcher:
     def __init__(self, model, classes_list_to_patch):
@@ -38,17 +34,19 @@ class DummyForwardMonkeyPatcher:
             self.fmodels += [i[0] for i in monkey_patched_enc_tuples]
             self.encapsulators += [i[1] for i in monkey_patched_enc_tuples]
 
+        # Create dicts.
+        # Warning: if id changes - this won't work.
+        self.id_models_to_fmodels = {id(m): fm for m, fm in zip(self.models, self.fmodels)}
+        self.id_fmodels_to_models = {id(fm): m for m, fm in zip(self.models, self.fmodels)}
+
     def replace_for_dummy(self):
         if not self.state_is_dummy:
-            for m, fm in zip(self.models, self.fmodels):
-                convert_child(self.model, m, fm)
+            convert_child_by_dict(self.model, self.id_models_to_fmodels)
             self.state_is_dummy = True
 
     def replace_for_forward(self):
         if self.state_is_dummy:
-            for m, fm in zip(self.models, self.fmodels):
-                convert_child(self.model, fm, m)
-
+            convert_child_by_dict(self.model, self.id_fmodels_to_models)
             self.state_is_dummy = False
 
     def sync(self):
@@ -130,4 +128,4 @@ if __name__ == "__main__":
     # From pipeline dir:
     # python -m monkey_patch.dummy_forward_monkey_patcher
     test()
-    test_no_grad_and_bwd()
+    # test_no_grad_and_bwd()
