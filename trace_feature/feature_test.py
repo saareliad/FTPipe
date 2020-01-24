@@ -76,7 +76,7 @@ if __name__ == "__main__":
     block_scopes = basic_blocks_new_scopes(basic_blocks,
                                            profiled_layers, new_to_old)
 
-    torch._C._jit_pass_inline(traced, depth=1000, basic_blocks=basic_blocks)
+    torch._C._jit_pass_inline(traced, depth=1000, basic_blocks=block_scopes)
     calls = len([n for n in traced.nodes() if n.kind() == "prim::CallMethod"])
     assert calls == 4, f"expected 4 calls got {calls}"
 

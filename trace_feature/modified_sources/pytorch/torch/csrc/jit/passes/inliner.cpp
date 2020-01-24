@@ -10,6 +10,15 @@ namespace prim {
 using namespace ::c10::prim;
 }
 
+std::string classHierarchy(const Node* node){
+  Node* it = node->input(0)->node();
+  std::string accessorPath = "__module";
+
+  while(it->inputs().size() > 0){
+    accessorPath+= it->s(attr::name);
+    it=it->input(0)->node();
+  }
+
 void inlineCalls(Block* block, int depth = 1000,const std::set<std::string>& basicBlocks=std::set<std::string>()) {
   if (depth == 0) {
     return;
@@ -32,13 +41,16 @@ void inlineCalls(Block* block, int depth = 1000,const std::set<std::string>& bas
         inlineCallTo(cur, fun_type->function(),depth-1,basicBlocks);
       } break;
       case prim::CallMethod: {
+
         const std::string& name = cur->s(attr::name);
-        if (auto class_type = cur->input(0)->type()->cast<ClassType>() && (basicBlocks.count(classHierarchy(cur)) == 0)) {
-          auto function = class_type->getMethod(name);
-          GRAPH_UPDATE("Inlining method '", function->name(), "' to ", *cur);
-          GRAPH_UPDATE(
-              "Function body: ", *function->optimized_graph(depth - 1,basicBlocks));
-          inlineCallTo(cur, function, depth - 1,basicBlocks);
+        if(basicBlocks.count(classHierarchy(cur)) == 0) {
+          if (auto class_type = cur->input(0)->type()->cast<ClassType>()) {
+            auto function = class_type->getMethod(name);
+            GRAPH_UPDATE("Inlining method '", function->name(), "' to ", *cur);
+            GRAPH_UPDATE(
+                "Function body: ", *function->optimized_graph(depth - 1,basicBlocks));
+            inlineCallTo(cur, function, depth - 1,basicBlocks);
+          }
         }
       } break;
       default: {
@@ -57,14 +69,7 @@ void Inline(Graph& graph, int depth,const std::set<std::string>& basicBlocks) {
 }
 
 
-std::string classHierarchy(const Node* node){
-  Node* it = node->inputs(0)->node();
-  std::string accessorPath = "__module";
 
-  while(it->inputs()->size() > 0){
-    accessorPath+= it.s(attr::name);
-    it=it->input(0)->node();
-  }
 
   return accessorPath;
 }
