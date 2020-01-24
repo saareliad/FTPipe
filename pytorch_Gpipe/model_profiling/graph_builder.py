@@ -8,7 +8,7 @@ from .network_profiler import profile_network
 from collections import OrderedDict
 import re
 import string
-from typing import Callable, List, Dict, OrderedDict as OrderedDictType, Optional, Any, Tuple
+from typing import Callable, List, Dict, OrderedDict as OrderedDictType, Optional, Any, Tuple, Set
 
 __all__ = ["build_graph"]
 
@@ -38,10 +38,14 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
                                   basic_blocks=basic_blocks)
 
     tensors = tensorDict(model)
-    profiled_layers = list(layerDict(model, depth=max_depth,
-                                     basic_blocks=basic_blocks).keys())
-    new_to_old = translate_scopes(profiled_layers)
-    partials = partial_scopes(profiled_layers)
+    profiled_layers = layerDict(model, depth=max_depth,
+                                basic_blocks=basic_blocks)
+    layer_scopes = list(profiled_layers.keys())
+    new_to_old = translate_scopes(layer_scopes)
+    partials = partial_scopes(layer_scopes)
+
+    block_scopes = basic_blocks_new_scopes(basic_blocks, profiled_layers,
+                                           new_to_old)
 
     for i, t in enumerate(sample_batch):
         tensors[f"input{i}"] = t
@@ -54,7 +58,12 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
     torch._C._jit_set_inline_everything_mode(False)
     trace_graph = torch.jit.trace(model, sample_batch, check_trace=False).graph
     torch._C._jit_set_inline_everything_mode(old_value)
-    torch._C._jit_pass_inline(trace_graph, max_depth)
+    # TODO need to support basic blocks as well
+    # actually quite tricky as I've no idea how to pass python classes to c++
+    # or even if the trace graph saves a class info which can be compared
+    # the simple but realy unoptimized solution is to precompute all scopes of the basic blocks
+    # and compare them to the accessor hierarchy for large models it will be slow
+    torch._C._jit_pass_inline(trace_graph, max_depth, block_scopes)
     # build the graph from trace
     nodes = add_nodes(trace_graph, new_to_old, partials, tensors)
 
@@ -63,7 +72,7 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
     # optimization passes
     nodes = remove_useless_clone(nodes)
     nodes = remove_empty_view(nodes)
-    nodes = optimize_graph(nodes, profiled_layers)
+    nodes = optimize_graph(nodes, layer_scopes)
     nodes = _remove_nodes_that_go_nowhere(nodes, outputs)
     nodes = remove_useless_node_inputs(nodes)
     nodes = remove_tensor_int_tensor(nodes)
@@ -249,6 +258,20 @@ def translate_scopes(old_scopes: List[str]) -> Dict[str, str]:
         translation[translated] = scope
 
     return translation
+
+
+def basic_blocks_new_scopes(basic_blocks: Tuple[torch.nn.Module, ...], profiled_layers: Dict[str, torch.nn.Module], new_to_old: Dict[str, str]) -> Set[str]:
+    blocks_old_scopes = set()
+    for old_scope, layer in profiled_layers.items():
+        if isinstance(layer, basic_blocks):
+            blocks_old_scopes.add(old_scope)
+
+    blocks_new_scopes = set()
+    for new_scope, old_scope in new_to_old.items():
+        if old_scope in blocks_old_scopes:
+            blocks_new_scopes.add(new_scope)
+
+    return blocks_new_scopes
 
 
 def extract_new_scope(new_scope: str) -> str:
@@ -453,7 +476,7 @@ def add_missing_types(nodes: GraphNodes) -> GraphNodes:
                 if 'aten::chunk' in father.scope:
                     node.value_type = Tensor
                 else:
-                    # if father is a layer we assime all outputs are tensors
+                    # if father is a layer we assume all outputs are tensors
                     # otherwise we assume the pack/unpack are symetric aka first packed value is first unpacked value
                     # so we propagate the type
                     idx = father.out_nodes.indexOf(node)
@@ -465,7 +488,4 @@ def add_missing_types(nodes: GraphNodes) -> GraphNodes:
                         node.value_type = matching_input.value_type
         elif 'NumToTensor' in node.scope:
             node.value_type = int
-        if node.valueType() is type(None):
-            # TODO there are nodes list prim::TupleUnpack for which we do not have a value or a value_type
-            print(node.scope)
     return nodes
