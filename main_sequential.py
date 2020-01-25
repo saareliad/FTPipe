@@ -7,7 +7,7 @@ import logging
 
 # parse_env_vars
 from main import parse_cli, parse_json_config, get_scheduler, get_dataloaders
-from models import create_normal_model_instance
+from models import create_normal_model_instance, get_partitioning
 from experiments import save_experiment
 
 # from pipeline.work_schedulers import AVAILABLE_WORK_SCHEDULERS
@@ -17,7 +17,8 @@ from pipeline.training import AVAILABLE_TRAINERS
 from pipeline.stats import AVAILBALE_STATS
 
 from pipeline.tasks import DLTask
-from misc import dp_sim
+from pipeline import dp_sim
+from pipeline.partition import FirstPartition
 
 
 class SyncCVTask(DLTask):
@@ -38,10 +39,15 @@ class SyncCVTask(DLTask):
 
 
 class SequentailManager:
-    def __init__(self, model, device, log_frequency=100):
+    def __init__(self, model, device, log_frequency=100, recompute=False):
 
         self.device = device
-        self.model = model.to(device)
+        if not recompute:
+            self.model = model.to(device)
+        else:
+            raise NotImplementedError()
+            #  classes_list_to_patch=DEFAULT_CLASSES_LIST_TO_PATCH
+            self.model = FirstPartition(model, device, to_device=True)
 
         # State for train logging
         self.log_frequency = log_frequency
@@ -244,7 +250,14 @@ def yuck_from_main():
 
     # Create the model
     model = create_normal_model_instance(args.model)
-    partition = SequentailManager(model, device, log_frequency=100)
+    recompute = getattr(args, "recompute", False)
+    if recompute:
+        raise NotImplementedError()
+        # # TODO: optionally partition the model and recompute by partitions
+        # config = get_partitioning(args.model, model_instance=model)
+        # print("-I- Using recomputation")
+
+    partition = SequentailManager(model, device, log_frequency=100, recompute=recompute)
 
     if hasattr(args, "ddp_sim_num_gpus") and args.ddp_sim_num_gpus > 1:
         print(f"-I- simulating DDP accuracy with {args.ddp_sim_num_gpus} (DDP) GPUs per stage")

@@ -5,6 +5,7 @@ from typing import Tuple, Union
 from .monkey_patch import DummyForwardMonkeyPatcher
 from .replace_inplace import replace_inplace_for_first_innermost_layer_
 from .rng_stasher import PartitionRngStasher
+from . import dp_sim
 # import logging
 Tensors = Tuple[Tensor, ...]
 TensorOrTensors = Union[Tensor, Tensors]
@@ -12,7 +13,8 @@ TensorOrTensors = Union[Tensor, Tensors]
 __all__ = ['Partition', 'LastPartition', 'FirstPartition']
 
 DEFAULT_CLASSES_LIST_TO_PATCH = [nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d,
-                                 nn.SyncBatchNorm, nn.InstanceNorm1d, nn.InstanceNorm2d, nn.InstanceNorm3d]
+                                 nn.SyncBatchNorm, nn.InstanceNorm1d, nn.InstanceNorm2d, nn.InstanceNorm3d,
+                                 dp_sim.BatchNorm1d, dp_sim.BatchNorm2d, dp_sim.BatchNorm3d]
 
 
 class Partition(nn.Module):

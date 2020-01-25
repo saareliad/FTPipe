@@ -65,12 +65,13 @@ if __name__ == "__main__":
         }
         run_grid_on(COMMAND, param_grid, gpu_list=[0, 1, 2, 3, 4, 5])
 
-    def sim_ddp():
+    def sim_ddp4():
         COMMAND = "python main_sequential.py"
         cfgs_dir = "configs/ddp_sim/ddp_4gpus/"
         all_algs = ["seq_wrn16x4_c100",
                     "seq_wrn16x4_c10",
                     "seq_wrn28x10_c100"]
+        # TODO: seq_wrn28x10_c100 did not run due to insufficient memory.
 
         param_grid = {
             'config': [f"{cfgs_dir}{cfg}.json" for cfg in all_algs],
@@ -78,4 +79,20 @@ if __name__ == "__main__":
         }
         run_grid_on(COMMAND, param_grid, gpu_list=[0, 1, 2, 3, 4, 5])
 
-    sim_ddp()
+
+    def sim_ddp8():
+        COMMAND = "python main_sequential.py"
+        cfgs_dir = "configs/ddp_sim/ddp_8gpus/"
+        all_algs = ["seq_wrn16x4_c100",
+                    "seq_wrn16x4_c10",
+                    # "seq_wrn28x10_c100"
+                    ]
+        # TODO: seq_wrn28x10_c100 did not run due to insufficient memory.
+
+        param_grid = {
+            'config': [f"{cfgs_dir}{cfg}.json" for cfg in all_algs],
+            'seed': [42, 20202020, 77777777, 314159, 1322019]
+        }
+        run_grid_on(COMMAND, param_grid, gpu_list=[0, 1, 2, 3, 4, 5])
+
+    sim_ddp8()

@@ -20,7 +20,7 @@ import torch
 from collections import OrderedDict
 from misc.datasets import add_dataset_argument, simplified_get_train_test_dl_from_args
 from misc.filelogger import FileLogger
-from misc import dp_sim
+from pipeline import dp_sim
 import os
 import json
 from experiments import save_experiment, load_experiment_for_update

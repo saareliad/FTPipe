@@ -1,0 +1,42 @@
+{
+    "logdir": "logs/",
+    "out_dir":"results/",
+    "out_filename": "ddp_sim",
+    "auto_file_name": true,
+    "statistics": "cv_grad_norm",
+    "model": "wrn_28x10_c100_dr03_p4",
+    "dataset": "cifar100",
+    "trainer": {
+        "type": "cv",
+        "args": {
+            "always_calc_grad_norm": true
+        }
+    },
+    "bs_train": 1024,
+    "ddp_sim_num_gpus": 8,
+    "bs_test": 200,
+    "num_data_workers": 10,
+    "optimizer": {
+        "type": "sgd1",
+        "args": {
+            "lr": 0.8,
+            "weight_decay": 0.0005,
+            "momentum": 0.9,
+            "nesterov": true
+        }
+    },
+    "lr_scheduler": {
+        "type": "get_multi_step_lr_schedule_with_warmup",
+        "args": {
+            "num_warmup_steps": 5,
+            "milestones": [60, 120, 160],
+            "gamma": 0.2,
+            "last_epoch": -1
+        }
+    },
+    "epochs": 400,
+    "steps": -1,
+    "seed": 42,
+    "verbose_comm": false,
+    "seed_from_cmd": true
+}

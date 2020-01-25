@@ -48,7 +48,7 @@ class _NormBase(Module):
                 getattr(self, f"running_mean_{i}").zero_()
                 getattr(self, f"running_var_{i}").fill_(1)
             self.num_batches_tracked.zero_()
-    
+
     def reset_parameters(self):
         self.reset_running_stats()
         if self.affine:
@@ -105,12 +105,12 @@ class _BatchNorm(_NormBase):
                 else:  # use exponential moving average
                     exponential_average_factor = self.momentum
 
-
-        return torch.cat([ F.batch_norm(
-                chunk, getattr(self,f"running_mean_{i}"), getattr(self, f"running_var_{i}"), 
+        return torch.cat([F.batch_norm(
+                chunk, getattr(self, f"running_mean_{i}"), getattr(self, f"running_var_{i}"),
                 self.weight, self.bias,
                 self.training or not self.track_running_stats,
                 exponential_average_factor, self.eps) for i, chunk in enumerate(torch.chunk(input, self.num_gpus_to_sim)) ])
+
 
 class BatchNorm1d(_BatchNorm):
     r"""Applies Batch Normalization over a 2D or 3D input (a mini-batch of 1D
