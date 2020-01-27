@@ -133,6 +133,7 @@ class Partition(Dataset):
     """ Dataset partitioning helper """
 
     def __init__(self, data, index):
+        super().__init__()
         self.data = data
         self.index = index
 
@@ -179,14 +180,18 @@ def get_dist_partition(dataset, seed_to_assert=None, num_splits=None, use_split=
     partition_sizes = [1.0 / num_splits for _ in range(num_splits)]
     partition = DataPartitioner(dataset, partition_sizes, seed_to_assert)
     partition = partition.use(use_split)
+    return partition
 
 
 def distributed_get_train_test_ds(dataset, DATA_DIR=DEFAULT_DATA_DIR, **kw):
     get_dataset_fn = DATASET_TO_DS_FN.get(dataset, None)
     if get_dataset_fn:
         train_ds, test_ds = get_dataset_fn(DATA_DIR=DATA_DIR)
+        print(len(train_ds), len(test_ds))
         train_ds = get_dist_partition(train_ds, **kw)
-        test_ds = get_dist_partition(test_ds, **kw)
+        # NOTE: we do not do dist on test...
+        # test_ds = get_dist_partition(test_ds, **kw)
+        print(len(train_ds), len(test_ds))
         return train_ds, test_ds
     else:
         raise ValueError(dataset)

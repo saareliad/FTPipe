@@ -21,20 +21,43 @@ def run_function_on_several_gpus(required_gpus, func, cfg, q):
     for gpu in gpus:
         q.put(gpu)
 
-
-def map_to_limited_gpus(func, configs, N_GPU, CUDA_VISIBLE_DEVICES=None):
+# TODO: this is not working it...
+def map_to_several_limited_gpus(func, configs, gpus_per_config, NUM_AVAIALBLE_GPUS, CUDA_VISIBLE_DEVICES=None):
     with Manager() as manager:
         q = manager.Queue()
 
+        # Mark GPUs as avaialbale
         if CUDA_VISIBLE_DEVICES:
             for i in CUDA_VISIBLE_DEVICES:
                 q.put(i)
         else:
             # TODO: if os.environ.get('CUDA_VISIBLE_DEVICES'):
-            for i in range(N_GPU):
+            for i in range(NUM_AVAIALBLE_GPUS):
                 q.put(i)
 
-        Parallel(n_jobs=N_GPU, verbose=10)(
+        if not isinstance(gpus_per_config, list):
+            required_gpus_list = [gpus_per_config for _ in range(len(configs))]
+        
+        assert len(gpus_per_config) == len(configs)
+
+        Parallel(n_jobs=NUM_AVAIALBLE_GPUS, verbose=10)(
+            delayed(run_function_on_several_gpus)(required_gpus, func, cfg, q) for cfg, required_gpus in zip(configs, required_gpus_list))
+
+
+def map_to_limited_gpus(func, configs, NUM_AVAIALBLE_GPUS, CUDA_VISIBLE_DEVICES=None):
+    with Manager() as manager:
+        q = manager.Queue()
+
+        # Mark GPUs as avaialbale
+        if CUDA_VISIBLE_DEVICES:
+            for i in CUDA_VISIBLE_DEVICES:
+                q.put(i)
+        else:
+            # TODO: if os.environ.get('CUDA_VISIBLE_DEVICES'):
+            for i in range(NUM_AVAIALBLE_GPUS):
+                q.put(i)
+
+        Parallel(n_jobs=NUM_AVAIALBLE_GPUS, verbose=10)(
             delayed(run_function)(func, cfg, q) for cfg in configs)
 
 

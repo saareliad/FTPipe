@@ -1,6 +1,6 @@
 import os
 from sklearn.model_selection import ParameterGrid
-from gpu_queue import map_to_limited_gpus
+from gpu_queue import map_to_limited_gpus, map_to_several_limited_gpus
 from functools import partial
 
 import shlex
@@ -39,14 +39,34 @@ def run_grid_on(COMMAND, param_grid, gpu_list):
                         CUDA_VISIBLE_DEVICES=gpu_list)
 
 
+def run_grid_on_multi_gpu_per_run(COMMAND, param_grid, gpu_list, gpus_per_config=1):
+    # TODO: support list gpus_per_run
+
+    # Assumes required gpu per run is 1
+    configs = ParameterGrid(param_grid)
+    func = partial(subproccess_func, COMMAND)
+    # func = partial(call_function, COMMAND)
+    map_to_several_limited_gpus(func, configs, gpus_per_config, len(gpu_list),
+                                CUDA_VISIBLE_DEVICES=gpu_list)
+
+
+def infer_number_of_gpus(COMMAND):
+    # TODO
+    raise NotImplementedError()
+
+
 if __name__ == "__main__":
-    # COMMAND = "python main_sequential.py"
-    # param_grid = {
-    #     'config': ['configs/sequential/seq_wrn16x4_c10.json', 'configs/sequential/seq_wrn16x4_c100.json'],
-    #     #'config': ['configs/sequential/sequential.json'],
-    #     'seed': [42, 20202020, 77777777, 314159, 1322019]
-    # }
-    # run_grid_on(COMMAND, param_grid, gpu_list=[0, 1, 2, 3, 4, 5])
+    def sequential():
+        COMMAND = "python main_sequential.py"
+        param_grid = {
+            'config': [
+                # 'configs/sequential/seq_wrn16x4_c10.json',
+                'configs/sequential/seq_wrn16x4_c100.json',
+                # 'config': ['configs/sequential/seq_wrn28x10_c100.json'
+            ],
+            'seed': [42, 20202020, 77777777, 314159, 1322019]
+        }
+        run_grid_on(COMMAND, param_grid, gpu_list=[0, 1, 2, 3, 4, 5])
 
     def staleness_study():
         COMMAND = "mpirun -np 4 python main.py"
@@ -79,7 +99,6 @@ if __name__ == "__main__":
         }
         run_grid_on(COMMAND, param_grid, gpu_list=[0, 1, 2, 3, 4, 5])
 
-
     def sim_ddp8():
         COMMAND = "python main_sequential.py"
         cfgs_dir = "configs/ddp_sim/ddp_8gpus/"
@@ -95,4 +114,19 @@ if __name__ == "__main__":
         }
         run_grid_on(COMMAND, param_grid, gpu_list=[0, 1, 2, 3, 4, 5])
 
-    sim_ddp8()
+    def ddp4():
+        COMMAND = "numactl --cpunodebind=0 python -m torch.distributed.launch --nproc_per_node 4 --nnodes 1 main_sequential.py"
+        # --master_port 6001
+        cfgs_dir = "configs/ddp/"
+        all_algs = [  # "seq_wrn16x4_c100",
+            # "seq_wrn16x4_c10",
+            "seq_wrn28x10_c100"]
+        # TODO: seq_wrn28x10_c100 did not run due to insufficient memory.
+
+        param_grid = {
+            'config': [f"{cfgs_dir}{cfg}.json" for cfg in all_algs],
+            'seed': [42, 20202020, 77777777, 314159, 1322019]
+        }
+        run_grid_on_multi_gpu_per_run(COMMAND, param_grid, gpu_list=[0, 1, 2, 3, 4, 5], gpus_per_config=4)
+
+    ddp4()

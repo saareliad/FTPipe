@@ -1,13 +1,14 @@
 import torch
+
+
 import random
 import numpy as np
 import time
 import logging
 
-
 # parse_env_vars
-from main import parse_cli, parse_json_config, get_scheduler, get_dataloaders
-from models import create_normal_model_instance, get_partitioning
+from main import parse_cli, parse_json_config, get_scheduler, parse_env_vars  # get_dataloaders
+from models import create_normal_model_instance  # , get_partitioning
 from experiments import save_experiment
 
 # from pipeline.work_schedulers import AVAILABLE_WORK_SCHEDULERS
@@ -19,6 +20,12 @@ from pipeline.stats import AVAILBALE_STATS
 from pipeline.tasks import DLTask
 from pipeline import dp_sim
 from pipeline.partition import FirstPartition
+
+# Distributed stuff
+import torch.distributed as dist
+from pipeline.util import get_world_size
+from torch.nn.parallel import DistributedDataParallel
+from misc.datasets import distributed_get_train_test_dl_from_args, simplified_get_train_test_dl_from_args
 
 
 class SyncCVTask(DLTask):
@@ -39,11 +46,19 @@ class SyncCVTask(DLTask):
 
 
 class SequentailManager:
-    def __init__(self, model, device, log_frequency=100, recompute=False):
+    def __init__(self, model, device, log_frequency=100, recompute=False, ddp=False, local_rank=None):
 
         self.device = device
+        self.needs_unwrap = False
+        self.logger = logging.getLogger()
+
         if not recompute:
             self.model = model.to(device)
+            if ddp:
+                self.needs_unwrap = True
+                self.model = DistributedDataParallel(
+                    model, device_ids=[local_rank], output_device=local_rank)
+                self.logger.info("-I- using DDP!")
         else:
             raise NotImplementedError()
             #  classes_list_to_patch=DEFAULT_CLASSES_LIST_TO_PATCH
@@ -53,12 +68,19 @@ class SequentailManager:
         self.log_frequency = log_frequency
         self.batches = 0
 
-        self.logger = logging.getLogger()
 
         # self.trainer
         # self.task
 
         self.task = SyncCVTask(device)
+
+
+    def unwrap_model(self):
+        # Have to unwrap DDP & FP16, if using.
+        if self.needs_unwrap:
+            return self.model.module
+        else:
+            return self.model
 
     def set_trainer(self, trainer):
         self.trainer = trainer
@@ -105,13 +127,19 @@ class SequentailManager:
                 self.logger.info(batch_log_str)
 
     def run_forward_until_flush(self, num_batches):
+        model = self.unwrap_model()
+        # eval_start_time = time.time()
+        
+        eval_start_time = time.time()
         with torch.no_grad():
             for batch_idx in range(num_batches):
                 data = next(self.dl_iter)
                 x, *ctx = self.task.unpack_data_for_partition(data)
-                x = self.model(x)
+                x = model(x)
                 self.trainer.calc_test_stats(x,  *ctx)
-
+        
+        eval_end_time = time.time()
+        # TODO: add eval time to statistics
 
 def assert_args(args):
     assert (args.epochs >= 1 or args.steps >= 1)
@@ -119,7 +147,11 @@ def assert_args(args):
 
 def auto_file_name(args):
     assert hasattr(args, "auto_file_name")
-    s = f'{args.model}_{args.dataset}_seq_bs_{args.bs_train}_seed_{args.seed}'
+    actual_bs_train = args.bs_train
+    if args.ddp:
+        actual_bs_train *= args.world_size
+
+    s = f'{args.model}_{args.dataset}_seq_bs_{actual_bs_train}_seed_{args.seed}'
     args.out_filename = f"{args.out_filename}_{s}"
     print(f"Out File Name will be: {args.out_filename}")
 
@@ -177,6 +209,7 @@ def training_loop(args, logger, train_dl, test_dl, partition, scheduler, statist
             # TEST_BATCHES_TO_RUN = 30
 
             if TRAIN:
+                train_epoch_start_time = time.time()
                 if TRAIN_BATCHES_TO_RUN == 0:
                     continue
                 # Set Dataloader
@@ -193,8 +226,9 @@ def training_loop(args, logger, train_dl, test_dl, partition, scheduler, statist
                 scheduler.step()
                 did_train = True
                 steps += TRAIN_BATCHES_TO_RUN
+                train_epoch_end_time = time.time()
+                # TODO record it
                 statistics.on_epoch_end()
-
             else:  # EVAL
                 # Set Dataloader
                 if TEST_BATCHES_TO_RUN == 0:
@@ -231,10 +265,58 @@ def training_loop(args, logger, train_dl, test_dl, partition, scheduler, statist
             break  # steps condition met
 
 
+def init_DDP(args, logger):
+    if args.distributed_backend == 'mpi':
+        raise NotImplementedError("DDP only works with gloo and nccl backends")
+    parse_env_vars(args)
+    args.world_size = 4  # get_world_size(args.distributed_backend)
+    # Initialize the distributed environment.
+    dist.init_process_group(args.distributed_backend, world_size=args.world_size)
+    assert dist.get_world_size() == args.world_size
+    logger.info(f"Initialized process group; backend: {args.distributed_backend}, rank: {args.rank}, "
+                f"local_rank: {args.local_rank}, world_size: {args.world_size}")
+
+    args.optimizer["args"]['lr'] *= args.world_size
+    lr = args.optimizer["args"]['lr']
+    logger.info(f"Applying linear scaling bs-per-worker:{args.bs_train}, lr:{lr}, workers:{args.world_size}, epochs:{args.epochs}, steps:{args.steps}")
+
+
+def get_dataloaders(args):
+    dl_kw = dict()
+    if args.cpu:
+        dl_kw['pin_memory'] = False
+    # else:
+    #     dl_kw['pin_memory'] = True  # FIXME
+
+    dl_kw['num_workers'] = args.num_data_workers
+    dl_kw['drop_last'] = True
+
+    get_dls_fn = simplified_get_train_test_dl_from_args
+    if hasattr(args, 'ddp') and args.ddp:
+        get_dls_fn = distributed_get_train_test_dl_from_args
+        # num_splits=None, use_split=None
+    train_dl, test_dl = get_dls_fn(
+        args, verbose=False, **dl_kw)
+
+    return train_dl, test_dl
+
+
 def yuck_from_main():
     print(f"Using {torch.get_num_threads()} Threads")
     args = parse_cli()
     parse_json_config(args)
+    args.is_sync = True  # Marking the experiment as sequential/syhcnronized
+
+    # Basic Logger
+    logging.basicConfig(filename='sequential.log', level=logging.DEBUG)
+    logger = logging.getLogger()
+    console = logging.StreamHandler()
+    console.setLevel(logging.DEBUG)
+    logger.addHandler(console)
+
+    if hasattr(args, 'ddp') and args.ddp:
+        init_DDP(args, logger)
+
     # parse_env_vars(args)
     # args.world_size = get_world_size(args.distributed_backend)
 
@@ -248,6 +330,9 @@ def yuck_from_main():
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
+    if hasattr(args, "cudnn_benchmark") and args.cudnn_benchmark:
+        torch.backends.cudnn.benchmark = True
+
     # Create the model
     model = create_normal_model_instance(args.model)
     recompute = getattr(args, "recompute", False)
@@ -257,22 +342,17 @@ def yuck_from_main():
         # config = get_partitioning(args.model, model_instance=model)
         # print("-I- Using recomputation")
 
-    partition = SequentailManager(model, device, log_frequency=100, recompute=recompute)
+    partition = SequentailManager(
+        model, device, log_frequency=100, recompute=recompute, ddp=args.ddp, local_rank=args.local_rank)
 
     if hasattr(args, "ddp_sim_num_gpus") and args.ddp_sim_num_gpus > 1:
-        print(f"-I- simulating DDP accuracy with {args.ddp_sim_num_gpus} (DDP) GPUs per stage")
+        print(
+            f"-I- simulating DDP accuracy with {args.ddp_sim_num_gpus} (DDP) GPUs per stage")
         dp_sim.convert_to_num_gpus(partition.model, args.ddp_sim_num_gpus)
 
     # model.to(device)
 
     assert_args(args)
-
-    # Basic Logger
-    logging.basicConfig(filename='sequential.log', level=logging.DEBUG)
-    logger = logging.getLogger()
-    console = logging.StreamHandler()
-    console.setLevel(logging.DEBUG)
-    logger.addHandler(console)
 
     train_dl, test_dl = get_dataloaders(args)
     trainer_cls = AVAILABLE_TRAINERS.get(args.trainer['type'])

@@ -28,7 +28,7 @@ class InferStuff:
         self.config = config
         self.fit_res = fit_res
         self.interesting_from_config = {
-            i: config[i] for i in ["model", "dataset", 'seed']
+            i: config[i] for i in ["model", "dataset", 'seed', 'bs_train']
         }
         self.all_data = {}
         self.infer_experiment_names()
@@ -37,16 +37,28 @@ class InferStuff:
     def fix_model_name(self):
         pass
 
+    def infer_num_partitions(self):
+        # TODO:
+        pass
+
     def infer_experiment_names(self):
+        # TODO: add names for SSGD/sequential
+        # this is only for pipeline,
         wp = "weight_prediction" in self.config
         ga = "gap_aware" in self.config
         ws = "weight_stashing" in self.config and self.config["weight_stashing"]
+        pipedream = "work_scheduler" in self.config and (
+            self.config["work_scheduler"] == "PIPEDREAM")
+        sync = "is_sync" in self.config and self.config['is_sync']
 
-        wp_name = "wp" if wp else "stale"
+        wp_name = "wp" if wp else ("stale" if not sync else '')
         ga_name = "ga" if ga else ''
         ws_name = "ws" if ws else ''
+        pipedream_name = 'pipedream' if pipedream else ''
+        sync_name = 'sync' if sync else ''
 
-        names = filter(None, [wp_name, ga_name, ws_name])
+        names = filter(None, [wp_name, ga_name, ws_name,
+                              pipedream_name, sync_name])
 
         # Alg is contour name
         alg = "_".join(names)
@@ -142,9 +154,17 @@ def proccess_file(f):
     return inferer.to_df()
 
 
-def all_results_to_csv(root_path, csv_name):
-    files = all_files(root_path)
-    print(f"-I- There are {len(files)} json files in {path}")
+def all_results_to_csv(root_paths, csv_name):
+    if isinstance(root_paths, str):
+        root_paths = [root_paths]
+
+    files = []
+    for root_path in root_paths:
+        files += all_files(root_path)
+
+    # files = [*all_files(root_path) for root_path in root_paths]
+
+    print(f"-I- There are {len(files)} json files in {root_paths}")
     print("-I- Creating....")
     df = pd.concat([proccess_file(f) for f in files], sort=False)
     print(f"-I- Created df.shape: {df.shape}")
@@ -153,8 +173,48 @@ def all_results_to_csv(root_path, csv_name):
     print("-I- Done")
 
 
+## Analysis tools:
+def print_uniques(csv, cols=["alg", 'bs_train', "model", "dataset", 'seed']):
+    # TODO: args.bs_train * args.step_every
+    # TODO: number of partitions
+    df = pd.read_csv(csv)
+    var_to_uniques = {var: pd.unique(df[var]) for var in cols}
+    var_to_len_uniques = {i: len(v) for i, v in var_to_uniques.items()}
+
+    print(f"-I- Describing csv: {csv}")
+    print(f"-I- Analyzed cols: {cols}")
+
+    print("-I- length_uniques:")
+    print(var_to_len_uniques)
+
+    print("-I- uniques:")
+    print(var_to_uniques)
+
+
 if __name__ == "__main__":
-    path = "results/2partitions"
-    csv_name = "2partitions.csv"
-    csv_name = os.path.join(".", csv_name)
-    all_results_to_csv(path, csv_name)
+
+    def two_partitions():
+        path = "results/2partitions"
+        csv_name = "2partitions.csv"
+        csv_out_dir = "."
+        csv_name = os.path.join(csv_out_dir, csv_name)
+        all_results_to_csv(path, csv_name)
+
+    def four_partitions():
+        path = "results/4partitions"
+        csv_name = "4partitions.csv"
+        csv_out_dir = "."
+        csv_name = os.path.join(csv_out_dir, csv_name)
+        all_results_to_csv(path, csv_name)
+
+    def all_results_with_sequential():
+        paths = [# "results/2partitions",
+                 "results/4partitions", 'results/sequential']
+        # csv_name = "2p_4p_seq_ddpsim"
+        csv_name = "4p_seq_ddpsim.csv"
+        csv_out_dir = "."
+        csv_name = os.path.join(csv_out_dir, csv_name)
+        all_results_to_csv(paths, csv_name)
+        print_uniques(csv_name)
+    
+    all_results_with_sequential()

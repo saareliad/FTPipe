@@ -681,6 +681,9 @@ def main():
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
+    if hasattr(args, "cudnn_benchmark") and args.cudnn_benchmark:
+        torch.backends.cudnn.benchmark = True
+
     # Get partitioning config
     configs = models.get_partitioning(args.model, model_instance=None)
     configs.pop('model inputs')  # We don't use thous.
