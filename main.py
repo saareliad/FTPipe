@@ -436,7 +436,7 @@ def get_weight_predictor(args, optimizer, scheduler=None):
     # if pred_mem['type'] == "msnag":
     if 'sgd' in optimizer_type:
         weight_predictor = get_sgd_weight_predictor(
-            optimizer_type, pred_mem, optimizer, scheduler)
+            optimizer_type, pred_mem, optimizer, scheduler=scheduler, nag_with_predictor=nag_with_predictor)
         return weight_predictor, nag_with_predictor
     else:
         raise NotImplementedError()
@@ -792,6 +792,7 @@ def main():
         device, is_last_partition, is_first_partition,
         log_frequency=args.log_frequency,
         max_buffers=args.max_buffers,
+        step_every=args.step_every
     )
 
     if hasattr(args, "ddp_sim_num_gpus") and args.ddp_sim_num_gpus > 1:
@@ -804,15 +805,16 @@ def main():
         partition.partition.parameters(), **args.optimizer['args'])
 
     # Create micro-batching (big batch) manger
-    big_batch_mgr = BigBatchManager(
-        args.step_every, optimizer, args.base_lr_batch_size, args.bs_train) if args.step_every > 1 else None
+    # big_batch_mgr = BigBatchManager(
+    #     args.step_every, optimizer, args.base_lr_batch_size, args.bs_train) if args.step_every > 1 else None
+    
     if len(train_dl) % args.step_every != 0:
         raise NotImplementedError()
         reminder_to_drop = len(train_dl) % args.step_every
     if args.flush_rate > 0 and args.flush_rate < args.step_every:
         raise NotImplementedError()
 
-    partition.set_big_batch_mgr(big_batch_mgr)
+    # partition.set_big_batch_mgr(big_batch_mgr)
     # Set Scheduler
     # TODO: scheduler for sched aware prediction
     scheduler = get_scheduler(args, optimizer)
@@ -836,7 +838,7 @@ def main():
         partition.set_weight_predictor(weight_predictor, nag_with_predictor)
 
     # Set Weight Stashing
-    weight_stasher = WeightStasher(optimizer) if hasattr(
+    weight_stasher = WeightStasher(optimizer, args.step_every) if hasattr(
         args, "weight_stashing") and args.weight_stashing else None
     if weight_stasher and not is_last_partition:
         partition.set_weight_stasher(weight_stasher)

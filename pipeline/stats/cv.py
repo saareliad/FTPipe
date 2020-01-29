@@ -167,7 +167,8 @@ class NormCVstats(CVStats):
         # Note: This is also called for test
         super().on_batch_end(loss, num_correct, batch_size)
 
-        if self.training:
+        # TODO: not sure fi thats the best way
+        if self.training and (not (grad_norm is None)):
             # if self.record_loss_per_batch:
             #     self.fit_res.append(grad_norm)
 

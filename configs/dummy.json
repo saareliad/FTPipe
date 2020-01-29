@@ -1,12 +1,14 @@
 {
-    "logdir": "logs/",
+    "logdir": "logs/debug/",
+    "data_dir": "/home_local/saareliad/data",
     "out_dir":"results/",
-    "out_filename": "only_fwd",
+    "auto_file_name": false,
+    "out_filename": "debug",
     "distributed_backend": "mpi",
     "task": "cv",
     "statistics": "cv_theta_dist_grad_norm",
-    "model": "wrn_16x4_p4",
-    "dataset": "cifar10",
+    "model": "wrn_16x4_c100_p4",
+    "dataset": "cifar100",
     "trainer": {
         "type": "cv",
         "args": {
@@ -19,7 +21,7 @@
     "optimizer": {
         "type": "sgd1",
         "args": {
-            "lr": 0.1,
+            "lr": 0.2,
             "weight_decay": 0.0005,
             "momentum": 0.9,
             "nesterov": false
@@ -34,14 +36,31 @@
             "last_epoch": -1
         }
     },
-    "epochs": 2,
+    "weight_prediction": {
+        "type": "msnag",
+        "args": {
+            "pred_mem": "clone",
+            "nag_with_predictor": true
+        }
+    },
+    "gap_aware": {
+        "type": "sgd1",
+        "policy": "all_except_last",
+        "args": {
+            "big_gamma": 0.999,
+            "epsilon": 1e-8,
+            "penatly_for_weight_decay": true
+        }
+    },
+    "epochs": 220,
     "steps": -1,
     "seed": 42,
     "num_chunks": 1,
     "verbose_comm": false,
     "flush_rate": -1,
-    "train_batches_limit":12,
-    "test_batches_limit":-1,
     "weight_stashing": true,
-    "work_scheduler": "1F1B"
+    "work_scheduler": "1F1B",
+    "cudnn_benchmark": true,
+    "max_buffers": 2,
+    "step_every": 2
 }

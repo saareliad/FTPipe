@@ -1,3 +1,4 @@
+import types
 import torch
 from collections import OrderedDict
 
@@ -23,11 +24,30 @@ class WeightStasher:
 
     """
 
-    def __init__(self, optimizer):
+    def __init__(self, optimizer, step_every=1):
         self.optimizer = optimizer
         self.theta_buffer = OrderedDict()
         self.dirty_mark = OrderedDict()
         self.temporery_short_term_buff = []
+        # step every parameter, used to infer micro batch.
+        self.step_every = step_every
+        self.is_problematic = False
+        # TODO: reduce redundent stashing for micro batches.
+
+    def set_problematic(self):
+        self.is_problematic = True
+        se = self.step_every
+
+        # TODO: is fwd?
+        def get_micro_batch(self, batch_index):
+            if batch_index <= se:
+                return batch_index
+            return (batch_index+1) % se
+
+        self.get_micro_batch = types.MethodType(get_micro_batch, self)
+
+    def get_micro_batch(self, batch_index):
+        return batch_index % self.step_every
 
     def mark_stashed_as_dirty(self):
         for i in self.dirty_mark:
@@ -45,8 +65,24 @@ class WeightStasher:
     def stash_current(self, batch_index, expected_updates):
         # print(f"stashed {batch_index}, rank {rank}")
         # Aviod stashing in case of no staleness.
+        if rank == 0:
+            print(
+                f"Stash? fwd_batch_idx:{batch_index}, expected_updates:{expected_updates}, mb: {batch_index % self.step_every}")
+            print(self.dirty_mark)
         if expected_updates > 0:
-            self.theta_buffer[batch_index] = self._create_current_cloned_buff()
+            micro_batch = self.get_micro_batch(batch_index)
+            buff = self.theta_buffer.get(
+                batch_index - 1, None) if micro_batch > 0 else None
+            if buff is None:
+                buff = self._create_current_cloned_buff()
+            else:
+                if (self.dirty_mark[batch_index-1]):
+                    raise RuntimeError(
+                        f"Attemted to use dirty buff as stash: rank:{rank} b:{batch_index}, mb:{micro_batch}, prev b:{batch_index-1} expected_updates:{expected_updates}")
+
+                # assert not (self.dirty_mark[batch_index-1])  # check for bug...
+
+            self.theta_buffer[batch_index] = buff
 
         self.dirty_mark[batch_index] = False  # HACK: mark as not dirty anyway.
 
@@ -56,42 +92,53 @@ class WeightStasher:
                 for p, bp in zip(pg['params'], cloned):
                     p.data = bp.data
 
-    def ensure_correct_post_restore(self, batch_idx):
-        # This functionality can be simply described as:
-        #   if did step since last call =>
-        #       create temporary buffer and restore from it later.
+    # def ensure_correct_post_restore(self, batch_idx):
+    #     """ Used before `pop_restore_stashed()` """
+    #     # This functionality can be simply described as:
+    #     #   if did step since I was stasshed =>
+    #     #       create temporary buffer -> (do backward) -> ... -> (do step)-> then restore it
+    #     # at batch_index=0, Add the temp buff for the one which will step
 
-        # Extra Details:
-        # problem this function is supposed to solve:
-        # what we are about to do is:
-        # restore stashed wieghts.data
-        # compute backward on them
-        # restore back to current, up to date weights.data, with restore_last().
-        # however, there is possibility that current `batch_index` is not the last.
-        # (This can happen in case of several backwards one after another)
-        # In this case, we need to stash the currect version of weight so it will be the last,
-        # and this is what the function does.
-        # Note we use temp buffer because we are about to pop from the original buffer
+    #     # the in case micro batches is used, the temp_buffer is duplicated at mb=0 for all of them.
 
-        if self.dirty_mark[batch_idx]:
-            # print(f"Ensured for {batch_idx} rank {rank}")
-            self.temporery_short_term_buff.append(
-                self._create_current_cloned_buff())
+    #     # Extra Details:
+    #     # problem this function is supposed to solve:
+    #     # what we are about to do is:
+    #     # restore stashed wieghts.data
+    #     # compute backward on them
+    #     # restore back to current, up to date weights.data, with restore_last().
+    #     # however, there is possibility that current `batch_index` is not the last.
+    #     # (This can happen in case of several backwards one after another)
+    #     # In this case, we need to stash the currect version of weight so it will be the last,
+    #     # and this is what the function does.
+    #     # Note we use temp buffer because we are about to pop from the original buffer
+    #     if self.dirty_mark[batch_idx] and (batch_idx % self.step_every == 0):
+    #         self.temporery_short_term_buff.append(self._create_current_cloned_buff())
 
     def pop_restore_stashed(self, batch_index):
         """ 
         Changed weight back to stashed wieghts.
         pops the stashed weights from memory.
+
+        (used before backward, 
+        and after `ensure_correct_post_restore(...)` was called)
         """
         # print(f"popped {batch_index} rank {rank}")
         dirty = self.dirty_mark.pop(batch_index)
         if dirty:
+            # Ensure correct post resotore (detailed above...)
+            micro_batch = self.get_micro_batch(batch_index)
+            if (micro_batch == 0):
+                self.temporery_short_term_buff.append(
+                    self._create_current_cloned_buff())
+
             buff = self.theta_buffer.pop(batch_index)
             self._restore_from_buff(buff)
         else:
             assert batch_index not in self.theta_buffer
 
     def post_restore(self, batch_index):
+        """ Called **only** after step """
         if self.temporery_short_term_buff:
             buff = self.temporery_short_term_buff.pop()
             self._restore_from_buff(buff)
@@ -106,5 +153,5 @@ class WeightStasher:
         """
         if self.temporery_short_term_buff:
             return self.temporery_short_term_buff[-1]
-        
+
         # return None

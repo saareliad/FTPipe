@@ -11,11 +11,9 @@ import math
 class SGDRevertableLinearWeightPrediction(WeightPredictor):
 
     # FIXME: handle the error obtained from linear prediction (error < 1e-7)
-    def __init__(self, optimizer,
-                 fix_fn, scheduler=None):
+    def __init__(self, *args, **kw):
 
-        super().__init__(optimizer,
-                         fix_fn, scheduler=scheduler)
+        super().__init__(*args, **kw)
 
     def forward(self):
         with torch.no_grad():
@@ -38,16 +36,15 @@ class SGDRevertableLinearWeightPrediction(WeightPredictor):
 
 
 class SGDClonedWeightPrediction(WeightPredictor):
-    def __init__(self, optimizer,
-                 fix_fn, scheduler=None):
+    def __init__(self, *args, **kw):
 
-        super().__init__(optimizer,
-                         fix_fn, scheduler=scheduler)
-        
+        super().__init__(*args, **kw)
+
         # Ugly hack, init momentum buffer to zeros before we start
         for pg in self.optimizer.param_groups:
             for p in pg['params']:
-                self.optimizer.state[p]['momentum_buffer'] = torch.zeros_like(p)
+                self.optimizer.state[p]['momentum_buffer'] = torch.zeros_like(
+                    p)
 
     def forward(self):
         with torch.no_grad():
@@ -90,6 +87,7 @@ class SGD2MSNAG(FixFunction):
 
 class SGD1MSNAG(SGD2MSNAG):
     """ Pytorch SGD. Mentioned as eq 9 Goyal et al. """
+
     def __call__(self, p: WeightPredictor, pg):
         return pg['lr'] * super().__call__(p, pg)
 
@@ -106,10 +104,10 @@ SGD_TYPE_TO_MSNAG_CLASS = {
 }
 
 
-def get_sgd_weight_predictor(sgd_type: str, pred_mem: str, optimizer, scheduler=None) -> WeightPredictor:
+def get_sgd_weight_predictor(sgd_type: str, pred_mem: str, optimizer, scheduler=None, nag_with_predictor=False) -> WeightPredictor:
     fix_fn_cls = SGD_TYPE_TO_MSNAG_CLASS.get(sgd_type, None)
     fix_fn = fix_fn_cls()
     pred_cls = PRED_MEM_TO_CLASS.get(pred_mem, None)
     # pred_cls: WeightPredictor
     # fix_fn: FixFunction
-    return pred_cls(optimizer, fix_fn, scheduler=scheduler)
+    return pred_cls(optimizer, fix_fn, scheduler=scheduler, nag_with_predictor=nag_with_predictor)

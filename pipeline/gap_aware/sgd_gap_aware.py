@@ -70,11 +70,13 @@ class GapAware:
     """
     # 3 main changes form original implementation.
     # (1) better mem trick for WD.
-    # (2) option to shut down changing WD.
+    # (2) option to shut down changing WD. => but we came to conclusion its not recomended.
     #
-    # Note: (2) will allow checking L2 regularization instead of WD.
+    #
+    # (this note is not correct...) Note: (2) will allow checking L2 regularization instead of WD.
     #    (as WD suffers from staleness)
     #
+    # (this note is not correct: its acumulated to local parameters, we can't send it backwards.)
     # (3) For pipeline, we can send the "mitigated" gradeints backwards, (before step),
     #       And thus avoid using GA on all layers.
     #       For WD mem trick, this requires applying a WD correction later.
@@ -111,8 +113,10 @@ class GapAware:
         # Ugly hack, init momentum buffer to zeros before we start
         for pg in self.optimizer.param_groups:
             for p in pg['params']:
-                if not 'momentum_buffer' in self.optimizer.state[p]:
-                    self.optimizer.state[p]['momentum_buffer'] = torch.zeros_like(p)
+                if 'momentum_buffer' not in self.optimizer.state[p]:
+                    self.optimizer.state[p]['momentum_buffer'] = torch.zeros_like(
+                        p)
+
     def update_max_lr(self):
         """ should be called after scheduler step. """
         for pg in self.optimizer.param_groups:
