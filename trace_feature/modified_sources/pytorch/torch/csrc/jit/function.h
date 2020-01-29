@@ -14,7 +14,7 @@ using Kwargs = std::unordered_map<std::string, IValue>;
 
 TORCH_API void preoptimizeGraph(
     std::shared_ptr<Graph>& graph,
-    int depth = 1000,const std::set<std::string>& basicBlocks = std::set<std::string>());
+    int depth = -1,const std::set<std::string>& basicBlocks = std::set<std::string>(),const std::string& accessorPath="");
 
 // A Function is a pure Graph with no implicit `self` object bound.
 // It contains schema information, and the executor that manages the
@@ -39,13 +39,13 @@ struct TORCH_API Function {
     return graph_;
   }
 
-  std::shared_ptr<Graph> optimized_graph(int depth = 1000,const std::set<std::string>& basicBlocks = std::set<std::string>()) const {
+  std::shared_ptr<Graph> optimized_graph(int depth = -1,const std::set<std::string>& basicBlocks = std::set<std::string>(),const std::string& accessorPath="") const {
     std::lock_guard<std::recursive_mutex> lock(compile_mutex);
     if (optimized_graph_) {
       return *optimized_graph_;
     }
     optimized_graph_ = graph_->copy();
-    preoptimizeGraph(*optimized_graph_, depth,basicBlocks);
+    preoptimizeGraph(*optimized_graph_, depth,basicBlocks,accessorPath);
     return *optimized_graph_;
   }
 

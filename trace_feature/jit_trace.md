@@ -7,13 +7,8 @@
     torch._C._jit_pass_inline->Inline->inlineCalls->inlineCallTo->optimized_graph->preoptimizeGraph->Inline\
     we can add depth/basic blocks parameters which will have default non influencing values thus we can have traces and profiles at the same resolution without information loss
 
-## TODOS
-* how to handle basic blocks?
-  - need to be able to access the nodes class during the trace should be possible via the prim::GetAttr Node
-  - same as depth and we can use a dynamic cast
-    or std::is_base_of to check if a basic block
+DEBUG=1 USE_DISTRIBUTED=0 USE_MKLDNN=0 USE_CUDA=0 BUILD_TEST=0 USE_FBGEMM=0 USE_NNPACK=0 USE_QNNPACK=0 python setup.py
 
-
-
-
-## 
+## instructions:
+* run copy_and_build_pytorch.sh
+* run feature_test.py to make sure the feature works as expected

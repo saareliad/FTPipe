@@ -87,11 +87,11 @@ const FunctionSchema &Function::getSchema() const
   return *schema_;
 }
 
-void preoptimizeGraph(std::shared_ptr<Graph> &graph, int depth,const std::set<std::string>& basicBlocks)
+void preoptimizeGraph(std::shared_ptr<Graph> &graph, int depth,const std::set<std::string>& basicBlocks,const std::string& accessorPath)
 {
   // TODO: Invoke cleanup passes before and after inlining to reduce amount of
   // code we're copying.
-  Inline(*graph, depth,basicBlocks);
+  Inline(*graph, depth,basicBlocks,accessorPath);
 }
 
 } // namespace jit

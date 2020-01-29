@@ -1721,12 +1721,13 @@ std::vector<Value*> inlineCallTo(
     Node* to_replace,
     Function* callee,
     int depth,
-    const std::set<std::string>& basicBlocks) {
+    const std::set<std::string>& basicBlocks,
+    const std::string& accessorPath) {
   WithInsertPoint guard(to_replace);
   std::unordered_map<Value*, Value*> value_map;
   auto new_outputs = insertGraph(
       *to_replace->owningGraph(),
-      *(callee->optimized_graph(depth,basicBlocks)),
+      *(callee->optimized_graph(depth,basicBlocks,accessorPath)),
       to_replace->inputs(),
       value_map);
 

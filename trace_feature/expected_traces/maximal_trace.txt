@@ -1,0 +1,39 @@
+graph(%self.1 : __torch__.torch.nn.modules.module.___torch_mangle_40.Module,
+      %input.1 : Float(100, 100)):
+  %85 : __torch__.torch.nn.modules.module.___torch_mangle_39.Module = prim::GetAttr[name="b2"](%self.1)
+  %75 : __torch__.torch.nn.modules.module.___torch_mangle_31.Module = prim::GetAttr[name="b1"](%self.1)
+  %118 : __torch__.torch.nn.modules.module.___torch_mangle_30.Module = prim::GetAttr[name="op"](%75)
+  %119 : __torch__.torch.nn.modules.module.___torch_mangle_28.Module = prim::GetAttr[name="l0"](%75)
+  %120 : __torch__.torch.nn.modules.module.___torch_mangle_27.Module = prim::GetAttr[name="act"](%119)
+  %121 : Tensor = prim::CallMethod[name="forward"](%120, %input.1)
+  %122 : Long() = prim::Constant[value={5}](), scope: __module.b1/__module.b1.l0 # feature_test.py:57:0
+  %input.3 : Float(100, 100) = aten::mul(%121, %122), scope: __module.b1/__module.b1.l0 # feature_test.py:57:0
+  %124 : __torch__.torch.nn.modules.module.___torch_mangle_29.Module = prim::GetAttr[name="act"](%118)
+  %125 : Tensor = prim::CallMethod[name="forward"](%124, %input.1)
+  %126 : Long() = prim::Constant[value={5}](), scope: __module.b1/__module.b1.op # feature_test.py:57:0
+  %input.2 : Float(100, 100) = aten::mul(%125, %126), scope: __module.b1/__module.b1.op # feature_test.py:57:0
+  %128 : (Tensor, Tensor) = prim::TupleConstruct(%input.2, %input.3)
+  %105 : Tensor, %106 : Tensor = prim::TupleUnpack(%128)
+  %129 : __torch__.torch.nn.modules.module.___torch_mangle_38.Module = prim::GetAttr[name="op"](%85)
+  %130 : __torch__.torch.nn.modules.module.___torch_mangle_33.Module = prim::GetAttr[name="l0"](%85)
+  %131 : __torch__.torch.nn.modules.module.___torch_mangle_32.Module = prim::GetAttr[name="act"](%130)
+  %132 : Tensor = prim::CallMethod[name="forward"](%131, %105)
+  %133 : Long() = prim::Constant[value={5}](), scope: __module.b2/__module.b2.l0 # feature_test.py:57:0
+  %input : Float(100, 100) = aten::mul(%132, %133), scope: __module.b2/__module.b2.l0 # feature_test.py:57:0
+  %135 : __torch__.torch.nn.modules.module.___torch_mangle_37.Module = prim::GetAttr[name="op"](%129)
+  %136 : __torch__.torch.nn.modules.module.___torch_mangle_35.Module = prim::GetAttr[name="l0"](%129)
+  %137 : __torch__.torch.nn.modules.module.___torch_mangle_34.Module = prim::GetAttr[name="act"](%136)
+  %138 : Tensor = prim::CallMethod[name="forward"](%137, %106)
+  %139 : Long() = prim::Constant[value={5}](), scope: __module.b2/__module.b2.op/__module.b2.op.l0 # feature_test.py:57:0
+  %140 : Float(100, 100) = aten::mul(%138, %139), scope: __module.b2/__module.b2.op/__module.b2.op.l0 # feature_test.py:57:0
+  %141 : __torch__.torch.nn.modules.module.___torch_mangle_36.Module = prim::GetAttr[name="act"](%135)
+  %142 : Tensor = prim::CallMethod[name="forward"](%141, %input)
+  %143 : Long() = prim::Constant[value={5}](), scope: __module.b2/__module.b2.op/__module.b2.op.op # feature_test.py:57:0
+  %144 : Float(100, 100) = aten::mul(%142, %143), scope: __module.b2/__module.b2.op/__module.b2.op.op # feature_test.py:57:0
+  %145 : (Tensor, Tensor) = prim::TupleConstruct(%144, %140)
+  %146 : Tensor, %147 : Tensor = prim::TupleUnpack(%145)
+  %148 : (Tensor, Tensor, Tensor) = prim::TupleConstruct(%146, %147, %input)
+  %113 : Tensor, %114 : Tensor, %115 : Tensor = prim::TupleUnpack(%148)
+  %54 : (Float(100, 100), Float(100, 100)) = prim::TupleConstruct(%113, %114)
+  %55 : ((Float(100, 100), Float(100, 100)), Float(100, 100)) = prim::TupleConstruct(%54, %115)
+  return (%55)

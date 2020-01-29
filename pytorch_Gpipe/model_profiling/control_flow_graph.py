@@ -2,7 +2,9 @@ from enum import Enum
 from typing import Any, List, Tuple, Optional, OrderedDict, Type, Callable, Union
 from ..utils import OrderedSet
 from .network_profiler import Profile
+import torch
 from torch.nn import Module
+from torch import Tensor
 import pickle
 import collections
 
@@ -375,6 +377,47 @@ class Graph():
                  "nodes_data": graph_nodes_data}
 
         pickle.dump(graph, open(path, "wb"))
+
+    def graphs_equal(self,other)->bool:
+        '''
+        check if 2 graphs are equal\n
+        graphs are equal if the topography is the same and if the nodes data is the same (upto weights and partition idx)
+        '''
+        if not isinstance(other,Graph):
+            return False
+        
+        if len(self.nodes) != len(other.nodes):
+            return False
+        
+        for u,v in zip(self.nodes,other.nodes):
+            if u.idx != v.idx or u.scope != v.scope or u.type != v.type:
+                return False
+            if u.value_type != v.value_type or u.valueType() != v.valueType():
+                return False
+            
+            if u.valueType() is Tensor:
+                if (u.value is None or v.value is None) and (not (u.value is v.value)):
+                    return False
+                if (u.value != None and v.value != None) and (not torch.allclose(u.value,v.value)):
+                    return False
+            if u.valueType() != Tensor and u.value != v.value:
+                return False
+            
+            if len(u.out_nodes) != len(v.out_nodes):
+                return False
+            for x,y in zip(u.out_nodes,v.out_nodes):
+                if x.idx != y.idx:
+                    return False
+            
+            if len(u.in_nodes) != len(v.in_nodes):
+                return False
+            for x,y in zip(u.in_nodes,v.in_nodes):
+                if x.idx != y.idx:
+                    return False
+        
+        return True
+            
+
 
     @classmethod
     def deserialize(cls, path: str) -> "Graph":

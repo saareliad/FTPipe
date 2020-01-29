@@ -1354,8 +1354,9 @@ TORCH_API std::vector<Value*> insertGraph(
 TORCH_API std::vector<Value*> inlineCallTo(
     Node* to_replace,
     Function* callee,
-    int depth = 1000,
-    const std::set<std::string>& basicBlocks = std::set<std::string>());
+    int depth = -1,
+    const std::set<std::string>& basicBlocks = std::set<std::string>(),
+    const std::string& accessorPath="");
 
 /** If there is only one value in \p OUTPUTS and its kind is Tuple, insert a
  * tuple unpack node and return the resulting values.
