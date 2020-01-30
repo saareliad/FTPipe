@@ -34,19 +34,31 @@ class WeightStasher:
         self.is_problematic = False
         # TODO: reduce redundent stashing for micro batches.
 
-    def set_problematic(self):
+    def set_problematic(self, forward=True):
         self.is_problematic = True
         se = self.step_every
 
-        # TODO: is fwd?
         def get_micro_batch(self, batch_index):
+            # TODO: can do a more "fine grained condition" 
+            # saves computation for earlier partitions:
+            # L - num partitions
+            # roundtrip = 2*L - 1
+            # min(initial_forwards, roundtrip) + (step.every - 1)
             if batch_index <= se:
                 return batch_index
             return (batch_index+1) % se
 
-        self.get_micro_batch = types.MethodType(get_micro_batch, self)
+        if forward:
+            self.get_micro_batch_forward = types.MethodType(
+                get_micro_batch, self)
+        else:
+            self.get_micro_batch_backward = types.MethodType(
+                get_micro_batch, self)
 
-    def get_micro_batch(self, batch_index):
+    def get_micro_batch_forward(self, batch_index):
+        return batch_index % self.step_every
+
+    def get_micro_batch_backward(self, batch_index):
         return batch_index % self.step_every
 
     def mark_stashed_as_dirty(self):
@@ -63,24 +75,32 @@ class WeightStasher:
         return next(reversed(self.theta_buffer.keys())) == batch_index
 
     def stash_current(self, batch_index, expected_updates):
+        """
+        Stashes current weights if we expect updates.
+        Also tracks "dirty-ness" of real weights w.r.t given batch_index
+        """
         # print(f"stashed {batch_index}, rank {rank}")
+        # if rank == 0:
+        #     print(
+        #         f"Stash? fwd_batch_idx:{batch_index}, expected_updates:{expected_updates}, \
+        # mb: {batch_index % self.step_every}")
+        #     print(self.dirty_mark)
         # Aviod stashing in case of no staleness.
-        if rank == 0:
-            print(
-                f"Stash? fwd_batch_idx:{batch_index}, expected_updates:{expected_updates}, mb: {batch_index % self.step_every}")
-            print(self.dirty_mark)
         if expected_updates > 0:
-            micro_batch = self.get_micro_batch(batch_index)
+            micro_batch = self.get_micro_batch_forward(batch_index)
+            # HACK: we use the same buffer for differnt micro batches!
+            # we can do it because we don't step on stashed wieghts.
             buff = self.theta_buffer.get(
                 batch_index - 1, None) if micro_batch > 0 else None
             if buff is None:
                 buff = self._create_current_cloned_buff()
             else:
-                if (self.dirty_mark[batch_index-1]):
-                    raise RuntimeError(
-                        f"Attemted to use dirty buff as stash: rank:{rank} b:{batch_index}, mb:{micro_batch}, prev b:{batch_index-1} expected_updates:{expected_updates}")
-
-                # assert not (self.dirty_mark[batch_index-1])  # check for bug...
+                assert not (self.dirty_mark[batch_index-1])  # check for bug...
+                # if (self.dirty_mark[batch_index-1]):
+                #     s = f"Attemted to use dirty buff as stash: rank:\
+                #         {rank} b:{batch_index}, mb:{micro_batch}, prev b:{batch_index-1} \
+                #           expected_updates:{expected_updates}"
+                #     raise RuntimeError(s)
 
             self.theta_buffer[batch_index] = buff
 
@@ -124,11 +144,10 @@ class WeightStasher:
         and after `ensure_correct_post_restore(...)` was called)
         """
         # print(f"popped {batch_index} rank {rank}")
-        dirty = self.dirty_mark.pop(batch_index)
-        if dirty:
+        if self.dirty_mark.pop(batch_index):
             # Ensure correct post resotore (detailed above...)
-            micro_batch = self.get_micro_batch(batch_index)
-            if (micro_batch == 0):
+            # Same versions as backward!
+            if (self.get_micro_batch_backward(batch_index) == 0):
                 self.temporery_short_term_buff.append(
                     self._create_current_cloned_buff())
 

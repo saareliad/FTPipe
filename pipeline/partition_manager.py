@@ -19,6 +19,9 @@ import types
 
 
 class SinglePartitionManager:
+    PROBLEMATIC_POLICY = 'SAME'
+    # PROBLEMATIC_POLICY = 'SKIP'
+
     def __init__(self, stage, configs: Dict, partition: torch.nn.Module, comm_handler: CommunicationHandlerBase,
                  work_scheduler: WorkScheduler,
                  training_tensor_shapes, eval_tensor_shapes, training_tensor_dtypes,  # FIXME
@@ -49,55 +52,11 @@ class SinglePartitionManager:
         # FIXME: num batches just have to be high enough for the calculation.
         fwds, is_problematic = get_fwds_between_first_and_seconds_step_for_stage(
             self.work_scheduler, self.stage, self.num_stages, num_batches=390)
-        # self.do_big_batch_fix_for_problematic = False
         self.is_problematic = is_problematic
         if is_problematic:
-            # The problem: Different versions in forward, same versions in backward due to ODD staleness.
-            PROBLEMATIC_POLICY = 'SKIP'
-            if PROBLEMATIC_POLICY == 'SKIP':
-                self.set_problematic()
-                # 'SKIP' Changes the problem to same versions in forward, different version in backward
-
-                skip_batch_index = step_every - 1
-                # self.do_big_batch_fix_for_problematic = True
-                # e.g: 1  (if step_every = 2)
-                # self.skip_batch_index = skip_batch_index
-                # small_step_batch = skip_batch_index + 2
-                # e.g: 3  (if step_every = 2)
-                # self.small_step_batch = small_step_batch
-
-                print(f"-V- Patching problematic batches {fwds} for stage {self.stage}. batch:{list(range(step_every+1))},{[step_every+1]}")
-                
-                def should_do_step_patch(self, batch_idx):
-                    # old_lrs = None
-                    if batch_idx <= skip_batch_index:
-                        if batch_idx == skip_batch_index:
-                            print(f"-V- stage:{self.stage} Skipping problematic batch {skip_batch_index}")
-                        return False, None
-                    # elif batch_idx == small_step_batch:
-                    #     # TODO: Exceptional smaller than usual batch step
-                    #     factor = (step_every - 1) / step_every
-                    #     old_lrs, _ = self.scale_lr(factor)
-                    #     return True, old_lrs
-                    elif batch_idx == step_every:
-                        # TODO: Exceptional bigger than usual batch step
-                        factor = (step_every + 1) / step_every
-                        old_lrs, _ = self.scale_lr(factor)
-                        return True, old_lrs
-
-                    return (batch_idx % step_every) == 0,  None
-
-                    # do_step = (batch_idx % step_every) == 0
-                    # old_lrs = None
-
-                    # For last batch
-                    # if not do_step and (batch_idx == (num_batches - 1)):
-                    #     do_step = True
-                    #     factor = ((batch_idx % step_every) + 1) / step_every
-                    #     old_lrs, _ = self.scale_lr(factor)
-                    # return do_step, old_lrs
-
-                self.should_do_step = types.MethodType(should_do_step_patch, self)
+            print(f"-V- Patching problematic batches {fwds} for stage {self.stage}")
+            if self.PROBLEMATIC_POLICY == 'SKIP':
+                self.set_problematic_skip()
 
         self.weight_predictor = None
         self.gap_aware = None
@@ -135,9 +94,42 @@ class SinglePartitionManager:
         self.gap_aware: GapAware
         self.weight_stasher: WeightStasher
 
-    def set_problematic(self):
+    def set_problematic_same(self):
+        self.is_problematic = True
+        pass
+    
+    def set_problematic_skip(self):
+        """
+        # The problem: Different versions in forward, same versions in backward due to ODD staleness.
+        # 'SKIP' Changes the problem to same versions in forward, different version in backward
+        # TODO: weight precition for the initial big batch
+        """
         self.is_problematic = True
         se = self.step_every
+        skip_batch_index = se - 1
+
+        print(f"Stage {self.stage}. first batch:{list(range(se+1))}")
+        
+        def should_do_step_patch(self, batch_idx):
+            # old_lrs = None
+            if batch_idx <= skip_batch_index:
+                # if batch_idx == skip_batch_index:
+                #     print(f"-V- stage:{self.stage} Skipping problematic batch {skip_batch_index}")
+                return False, None
+            # elif batch_idx == small_step_batch:
+            #     # Exceptional smaller than usual batch step
+            #     factor = (se - 1) / se
+            #     old_lrs, _ = self.scale_lr(factor)
+            #     return True, old_lrs
+            elif batch_idx == se:
+                # TODO: Exceptional bigger than usual batch step
+                factor = (se + 1) / se
+                old_lrs, _ = self.scale_lr(factor)
+                return True, old_lrs
+
+            return (batch_idx % se) == 0,  None
+
+        self.should_do_step = types.MethodType(should_do_step_patch, self)
 
         def get_micro_batch(self, batch_index):
             if batch_index <= se:
@@ -205,8 +197,11 @@ class SinglePartitionManager:
     def set_weight_stasher(self, weight_stasher: WeightStasher):
         if self.is_last_partition and not (weight_stasher is None):
             raise NotImplementedError()
+
         if self.is_problematic:
-            weight_stasher.set_problematic()
+            is_forward = self.PROBLEMATIC_POLICY == 'SAME'
+            weight_stasher.set_problematic(forward=is_forward)
+    
         self.weight_stasher = weight_stasher
 
     def train(self):
@@ -339,14 +334,12 @@ class SinglePartitionManager:
 
             # BIG_BATCH allow skipping steps.
             # HACK: last partition- batch idx is the same as num backwards.
-            # do_step = self.step_every == 1 or ((batch_idx % self.step_every == 0) and batch_idx != 0)
             do_step, old_lrs = self.should_do_step(batch_idx)
 
             # scale_down_lr = False
             if not do_step and (batch_idx == (num_batches - 1)):
                 do_step = True
                 # For the last batch, we must scale down the learning rate, and then restore.
-                # scale_down_lr = True
                 pgs = self.trainer.optimizer.param_groups
                 old_lrs = [g['lr'] for g in pgs]
                 for g in pgs:
@@ -399,12 +392,12 @@ class SinglePartitionManager:
         if (not recved_all) and batch_idx - 1 + self.bwd_rcev_buffers.max_buffers < num_batches:
             self.bwd_rcev_buffers.recv_next(batch_idx-1)
 
-        real_theta = None
+        # real_theta = None
         if self.weight_stasher:
             # self.weight_stasher.ensure_correct_post_restore(batch_idx)
             # Restore to parameters which the fwd ran on
             self.weight_stasher.pop_restore_stashed(batch_idx)
-            real_theta = self.weight_stasher.tmp_buff_top()
+            # real_theta = self.weight_stasher.tmp_buff_top()
 
         # Compute gradeint
         self.partition.backward_from_recomputed(g, batch_idx)
@@ -417,9 +410,9 @@ class SinglePartitionManager:
 
         # BIG_BATCH allow skiping steps.
         do_step, old_lrs = self.should_do_step(batch_idx)
-        if self.stage == 0:
-            print(
-                f"do_step:{do_step}, step_every {self.step_every}, bwd_batch_index:{batch_idx}, micro batch {batch_idx % self.step_every}, old_lrs:{old_lrs} ")
+        # if self.stage == 0:
+        #     print(f"do_step:{do_step}, step_every {self.step_every}, \
+        #       bwd_batch_index:{batch_idx}, micro batch {batch_idx % self.step_every}, old_lrs:{old_lrs} ")
 
         # also do step for the last. (but with smaller LR)
         # scale_down_lr = False
@@ -434,12 +427,12 @@ class SinglePartitionManager:
                 g['lr'] *= ((batch_idx % se) + 1) / se
 
         if do_step:
+            real_theta = self.weight_stasher.tmp_buff_top() if self.weight_stasher else None
             # ####### Preparing to step
             if real_theta:
                 self.trainer.try_record_real_gap_from_current(real_theta)
 
             delay = self.delay_at_batch.pop(batch_idx, None)
-
             if not (delay is None) and self.is_problematic:
                 # Average delays
                 mb = self.get_micro_batch(batch_idx)
@@ -452,7 +445,6 @@ class SinglePartitionManager:
 
             if self.weight_stasher:
                 # Restore to previosly saved parameters, so we can do the step on them.
-                # FIXME -minus micro batch
                 self.weight_stasher.post_restore(batch_idx)
                 # Mark previously stashed weights as dirty
                 self.weight_stasher.mark_stashed_as_dirty()
@@ -523,9 +515,9 @@ class SinglePartitionManager:
             action_is_fwd = self.work_scheduler(self.stage, self.num_stages,
                                                 num_batches, done_fwds, done_bwds)
 
-            if self.stage == 0:
-                print(
-                    f"action_is_fwd:{action_is_fwd}. totla:{num_batches}, fwd:{done_fwds}, bwd:{done_bwds} ")
+            # if self.stage == 0:
+            #     print(
+            #         f"action_is_fwd:{action_is_fwd}. totla:{num_batches}, fwd:{done_fwds}, bwd:{done_bwds} ")
 
             if action_is_fwd:
                 sent_request_objects = self.run_batch_forward(
