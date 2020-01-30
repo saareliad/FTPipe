@@ -1,4 +1,4 @@
-from collections import deque
+from collections import deque, defaultdict
 from typing import List
 
 from ..model_profiling import Graph, NodeTypes
@@ -21,7 +21,6 @@ def post_process_partition(graph: Graph, part: List[int]) -> Graph:
 
     for node, idx in zip(graph.nodes, part):
         node.part = idx
-
     cannonize_partition_indices(graph)
     constants_fix(graph)
     remove_backward_edges(graph)
@@ -32,29 +31,38 @@ def post_process_partition(graph: Graph, part: List[int]) -> Graph:
 
 
 def cannonize_partition_indices(graph: Graph):
-    num_parts = len({n.part for n in graph.nodes})
-    num_taken = 0
-    model_inputs = [node for node in graph.nodes
-                    if node.type == NodeTypes.IN]
-    open_nodes = deque(model_inputs)
-    closed = set()
-    cannonical_parts = dict()
-
-    while num_taken < num_parts:
-        node = open_nodes.popleft()
-        if node in closed or node in open_nodes:
-            continue
-        if node.part not in cannonical_parts:
-            cannonical_parts[node.part] = num_taken
-            num_taken += 1
-
-        closed.add(node)
-        edges = node.out_nodes.union(node.in_nodes)
-        nodes = edges.difference(closed, set(open_nodes))
-        open_nodes.extendleft(nodes)
-
+    out_edges = defaultdict(set)
     for node in graph.nodes:
-        node.part = cannonical_parts[node.part]
+        for o in node.out_nodes:
+            out_edges[node.part].add(o.part)
+
+    for i, e in out_edges.items():
+        e.discard(i)
+
+    translation = {idx: i for i, idx in enumerate(topological_sort(out_edges))}
+    for node in graph.nodes:
+        node.part = translation[node.part]
+
+
+def _topological_sort(out_edges, v, visited, stack):
+    visited[v] = True
+
+    for i in out_edges[v]:
+        if not visited[i]:
+            _topological_sort(out_edges, i, visited, stack)
+
+    stack.insert(0, v)
+
+
+def topological_sort(out_edges):
+    visited = {i: False for i in out_edges}
+    stack = []
+
+    for i in out_edges.keys():
+        if not visited[i]:
+            _topological_sort(out_edges, i, visited, stack)
+
+    return stack
 
 
 def constants_fix(graph: Graph):
