@@ -73,8 +73,7 @@ class PartitionedTrainer(AnyTrainer):
                                                     for pg in self.optimizer.param_groups]),
                                chain.from_iterable(real_theta))])
 
-            self.statistics.update_statistic_after_batch(
-                "gap", gap)
+            self.statistics.update_statistic_after_batch("gap", gap)
 
 
 class PartitionedSupervisedTrainer(PartitionedTrainer, SupervisedTrainer):

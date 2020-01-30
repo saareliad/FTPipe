@@ -3,11 +3,11 @@
     "data_dir": "/home_local/saareliad/data",
     "out_dir":"results/",
     "auto_file_name": false,
-    "out_filename": "debug",
+    "out_filename": "debug_28x10_100",
     "distributed_backend": "mpi",
     "task": "cv",
     "statistics": "cv_theta_dist_grad_norm",
-    "model": "wrn_16x4_c100_p4",
+    "model": "wrn_28x10_c100_dr03_p4",
     "dataset": "cifar100",
     "trainer": {
         "type": "cv",
@@ -17,11 +17,11 @@
     },
     "bs_train": 128,
     "bs_test": 200,
-    "num_data_workers": 0,
+    "num_data_workers": 10,
     "optimizer": {
         "type": "sgd1",
         "args": {
-            "lr": 0.2,
+            "lr": 0.8,
             "weight_decay": 0.0005,
             "momentum": 0.9,
             "nesterov": false
@@ -62,5 +62,5 @@
     "work_scheduler": "1F1B",
     "cudnn_benchmark": true,
     "max_buffers": 2,
-    "step_every": 10
+    "step_every": 8
 }

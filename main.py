@@ -26,6 +26,7 @@ import json
 from experiments import save_experiment, load_experiment_for_update
 import time
 import random
+import math
 
 # TODO: support multiple servers,
 # TODO heterogenous servers
@@ -522,39 +523,41 @@ def save_distributed_experiment(statistics, args, world_size, rank, local_rank, 
         torch.distributed.barrier()
 
 
-def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition,
-                  gap_aware, partition_using_gap_aware, scheduler, statistics):
+def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition, statistics):
     epochs = 0
     steps = 0
     logger.info(f"flush rate {args.flush_rate}")
     logger.info(f"Running for {args.epochs} epochs and {args.steps} steps")
+    if (args.flush_rate >= 0):
+        raise NotImplementedError()
 
-    if not hasattr(args, "train_batches_limit"):
-        TRAIN_BATCHES_TO_RUN = len(train_dl)
-    else:
-        TRAIN_BATCHES_TO_RUN = getattr(args, "train_batches_limit") if getattr(
-            args, "train_batches_limit") >= 0 else len(train_dl)
+    TRAIN_BATCHES_TO_RUN = getattr(args, "train_batches_limit", len(train_dl))
+    TEST_BATCHES_TO_RUN = getattr(args, "test_batches_limit", len(test_dl))
 
-    if not hasattr(args, "test_batches_limit"):
-        TEST_BATCHES_TO_RUN = len(test_dl)
-    else:
-        TEST_BATCHES_TO_RUN = getattr(args, "test_batches_limit") if getattr(
-            args, "test_batches_limit") >= 0 else len(test_dl)
+    TRAIN_BATCHES_TO_RUN = len(
+        train_dl) if TRAIN_BATCHES_TO_RUN < 0 else TRAIN_BATCHES_TO_RUN
+    TEST_BATCHES_TO_RUN = len(
+        test_dl) if TEST_BATCHES_TO_RUN < 0 else TEST_BATCHES_TO_RUN
 
     while epochs < args.epochs or args.epochs < 0:
         if args.steps > 0:
             TRAIN_BATCHES_TO_RUN = min(
                 TRAIN_BATCHES_TO_RUN, args.steps - steps)
 
+            # handle step every.
+            reminder_to_drop = TRAIN_BATCHES_TO_RUN % args.step_every
+            if reminder_to_drop:
+                logger.info(
+                    f"Drop {reminder_to_drop} steps for each epoch>={epochs}")
+                TRAIN_BATCHES_TO_RUN -= reminder_to_drop
+                if TRAIN_BATCHES_TO_RUN <= 0:
+                    break
+
         did_train = False
         did_eval = False
         epoch_start_time = time.time()
-        # steps_at_epoch_start = steps
         for TRAIN in [True, False]:
             logger.info(f"Running {'train' if TRAIN else 'eval'}")
-
-            # TRAIN_BATCHES_TO_RUN = 4
-            # TEST_BATCHES_TO_RUN = 30
 
             if TRAIN:
                 if TRAIN_BATCHES_TO_RUN == 0:
@@ -567,28 +570,17 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition
                 partition.train()
                 if statistics:
                     statistics.train()
-                if args.flush_rate > 0:
-                    for _ in range(0, TRAIN_BATCHES_TO_RUN, args.flush_rate):
-                        if partition_using_gap_aware:
-                            # Gap calculation assumes staleness 1, so skipping first batch in flush.
-                            gap_aware.skip_one_apply()
-                        partition.run_until_flush(
-                            min(args.flush_rate, len(train_dl)))
+                # if args.flush_rate > 0:
+                #     for _ in range(0, TRAIN_BATCHES_TO_RUN, args.flush_rate):
+                #         partition.run_until_flush(
+                #             min(args.flush_rate, len(train_dl)))
 
-                    reminder = len(train_dl) % args.flush_rate
-                    if reminder > 0:
-                        if partition_using_gap_aware:
-                            gap_aware.skip_one_apply()
-                        partition.run_until_flush(reminder)
-                else:
-                    if partition_using_gap_aware:
-                        gap_aware.skip_one_apply()
-                    partition.run_until_flush(
-                        min(TRAIN_BATCHES_TO_RUN, len(train_dl)))
+                #     reminder = len(train_dl) % args.flush_rate
+                #     if reminder > 0:
+                #         partition.run_until_flush(reminder)
+                # else:
+                partition.run_until_flush(TRAIN_BATCHES_TO_RUN)
 
-                scheduler.step()
-                if partition_using_gap_aware:
-                    gap_aware.update_max_lr()
                 did_train = True
                 if args.local_rank == args.world_size - 1:
                     statistics.on_epoch_end()
@@ -616,7 +608,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition
 
         epochs += 1
         if did_train:
-            steps += TRAIN_BATCHES_TO_RUN
+            steps += math.ceil(TRAIN_BATCHES_TO_RUN / args.step_every)
 
         # if is_last_partition
         if args.local_rank == args.world_size - 1:
@@ -796,7 +788,8 @@ def main():
     )
 
     if hasattr(args, "ddp_sim_num_gpus") and args.ddp_sim_num_gpus > 1:
-        print(f"-I- simulating DDP accuracy with {args.ddp_sim_num_gpus} (DDP) GPUs per stage")
+        print(
+            f"-I- simulating DDP accuracy with {args.ddp_sim_num_gpus} (DDP) GPUs per stage")
         dp_sim.convert_to_num_gpus(partition.partition, args.ddp_sim_num_gpus)
 
     # After the partition is on its device:
@@ -807,10 +800,10 @@ def main():
     # Create micro-batching (big batch) manger
     # big_batch_mgr = BigBatchManager(
     #     args.step_every, optimizer, args.base_lr_batch_size, args.bs_train) if args.step_every > 1 else None
-    
-    if len(train_dl) % args.step_every != 0:
-        raise NotImplementedError()
-        reminder_to_drop = len(train_dl) % args.step_every
+    # if len(train_dl) % args.step_every != 0:
+    #     reminder_to_drop = len(train_dl) % args.step_every
+    #     raise NotImplementedError(
+    #         f"len(train_dl):{len(train_dl)}, args.step_every:{args.step_every}")
     if args.flush_rate > 0 and args.flush_rate < args.step_every:
         raise NotImplementedError()
 
@@ -829,7 +822,9 @@ def main():
         gap_aware = None
         trainer = trainer_cls(partition.partition, optimizer=optimizer,
                               scheduler=scheduler, statistics=statistics, **trainer_extra_args)
+
     partition.set_trainer(trainer)
+    partition.set_lr_scheduler(scheduler)
 
     # Set Weight predictor
     weight_predictor, nag_with_predictor = get_weight_predictor(
@@ -851,8 +846,8 @@ def main():
         auto_file_name(args)
 
     # Main Training Loop
-    training_loop(args, logger, train_dl, test_dl, is_first_partition, partition,
-                  gap_aware, partition_using_gap_aware, scheduler, statistics)
+    training_loop(args, logger, train_dl, test_dl,
+                  is_first_partition, partition, statistics)
 
     # Synchronize and save statistics from all partitions
     save_distributed_experiment(

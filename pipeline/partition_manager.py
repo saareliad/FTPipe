@@ -54,7 +54,8 @@ class SinglePartitionManager:
             self.work_scheduler, self.stage, self.num_stages, num_batches=390)
         self.is_problematic = is_problematic
         if is_problematic:
-            print(f"-V- Patching problematic batches {fwds} for stage {self.stage}")
+            print(
+                f"-V- Patching problematic batches {fwds} for stage {self.stage}")
             if self.PROBLEMATIC_POLICY == 'SKIP':
                 self.set_problematic_skip()
 
@@ -97,7 +98,7 @@ class SinglePartitionManager:
     def set_problematic_same(self):
         self.is_problematic = True
         pass
-    
+
     def set_problematic_skip(self):
         """
         # The problem: Different versions in forward, same versions in backward due to ODD staleness.
@@ -109,7 +110,7 @@ class SinglePartitionManager:
         skip_batch_index = se - 1
 
         print(f"Stage {self.stage}. first batch:{list(range(se+1))}")
-        
+
         def should_do_step_patch(self, batch_idx):
             # old_lrs = None
             if batch_idx <= skip_batch_index:
@@ -191,6 +192,9 @@ class SinglePartitionManager:
         self.weight_predictor = weight_predictor
         # self.nag_with_predictor = nag_with_predictor # handled inside the wp.
 
+    def set_lr_scheduler(self, lr_scheduler):
+        self.lr_scheduler = lr_scheduler
+    
     def set_gap_aware(self, gap_aware):
         self.gap_aware = gap_aware
 
@@ -201,7 +205,7 @@ class SinglePartitionManager:
         if self.is_problematic:
             is_forward = self.PROBLEMATIC_POLICY == 'SAME'
             weight_stasher.set_problematic(forward=is_forward)
-    
+
         self.weight_stasher = weight_stasher
 
     def train(self):
@@ -343,6 +347,7 @@ class SinglePartitionManager:
                 pgs = self.trainer.optimizer.param_groups
                 old_lrs = [g['lr'] for g in pgs]
                 for g in pgs:
+                    # FIXME: micro batch index
                     g['lr'] *= ((batch_idx % self.step_every) +
                                 1) / self.step_every
 
@@ -424,6 +429,7 @@ class SinglePartitionManager:
             old_lrs = [g['lr'] for g in pgs]
             se = self.step_every
             for g in pgs:
+                # FIXME: micro batch index
                 g['lr'] *= ((batch_idx % se) + 1) / se
 
         if do_step:
@@ -437,7 +443,8 @@ class SinglePartitionManager:
                 # Average delays
                 mb = self.get_micro_batch(batch_idx)
                 if mb > 0:
-                    delays = [delay] + [self.delay_at_batch.pop(batch_idx-i, None) for i in range(1, mb + 1)]
+                    delays = [
+                        delay] + [self.delay_at_batch.pop(batch_idx-i, None) for i in range(1, mb + 1)]
                     delay = np.mean(delays)
 
             # possible Modify gradients (e.g Gap aware)
@@ -480,6 +487,12 @@ class SinglePartitionManager:
         raise NotImplementedError()
 
     def run_forward_until_flush(self, num_batches):
+        """
+        Running evaluation (pipelined)
+        Requires:
+            set_dataloader() was called (if first partition)
+            eval() was called
+        """
 
         for done_fwds in range(num_batches):
 
@@ -495,20 +508,20 @@ class SinglePartitionManager:
         while len(self.async_fwd_objects) > 0:
             self.wait_on_sent_object(is_fwd=True)
 
-        # if not self.comm_handler.cpu:
-        #     # HACK: synchronize.
-        #     torch.cuda.synchronize(device=self.device)
-
-    def run_until_flush(self, num_batches):
+    def run_until_flush(self, num_batches, sched_step=True):
         """
         Requires:
             set_dataloader() was called (if first partition)
-            train() or eval() was called
+            train() was called
         """
         done_bwds = 0
         done_fwds = 0
 
-        num_steps = num_batches
+        ga = self.gap_aware
+        if ga:
+            ga.skip_one_apply()
+
+        # num_steps = num_batches
         while done_bwds < num_batches:
             # for step_index in range(num_steps):
             # Act according to some policy
@@ -529,6 +542,7 @@ class SinglePartitionManager:
                     done_bwds, num_batches)
                 if not (self.is_first_partition):
                     self.async_bwd_objects[done_bwds] = sent_request_objects
+
             # Increase counters
             if self.is_last_partition:
                 done_bwds += 1
@@ -557,6 +571,11 @@ class SinglePartitionManager:
 
         while len(self.async_bwd_objects) > 0:
             self.wait_on_sent_object(is_fwd=False)
+        
+        if sched_step:
+            self.lr_scheduler.step()
+            if ga:
+                ga.update_max_lr()
 
         # if not self.comm_handler.cpu:
         #     # HACK: synchronize.
