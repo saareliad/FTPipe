@@ -12,7 +12,6 @@ from typing import Callable, List, Dict, OrderedDict as OrderedDictType, Optiona
 
 __all__ = ["build_graph"]
 
-# TODO support list and tuple layer outputs
 # TODO if we have l(x,x) it will register only as 1 input
 #  similarly l(x,y,x) will only have 2 inputs
 
@@ -58,12 +57,11 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
     torch._C._jit_set_inline_everything_mode(False)
     trace_graph = torch.jit.trace(model, sample_batch, check_trace=False).graph
     torch._C._jit_set_inline_everything_mode(old_value)
-    # TODO need to support basic blocks as well
-    # actually quite tricky as I've no idea how to pass python classes to c++
-    # or even if the trace graph saves a class info which can be compared
-    # the simple but realy unoptimized solution is to precompute all scopes of the basic blocks
-    # and compare them to the accessor hierarchy for large models it will be slow
-    torch._C._jit_pass_inline(trace_graph, max_depth, block_scopes)
+    try:
+        torch._C._jit_pass_inline(trace_graph, max_depth, block_scopes)
+    except Exception:
+        # if extension not built fall back to a default solution
+        torch._C._jit_pass_inline(trace_graph)
     # build the graph from trace
     nodes = add_nodes(trace_graph, new_to_old, partials, tensors)
 

@@ -23,11 +23,10 @@ def post_process_partition(graph: Graph, part: List[int]) -> Graph:
         node.part = idx
 
     cannonize_partition_indices(graph)
-
-    graph_root_fix(graph)
+    constants_fix(graph)
     remove_backward_edges(graph)
     do_not_send_lists(graph)
-    graph_root_fix(graph)
+    constants_fix(graph)
 
     return graph
 
@@ -58,13 +57,13 @@ def cannonize_partition_indices(graph: Graph):
         node.part = cannonical_parts[node.part]
 
 
-def graph_root_fix(graph: Graph):
+def constants_fix(graph: Graph):
     fixed = False
     while True:
         changed = False
         for node in graph.nodes:
             for n in node.in_nodes:
-                if n.part != node.part and len(n.in_nodes) == 0:
+                if n.part != node.part and len(n.in_nodes) == 0 and n.type is NodeTypes.CONSTANT:
                     n.part = node.part
                     changed = True
                     fixed = True

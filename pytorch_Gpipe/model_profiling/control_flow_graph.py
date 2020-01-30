@@ -378,46 +378,44 @@ class Graph():
 
         pickle.dump(graph, open(path, "wb"))
 
-    def graphs_equal(self,other)->bool:
+    def graphs_equal(self, other) -> bool:
         '''
         check if 2 graphs are equal\n
         graphs are equal if the topography is the same and if the nodes data is the same (upto weights and partition idx)
         '''
-        if not isinstance(other,Graph):
+        if not isinstance(other, Graph):
             return False
-        
+
         if len(self.nodes) != len(other.nodes):
             return False
-        
-        for u,v in zip(self.nodes,other.nodes):
+
+        for u, v in zip(self.nodes, other.nodes):
             if u.idx != v.idx or u.scope != v.scope or u.type != v.type:
                 return False
             if u.value_type != v.value_type or u.valueType() != v.valueType():
                 return False
-            
+
             if u.valueType() is Tensor:
                 if (u.value is None or v.value is None) and (not (u.value is v.value)):
                     return False
-                if (u.value != None and v.value != None) and (not torch.allclose(u.value,v.value)):
+                if (u.value != None and v.value != None) and (not torch.allclose(u.value, v.value)):
                     return False
             if u.valueType() != Tensor and u.value != v.value:
                 return False
-            
+
             if len(u.out_nodes) != len(v.out_nodes):
                 return False
-            for x,y in zip(u.out_nodes,v.out_nodes):
+            for x, y in zip(u.out_nodes, v.out_nodes):
                 if x.idx != y.idx:
                     return False
-            
+
             if len(u.in_nodes) != len(v.in_nodes):
                 return False
-            for x,y in zip(u.in_nodes,v.in_nodes):
+            for x, y in zip(u.in_nodes, v.in_nodes):
                 if x.idx != y.idx:
                     return False
-        
-        return True
-            
 
+        return True
 
     @classmethod
     def deserialize(cls, path: str) -> "Graph":
@@ -456,3 +454,10 @@ class Graph():
                                                        for u in node["out_nodes"]])
 
         return cls(nodes, graph_data["output_scopes"], graph_data["depth"], graph_data["basic_blocks"])
+
+    def _check(self):
+        for node in self.nodes:
+            for i in node.in_nodes:
+                assert node in i.out_nodes
+            for o in node.out_nodes:
+                assert node in o.in_nodes
