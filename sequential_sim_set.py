@@ -127,6 +127,27 @@ if __name__ == "__main__":
             'config': [f"{cfgs_dir}{cfg}.json" for cfg in all_algs],
             'seed': [42, 20202020, 77777777, 314159, 1322019]
         }
-        run_grid_on_multi_gpu_per_run(COMMAND, param_grid, gpu_list=[0, 1, 2, 3, 4, 5], gpus_per_config=4)
+        run_grid_on_multi_gpu_per_run(COMMAND, param_grid, gpu_list=[
+                                      0, 1, 2, 3, 4, 5], gpus_per_config=4)
 
-    ddp4()
+    def staleness_big_batch():
+        COMMAND = "mpirun -np 4 python main.py"
+        cfg_dir_tmplt = "configs/wrn16x4_cifar100/step_every_{}/"
+        cfgs_dirs = [cfg_dir_tmplt.format(i) for i in [2, 4, 8]]
+        all_algs = ["weight_stashing_msnag_gap_aware",
+                    "weight_stashing",
+                    "weight_stashing_msnag",
+                    "weight_stashing_gap_aware",
+                    # "gap_aware",
+                    "msnag",
+                    "stale", ]
+
+        param_grid = [{
+            'config': [f"{cfgs_dir}{cfg}.json" for cfg in all_algs],
+            # 'seed': [42, 20202020, 77777777, 314159, 1322019]
+            'seed': [42, 314159, 1322019]
+        } for cfgs_dir in cfgs_dirs]
+        run_grid_on(COMMAND, param_grid, gpu_list=[0, 1, 2, 3, 4, 5, 6, 7])
+        # run_grid_on(COMMAND, param_grid, gpu_list=[7])
+
+    staleness_big_batch()

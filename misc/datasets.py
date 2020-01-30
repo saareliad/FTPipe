@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import torchvision
 from torchvision.datasets import CIFAR10, CIFAR100
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DistributedSampler
 import torch.distributed as dist
 
 
@@ -206,6 +206,63 @@ def distributed_simplified_get_train_test_dl(dataset, bs_train, bs_test, shuffle
 
     dl_train, dl_test = get_train_test_dl(
         dataset, ds_train, ds_test, bs_train, bs_test, shuffle_train=shuffle_train, **kw)
+
+    if verbose:
+        print(f'Train: {len(dl_train) * bs_train} samples')
+        print(f'Test: {len(dl_test) * bs_test} samples')
+
+    return dl_train, dl_test
+
+
+class MyNewDistributedSampler(DistributedSampler):
+    # Better use this class, as it was tested by pytorch.
+    # only problem with it is *deterministic shuffling*, which will be the same for all experiments.
+    # so we add experiment seed to make it fun.
+
+    def __init__(self, experiment_manual_seed, *args, **kw):
+        super().__init__(*args, **kw)
+        self.experiment_manual_seed = experiment_manual_seed
+
+    def __iter__(self):
+        # deterministically shuffle based on epoch
+        g = torch.Generator()
+        # My only change
+        g.manual_seed(self.epoch * self.experiment_manual_seed)
+        if self.shuffle:
+            indices = torch.randperm(len(self.dataset), generator=g).tolist()
+        else:
+            indices = list(range(len(self.dataset)))
+
+        # add extra samples to make it evenly divisible
+        indices += indices[:(self.total_size - len(indices))]
+        assert len(indices) == self.total_size
+
+        # subsample
+        indices = indices[self.rank:self.total_size:self.num_replicas]
+        assert len(indices) == self.num_samples
+
+        return iter(indices)
+
+
+def new_distributed_simplified_get_train_test_dl(dataset, bs_train, bs_test, shuffle_train=True, verbose=True,
+                                                 DATA_DIR=DEFAULT_DATA_DIR, dist_kw={}, pin_memory=True, **kw):
+    """dist_kw: seed_to_assert=None, num_splits=None, use_split=None """
+
+    ds_train, ds_test = get_train_test_ds(
+        dataset, DATA_DIR=DATA_DIR)
+
+    train_sampler = DistributedSampler(
+        dataset, num_replicas=None, rank=None, shuffle=shuffle_train)
+    test_sampler = DistributedSampler(
+        dataset, num_replicas=None, rank=None, shuffle=False)
+
+    dl_train = torch.utils.data.DataLoader(
+        ds_train, bs_train, shuffle=False, pin_memory=pin_memory, sampler=train_sampler, **kw)
+    dl_test = torch.utils.data.DataLoader(
+        ds_test, bs_test, shuffle=False, pin_memory=pin_memory, sampler=test_sampler, **kw)
+
+    # dl_train, dl_test = get_train_test_dl(
+    #     dataset, ds_train, ds_test, bs_train, bs_test, shuffle_train=shuffle_train, **kw)
 
     if verbose:
         print(f'Train: {len(dl_train) * bs_train} samples')

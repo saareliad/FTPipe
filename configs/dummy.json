@@ -17,7 +17,7 @@
     },
     "bs_train": 128,
     "bs_test": 200,
-    "num_data_workers": 10,
+    "num_data_workers": 20,
     "optimizer": {
         "type": "sgd1",
         "args": {

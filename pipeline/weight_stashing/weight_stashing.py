@@ -162,6 +162,11 @@ class WeightStasher:
             buff = self.temporery_short_term_buff.pop()
             self._restore_from_buff(buff)
 
+    def post_restore_from_top(self, batch_index):
+        if self.temporery_short_term_buff:
+            buff = self.temporery_short_term_buff[-1]
+            self._restore_from_buff(buff)
+
     # Exposed for statistics and alike
     def get_stashed_buff(self, batch_index, default=None):
         return self.theta_buffer.get(batch_index, default)

@@ -462,6 +462,10 @@ class SinglePartitionManager:
                 pgs = self.trainer.optimizer.param_groups
                 for g, old_lr in zip(pgs, old_lrs):
                     g['lr'] = old_lr
+        else:
+            if self.weight_stasher:
+                # Restore to previosly saved parameters, so we can do the next forwards on them!
+                self.weight_stasher.post_restore_from_top(batch_idx)
 
         return request_objects
 
