@@ -1,5 +1,5 @@
-from collections import deque, defaultdict
-from typing import List
+from collections import defaultdict
+from typing import List, Dict, Set
 
 from ..model_profiling import Graph, NodeTypes
 
@@ -21,6 +21,7 @@ def post_process_partition(graph: Graph, part: List[int]) -> Graph:
 
     for node, idx in zip(graph.nodes, part):
         node.part = idx
+
     cannonize_partition_indices(graph)
     constants_fix(graph)
     remove_backward_edges(graph)
@@ -44,7 +45,7 @@ def cannonize_partition_indices(graph: Graph):
         node.part = translation[node.part]
 
 
-def _topological_sort(out_edges, v, visited, stack):
+def _topological_sort(out_edges: Dict[int, Set[int]], v: int, visited: Dict[int, bool], stack: List[int]):
     visited[v] = True
 
     for i in out_edges[v]:
@@ -54,7 +55,7 @@ def _topological_sort(out_edges, v, visited, stack):
     stack.insert(0, v)
 
 
-def topological_sort(out_edges):
+def topological_sort(out_edges: Dict[int, Set[int]]) -> List[int]:
     visited = {i: False for i in out_edges}
     stack = []
 

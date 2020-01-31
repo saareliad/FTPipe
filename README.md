@@ -14,6 +14,7 @@ Sections start with a reference to the source file where the code related to the
   - [Model Profiler](#model-profiler)
   - [Control Flow Graph](#control-flow-graph)
     - [Graph Builder](#graph-builder)
+    - [Graph Pitfalls](#graph-pitfalls)
     - [Graph Representation](#graph-representation)
 - [Model Partitioning](#model-partitioning)
   - [METIS Partitioning](#metis-partitioning)
@@ -30,6 +31,7 @@ Sections start with a reference to the source file where the code related to the
     - [Declaration Parsing](#declaration-parsing)
 - [Synchronous Pipeline](#synchronous-pipeline)
 - [Environment](#environment)
+- [TODOS](#todos)
 
 # High Level API #
 
@@ -117,6 +119,31 @@ it digests the raw trace and omits a graph detailing the model according to give
 def build_graph(model, sample_batch, kwargs, max_depth, basic_blocks, use_profiler, n_iter, weights)
 ```
 
+### Graph Pitfalls
+
+as we are using tracing there are several limitations that come with it:
+- only tensors and nested lists/tuples of tensors are supported as model inputs
+- control flow must be deterministic. we can only profile the actions that were taken for the traced input.\
+  for example if statement will be inlined with the path taken same for loops which will be unrolled.
+- as pytorch has problem with tracing keyword given to forward methods, it is advised to pass keywords by positions.\
+  for example:
+   ```python
+  def forward(x,y=None,z=None)...
+  
+  model(x,z=10)
+  ```
+  the following will not register z as the third input but as the second, so if you know that only z will be used rewrite it to be:
+  ```python
+  def forward(x,z=None,y=None)
+  ```
+  that will ensure that the generated code is correct.
+  similarly if we do:
+  ```python
+  model(x,z=x)
+  ```
+  we can't know that x was passed twice, instead it will appear as ```model(x)```
+- ModuleList,ModuleDict,Sequential are not yet supported
+- functions that have string args like for example nll_loss which has a reduction arg will not register correctly and must be fixed manually
 ### Graph Representation
 
 [model_profiling/control_flow_graph.py](pytorch_Gpipe/model_profiling/control_flow_graph.py)
@@ -259,3 +286,8 @@ TODO still needs testing tested on cpus and single GPU
 - pytorch 1.4
 - networkx + networkx-metis for metis partitioning
 - graphviz + python-graphviz for graph visualization
+
+# TODOS
+- support containerModules (ModuleList,ModuleDict,Sequential) support for ModuleDict is not necessary as we cannot have string arguments anyway
+- string arguments for functions like nll_loss are not supported with tracing but yes with scripting
+- optional inputs problem

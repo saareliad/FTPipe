@@ -9,6 +9,7 @@ from collections import OrderedDict
 import re
 import string
 from typing import Callable, List, Dict, OrderedDict as OrderedDictType, Optional, Any, Tuple, Set
+import warnings
 
 __all__ = ["build_graph"]
 
@@ -61,6 +62,8 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
         torch._C._jit_pass_inline(trace_graph, max_depth, block_scopes)
     except Exception:
         # if extension not built fall back to a default solution
+        warnings.warn(
+            "trace_feature not found. falling back to regular trace which is less accurate\n please build it")
         torch._C._jit_pass_inline(trace_graph)
     # build the graph from trace
     nodes = add_nodes(trace_graph, new_to_old, partials, tensors)
