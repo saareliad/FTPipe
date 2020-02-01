@@ -15,9 +15,6 @@ from pytorch_Gpipe.delayedNorm import DelayedBatchNorm
 
 ExcInfo = Tuple[Type[BaseException], BaseException, TracebackType]
 
-logging.basicConfig(
-    filename="pipelineLog.log", level=logging.DEBUG, format='%(relativeCreated)6d %(message)s')
-
 
 @unique
 class COMMAND(Enum):
@@ -247,11 +244,14 @@ class Pipeline():
         self.training = True
         self.num_DEBUG_messages = 0
 
+        logging.basicConfig(
+            filename="pipelineLog.log", level=logging.DEBUG, format='%(relativeCreated)6d %(threadName)s %(message)s')
+
     def log(self, msg: str):
         logging.debug(f"master msg{self.num_DEBUG_messages} {msg}")
         self.num_DEBUG_messages += 1
 
-    def __call__(self, *xs: Tensor, num_chunks: Optional[int] = 1):
+    def __call__(self, *xs: Tensor, num_chunks: Optional[int] = None):
         '''runs the pipeline forward pass input is split across batch dim
            and fed to workers process order and result order are presereved
            and the result should be the same regardless the number of chunks
@@ -322,6 +322,9 @@ class Pipeline():
         self.FORWARD = False
         if not self.WorkersRunning():
             raise InvalidState("workers are not running")
+
+        if not isinstance(grad_input, (list, tuple)):
+            grad_input = [grad_input]
 
         self._sendCommand(COMMAND.BACKWARD, self.num_chunks)
         # seed gradients one gradient at a time
