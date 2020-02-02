@@ -121,6 +121,8 @@ class GapAwareCVTrainer(CVTrainer):
         # It does not help to modify the (Gap Aware) gradients before we send,
         # so do everything here.
         if real_theta is None or delay is None:
+            # FIXME: its very problematic if almost last partition calls this if step_every > 1.
+            # This means: for the "gap_aware.json" configs !!!
             self.gap_aware.apply()
         else:
             self.gap_aware.apply_on_theta(real_theta, delay)

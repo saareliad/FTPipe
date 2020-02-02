@@ -34,6 +34,8 @@ on the rishon sever:
 salloc -n2 --gres=gpu:2 mpirun python main.py
 ```
 
+Note that OpenMPI may require special settings (e.g disable P2P via PCI ```--mca btl_smcuda_use_cuda_ipc 0```).
+
 ### Via torch.distributed.launch model
 
 Not supported. To be removed.

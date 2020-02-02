@@ -34,20 +34,25 @@ class WeightStasher:
         self.is_problematic = False
         # TODO: reduce redundent stashing for micro batches.
 
-    def set_problematic(self, forward=True):
+    def set_problematic(self, forward=True, policy='EVERY_BATCH'):
         self.is_problematic = True
+        # POLICIES = {'CHANGE', 'EVERY_BATCH'}
         se = self.step_every
-
-        def get_micro_batch(self, batch_index):
-            # TODO: can do a more "fine grained condition" 
-            # saves computation for earlier partitions:
-            # L - num partitions
-            # roundtrip = 2*L - 1
-            # min(initial_forwards, roundtrip) + (step.every - 1)
-            if batch_index <= se:
-                return batch_index
-            return (batch_index+1) % se
-
+        if policy == 'CHANGE':
+            def get_micro_batch(self, batch_index):
+                # TODO: can do a more "fine grained condition"
+                # saves computation for earlier partitions:
+                # L - num partitions
+                # roundtrip = 2*L - 1
+                # min(initial_forwards, roundtrip) + (step.every - 1)
+                if batch_index <= se:
+                    return batch_index
+                return (batch_index+1) % se
+        elif policy == 'EVERY_BATCH':
+            def get_micro_batch(self, batch_index):
+                return batch_index if batch_index < se else 0
+        else:
+            raise NotImplementedError()
         if forward:
             self.get_micro_batch_forward = types.MethodType(
                 get_micro_batch, self)

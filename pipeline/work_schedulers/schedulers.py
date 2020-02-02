@@ -96,6 +96,14 @@ class SeqScheduler(WorkScheduler):
         return done_bwds == done_fwds
 
 
+class StepEvery1F1BScheduler(WorkScheduler):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+
+    def __call__(self, stage, num_stages, num_steps, done_fwds, done_bwds):
+        raise NotImplementedError()
+
+
 class GpipeScheduler(WorkScheduler):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
@@ -149,9 +157,34 @@ def get_fwds_between_first_and_seconds_step_for_stage(scheduler, stage, num_stag
     s = print_for_stage(stage, scheduler, num_stages, num_batches)
     step_every = scheduler.step_every
     fwds = get_fwds_between_first_step_from_str(s, step_every)
-    is_problematic = fwds[0] % step_every !=0
+    is_problematic = fwds[0] % step_every != 0
     return fwds, is_problematic
 
+
+def should_do_step(batch_idx, se):
+    do_step = (batch_idx % se) == (se-1)
+    return do_step
+
+
+def expected_staleness(done_fwds, done_bwds, se):
+    return sum([should_do_step(x, se) for x in range(done_bwds, done_fwds)])
+
+
+def my_version(batch_index, se):
+    """ steps so far """
+    return sum([should_do_step(i, se) for i in range(batch_index)])
+
+
+def expected_version(done_fwds, done_bwds, se):
+    # Tuple: current + weight prediction
+    return (my_version(done_bwds, se), expected_staleness(done_fwds, done_bwds, se))
+
+
+def backward_version(done_fwds, done_bwds, se):
+    return my_version(done_bwds, se) + expected_staleness(done_fwds, done_bwds, se)
+    # stage 0, len 4: [expected_staleness(i, max(i-3,0), 2) for i in range(10)]
+
+# print([expected_version(i, max(i-3,0), 2) for i in range(15)]); print(list(range(15))); print([expected_staleness(i, max(i-3,0), 2) for i in range(15)]);
 
 
 if __name__ == "__main__":

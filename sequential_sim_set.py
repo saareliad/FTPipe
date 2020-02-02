@@ -135,19 +135,62 @@ if __name__ == "__main__":
         cfg_dir_tmplt = "configs/wrn16x4_cifar100/step_every_{}/"
         cfgs_dirs = [cfg_dir_tmplt.format(i) for i in [2, 4, 8]]
         all_algs = ["weight_stashing_msnag_gap_aware",
-                    "weight_stashing",
+                    # "weight_stashing",
                     "weight_stashing_msnag",
-                    "weight_stashing_gap_aware",
-                    # "gap_aware",
-                    "msnag",
-                    "stale", ]
+                    # "weight_stashing_gap_aware",
+                    # # "gap_aware",
+                    # "msnag",
+                    # "stale", 
+                    ]
 
         param_grid = [{
             'config': [f"{cfgs_dir}{cfg}.json" for cfg in all_algs],
-            # 'seed': [42, 20202020, 77777777, 314159, 1322019]
-            'seed': [42, 314159, 1322019]
+            'seed': [42, 20202020, 77777777, 314159, 1322019]
+            # 'seed': [20202020, 77777777, 314159, 1322019]
         } for cfgs_dir in cfgs_dirs]
-        run_grid_on(COMMAND, param_grid, gpu_list=[0, 1, 2, 3, 4, 5, 6, 7])
+        run_grid_on(COMMAND, param_grid, gpu_list=[0, 1])
         # run_grid_on(COMMAND, param_grid, gpu_list=[7])
+
+    def agg_to_same_batch_wrn16x4_c100():
+        # TODO: first run without GA
+        COMMAND = "mpirun -np 4 python main.py"
+        cfg_dir_tmplt = "configs/wrn16x4_cifar100/batch_128_step_every/step_every_{}"
+        cfgs_dirs = [cfg_dir_tmplt.format(i) for i in [2, 4]]
+        all_algs = ["weight_stashing_msnag_gap_aware",
+                    # "weight_stashing",
+                    "weight_stashing_msnag",
+                    # "weight_stashing_gap_aware",
+                    # # "gap_aware",
+                    # "msnag",
+                    # "stale", 
+                    ]
+
+        param_grid = [{
+            'config': [f"{cfgs_dir}{cfg}.json" for cfg in all_algs],
+            'seed': [42, 20202020, 77777777, 314159, 1322019]
+            # 'seed': [20202020, 77777777, 314159, 1322019]
+        } for cfgs_dir in cfgs_dirs]
+        run_grid_on(COMMAND, param_grid, gpu_list=[0, 1])
+
+    def agg_to_same_batch_wrn28x10_c100():
+        # TODO: first run without GA
+        COMMAND = "mpirun -np 4 python main.py"
+        cfg_dir_tmplt = "configs/wrn_cifar100/batch_128_step_every/step_every_{}"
+        cfgs_dirs = [cfg_dir_tmplt.format(i) for i in [2, 4]]
+        all_algs = ["weight_stashing_msnag_gap_aware",
+                    # "weight_stashing",
+                    "weight_stashing_msnag",
+                    # "weight_stashing_gap_aware",
+                    # # "gap_aware",
+                    # "msnag",
+                    # "stale", 
+                    ]
+
+        param_grid = [{
+            'config': [f"{cfgs_dir}{cfg}.json" for cfg in all_algs],
+            'seed': [42, 20202020, 77777777, 314159, 1322019]
+            # 'seed': [20202020, 77777777, 314159, 1322019]
+        } for cfgs_dir in cfgs_dirs]
+        run_grid_on(COMMAND, param_grid, gpu_list=[0, 1])
 
     staleness_big_batch()

@@ -173,7 +173,7 @@ def assert_args(args):
     assert(not (args.stage is None))
 
 
-def create_comm_handler(args, initialize_args, device) -> CommunicationHandlerBase:
+def create_comm_handler(args, comm_init_args, device) -> CommunicationHandlerBase:
 
     # get the parameters to create the comm handler
     handler_cls = get_auto_comm_handler_cls(args.distributed_backend, args.cpu)
@@ -184,7 +184,7 @@ def create_comm_handler(args, initialize_args, device) -> CommunicationHandlerBa
         args.world_size,
         args.num_stages,
         args.stage,
-        *initialize_args,
+        *comm_init_args,
         args.cpu,
         args.num_chunks,
         device,
@@ -194,7 +194,6 @@ def create_comm_handler(args, initialize_args, device) -> CommunicationHandlerBa
     return comm_handler
 
 
-# target_tensor_names = {"target", "target_length"}
 # target_tensor_names = {"target"}
 def tensor_tags_from_config(config, target_tensor_names, num_chunks, GRAD_UGLY_SHAMEFUL_NAME="_grad"):
 
@@ -319,7 +318,7 @@ def infer_dtypes_and_shapes(config, bs_train, bs_test, random_input_sample,
 
 
 def create_distributed_communcation_context(args, config, stage,
-                                            target_tensor_names={"target"},
+                                            target_tensor_names=None,
                                             # training_tensor_dtypes={},
                                             # training_tensor_shapes={}, eval_tensor_shapes={},
                                             # random_input_sample=None,
@@ -342,6 +341,10 @@ def create_distributed_communcation_context(args, config, stage,
         eval_tensor_dtypes
         support weight sharing
     """
+
+    if target_tensor_names is None:
+        target_tensor_names = set()
+    
     tensor_tags, TOTAL_TAGS = tensor_tags_from_config(
         config, target_tensor_names, args.num_chunks, GRAD_UGLY_SHAMEFUL_NAME="_grad")
 
@@ -365,7 +368,7 @@ def create_distributed_communcation_context(args, config, stage,
         stage + 1) if stage < args.num_stages - 1 else []
 
     # Note that we don't need shapes for the comm, just the datatypes.
-    comm_args = (receive_ranks,
+    comm_init_args = (receive_ranks,
                  send_ranks,
                  tensor_tags,
                  target_tensor_names,
@@ -373,7 +376,7 @@ def create_distributed_communcation_context(args, config, stage,
                  ranks_in_next_stage,
                  TOTAL_TAGS)
 
-    return comm_args
+    return comm_init_args
 
 
 def to_tuple(x):
@@ -663,13 +666,16 @@ def main():
     parse_env_vars(args)
     args.world_size = get_world_size(args.distributed_backend)
 
-    # device = get_device(args)  # torch.device('cpu' if args.cpu else f"cuda:{args.local_rank}")
-    # if not args.cpu:
-    #     torch.cuda.set_device(device)
+    # TODO: idealy we want to choose device here, but we moved it down.
 
     # Set Random Seed
     if args.seed is None:
         args.seed = random.randint(0, 2 ** 31)
+    # FIXME: I susspect there is a problem here because it does it on it on ALL GPUs.
+    # should probably hide with CUDA VISABLE DEVICES, 
+    # or do it just for a single GPU:
+    # torch._C.default_generator.manual_seed(int(args.seed))
+    # torch.cuda.manual_seed(int(args.seed))
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
@@ -734,15 +740,17 @@ def main():
     BASE_TARGET_SHAPE = y.shape[1:]
 
     # TODO formalize with function according to dataset/task
-    target_tensor_names = {"target"}
+    USE_TARGET = True
+    target_tensor_names = {}
+    training_tensor_dtypes = {"input0": x.dtype}
+    training_tensor_shapes = {"input0": (*bs_train, *BASE_INPUT_SHAPE)}
+    eval_tensor_shapes = {"input0": (*bs_test, *BASE_INPUT_SHAPE)}
 
-    training_tensor_dtypes = {"input0": x.dtype, "target": y.dtype}
-
-    training_tensor_shapes = {"input0": (
-        *bs_train, *BASE_INPUT_SHAPE), "target": (*bs_train, *BASE_TARGET_SHAPE)}
-
-    eval_tensor_shapes = {"input0": (
-        *bs_test, *BASE_INPUT_SHAPE), "target": (*bs_test, *BASE_TARGET_SHAPE)}
+    if USE_TARGET:
+        target_tensor_names = {"target"}
+        training_tensor_dtypes["target"] = y.dtype
+        training_tensor_shapes["target"] = (*bs_train, *BASE_TARGET_SHAPE)
+        eval_tensor_shapes["target"] = (*bs_test, *BASE_TARGET_SHAPE)
 
     SAMPLE_BATCH_SIZE = 1  # Smallest batch as possible.
     random_input_sample = torch.randn(SAMPLE_BATCH_SIZE, *BASE_INPUT_SHAPE)

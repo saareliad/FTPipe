@@ -67,6 +67,10 @@ class SinglePartitionManager:
         self.log_frequency = log_frequency
         self.batches = 0
 
+        # State for saving current relevant weight.
+        self.true_weights_dirty = None
+        self.true_weights = None
+
         # State for recv buffers
         if max_buffers > 2:  # FIXME
             raise NotImplementedError()
@@ -95,9 +99,23 @@ class SinglePartitionManager:
         self.gap_aware: GapAware
         self.weight_stasher: WeightStasher
 
-    def set_problematic_same(self):
-        self.is_problematic = True
-        pass
+    def set_true_weights_dirty(self):
+        self.true_weights_dirty = True
+
+    def get_true_weights_dirty(self):
+        return self.true_weights_dirty
+
+    def get_true_weights(self):
+        return self.true_weights
+
+    def set_true_weights_buffer(self):
+        pgs = self.trainer.optimizer.param_groups
+        with torch.no_grad():
+            buff = [[p.data.clone() for p in pg['params']]
+                    for pg in pgs]
+
+        self.true_weights = buff
+        self.true_weights_dirty = False
 
     def set_problematic_skip(self):
         """
@@ -125,6 +143,7 @@ class SinglePartitionManager:
             elif batch_idx == se:
                 # TODO: Exceptional bigger than usual batch step
                 factor = (se + 1) / se
+                # FIXME: this funcion should not do the scale.
                 old_lrs, _ = self.scale_lr(factor)
                 return True, old_lrs
 
@@ -185,8 +204,8 @@ class SinglePartitionManager:
 
     def set_dataloader(self, dataloader):
         assert self.is_first_partition
-        self.dataloader = dataloader
-        self.dl_iter = iter(self.dataloader)
+        # self.dataloader = dataloader
+        self.dl_iter = iter(dataloader)
 
     def set_weight_predictor(self, weight_predictor: WeightPredictor, nag_with_predictor: bool):
         self.weight_predictor = weight_predictor
@@ -194,7 +213,7 @@ class SinglePartitionManager:
 
     def set_lr_scheduler(self, lr_scheduler):
         self.lr_scheduler = lr_scheduler
-    
+
     def set_gap_aware(self, gap_aware):
         self.gap_aware = gap_aware
 
@@ -203,8 +222,16 @@ class SinglePartitionManager:
             raise NotImplementedError()
 
         if self.is_problematic:
-            is_forward = self.PROBLEMATIC_POLICY == 'SAME'
-            weight_stasher.set_problematic(forward=is_forward)
+            if self.PROBLEMATIC_POLICY == 'SAME':
+                if self.weight_predictor is None:
+                    weight_stasher.set_problematic(
+                        forward=True, policy='CHANGE')
+                else:
+                    weight_stasher.set_problematic(
+                        forward=True, policy='EVERY_BATCH')
+        elif self.PROBLEMATIC_POLICY == 'SKIP':
+            raise NotImplementedError()
+            # weight_stasher.set_problematic(forward=False, policy='CHANGE')
 
         self.weight_stasher = weight_stasher
 
@@ -257,7 +284,7 @@ class SinglePartitionManager:
                 - If last partition: do the backward and send to previous partition
 
             TODO:
-                -
+                - Pre load Y to last partition if possible
         """
         # TODO: BIG_BATCH: fix delay in case micro batches.
         if self.gap_aware and self.partition.training:
@@ -270,15 +297,19 @@ class SinglePartitionManager:
             # TODO: handle y with separate coordinated dataloader according to trainer/tast.
             x, *ctx = self.task.unpack_data_for_partition(next(self.dl_iter))
         else:
-            if not self.fwd_rcev_buffers.is_initialized():
-                self.fwd_rcev_buffers.create()
+            preload_ctx = self.task.preload_last_partition(getattr(self,"dl_iter",None), self.device) if self.is_last_partition else tuple()
+
+            fwd_rcev_buffers = self.fwd_rcev_buffers
+
+            if not fwd_rcev_buffers.is_initialized():
+                fwd_rcev_buffers.create()
 
             recved_all = False
-            if self.fwd_rcev_buffers.first_rcv_after_created or self.fwd_rcev_buffers.max_buffers == 1:
-                self.fwd_rcev_buffers.recv_all(batch_idx, num_batches)
+            if fwd_rcev_buffers.first_rcv_after_created or fwd_rcev_buffers.max_buffers == 1:
+                fwd_rcev_buffers.recv_all(batch_idx, num_batches)
                 recved_all = True
 
-            x = self.fwd_rcev_buffers.wait_first()
+            x = fwd_rcev_buffers.wait_first()
             x = self.comm_handler.fix_after_recv(x)
 
             # pre-Start the next fwd Irecv:
@@ -288,25 +319,24 @@ class SinglePartitionManager:
             # actually, many times we clone the input anyway inside the partition (for re-computation)
             # and if so, we can use less recv buffers for forward to save memory,
             # while stil getting the same speed/parallelism.
-            if (not recved_all) and batch_idx - 1 + self.fwd_rcev_buffers.max_buffers < num_batches:
-                self.fwd_rcev_buffers.recv_next(batch_idx-1)
+            if (not recved_all) and batch_idx - 1 + fwd_rcev_buffers.max_buffers < num_batches:
+                fwd_rcev_buffers.recv_next(batch_idx-1)
 
             x, *ctx = self.task.unpack_data_for_partition(x)
-
+            ctx = (*preload_ctx, *ctx)
         # Do the forward pass with optionals
         if self.weight_predictor and self.partition.training:
             # TODO: last partition can do bengio nesterov instead of predicting.
             # Requires per partition optimizer config, or some hack.
-            self.weight_predictor.setup(
-                self.expected_staleness(batch_idx, done_bwds))
+            expected_staleness = self.expected_staleness(batch_idx, done_bwds)
+            self.weight_predictor.setup(expected_staleness)
             self.weight_predictor.forward()
             x = self.partition(x, batch_idx)
 
             if self.weight_stasher and self.partition.training:
                 # Stash parameters for later.
                 # Note: wait stasher should be None be in last partition.
-                self.weight_stasher.stash_current(
-                    batch_idx, self.expected_staleness(batch_idx, done_bwds))
+                self.weight_stasher.stash_current(batch_idx, expected_staleness)
 
             self.weight_predictor.revert()
         else:
@@ -379,23 +409,24 @@ class SinglePartitionManager:
     def run_batch_backward(self, batch_idx, num_batches):
         """ Runs the backwards pass + step for all except the last partition """
 
-        if not self.bwd_rcev_buffers.is_initialized():
-            self.bwd_rcev_buffers.create()
+        bwd_rcev_buffers = self.bwd_rcev_buffers
+        if not bwd_rcev_buffers.is_initialized():
+            bwd_rcev_buffers.create()
 
         recved_all = False
-        if self.recv_all_bwd or self.bwd_rcev_buffers.first_rcv_after_created or self.bwd_rcev_buffers.max_buffers == 1:
+        if self.recv_all_bwd or bwd_rcev_buffers.first_rcv_after_created or bwd_rcev_buffers.max_buffers == 1:
             self.recv_all_bwd = False
-            self.bwd_rcev_buffers.recv_all(batch_idx, num_batches)
+            bwd_rcev_buffers.recv_all(batch_idx, num_batches)
             recved_all = True
 
         #  Recompute before waiting to the first, so parallelize communication and computation
         self.partition.recompute(batch_idx)
-        g = self.bwd_rcev_buffers.wait_first()
+        g = bwd_rcev_buffers.wait_first()
         g = self.comm_handler.fix_after_recv(g)
 
         # Wait for next if appropriate
-        if (not recved_all) and batch_idx - 1 + self.bwd_rcev_buffers.max_buffers < num_batches:
-            self.bwd_rcev_buffers.recv_next(batch_idx-1)
+        if (not recved_all) and batch_idx - 1 + bwd_rcev_buffers.max_buffers < num_batches:
+            bwd_rcev_buffers.recv_next(batch_idx-1)
 
         # real_theta = None
         if self.weight_stasher:
@@ -575,7 +606,7 @@ class SinglePartitionManager:
 
         while len(self.async_bwd_objects) > 0:
             self.wait_on_sent_object(is_fwd=False)
-        
+
         if sched_step:
             self.lr_scheduler.step()
             if ga:

@@ -4,12 +4,18 @@ import numpy as np
 import torch
 import torchvision
 from torchvision.datasets import CIFAR10, CIFAR100
+from PIL import Image
+
 from torch.utils.data import Dataset, DistributedSampler
 import torch.distributed as dist
 
+# new_distributed_get_train_test_dl_from_args
+# distributed_get_train_test_dl_from_args
+# simplified_get_train_test_dl_from_args
+# get_seperate_just_x_or_y_train_test_dl_from_args
 
-# TODO: remove hardcoded DATA_DIR
-# read DATA_DIR from env or some config.yml file.
+
+# Fallback to this dataset dir of no other dir is given as arument to functions.
 DEFAULT_DATA_DIR = os.path.expanduser('~/.pytorch-datasets')
 
 # torch.backends.cudnn.deterministic = True
@@ -214,10 +220,30 @@ def distributed_simplified_get_train_test_dl(dataset, bs_train, bs_test, shuffle
     return dl_train, dl_test
 
 
+def distributed_get_train_test_dl_from_args(args, shuffle_train=True,
+                                            verbose=True, num_splits=None, use_split=None, **kw):
+    """
+    num_splits: number of splits, that is, num dataparallel gpus (default value is to take dist.world_size).
+    use_split: the number of split to use on this proccess (default value is to take dist.rank)
+    """
+    # TODO: num_splits=None, use_split=None
+    dist_kw = dict(seed_to_assert=args.seed,
+                   num_splits=num_splits, use_split=use_split)
+
+    DATA_DIR = getattr(args, "data_dir", DEFAULT_DATA_DIR)
+    DATA_DIR = DATA_DIR if DATA_DIR else DEFAULT_DATA_DIR
+
+    return distributed_simplified_get_train_test_dl(args.dataset, args.bs_train,
+                                                    args.bs_test, shuffle_train=shuffle_train, verbose=verbose,
+                                                    DATA_DIR=DATA_DIR, dist_kw=dist_kw, **kw)
+
+
 class MyNewDistributedSampler(DistributedSampler):
     # Better use this class, as it was tested by pytorch.
     # only problem with it is *deterministic shuffling*, which will be the same for all experiments.
     # so we add experiment seed to make it fun.
+
+    MAX_INT = 2**32  # Used to prevent overflow
 
     def __init__(self, experiment_manual_seed, *args, **kw):
         super().__init__(*args, **kw)
@@ -227,7 +253,8 @@ class MyNewDistributedSampler(DistributedSampler):
         # deterministically shuffle based on epoch
         g = torch.Generator()
         # My only change
-        g.manual_seed(self.epoch * self.experiment_manual_seed)
+        g.manual_seed((self.epoch * self.experiment_manual_seed) %
+                      self.MAX_INT)
         if self.shuffle:
             indices = torch.randperm(len(self.dataset), generator=g).tolist()
         else:
@@ -245,17 +272,21 @@ class MyNewDistributedSampler(DistributedSampler):
 
 
 def new_distributed_simplified_get_train_test_dl(dataset, bs_train, bs_test, shuffle_train=True, verbose=True,
-                                                 DATA_DIR=DEFAULT_DATA_DIR, dist_kw={}, pin_memory=True, **kw):
-    """dist_kw: seed_to_assert=None, num_splits=None, use_split=None """
+                                                 DATA_DIR=DEFAULT_DATA_DIR, pin_memory=True, **kw):
+    """ Requires:
+         that a manual seed is set to the experiment and restorable via torch.initial_seed() """
 
     ds_train, ds_test = get_train_test_ds(
         dataset, DATA_DIR=DATA_DIR)
+    experiment_manual_seed = torch.initial_seed()
 
-    train_sampler = DistributedSampler(
-        dataset, num_replicas=None, rank=None, shuffle=shuffle_train)
-    test_sampler = DistributedSampler(
-        dataset, num_replicas=None, rank=None, shuffle=False)
+    # Note: choosing None will infer these args from torch.distributed calls.
+    train_sampler = MyNewDistributedSampler(
+        experiment_manual_seed, ds_train, num_replicas=None, rank=None, shuffle=shuffle_train)
+    test_sampler = MyNewDistributedSampler(
+        experiment_manual_seed, ds_test, num_replicas=None, rank=None, shuffle=False)
 
+    # Note: explicitly set shuffle to False, its handled by samplers.
     dl_train = torch.utils.data.DataLoader(
         ds_train, bs_train, shuffle=False, pin_memory=pin_memory, sampler=train_sampler, **kw)
     dl_test = torch.utils.data.DataLoader(
@@ -271,18 +302,246 @@ def new_distributed_simplified_get_train_test_dl(dataset, bs_train, bs_test, shu
     return dl_train, dl_test
 
 
-def distributed_get_train_test_dl_from_args(args, shuffle_train=True, verbose=True, num_splits=None, use_split=None, **kw):
-    """
-    num_splits: number of splits, that is, num dataparallel gpus (default value is to take dist.world_size).
-    use_split: the number of split to use on this proccess (default value is to take dist.rank)
-    """
-    # TODO: num_splits=None, use_split=None
-    dist_kw = dict(seed_to_assert=args.seed,
-                   num_splits=num_splits, use_split=use_split)
+def new_distributed_get_train_test_dl_from_args(args, **kw):
 
     DATA_DIR = getattr(args, "data_dir", DEFAULT_DATA_DIR)
     DATA_DIR = DATA_DIR if DATA_DIR else DEFAULT_DATA_DIR
 
-    return distributed_simplified_get_train_test_dl(args.dataset, args.bs_train,
-                                                    args.bs_test, shuffle_train=shuffle_train, verbose=verbose,
-                                                    DATA_DIR=DATA_DIR, dist_kw=dist_kw, **kw)
+    # num_replicas=None, rank=None
+    return new_distributed_simplified_get_train_test_dl(args.dataset, args.bs_train,
+                                                        args.bs_test,
+                                                        DATA_DIR=DATA_DIR, **kw)
+
+
+#############################################
+# get x seperate from y, both with same seed
+#############################################
+
+
+class CIFAR10JustX(CIFAR10):
+    def __getitem__(self, index):
+        """
+        Args:
+            index (int): Index
+
+        Returns:
+            tuple: (image, target) where target is index of the target class.
+        """
+        img = self.data[index]
+        # target = self.targets[index]
+
+        # doing this so that it is consistent with all other datasets
+        # to return a PIL Image
+        img = Image.fromarray(img)
+
+        if self.transform is not None:
+            img = self.transform(img)
+
+        # if self.target_transform is not None:
+        #     target = self.target_transform(target)
+
+        return img  # , target
+
+
+class CIFAR10JustY(CIFAR10):
+    def __getitem__(self, index):
+        """
+        Args:
+            index (int): Index
+
+        Returns:
+            tuple: (image, target) where target is index of the target class.
+        """
+        # img = self.data[index]
+        target = self.targets[index]
+
+        # # doing this so that it is consistent with all other datasets
+        # # to return a PIL Image
+        # img = Image.fromarray(img)
+
+        # if self.transform is not None:
+        #     img = self.transform(img)
+
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        return target
+
+
+class CIFAR100JustX(CIFAR10JustX):
+    """`CIFAR100 <https://www.cs.toronto.edu/~kriz/cifar.html>`_ Dataset.
+
+    This is a subclass of the `CIFAR10` Dataset.
+    """
+    base_folder = 'cifar-100-python'
+    url = "https://www.cs.toronto.edu/~kriz/cifar-100-python.tar.gz"
+    filename = "cifar-100-python.tar.gz"
+    tgz_md5 = 'eb9058c3a382ffc7106e4002c42a8d85'
+    train_list = [
+        ['train', '16019d7e3df5f24257cddd939b257f8d'],
+    ]
+
+    test_list = [
+        ['test', 'f0ef6b0ae62326f3e7ffdfab6717acfc'],
+    ]
+    meta = {
+        'filename': 'meta',
+        'key': 'fine_label_names',
+        'md5': '7973b15100ade9c7d40fb424638fde48',
+    }
+
+
+class CIFAR100JustY(CIFAR10JustY):
+    """`CIFAR100 <https://www.cs.toronto.edu/~kriz/cifar.html>`_ Dataset.
+
+    This is a subclass of the `CIFAR10` Dataset.
+    """
+    base_folder = 'cifar-100-python'
+    url = "https://www.cs.toronto.edu/~kriz/cifar-100-python.tar.gz"
+    filename = "cifar-100-python.tar.gz"
+    tgz_md5 = 'eb9058c3a382ffc7106e4002c42a8d85'
+    train_list = [
+        ['train', '16019d7e3df5f24257cddd939b257f8d'],
+    ]
+
+    test_list = [
+        ['test', 'f0ef6b0ae62326f3e7ffdfab6717acfc'],
+    ]
+    meta = {
+        'filename': 'meta',
+        'key': 'fine_label_names',
+        'md5': '7973b15100ade9c7d40fb424638fde48',
+    }
+
+
+def get_cifar_100_seperate_train_test_ds(DATA_DIR=DEFAULT_DATA_DIR):
+    mean = np.array([0.5071, 0.4867, 0.4408])
+    std = np.array([0.2675, 0.2565, 0.2761])
+
+    train_transform, test_transform = cifar_transformations(mean, std)
+
+    ds_train_X = CIFAR100JustX(
+        root=DATA_DIR, download=True, train=True, transform=train_transform)
+    ds_train_Y = CIFAR100JustY(
+        root=DATA_DIR, download=True, train=True, transform=train_transform)
+
+    ds_test_X = CIFAR100JustX(
+        root=DATA_DIR, download=True, train=False, transform=test_transform)
+    ds_test_Y = CIFAR100JustY(
+        root=DATA_DIR, download=True, train=False, transform=test_transform)
+
+    return ds_train_X, ds_train_Y, ds_test_X, ds_test_Y
+
+
+def get_cifar_10_seperate_train_test_ds(DATA_DIR=DEFAULT_DATA_DIR):
+    mean = np.array([0.49139968, 0.48215841, 0.44653091])
+    std = np.array([0.24703223, 0.24348513, 0.26158784])
+
+    train_transform, test_transform = cifar_transformations(mean, std)
+
+    ds_train_X = CIFAR10JustX(
+        root=DATA_DIR, download=True, train=True, transform=train_transform)
+    ds_train_Y = CIFAR10JustY(
+        root=DATA_DIR, download=True, train=True, transform=train_transform)
+
+    ds_test_X = CIFAR10JustX(root=DATA_DIR, download=True,
+                             train=False, transform=test_transform)
+    ds_test_Y = CIFAR10JustY(root=DATA_DIR, download=True,
+                             train=False, transform=test_transform)
+
+    return ds_train_X, ds_train_Y, ds_test_X, ds_test_Y
+
+
+def get_cifar_100_just_x_or_y_train_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR):
+    mean = np.array([0.5071, 0.4867, 0.4408])
+    std = np.array([0.2675, 0.2565, 0.2761])
+
+    train_transform, test_transform = cifar_transformations(mean, std)
+    just = just.lower()
+    if just == 'x':
+        ds_train_X = CIFAR100JustX(
+            root=DATA_DIR, download=True, train=True, transform=train_transform)
+        ds_test_X = CIFAR100JustX(
+            root=DATA_DIR, download=True, train=False, transform=test_transform)
+        return ds_train_X, ds_test_X
+    elif just == 'y':
+        ds_train_Y = CIFAR100JustY(
+            root=DATA_DIR, download=True, train=True, transform=train_transform)
+        ds_test_Y = CIFAR100JustY(
+            root=DATA_DIR, download=True, train=False, transform=test_transform)
+        return ds_train_Y, ds_test_Y
+    else:
+        raise ValueError(f"'just' should be in x,y. Got {just} instead.")
+
+
+def get_cifar_10_just_x_or_y_train_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR):
+    mean = np.array([0.49139968, 0.48215841, 0.44653091])
+    std = np.array([0.24703223, 0.24348513, 0.26158784])
+
+    train_transform, test_transform = cifar_transformations(mean, std)
+    just = just.lower()
+    if just == 'x':
+        ds_train_X = CIFAR10JustX(
+            root=DATA_DIR, download=True, train=True, transform=train_transform)
+        ds_test_X = CIFAR10JustX(
+            root=DATA_DIR, download=True, train=False, transform=test_transform)
+        return ds_train_X, ds_test_X
+    elif just == 'y':
+        ds_train_Y = CIFAR10JustY(
+            root=DATA_DIR, download=True, train=True, transform=train_transform)
+        ds_test_Y = CIFAR10JustY(
+            root=DATA_DIR, download=True, train=False, transform=test_transform)
+        return ds_train_Y, ds_test_Y
+    else:
+        raise ValueError(f"'just' should be in x,y. Got {just} instead.")
+
+
+def get_seperate_just_x_or_y_train_test_dl(dataset, bs_train, bs_test, just,
+                                           shuffle_train=True, verbose=True,
+                                           DATA_DIR=DEFAULT_DATA_DIR, pin_memory=True, **kw):
+    ds_train, ds_test = get_train_test_ds(dataset, DATA_DIR=DATA_DIR)
+
+    DICT_DATASET_JUST_XY_FUNC = {
+        'cifar10': get_cifar_10_just_x_or_y_train_test_ds,
+        'cifar100': get_cifar_100_just_x_or_y_train_test_ds
+    }
+
+    experiment_manual_seed = torch.initial_seed()
+
+    ds_train, ds_test = DICT_DATASET_JUST_XY_FUNC.get(
+        dataset)(just=just, DATA_DIR=DATA_DIR)
+
+    # Note: choosing None will infer these args from torch.distributed calls.
+    # HACK: we set everything to rank 0 and 1 replica.
+    # (we do this to utilize the tested generator code inside the distributed sampler)
+    train_sampler = MyNewDistributedSampler(
+        experiment_manual_seed, ds_train, num_replicas=1, rank=0, shuffle=shuffle_train)
+    test_sampler = MyNewDistributedSampler(
+        experiment_manual_seed, ds_test, num_replicas=1, rank=0, shuffle=False)
+
+    # Note: explicitly set shuffle to False, its handled by samplers.
+    dl_train = torch.utils.data.DataLoader(
+        ds_train, bs_train, shuffle=False, pin_memory=pin_memory, sampler=train_sampler, **kw)
+    dl_test = torch.utils.data.DataLoader(
+        ds_test, bs_test, shuffle=False, pin_memory=pin_memory, sampler=test_sampler, **kw)
+
+    if verbose:
+        print(f'Train: {len(dl_train) * bs_train} samples')
+        print(f'Test: {len(dl_test) * bs_test} samples')
+
+    return dl_train, dl_test
+
+
+def get_seperate_just_x_or_y_train_test_dl_from_args(args, **kw):
+
+    DATA_DIR = getattr(args, "data_dir", DEFAULT_DATA_DIR)
+    DATA_DIR = DATA_DIR if DATA_DIR else DEFAULT_DATA_DIR
+
+    # Just:
+    # HACK: avoid asking "is last partition?"
+    just = 'x' if args.stage == 0 else 'y'
+
+    # num_replicas=None, rank=None
+    return get_seperate_just_x_or_y_train_test_dl(args.dataset, args.bs_train,
+                                                  args.bs_test, just,
+                                                  DATA_DIR=DATA_DIR, **kw)

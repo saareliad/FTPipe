@@ -3,6 +3,10 @@ checkpoints/
 results/
 multithreaded_pipe/
 logs/
+cpp/
+old_bash_scripts/
+figures/
+csv/
 # Created by https://www.gitignore.io/api/python,pycharm,windows,osx,linux
 
 ### Linux ###

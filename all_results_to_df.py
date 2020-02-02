@@ -27,8 +27,17 @@ class InferStuff:
     def __init__(self, config, fit_res):
         self.config = config
         self.fit_res = fit_res
+
+        stat_to_default = {
+            'step_every': 1    
+        }
+
+        def get_from_cfg(stat):
+            # config.get(i, stat_to_default.get(i,None))
+            return config[stat] if stat in config else stat_to_default[stat]
+        
         self.interesting_from_config = {
-            i: config[i] for i in ["model", "dataset", 'seed', 'bs_train']
+            i: get_from_cfg(i) for i in ["model", "dataset", 'seed', 'bs_train', 'step_every']
         }
         self.all_data = {}
         self.infer_experiment_names()
@@ -174,7 +183,7 @@ def all_results_to_csv(root_paths, csv_name):
 
 
 ## Analysis tools:
-def print_uniques(csv, cols=["alg", 'bs_train', "model", "dataset", 'seed']):
+def print_uniques(csv, cols=["alg", 'bs_train', "model", "dataset", 'seed', 'step_every']):
     # TODO: args.bs_train * args.step_every
     # TODO: number of partitions
     df = pd.read_csv(csv)
