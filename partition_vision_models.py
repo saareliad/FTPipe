@@ -73,7 +73,7 @@ def edge_weight_function(bandwidth_gps):
         if v.type is NodeTypes.LAYER:
             return max(1, int(v.weight.input_size / bandwidth_gps))
         if u.type is NodeTypes.CONSTANT:
-            return 1
+            return 1000
         return 1
     return f
 
