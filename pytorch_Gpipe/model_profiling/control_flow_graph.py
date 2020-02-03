@@ -50,7 +50,7 @@ class Node():
      parallel edges in the same direction are not allowed
     '''
 
-    def __init__(self, scope: str, idx: int, node_type: NodeTypes, incoming_nodes: Optional[OrderedSet["Node"]] = None, weight: Union[Profile, int] = 0, part: int = 0, value: Optional[Any] = None):
+    def __init__(self, scope: str, idx: int, node_type: NodeTypes, incoming_nodes: Optional[OrderedSet["Node"]] = None, weight: Union[Profile, int] = 0, part: int = 0, value: Optional[Any] = None, shape: Optional[List[int]] = None):
         self.scope = scope
         self.idx = idx
         self.type = node_type
@@ -61,6 +61,7 @@ class Node():
             incoming_nodes, OrderedSet) else OrderedSet()
         self.value = value
         self.value_type: Optional[Type] = None
+        self.shape = [] if shape is None else shape
 
     def valueType(self) -> Type:
         if self.value_type:
@@ -227,14 +228,14 @@ class Graph():
 
         return G
 
-    def build_dot(self, show_buffs_params: bool = False, show_weights: bool = True):
+    def build_dot(self, show_buffs_params: bool = False, show_profiles: bool = True):
         '''
         return a graphviz representation of the graph
         Parameters
         ----------
         show_buffs_params:
             whether to display also buffers and parameters which are not encased in the graph scopes
-        show_weights:
+        show_profiles:
             whether to display the nodes weight
         '''
 
@@ -287,7 +288,7 @@ class Graph():
                 continue
             label = node.scope
 
-            if show_weights and node.weight != 0:
+            if show_profiles and node.weight != 0:
                 label = f"{label}\n {node.weight}"
 
             label = f"{label}\n type: {node.valueType()}"
@@ -306,7 +307,7 @@ class Graph():
 
         return dot
 
-    def display(self, show_buffs_params: bool = False, show_weights: bool = True):
+    def display(self, show_buffs_params: bool = False, show_profiles: bool = True):
         '''
         display the graph in Jupyter
 
@@ -314,17 +315,17 @@ class Graph():
         ----------
         show_buffs_params:
             whether to display also buffers and parameters which are not encased in the graph scopes
-        show_weights:
+        show_profiles:
             whether to display the nodes weight
         '''
         try:
             from IPython.core.display import display_svg
             display_svg(self.build_dot(show_buffs_params,
-                                       show_weights=show_weights), raw=False)
+                                       show_profiles=show_profiles), raw=False)
         except ImportError as _:
             print("only works in python notebooks")
 
-    def save_as_pdf(self, file_name: str, directory: str, show_buffs_params: bool = True, show_weights: bool = False):
+    def save_as_pdf(self, file_name: str, directory: str, show_buffs_params: bool = True, show_profiles: bool = False):
         '''
         save the rendered graph to a pdf file
 
@@ -336,10 +337,10 @@ class Graph():
             directory to store the file in
         show_buffs_params:
             whether to display also buffers and parameters which are not encased in the graph scopes
-        show_weights:
+        show_profiles:
             whether to display the nodes weight
         '''
-        dot = self.build_dot(show_buffs_params, show_weights=show_weights)
+        dot = self.build_dot(show_buffs_params, show_profiles=show_profiles)
         dot.format = "pdf"
         import os
         if os.path.exists(f"{directory}/{file_name}.pdf"):

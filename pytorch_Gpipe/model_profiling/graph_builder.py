@@ -3,7 +3,7 @@ from torch import Tensor
 
 from ..utils import tensorDict, layerDict, OrderedSet, Tensors
 from .control_flow_graph import NodeTypes, Node, Graph, GraphNodes
-from .network_profiler import profile_network
+from .network_profiler import profile_network, Profile
 
 from collections import OrderedDict
 import re
@@ -17,9 +17,7 @@ __all__ = ["build_graph"]
 #  similarly l(x,y,x) will only have 2 inputs
 
 
-def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, max_depth: int = 1000, basic_blocks: Optional[Tuple[torch.nn.Module, ...]] = None, use_profiler: bool = True, n_iter: int = 10, weights: Optional[Dict[str, Any]] = None) -> Graph:
-    if weights is None:
-        weights = dict()
+def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, max_depth: int = 1000, basic_blocks: Optional[Tuple[torch.nn.Module, ...]] = None, n_iter: int = 10) -> Graph:
     if kwargs is None:
         kwargs = dict()
         # TODO tracing not tested with kwargs
@@ -33,9 +31,8 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
     else:
         basic_blocks = tuple(basic_blocks)
 
-    if use_profiler:
-        weights = profile_network(model, sample_batch, kwargs=kwargs, n_iter=n_iter, max_depth=max_depth,
-                                  basic_blocks=basic_blocks)
+    layer_profiles = profile_network(model, sample_batch, kwargs=kwargs, n_iter=n_iter, max_depth=max_depth,
+                                     basic_blocks=basic_blocks)
 
     tensors = tensorDict(model)
     profiled_layers = layerDict(model, depth=max_depth,
@@ -87,7 +84,7 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
     nodes = add_missing_types(nodes)
 
     for node in nodes.values():
-        node.weight = weights.get(node.scope, node.weight)
+        node.weight = layer_profiles.get(node.scope, node.weight)
 
     return Graph(nodes, outputs, max_depth, basic_blocks)
 
@@ -108,7 +105,7 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
             t = tensors[scope]
             size_in_mb = (t.nelement() * t.element_size()) / 1e6
             node = Node(scope, idx,
-                        node_type, weight=size_in_mb)
+                        node_type, weight=size_in_mb, shape=t.shape)
             node.value_type = Tensor
             nodes[idx] = node
         else:
@@ -141,7 +138,8 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
                     t = tensors[f"{parent_scope}/[{accessor_name}]"]
                     tensor_scope = f"{parent_scope}/{type(t).__name__}[{accessor_name}]"
                     size_in_mb = (t.nelement() * t.element_size()) / 1e6
-                node = Node(tensor_scope, idx, node_type, weight=size_in_mb)
+                node = Node(tensor_scope, idx, node_type,
+                            weight=size_in_mb, shape=t.shape)
                 node.value_type = Tensor
                 nodes[idx] = node
             continue
@@ -196,7 +194,6 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
                 node_type = NodeTypes.PYTHON_PRIMITIVE
             elif 'aten::' in trace_node.kind():
                 # unprofiled torch op
-                # TODO should we specialize the aten:: and prim:: cases
                 node_type = NodeTypes.OP
             else:
                 # unprofiled other
@@ -204,12 +201,10 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
 
         # add node for each output
         for i, output in enumerate(trace_node.outputs()):
-            # TODO in some cases we can know the shape of the tensor per edge
-            # when we merge scopes we need to reliably know how many outputs we have
-            # maybe it's not a problem as layers with multiple outputs are profiled
-            # and there are no functions with multiple outputs (they return a single tuple)
-            if output.isCompleteTensor():
+            try:
                 shape = output.type().sizes()
+            except Exception:
+                shape = None
 
             unique_id = output.unique()
 
@@ -218,7 +213,7 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
                 node_scope += str(unique_id)
             # create new node
             new_node = Node(node_scope, unique_id,
-                            node_type, incoming_nodes=inputs, value=value)
+                            node_type, incoming_nodes=inputs, value=value, shape=shape)
 
             # add incoming edges
             for node in inputs:

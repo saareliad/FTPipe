@@ -10,10 +10,7 @@ from .pipeline import Pipeline
 from .utils import Devices, Tensors
 
 __all__ = ['pipe_model', 'profile_network',
-           'build_graph', 'partition_with_profiler', 'METIS_partition', 'Pipeline']
-
-
-# TODO pytorch jit trace / get_trace_graph do not support kwargs
+           'build_graph', 'partition_model', 'METIS_partition', 'Pipeline']
 
 
 def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, n_iter=10, nparts: int = 4,
@@ -57,9 +54,9 @@ def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] =
         additional kwargs to pass to the METIS partitioning algorithm
     '''
 
-    graph = partition_with_profiler(model, sample_batch, kwargs=kwargs, max_depth=depth, n_iter=n_iter, nparts=nparts,
-                                    basic_blocks=basic_blocks, node_weight_function=node_weight_function,
-                                    edge_weight_function=edge_weight_function, METIS_opt=METIS_opt)
+    graph = partition_model(model, sample_batch, kwargs=kwargs, max_depth=depth, n_iter=n_iter, nparts=nparts,
+                            basic_blocks=basic_blocks, node_weight_function=node_weight_function,
+                            edge_weight_function=edge_weight_function, METIS_opt=METIS_opt)
 
     compile_partitoned_model(graph, model, output_file=output_file,
                              verbose=DEBUG)
@@ -67,13 +64,12 @@ def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] =
     return graph
 
 
-def partition_with_profiler(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, n_iter=10, nparts=4, max_depth=100, basic_blocks: Optional[List[nn.Module]] = None,
-                            node_weight_function: Optional[NodeWeightFunction] = None,
-                            edge_weight_function: Optional[EdgeWeightFunction] = None,
-                            **METIS_opt) -> Graph:
+def partition_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, n_iter=10, nparts=4, max_depth=100, basic_blocks: Optional[List[nn.Module]] = None,
+                    node_weight_function: Optional[NodeWeightFunction] = None,
+                    edge_weight_function: Optional[EdgeWeightFunction] = None,
+                    **METIS_opt) -> Graph:
     '''
-    return a graph representing the partitioned model with the weights given by the profiler
-    this method does not distribute the model accross devices
+    profiles the network and return a graph representing the partition
 
     Parameters:
     model:
@@ -100,7 +96,7 @@ def partition_with_profiler(model: nn.Module, sample_batch: Tensors, kwargs: Opt
         additional kwargs to pass to the METIS partitioning algorithm
     '''
     graph = build_graph(model, sample_batch, kwargs=kwargs, max_depth=max_depth,
-                        basic_blocks=basic_blocks, n_iter=n_iter, use_profiler=True)
+                        basic_blocks=basic_blocks, n_iter=n_iter)
 
     graph = METIS_partition(graph, nparts, node_weight_function=node_weight_function,
                             edge_weight_function=edge_weight_function, **METIS_opt)
