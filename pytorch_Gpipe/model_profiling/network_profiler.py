@@ -10,7 +10,7 @@ from ..utils import Tensors, _detach_inputs, _get_size, get_device, traverse_mod
 __all__ = ['profile_network', 'Profile']
 
 Profile = namedtuple('Profile',
-                     'forward_time backward_time cuda_memory_forward cuda_memory_backward layer_size input_size output_size')
+                     'forward_time backward_time cuda_memory_forward cuda_memory_backward layer_size input_size output_size input_shape output_shape')
 
 
 def profile_network(net: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, basic_blocks: Optional[List[nn.Module]] = None, max_depth=100, n_iter=10) -> Dict[str, Profile]:
@@ -72,9 +72,13 @@ def profile_network(net: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict
     cuda_memory = [(layer.forward_cuda_mem, layer.backward_cuda_mem)
                    for layer in layers_dict.values()]
 
+    # gather input/output shapes
+    input_shapes = [layer.input_shape for layer in layers_dict.values()]
+    output_shapes = [layer.output_shape for layer in layers_dict.values()]
+
     # prepare profiling results
-    layers_profile = {name: Profile(forward, backward, *cuda_mem, param_size + buffer_size, in_size, out_size) for name, forward, backward, param_size, buffer_size, in_size, out_size, cuda_mem in zip(
-        layers_dict.keys(), forward_times, backward_times, param_sizes, buffer_sizes, layer_input_sizes, layer_output_sizes, cuda_memory)}
+    layers_profile = {name: Profile(forward, backward, *cuda_mem, param_size + buffer_size, in_size, out_size, in_shape, out_shape) for name, forward, backward, param_size, buffer_size, in_size, out_size, cuda_mem, in_shape, out_shape in zip(
+        layers_dict.keys(), forward_times, backward_times, param_sizes, buffer_sizes, layer_input_sizes, layer_output_sizes, cuda_memory, input_shapes, output_shapes)}
 
     _unwrap_layers(net)
 
@@ -152,6 +156,8 @@ class Wrapper(nn.Module):
         self.parameters_size, self.buffers_size = self._layer_size()
         self.forward_cuda_mem = 0
         self.backward_cuda_mem = 0
+        self.input_shape = []
+        self.output_shape = []
 
     def _layer_size(self):
         '''
@@ -202,8 +208,8 @@ class Wrapper(nn.Module):
         self.backward_time.append(backward_time)
 
         # input and output size
-        self.input_size = _get_size(inputs)
-        self.output_size = _get_size(outputs)
+        self.input_size, self.input_shape = _get_size(inputs)
+        self.output_size, self.output_shape = _get_size(outputs)
 
         # size in MegaBytes
         self.backward_cuda_mem /= 1e6

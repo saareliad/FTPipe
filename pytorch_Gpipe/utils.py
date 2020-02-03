@@ -109,15 +109,19 @@ def _detach_inputs(*inputs: Tensors):
 
 def _get_size(*inputs: Tensors) -> int:
     size = 0
+    shapes = []
     for x in inputs:
         if isinstance(x, torch.Tensor):
             size += x.nelement() * x.element_size()
+            shapes.append(x.shape)
         elif isinstance(x, (list, tuple)):
             for a in x:
-                size += _get_size(a)
+                a_size, a_shape = _get_size(a)
+                size += a_size
+                shapes.append(type(x)(a_shape))
         else:
             raise ValueError(INCORRECT_INPUT_TYPE + f"{type(x)} ")
-    return size
+    return size, shapes
 
 
 def flatten(x: Tensors):
