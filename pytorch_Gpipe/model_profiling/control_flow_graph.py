@@ -346,6 +346,7 @@ class Graph():
         if os.path.exists(f"{directory}/{file_name}.pdf"):
             os.remove(f"{directory}/{file_name}.pdf")
         dot.render(file_name, directory=directory, cleanup=True)
+        return self
 
     def serialize(self, path: str):
         '''
@@ -458,7 +459,11 @@ class Graph():
 
     def _check(self):
         for node in self.nodes:
+            assert node.idx in self._nodes
             for i in node.in_nodes:
                 assert node in i.out_nodes
+                assert i.idx in self._nodes
             for o in node.out_nodes:
                 assert node in o.in_nodes
+                assert o.idx in self._nodes
+        return self

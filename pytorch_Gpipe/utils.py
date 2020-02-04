@@ -107,21 +107,21 @@ def _detach_inputs(*inputs: Tensors):
     return detached[0] if len(detached) == 1 else tuple(detached)
 
 
-def _get_size(*inputs: Tensors) -> int:
+def _get_size(x: Tensors) -> int:
     size = 0
     shapes = []
-    for x in inputs:
-        if isinstance(x, torch.Tensor):
-            size += x.nelement() * x.element_size()
-            shapes.append(x.shape)
-        elif isinstance(x, (list, tuple)):
-            for a in x:
-                a_size, a_shape = _get_size(a)
-                size += a_size
-                shapes.append(type(x)(a_shape))
-        else:
-            raise ValueError(INCORRECT_INPUT_TYPE + f"{type(x)} ")
-    return size, shapes
+
+    if isinstance(x, torch.Tensor):
+        return x.nelement() * x.element_size(), x.shape if len(x.shape) else torch.Size([1])
+    elif isinstance(x, (list, tuple)):
+        for a in x:
+            a_size, a_shape = _get_size(a)
+            size += a_size
+            shapes.append(a_shape)
+        return size, type(x)(shapes)
+
+    else:
+        raise ValueError(INCORRECT_INPUT_TYPE + f"{type(x)} ")
 
 
 def flatten(x: Tensors):

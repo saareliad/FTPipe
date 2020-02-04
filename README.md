@@ -157,6 +157,9 @@ as we are using tracing there are several limitations that come with it:
   we can't know that x was passed twice, instead it will appear as `model(x)`
 
 - functions that have string args like for example nll_loss which has a reduction arg will not register correctly and must be fixed manually
+- trace bugs
+- - nested tuples are flattened
+- - unpack uses not used in correct locations opened an issue
 
 ### Graph Representation
 
@@ -295,10 +298,10 @@ contains our logic for synchronous pipeline according to [Gpipe](https://arxiv.o
 
 TODO still needs testing tested on cpus and single GPU
 
-
 # Experiments
- we provide the code we used to run our experiments.
- we've implemented throughput/memory and accuracy experiments
+
+we provide the code we used to run our experiments.
+we've implemented throughput/memory and accuracy experiments
 
 # Environment
 
