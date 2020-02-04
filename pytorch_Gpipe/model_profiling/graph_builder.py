@@ -64,13 +64,14 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
         torch._C._jit_pass_inline(trace_graph)
     # build the graph from trace
     nodes = add_nodes(trace_graph, new_to_old, partials, tensors)
-
     outputs = output_scopes(trace_graph, nodes)
 
     # optimization passes
     nodes = remove_useless_clone(nodes)
     nodes = remove_empty_view(nodes)
     nodes = optimize_graph(nodes, layer_scopes)
+    nodes = remove_layer_to_list(nodes)
+    nodes = fix_nested_iterables(nodes, layer_profiles)
     nodes = _remove_nodes_that_go_nowhere(nodes, outputs)
     nodes = remove_useless_node_inputs(nodes)
     nodes = remove_tensor_int_tensor(nodes)
@@ -86,7 +87,7 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
     for node in nodes.values():
         node.weight = layer_profiles.get(node.scope, node.weight)
 
-    return Graph(nodes, outputs, max_depth, basic_blocks)
+    return Graph._check(Graph(nodes, outputs, max_depth, basic_blocks))
 
 
 def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials: Dict[str, str], tensors: OrderedDictType[str, Tensor]) -> GraphNodes:
@@ -321,6 +322,17 @@ def remove_useless_clone(nodes: GraphNodes) -> GraphNodes:
     return _remove_nodes(nodes, predicate)
 
 
+def remove_layer_to_list(nodes: GraphNodes) -> GraphNodes:
+    '''can happen when not using our trace feature as result of merging nodes
+        this indicates that a merged scope returns a list/tuple so we remove it
+    '''
+    def predicate(n: Node):
+        if "prim::ListConstruct" in n.scope or "prim::TupleConstruct" in n.scope:
+            return (len(n.in_nodes) == 1) and (n.in_nodes[0].type is NodeTypes.LAYER)
+
+    return _remove_nodes(nodes, predicate)
+
+
 def remove_empty_view(nodes: GraphNodes) -> GraphNodes:
     def predicate(n: Node):
         if ('aten::view' in n.scope):
@@ -467,21 +479,88 @@ def add_missing_types(nodes: GraphNodes) -> GraphNodes:
                 node.value_type = list
             elif 'ImplicitTensorToNum' in node.scope:
                 node.value_type = int
+            elif any('prim::ListUnpack' in o.scope or 'prim::TupleUnpack' in o.scope for o in node.out_nodes):
+                node.value_type = tuple
             elif 'prim::ListUnpack' in node.scope or 'prim::TupleUnpack' in node.scope:
                 father = node.in_nodes[0]
                 if 'aten::chunk' in father.scope:
                     node.value_type = Tensor
                 else:
-                    # if father is a layer we assume all outputs are tensors
-                    # otherwise we assume the pack/unpack are symetric aka first packed value is first unpacked value
-                    # so we propagate the type
+                    # unpack type for iterables not from layers propagete shape from the packing
                     idx = father.out_nodes.indexOf(node)
-                    if father.type is NodeTypes.LAYER:
-                        node.value_type = Tensor
-                    else:
-                        matching_input = father.in_nodes[idx]
-                        node.value = matching_input.value
-                        node.value_type = matching_input.value_type
+                    matching_input = father.in_nodes[idx]
+                    node.value = matching_input.value
+                    node.value_type = matching_input.value_type
         elif 'NumToTensor' in node.scope:
             node.value_type = int
     return nodes
+
+
+def fix_nested_iterables(nodes: GraphNodes, layer_profiles: Dict[str, Profile]):
+    new_graph = OrderedDict()
+    skip = 0
+    for node in nodes.values():
+        if skip:
+            # this is an unpack node that we already fixed and added to the graph so we do not add it again
+            assert "prim::TupleUnpack" in node.scope or "prim::ListUnpack" in node.scope
+            skip -= 1
+            continue
+        assert node.idx not in new_graph, "idx collision when fixing nested iterables"
+        new_graph[node.idx] = node
+        if node.type is NodeTypes.LAYER and len(layer_profiles[node.scope].output_shape) > 1:
+            assert skip == 0
+            fixed_nodes, num_new = _fix_node(node,
+                                             layer_profiles[node.scope].output_shape)
+            for n in fixed_nodes:
+                assert n.idx not in new_graph, "idx collision when fixing nested iterables"
+                new_graph[n.idx] = n
+            skip = len(fixed_nodes) - num_new
+    return new_graph
+
+
+def _fix_node(node: Node, outputs):
+    '''fixes output of a node with nested iterable output
+       the trace flattens the output so we recreate the original acessor hierarchy to access the nested outputs
+    '''
+    old_outputs = node.out_nodes
+    node.out_nodes = OrderedSet()
+
+    accessor_map = {(): node}
+    num_new = 0
+    unpack_nodes = []
+    for idx, (path, terminal) in enumerate(accessor_paths(outputs)):
+        parent = accessor_map[path[:-1]]
+        if terminal:
+            # we already have this node just change it's parent
+            new_node = old_outputs[idx - num_new]
+            new_node.replace_in_node(node, parent)
+            new_node.value_type = Tensor
+        else:
+            # we create an accessor node to a nested iterable
+            node_idx = node.idx + num_new + 1
+            scope = parent.scope[:parent.scope.rfind(
+                "/")] + f"/TupleUnpack{node_idx}{path[-1]}"
+            new_node = Node(scope, node_idx, NodeTypes.PYTHON_PRIMITIVE,
+                            OrderedSet([parent]))
+            new_node.value_type = tuple
+            num_new += 1
+
+        parent.out_nodes.add(new_node)
+        accessor_map[path] = new_node
+        unpack_nodes.append(new_node)
+
+    return unpack_nodes, num_new
+
+
+def accessor_paths(outputs, path=()):
+    '''given a tuple yields the indices to access each element and if the nested element if terminal or iterable
+       for example l=(1,(6,(7,8))) will result in (0,) True , (1,) False, (1,0) True (1,1) False, (1,1,0) True, (1,1,1) True
+    '''
+    for idx, val in enumerate(outputs):
+        accessor = path + (idx, )
+        if isinstance(val, torch.Size):
+            yield accessor, True
+        else:
+            assert isinstance(val, (list, tuple)), val
+            yield accessor, False
+            yield from accessor_paths(val, accessor)

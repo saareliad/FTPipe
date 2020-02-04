@@ -457,13 +457,24 @@ class Graph():
 
         return cls(nodes, graph_data["output_scopes"], graph_data["depth"], graph_data["basic_blocks"])
 
-    def _check(self):
-        for node in self.nodes:
-            assert node.idx in self._nodes
+    @classmethod
+    def _check(cls, nodes_or_graph: Union[GraphNodes, "Graph"]):
+        if isinstance(nodes_or_graph, Graph):
+            nodes = nodes_or_graph.nodes
+            _nodes = nodes_or_graph._nodes
+        else:
+            assert isinstance(nodes_or_graph, OrderedDict)
+            nodes = list(nodes_or_graph.values())
+            _nodes = nodes_or_graph
+
+        assert isinstance(_nodes, OrderedDict)
+        assert isinstance(nodes[0], Node)
+        for node in nodes:
+            assert node.idx in _nodes
             for i in node.in_nodes:
                 assert node in i.out_nodes
-                assert i.idx in self._nodes
+                assert i.idx in _nodes
             for o in node.out_nodes:
                 assert node in o.in_nodes
-                assert o.idx in self._nodes
-        return self
+                assert o.idx in _nodes
+        return nodes_or_graph

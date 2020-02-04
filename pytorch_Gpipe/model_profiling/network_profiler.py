@@ -211,6 +211,11 @@ class Wrapper(nn.Module):
         self.input_size, self.input_shape = _get_size(inputs)
         self.output_size, self.output_shape = _get_size(outputs)
 
+        if isinstance(self.input_shape, torch.Size):
+            self.input_shape = (self.input_shape,)
+        if isinstance(self.output_shape, torch.Size):
+            self.output_shape = (self.output_shape,)
+
         # size in MegaBytes
         self.backward_cuda_mem /= 1e6
         self.forward_cuda_mem /= 1e6
