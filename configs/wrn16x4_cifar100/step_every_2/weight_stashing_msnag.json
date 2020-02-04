@@ -43,7 +43,7 @@
             "nag_with_predictor": true
         }
     },
-    "epochs": 400,
+    "epochs": 220,
 "step_every": 2,
 "cudnn_benchmark": true,
     "steps": -1,

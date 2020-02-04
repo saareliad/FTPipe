@@ -47,10 +47,11 @@ Not supported. To be removed.
 python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_node 2 main.py --cpu --distributed_backend gloo
 ```
 
-## Bugs
+## Known problems
 
 * gpu bcast not working yet. (some deadlock)
   * The problem is that p0 does 'send' bcast to p1 while p1 does 'send' bcast to p0, on the same group. Therefore need more groups.
+
 * We need to manualy `wait()` on async handlers, otherwise memory explodes.
 
 * With `torch.distributed.launch` we may need to manually do ```kill -9 <PIDs>``` in case of errors to kill workers.
@@ -58,21 +59,33 @@ python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_nod
 * We currently must do `drop_last=True` because we use constant buffer buffers
   (we can write code to fix that, but we prefer this easy fix meanwhile).
 
-* `in_place` operations (like ReLU) at partition border have a potential of destroying our saved activations (?).
+* the first pass on input to determine shapes: changes batch normalization statistics (can do it with monkey patch, but its super ugly!)
 
-* fix batch normalization in `torch.no_grad()`
+* must explicitly do `cuda.synchronize(...)` before CUDA-AWARE MPI sends.
+
+* for simulation: to communicate gpu->to-same->gpu need to do [something ugly like this](http://cudamusing.blogspot.com/2013/07/enabling-cuda-multi-process-service-mps.html).
+
+## Some Solved problems:
+* problem: batch normalization statistics keep going in `torch.no_grad()` => solution: monkey patch.
+
+* problem: `in_place` operations (like ReLU) at partition border have a potential of destroying our saved activations (also throws some autograd "variable changed inplace" error) => solution: automatically replace inplaces ops on partition borders.
+
+* problem: In Pipedream they pass the target all across the pipeline (waste of energy, inefficient). solution: using two data-loaders with correct synchronization.
+  * Note that sometimes (in LM) we don't even need to send the "y" as its efficiently created from the "x", so we support both methods.
+
+* recomputation: overlap with wait.
+
+* simulation with more than one partition per GPU + cuda aware: add `--mca btl_smcuda_use_cuda_ipc_same_gpu 0` to mpirun.
 
 ## TODOs
 
-* Double Buffering (Remember credit to Mark)
-* Monkey patch batch normalization: is just a moneky patch.
+* fix batch normalization in `torch.no_grad()` to something better than monkey patch
+  * Monkey patch batch normalization: is just a moneky patch.
   * can write spesific class to every case (e.g Batch Norm) to make it more efficient.
+
+* Double Buffering (Remember credit to Mark)
 * timing (ms per batch, fwd, bwd, etc)
 * schedule: find way to eliminate bubbles
-* Target_tensor_names:
-  * I notice that they (pipedream) pass the target all across the pipeline (waste of energy, inefficient).
-  * This can be solved using two data-loaders with correct synchronization.
-  * sometimes (in LM) we don't even need to send the "y" as its created from the "x".
 
 * CUDA aware openmpi
   * test to make sure we get the desired speedup [unlike this guy](https://www.pugetsystems.com/labs/hpc/P2P-peer-to-peer-on-NVIDIA-RTX-2080Ti-vs-GTX-1080Ti-GPUs-1331/#test-setup-and-results).
@@ -80,18 +93,15 @@ python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_nod
 * Support multi node after everything works.
 * later change `batch_idx` to `micro_batch_index` to be consistent with the paper.
 
-* Can do gap aware at step 2 even on deeper partitions (effective only once per epoch)
-* gap aware with wieght stashing
-* "send the layer not the gradient"
+* Can do gap aware at step 2 even on deeper partitions without stashing (effective only once per epoch). This is effecitve when using "batch aggregation staleness mitigation". Currently we can do it without stashing when staleness is 1.
+* gap aware with weight stashing
 * add "scheduler aware prediction".
 * can wait in the last layer (extra irecv) to overlap (more) communication with computation.
   * this requires another rcv buffer but in the last partition we don't have mem problems.
 
 * change c code in torch mpigroup to drop the tensor (and its pointers) once completed, so we won't have to handle mem cleaning (this can reduce peak memory memory).
 
-* option in GA to change gradient before sending! (I put this default True).
-* look at detach_(), remove uneeded.
-
+* option in GA to change gradient activation before sending!
 
 ## References
 
@@ -131,10 +141,12 @@ After talk with Amit Nadav
 
 ## Crazy ideas
 
-* connect all layers to the last one to improve optimization. (theoretical works show this can eliminate bad local minima). (Competitors can't do it, their partitioning does not support it)
+* connect all layers to the last one to improve optimization. (theoretical works show this can eliminate bad local minima). (motivation is Competitors can't do it, their partitioning does not support it)
 
 * we can utilize idle/spare time to do gradient smoothing.
-  * inspired from [this stupid nips paper](http://papers.nips.cc/paper/9402-theoretical-limits-of-pipeline-parallel-optimization-and-application-to-distributed-deep-learning)
+  * inspired from [this very bad nips paper which I accidently read](http://papers.nips.cc/paper/9402-theoretical-limits-of-pipeline-parallel-optimization-and-application-to-distributed-deep-learning)
+
+* increace momentum?
 
 ## NOTICE
 * some ga resulst ran without GA! re running.... (some: thous after thier application was before decoupling step for last partition) I rerun all gap aware just in case...

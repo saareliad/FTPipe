@@ -4,6 +4,7 @@ import torch
 
 class CVTask(DLTask):
     def __init__(self, device, is_last_partition, is_first_partition):
+        super().__init__()
         self.device = device
 
         # Determine unpack_cls

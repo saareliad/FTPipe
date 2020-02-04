@@ -203,7 +203,7 @@ class SinglePartitionManager:
         self.trainer = trainer
 
     def set_dataloader(self, dataloader):
-        assert self.is_first_partition
+        assert self.is_first_partition or self.is_last_partition
         # self.dataloader = dataloader
         self.dl_iter = iter(dataloader)
 
@@ -323,7 +323,6 @@ class SinglePartitionManager:
                 fwd_rcev_buffers.recv_next(batch_idx-1)
 
             x, *ctx = self.task.unpack_data_for_partition(x)
-            ctx = (*preload_ctx, *ctx)
         # Do the forward pass with optionals
         if self.weight_predictor and self.partition.training:
             # TODO: last partition can do bengio nesterov instead of predicting.
@@ -352,6 +351,7 @@ class SinglePartitionManager:
 
         else:
             # Last partition
+            ctx = (*preload_ctx, *ctx)
             if not self.partition.training:
                 # In Eval: Just calculate statistics.
                 self.trainer.calc_test_stats(x, *ctx)
@@ -571,7 +571,7 @@ class SinglePartitionManager:
                 sent_request_objects = self.run_batch_forward(
                     done_fwds, num_batches, done_bwds)
                 # Last partition inserts its gradints into async_fwd_objects,
-                self.async_bwd_objects[done_fwds] = sent_request_objects
+                self.async_fwd_objects[done_fwds] = sent_request_objects
             else:
                 sent_request_objects = self.run_batch_backward(
                     done_bwds, num_batches)

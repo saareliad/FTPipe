@@ -5,25 +5,26 @@ import types
 
 class CVTask(DLTask):
     def __init__(self, device, is_last_partition, is_first_partition):
+        super().__init__()
         self.device = device
 
         # Determine unpack_cls
         if is_last_partition:
             # Last partition
             def unpack_cls(self, x):
-                assert isinstance(x, tuple)
-                return x
+                assert isinstance(x, tuple) or isinstance(x, list)
+                return x,  # Comma here is important!
         elif is_first_partition:
             # Fist partition
             def unpack_cls(self, x):
                 with torch.no_grad():
                     x = x.to(device, non_blocking=True)
-                return x
+                return (x,)
         else:
             # Mid partition
             def unpack_cls(self, x):
-                assert isinstance(x, tuple)
-                return x
+                assert isinstance(x, tuple) or isinstance(x, list)
+                return x,
 
         # TODO: can be static...
         # types.MethodType
@@ -35,9 +36,7 @@ class CVTask(DLTask):
     def pack_send_context(self, model_out, *ctx):
         # ctx here is just the label y
         return (*model_out, *ctx)
-    
+
     def preload_last_partition(self, dlitr, device):
         y = next(dlitr)
-        return y.to(device, non_blocking=True)
-        
-        
+        return (y.to(device, non_blocking=True),)

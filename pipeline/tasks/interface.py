@@ -25,3 +25,7 @@ class DLTask(abc.ABC):
     @abc.abstractmethod
     def pack_send_context(self, model_out, *ctx):
         pass
+
+    def preload_last_partition(self, *args):
+        # def preload_last_partition(self, dlitr, device):
+        return tuple()

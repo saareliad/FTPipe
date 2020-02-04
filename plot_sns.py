@@ -147,7 +147,7 @@ def wrn16x4_c100():
     df = pd.read_csv(csv).query("dataset == @dataset and model == @model and bs_train == 128")  # .query("epoch == 200")
     # ax = sns.barplot(x="epoch", y=graph, hue="alg", style='step_every', data=df.query("epoch == 200"))
     ax = sns.catplot(x="epoch", y=graph, hue="alg", col="step_every", kind="bar", data=df.query("epoch == 200"))
-    ax.set(ylim=(74, 77))
+    ax.set(ylim=(54, 77))
     
     # ax = sns.lineplot(x="epoch", y=graph, hue="alg", style='step_every', data=df)
 
@@ -217,8 +217,8 @@ if __name__ == "__main__":
     # plt.clf()
     # p2()
     # p1_fit_plots()
-    # wrn16x4_c100()
-    wrn16x4_c100_gap()
+    wrn16x4_c100()
+    # wrn16x4_c100_gap()
     # p2_2partitions()
     # p2_2partitions_16x4()
     # p2_2partitions_all_models()

@@ -30,9 +30,13 @@ def subproccess_func(COMMAND, *args, **kw):
     p.wait()
 
 
-def run_grid_on(COMMAND, param_grid, gpu_list):
+def run_grid_on(COMMAND, param_grid, gpu_list, skip_first=0):
     # Assumes required gpu per run is 1
     configs = ParameterGrid(param_grid)
+    if skip_first > 0:
+        print(f"-I- Skipping first {skip_first} configs")
+        print(f"-I- Skipping: {list(configs)[:skip_first]}")
+        configs = list(configs)[skip_first:]
     func = partial(subproccess_func, COMMAND)
     # func = partial(call_function, COMMAND)
     map_to_limited_gpus(func, configs, len(gpu_list),
@@ -131,6 +135,7 @@ if __name__ == "__main__":
                                       0, 1, 2, 3, 4, 5], gpus_per_config=4)
 
     def staleness_big_batch():
+        # TODO: re run msnag + ws, (+ga)  results not OK.
         COMMAND = "mpirun -np 4 python main.py"
         cfg_dir_tmplt = "configs/wrn16x4_cifar100/step_every_{}/"
         cfgs_dirs = [cfg_dir_tmplt.format(i) for i in [2, 4, 8]]
@@ -140,7 +145,7 @@ if __name__ == "__main__":
                     # "weight_stashing_gap_aware",
                     # # "gap_aware",
                     # "msnag",
-                    # "stale", 
+                    # "stale",
                     ]
 
         param_grid = [{
@@ -151,18 +156,35 @@ if __name__ == "__main__":
         run_grid_on(COMMAND, param_grid, gpu_list=[0, 1])
         # run_grid_on(COMMAND, param_grid, gpu_list=[7])
 
+    def complete_staleness_big_batch():
+        # TODO: re run msnag + ws, (+ga)  results not OK.
+        COMMAND = "mpirun -np 4 python main.py"
+        cfg_dir_tmplt = "configs/wrn16x4_cifar100/step_every_{}/"
+        cfgs_dirs = [cfg_dir_tmplt.format(i) for i in [2, 4, 8]]
+        all_algs = ["weight_stashing_msnag_gap_aware",
+                    "weight_stashing_msnag",
+                    ]
+
+        param_grid = [{
+            'config': [f"{cfgs_dir}{cfg}.json" for cfg in all_algs],
+            'seed': [42, 20202020, 77777777, 314159, 1322019]
+            # 'seed': [20202020, 77777777, 314159, 1322019]
+        } for cfgs_dir in cfgs_dirs]
+        run_grid_on(COMMAND, param_grid, gpu_list=[0, 1, 2, 3, 4, 5, 6, 7])
+        # run_grid_on(COMMAND, param_grid, gpu_list=[7])
+
     def agg_to_same_batch_wrn16x4_c100():
         # TODO: first run without GA
         COMMAND = "mpirun -np 4 python main.py"
-        cfg_dir_tmplt = "configs/wrn16x4_cifar100/batch_128_step_every/step_every_{}"
+        cfg_dir_tmplt = "configs/wrn16x4_cifar100/batch_128_step_every/step_every_{}/"
         cfgs_dirs = [cfg_dir_tmplt.format(i) for i in [2, 4]]
-        all_algs = ["weight_stashing_msnag_gap_aware",
-                    # "weight_stashing",
+        all_algs = [  # "weight_stashing_msnag_gap_aware",
+                    "weight_stashing",
                     "weight_stashing_msnag",
                     # "weight_stashing_gap_aware",
                     # # "gap_aware",
-                    # "msnag",
-                    # "stale", 
+                    "msnag",
+                    "stale",
                     ]
 
         param_grid = [{
@@ -170,20 +192,51 @@ if __name__ == "__main__":
             'seed': [42, 20202020, 77777777, 314159, 1322019]
             # 'seed': [20202020, 77777777, 314159, 1322019]
         } for cfgs_dir in cfgs_dirs]
-        run_grid_on(COMMAND, param_grid, gpu_list=[0, 1])
+        run_grid_on(COMMAND, param_grid, gpu_list=[0, 1, 2, 3, 4, 5, 6, 7])
+
+    def continue_experiment_of_agg_to_same_batch_wrn28x10_c100():
+        # TODO: first run without GA
+        # also with msnag+stashing, as it consumes more memory
+        COMMAND = "mpirun -np 4 --mca btl_smcuda_use_cuda_ipc_same_gpu 0 python main.py"
+        cfg_dir_tmplt = "configs/wrn_cifar100/batch_128_step_every/step_every_{}/"
+        cfgs_dirs = [cfg_dir_tmplt.format(i) for i in [2, 4]]
+        all_algs = [  # "weight_stashing_msnag_gap_aware",
+                    "weight_stashing",
+                    # "weight_stashing_msnag",
+                    # "weight_stashing_gap_aware",
+                    # # "gap_aware",
+                    "msnag",
+                    "stale",
+                    ]
+        
+        # all_seeds = [42, 20202020, 77777777, 314159, 1322019]
+        # ran_alg = all_algs[:1]
+        # ran_config_dirs = cfgs_dirs[:1]
+        # ran_seeds = all_seeds[:2]
+        
+        ran_count = 4
+
+        param_grid = [{
+            'config': [f"{cfgs_dir}{cfg}.json" for cfg in all_algs],
+            'seed': [42, 20202020, 77777777, 314159, 1322019]
+        } for cfgs_dir in cfgs_dirs]
+
+        run_grid_on(COMMAND, param_grid, gpu_list=[0, 1, 2, 3, 4, 5, 6, 7], skip_first=ran_count)
 
     def agg_to_same_batch_wrn28x10_c100():
         # TODO: first run without GA
+        # COMMAND = "mpirun -np 4 --mca btl_smcuda_use_cuda_ipc_same_gpu 0 python main.py"
         COMMAND = "mpirun -np 4 python main.py"
-        cfg_dir_tmplt = "configs/wrn_cifar100/batch_128_step_every/step_every_{}"
+
+        cfg_dir_tmplt = "configs/wrn_cifar100/batch_128_step_every/step_every_{}/"
         cfgs_dirs = [cfg_dir_tmplt.format(i) for i in [2, 4]]
-        all_algs = ["weight_stashing_msnag_gap_aware",
-                    # "weight_stashing",
-                    "weight_stashing_msnag",
+        all_algs = [# "weight_stashing_msnag_gap_aware",
+                    "weight_stashing",
+                    # "weight_stashing_msnag",
                     # "weight_stashing_gap_aware",
                     # # "gap_aware",
-                    # "msnag",
-                    # "stale", 
+                    "msnag",
+                    "stale",
                     ]
 
         param_grid = [{
@@ -193,4 +246,9 @@ if __name__ == "__main__":
         } for cfgs_dir in cfgs_dirs]
         run_grid_on(COMMAND, param_grid, gpu_list=[0, 1])
 
-    staleness_big_batch()
+    # agg_to_same_batch_wrn16x4_c100()
+    # agg_to_same_batch_wrn28x10_c100()
+    # agg_to_same_batch_wrn16x4_c100()
+    continue_experiment_of_agg_to_same_batch_wrn28x10_c100()
+    # complete_staleness_big_batch()
+    # staleness_big_batch()

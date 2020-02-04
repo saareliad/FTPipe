@@ -18,7 +18,7 @@ import models
 import numpy as np
 import torch
 from collections import OrderedDict
-from misc.datasets import add_dataset_argument, simplified_get_train_test_dl_from_args
+from misc.datasets import add_dataset_argument, simplified_get_train_test_dl_from_args, get_seperate_just_x_or_y_train_test_dl_from_args
 from misc.filelogger import FileLogger
 from pipeline import dp_sim
 import os
@@ -134,10 +134,12 @@ def parse_json_config(args):
 
     # replace
     for key, value in output.items():
-        if key == 'seed' and 'seed_from_cmd' in output:
+        if output.get(f'{key}_from_cmd', False):
             continue
-        if key == 'bs_train' and 'bs_train_from_cmd' in output:
-            continue
+        # if key == 'seed' and output.get('seed_from_cmd', False):
+        #     continue
+        # if key == 'bs_train' and output.get('bs_train_from_cmd', False):
+        #     continue
         setattr(args, key, value)
 
     # Explicit yuck replace
@@ -276,15 +278,23 @@ def get_my_send_recv_ranks(config, stage, stage_to_rank_map=None):
 
 
 def infer_dtypes_and_shapes(config, bs_train, bs_test, random_input_sample,
-                            training_tensor_dtypes, training_tensor_shapes, eval_tensor_shapes):
+                            training_tensor_dtypes, training_tensor_shapes, eval_tensor_shapes,
+                            just_for_stage=None):
     """
     Runs a sequential forward pass to determine:
         # training_tensor_dtypes
         # training_tensor_shapes
         # eval_tensor_shapes
         # TODO: eval_tensor_dtypes
+
+    
+    # FIXME: we don't want this pass to record statistic for batch norm!
+    # TODO: maybe write this to some file and load from it if exists,
+    #  to aviod doing this pass every time
     """
     assert(len(training_tensor_shapes) == len(training_tensor_dtypes))
+    if not (just_for_stage is None):
+        raise NotImplementedError()
 
     bs_train = to_tuple(bs_train)
     bs_test = to_tuple(bs_test)
@@ -298,21 +308,26 @@ def infer_dtypes_and_shapes(config, bs_train, bs_test, random_input_sample,
         else:
             with torch.no_grad():
                 a = partition(*a)
+        
+        if (just_for_stage is None) or just_for_stage == i:
+            # TODO: we need to actually go for i+1...
+            outputs = v['outputs']
+            dtypes = tuple(j.data.dtype for j in a)
 
-        outputs = v['outputs']
-        dtypes = tuple(j.data.dtype for j in a)
+            # Concatenate shapes with expected bs_train/bs_test
+            # the batch size can be a collection (e.g (batch, seq_len) in NLP)
+            # TODO: this assume that batch is first
+            train_shapes = tuple(
+                tuple(list(bs_train) + list(j.data.size()[len_bs:])) for j in a)
+            eval_shapes = tuple(
+                tuple(list(bs_test) + list(j.data.size()[len_bs:])) for j in a)
 
-        # Concatenate shapes with expected bs_train/bs_test
-        # the batch size can be a collection (e.g (batch, seq_len) in NLP)
-        # TODO: this assume that batch is first
-        train_shapes = tuple(
-            tuple(list(bs_train) + list(j.data.size()[len_bs:])) for j in a)
-        eval_shapes = tuple(
-            tuple(list(bs_test) + list(j.data.size()[len_bs:])) for j in a)
+            training_tensor_dtypes.update(zip(outputs, dtypes))
+            training_tensor_shapes.update(zip(outputs, train_shapes))
+            eval_tensor_shapes.update(zip(outputs, eval_shapes))
 
-        training_tensor_dtypes.update(zip(outputs, dtypes))
-        training_tensor_shapes.update(zip(outputs, train_shapes))
-        eval_tensor_shapes.update(zip(outputs, eval_shapes))
+        if just_for_stage == i:
+            break
 
     return training_tensor_dtypes, training_tensor_shapes, eval_tensor_shapes
 
@@ -526,7 +541,7 @@ def save_distributed_experiment(statistics, args, world_size, rank, local_rank, 
         torch.distributed.barrier()
 
 
-def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition, statistics):
+def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition, statistics, train_dl_len, test_dl_len):
     epochs = 0
     steps = 0
     logger.info(f"flush rate {args.flush_rate}")
@@ -534,13 +549,11 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition
     if (args.flush_rate >= 0):
         raise NotImplementedError()
 
-    TRAIN_BATCHES_TO_RUN = getattr(args, "train_batches_limit", len(train_dl))
-    TEST_BATCHES_TO_RUN = getattr(args, "test_batches_limit", len(test_dl))
+    TRAIN_BATCHES_TO_RUN = getattr(args, "train_batches_limit", train_dl_len)
+    TEST_BATCHES_TO_RUN = getattr(args, "test_batches_limit", test_dl_len)
 
-    TRAIN_BATCHES_TO_RUN = len(
-        train_dl) if TRAIN_BATCHES_TO_RUN < 0 else TRAIN_BATCHES_TO_RUN
-    TEST_BATCHES_TO_RUN = len(
-        test_dl) if TEST_BATCHES_TO_RUN < 0 else TEST_BATCHES_TO_RUN
+    TRAIN_BATCHES_TO_RUN = train_dl_len if TRAIN_BATCHES_TO_RUN < 0 else TRAIN_BATCHES_TO_RUN
+    TEST_BATCHES_TO_RUN = test_dl_len if TEST_BATCHES_TO_RUN < 0 else TEST_BATCHES_TO_RUN
 
     while epochs < args.epochs or args.epochs < 0:
         if args.steps > 0:
@@ -566,8 +579,8 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition
                 if TRAIN_BATCHES_TO_RUN == 0:
                     continue
                 # Set Dataloader
-                # sets only to first partition
-                if is_first_partition:
+                # sets only to first (+last) partition
+                if train_dl:
                     partition.set_dataloader(train_dl)
                 # Start training
                 partition.train()
@@ -591,10 +604,10 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition
                     statistics.non_latst_partition_on_epoch_end()
             else:  # EVAL
                 # Set Dataloader
-                # sets only to first partition
+                # sets only to first (+last) partition
                 if TEST_BATCHES_TO_RUN == 0:
                     continue
-                if is_first_partition:
+                if test_dl:
                     partition.set_dataloader(test_dl)
                 partition.eval()
 
@@ -602,8 +615,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition
                     statistics.eval()
 
                 with torch.no_grad():  # TODO maybe remove this?
-                    partition.run_forward_until_flush(
-                        min(TEST_BATCHES_TO_RUN, len(test_dl)))
+                    partition.run_forward_until_flush(TEST_BATCHES_TO_RUN)
 
                 did_eval = True
                 if args.local_rank == args.world_size - 1:
@@ -633,19 +645,22 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition
             break  # steps condition met
 
 
-def get_dataloaders(args):
-    # Here is a dummy for For CIFAR10 network
+def get_dataloaders(args, explicit_seperated_dataset=False):
     dl_kw = dict()
     if args.cpu:
         dl_kw['pin_memory'] = False
-    # else:
-    #     dl_kw['pin_memory'] = True  # FIXME
+    else:
+        dl_kw['pin_memory'] = True
 
     dl_kw['num_workers'] = args.num_data_workers
     dl_kw['drop_last'] = True
 
-    train_dl, test_dl = simplified_get_train_test_dl_from_args(
-        args, verbose=False, **dl_kw)
+    # if args.task == 'cv_sep'
+    if explicit_seperated_dataset:
+        train_dl, test_dl = get_seperate_just_x_or_y_train_test_dl_from_args(args, verbose=False, **dl_kw)
+    else:
+        train_dl, test_dl = simplified_get_train_test_dl_from_args(
+            args, verbose=False, **dl_kw)
 
     return train_dl, test_dl
 
@@ -740,7 +755,7 @@ def main():
     BASE_TARGET_SHAPE = y.shape[1:]
 
     # TODO formalize with function according to dataset/task
-    USE_TARGET = True
+    USE_TARGET = not ('_sep' in args.task)
     target_tensor_names = {}
     training_tensor_dtypes = {"input0": x.dtype}
     training_tensor_shapes = {"input0": (*bs_train, *BASE_INPUT_SHAPE)}
@@ -772,7 +787,7 @@ def main():
      eval_tensor_shapes) = \
         infer_dtypes_and_shapes(
         configs, bs_train, bs_test, random_input_sample,
-        training_tensor_dtypes, training_tensor_shapes, eval_tensor_shapes)
+        training_tensor_dtypes, training_tensor_shapes, eval_tensor_shapes, just_for_stage=None)
 
     ######################################## END OF UGLY BLOCK ########################################
 
@@ -853,9 +868,18 @@ def main():
     if hasattr(args, "auto_file_name"):
         auto_file_name(args)
 
+    train_dl_len, test_dl_len = len(train_dl), len(test_dl)
+    # Try getting seperate X,Y dataloaders
+    if is_first_partition or is_last_partition:
+        if "_sep" in args.task:
+            train_dl, test_dl = get_dataloaders(args, explicit_seperated_dataset=True)
+    else:
+        train_dl, test_dl = None, None
+
     # Main Training Loop
+
     training_loop(args, logger, train_dl, test_dl,
-                  is_first_partition, partition, statistics)
+                  is_first_partition, partition, statistics, train_dl_len, test_dl_len)
 
     # Synchronize and save statistics from all partitions
     save_distributed_experiment(

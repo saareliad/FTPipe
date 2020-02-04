@@ -325,7 +325,7 @@ class CIFAR10JustX(CIFAR10):
             index (int): Index
 
         Returns:
-            tuple: (image, target) where target is index of the target class.
+            tuple: image
         """
         img = self.data[index]
         # target = self.targets[index]
@@ -350,7 +350,7 @@ class CIFAR10JustY(CIFAR10):
             index (int): Index
 
         Returns:
-            tuple: (image, target) where target is index of the target class.
+            tuple: target where target is index of the target class.
         """
         # img = self.data[index]
         target = self.targets[index]

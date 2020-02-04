@@ -51,6 +51,7 @@ class SGDClonedWeightPrediction(WeightPredictor):
             # init theta for clone
             # TODO: we are doing unneccery clone for batches without staleness.
             # e.g first batch in run_until_flush()
+            # however when we NAG we predictor (current practice), the staleness is 1 instead of 0.
             self.theta_buffer = [[p.data.clone() for p in pg['params']]
                                  for pg in self.optimizer.param_groups]
 
