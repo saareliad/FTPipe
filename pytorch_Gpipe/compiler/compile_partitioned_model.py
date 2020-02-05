@@ -28,7 +28,7 @@ def compile_partitoned_model(graph: Graph, model: Module, verbose: bool = False,
     module:
         the module itself
     verbose:
-        wether to generate each statement of the forward function in a seperate line (usefull for debugging)
+        whether to generate each statement of the forward function in a seperate line (usefull for debugging)
     output_file:
         optional path to the generated code. if None uses generated_{model_name}{numberOfPatitions}.py
     '''

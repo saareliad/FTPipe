@@ -41,9 +41,9 @@ class ExpParser(argparse.ArgumentParser):
         self.add_argument('--device_ids', '-d', help='device ids to use',
                           type=int, nargs='*', default=[])
         self.add_argument('--no_dp', default=False,
-                          help="wether to not compare with data parallel", action="store_true")
+                          help="whether to not compare with data parallel", action="store_true")
         self.add_argument('--no_single', default=False,
-                          help="wether to not compare with single gpu", action="store_true")
+                          help="whether to not compare with single gpu", action="store_true")
 
     def parse_args(self, *args, **kwargs):
         res = vars(super().parse_args(*args, **kwargs))
@@ -118,7 +118,7 @@ class ImageNetParser(argparse.ArgumentParser):
                           default=0.9, type=float)
         self.add_argument("--weight_decay", help="weight decay for SGD optimizer",
                           default=1e-4, type=float)
-        self.add_argument("--nesterov", help="wether to use nesterov with SGD optimizer",
+        self.add_argument("--nesterov", help="whether to use nesterov with SGD optimizer",
                           default=False, action="store_true")
 
         self.add_argument("--dp", help="train dataParallel model",

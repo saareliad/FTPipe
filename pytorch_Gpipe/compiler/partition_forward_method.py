@@ -417,7 +417,7 @@ def generateToArgs(ready_expressions: Dict[str, str], node: Node,) -> str:
 
 
 def inputsNotReady(node: Node, ready_expressions: Dict[str, str]) -> bool:
-    '''a predicate to check wether we have not generated code for any of this nodes dependencies
+    '''a predicate to check whether we have not generated code for any of this nodes dependencies
     '''
     return any(operand.scope not in ready_expressions for operand in node.in_nodes)
 
