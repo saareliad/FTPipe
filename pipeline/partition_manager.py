@@ -420,20 +420,17 @@ class SinglePartitionManager:
             recved_all = True
 
         #  Recompute before waiting to the first, so parallelize communication and computation
+        if self.weight_stasher:
+            # Restore to parameters which the fwd ran on
+            self.weight_stasher.pop_restore_stashed(batch_idx)
         self.partition.recompute(batch_idx)
+
         g = bwd_rcev_buffers.wait_first()
         g = self.comm_handler.fix_after_recv(g)
 
         # Wait for next if appropriate
         if (not recved_all) and batch_idx - 1 + bwd_rcev_buffers.max_buffers < num_batches:
             bwd_rcev_buffers.recv_next(batch_idx-1)
-
-        # real_theta = None
-        if self.weight_stasher:
-            # self.weight_stasher.ensure_correct_post_restore(batch_idx)
-            # Restore to parameters which the fwd ran on
-            self.weight_stasher.pop_restore_stashed(batch_idx)
-            # real_theta = self.weight_stasher.tmp_buff_top()
 
         # Compute gradeint
         self.partition.backward_from_recomputed(g, batch_idx)
@@ -446,9 +443,6 @@ class SinglePartitionManager:
 
         # BIG_BATCH allow skiping steps.
         do_step, old_lrs = self.should_do_step(batch_idx)
-        # if self.stage == 0:
-        #     print(f"do_step:{do_step}, step_every {self.step_every}, \
-        #       bwd_batch_index:{batch_idx}, micro batch {batch_idx % self.step_every}, old_lrs:{old_lrs} ")
 
         # also do step for the last. (but with smaller LR)
         # scale_down_lr = False
