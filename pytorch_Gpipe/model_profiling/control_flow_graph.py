@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, List, Tuple, Optional, OrderedDict, Type, Callable, Union
+from typing import Any, List, Tuple, Optional, OrderedDict, Type, Callable, Union, Dict
 from ..utils import OrderedSet
 from .network_profiler import Profile
 import torch
@@ -50,7 +50,7 @@ class Node():
      parallel edges in the same direction are not allowed
     '''
 
-    def __init__(self, scope: str, idx: int, node_type: NodeTypes, incoming_nodes: Optional[OrderedSet["Node"]] = None, weight: Union[Profile, int] = 0, part: int = 0, value: Optional[Any] = None, shape: Optional[List[int]] = None):
+    def __init__(self, scope: str, idx: int, node_type: NodeTypes, incoming_nodes: Optional[OrderedSet["Node"]] = None, weight: Union[Profile, int] = 0, part: int = -1, value: Optional[Any] = None, shape: Optional[List[int]] = None):
         self.scope = scope
         self.idx = idx
         self.type = node_type
@@ -152,11 +152,14 @@ class Graph():
         the number of partitions for the nodes
     '''
 
-    def __init__(self, nodes: GraphNodes, graph_output_scopes: OrderedSet[str], depth: int, basic_blocks: Tuple[Module, ...]):
-        self._nodes = nodes
-        self.output_scopes = graph_output_scopes
-        self.depth = depth
-        self.basic_blocks = basic_blocks
+    def __init__(self, nodes: Optional[GraphNodes] = None, graph_output_scopes: Optional[OrderedSet[str]] = None, depth: Optional[int] = None, basic_blocks: Optional[Tuple[Module, ...]] = None):
+        self._nodes = nodes if nodes else collections.OrderedDict()
+        self.output_scopes = graph_output_scopes if graph_output_scopes else OrderedSet()
+        self.depth = depth if depth != None else 0
+        self.basic_blocks = basic_blocks if basic_blocks != None else ()
+
+    def __getitem__(self, idx) -> Node:
+        return self._nodes[idx]
 
     @property
     def nodes(self) -> List[Node]:
@@ -277,7 +280,7 @@ class Graph():
 
         # TODO split big graphs to multiple pdfs
 
-        colors = {0: 'grey', 1: 'green', 2: 'red', 3: 'yellow',
+        colors = {-1: 'grey', 0: 'grey', 1: 'green', 2: 'red', 3: 'yellow',
                   4: 'orange', 5: 'brown', 6: 'purple', 7: 'pink'}
 
         def hide_node(node):
@@ -360,6 +363,12 @@ class Graph():
         '''
         path += ".graph"
 
+        pickle.dump(self.state(), open(path, "wb"))
+
+    def state(self):
+        '''
+        returns a dicitionary containing the graphs state
+        '''
         graph_output_scopes = self.output_scopes
         graph_depth = self.depth
         graph_basic_blocks = self.basic_blocks
@@ -370,7 +379,7 @@ class Graph():
             node_data = {"idx": u.idx, "part": u.part, "weight": u.weight,
                          "scope": u.scope, "type": u.type, "value": u.value,
                          "value_type": u.value_type,
-                         "in_nodes": in_nodes, "out_nodes": out_nodes}
+                         "in_nodes": in_nodes, "out_nodes": out_nodes, "shape": u.shape}
             graph_nodes_data.append(node_data)
 
         graph = {"depth": graph_depth,
@@ -378,7 +387,41 @@ class Graph():
                  "basic_blocks": graph_basic_blocks,
                  "nodes_data": graph_nodes_data}
 
-        pickle.dump(graph, open(path, "wb"))
+        return graph
+
+    def load_state(self, state):
+        '''
+        loads the given state into the graph overriding it
+        '''
+        nodes = collections.OrderedDict()
+
+        # load node data
+        for node in state["nodes_data"]:
+            idx = node["idx"]
+            part = node["part"]
+            weight = node["weight"]
+            scope = node["scope"]
+            node_type = node["type"]
+            value = node["value"]
+            value_type = node["value_type"]
+            shape = node["shape"]
+            nodes[idx] = Node(scope, idx, node_type,
+                              weight=weight, part=part, value=value, shape=shape)
+            nodes[idx].value_type = value_type
+
+        # add edges
+        for node in state["nodes_data"]:
+            nodes[node["idx"]].in_nodes = OrderedSet([nodes[u]
+                                                      for u in node["in_nodes"]])
+            nodes[node["idx"]].out_nodes = OrderedSet([nodes[u]
+                                                       for u in node["out_nodes"]])
+
+        self._nodes = nodes
+        self.output_scopes = state["output_scopes"]
+        self.depth = state["depth"]
+        self.basic_blocks = state["basic_blocks"]
+
+        return self
 
     def graphs_equal(self, other) -> bool:
         '''
@@ -392,7 +435,7 @@ class Graph():
             return False
 
         for u, v in zip(self.nodes, other.nodes):
-            if u.idx != v.idx or u.scope != v.scope or u.type != v.type:
+            if u.idx != v.idx or u.scope != v.scope or u.type != v.type or u.shape != v.shape:
                 return False
             if u.value_type != v.value_type or u.valueType() != v.valueType():
                 return False
@@ -433,29 +476,9 @@ class Graph():
             path += ".graph"
 
         graph_data = pickle.load(open(path, "rb"))
-        nodes = collections.OrderedDict()
+        graph = cls()
 
-        # load node data
-        for node in graph_data["nodes_data"]:
-            idx = node["idx"]
-            part = node["part"]
-            weight = node["weight"]
-            scope = node["scope"]
-            node_type = node["type"]
-            value = node["value"]
-            value_type = node["value_type"]
-            nodes[idx] = Node(scope, idx, node_type,
-                              weight=weight, part=part, value=value)
-            nodes[idx].value_type = value_type
-
-        # add edges
-        for node in graph_data["nodes_data"]:
-            nodes[node["idx"]].in_nodes = OrderedSet([nodes[u]
-                                                      for u in node["in_nodes"]])
-            nodes[node["idx"]].out_nodes = OrderedSet([nodes[u]
-                                                       for u in node["out_nodes"]])
-
-        return cls(nodes, graph_data["output_scopes"], graph_data["depth"], graph_data["basic_blocks"])
+        return graph.load_state(graph_data)
 
     @classmethod
     def _check(cls, nodes_or_graph: Union[GraphNodes, "Graph"]):

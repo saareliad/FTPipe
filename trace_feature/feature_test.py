@@ -4,9 +4,10 @@ import torch
 
 import sys
 sys.path.append("../")
-from pytorch_Gpipe import build_graph,Graph,compile_partitoned_model
+from pytorch_Gpipe import build_graph, Graph, compile_partitoned_model
 from pytorch_Gpipe.model_profiling.graph_builder import basic_blocks_new_scopes, layerDict, translate_scopes
 import os
+
 
 class Tuples(nn.Module):
     def __init__(self):
@@ -24,12 +25,11 @@ class Branch1(nn.Module):
     def __init__(self):
         super(Branch1, self).__init__()
         self.l0 = Act(nn.ReLU(inplace=False))
-        self.op = Act(nn.Linear(100,100))
+        self.op = Act(nn.Linear(100, 100))
 
     def forward(self, x, y):
         x = self.l0(x)
         y = self.op(y)
-
 
         return y, x
 
@@ -42,8 +42,7 @@ class Branch2(nn.Module):
 
     def forward(self, x, y):
         x = self.l0(x)
-        y = self.op(y,x)
-
+        y = self.op(y, x)
 
         return y, x
 
@@ -57,10 +56,12 @@ class Act(nn.Module):
         return self.act(x) * 5
 
 
+# TODO need to recreate expected graphs as we now record shapes
 
-def check_nothing_inlined(model,sample):
+
+def check_nothing_inlined(model, sample):
     traced = torch.jit.trace(model, sample, check_trace=False).graph
-    with open("actual_traces/minimal_trace.txt","w") as f , open("expected_traces/minimal_trace.txt","r") as e:
+    with open("actual_traces/minimal_trace.txt", "w") as f, open("expected_traces/minimal_trace.txt", "r") as e:
         f.write(str(traced))
         if str(traced) != e.read():
             print("check_nothing_inlined traces not equal")
@@ -78,10 +79,10 @@ def check_nothing_inlined(model,sample):
     return True
 
 
-def check_we_only_inline_composite_layers(model,sample):
+def check_we_only_inline_composite_layers(model, sample):
     traced = torch.jit.trace(model, sample, check_trace=False).graph
-    torch._C._jit_pass_inline(traced,depth=1000)
-    with open("actual_traces/maximal_trace.txt","w") as f, open("expected_traces/maximal_trace.txt","r") as e:
+    torch._C._jit_pass_inline(traced, depth=1000)
+    with open("actual_traces/maximal_trace.txt", "w") as f, open("expected_traces/maximal_trace.txt", "r") as e:
         f.write(str(traced))
         if str(traced) != e.read():
             print("check_we_only_inline_composite_layers traces not equal")
@@ -100,10 +101,10 @@ def check_we_only_inline_composite_layers(model,sample):
     return True
 
 
-def check_depth_based_tracing(model,sample):
+def check_depth_based_tracing(model, sample):
     traced = torch.jit.trace(model, sample, check_trace=False).graph
-    torch._C._jit_pass_inline(traced,depth=1)
-    with open("actual_traces/depth_1_trace.txt","w") as f,open("expected_traces/depth_1_trace.txt","r") as e:
+    torch._C._jit_pass_inline(traced, depth=1)
+    with open("actual_traces/depth_1_trace.txt", "w") as f, open("expected_traces/depth_1_trace.txt", "r") as e:
         f.write(str(traced))
         if str(traced) != e.read():
             print("check_depth_based_tracing traces not equal")
@@ -115,12 +116,12 @@ def check_depth_based_tracing(model,sample):
     if not Graph.deserialize("expected_graphs/depth_1_graph").graphs_equal(graph):
         print("check_depth_based_tracing graphs not equal")
         return False
-    
+
     os.remove("actual_graphs/depth_1_graph.graph")
     os.remove("actual_traces/depth_1_trace.txt")
 
 
-def check_basic_blocks(model,sample):
+def check_basic_blocks(model, sample):
     basic_blocks = (Branch1,)
     traced = torch.jit.trace(model, sample, check_trace=False).graph
     # compute the scopes of the basic blocks
@@ -128,17 +129,18 @@ def check_basic_blocks(model,sample):
                                 basic_blocks=basic_blocks)
     new_to_old = translate_scopes(profiled_layers.keys())
     block_scopes = basic_blocks_new_scopes(basic_blocks,
-                                        profiled_layers, new_to_old)
+                                           profiled_layers, new_to_old)
 
     torch._C._jit_pass_inline(traced, depth=1000, basic_blocks=block_scopes)
-    with open("actual_traces/basic_blocks_trace.txt","w") as f, open("expected_traces/basic_blocks_trace.txt","r") as e:
+    with open("actual_traces/basic_blocks_trace.txt", "w") as f, open("expected_traces/basic_blocks_trace.txt", "r") as e:
         f.write(str(traced))
         # the traces are not content equal as some ids are different
         if len(str(traced)) != len(e.read()):
             print("check_basic_blocks traces not equal")
             return False
 
-    graph = build_graph(model, sample, max_depth=1000,basic_blocks=basic_blocks)
+    graph = build_graph(model, sample, max_depth=1000,
+                        basic_blocks=basic_blocks)
     graph.serialize("actual_graphs/basic_blocks_graph")
 
     if not Graph.deserialize("expected_graphs/basic_blocks_graph").graphs_equal(graph):
@@ -147,20 +149,21 @@ def check_basic_blocks(model,sample):
 
     os.remove("actual_graphs/basic_blocks_graph.graph")
     os.remove("actual_traces/basic_blocks_trace.txt")
-    
+
     return True
 
 
-def check_default_behaviour(model,sample):
+def check_default_behaviour(model, sample):
     traced = torch.jit.trace(model, sample, check_trace=False).graph
     torch._C._jit_pass_inline(traced)
-    with open("actual_traces/default_trace.txt","w") as f,open("expected_traces/default_trace.txt","r") as e:
+    with open("actual_traces/default_trace.txt", "w") as f, open("expected_traces/default_trace.txt", "r") as e:
         f.write(str(traced))
-        calls = len([n for n in traced.nodes() if n.kind() == "prim::CallMethod"])
+        calls = len([n for n in traced.nodes()
+                     if n.kind() == "prim::CallMethod"])
         if calls != 0:
             print("check_default_behaviour traces not equal")
             return False
-    
+
     os.remove("actual_traces/default_trace.txt")
     return True
 
@@ -174,11 +177,11 @@ if __name__ == "__main__":
     model = Tuples()
     sample = torch.randn(100, 100)
 
-    check_nothing_inlined(model,sample)
-    check_we_only_inline_composite_layers(model,sample)
-    check_depth_based_tracing(model,sample)
-    check_basic_blocks(model,sample)
-    check_default_behaviour(model,sample)
+    check_nothing_inlined(model, sample)
+    check_we_only_inline_composite_layers(model, sample)
+    check_depth_based_tracing(model, sample)
+    check_basic_blocks(model, sample)
+    check_default_behaviour(model, sample)
 
     if not os.listdir("actual_graphs"):
         os.rmdir("actual_graphs")
@@ -186,11 +189,4 @@ if __name__ == "__main__":
         os.rmdir("actual_traces")
 
     if (not os.path.exists("actual_traces")) and (not os.path.exists("actual_graphs")):
-        print("feature works")    
-
-
-
-
-
-
-
+        print("feature works")

@@ -1,5 +1,5 @@
 
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 
 from ..model_profiling import Graph, NodeWeightFunction, EdgeWeightFunction
 from .process_partition import post_process_partition
@@ -22,7 +22,10 @@ def METIS_partition(graph: Graph, num_partitions: int,
     parts = sorted((idx, n) for n, p in enumerate(parts)for idx in p)
     parts = [n for _, n in parts]
 
-    post_process_partition(graph, parts)
+    for node, part in zip(graph.nodes, parts):
+        node.part = part
+    n_parts = set(parts)
+    post_process_partition(graph)
 
     actual_nparts = len({n.part for n in graph.nodes})
 
@@ -30,4 +33,5 @@ def METIS_partition(graph: Graph, num_partitions: int,
         print(
             f"expected {num_partitions} partitions but only {actual_nparts} found implicating that the model to partition is too small")
         print("consider increasing the depth of graph or disabling the basic blocks option")
+        print(f"before post processing there were {n_parts} partitions")
     return graph
