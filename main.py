@@ -497,7 +497,8 @@ def auto_file_name(args):
                    and args.weight_stashing) else ""
     ga = "ga_" if hasattr(args, "gap_aware") else ""
     bs = f"bs_{args.bs_train * args.step_every}_"
-    s = f'{args.model}_{args.dataset}_{wp}_{ws}{ga}{bs}seed_{args.seed}'
+    se = f"se_{args.step_every}_"
+    s = f'{args.model}_{args.dataset}_{wp}_{ws}{ga}{bs}{se}seed_{args.seed}'
     args.out_filename = f"{args.out_filename}_{s}"
     print(f"Out File Name will be: {args.out_filename}")
 

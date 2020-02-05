@@ -335,6 +335,10 @@ class SinglePartitionManager:
             if self.weight_stasher and self.partition.training:
                 # Stash parameters for later.
                 # Note: wait stasher should be None be in last partition.
+                
+                if expected_staleness == 0 and self.weight_predictor.nag_with_predictor:
+                    expected_staleness = 1
+                
                 self.weight_stasher.stash_current(batch_idx, expected_staleness)
 
             self.weight_predictor.revert()
