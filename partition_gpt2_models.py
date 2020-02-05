@@ -181,6 +181,7 @@ def partition_model(args, train_dataset, model, tokenizer):
                        node_weight_function=node_weight_function,
                        edge_weight_function=edge_weight_function(
                            args.bandwidth_gps),
+                       use_layers_only_graph=args.partition_layer_graph,
                        output_file=args.output_file, DEBUG=False)
     graph.save_as_pdf(args.output_file, ".")
 
@@ -261,13 +262,15 @@ def main():
     parser.add_argument('--bandwidth_gps', type=float,
                         default=12, help="data transfer rate between gpus in gigabaytes per second")
     parser.add_argument('--no_recomputation', action='store_true',
-                        default=False, help="wether to use recomputation for the backward pass")
+                        default=False, help="whether to use recomputation for the backward pass")
     parser.add_argument('--analysis_batch_size', type=int, default=1,
                         help="batch size to use when analysing the generated partititon")
     parser.add_argument('--no_analysis', action='store_true',
                         default=False, help="disable partition analysis")
     parser.add_argument("--depth", default=1000, type=int,
                         help="the depth in which we will partition the model")
+    parser.add_argument("--partition_layer_graph", action="store_true",
+                        default=True, help="whether to partition a graph containing only layers")
 
     args = parser.parse_args()
 

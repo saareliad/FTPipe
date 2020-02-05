@@ -17,6 +17,7 @@ def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] =
                depth=1000, basic_blocks: Optional[List[nn.Module]] = None,
                node_weight_function: Optional[NodeWeightFunction] = None,
                edge_weight_function: Optional[EdgeWeightFunction] = None,
+               use_layers_only_graph: bool = False,
                output_file: str = None, DEBUG=False, **METIS_opt) -> Graph:
     '''attemps to partition a model to given number of parts using our profiler
        this will produce a python file with the partition config
@@ -45,6 +46,8 @@ def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] =
     edge_weight_function:
             an optional weight function for the edges should be a function (Node,Node) to int
             if not given a default value of 1 will be given to all edges
+    use_layers_only_graph:
+        whether to partition a smaller version of the graph containing only the layers (usefull fo big models with lots of unprofiled ops)
     output_file:
         the file name in which to save the partition config
         if not given defualts to generated_{modelClass}{actualNumberOfPartitions}
@@ -56,7 +59,7 @@ def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] =
 
     graph = partition_model(model, sample_batch, kwargs=kwargs, max_depth=depth, n_iter=n_iter, nparts=nparts,
                             basic_blocks=basic_blocks, node_weight_function=node_weight_function,
-                            edge_weight_function=edge_weight_function, METIS_opt=METIS_opt)
+                            edge_weight_function=edge_weight_function, use_layers_only_graph=use_layers_only_graph, METIS_opt=METIS_opt)
 
     compile_partitoned_model(graph, model, output_file=output_file,
                              verbose=DEBUG)
@@ -67,6 +70,7 @@ def pipe_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] =
 def partition_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, n_iter=10, nparts=4, max_depth=100, basic_blocks: Optional[List[nn.Module]] = None,
                     node_weight_function: Optional[NodeWeightFunction] = None,
                     edge_weight_function: Optional[EdgeWeightFunction] = None,
+                    use_layers_only_graph: bool = False,
                     **METIS_opt) -> Graph:
     '''
     profiles the network and return a graph representing the partition
@@ -87,11 +91,13 @@ def partition_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Di
     basic_blocks:
         an optional list of modules that if encountered will not be broken down
     node_weight_function:
-            an optional weight function for the nodes should be a function from Node to int
-            if not given a default weight of 1 will be given to all nodes
+        an optional weight function for the nodes should be a function from Node to int
+        if not given a default weight of 1 will be given to all nodes
     edge_weight_function:
-            an optional weight function for the edges should be a function (Node,Node) to int
-            if not given a default value of 1 will be given to all edges
+        an optional weight function for the edges should be a function (Node,Node) to int
+        if not given a default value of 1 will be given to all edges
+    use_layers_only_graph:
+        whether to partition a smaller version of the graph containing only the layers (usefull fo big models with lots of unprofiled ops)
     METIS_opt:
         additional kwargs to pass to the METIS partitioning algorithm
     '''
@@ -99,6 +105,6 @@ def partition_model(model: nn.Module, sample_batch: Tensors, kwargs: Optional[Di
                         basic_blocks=basic_blocks, n_iter=n_iter)
 
     graph = METIS_partition(graph, nparts, node_weight_function=node_weight_function,
-                            edge_weight_function=edge_weight_function, **METIS_opt)
+                            edge_weight_function=edge_weight_function, use_layers_only_graph=use_layers_only_graph, **METIS_opt)
 
     return graph

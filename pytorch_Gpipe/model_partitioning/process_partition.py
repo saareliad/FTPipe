@@ -6,7 +6,7 @@ from ..model_profiling import Graph, NodeTypes
 __all__ = ["post_process_partition"]
 
 
-def post_process_partition(graph: Graph, part: List[int]) -> Graph:
+def post_process_partition(graph: Graph) -> Graph:
     '''
     process the partition and optimize it
     called as part of partition_graph method
@@ -15,12 +15,7 @@ def post_process_partition(graph: Graph, part: List[int]) -> Graph:
     ----------
     graph:
         the Graph object that was partitioned
-    part:
-        a list of the nodes partition indices
     '''
-
-    for node, idx in zip(graph.nodes, part):
-        node.part = idx
 
     cannonize_partition_indices(graph)
     constants_fix(graph)

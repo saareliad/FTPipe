@@ -44,6 +44,7 @@ our high level API can be described as follows in a hierarchical order
 def pipe_model(model, sample_batch, kwargs, n_iter, nparts,
                depth, basic_blocks,partition_by_memory,
                node_weight_function,edge_weight_function,
+               use_layers_only_graph,
                output_file, DEBUG, **METIS_opt)
 ```
 
@@ -52,14 +53,14 @@ returns a partitioned graph object.
 
 ```python
 def partition_model(model, sample_batch, kwargs, n_iter, nparts, max_depth,
-                              basic_blocks,node_weight_function,edge_weight_function, **METIS_opt)
+                              basic_blocks,node_weight_function,edge_weight_function,use_layers_only_graph, **METIS_opt)
 ```
 
 this function profiles and partitions the model without code generation
 returns a partitioned graph object
 
 ```python
-def METIS_partition(graph,num_partitions,node_weight_function,edge_weight_function,**METIS_opts)
+def METIS_partition(graph,num_partitions,node_weight_function,edge_weight_function,use_layers_only_graph,**METIS_opts)
 ```
 
 this functions performs METIS kway partitioning on our graph
@@ -176,7 +177,7 @@ our Graph is a simple data structre that holds nodes and does not have special l
 this module involves the necessary calls in order to perform METIS partKway method on our graph
 
 ```python
-def METIS_partition(graph, num_partitions,node_weight_function,edge_weight_function,**METIS_opts)
+def METIS_partition(graph, num_partitions,node_weight_function,edge_weight_function,use_layers_only_graph,**METIS_opts)
 ```
 
 ## Pipedream Partitioning
@@ -213,8 +214,8 @@ the partitions can be consumed later by calling the generated method:
 def create_pipeline_configuration(model,DEBUG,partitions_only)
 ```
 
-DEBUG is wether we want the partitions on the CPU/GPUS
-partitions_only is wether we want oly the partitions or the entire config
+DEBUG is whether we want the partitions on the CPU/GPUS
+partitions_only is whether we want oly the partitions or the entire config
 
 the config is composed of a dicionary with the following fields:
 

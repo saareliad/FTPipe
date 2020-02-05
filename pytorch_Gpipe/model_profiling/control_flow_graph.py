@@ -192,7 +192,7 @@ class Graph():
         Parameters:
         ------------
         directed:
-            wether to return a directed graph default is undirected
+            whether to return a directed graph default is undirected
         node_weight_function:
             an optional weight function for the nodes should be a function from Node to int
             if not given a default weight of 1 will be given to all nodes
@@ -501,3 +501,50 @@ class Graph():
                 assert node in o.in_nodes
                 assert o.idx in _nodes
         return nodes_or_graph
+
+    def layers_graph(self) -> Tuple["Graph", Dict[int, int]]:
+        '''
+        creates a graph g with nodes of types OP PYTHON_PRIMITIVE and CONSTANT removed
+        leaving only inputs layers and params/buffers
+
+        returns the created graph and a map between g's indices and self indices
+        '''
+        g = Graph().load_state(self.state())
+
+        def predicate(n: Node):
+            return n.type in {NodeTypes.PYTHON_PRIMITIVE, NodeTypes.CONSTANT} or (len(n.in_nodes) == 0 and n.type is NodeTypes.OP)
+
+        # inefficient but should only be called once
+        nodes = _remove_nodes(g._nodes, predicate)
+        new_to_old = dict()
+        g._nodes = collections.OrderedDict()
+        for idx, n in enumerate(nodes.values()):
+            new_to_old[idx] = n.idx
+            n.idx = idx
+            g._nodes[idx] = n
+        return g, new_to_old
+
+
+def _remove_nodes(nodes: GraphNodes, condition: Callable[[Node], bool]) -> GraphNodes:
+    # TODO code duplication from graph builder
+    while True:
+        changed = False
+        optimized_graph = OrderedDict()
+
+        for unique_id, node in nodes.items():
+            if condition(node):
+                changed = True
+                for in_node in node.in_nodes:
+                    in_node.replace_out_node(node, node.out_nodes)
+                    if node.value_type:
+                        in_node.value_type = node.value_type
+                        in_node.value = None
+                for out_node in node.out_nodes:
+                    out_node.replace_in_node(node, node.in_nodes)
+            else:
+                optimized_graph[unique_id] = node
+
+        nodes = optimized_graph
+        if not changed:
+            break
+    return nodes

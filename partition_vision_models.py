@@ -124,11 +124,13 @@ if __name__ == "__main__":
     parser.add_argument('--bandwidth_gps', type=float,
                         default=12, help="data transfer rate between gpus in gigabaytes per second")
     parser.add_argument('--no_recomputation', action='store_true',
-                        default=False, help="wether to use recomputation for the backward pass")
+                        default=False, help="whether to use recomputation for the backward pass")
     parser.add_argument('--no_analysis', action='store_true',
                         default=False, help="disable partition analysis")
     parser.add_argument("--depth", default=1000, type=int,
                         help="the depth in which we will partition the model")
+    parser.add_argument("--partition_layer_graph", action="store_true",
+                        default=True, help="whether to partition a graph containing only layers")
     parser.add_argument("--analysis_batch_size", default=8, type=int,
                         help="batch size to use during the post partition analysis")
 
@@ -164,6 +166,7 @@ if __name__ == "__main__":
     n_iter = args.n_iter
     graph = pipe_model(model, sample, depth=args.depth, kwargs=None, nparts=args.n_partitions,
                        DEBUG=VERBOSE_PARTITIONING, output_file=args.output_file,
+                       use_layers_only_graph=args.partition_layer_graph,
                        node_weight_function=node_weight_function,
                        edge_weight_function=edge_weight_function(
                            args.bandwidth_gps),
