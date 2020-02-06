@@ -82,7 +82,7 @@ class ExpParser(argparse.ArgumentParser):
     def _get_available_models(self):
         classes = dict()
         for name, t in inspect.getmembers(sample_models):
-            if inspect.isfunction(t):
+            if inspect.isfunction(t) or inspect.isclass(t):
                 classes[name] = t
 
         return classes
