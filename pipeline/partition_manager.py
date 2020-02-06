@@ -48,6 +48,8 @@ class SinglePartitionManager:
         self.step_every = step_every
         self.work_scheduler = work_scheduler(step_every)
 
+        # self.needs_own_post_restore = dict()
+
         # HACK:
         # FIXME: num batches just have to be high enough for the calculation.
         fwds, is_problematic = get_fwds_between_first_and_seconds_step_for_stage(
@@ -218,8 +220,12 @@ class SinglePartitionManager:
         self.gap_aware = gap_aware
 
     def set_weight_stasher(self, weight_stasher: WeightStasher):
-        if self.is_last_partition and not (weight_stasher is None):
+        assert (weight_stasher is not None)
+        if self.is_last_partition:
             raise NotImplementedError()
+
+        # if weight_stasher and self.weight_predictor and self.step_every > 1:
+        #     weight_stasher.set_problematic(forward=True, policy='EVERY_BATCH')
 
         if self.is_problematic:
             if self.PROBLEMATIC_POLICY == 'SAME':
@@ -272,24 +278,7 @@ class SinglePartitionManager:
             while(not i.is_completed()):
                 pass
 
-    def run_batch_forward(self, batch_idx, num_batches, done_bwds=None):
-        """ Handles the forward pass, for last partition also handles the backward pass.
-
-            Algorithem:
-                - Get the data
-                - Forward pass (including: wp, ws)
-                    optional: Weight Preiction (wp)
-                    optional: Weight Stashing (ws)
-                - Send to next partition (*if needed)
-                - If last partition: do the backward and send to previous partition
-
-            TODO:
-                - Pre load Y to last partition if possible
-        """
-        # TODO: BIG_BATCH: fix delay in case micro batches.
-        if self.gap_aware and self.partition.training:
-            self.delay_at_batch[batch_idx] = self.expected_staleness(
-                batch_idx, done_bwds)
+    def get_input_data_forward(self, batch_idx, num_batches):
 
         # Get the data to do forward on
         if self.is_first_partition:
@@ -297,7 +286,6 @@ class SinglePartitionManager:
             # TODO: handle y with separate coordinated dataloader according to trainer/tast.
             x, *ctx = self.task.unpack_data_for_partition(next(self.dl_iter))
         else:
-            preload_ctx = self.task.preload_last_partition(getattr(self,"dl_iter",None), self.device) if self.is_last_partition else tuple()
 
             fwd_rcev_buffers = self.fwd_rcev_buffers
 
@@ -323,30 +311,73 @@ class SinglePartitionManager:
                 fwd_rcev_buffers.recv_next(batch_idx-1)
 
             x, *ctx = self.task.unpack_data_for_partition(x)
+
+        return x, ctx
+
+    def run_batch_forward(self, batch_idx, num_batches, done_bwds=None):
+        """ Handles the forward pass, for last partition also handles the backward pass.
+
+            Algorithem:
+                - Get the data
+                - Forward pass (including: wp, ws)
+                    optional: Weight Preiction (wp)
+                    optional: Weight Stashing (ws)
+                - Send to next partition (*if needed)
+                - If last partition: do the backward and send to previous partition
+
+            TODO:
+                - Pre load Y to last partition if possible
+        """
+        # TODO: BIG_BATCH: fix delay in case micro batches.
+        if self.gap_aware and self.partition.training:
+            self.delay_at_batch[batch_idx] = self.expected_staleness(
+                batch_idx, done_bwds)
+
+        # Get the data to run forward on, (and target)
+        if self.is_last_partition:
+            preload_ctx = self.task.preload_last_partition(
+                getattr(self, "dl_iter", None), self.device)
+        x, ctx = self.get_input_data_forward(batch_idx, num_batches)
+
         # Do the forward pass with optionals
-        if self.weight_predictor and self.partition.training:
-            # TODO: last partition can do bengio nesterov instead of predicting.
-            # Requires per partition optimizer config, or some hack.
-            expected_staleness = self.expected_staleness(batch_idx, done_bwds)
-            self.weight_predictor.setup(expected_staleness)
-            self.weight_predictor.forward()
-            x = self.partition(x, batch_idx)
+        # optional (1): Weight Prediction
+        # optional (2): Weight Stashing
+        weight_predictor = self.weight_predictor
+        partition = self.partition
+        is_training = partition.training
 
-            if self.weight_stasher and self.partition.training:
-                # Stash parameters for later.
-                # Note: wait stasher should be None be in last partition.
-                
-                if expected_staleness == 0 and self.weight_predictor.nag_with_predictor:
-                    expected_staleness = 1
-                
-                self.weight_stasher.stash_current(batch_idx, expected_staleness)
+        if is_training:
+            if weight_predictor is not None:
+                # TODO: last partition can do bengio nesterov instead of predicting.
+                # Requires per partition optimizer config, or some hack.
+                # FIXME: for predictor to work with step_every > 1 it must know if are going to step
+                expected_staleness = self.expected_staleness(
+                    batch_idx, done_bwds)
+                weight_predictor.setup(expected_staleness)
+                weight_predictor.forward()
 
-            self.weight_predictor.revert()
+                x = partition(x, batch_idx)
+                if self.weight_stasher is not None:
+                    # Stash parameters for later.
+                    # Note: wait stasher should be None be in last partition.
+                    if expected_staleness == 0 and weight_predictor.nag_with_predictor:
+                        expected_staleness = 1
+                        # TODO: if not planned to do exp at this batch.
+                        # self.needs_own_post_restore[batch_idx] = False
+                        # FIXME: no reason to stash, and no reason to post restore from top!!!!!
+
+                    # HACK: consider setting dirty ahead!
+                    self.weight_stasher.stash_current(
+                        batch_idx, expected_staleness)
+
+                weight_predictor.revert()
+            else:
+                x = partition(x, batch_idx)
+                if self.weight_stasher is not None:
+                    self.weight_stasher.stash_current(
+                        batch_idx, self.expected_staleness(batch_idx, done_bwds))
         else:
-            x = self.partition(x, batch_idx)
-            if self.weight_stasher and self.partition.training:
-                self.weight_stasher.stash_current(
-                    batch_idx, self.expected_staleness(batch_idx, done_bwds))
+            x = partition(x, batch_idx)
 
         if not self.is_last_partition:
             send_ctx = self.task.pack_send_context(x, *ctx)
@@ -354,19 +385,20 @@ class SinglePartitionManager:
                 send_ctx, batch_idx)
 
         else:
-            # Last partition
+            # Last partition - also do backward.
             ctx = (*preload_ctx, *ctx)
-            if not self.partition.training:
+            if not is_training:
                 # In Eval: Just calculate statistics.
                 self.trainer.calc_test_stats(x, *ctx)
                 return []
 
+            trainer = self.trainer
             # Backprop
-            step_and_stats_ctx = self.trainer.backprop_last_partition(
+            step_and_stats_ctx = trainer.backprop_last_partition(
                 x, *ctx)
 
             # Send partition border gradients
-            grads = self.partition.get_grad(batch_idx)
+            grads = partition.get_grad(batch_idx)
             request_objects = self.comm_handler.send_gradients(
                 grads, batch_idx)
 
@@ -378,26 +410,25 @@ class SinglePartitionManager:
             if not do_step and (batch_idx == (num_batches - 1)):
                 do_step = True
                 # For the last batch, we must scale down the learning rate, and then restore.
-                pgs = self.trainer.optimizer.param_groups
+                pgs = trainer.optimizer.param_groups
                 old_lrs = [g['lr'] for g in pgs]
+                se = self.step_every
                 for g in pgs:
                     # FIXME: micro batch index
-                    g['lr'] *= ((batch_idx % self.step_every) +
-                                1) / self.step_every
+                    g['lr'] *= (((batch_idx % se) + 1) / se)
 
             # Step
-            self.trainer.last_partition_step_and_statistics(
+            trainer.last_partition_step_and_statistics(
                 x, *ctx, step_and_stats_ctx, step=do_step)
-            del x, ctx, step_and_stats_ctx
+            # del x, ctx, step_and_stats_ctx
 
             # Print training statistics.
-            # if self.partition.training:
             self.batches += 1
             if self.batches % self.log_frequency == 0:
                 batch_log_str = ''
-                if hasattr(self.trainer, "scheduler"):
+                if hasattr(trainer, "scheduler"):
                     # Note: could be more than one LR, but we ignore this for simplicity.
-                    lr = self.trainer.scheduler.get_last_lr()[0]
+                    lr = trainer.scheduler.get_last_lr()[0]
                     batch_log_str += '| lr {:02.4f}'.format(lr)
 
                 # TODO: add more stats. e.g can print here time, ' ms/batch {:5.2f} | ' ,...
@@ -462,39 +493,53 @@ class SinglePartitionManager:
                 g['lr'] *= ((batch_idx % se) + 1) / se
 
         if do_step:
-            real_theta = self.weight_stasher.tmp_buff_top() if self.weight_stasher else None
+            trainer = self.trainer
+            weight_stasher = self.weight_stasher
+
+            # TODO: allow access to real theta just for statistics
+            real_theta = weight_stasher.tmp_buff_top() if weight_stasher else None
             # ####### Preparing to step
             if real_theta:
-                self.trainer.try_record_real_gap_from_current(real_theta)
+                # Calculate Gap
+                trainer.try_record_real_gap_from_current(real_theta)
 
-            delay = self.delay_at_batch.pop(batch_idx, None)
-            if not (delay is None) and self.is_problematic:
-                # Average delays
-                mb = self.get_micro_batch(batch_idx)
-                if mb > 0:
-                    delays = [
-                        delay] + [self.delay_at_batch.pop(batch_idx-i, None) for i in range(1, mb + 1)]
-                    delay = np.mean(delays)
+            if self.gap_aware:
+                # Get delay and modify gradeints.
+                if self.is_problematic:
+                    # Average delays
+                    mb = self.get_micro_batch(batch_idx)
+                    delay = np.mean([self.delay_at_batch.pop(
+                        batch_idx-i) for i in range(0, mb + 1)])
+                else:
+                    delay = self.delay_at_batch.pop(batch_idx)
 
-            # possible Modify gradients (e.g Gap aware)
-            self.trainer.modify_gradients(real_theta, delay)
+                # Modify gradients
+                trainer.modify_gradients(real_theta, delay)
 
-            if self.weight_stasher:
+            if weight_stasher:
+                # self.needs_own_post_restore.pop(batch_idx, None)
                 # Restore to previosly saved parameters, so we can do the step on them.
-                self.weight_stasher.post_restore(batch_idx)
+                weight_stasher.post_restore(batch_idx)
                 # Mark previously stashed weights as dirty
-                self.weight_stasher.mark_stashed_as_dirty()
+                weight_stasher.mark_stashed_as_dirty()
 
-            self.trainer.non_last_partition_step()
+            trainer.non_last_partition_step()
 
             if old_lrs:
-                pgs = self.trainer.optimizer.param_groups
+                # Note that sometimes its not defined locally.
+                pgs = trainer.optimizer.param_groups
                 for g, old_lr in zip(pgs, old_lrs):
                     g['lr'] = old_lr
         else:
             if self.weight_stasher:
                 # Restore to previosly saved parameters, so we can do the next forwards on them!
+                # if self.needs_own_post_restore.pop(batch_idx, False):
+                #     self.weight_stasher.post_restore(batch_idx)
+                #     # TODO: clear smaller batch indexes...
+                # else:
                 self.weight_stasher.post_restore_from_top(batch_idx)
+
+                # TODO: if weight predictior and expected staleness was 0 (w/o the NAG), than ?!
 
         return request_objects
 
@@ -560,14 +605,9 @@ class SinglePartitionManager:
             # Act according to some policy
             action_is_fwd = self.work_scheduler(self.stage, self.num_stages,
                                                 num_batches, done_fwds, done_bwds)
-
-            # if self.stage == 0:
-            #     print(
-            #         f"action_is_fwd:{action_is_fwd}. totla:{num_batches}, fwd:{done_fwds}, bwd:{done_bwds} ")
-
             if action_is_fwd:
                 sent_request_objects = self.run_batch_forward(
-                    done_fwds, num_batches, done_bwds)
+                    done_fwds, num_batches, done_bwds=done_bwds)
                 # Last partition inserts its gradints into async_fwd_objects,
                 self.async_fwd_objects[done_fwds] = sent_request_objects
             else:
@@ -595,10 +635,6 @@ class SinglePartitionManager:
             if len(self.async_bwd_objects) > 1:
                 self.wait_on_sent_object(is_fwd=False)
 
-        # This print its used to debug how much we have in pipe.
-        # print(self.stage, len(self.async_bwd_objects),
-        #       len(self.async_fwd_objects))
-
         while len(self.async_fwd_objects) > 0:
             self.wait_on_sent_object(is_fwd=True)
 
@@ -609,7 +645,3 @@ class SinglePartitionManager:
             self.lr_scheduler.step()
             if ga:
                 ga.update_max_lr()
-
-        # if not self.comm_handler.cpu:
-        #     # HACK: synchronize.
-        #     torch.cuda.synchronize(device=self.device)

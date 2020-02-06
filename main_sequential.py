@@ -5,7 +5,7 @@ import random
 import numpy as np
 import time
 import logging
-
+# TODO: fix train acc for DDP
 # parse_env_vars
 from main import parse_cli, parse_json_config, get_scheduler, parse_env_vars  # get_dataloaders
 from models import create_normal_model_instance  # , get_partitioning
@@ -25,7 +25,9 @@ from pipeline.partition import FirstPartition
 import torch.distributed as dist
 from pipeline.util import get_world_size
 from torch.nn.parallel import DistributedDataParallel
-from misc.datasets import distributed_get_train_test_dl_from_args, simplified_get_train_test_dl_from_args
+from misc.datasets import (distributed_get_train_test_dl_from_args, 
+simplified_get_train_test_dl_from_args,
+new_distributed_get_train_test_dl_from_args)
 
 
 class SyncCVTask(DLTask):
@@ -56,6 +58,7 @@ class SequentailManager:
             self.model = model.to(device)
             if ddp:
                 self.needs_unwrap = True
+                # see https://github.com/pytorch/pytorch/blob/master/torch/distributed/launch.py
                 self.model = DistributedDataParallel(
                     model, device_ids=[local_rank], output_device=local_rank)
                 self.logger.info("-I- using DDP!")
@@ -127,15 +130,13 @@ class SequentailManager:
                 self.logger.info(batch_log_str)
 
     def run_forward_until_flush(self, num_batches):
-        model = self.unwrap_model()
-        # eval_start_time = time.time()
-        
+        # model = self.unwrap_model()
         eval_start_time = time.time()
         with torch.no_grad():
             for batch_idx in range(num_batches):
                 data = next(self.dl_iter)
                 x, *ctx = self.task.unpack_data_for_partition(data)
-                x = model(x)
+                x = self.model(x)
                 self.trainer.calc_test_stats(x,  *ctx)
         
         eval_end_time = time.time()
@@ -271,8 +272,9 @@ def init_DDP(args, logger):
     parse_env_vars(args)
     args.world_size = 4  # get_world_size(args.distributed_backend) # FIXME:
     # Initialize the distributed environment.
-    dist.init_process_group(args.distributed_backend, world_size=args.world_size)
+    dist.init_process_group(args.distributed_backend, init_method='env://')
     assert dist.get_world_size() == args.world_size
+    args.rank = dist.get_rank()
     logger.info(f"Initialized process group; backend: {args.distributed_backend}, rank: {args.rank}, "
                 f"local_rank: {args.local_rank}, world_size: {args.world_size}")
     
@@ -300,7 +302,7 @@ def get_dataloaders(args):
 
     get_dls_fn = simplified_get_train_test_dl_from_args
     if hasattr(args, 'ddp') and args.ddp:
-        get_dls_fn = distributed_get_train_test_dl_from_args
+        get_dls_fn = new_distributed_get_train_test_dl_from_args
         # num_splits=None, use_split=None
     train_dl, test_dl = get_dls_fn(
         args, verbose=False, **dl_kw)
@@ -320,6 +322,13 @@ def yuck_from_main():
     console = logging.StreamHandler()
     console.setLevel(logging.DEBUG)
     logger.addHandler(console)
+    
+
+    # Set Random Seed
+    if args.seed is None:
+        args.seed = random.randint(0, 2 ** 31)
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
 
     if hasattr(args, 'ddp') and args.ddp:
         init_DDP(args, logger)
@@ -330,12 +339,6 @@ def yuck_from_main():
     device = torch.device('cpu' if args.cpu else f"cuda:{args.local_rank}")
     if not args.cpu:
         torch.cuda.set_device(device)
-
-    # Set Random Seed
-    if args.seed is None:
-        args.seed = random.randint(0, 2 ** 31)
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
 
     if hasattr(args, "cudnn_benchmark") and args.cudnn_benchmark:
         torch.backends.cudnn.benchmark = True

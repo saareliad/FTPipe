@@ -18,7 +18,9 @@ import models
 import numpy as np
 import torch
 from collections import OrderedDict
-from misc.datasets import add_dataset_argument, simplified_get_train_test_dl_from_args, get_seperate_just_x_or_y_train_test_dl_from_args
+from misc.datasets import (add_dataset_argument,
+                           simplified_get_train_test_dl_from_args,
+                           get_seperate_just_x_or_y_train_test_dl_from_args)
 from misc.filelogger import FileLogger
 from pipeline import dp_sim
 import os
@@ -287,7 +289,7 @@ def infer_dtypes_and_shapes(config, bs_train, bs_test, random_input_sample,
         # eval_tensor_shapes
         # TODO: eval_tensor_dtypes
 
-    
+
     # FIXME: we don't want this pass to record statistic for batch norm!
     # TODO: maybe write this to some file and load from it if exists,
     #  to aviod doing this pass every time
@@ -308,7 +310,7 @@ def infer_dtypes_and_shapes(config, bs_train, bs_test, random_input_sample,
         else:
             with torch.no_grad():
                 a = partition(*a)
-        
+
         if (just_for_stage is None) or just_for_stage == i:
             # TODO: we need to actually go for i+1...
             outputs = v['outputs']
@@ -359,7 +361,7 @@ def create_distributed_communcation_context(args, config, stage,
 
     if target_tensor_names is None:
         target_tensor_names = set()
-    
+
     tensor_tags, TOTAL_TAGS = tensor_tags_from_config(
         config, target_tensor_names, args.num_chunks, GRAD_UGLY_SHAMEFUL_NAME="_grad")
 
@@ -384,12 +386,12 @@ def create_distributed_communcation_context(args, config, stage,
 
     # Note that we don't need shapes for the comm, just the datatypes.
     comm_init_args = (receive_ranks,
-                 send_ranks,
-                 tensor_tags,
-                 target_tensor_names,
-                 ranks_in_previous_stage,
-                 ranks_in_next_stage,
-                 TOTAL_TAGS)
+                      send_ranks,
+                      tensor_tags,
+                      target_tensor_names,
+                      ranks_in_previous_stage,
+                      ranks_in_next_stage,
+                      TOTAL_TAGS)
 
     return comm_init_args
 
@@ -459,7 +461,6 @@ def get_weight_predictor(args, optimizer, scheduler=None):
         return weight_predictor, nag_with_predictor
     else:
         raise NotImplementedError()
-
 
 def hack_trainer_type_to_gap_aware(args):
 
@@ -658,8 +659,10 @@ def get_dataloaders(args, explicit_seperated_dataset=False):
 
     # if args.task == 'cv_sep'
     if explicit_seperated_dataset:
-        train_dl, test_dl = get_seperate_just_x_or_y_train_test_dl_from_args(args, verbose=False, **dl_kw)
+        train_dl, test_dl = get_seperate_just_x_or_y_train_test_dl_from_args(
+            args, verbose=False, **dl_kw)
     else:
+        # Note: sometimes used to infer all parameters, (by all partitions).
         train_dl, test_dl = simplified_get_train_test_dl_from_args(
             args, verbose=False, **dl_kw)
 
@@ -688,7 +691,7 @@ def main():
     if args.seed is None:
         args.seed = random.randint(0, 2 ** 31)
     # FIXME: I susspect there is a problem here because it does it on it on ALL GPUs.
-    # should probably hide with CUDA VISABLE DEVICES, 
+    # should probably hide with CUDA VISABLE DEVICES,
     # or do it just for a single GPU:
     # torch._C.default_generator.manual_seed(int(args.seed))
     # torch.cuda.manual_seed(int(args.seed))
@@ -821,17 +824,9 @@ def main():
     optimizer = optimizer_cls(
         partition.partition.parameters(), **args.optimizer['args'])
 
-    # Create micro-batching (big batch) manger
-    # big_batch_mgr = BigBatchManager(
-    #     args.step_every, optimizer, args.base_lr_batch_size, args.bs_train) if args.step_every > 1 else None
-    # if len(train_dl) % args.step_every != 0:
-    #     reminder_to_drop = len(train_dl) % args.step_every
-    #     raise NotImplementedError(
-    #         f"len(train_dl):{len(train_dl)}, args.step_every:{args.step_every}")
     if args.flush_rate > 0 and args.flush_rate < args.step_every:
         raise NotImplementedError()
 
-    # partition.set_big_batch_mgr(big_batch_mgr)
     # Set Scheduler
     # TODO: scheduler for sched aware prediction
     scheduler = get_scheduler(args, optimizer)
@@ -855,12 +850,15 @@ def main():
         args, optimizer, scheduler=scheduler)
     if weight_predictor:
         partition.set_weight_predictor(weight_predictor, nag_with_predictor)
+        # TODO: wp with reminder from step every.
 
     # Set Weight Stashing
-    weight_stasher = WeightStasher(optimizer, args.step_every) if hasattr(
-        args, "weight_stashing") and args.weight_stashing else None
-    if weight_stasher and not is_last_partition:
-        partition.set_weight_stasher(weight_stasher)
+    if hasattr(args, "weight_stashing") and args.weight_stashing:
+        weight_stasher = WeightStasher(optimizer, step_every=args.step_every,
+                                       has_weight_predictor=(weight_predictor is not None))
+
+        if not is_last_partition:
+            partition.set_weight_stasher(weight_stasher)
 
     # Set Task
     task = task_cls(device, is_last_partition, is_first_partition)
@@ -873,7 +871,8 @@ def main():
     # Try getting seperate X,Y dataloaders
     if is_first_partition or is_last_partition:
         if "_sep" in args.task:
-            train_dl, test_dl = get_dataloaders(args, explicit_seperated_dataset=True)
+            train_dl, test_dl = get_dataloaders(
+                args, explicit_seperated_dataset=True)
     else:
         train_dl, test_dl = None, None
 

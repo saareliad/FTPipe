@@ -283,8 +283,9 @@ def new_distributed_simplified_get_train_test_dl(dataset, bs_train, bs_test, shu
     # Note: choosing None will infer these args from torch.distributed calls.
     train_sampler = MyNewDistributedSampler(
         experiment_manual_seed, ds_train, num_replicas=None, rank=None, shuffle=shuffle_train)
-    test_sampler = MyNewDistributedSampler(
-        experiment_manual_seed, ds_test, num_replicas=None, rank=None, shuffle=False)
+    # test_sampler = MyNewDistributedSampler(
+    #     experiment_manual_seed, ds_test, num_replicas=None, rank=None, shuffle=False)
+    test_sampler = None
 
     # Note: explicitly set shuffle to False, its handled by samplers.
     dl_train = torch.utils.data.DataLoader(

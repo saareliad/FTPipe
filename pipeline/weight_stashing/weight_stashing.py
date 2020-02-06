@@ -2,8 +2,8 @@ import types
 import torch
 from collections import OrderedDict
 
-import os
-rank = int(os.environ.get('OMPI_COMM_WORLD_RANK', 0))
+# import os
+# rank = int(os.environ.get('OMPI_COMM_WORLD_RANK', 0))
 
 
 class WeightStasher:
@@ -24,7 +24,7 @@ class WeightStasher:
 
     """
 
-    def __init__(self, optimizer, step_every=1):
+    def __init__(self, optimizer, step_every=1, has_weight_predictor=False):
         self.optimizer = optimizer
         self.theta_buffer = OrderedDict()
         self.dirty_mark = OrderedDict()
@@ -32,6 +32,7 @@ class WeightStasher:
         # step every parameter, used to infer micro batch.
         self.step_every = step_every
         self.is_problematic = False
+        self.has_weight_predictor = has_weight_predictor
         # TODO: reduce redundent stashing for micro batches.
 
     def set_problematic(self, forward=True, policy='EVERY_BATCH'):
@@ -53,6 +54,7 @@ class WeightStasher:
                 return batch_index if batch_index < se else 0
         else:
             raise NotImplementedError()
+
         if forward:
             self.get_micro_batch_forward = types.MethodType(
                 get_micro_batch, self)
@@ -158,6 +160,13 @@ class WeightStasher:
 
             buff = self.theta_buffer.pop(batch_index)
             self._restore_from_buff(buff)
+        elif self.has_weight_predictor:
+            # THAN every micro batch can have its own stashed weight -> restore it.
+            # Note: we don't need to restore from top.
+            if batch_index in self.theta_buffer:
+                buff = self.theta_buffer.pop(batch_index)
+                self._restore_from_buff(buff)
+                # Note: can assert weight predictor does NAG with predicted
         else:
             assert batch_index not in self.theta_buffer
 
@@ -169,6 +178,7 @@ class WeightStasher:
 
     def post_restore_from_top(self, batch_index):
         if self.temporery_short_term_buff:
+            # TODO: assert micro batch belongs batch
             buff = self.temporery_short_term_buff[-1]
             self._restore_from_buff(buff)
 
