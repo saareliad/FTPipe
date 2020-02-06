@@ -11,3 +11,4 @@ from .SqueezeNet import squeezenet1_0, squeezenet1_1
 from .amoebaNet import amoebanetd
 from .NLP_models import GPT2LMHeadModel
 from .UNet import UNet
+from .seq2seq import GNMT

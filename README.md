@@ -310,6 +310,8 @@ we've implemented throughput/memory and accuracy experiments
 - pytorch 1.4
 - networkx + networkx-metis for metis partitioning
 - graphviz + python-graphviz for graph visualization
+- torchvision 0.5.0 for vision models
+- transformers 2.2.1 for GPT2 and BERT NLP models
 
 # TODOS
 
