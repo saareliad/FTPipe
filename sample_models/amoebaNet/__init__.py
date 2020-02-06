@@ -1,306 +1,184 @@
-from collections import OrderedDict
-from typing import Tuple, Optional, List
-
-import torch
-from torch import nn
-from torch import Tensor
-from .genotype import Genotype, amoebanetd_genotype
-from .utils import Conv_3x3, Conv_7x1_1x7, Conv_Cell, FactorizedReduce, Pool_Operation
-
-__all__ = ["AmoebaNet_D"]
+"""AmoebaNet-D for ImageNet"""
 
 # based on torchGpipe implementation https://github.com/kakaobrain/torchgpipe/blob/master/examples/amoebanet/__init__.py
 
 
-def conv_1x1(channel: int, stride: int, affine: bool) -> Conv_Cell:
-    return Conv_Cell(channel, channel, 1, stride, 0, affine, use_relu=True)
+from collections import OrderedDict
+from typing import Iterator, List, Tuple, Union
+
+import torch
+from torch import Tensor, nn
+
+from .genotype import (NORMAL_CONCAT, NORMAL_OPERATIONS, REDUCTION_CONCAT,
+                       REDUCTION_OPERATIONS)
+from .utils import FactorizedReduce
+
+__all__ = ['amoebanetd']
 
 
-def avg_pool_3x3(channel: int, stride: int, affine: bool) -> Pool_Operation:
-    return Pool_Operation('avg', 3, channel, stride, affine)
+def relu_conv_bn(in_channels: int,
+                 out_channels: int,
+                 kernel_size: int = 1,
+                 stride: int = 1,
+                 padding: int = 0,
+                 ) -> nn.Module:
+    return nn.Sequential(
+        nn.ReLU(inplace=False),
+        nn.Conv2d(in_channels, out_channels, kernel_size,
+                  stride, padding, bias=False),
+        nn.BatchNorm2d(out_channels),
+    )
 
 
-def max_pool_2x2(channel: int, stride: int, affine: bool) -> Pool_Operation:
-    return Pool_Operation('max', 2, channel, stride, affine)
+class Classify(nn.Module):
+
+    def __init__(self, channels_prev: int, num_classes: int):
+        super().__init__()
+        self.pool = nn.AvgPool2d(7)
+        self.flat = nn.Flatten()
+        self.fc = nn.Linear(channels_prev, num_classes)
+
+    def forward(self, states: Tuple[Tensor, Tensor]) -> Tensor:
+        x, _ = states
+        x = self.pool(x)
+        x = self.flat(x)
+        x = self.fc(x)
+        return x
 
 
-def skip_connect(channel: int, stride: int, affine: bool) -> nn.Module:
-    if stride == 1:
-        return nn.Identity()
-    return FactorizedReduce(channel, channel, affine)
+class Stem(nn.Sequential):
+    def __init__(self, channels: int):
+        super().__init__(nn.ReLU(inplace=False),
+                         nn.Conv2d(3, channels, 3, stride=2,
+                                   padding=1, bias=False),
+                         nn.BatchNorm2d(channels))
 
 
-class Classifier(nn.Module):
-    def __init__(self, channel_prev: int, num_classes: int):
+class Cell(nn.Module):
+    def __init__(self,
+                 channels_prev_prev: int,
+                 channels_prev: int,
+                 channels: int,
+                 reduction: bool,
+                 reduction_prev: bool,
+                 ):
         super().__init__()
 
-        self.global_pooling = nn.AvgPool2d(7)
-        self.classifier = nn.Linear(channel_prev, num_classes)
+        self.reduce1 = relu_conv_bn(
+            in_channels=channels_prev, out_channels=channels)
 
-    def forward(self, x: Tensor) -> Tensor:
-        s1 = self.global_pooling(x)
-        y = self.classifier(s1.view(s1.size(0), -1))
-        return y
-
-
-class Stem(nn.Module):
-    def __init__(self, channel: int):
-        super(Stem, self).__init__()
-        self.conv_cell = Conv_Cell(3, channel, 3, 2, 1, False)
-
-    def forward(self, x: Tensor) -> Tuple[Tensor]:
-        out = self.conv_cell(x)
-        return out
-
-
-OPS = {
-    'skip_connect': skip_connect,
-    'avg_pool_3x3': avg_pool_3x3,
-    'max_pool_2x2': max_pool_2x2,
-    'conv_7x1_1x7': Conv_7x1_1x7,
-    'conv_1x1____': conv_1x1,
-    'conv_3x3____': Conv_3x3,
-}
-
-
-class AmoebaNet_D(nn.Module):
-    """an AmoebaNet-D model for ImageNet."""
-
-    def __init__(self, num_classes: int = 10, num_layers: int = 4,
-                 num_filters: int = 512,
-                 genotype: Optional[Genotype] = None):
-        super(AmoebaNet_D, self).__init__()
-
-        genotype = amoebanetd_genotype if genotype is None else genotype
-        assert isinstance(genotype, Genotype)
-        channel = num_filters // 4
-
-        channel_prev_prev, channel_prev, channel_curr = channel, channel, channel
-        cells = []
-
-        # reduction
-        channel_curr *= 2
-        reduction_prev = False
-        reduction = True
-        cell = Amoeba_Cell(genotype, channel_prev_prev,
-                           channel_prev, channel_curr, reduction, reduction_prev)
-        multiplier = len(cell.concat_indices)
-        channel_prev_prev, channel_prev = channel_prev, multiplier * channel_curr
-        cells.append(cell)
-
-        # reduction
-        channel_curr *= 2
-        reduction_prev = True
-        reduction = True
-        cell = Amoeba_Cell(genotype, channel_prev_prev,
-                           channel_prev, channel_curr, reduction, reduction_prev)
-        multiplier = len(cell.concat_indices)
-        channel_prev_prev, channel_prev = channel_prev, multiplier * channel_curr
-        cells.append(cell)
-
-        # not reduction
-        reduction_prev = True
-        reduction = False
-        for _ in range(num_layers):
-            cell = Amoeba_Cell(genotype, channel_prev_prev,
-                               channel_prev, channel_curr, reduction, reduction_prev)
-            multiplier = len(cell.concat_indices)
-            channel_prev_prev, channel_prev = channel_prev, multiplier * channel_curr
-            cells.append(cell)
-            reduction_prev = False
-
-        # reduction
-        channel_curr *= 2
-        reduction_prev = False
-        reduction = True
-        cell = Amoeba_Cell(genotype, channel_prev_prev,
-                           channel_prev, channel_curr, reduction, reduction_prev)
-        multiplier = len(cell.concat_indices)
-        channel_prev_prev, channel_prev = channel_prev, multiplier * channel_curr
-        cells.append(cell)
-
-        # not reduction
-        reduction_prev = True
-        reduction = False
-        for _ in range(num_layers):
-            cell = Amoeba_Cell(genotype, channel_prev_prev,
-                               channel_prev, channel_curr, reduction, reduction_prev)
-            multiplier = len(cell.concat_indices)
-            channel_prev_prev, channel_prev = channel_prev, multiplier * channel_curr
-            cells.append(cell)
-            reduction_prev = False
-
-        # reduction
-        channel_curr *= 2
-        reduction_prev = False
-        reduction = True
-        cell = Amoeba_Cell(genotype, channel_prev_prev,
-                           channel_prev, channel_curr, reduction, reduction_prev)
-        multiplier = len(cell.concat_indices)
-        channel_prev_prev, channel_prev = channel_prev, multiplier * channel_curr
-        cells.append(cell)
-
-        # not reduction
-        reduction_prev = True
-        reduction = False
-        for _ in range(num_layers):
-            cell = Amoeba_Cell(genotype, channel_prev_prev,
-                               channel_prev, channel_curr, reduction, reduction_prev)
-            multiplier = len(cell.concat_indices)
-            channel_prev_prev, channel_prev = channel_prev, multiplier * channel_curr
-            cells.append(cell)
-            reduction_prev = False
-
-        self.stem = Stem(channel)
-        self.cells = nn.Sequential(*cells)
-        self.classifier = Classifier(channel_prev, num_classes)
-
-    def forward(self, x: Tensor) -> Tensor:
-        out = self.stem(x)
-        out = self.cells((out, out))
-        return self.classifier(out[1])
-
-
-class Amoeba_Cell(nn.Module):
-    def __init__(self, genotype: Genotype,
-                 channel_prev_prev: int, channel_prev: int, channel: int,
-                 reduction: bool, reduction_prev: bool):
-        super(Amoeba_Cell, self).__init__()
-
-        preprocess0 = nn.Sequential()
+        self.reduce2: nn.Module = nn.Identity()
         if reduction_prev:
-            preprocess0 = FactorizedReduce(channel_prev_prev, channel)
-        elif channel_prev_prev != channel:
-            preprocess0 = Conv_Cell(channel_prev_prev, channel, 1, 1, 0, True)
-
-        preprocess0: nn.Module = preprocess0
-        preprocess1 = Conv_Cell(channel_prev, channel, 1, 1, 0, True)
+            self.reduce2 = FactorizedReduce(channels_prev_prev, channels)
+        elif channels_prev_prev != channels:
+            self.reduce2 = relu_conv_bn(
+                in_channels=channels_prev_prev, out_channels=channels)
 
         if reduction:
-            op_names, indices = zip(*genotype.reduce)
-            concat = genotype.reduce_concat
+            self.indices, op_classes = zip(*REDUCTION_OPERATIONS)
+            self.concat = REDUCTION_CONCAT
         else:
-            op_names, indices = zip(*genotype.normal)
-            concat = genotype.normal_concat
+            self.indices, op_classes = zip(*NORMAL_OPERATIONS)
+            self.concat = NORMAL_CONCAT
 
-        ops = []
-        for name, index in zip(op_names, indices):
-            if reduction and index < 2:
+        self.operations = nn.ModuleList()
+
+        for i, op_class in zip(self.indices, op_classes):
+            if reduction and i < 2:
                 stride = 2
             else:
                 stride = 1
-            op = OPS[name](channel, stride, True)
-            ops.append((op, index))
 
-        self.preprocess0 = preprocess0
-        self.preprocess1 = preprocess1
+            op = op_class(channels, stride)
+            self.operations.append(op)
 
-        layers = []
-        assert (len(ops) % 2) == 0
-        for i in range(len(ops) // 2):
-            op0, i0 = ops[i * 2]
-            op1, i1 = ops[i * 2 + 1]
-            layers.extend([
-                InputOne(op0, i=i0, insert=2 + i),
-                # Output: x..., op0(x[i0]), skip]
+    def extra_repr(self) -> str:
+        return f'indices: {self.indices}'
 
-                InputOne(op1, i=i1, insert=2 + i + 1),
-                # Output: x..., op0(x[i0]), op1(x[i1]), skip
+    def forward(self,
+                input_or_states: Union[Tensor, Tuple[Tensor, Tensor]],
+                ) -> Tuple[Tensor, Tensor]:
+        if isinstance(input_or_states, tuple):
+            s1, s2 = input_or_states
+        else:
+            s1 = s2 = input_or_states
 
-                MergeTwo(2 + i, 2 + i + 1),
-                # Output: x..., op0(x[i0]) + op1(x[i1]), skip
-            ])
-        self.layers = nn.Sequential(*layers)
+        skip = s1
 
-        self.concat_indices = concat
+        s1 = self.reduce1(s1)
+        s2 = self.reduce2(s2)
 
-        assert len(concat) > 0 and all(i < (3 + (len(ops) // 2) - 1)
-                                       for i in concat)
+        _states = [s1, s2]
 
-    def forward(self, xs):
-        preprocessed = self.preprocess(xs)
-        # preprocess(x0),preprocess(x1),x1
-        out = preprocessed
-        out = self.layers(out)
-        # x,........,skip
-        reduced = self.reduce_channels(self.concat_indices, out)
-        # skip,concat
-        return reduced
+        for i in range(0, len(self.operations), 2):
+            h1 = _states[self.indices[i]]
+            h2 = _states[self.indices[i + 1]]
 
-    def preprocess(self, xs):
-        x0, x1 = xs
-        return self.preprocess0(x0), self.preprocess1(x1), x1
+            op1 = self.operations[i]
+            op2 = self.operations[i + 1]
 
-    def reduce_channels(self, indices, xs):
-        # indices = 4,5,6
-        # x0,x1,x2,x3,x4,x5,x6,x7
-        # x7,x0,x1,x2,x3,x4,x5,x6
-        # x7,concat(x4,x5,x6)
-        return xs[-1], torch.cat([xs[i] for i in indices], dim=1)
+            h1 = op1(h1)
+            h2 = op2(h2)
+
+            s = h1 + h2
+            _states.append(s)
+
+        return torch.cat([_states[i] for i in self.concat], dim=1), skip
 
 
-Tensors = Tuple[Tensor, ...]
+def amoebanetd(num_classes: int = 10,
+               num_layers: int = 4,
+               num_filters: int = 512,
+               ) -> nn.Sequential:
+    """Builds an AmoebaNet-D model for ImageNet."""
+    layers = OrderedDict()
 
+    repeat_normal_cells = num_layers // 3
 
-class Hack(nn.Module):
+    channels = num_filters // 4
+    channels_prev_prev = channels_prev = channels
+    reduction_prev = False
 
-    def forward(self, *args, **kwargs):
-        raise NotImplementedError()
+    def make_cells(reduction: bool, channels_scale: int, repeat: int) -> Iterator[Cell]:
+        nonlocal channels_prev_prev
+        nonlocal channels_prev
+        nonlocal channels
+        nonlocal reduction_prev
 
+        channels *= channels_scale
 
-class InputOne(Hack):
-    """Picks one tensor for the underlying module input::
-        a -----> a
-        b --f--> f(b)
-        c -----> c
-    """
+        for i in range(repeat):
+            cell = Cell(channels_prev_prev,
+                        channels_prev,
+                        channels,
+                        reduction,
+                        reduction_prev)
 
-    def __init__(self, module: nn.Module, i: int, insert: Optional[int] = None):
-        super().__init__()
-        self.module = module
-        self.i = i
-        self.insert = insert
+            channels_prev_prev = channels_prev
+            channels_prev = channels * len(cell.concat)
+            reduction_prev = reduction
 
-    def forward(self, tensors: Tensors) -> Tensors:  # type: ignore
-        i = self.i
+            yield cell
 
-        # for t in tensors:
-        #     print(t.shape[1:])
-        # print("\n")
-        input = tensors[i]
-        output = self.module(input)
+    def reduction_cell() -> Cell:
+        return next(make_cells(reduction=True, channels_scale=2, repeat=1))
 
-        if not isinstance(output, tuple):
-            output = (output,)
+    def normal_cells() -> Iterator[Tuple[int, Cell]]:
+        return enumerate(make_cells(reduction=False, channels_scale=1, repeat=repeat_normal_cells))
 
-        if self.insert is None:
-            # Replace with the input.
-            return tensors[:i] + output + tensors[i + 1:]
+    # Stem for ImageNet
+    layers['stem1'] = Stem(channels)
+    layers['stem2'] = reduction_cell()
+    layers['stem3'] = reduction_cell()
 
-        return tensors[:self.insert] + output + tensors[self.insert:]
+    # AmoebaNet cells
+    layers.update((f'cell1_normal{i+1}', cell) for i, cell in normal_cells())
+    layers['cell2_reduction'] = reduction_cell()
+    layers.update((f'cell3_normal{i+1}', cell) for i, cell in normal_cells())
+    layers['cell4_reduction'] = reduction_cell()
+    layers.update((f'cell5_normal{i+1}', cell) for i, cell in normal_cells())
 
+    # Finally, classifier
+    layers['classify'] = Classify(channels_prev, num_classes)
 
-class MergeTwo(Hack):
-    """Merges the last two tensors and replace them with the result::
-        a -----> a
-        b --+--> b+c
-        c --+
-    """
-
-    def __init__(self, i: int, j: int):
-        super().__init__()
-        self.i = i
-        self.j = j
-
-    def forward(self, *tensors: Tensors) -> Tensors:  # type: ignore
-        if len(tensors) > 1:
-            return sum(tensors)
-
-        tensors = tensors[0]
-        i = self.i
-        j = self.j
-        # Set the initial value as the first tensor
-        # to type as 'Tensor' instead of 'Union[Tensor, int]'.
-        merged = sum(tensors[i + 1:j + 1], tensors[i])
-
-        return tensors[:i] + (merged,) + tensors[j + 1:]
+    return nn.Sequential(layers)

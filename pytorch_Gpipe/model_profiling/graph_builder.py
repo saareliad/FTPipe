@@ -59,6 +59,7 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
         torch._C._jit_pass_inline(trace_graph, max_depth, block_scopes)
     except Exception:
         # if extension not built fall back to a default solution
+        # TODO remove it at some point as it's not a best practice
         warnings.warn(
             "trace_feature not found. falling back to regular trace which is less accurate\n please build it")
         torch._C._jit_pass_inline(trace_graph)
@@ -86,6 +87,11 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
 
     for node in nodes.values():
         node.weight = layer_profiles.get(node.scope, node.weight)
+        # as we merge nodes its possible that shape and type are not correct so we fix this
+        # can happen only without trace feature
+        if node.type is NodeTypes.LAYER:
+            node.shape = layer_profiles[node.scope].output_shape
+            node.value_type = Tensor if len(node.shape) == 1 else list
 
     return Graph._check(Graph(nodes, outputs, max_depth, basic_blocks))
 

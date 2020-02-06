@@ -1,99 +1,116 @@
 
-
 import torch
-from torch import nn
-from torch import Tensor
+from torch import Tensor, nn
 
 
-class Pool_Operation(nn.Module):
-    def __init__(self, pool_type: str, kernel_size: int, channel: int, stride: int, affine: bool):
-        super(Pool_Operation, self).__init__()
-        assert pool_type in['avg', 'max']
+class NamedOperation(nn.Module):
+    """Includes the operation name into the representation string for
+    debugging.
+    """
 
-        if pool_type == 'avg':
-            self.pool = nn.AvgPool2d(kernel_size, stride=stride,
-                                     padding=1, count_include_pad=False)
-        else:
-            self.pool = nn.MaxPool2d(kernel_size, stride=stride, padding=0)
+    def __init__(self, name: str, module: nn.Module):
+        super().__init__()
+        self.name = name
+        self.module = module
 
-        self.conv_cell = Conv_Cell(channel, channel, 1,
-                                   1, 0, affine, use_relu=False)
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}[{self.name}]'
 
-    def forward(self, x: Tensor) -> Tensor:
-        out = self.pool(x)
-        return self.conv_cell(out)
-
-
-class Conv_Cell(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, kernel, stride, padding, affine: bool, use_relu: bool = True):
-        super(Conv_Cell, self).__init__()
-        self.relu = nn.ReLU(inplace=False) if use_relu else None
-        self.conv = nn.Conv2d(in_channels, out_channels,
-                              kernel, stride=stride, padding=padding, bias=False)
-        self.norm = nn.BatchNorm2d(out_channels, affine=affine)
-
-    def forward(self, x: Tensor) -> Tensor:
-        out = x if self.relu is None else self.relu(x)
-        out = self.conv(out)
-        return self.norm(out)
-
-
-class Conv_3x3(nn.Module):
-    def __init__(self, channel: int, stride: int, affine: bool):
-        super(Conv_3x3, self).__init__()
-
-        self.conv1_1x1 = Conv_Cell(channel, channel//4, 1,
-                                   1, 0, affine)
-        self.conv2_3x3 = Conv_Cell(channel//4, channel//4, 3,
-                                   (stride, stride), 1, affine)
-        self.conv3_1x1 = Conv_Cell(channel//4, channel, 1,
-                                   1, 0, affine)
-
-    def forward(self, x: Tensor) -> Tensor:
-        out = self.conv1_1x1(x)
-        out = self.conv2_3x3(out)
-        return self.conv3_1x1(out)
-
-
-class Conv_7x1_1x7(nn.Module):
-    def __init__(self, channel: int, stride: int, affine: bool):
-        super(Conv_7x1_1x7, self).__init__()
-
-        self.conv1_1x1 = Conv_Cell(channel, channel//4, 1,
-                                   1, 0, affine)
-
-        self.conv2_1x7 = Conv_Cell(channel//4, channel//4, (1, 7),
-                                   (1, stride), (0, 3), affine)
-
-        self.conv3_7x1 = Conv_Cell(channel//4, channel//4, (7, 1),
-                                   (stride, 1), (3, 0), affine)
-
-        self.conv4_1x1 = Conv_Cell(channel//4, channel, 1,
-                                   1, 0, affine)
-
-    def forward(self, x: Tensor) -> Tensor:
-        out = self.conv1_1x1(x)
-        out = self.conv2_1x7(out)
-        out = self.conv3_7x1(out)
-        return self.conv4_1x1(out)
+    def forward(self, x) -> Tensor:
+        return self.module(x)
 
 
 class FactorizedReduce(nn.Module):
-    """Operation Factorized reduce"""
-
-    def __init__(self, in_planes: int, out_planes: int, affine: bool = True):
+    def __init__(self, in_channels: int, out_channels: int):
         super().__init__()
         self.relu = nn.ReLU(inplace=False)
-        self.conv_1 = nn.Conv2d(in_planes, out_planes //
-                                2, 1, stride=2, padding=0, bias=False)
-        self.conv_2 = nn.Conv2d(in_planes, out_planes //
-                                2, 1, stride=2, padding=0, bias=False)
-        self.bn = nn.BatchNorm2d(out_planes, affine=affine)
+        self.pad = nn.ZeroPad2d((0, 1, 0, 1))
+        self.conv1 = nn.Conv2d(in_channels, out_channels //
+                               2, kernel_size=1, stride=2, bias=False)
+        self.conv2 = nn.Conv2d(in_channels, out_channels //
+                               2, kernel_size=1, stride=2, bias=False)
+        self.bn = nn.BatchNorm2d(out_channels)
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.relu(x)
-        branch1 = self.conv_1(x)
-        branch2 = self.conv_2(x[:, :, 1:, 1:])
-        out = torch.cat([branch1, branch2], dim=1)
-        out = self.bn(out)
-        return out
+        x = torch.cat([self.conv1(x),
+                       self.conv2(self.pad(x[:, :, 1:, 1:]))], dim=1)
+        x = self.bn(x)
+        return x
+
+
+def none(channels: int, stride: int) -> NamedOperation:
+    module: nn.Module
+    if stride == 1:
+        module = nn.Identity()
+    else:
+        module = FactorizedReduce(channels, channels)
+    return NamedOperation('none', module)
+
+
+def avg_pool_3x3(channels: int, stride: int) -> NamedOperation:
+    module = nn.AvgPool2d(3, stride=stride, padding=1, count_include_pad=False)
+    return NamedOperation('avg_pool_3x3', module)
+
+
+def max_pool_3x3(channels: int, stride: int) -> NamedOperation:
+    module = nn.AvgPool2d(3, stride=stride, padding=1, count_include_pad=False)
+    return NamedOperation('max_pool_3x3', module)
+
+
+def max_pool_2x2(channels: int, stride: int) -> NamedOperation:
+    module = nn.MaxPool2d(2, stride=stride, padding=0)
+    return NamedOperation('max_pool_2x2', module)
+
+
+def conv_1x7_7x1(channels: int, stride: int) -> NamedOperation:
+    c = channels
+    module = nn.Sequential(
+        nn.ReLU(inplace=False),
+        nn.Conv2d(c, c // 4, kernel_size=1, stride=1, padding=0, bias=False),
+        nn.BatchNorm2d(c // 4),
+
+        nn.ReLU(inplace=False),
+        nn.Conv2d(c // 4, c // 4, kernel_size=(1, 7),
+                  stride=(1, stride), padding=(0, 3), bias=False),
+        nn.BatchNorm2d(c // 4),
+
+        nn.ReLU(inplace=False),
+        nn.Conv2d(c // 4, c // 4, kernel_size=(7, 1),
+                  stride=(stride, 1), padding=(3, 0), bias=False),
+        nn.BatchNorm2d(c // 4),
+
+        nn.ReLU(inplace=False),
+        nn.Conv2d(c // 4, c, kernel_size=1, stride=1, padding=0, bias=False),
+        nn.BatchNorm2d(c),
+    )
+    return NamedOperation('conv_1x7_7x1', module)
+
+
+def conv_1x1(channels: int, stride: int) -> NamedOperation:
+    c = channels
+    module = nn.Sequential(
+        nn.ReLU(inplace=False),
+        nn.Conv2d(c, c, kernel_size=1, stride=stride, bias=False),
+        nn.BatchNorm2d(c),
+    )
+    return NamedOperation('conv_1x1', module)
+
+
+def conv_3x3(channels: int, stride: int) -> NamedOperation:
+    c = channels
+    module = nn.Sequential(
+        nn.ReLU(inplace=False),
+        nn.Conv2d(c, c // 4, kernel_size=1, bias=False),
+        nn.BatchNorm2d(c // 4),
+
+        nn.ReLU(inplace=False),
+        nn.Conv2d(c // 4, c // 4, kernel_size=3,
+                  stride=stride, padding=1, bias=False),
+        nn.BatchNorm2d(c // 4),
+
+        nn.ReLU(inplace=False),
+        nn.Conv2d(c // 4, c, kernel_size=1, bias=False),
+        nn.BatchNorm2d(c),
+    )
+    return NamedOperation('conv_3x3', module)

@@ -1,5 +1,5 @@
 import torch
-from sample_models import WideResNet, AmoebaNet_D
+from sample_models import WideResNet, amoebanetd
 from pytorch_Gpipe import pipe_model
 from pytorch_Gpipe.model_profiling import Node, NodeTypes
 import argparse
@@ -31,7 +31,7 @@ MODEL_CONFIGS = {**_WIDE_RESNETS, **_AMOEBANET_D}
 
 # (note) originally used to get generated pipeline name later
 MODEL_CFG_TO_SAMPLE_MODEL = {k: WideResNet for k in _WIDE_RESNETS.keys()}
-MODEL_CFG_TO_SAMPLE_MODEL.update({k: AmoebaNet_D for k in _AMOEBANET_D.keys()})
+MODEL_CFG_TO_SAMPLE_MODEL.update({k: amoebanetd for k in _AMOEBANET_D.keys()})
 
 
 DATASETS = ['cifar10', 'cifar100', 'imagenet']
@@ -171,7 +171,9 @@ if __name__ == "__main__":
                        edge_weight_function=edge_weight_function(
                            args.bandwidth_gps),
                        n_iter=n_iter)
+
     graph.save_as_pdf(args.output_file, ".")
+    graph.serialize(args.output_file)
 
     generated = importlib.import_module(args.output_file)
     create_pipeline_configuration = generated.create_pipeline_configuration

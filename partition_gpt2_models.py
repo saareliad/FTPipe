@@ -183,7 +183,9 @@ def partition_model(args, train_dataset, model, tokenizer):
                            args.bandwidth_gps),
                        use_layers_only_graph=args.partition_layer_graph,
                        output_file=args.output_file, DEBUG=False)
+
     graph.save_as_pdf(args.output_file, ".")
+    graph.serialize(args.output_file, ".")
 
     generated = importlib.import_module(args.output_file)
     create_pipeline_configuration = generated.create_pipeline_configuration

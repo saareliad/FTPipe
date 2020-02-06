@@ -50,7 +50,7 @@ class Node():
      parallel edges in the same direction are not allowed
     '''
 
-    def __init__(self, scope: str, idx: int, node_type: NodeTypes, incoming_nodes: Optional[OrderedSet["Node"]] = None, weight: Union[Profile, int] = 0, part: int = -1, value: Optional[Any] = None, shape: Optional[List[int]] = None):
+    def __init__(self, scope: str, idx: int, node_type: NodeTypes, incoming_nodes: Optional[OrderedSet["Node"]] = None, weight: Union[Profile, int] = 0, part: int = 0, value: Optional[Any] = None, shape: Optional[List[int]] = None):
         self.scope = scope
         self.idx = idx
         self.type = node_type
@@ -280,7 +280,7 @@ class Graph():
 
         # TODO split big graphs to multiple pdfs
 
-        colors = {-1: 'grey', 0: 'grey', 1: 'green', 2: 'red', 3: 'yellow',
+        colors = {0: 'grey', 1: 'green', 2: 'red', 3: 'yellow',
                   4: 'orange', 5: 'brown', 6: 'purple', 7: 'pink'}
 
         def hide_node(node):

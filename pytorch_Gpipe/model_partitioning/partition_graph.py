@@ -77,6 +77,7 @@ def induce_layer_partition(original_graph: Graph, parts: List[int], layers_to_or
         if node.idx in old_to_new:
             node.part = parts[old_to_new[node.idx]]
         else:
+            # as we iterate in reverse topological order we've already handled this node's outupts
             node.part = node.out_nodes[0].part
 
         assert node.part >= 0
