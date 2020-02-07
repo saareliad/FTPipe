@@ -10,12 +10,20 @@ import re
 import string
 from typing import Callable, List, Dict, OrderedDict as OrderedDictType, Optional, Any, Tuple, Set
 import warnings
+import sys
 
 __all__ = ["build_graph"]
 
 # TODO if we have l(x,x) it will register only as 1 input
 #  similarly l(x,y,x) will only have 2 inputs
+# TODO layers with multiple uses can be distinguished using the trace feature (forward,forward1,...)
+#      with the trace feature it will fail. without the trace feature we can know as each use gets a node
+#      but when we merge scopes they are all merged together
 
+
+# TODO for some reason there are layers with multiple outputs that do not flow to an Unpack op
+#      it should be layer-> unpack0,unpack1,unpack2
+#      instead we have layer0,layer1,layer2
 
 def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, max_depth: int = 1000, basic_blocks: Optional[Tuple[torch.nn.Module, ...]] = None, n_iter: int = 10) -> Graph:
     if kwargs is None:
@@ -64,7 +72,8 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
             "trace_feature not found. falling back to regular trace which is less accurate\n please build it")
         torch._C._jit_pass_inline(trace_graph)
     # build the graph from trace
-    nodes = add_nodes(trace_graph, new_to_old, partials, tensors)
+    nodes, unpack_fix = add_nodes(trace_graph, new_to_old,
+                                  partials, tensors)
     outputs = output_scopes(trace_graph, nodes)
 
     # optimization passes
@@ -78,9 +87,9 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
     nodes = remove_tensor_int_tensor(nodes)
 
     tmp = OrderedDict()
-    for idx, node in enumerate(nodes.values()):
-        node.idx = idx
-        tmp[idx] = node
+    for unique_id, node in enumerate(nodes.values()):
+        node.idx = unique_id
+        tmp[unique_id] = node
     nodes = tmp
 
     nodes = add_missing_types(nodes)
@@ -96,59 +105,13 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
     return Graph._check(Graph(nodes, outputs, max_depth, basic_blocks))
 
 
-def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials: Dict[str, str], tensors: OrderedDictType[str, Tensor]) -> GraphNodes:
-    items = list(tensors.items())
-    for k, t in items:
-        partial_key = k[:k.rfind("/")] + "/" + k[k.rfind("["):]
-        tensors[partial_key] = t
-    nodes = OrderedDict()
-    accessors = dict()
-    # add input nodes and the self node
-    for i, input_node in enumerate(trace_graph.inputs()):
-        idx = input_node.unique()
-        if i > 0:
-            scope = f"input{i-1}"
-            node_type = NodeTypes.IN
-            t = tensors[scope]
-            size_in_mb = (t.nelement() * t.element_size()) / 1e6
-            node = Node(scope, idx,
-                        node_type, weight=size_in_mb, shape=t.shape)
-            node.value_type = Tensor
-            nodes[idx] = node
-        else:
-            accessors[idx] = "__module"
-
+def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials: Dict[str, str], tensors: OrderedDictType[str, Tensor]) -> Tuple[GraphNodes, List[Tuple[int, int]]]:
+    nodes, accessors = add_inputs_and_self_accessor(tensors, trace_graph)
+    multiple_output_fix_nodes = []
     for trace_node in trace_graph.nodes():
         if trace_node.kind() == "prim::GetAttr":
-            # first we do book keeping we remember the accessor to know where are we in the model's hierarchy
-            # we do not add accessor nodes to the graph as they only provide context
-            accessor_name = trace_node.s('name')
-            assert len(list(trace_node.inputs())) == 1
-            assert len(list(trace_node.outputs())) == 1
-            parent = trace_node.input()
-            parent_scope = accessors[parent.unique()]
-            tensor_scope = f"{parent_scope}.{accessor_name}"
-            idx = trace_node.output().unique()
-            accessors[idx] = tensor_scope
-            output_type = trace_node.output().type()
-            # add buffer or parameter
-            if str(output_type) == "Tensor":
-                node_type = NodeTypes.BUFF_PARAM
-                layer_scope = longest_prefix(new_to_old, tensor_scope)
-                if layer_scope:
-                    # this tensor was profiled so it will be folder into it's layer
-                    # this is a hack as I do not think it should have a special case
-                    size_in_mb = 0
-                    tensor_scope = layer_scope + "/" + accessor_name
-                else:
-                    parent_scope = longest_prefix(partials, tensor_scope)
-                    t = tensors[f"{parent_scope}/[{accessor_name}]"]
-                    tensor_scope = f"{parent_scope}/{type(t).__name__}[{accessor_name}]"
-                    size_in_mb = (t.nelement() * t.element_size()) / 1e6
-                node = Node(tensor_scope, idx, node_type,
-                            weight=size_in_mb, shape=t.shape)
-                node.value_type = Tensor
-                nodes[idx] = node
+            add_accessor(nodes, trace_node, accessors,
+                         new_to_old, partials, tensors)
             continue
 
         if trace_node.kind() == "prim::CallFunction":
@@ -157,6 +120,7 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
         elif trace_node.kind() == 'prim::CallMethod':
             # this is a layer call
             accessor_name = trace_node.s("name")
+            # TODO this is wrong in the case that we use the same layer multiple times
             assert accessor_name == "forward"
             layer_node = next(trace_node.inputs())
             layer_scope = accessors[layer_node.unique()]
@@ -206,6 +170,9 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
                 # unprofiled other
                 assert False, f"unknown scope {trace_node.scopeName()}"
 
+        if trace_node.outputsSize() > 1 and trace_node.kind() not in ["prim::TupleUnpack", "prim::ListUnpack"]:
+            multiple_output_fix_nodes.append(
+                (next(trace_node.outputs()).unique(), trace_node.outputsSize()))
         # add node for each output
         for i, output in enumerate(trace_node.outputs()):
             try:
@@ -243,10 +210,70 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
                 parent.value_type = list
 
         # add output idx for op with multiple outputs
+        # uses last values of unique_id and i not best practice but ok here
         if trace_node.outputsSize() > 1 and nodes[unique_id - i].type != NodeTypes.LAYER:
             nodes[unique_id - i].scope += "0 "
 
-    return nodes
+    return nodes, multiple_output_fix_nodes
+
+
+def add_inputs_and_self_accessor(tensors: OrderedDictType[str, Tensor], trace_graph: torch._C.Graph) -> Tuple[OrderedDictType[int, Node], Dict[int, str]]:
+    items = list(tensors.items())
+    for k, t in items:
+        partial_key = k[:k.rfind("/")] + "/" + k[k.rfind("["):]
+        tensors[partial_key] = t
+    nodes = OrderedDict()
+    accessors = dict()
+    # add input nodes and the self node
+    for i, input_node in enumerate(trace_graph.inputs()):
+        unique_id = input_node.unique()
+        if i > 0:
+            scope = f"input{i-1}"
+            node_type = NodeTypes.IN
+            t = tensors[scope]
+            size_in_mb = (t.nelement() * t.element_size()) / 1e6
+            node = Node(scope, unique_id,
+                        node_type, weight=size_in_mb, shape=t.shape)
+            node.value_type = Tensor
+            nodes[unique_id] = node
+        else:
+            accessors[unique_id] = "__module"
+
+    return nodes, accessors
+
+
+def add_accessor(nodes: GraphNodes, trace_node: torch._C.Node, accessors: Dict[int, str], new_to_old: Dict[str, str], partials: Dict[str, str], tensors: Dict[str, Tensor]):
+    # first we do book keeping we remember the accessor to know where are we in the model's hierarchy
+    # we do not add accessor nodes to the graph as they only provide context
+    accessor_name = trace_node.s('name')
+    assert len(list(trace_node.inputs())) == 1
+    assert len(list(trace_node.outputs())) == 1
+    parent = trace_node.input()
+    parent_scope = accessors[parent.unique()]
+    tensor_scope = f"{parent_scope}.{accessor_name}"
+    idx = trace_node.output().unique()
+    accessors[idx] = tensor_scope
+    output_type = trace_node.output().type()
+    # add buffer or parameter
+    if str(output_type) == "Tensor":
+        node_type = NodeTypes.BUFF_PARAM
+        layer_scope = longest_prefix(new_to_old, tensor_scope)
+        if layer_scope:
+            # this tensor was profiled so it will be folder into it's layer
+            # this is a hack as I do not think it should have a special case
+            size_in_mb = 0
+            tensor_scope = layer_scope + "/" + accessor_name
+            shape = torch.Size([])
+        else:
+            parent_scope = longest_prefix(partials, tensor_scope)
+            t = tensors[f"{parent_scope}/[{accessor_name}]"]
+            tensor_scope = f"{parent_scope}/{type(t).__name__}[{accessor_name}]"
+            size_in_mb = (t.nelement() * t.element_size()) / 1e6
+            shape = t.shape
+        node = Node(tensor_scope, idx, node_type,
+                    weight=size_in_mb, shape=shape)
+        node.value_type = Tensor
+        nodes[idx] = node
 
 
 def translate_scopes(old_scopes: List[str]) -> Dict[str, str]:
