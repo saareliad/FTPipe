@@ -353,8 +353,14 @@ class SinglePartitionManager:
                 # FIXME: for predictor to work with step_every > 1 it must know if are going to step
                 expected_staleness = self.expected_staleness(
                     batch_idx, done_bwds)
+
+                if batch_idx >= self.first_effected_batch:
+                    old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
                 weight_predictor.setup(expected_staleness)
                 weight_predictor.forward()
+                pgs = self.trainer.optimizer.param_groups
+                for pg, old_lr in zip(pgs, old_lrs):
+                    pg['lr'] = old_lr
 
                 x = partition(x, batch_idx)
                 if self.weight_stasher is not None:
@@ -598,6 +604,13 @@ class SinglePartitionManager:
         ga = self.gap_aware
         if ga:
             ga.skip_one_apply()
+
+        wp = self.weight_predictor
+        if wp:
+            reminder = num_batches % self.step_every
+            if reminder > 0:
+                self.first_effected_batch = num_batches - reminder
+                self.reminder_scaler_lr_factor = reminder / self.step_every
 
         # num_steps = num_batches
         while done_bwds < num_batches:
