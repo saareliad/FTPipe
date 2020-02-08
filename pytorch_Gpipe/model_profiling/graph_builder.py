@@ -1,16 +1,17 @@
 import torch
 from torch import Tensor
 
-from ..utils import tensorDict, layerDict, OrderedSet, Tensors
+from ..utils import tensorDict, layerDict, OrderedSet, Tensors, _get_size
 from .control_flow_graph import NodeTypes, Node, Graph, GraphNodes
 from .network_profiler import profile_network, Profile
 
 from collections import OrderedDict
 import re
 import string
-from typing import Callable, List, Dict, OrderedDict as OrderedDictType, Optional, Any, Tuple, Set
+from typing import Callable, List, Dict, OrderedDict as OrderedDictType, Optional, Tuple, Set
 import warnings
 import sys
+
 
 __all__ = ["build_graph"]
 
@@ -82,7 +83,8 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
     nodes = optimize_graph(nodes, layer_scopes)
     nodes = remove_layer_to_list(nodes)
     nodes = fix_nested_iterables(nodes, layer_profiles)
-    nodes = _remove_nodes_that_go_nowhere(nodes, outputs)
+    # TODO is this realy necessary? and if yes than should ensure compatibility now that we add nodes
+    # nodes = _remove_nodes_that_go_nowhere(nodes, outputs)
     nodes = remove_useless_node_inputs(nodes)
     nodes = remove_tensor_int_tensor(nodes)
 
@@ -105,9 +107,9 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
     return Graph._check(Graph(nodes, outputs, max_depth, basic_blocks))
 
 
-def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials: Dict[str, str], tensors: OrderedDictType[str, Tensor]) -> Tuple[GraphNodes, List[Tuple[int, int]]]:
+def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials: Dict[str, str], tensors: OrderedDictType[str, Tensor]) -> Tuple[GraphNodes, Dict[int, int]]:
     nodes, accessors = add_inputs_and_self_accessor(tensors, trace_graph)
-    multiple_output_fix_nodes = []
+    multiple_output_fix = dict()
     for trace_node in trace_graph.nodes():
         if trace_node.kind() == "prim::GetAttr":
             add_accessor(nodes, trace_node, accessors,
@@ -171,8 +173,8 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
                 assert False, f"unknown scope {trace_node.scopeName()}"
 
         if trace_node.outputsSize() > 1 and trace_node.kind() not in ["prim::TupleUnpack", "prim::ListUnpack"]:
-            multiple_output_fix_nodes.append(
-                (next(trace_node.outputs()).unique(), trace_node.outputsSize()))
+            idx = next(trace_node.outputs()).unique()
+            multiple_output_fix[idx] = trace_node.outputsSize()
         # add node for each output
         for i, output in enumerate(trace_node.outputs()):
             try:
@@ -203,18 +205,13 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
             if i != 0:
                 if node_type != NodeTypes.LAYER:
                     new_node.scope += f"{i} "
-                first_output_node = nodes[unique_id - i]
-                parent = first_output_node.in_nodes[0]
-                new_node.add_in_node(parent)
-                parent.add_out_node(new_node)
-                parent.value_type = list
 
         # add output idx for op with multiple outputs
         # uses last values of unique_id and i not best practice but ok here
         if trace_node.outputsSize() > 1 and nodes[unique_id - i].type != NodeTypes.LAYER:
             nodes[unique_id - i].scope += "0 "
 
-    return nodes, multiple_output_fix_nodes
+    return nodes, multiple_output_fix
 
 
 def add_inputs_and_self_accessor(tensors: OrderedDictType[str, Tensor], trace_graph: torch._C.Graph) -> Tuple[OrderedDictType[int, Node], Dict[int, str]]:
@@ -231,9 +228,9 @@ def add_inputs_and_self_accessor(tensors: OrderedDictType[str, Tensor], trace_gr
             scope = f"input{i-1}"
             node_type = NodeTypes.IN
             t = tensors[scope]
-            size_in_mb = (t.nelement() * t.element_size()) / 1e6
+            size, shape = _get_size(t)
             node = Node(scope, unique_id,
-                        node_type, weight=size_in_mb, shape=t.shape)
+                        node_type, weight=size / 1e6, shape=shape)
             node.value_type = Tensor
             nodes[unique_id] = node
         else:
@@ -529,7 +526,7 @@ def add_missing_types(nodes: GraphNodes) -> GraphNodes:
     return nodes
 
 
-def fix_nested_iterables(nodes: GraphNodes, layer_profiles: Dict[str, Profile]):
+def unpack_all_node_outputs(nodes: GraphNodes, layer_profiles: Dict[str, Profile]) -> GraphNodes:
     new_graph = OrderedDict()
     skip = 0
     for node in nodes.values():
@@ -542,7 +539,7 @@ def fix_nested_iterables(nodes: GraphNodes, layer_profiles: Dict[str, Profile]):
         new_graph[node.idx] = node
         if node.type is NodeTypes.LAYER and len(layer_profiles[node.scope].output_shape) > 1:
             assert skip == 0
-            fixed_nodes, num_new = _fix_node(node,
+            fixed_nodes, num_new = _unpack_outputs(node,
                                              layer_profiles[node.scope].output_shape)
             for n in fixed_nodes:
                 assert n.idx not in new_graph, "idx collision when fixing nested iterables"
@@ -551,8 +548,8 @@ def fix_nested_iterables(nodes: GraphNodes, layer_profiles: Dict[str, Profile]):
     return new_graph
 
 
-def _fix_node(node: Node, outputs):
-    '''fixes output of a node with nested iterable output
+def _unpack_outputs(node: Node, outputs) -> Tuple[List[Node], int]:
+    '''unpack outputs if nested generates the correct unpacking hierarchy
        the trace flattens the output so we recreate the original acessor hierarchy to access the nested outputs
     '''
     old_outputs = node.out_nodes
@@ -572,7 +569,7 @@ def _fix_node(node: Node, outputs):
             # we create an accessor node to a nested iterable
             node_idx = node.idx + num_new + 1
             scope = parent.scope[:parent.scope.rfind(
-                "/")] + f"/TupleUnpack{node_idx}{path[-1]}"
+                "/")] + f"/prim::TupleUnpack{node_idx}{path[-1]}"
             new_node = Node(scope, node_idx, NodeTypes.PYTHON_PRIMITIVE,
                             OrderedSet([parent]))
             new_node.value_type = tuple
@@ -597,3 +594,57 @@ def accessor_paths(outputs, path=()):
             assert isinstance(val, (list, tuple)), val
             yield accessor, False
             yield from accessor_paths(val, accessor)
+
+
+def add_unpack_nodes(nodes: GraphNodes, to_fix: Dict[int, int]) -> GraphNodes:
+    new_graph = OrderedDict()
+
+    skip = 0
+    offset = 0
+    for node in nodes.values():
+        if skip:
+            skip -= 1
+            continue
+        if node.idx in to_fix:
+            assert skip == 0
+            tuple_node = Node(node.scope, node.idx + offset, node.type,
+                              incoming_nodes=node.in_nodes, shape=node.shape, value=node.value)
+            tuple_node.value_type = tuple
+
+            offset += 1
+
+            for i in tuple_node.in_nodes:
+                i.replace_out_node(node, tuple_node)
+
+            assert tuple_node.idx not in new_graph, "idx collision"
+            new_graph[tuple_node.idx] = tuple_node
+
+            # at this stage the new tuple node is connected to all inputs
+
+            output_scope = tuple_node.scope[:tuple_node.scope.rfind("/") + 1]
+            output_scope += f"prim::TupleUnpack{node.idx+offset}"
+            n = to_fix[node.idx]
+            first_out_idx = node.idx
+            for idx in range(n):
+                v = nodes[first_out_idx + idx]
+                # remove connection from input u to output v
+                for u in v.in_nodes:
+                    u.out_nodes.discard(v)
+
+                # set connection between tuple_node and v
+                v.in_nodes = OrderedSet([tuple_node])
+                tuple_node.add_out_node(v)
+                v.type = NodeTypes.PYTHON_PRIMITIVE
+                v.scope = output_scope + str(idx)
+                v.idx += offset
+                assert v.idx not in new_graph, "idx collision"
+                new_graph[v.idx] = v
+
+            skip = n - 1
+        else:
+            assert skip == 0
+            node.idx += offset
+            assert node.idx not in new_graph, "idx collision"
+            new_graph[node.idx] = node
+
+    return new_graph

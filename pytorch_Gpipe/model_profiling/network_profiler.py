@@ -111,7 +111,7 @@ def _wrap_profiled_layers(module: nn.Module, depth, basic_blocks: List[nn.Module
 
     for sub_layer, scope, parent in traverse_model(module, depth, basic_blocks=basic_blocks):
         name = scope[scope.rfind('[') + 1:-1]
-        wrapper = Wrapper(sub_layer)
+        wrapper = Wrapper(sub_layer, scope)
         parent.add_module(name, wrapper)
         layers_dict[scope] = wrapper
 
@@ -146,7 +146,7 @@ class Wrapper(nn.Module):
 
     '''
 
-    def __init__(self, sub_module: nn.Module):
+    def __init__(self, sub_module: nn.Module, scope: str):
         super(Wrapper, self).__init__()
         self.layer = sub_module
         self.forward_time = []
@@ -158,6 +158,7 @@ class Wrapper(nn.Module):
         self.backward_cuda_mem = 0
         self.input_shape = []
         self.output_shape = []
+        self.scope = scope
 
     def _layer_size(self):
         '''
@@ -200,7 +201,8 @@ class Wrapper(nn.Module):
         # reduce outputs to calculate dummy loss
         loss = torch.zeros(1, requires_grad=True, device=device)
         for out in flatten(outputs):
-            loss = loss + out.norm()
+            if isinstance(out, torch.Tensor):
+                loss = loss + out.sum()
 
         # measure backward execution time
         backward_time, _, self.backward_cuda_mem = self._time_op(
@@ -261,7 +263,6 @@ class Wrapper(nn.Module):
             l = self.forward_time
         else:
             l = self.backward_time
-
         max_v = max(l)
 
         return sum([t for t in l if t < max_v]) / (len(l) - 1)

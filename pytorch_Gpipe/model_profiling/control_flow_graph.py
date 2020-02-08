@@ -289,7 +289,7 @@ class Graph():
         for node in self.nodes:
             if hide_node(node):
                 continue
-            label = node.scope
+            label = node.scope + f"\nidx:{node.idx}"
 
             if show_profiles and node.weight != 0:
                 label = f"{label}\n {node.weight}"

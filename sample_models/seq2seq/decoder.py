@@ -141,7 +141,9 @@ class ResidualRecurrentDecoder(nn.Module):
                              init_weight)
 
         self.classifier = Classifier(hidden_size, vocab_size)
-        self.dropout = nn.Dropout(p=dropout)
+        # self.dropout = nn.Dropout(p=dropout)
+        for i in range(num_layers - 1):
+            self.add_module(f"dropout{i}", nn.Dropout(p=dropout))
 
     def init_hidden(self, hidden):
         """
@@ -198,14 +200,16 @@ class ResidualRecurrentDecoder(nn.Module):
         self.append_hidden(h)
 
         x = torch.cat((x, attn), dim=2)
-        x = self.dropout(x)
+        # x = self.dropout(x)
+        x = self.dropout0(x)
         x, h = self.rnn_layers[0](x, hidden[1])
         self.append_hidden(h)
 
         for i in range(1, len(self.rnn_layers)):
             residual = x
             x = torch.cat((x, attn), dim=2)
-            x = self.dropout(x)
+            # x = self.dropout(x)
+            x = getattr(self, f"dropout{i}")(x)
             x, h = self.rnn_layers[i](x, hidden[i + 1])
             self.append_hidden(h)
             x = x + residual

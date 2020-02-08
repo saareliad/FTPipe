@@ -4,7 +4,6 @@ import collections
 import torch
 import torch.nn as nn
 from torch import Tensor
-
 __all__ = ["traverse_model", "traverse_params_buffs",
            "get_device", "_detach_inputs", "_get_size",
            "Tensors", "TensorsShape", "Devices", "OrderedSet", "layerDict", "tensorDict"]
@@ -84,9 +83,9 @@ INCORRECT_INPUT_TYPE = '''currently supported input types are torch.Tensor, List
 
 
 def get_device(x: Tensors) -> Device:
-    if isinstance(x, torch.Tensor):
+    if hasattr(x, "device"):
         return x.device
-    if isinstance(x, (list, tuple)):
+    elif isinstance(x, (list, tuple)):
         return get_device(x[0])
     raise ValueError(INCORRECT_INPUT_TYPE + f"{type(x)} ")
 
@@ -100,7 +99,14 @@ def _detach_inputs(*inputs: Tensors):
             tmp = []
             for a in x:
                 tmp.append(_detach_inputs(a))
-            detached.append(type(x)(tmp))
+            if isinstance(x, torch.nn.utils.rnn.PackedSequence):
+                # TODO ugly hack
+                assert len(tmp) == 4
+                detached.append(type(x)(*tmp))
+            else:
+                detached.append(type(x)(tmp))
+        elif x is None:
+            detached.append(x)
         else:
             raise ValueError(INCORRECT_INPUT_TYPE + f"{type(x)} ")
 
@@ -113,26 +119,28 @@ def _get_size(x: Tensors) -> int:
 
     if isinstance(x, torch.Tensor):
         return x.nelement() * x.element_size(), x.shape if len(x.shape) else torch.Size([1])
+    elif x is None:
+        return 1, torch.Size([])
     elif isinstance(x, (list, tuple)):
         for a in x:
             a_size, a_shape = _get_size(a)
             size += a_size
             shapes.append(a_shape)
-        return size, type(x)(shapes)
-
+        return size, tuple(shapes)
     else:
         raise ValueError(INCORRECT_INPUT_TYPE + f"{type(x)} ")
 
 
 def flatten(x: Tensors):
-    if isinstance(x, Tensor):
+    if isinstance(x, Tensor) or x is None:
         return[x]
-
-    ts = []
-    for t in x:
-        ts.extend(flatten(t))
-
-    return ts
+    elif isinstance(x, (list, tuple)):
+        ts = []
+        for t in x:
+            ts.extend(flatten(t))
+        return ts
+    else:
+        raise ValueError(INCORRECT_INPUT_TYPE + f"{type(x)} ")
 
 
 T = TypeVar('T')
