@@ -40,16 +40,6 @@ def cannonize_partition_indices(graph: Graph):
         node.part = translation[node.part]
 
 
-def _topological_sort(out_edges: Dict[int, Set[int]], v: int, visited: Dict[int, bool], stack: List[int]):
-    visited[v] = True
-
-    for i in out_edges[v]:
-        if not visited[i]:
-            _topological_sort(out_edges, i, visited, stack)
-
-    stack.insert(0, v)
-
-
 def topological_sort(out_edges: Dict[int, Set[int]]) -> List[int]:
     visited = {i: False for i in out_edges}
     stack = []
@@ -59,6 +49,16 @@ def topological_sort(out_edges: Dict[int, Set[int]]) -> List[int]:
             _topological_sort(out_edges, i, visited, stack)
 
     return stack
+
+
+def _topological_sort(out_edges: Dict[int, Set[int]], v: int, visited: Dict[int, bool], stack: List[int]):
+    visited[v] = True
+
+    for i in out_edges[v]:
+        if not visited[i]:
+            _topological_sort(out_edges, i, visited, stack)
+
+    stack.insert(0, v)
 
 
 def constants_fix(graph: Graph):

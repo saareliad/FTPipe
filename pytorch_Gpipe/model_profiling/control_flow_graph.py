@@ -492,14 +492,24 @@ class Graph():
 
         assert isinstance(_nodes, OrderedDict)
         assert isinstance(nodes[0], Node)
+
+        expected_num_keys = len({n.idx for n in nodes})
+        assert expected_num_keys == len(nodes)
+        key_set = set()
         for node in nodes:
+            key_set.add(node.idx)
             assert node.idx in _nodes
             for i in node.in_nodes:
                 assert node in i.out_nodes
                 assert i.idx in _nodes
+                assert node.idx > i.idx
+                key_set.add(i.idx)
             for o in node.out_nodes:
                 assert node in o.in_nodes
                 assert o.idx in _nodes
+                assert node.idx < o.idx
+                key_set.add(o.idx)
+        assert len(key_set) == len(nodes)
         return nodes_or_graph
 
     def layers_graph(self) -> Tuple["Graph", Dict[int, int]]:

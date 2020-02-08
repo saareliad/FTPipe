@@ -648,3 +648,84 @@ def add_unpack_nodes(nodes: GraphNodes, to_fix: Dict[int, int]) -> GraphNodes:
             new_graph[node.idx] = node
 
     return new_graph
+
+
+def pack_all_node_inputs(nodes: GraphNodes, layer_profiles: Dict[str, Profile]) -> GraphNodes:
+    new_graph = OrderedDict()
+
+    # as we iterate in forward order but add nodes in backward order
+    # we can modify the same nodes multiple times as such we space them out to avoid idx collisions
+    expanded_graph = OrderedDict()
+    for n in nodes.values():
+        expanded_graph[n.idx * 100] = n
+        n.idx *= 100
+
+    offset = 0
+    for node in expanded_graph.values():
+        if node.type is NodeTypes.LAYER and len(layer_profiles[node.scope].input_shape) > 1:
+            fixed_nodes, offset = _pack_inputs(node,
+                                               layer_profiles[node.scope].input_shape, offset)
+            for n in fixed_nodes:
+                assert n.idx not in new_graph, "idx collision"
+                new_graph[n.idx] = n
+        else:
+            node.idx += offset
+            assert node.idx not in new_graph, "idx collision"
+            new_graph[node.idx] = node
+
+    # it's possible the same node are under different keys so because it was involved in several fixes
+    # so we make sure each node appears exactly once
+    result = OrderedDict()
+    for k, v in new_graph.items():
+        result[v.idx] = v
+
+    return result
+
+
+def _pack_inputs(node: Node, inputs, offset):
+    old_inputs = node.in_nodes
+    node.in_nodes = OrderedSet()
+    nodes = []
+    num_new = 0
+    accessor_map = dict()
+    end = node.scope.rfind("/") + 1
+    base_scope = node.scope[:end] + "prim::TupleConstruct"
+    for idx, (path, terminal) in enumerate(accessor_paths(inputs)):
+        if len(path) == 1:
+            # this is an input that should be passed to the model
+            if terminal:
+                input_node = old_inputs[idx - num_new]
+            else:
+                # we need to create a new input node
+                num_new += 1
+                offset += 1
+                input_node = Node(base_scope + str(node.idx - idx - offset), node.idx - idx - offset,
+                                  NodeTypes.PYTHON_PRIMITIVE)
+
+                input_node.value_type = tuple
+                input_node.add_out_node(node)
+            node.add_in_node(input_node)
+
+        elif terminal:
+            input_node = old_inputs[idx - num_new]
+            input_node.replace_out_node(node, accessor_map[path[:-1]])
+            accessor_map[path[:-1]].add_in_node(input_node)
+
+        else:
+            num_new += 1
+            offset += 1
+            input_node = Node(base_scope + str(node.idx - idx - offset), node.idx - idx - offset,
+                              NodeTypes.PYTHON_PRIMITIVE)
+
+            input_node.value_type = tuple
+            v = accessor_map[path[:-1]]
+            input_node.add_out_node(v)
+            v.add_out_node(input_node)
+
+        if not terminal:
+            nodes.append(input_node)
+
+        accessor_map[path] = input_node
+    nodes.append(node)
+
+    return nodes, offset
