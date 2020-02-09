@@ -10,8 +10,6 @@ import re
 import string
 from typing import Callable, List, Dict, OrderedDict as OrderedDictType, Optional, Tuple, Set
 import warnings
-import sys
-
 
 __all__ = ["build_graph"]
 
@@ -22,9 +20,7 @@ __all__ = ["build_graph"]
 #      but when we merge scopes they are all merged together
 
 
-# TODO for some reason there are layers with multiple outputs that do not flow to an Unpack op
-#      it should be layer-> unpack0,unpack1,unpack2
-#      instead we have layer0,layer1,layer2
+# TODO there are still some problems with lstms should think if we want to tackle it
 
 def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, max_depth: int = 1000, basic_blocks: Optional[Tuple[torch.nn.Module, ...]] = None, n_iter: int = 10) -> Graph:
     if kwargs is None:
@@ -70,29 +66,24 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
         # if extension not built fall back to a default solution
         # TODO remove it at some point as it's not a best practice
         warnings.warn(
-            "trace_feature not found. falling back to regular trace which is less accurate\n please build it")
+            "trace_feature not found. falling back to regular trace which is less accurate and might not work\n please build it")
         torch._C._jit_pass_inline(trace_graph)
     # build the graph from trace
     nodes, unpack_fix = add_nodes(trace_graph, new_to_old,
                                   partials, tensors)
     outputs = output_scopes(trace_graph, nodes)
 
-    # optimization passes
+    nodes = add_unpack_nodes(nodes, unpack_fix)
+    # optimization passes and graph fixes
     nodes = remove_useless_clone(nodes)
     nodes = remove_empty_view(nodes)
     nodes = optimize_graph(nodes, layer_scopes)
     nodes = remove_layer_to_list(nodes)
-    nodes = fix_nested_iterables(nodes, layer_profiles)
-    # TODO is this realy necessary? and if yes than should ensure compatibility now that we add nodes
-    # nodes = _remove_nodes_that_go_nowhere(nodes, outputs)
+    nodes = unpack_all_node_outputs(nodes, layer_profiles)
+    nodes = pack_all_node_inputs(nodes, layer_profiles)
+    nodes = _remove_nodes_that_go_nowhere(nodes, outputs)
     nodes = remove_useless_node_inputs(nodes)
     nodes = remove_tensor_int_tensor(nodes)
-
-    tmp = OrderedDict()
-    for unique_id, node in enumerate(nodes.values()):
-        node.idx = unique_id
-        tmp[unique_id] = node
-    nodes = tmp
 
     nodes = add_missing_types(nodes)
 
@@ -104,7 +95,11 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
             node.shape = layer_profiles[node.scope].output_shape
             node.value_type = Tensor if len(node.shape) == 1 else list
 
+    nodes = set_indices(nodes)
+
     return Graph._check(Graph(nodes, outputs, max_depth, basic_blocks))
+
+##Initial graph construction####################################################################################################################################################################
 
 
 def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials: Dict[str, str], tensors: OrderedDictType[str, Tensor]) -> Tuple[GraphNodes, Dict[int, int]]:
@@ -272,67 +267,99 @@ def add_accessor(nodes: GraphNodes, trace_node: torch._C.Node, accessors: Dict[i
         node.value_type = Tensor
         nodes[idx] = node
 
-
-def translate_scopes(old_scopes: List[str]) -> Dict[str, str]:
-    translation = dict()
-
-    pattern = r'\[.*?\]'
-    matcher = re.compile(pattern)
-    for scope in old_scopes:
-        search_results = matcher.finditer(scope)
-        translated = ("__module." + ".".join(s.group()
-                                             [1:-1] for s in search_results))
-        translation[translated] = scope
-
-    return translation
+##################################################################################################################################################################################################
 
 
-def basic_blocks_new_scopes(basic_blocks: Tuple[torch.nn.Module, ...], profiled_layers: Dict[str, torch.nn.Module], new_to_old: Dict[str, str]) -> Set[str]:
-    blocks_old_scopes = set()
-    for old_scope, layer in profiled_layers.items():
-        if isinstance(layer, basic_blocks):
-            blocks_old_scopes.add(old_scope)
+##fit initial graph to profile#################################################################################################################################################
 
-    blocks_new_scopes = set()
-    for new_scope, old_scope in new_to_old.items():
-        if old_scope in blocks_old_scopes:
-            blocks_new_scopes.add(new_scope)
-
-    return blocks_new_scopes
+def optimize_graph(nodes: GraphNodes, layer_scopes: List[str]) -> GraphNodes:
+    '''
+    this module takes the raw Graph and removes/merges nodes in order to get the requested graph.
+    this method is called as part of graph_builder method
+    '''
+    nodes = _combine_OP_nodes_under_the_same_scope(nodes)
+    nodes = _combine_params_and_buffers_into_OP_nodes(nodes, layer_scopes)
+    return nodes
 
 
-def extract_new_scope(new_scope: str) -> str:
-    return new_scope[new_scope.rfind("/__module") + 1:]
+def _combine_OP_nodes_under_the_same_scope(nodes: GraphNodes) -> GraphNodes:
+    # optimization that reduces number of nodes in the graph
+    # combine nodes that have a commom scope we do this because\n
+    # if nodes have the same scopeName than they were profiled together
+    scope_representative = dict()
+
+    optimized_graph = OrderedDict()
+
+    # get the nodes of the optimized graph
+    for unique_id, node in reversed(nodes.items()):
+        if not node.scope in scope_representative:
+            optimized_graph[unique_id] = node
+            scope_representative[node.scope] = node
+        else:
+            # add edges create the super set of all edeges in the scope
+            scope_representative[node.scope].add_in_node(node.in_nodes)
+
+            scope_representative[node.scope].add_out_node(node.out_nodes)
+
+    for node in optimized_graph.values():
+        # get the sets of all incoming/outgoing scopes
+        # those will dictate the new set of edges and
+        # remove the internal edges of the scope
+        incoming_scopes = OrderedSet(n.scope for n in node.in_nodes
+                                     if n.scope != node.scope)
+        outgoing_scopes = OrderedSet(n.scope for n in node.out_nodes
+                                     if n.scope != node.scope)
+
+        out_nodes = OrderedSet(scope_representative[out_node]
+                               for out_node in outgoing_scopes)
+        in_nodes = OrderedSet(scope_representative[in_node]
+                              for in_node in incoming_scopes)
+
+        node.in_nodes = in_nodes
+        node.out_nodes = out_nodes
+
+    return OrderedDict(reversed(optimized_graph.items()))
 
 
-def partial_scopes(old_scopes: List[str]) -> Dict[str, str]:
-    partials = dict()
-    for scope in old_scopes:
-        old_partial = ""
-        new_partial = ""
-        for idx, part in enumerate(scope.split("/")):
-            if idx > 0:
-                old_partial += f"/{part}"
-                new_partial += f".{part[part.find('[') + 1:-1]}"
-            else:
-                old_partial = part[part.find("[") + 1:]
-                new_partial = "__module"
-            partials[new_partial] = old_partial
+def _combine_params_and_buffers_into_OP_nodes(nodes: GraphNodes, layer_scopes: List[str]) -> GraphNodes:
+    def is_buffer_or_param(n):
+        return n.type == NodeTypes.BUFF_PARAM and any(n.scope.startswith(layer_scope) for layer_scope in layer_scopes)
 
-    return partials
+    return _remove_nodes(nodes, is_buffer_or_param)
 
 
-def longest_prefix(strings: List[str], scope: str) -> str:
-    most_specific = ""
-    for s in strings:
-        if scope.startswith(s) and len(s) > len(most_specific):
-            most_specific = s
-
-    return strings[most_specific] if most_specific != "" else ""
+def add_missing_types(nodes: GraphNodes) -> GraphNodes:
+    for node in nodes.values():
+        if node.valueType() is type(None):
+            if 'aten::size' in node.scope or 'aten::Int' in node.scope:
+                node.value_type = int
+            elif 'aten::chunk' in node.scope or 'prim::TupleConstruct' in node.scope:
+                node.value_type = tuple
+            elif 'prim::ListConstruct' in node.scope:
+                node.value_type = list
+            elif 'ImplicitTensorToNum' in node.scope:
+                node.value_type = int
+            elif any('prim::ListUnpack' in o.scope or 'prim::TupleUnpack' in o.scope for o in node.out_nodes):
+                node.value_type = tuple
+            elif 'prim::ListUnpack' in node.scope or 'prim::TupleUnpack' in node.scope:
+                father = node.in_nodes[0]
+                if 'aten::chunk' in father.scope:
+                    node.value_type = Tensor
+                else:
+                    # unpack type for iterables not from layers propagete shape from the packing
+                    idx = father.out_nodes.indexOf(node)
+                    matching_input = father.in_nodes[idx]
+                    node.value = matching_input.value
+                    node.value_type = matching_input.value_type
+        elif 'NumToTensor' in node.scope:
+            node.value_type = int
+    return nodes
 
 
 def output_scopes(trace_graph, nodes: GraphNodes) -> OrderedSet[str]:
     return OrderedSet(nodes[output.unique()].scope for output in trace_graph.outputs())
+
+######cleanup methods##############################################################################################################################################
 
 
 def remove_tensor_int_tensor(nodes) -> GraphNodes:
@@ -409,6 +436,12 @@ def _remove_nodes_that_go_nowhere(nodes: GraphNodes, scopes: OrderedSet[str]) ->
         if node.scope in scopes:
             return False
 
+        # if we have for example 2 unpacking and only the second is used then
+        # because we decide the unpacking index by position we cant remove the unused first unpacking as it will lead to the wrong index being used
+        if "prim::TupleUnpack" in node.scope or "prim::ListUnpack" in node.scope:
+            assert node.type is NodeTypes.PYTHON_PRIMITIVE
+            return False
+
         return (not node.out_nodes)
 
     return _remove_nodes(nodes, going_nowhere)
@@ -442,161 +475,16 @@ def opMatch(scope: str, op_name: str) -> bool:
     return re.search(f"{op_name}[{string.digits}]", scope) != None
 
 
-def optimize_graph(nodes: GraphNodes, layer_scopes: List[str]) -> GraphNodes:
-    '''
-    this module takes the raw Graph and removes/merges nodes in order to get the requested graph.
-    this method is called as part of graph_builder method
-    '''
-    nodes = _combine_OP_nodes_under_the_same_scope(nodes)
-    nodes = _combine_params_and_buffers_into_OP_nodes(nodes, layer_scopes)
-    return nodes
+##################################################################################################################################################################################################
 
 
-def _combine_OP_nodes_under_the_same_scope(nodes: GraphNodes) -> GraphNodes:
-    # optimization that reduces number of nodes in the graph
-    # combine nodes that have a commom scope we do this because\n
-    # if nodes have the same scopeName than they were profiled together
-    scope_representative = dict()
-
-    optimized_graph = OrderedDict()
-
-    # get the nodes of the optimized graph
-    for unique_id, node in nodes.items():
-        if not node.scope in scope_representative:
-            optimized_graph[unique_id] = node
-            scope_representative[node.scope] = node
-        else:
-            # add edges create the super set of all edeges in the scope
-            scope_representative[node.scope].add_in_node(node.in_nodes)
-
-            scope_representative[node.scope].add_out_node(node.out_nodes)
-
-    for node in optimized_graph.values():
-        # get the sets of all incoming/outgoing scopes
-        # those will dictate the new set of edges and
-        # remove the internal edges of the scope
-        incoming_scopes = OrderedSet(n.scope for n in node.in_nodes
-                                     if n.scope != node.scope)
-        outgoing_scopes = OrderedSet(n.scope for n in node.out_nodes
-                                     if n.scope != node.scope)
-
-        out_nodes = OrderedSet(scope_representative[out_node]
-                               for out_node in outgoing_scopes)
-        in_nodes = OrderedSet(scope_representative[in_node]
-                              for in_node in incoming_scopes)
-
-        node.in_nodes = in_nodes
-        node.out_nodes = out_nodes
-
-    return optimized_graph
-
-
-def _combine_params_and_buffers_into_OP_nodes(nodes: GraphNodes, layer_scopes: List[str]) -> GraphNodes:
-    def is_buffer_or_param(n):
-        return n.type == NodeTypes.BUFF_PARAM and any(n.scope.startswith(layer_scope) for layer_scope in layer_scopes)
-
-    return _remove_nodes(nodes, is_buffer_or_param)
-
-
-def add_missing_types(nodes: GraphNodes) -> GraphNodes:
-    for node in nodes.values():
-        if node.valueType() is type(None):
-            if 'aten::size' in node.scope or 'aten::Int' in node.scope:
-                node.value_type = int
-            elif 'aten::chunk' in node.scope or 'prim::TupleConstruct' in node.scope:
-                node.value_type = tuple
-            elif 'prim::ListConstruct' in node.scope:
-                node.value_type = list
-            elif 'ImplicitTensorToNum' in node.scope:
-                node.value_type = int
-            elif any('prim::ListUnpack' in o.scope or 'prim::TupleUnpack' in o.scope for o in node.out_nodes):
-                node.value_type = tuple
-            elif 'prim::ListUnpack' in node.scope or 'prim::TupleUnpack' in node.scope:
-                father = node.in_nodes[0]
-                if 'aten::chunk' in father.scope:
-                    node.value_type = Tensor
-                else:
-                    # unpack type for iterables not from layers propagete shape from the packing
-                    idx = father.out_nodes.indexOf(node)
-                    matching_input = father.in_nodes[idx]
-                    node.value = matching_input.value
-                    node.value_type = matching_input.value_type
-        elif 'NumToTensor' in node.scope:
-            node.value_type = int
-    return nodes
-
-
-def unpack_all_node_outputs(nodes: GraphNodes, layer_profiles: Dict[str, Profile]) -> GraphNodes:
-    new_graph = OrderedDict()
-    skip = 0
-    for node in nodes.values():
-        if skip:
-            # this is an unpack node that we already fixed and added to the graph so we do not add it again
-            assert "prim::TupleUnpack" in node.scope or "prim::ListUnpack" in node.scope
-            skip -= 1
-            continue
-        assert node.idx not in new_graph, "idx collision when fixing nested iterables"
-        new_graph[node.idx] = node
-        if node.type is NodeTypes.LAYER and len(layer_profiles[node.scope].output_shape) > 1:
-            assert skip == 0
-            fixed_nodes, num_new = _unpack_outputs(node,
-                                             layer_profiles[node.scope].output_shape)
-            for n in fixed_nodes:
-                assert n.idx not in new_graph, "idx collision when fixing nested iterables"
-                new_graph[n.idx] = n
-            skip = len(fixed_nodes) - num_new
-    return new_graph
-
-
-def _unpack_outputs(node: Node, outputs) -> Tuple[List[Node], int]:
-    '''unpack outputs if nested generates the correct unpacking hierarchy
-       the trace flattens the output so we recreate the original acessor hierarchy to access the nested outputs
-    '''
-    old_outputs = node.out_nodes
-    node.out_nodes = OrderedSet()
-
-    accessor_map = {(): node}
-    num_new = 0
-    unpack_nodes = []
-    for idx, (path, terminal) in enumerate(accessor_paths(outputs)):
-        parent = accessor_map[path[:-1]]
-        if terminal:
-            # we already have this node just change it's parent
-            new_node = old_outputs[idx - num_new]
-            new_node.replace_in_node(node, parent)
-            new_node.value_type = Tensor
-        else:
-            # we create an accessor node to a nested iterable
-            node_idx = node.idx + num_new + 1
-            scope = parent.scope[:parent.scope.rfind(
-                "/")] + f"/prim::TupleUnpack{node_idx}{path[-1]}"
-            new_node = Node(scope, node_idx, NodeTypes.PYTHON_PRIMITIVE,
-                            OrderedSet([parent]))
-            new_node.value_type = tuple
-            num_new += 1
-
-        parent.out_nodes.add(new_node)
-        accessor_map[path] = new_node
-        unpack_nodes.append(new_node)
-
-    return unpack_nodes, num_new
-
-
-def accessor_paths(outputs, path=()):
-    '''given a tuple yields the indices to access each element and if the nested element if terminal or iterable
-       for example l=(1,(6,(7,8))) will result in (0,) True , (1,) False, (1,0) True (1,1) False, (1,1,0) True, (1,1,1) True
-    '''
-    for idx, val in enumerate(outputs):
-        accessor = path + (idx, )
-        if isinstance(val, torch.Size):
-            yield accessor, True
-        else:
-            assert isinstance(val, (list, tuple)), val
-            yield accessor, False
-            yield from accessor_paths(val, accessor)
-
+####################Packing and Unpacking of inputs/outputs########################################################################################################################################
 
 def add_unpack_nodes(nodes: GraphNodes, to_fix: Dict[int, int]) -> GraphNodes:
+    '''
+    when not all of a tuple elements are used it is possible that not all of the unpack nodes will be emitted by the trace
+    so we add them here if necessary
+    '''
     new_graph = OrderedDict()
 
     skip = 0
@@ -650,15 +538,83 @@ def add_unpack_nodes(nodes: GraphNodes, to_fix: Dict[int, int]) -> GraphNodes:
     return new_graph
 
 
+def unpack_all_node_outputs(nodes: GraphNodes, layer_profiles: Dict[str, Profile]) -> GraphNodes:
+    new_graph = OrderedDict()
+    # as we add nodes there might be idx collisions we fix this by expanding the range
+    expanded_graph = OrderedDict()
+    for n in nodes.values():
+        expanded_graph[n.idx * 10] = n
+        n.idx *= 10
+    skip = 0
+    for node in expanded_graph.values():
+        if skip:
+            # this is an unpack node that we already fixed and added to the graph so we do not add it again
+            assert "prim::TupleUnpack" in node.scope or "prim::ListUnpack" in node.scope
+            skip -= 1
+            continue
+        assert node.idx not in new_graph, "idx collision when fixing nested iterables"
+        new_graph[node.idx] = node
+        if node.type is NodeTypes.LAYER and len(layer_profiles[node.scope].output_shape) > 1:
+            assert skip == 0
+            fixed_nodes, num_new = _unpack_outputs(node,
+                                                   layer_profiles[node.scope].output_shape)
+            for n in fixed_nodes:
+                assert n.idx not in new_graph, "idx collision when fixing nested iterables"
+                new_graph[n.idx] = n
+            skip = len(fixed_nodes) - num_new
+
+    # it's possible the same node are under different keys so because it was involved in several fixes
+    # so we make sure each node appears exactly once
+    result = OrderedDict()
+    for k, v in new_graph.items():
+        result[v.idx] = v
+
+    return result
+
+
+def _unpack_outputs(node: Node, outputs) -> Tuple[List[Node], int]:
+    '''unpack outputs if nested generates the correct unpacking hierarchy
+       the trace flattens the output so we recreate the original acessor hierarchy to access the nested outputs
+    '''
+    old_outputs = node.out_nodes
+    node.out_nodes = OrderedSet()
+    accessor_map = {(): node}
+    num_new = 0
+    unpack_nodes = []
+    for idx, (path, terminal) in enumerate(accessor_paths(outputs)):
+        parent = accessor_map[path[:-1]]
+        if terminal:
+            # we already have this node just change it's parent
+            new_node = old_outputs[idx - num_new]
+            new_node.replace_in_node(node, parent)
+            new_node.value_type = Tensor
+        else:
+            # we create an accessor node to a nested iterable
+            node_idx = node.idx + num_new + 1
+            scope = parent.scope[:parent.scope.rfind(
+                "/")] + f"/prim::TupleUnpack{node_idx}{path[-1]}"
+            new_node = Node(scope, node_idx, NodeTypes.PYTHON_PRIMITIVE,
+                            OrderedSet([parent]))
+            new_node.value_type = tuple
+            num_new += 1
+
+        parent.out_nodes.add(new_node)
+        accessor_map[path] = new_node
+        unpack_nodes.append(new_node)
+
+    return unpack_nodes, num_new
+
+
 def pack_all_node_inputs(nodes: GraphNodes, layer_profiles: Dict[str, Profile]) -> GraphNodes:
+    "a model that have a tuple input may not be registered correctly so we create the necessary packing if necessary"
     new_graph = OrderedDict()
 
     # as we iterate in forward order but add nodes in backward order
     # we can modify the same nodes multiple times as such we space them out to avoid idx collisions
     expanded_graph = OrderedDict()
     for n in nodes.values():
-        expanded_graph[n.idx * 100] = n
-        n.idx *= 100
+        expanded_graph[n.idx * 10] = n
+        n.idx *= 10
 
     offset = 0
     for node in expanded_graph.values():
@@ -729,3 +685,92 @@ def _pack_inputs(node: Node, inputs, offset):
     nodes.append(node)
 
     return nodes, offset
+
+
+def accessor_paths(outputs, path=()):
+    '''given a tuple yields the indices to access each element and if the nested element if terminal or iterable
+       for example l=(1,(6,(7,8))) will result in (0,) True , (1,) False, (1,0) True (1,1) False, (1,1,0) True, (1,1,1) True
+    '''
+    for idx, val in enumerate(outputs):
+        accessor = path + (idx, )
+        if isinstance(val, torch.Size):
+            yield accessor, True
+        else:
+            assert isinstance(val, (list, tuple)), val
+            yield accessor, False
+            yield from accessor_paths(val, accessor)
+
+
+##################################################################################################################################################################################################
+
+###################Scope allocation and conversion to human readable format#######################################################################################################################
+def translate_scopes(old_scopes: List[str]) -> Dict[str, str]:
+    translation = dict()
+
+    pattern = r'\[.*?\]'
+    matcher = re.compile(pattern)
+    for scope in old_scopes:
+        search_results = matcher.finditer(scope)
+        translated = ("__module." + ".".join(s.group()
+                                             [1:-1] for s in search_results))
+        translation[translated] = scope
+
+    return translation
+
+
+def basic_blocks_new_scopes(basic_blocks: Tuple[torch.nn.Module, ...], profiled_layers: Dict[str, torch.nn.Module], new_to_old: Dict[str, str]) -> Set[str]:
+    blocks_old_scopes = set()
+    for old_scope, layer in profiled_layers.items():
+        if isinstance(layer, basic_blocks):
+            blocks_old_scopes.add(old_scope)
+
+    blocks_new_scopes = set()
+    for new_scope, old_scope in new_to_old.items():
+        if old_scope in blocks_old_scopes:
+            blocks_new_scopes.add(new_scope)
+
+    return blocks_new_scopes
+
+
+def extract_new_scope(new_scope: str) -> str:
+    return new_scope[new_scope.rfind("/__module") + 1:]
+
+
+def partial_scopes(old_scopes: List[str]) -> Dict[str, str]:
+    partials = dict()
+    for scope in old_scopes:
+        old_partial = ""
+        new_partial = ""
+        for idx, part in enumerate(scope.split("/")):
+            if idx > 0:
+                old_partial += f"/{part}"
+                new_partial += f".{part[part.find('[') + 1:-1]}"
+            else:
+                old_partial = part[part.find("[") + 1:]
+                new_partial = "__module"
+            partials[new_partial] = old_partial
+
+    return partials
+
+
+def longest_prefix(strings: List[str], scope: str) -> str:
+    most_specific = ""
+    for s in strings:
+        if scope.startswith(s) and len(s) > len(most_specific):
+            most_specific = s
+
+    return strings[most_specific] if most_specific != "" else ""
+
+
+##################################################################################################################################################################################################
+
+
+def set_indices(nodes: GraphNodes):
+    _nodes = list(nodes.values())
+
+    nodes.clear()
+    for idx, node in enumerate(_nodes):
+        node.idx = idx
+        nodes[idx] = node
+
+    return nodes

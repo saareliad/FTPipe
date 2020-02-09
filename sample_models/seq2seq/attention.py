@@ -30,11 +30,10 @@ class BahdanauAttention(nn.Module):
         self.normalize = normalize
         self.batch_first = batch_first
         self.num_units = num_units
-
-        self.linear_q = nn.Linear(query_size, num_units, bias=False)
-        self.linear_k = nn.Linear(key_size, num_units, bias=False)
-        nn.init.uniform_(self.linear_q.weight.data, -init_weight, init_weight)
-        nn.init.uniform_(self.linear_k.weight.data, -init_weight, init_weight)
+        self.linear_q = Parameter(torch.Tensor(num_units, query_size))
+        self.linear_k = Parameter(torch.Tensor(num_units, key_size))
+        nn.init.uniform_(self.linear_q, -init_weight, init_weight)
+        nn.init.uniform_(self.linear_k, -init_weight, init_weight)
 
         self.linear_att = Parameter(torch.Tensor(num_units))
 
@@ -129,8 +128,8 @@ class BahdanauAttention(nn.Module):
         t_q = query.size(1)
 
         # FC layers to transform query and key
-        processed_query = self.linear_q(query)
-        processed_key = self.linear_k(keys)
+        processed_query = F.linear(query, self.linear_q)
+        processed_key = F.linear(keys, self.linear_k)
 
         # scores: (b x t_q x t_k)
         scores = self.calc_score(processed_query, processed_key)
