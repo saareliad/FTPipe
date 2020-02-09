@@ -13,6 +13,7 @@ from pipeline.util import get_world_size
 import optimizers.lr_scheduler
 from pipeline.work_schedulers import AVAILABLE_WORK_SCHEDULERS
 from pipeline.weight_stashing import WeightStasher
+from pipeline import TrueWeightsStorage
 
 import models
 import numpy as np
@@ -436,12 +437,13 @@ def get_gap_aware(args, optimizer):
     return gap_aware_cls(optimizer, **gap_aware_args)
 
 
-def get_weight_predictor(args, optimizer, scheduler=None):
+def get_weight_predictor(args, optimizer, scheduler=None, true_weights_storage=None):
     """
         Returns:
             weight_predictor,
             nag_with_predictor: bool
     """
+    assert(true_weights_storage is not None)  # TODO: this should be normal argument when its stable
     if not hasattr(args, 'weight_prediction'):
         return None, None
 
@@ -457,7 +459,9 @@ def get_weight_predictor(args, optimizer, scheduler=None):
     # if pred_mem['type'] == "msnag":
     if 'sgd' in optimizer_type:
         weight_predictor = get_sgd_weight_predictor(
-            optimizer_type, pred_mem, optimizer, scheduler=scheduler, nag_with_predictor=nag_with_predictor)
+            optimizer_type, pred_mem, optimizer, scheduler=scheduler, 
+            nag_with_predictor=nag_with_predictor, 
+            true_weights_storage=true_weights_storage)
         return weight_predictor, nag_with_predictor
     else:
         raise NotImplementedError()
@@ -824,6 +828,9 @@ def main():
     optimizer = optimizer_cls(
         partition.partition.parameters(), **args.optimizer['args'])
 
+    true_weights_storage = TrueWeightsStorage(optimizer)
+    partition.set_true_weights_storage(true_weights_storage)
+
     if args.flush_rate > 0 and args.flush_rate < args.step_every:
         raise NotImplementedError()
 
@@ -847,7 +854,7 @@ def main():
 
     # Set Weight predictor
     weight_predictor, nag_with_predictor = get_weight_predictor(
-        args, optimizer, scheduler=scheduler)
+        args, optimizer, scheduler=scheduler, true_weights_storage=true_weights_storage)
     if weight_predictor:
         partition.set_weight_predictor(weight_predictor, nag_with_predictor)
         # TODO: wp with reminder from step every.
@@ -855,8 +862,8 @@ def main():
     # Set Weight Stashing
     if hasattr(args, "weight_stashing") and args.weight_stashing:
         weight_stasher = WeightStasher(optimizer, step_every=args.step_every,
-                                       has_weight_predictor=(weight_predictor is not None))
-
+                                       has_weight_predictor=(weight_predictor is not None), 
+                                       true_weights_storage=true_weights_storage)
         if not is_last_partition:
             partition.set_weight_stasher(weight_stasher)
 

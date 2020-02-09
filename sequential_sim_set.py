@@ -26,6 +26,7 @@ def subproccess_func(COMMAND, *args, **kw):
     sargs = "--" + " --".join([f"{i} {v}" for i, v in kw.items()])
     command_line = f"{COMMAND} {sargs}"
     args = shlex.split(command_line)
+    print(f"-I- Runnning: {command_line}")
     p = subprocess.Popen(args)
     p.wait()
 
@@ -197,17 +198,18 @@ if __name__ == "__main__":
     def afterJan15BugFix_agg_to_same_batch_wrn16x4_c100():
         # 2*5*2  ~20 sec/epoch => ~5 hours on 8 GPUs.
         # TODO: need to run the gap aware stuff too.
-        COMMAND = "mpirun -np 4 python main.py"
+        # COMMAND = "mpirun -np 4 python main.py"
+        COMMAND = "mpirun -mca btl_smcuda_use_cuda_ipc 0 -np 4 python main.py"
         cfg_dir_tmplt = "configs/wrn16x4_cifar100/batch_128_step_every/step_every_{}/"
         # cfgs_dirs = [cfg_dir_tmplt.format(i) for i in [2, 4]] # TODO: add 2
-        cfgs_dirs = [cfg_dir_tmplt.format(i) for i in [4]]  # TODO: add 2
+        cfgs_dirs = [cfg_dir_tmplt.format(i) for i in [2, 4]]  # TODO: add 2
 
         all_algs = [  # "weight_stashing_msnag_gap_aware",
-                    "weight_stashing",
+                    # "weight_stashing",
                     # "weight_stashing_msnag", # TODO: still bugy
                     # "weight_stashing_gap_aware",
                     # # "gap_aware",
-                    # "msnag",
+                    "msnag",
                     # "stale",
                     ]
 
@@ -217,25 +219,26 @@ if __name__ == "__main__":
             # 'seed': [20202020, 77777777, 314159, 1322019]
         } for cfgs_dir in cfgs_dirs]
         # FIXME manually added
-        param_grid.append({
-            'config': ["configs/wrn16x4_cifar100/batch_128_step_every/step_every_2/weight_stashing.json"],
-            'seed': [42, 314159, 20202020]
-        })
+        # param_grid.append({
+        #     'config': ["configs/wrn16x4_cifar100/batch_128_step_every/step_every_2/weight_stashing.json"],
+        #    'seed': [42, 314159, 20202020]
+        # })
         # TODO change skip first back
-        run_grid_on(COMMAND, param_grid, gpu_list=[0, 1, 2, 3, 4, 5, 6, 7], skip_first=3)
+        run_grid_on(COMMAND, param_grid, gpu_list=[0, 1, 2, 3, 4, 5, 6, 7], skip_first=0)
 
     def afterJan15BugFix_agg_to_same_batch_wrn28x10_c100():
         # TODO: first run without GA
         # also with msnag+stashing, as it consumes more memory
-        COMMAND = "mpirun -np 4 --mca btl_smcuda_use_cuda_ipc_same_gpu 0 python main.py"
+        # COMMAND = "mpirun -np 4 --mca btl_smcuda_use_cuda_ipc_same_gpu 0 python main.py"
+        COMMAND = "mpirun -mca btl_smcuda_use_cuda_ipc 0 -np 4 python main.py"
         cfg_dir_tmplt = "configs/wrn_cifar100/batch_128_step_every/step_every_{}/"
         cfgs_dirs = [cfg_dir_tmplt.format(i) for i in [2, 4]]
         all_algs = [  # "weight_stashing_msnag_gap_aware",
-                    "weight_stashing",
+                    # "weight_stashing",
                     # "weight_stashing_msnag",
                     # "weight_stashing_gap_aware",
                     # # "gap_aware",
-                    # "msnag",
+                    "msnag",
                     # "stale",
                     ]
         param_grid = [{
@@ -243,7 +246,7 @@ if __name__ == "__main__":
             'seed': [42, 20202020, 77777777, 314159, 1322019]
         } for cfgs_dir in cfgs_dirs]
 
-        run_grid_on(COMMAND, param_grid, gpu_list=[0, 1, 2, 3, 4, 5, 6, 7])
+        run_grid_on(COMMAND, param_grid, gpu_list=[0, 1, 2, 3, 4, 5])
 
     def agg_to_same_batch_wrn28x10_c100():
         # TODO: first run without GA
@@ -253,12 +256,13 @@ if __name__ == "__main__":
         cfg_dir_tmplt = "configs/wrn_cifar100/batch_128_step_every/step_every_{}/"
         cfgs_dirs = [cfg_dir_tmplt.format(i) for i in [2, 4]]
         all_algs = [# "weight_stashing_msnag_gap_aware",
-                    "weight_stashing",
-                    # "weight_stashing_msnag",
+                    # "weight_stashing", # DONE
+                    "weight_stashing_msnag",
+                    "weight_stashing_msnag_gap_aware",
                     # "weight_stashing_gap_aware",
-                    # # "gap_aware",
-                    "msnag",
-                    "stale",
+                    # # "gap_aware", # WILL BE PROBLEMATIC
+                    # "msnag", # DONE (CHANGE NAG WITH PARTITION?)
+                    # "stale", # DONE
                     ]
 
         param_grid = [{
@@ -267,7 +271,6 @@ if __name__ == "__main__":
             # 'seed': [20202020, 77777777, 314159, 1322019]
         } for cfgs_dir in cfgs_dirs]
         run_grid_on(COMMAND, param_grid, gpu_list=[0, 1])
-
 
     def agg_to_same_batch_wrn16x4_c100_ws_wp():
         # TODO: first run without GA
@@ -302,9 +305,10 @@ if __name__ == "__main__":
     # continue_experiment_of_agg_to_same_batch_wrn28x10_c100()
 
     # Re run buggies:
-    # afterJan15BugFix_agg_to_same_batch_wrn28x10_c100()
-    # afterJan15BugFix_agg_to_same_batch_wrn16x4_c100()
-    agg_to_same_batch_wrn16x4_c100_ws_wp()
+    # the 2 msnag on rambo3
+    afterJan15BugFix_agg_to_same_batch_wrn16x4_c100()
+    afterJan15BugFix_agg_to_same_batch_wrn28x10_c100()  # msnag_ws on ninja2
+    # agg_to_same_batch_wrn16x4_c100_ws_wp()  # on rambo3,
 
 
 

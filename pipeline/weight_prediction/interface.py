@@ -4,12 +4,13 @@ from typing import Callable
 
 class WeightPredictor(abc.ABC):
     def __init__(self, optimizer,
-                 fix_fn: Callable, scheduler=None, nag_with_predictor=False):
+                 fix_fn: Callable, scheduler=None, nag_with_predictor=False, true_weights_storage=None):
         self.optimizer = optimizer
         # self.params = self.optimizer.param_groups[0]['params']
         self.fix_fn = fix_fn  # ()
         self.scheduler = scheduler
         self.nag_with_predictor = nag_with_predictor
+        self.true_weights_storage = true_weights_storage
 
     def setup(self, n_steps):
         if n_steps == 0 and self.nag_with_predictor:

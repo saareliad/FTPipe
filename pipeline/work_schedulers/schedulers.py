@@ -1,5 +1,6 @@
 import abc
 import pprint
+import pandas as pd
 
 class WorkScheduler(abc.ABC):
     def __init__(self, step_every):
@@ -125,7 +126,7 @@ def get_fwds_between_first_step_from_str(s, step_every):
     from collections import Counter
     all_B_idexes = [m.start() for m in re.finditer('B', s)]
     first = all_B_idexes[step_every-1]
-    second = all_B_idexes[2+(step_every-1)]
+    second = all_B_idexes[2*step_every-1]
     c1 = Counter(s[:first])['F']
     c2 = Counter(s[:second])['F']
     idexes = list(range(c1, c2))
@@ -152,14 +153,44 @@ def print_for_stage(stage, scheduler, num_stages, num_batches):
     scheduler.reset()
     return s
 
+# def get_batch_to_micro_batch_dicts(stage, scheduler, num_stages, num_batches, use_wp=False):
+#     step_every =  scheduler.step_every
+#     d = get_staleness_for_stage(
+#                     stage, scheduler, num_stages, num_batches, step_every)
+#     # to list of records...
+    
+#     df = pd.DataFrame.from_record(list(d.values()))
+#     l = df.groupby('mv').apply(lambda df: len(df)).to_dict()
+#     df['unique_mv'] = list(map(i.get, df['mv']))
+#     df['unique_mv_cs'] = df['unique_mv'].cumsum()
+
+
+
+# 0,1,2,3 -> 2
+    
 
 def get_fwds_between_first_and_seconds_step_for_stage(scheduler, stage, num_stages, num_batches):
     s = print_for_stage(stage, scheduler, num_stages, num_batches)
     step_every = scheduler.step_every
     fwds = get_fwds_between_first_step_from_str(s, step_every)
-    is_problematic = fwds[0] % step_every != 0
+    # These fwds have the same "mv" (forward version)
+    # now, we need to check if thier "bv" (backward versions)
+
+    if len(fwds) == 1:
+        is_problematic = False
+    else:
+        # bv = {backward_version(i, 1, step_every)
+        #       for i in range(fwds[0], fwds[-1]+1)}
+
+        # or expected versions "ev" are the same.
+        # FIXME:
+        # d = get_staleness_for_stage(stage, scheduler, num_stages, num_batches, step_every)
+        is_problematic = fwds[0] % step_every != 0  # fwds[0] % step_every != 0
+
     return fwds, is_problematic
 
+# def get_micro_batch(batch_idx, se):
+#     return batch_idx % se
 
 def should_do_step(batch_idx, se):
     do_step = (batch_idx % se) == (se-1)
@@ -197,16 +228,16 @@ def get_staleness_for_stage(stage, scheduler, num_stages, num_batches, se):
             ev = expected_version(done_fwds, done_bwds, se)
             bv = mv + es
             mys = s[:done_fwds+done_bwds+1]
-            d[done_fwds]= dict(es=es, mv=mv, ev=ev, bv=bv, mys=mys)
-            done_fwds +=1
+            d[done_fwds] = dict(es=es, mv=mv, ev=ev, bv=bv, mys=mys)
+            done_fwds += 1
         if c == 'B':
             steps_so_far = done_bwds // se
             if not (steps_so_far == d[done_bwds]['bv']):
                 # pprint.pprint(d)
                 raise AssertionError(f"Stage:{stage}, batch:{done_bwds}, steps_so_far:{steps_so_far}, but predicted: {d[done_bwds]['bv']}.\n \
                     Extra:\n {pprint.pformat(d)},\n {s[:done_fwds+done_bwds+1]}")
-             
-            done_bwds+=1
+
+            done_bwds += 1
 
     return d
 
@@ -215,15 +246,21 @@ def get_staleness_for_stage(stage, scheduler, num_stages, num_batches, se):
 
 
 if __name__ == "__main__":
+    # TODO: automatic tests
     num_stages = 4
-    EXTRA = 5
+    EXTRA = 20
     # stage = 0  # Should test the edge case.
     num_batches = num_stages*2 + 1 + EXTRA
-    step_every = 1
+    step_every = 3
     sched_name = "1F1B"
+    PRINT_STAGE_STRINGS = False
+    PRINT_EXTRA_INFO = True
+    PRINT_JUST_PROBLEMATIC_STAGES = True
+    PRINT_JUST_FOR_THE_FWDS = False
 
 
-    d = dict(sched_name=sched_name, step_every=step_every, num_stages=num_stages)
+    d = dict(sched_name=sched_name,
+             step_every=step_every, num_stages=num_stages)
     print(f"-I- got args: {pprint.pformat(d)}")
     AVAILABLE_WORK_SCHEDULERS = {"1F1B": FBScheduler,
                                  "SEQ": SeqScheduler,
@@ -241,7 +278,8 @@ if __name__ == "__main__":
             stage_strings[stage] = s
             print()
 
-    print_for_all_stages(num_stages)
+    if PRINT_STAGE_STRINGS:
+        print_for_all_stages(num_stages)
 
     stage_fwds_between_first_step = dict()
     stage_fwds_problematic = []
@@ -259,7 +297,14 @@ if __name__ == "__main__":
     print("Problematic stages:", stage_fwds_problematic)
 
 
-    for stage in range(num_stages):
-        print(f"Stage {stage}")
-        d = get_staleness_for_stage(stage, scheduler, num_stages, num_batches, step_every)
-        pprint.pprint(d)
+    if PRINT_EXTRA_INFO:
+        for stage in range(num_stages):
+            print(f"Stage {stage}")
+            d = get_staleness_for_stage(
+                stage, scheduler, num_stages, num_batches, step_every)
+            if PRINT_JUST_PROBLEMATIC_STAGES:
+                if stage not in stage_fwds_problematic:
+                    continue
+                if PRINT_JUST_FOR_THE_FWDS:
+                    d = {i : d[i] for i in stage_fwds_between_first_step[stage]}
+            pprint.pprint(d)

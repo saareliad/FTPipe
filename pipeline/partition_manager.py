@@ -13,6 +13,7 @@ from .weight_stashing import WeightStasher
 from .buffer import Buffers
 import numpy as np
 import types
+from .true_weights_storage import TrueWeightsStorage
 
 # from gpu_mem_track import MemTracker
 # import time
@@ -58,6 +59,9 @@ class SinglePartitionManager:
         if is_problematic:
             print(
                 f"-V- Patching problematic batches {fwds} for stage {self.stage}")
+            if self.step_every > 2:
+                raise NotImplementedError("check in shcedulers.")
+
             if self.PROBLEMATIC_POLICY == 'SKIP':
                 self.set_problematic_skip()
 
@@ -70,8 +74,7 @@ class SinglePartitionManager:
         self.batches = 0
 
         # State for saving current relevant weight.
-        self.true_weights_dirty = None
-        self.true_weights = None
+        self.true_weights_storage = None
 
         # State for recv buffers
         if max_buffers > 2:  # FIXME
@@ -100,24 +103,10 @@ class SinglePartitionManager:
         self.weight_predictor: WeightPredictor
         self.gap_aware: GapAware
         self.weight_stasher: WeightStasher
+        self.true_weights_storage: TrueWeightsStorage
 
-    def set_true_weights_dirty(self):
-        self.true_weights_dirty = True
-
-    def get_true_weights_dirty(self):
-        return self.true_weights_dirty
-
-    def get_true_weights(self):
-        return self.true_weights
-
-    def set_true_weights_buffer(self):
-        pgs = self.trainer.optimizer.param_groups
-        with torch.no_grad():
-            buff = [[p.data.clone() for p in pg['params']]
-                    for pg in pgs]
-
-        self.true_weights = buff
-        self.true_weights_dirty = False
+    def set_true_weights_storage(self, true_weights_storage):
+        self.true_weights_storage = true_weights_storage
 
     def set_problematic_skip(self):
         """
@@ -189,14 +178,6 @@ class SinglePartitionManager:
         se = self.step_every
         do_step = (batch_idx % se) == (se-1)
         return do_step, None
-
-        # old_lrs = None
-        # if not do_step and (batch_idx == (num_batches - 1)):
-        #     do_step = True
-        #     factor = ((batch_idx % se) + 1) / se
-        #     old_lrs, _ = self.scale_lr(factor)
-
-        # return do_step, old_lrs
 
     def set_task(self, task: DLTask):
         self.task = task
@@ -337,6 +318,7 @@ class SinglePartitionManager:
         if self.is_last_partition:
             preload_ctx = self.task.preload_last_partition(
                 getattr(self, "dl_iter", None), self.device)
+        # TODO: can do stuff like load wieghts, NAG, etc....
         x, ctx = self.get_input_data_forward(batch_idx, num_batches)
 
         # Do the forward pass with optionals
@@ -354,13 +336,20 @@ class SinglePartitionManager:
                 expected_staleness = self.expected_staleness(
                     batch_idx, done_bwds)
 
+                old_lrs = None
                 if batch_idx >= self.first_effected_batch:
                     old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
+
+                # TODO:
+                # self.true_weights_storage.create_cloned_if_needed()
                 weight_predictor.setup(expected_staleness)
                 weight_predictor.forward()
-                pgs = self.trainer.optimizer.param_groups
-                for pg, old_lr in zip(pgs, old_lrs):
-                    pg['lr'] = old_lr
+
+                # We do it twice: this is the 1st time, just to tell th weight predictor
+                if old_lrs:
+                    pgs = self.trainer.optimizer.param_groups
+                    for pg, old_lr in zip(pgs, old_lrs):
+                        pg['lr'] = old_lr
 
                 x = partition(x, batch_idx)
                 if self.weight_stasher is not None:
@@ -372,11 +361,12 @@ class SinglePartitionManager:
                         # self.needs_own_post_restore[batch_idx] = False
                         # FIXME: no reason to stash, and no reason to post restore from top!!!!!
 
-                    # HACK: consider setting dirty ahead!
+                    # HACK: will set dirty ahead!
                     self.weight_stasher.stash_current(
                         batch_idx, expected_staleness)
 
-                weight_predictor.revert()
+                # HACK: reverting after send.
+                # weight_predictor.revert()
             else:
                 x = partition(x, batch_idx)
                 if self.weight_stasher is not None:
@@ -389,6 +379,10 @@ class SinglePartitionManager:
             send_ctx = self.task.pack_send_context(x, *ctx)
             request_objects = self.comm_handler.send_activations(
                 send_ctx, batch_idx)
+
+            if is_training:
+                self.true_weights_storage.restore_if_needed()
+            return request_objects
 
         else:
             # Last partition - also do backward.
@@ -408,25 +402,25 @@ class SinglePartitionManager:
             request_objects = self.comm_handler.send_gradients(
                 grads, batch_idx)
 
+            self.true_weights_storage.restore_if_needed()  # check=False
+
             # BIG_BATCH allow skipping steps.
             # HACK: last partition- batch idx is the same as num backwards.
             do_step, old_lrs = self.should_do_step(batch_idx)
 
-            # scale_down_lr = False
+            # For the last batch, we must scale down the learning rate, and then restore.
             if not do_step and (batch_idx == (num_batches - 1)):
                 do_step = True
-                # For the last batch, we must scale down the learning rate, and then restore.
-                pgs = trainer.optimizer.param_groups
-                old_lrs = [g['lr'] for g in pgs]
-                se = self.step_every
-                for g in pgs:
-                    # FIXME: micro batch index
-                    g['lr'] *= (((batch_idx % se) + 1) / se)
+                old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
 
             # Step
             trainer.last_partition_step_and_statistics(
                 x, *ctx, step_and_stats_ctx, step=do_step)
-            # del x, ctx, step_and_stats_ctx
+
+            if do_step:
+                self.true_weights_storage.reset_on_step()
+
+            # TODO: true weights
 
             # Print training statistics.
             self.batches += 1
@@ -442,6 +436,7 @@ class SinglePartitionManager:
 
             if old_lrs:
                 # return to previous LRs.
+                pgs = trainer.optimizer.param_groups
                 for g, old_lr in zip(pgs, old_lrs):
                     g['lr'] = old_lr
 
@@ -464,6 +459,8 @@ class SinglePartitionManager:
         if self.weight_stasher:
             # Restore to parameters which the fwd ran on
             self.weight_stasher.pop_restore_stashed(batch_idx)
+            self.true_weights_storage.record_change_mode("stashed")
+
         self.partition.recompute(batch_idx)
 
         g = bwd_rcev_buffers.wait_first()
@@ -486,24 +483,17 @@ class SinglePartitionManager:
         do_step, old_lrs = self.should_do_step(batch_idx)
 
         # also do step for the last. (but with smaller LR)
-        # scale_down_lr = False
         if not do_step and (batch_idx == (num_batches - 1)):
             do_step = True
-            # TODO: For the last batch, we must scale down.
-            # scale_down_lr = True
-            pgs = self.trainer.optimizer.param_groups
-            old_lrs = [g['lr'] for g in pgs]
-            se = self.step_every
-            for g in pgs:
-                # FIXME: micro batch index
-                g['lr'] *= ((batch_idx % se) + 1) / se
+            old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
 
         if do_step:
             trainer = self.trainer
             weight_stasher = self.weight_stasher
 
             # TODO: allow access to real theta just for statistics
-            real_theta = weight_stasher.tmp_buff_top() if weight_stasher else None
+            # real_theta = weight_stasher.get_saved_real_theta() if weight_stasher else None
+            real_theta = self.true_weights_storage.get_true_weights()
             # ####### Preparing to step
             if real_theta:
                 # Calculate Gap
@@ -523,13 +513,13 @@ class SinglePartitionManager:
                 trainer.modify_gradients(real_theta, delay)
 
             if weight_stasher:
-                # self.needs_own_post_restore.pop(batch_idx, None)
-                # Restore to previosly saved parameters, so we can do the step on them.
-                weight_stasher.post_restore(batch_idx)
                 # Mark previously stashed weights as dirty
                 weight_stasher.mark_stashed_as_dirty()
 
+            # Restore to previosly saved parameters, so we can do the step on them.
+            self.true_weights_storage.restore_if_needed()
             trainer.non_last_partition_step()
+            self.true_weights_storage.reset_on_step()
 
             if old_lrs:
                 # Note that sometimes its not defined locally.
@@ -537,15 +527,7 @@ class SinglePartitionManager:
                 for g, old_lr in zip(pgs, old_lrs):
                     g['lr'] = old_lr
         else:
-            if self.weight_stasher:
-                # Restore to previosly saved parameters, so we can do the next forwards on them!
-                # if self.needs_own_post_restore.pop(batch_idx, False):
-                #     self.weight_stasher.post_restore(batch_idx)
-                #     # TODO: clear smaller batch indexes...
-                # else:
-                self.weight_stasher.post_restore_from_top(batch_idx)
-
-                # TODO: if weight predictior and expected staleness was 0 (w/o the NAG), than ?!
+            self.true_weights_storage.restore_if_needed()
 
         return request_objects
 
@@ -583,8 +565,11 @@ class SinglePartitionManager:
             sent_request_objects = self.run_batch_forward(
                 done_fwds, num_batches)
             if sent_request_objects:  # last partition returns empty list.
+                # if self.async_fwd_objects:
+                #     self.wait_on_sent_object(is_fwd=True)
                 self.async_fwd_objects[done_fwds] = sent_request_objects
 
+            # Can change this number...
             if len(self.async_fwd_objects) > 1:
                 self.wait_on_sent_object(is_fwd=True)
 
@@ -605,32 +590,46 @@ class SinglePartitionManager:
         if ga:
             ga.skip_one_apply()
 
-        wp = self.weight_predictor
-        if wp:
-            reminder = num_batches % self.step_every
-            if reminder > 0:
-                self.first_effected_batch = num_batches - reminder
-                self.reminder_scaler_lr_factor = reminder / self.step_every
+        reminder = num_batches % self.step_every
+        # HACK: batch_idx always less than num batches
+        self.first_effected_batch = num_batches - reminder
+        self.reminder_scaler_lr_factor = reminder / self.step_every
 
-        # num_steps = num_batches
+        stage = self.stage
+        num_stages = self.num_stages
+        work_scheduler = self.work_scheduler
+        is_first_partition = self.is_first_partition
+        is_last_partition = self.is_last_partition
+        run_batch_backward = self.run_batch_backward
+        run_batch_forward = self.run_batch_forward
+        async_bwd_objects = self.async_bwd_objects
+        async_fwd_objects = self.async_fwd_objects
+        wait_on_sent_object = self.wait_on_sent_object
+
         while done_bwds < num_batches:
             # for step_index in range(num_steps):
             # Act according to some policy
-            action_is_fwd = self.work_scheduler(self.stage, self.num_stages,
-                                                num_batches, done_fwds, done_bwds)
+            action_is_fwd = work_scheduler(stage, num_stages,
+                                           num_batches, done_fwds, done_bwds)
             if action_is_fwd:
-                sent_request_objects = self.run_batch_forward(
+                sent_request_objects = run_batch_forward(
                     done_fwds, num_batches, done_bwds=done_bwds)
-                # Last partition inserts its gradints into async_fwd_objects,
-                self.async_fwd_objects[done_fwds] = sent_request_objects
+                # Note: Last partition inserts its gradints into async_fwd_objects,
+                # wait on prev send
+                if async_fwd_objects:
+                    wait_on_sent_object(is_fwd=True)
+                async_fwd_objects[done_fwds] = sent_request_objects
             else:
-                sent_request_objects = self.run_batch_backward(
+                sent_request_objects = run_batch_backward(
                     done_bwds, num_batches)
-                if not (self.is_first_partition):
-                    self.async_bwd_objects[done_bwds] = sent_request_objects
+                if not (is_first_partition):
+                    # wait on prev send
+                    if async_bwd_objects:
+                        wait_on_sent_object(is_fwd=False)
+                    async_bwd_objects[done_bwds] = sent_request_objects
 
             # Increase counters
-            if self.is_last_partition:
+            if is_last_partition:
                 done_bwds += 1
                 done_fwds += 1
             else:
@@ -641,18 +640,18 @@ class SinglePartitionManager:
             # TODO: can write the entire thing MUCH more nicely
             # if we just save asside and insert the new objects at the end.
 
-            # wait on the first,
-            if len(self.async_fwd_objects) > 1:
-                self.wait_on_sent_object(is_fwd=True)
+            # # wait on the first,
+            # if len(self.async_fwd_objects) > 1:
+            #     self.wait_on_sent_object(is_fwd=True)
 
-            if len(self.async_bwd_objects) > 1:
-                self.wait_on_sent_object(is_fwd=False)
+            # if len(self.async_bwd_objects) > 1:
+            #     self.wait_on_sent_object(is_fwd=False)
 
-        while len(self.async_fwd_objects) > 0:
-            self.wait_on_sent_object(is_fwd=True)
+        while len(async_fwd_objects) > 0:
+            wait_on_sent_object(is_fwd=True)
 
-        while len(self.async_bwd_objects) > 0:
-            self.wait_on_sent_object(is_fwd=False)
+        while len(async_bwd_objects) > 0:
+            wait_on_sent_object(is_fwd=False)
 
         if sched_step:
             self.lr_scheduler.step()

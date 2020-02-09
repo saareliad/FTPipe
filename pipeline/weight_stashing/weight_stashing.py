@@ -2,8 +2,8 @@ import types
 import torch
 from collections import OrderedDict
 
-# import os
-# rank = int(os.environ.get('OMPI_COMM_WORLD_RANK', 0))
+import os
+rank = int(os.environ.get('OMPI_COMM_WORLD_RANK', 0))
 
 
 class WeightStasher:
@@ -24,16 +24,19 @@ class WeightStasher:
 
     """
 
-    def __init__(self, optimizer, step_every=1, has_weight_predictor=False):
+    def __init__(self, optimizer, step_every=1, has_weight_predictor=False, true_weights_storage=None):
         self.optimizer = optimizer
         self.theta_buffer = OrderedDict()
         self.dirty_mark = OrderedDict()
+        self.micro_batch = OrderedDict()
         self.temporery_short_term_buff = []
         # step every parameter, used to infer micro batch.
         self.step_every = step_every
         self.is_problematic = False
         self.has_weight_predictor = has_weight_predictor
         # TODO: reduce redundent stashing for micro batches.
+
+        self.true_weights_storage = true_weights_storage
 
     def set_problematic(self, forward=True, policy='EVERY_BATCH'):
         self.is_problematic = True
@@ -51,7 +54,9 @@ class WeightStasher:
                 return (batch_index+1) % se
         elif policy == 'EVERY_BATCH':
             def get_micro_batch(self, batch_index):
-                return batch_index if batch_index < se else 0
+                return 0  # TODO: this can be improved, but I have problems with the dirty...
+                # return batch_index if batch_index < se else 0
+
         else:
             raise NotImplementedError()
 
@@ -85,6 +90,7 @@ class WeightStasher:
         """
         Stashes current weights if we expect updates.
         Also tracks "dirty-ness" of real weights w.r.t given batch_index
+        # TODO: option to set dirty right ahead!
         """
         # print(f"stashed {batch_index}, rank {rank}")
         # if rank == 0:
@@ -94,24 +100,30 @@ class WeightStasher:
         #     print(self.dirty_mark)
         # Aviod stashing in case of no staleness.
         if expected_updates > 0:
-            micro_batch = self.get_micro_batch_forward(batch_index)
+            
             # HACK: we use the same buffer for differnt micro batches!
             # we can do it because we don't step on stashed wieghts.
-            buff = self.theta_buffer.get(
-                batch_index - 1, None) if micro_batch > 0 else None
+            micro_batch = self.get_micro_batch_forward(batch_index)
+            buff = self.theta_buffer.get(batch_index - 1, None) if micro_batch > 0 else None
+
             if buff is None:
                 buff = self._create_current_cloned_buff()
             else:
-                assert not (self.dirty_mark[batch_index-1])  # check for bug...
-                # if (self.dirty_mark[batch_index-1]):
-                #     s = f"Attemted to use dirty buff as stash: rank:\
-                #         {rank} b:{batch_index}, mb:{micro_batch}, prev b:{batch_index-1} \
-                #           expected_updates:{expected_updates}"
-                #     raise RuntimeError(s)
-
+                # assert not (self.dirty_mark[batch_index-1])  # check for bug...
+                if (self.dirty_mark[batch_index-1]) and not self.has_weight_predictor:
+                    s = f"Attemted to use dirty buff as stash: rank:\
+                        {rank} b:{batch_index}, mb:{micro_batch}, prev b:{batch_index-1} \
+                          expected_updates:{expected_updates}"
+                    raise RuntimeError(s)
+            
             self.theta_buffer[batch_index] = buff
-
-        self.dirty_mark[batch_index] = False  # HACK: mark as not dirty anyway.
+            
+            if self.has_weight_predictor:
+                self.dirty_mark[batch_index] = True   # So we post restore true weights!
+            else:
+                self.dirty_mark[batch_index] = False
+        else:
+            self.dirty_mark[batch_index] = False  # HACK: mark as not dirty anyway.
 
     def _restore_from_buff(self, buff):
         with torch.no_grad():
@@ -151,46 +163,20 @@ class WeightStasher:
         and after `ensure_correct_post_restore(...)` was called)
         """
         # print(f"popped {batch_index} rank {rank}")
-        if self.dirty_mark.pop(batch_index):
-            # Ensure correct post resotore (detailed above...)
+        is_dirty = self.dirty_mark.pop(batch_index)
+        if is_dirty and (self.get_micro_batch_backward(batch_index) == 0):
+            # Ensure correct post resotore:
+            # create temporary buffer -> (do backward) -> ... -> (do step)-> then restore it
             # Same versions as backward!
-            if (self.get_micro_batch_backward(batch_index) == 0):
-                self.temporery_short_term_buff.append(
-                    self._create_current_cloned_buff())
-
+            self.true_weights_storage.create_cloned_if_needed()
+        if is_dirty:
             buff = self.theta_buffer.pop(batch_index)
             self._restore_from_buff(buff)
-        elif self.has_weight_predictor:
-            # THAN every micro batch can have its own stashed weight -> restore it.
-            # Note: we don't need to restore from top.
-            if batch_index in self.theta_buffer:
-                buff = self.theta_buffer.pop(batch_index)
-                self._restore_from_buff(buff)
-                # Note: can assert weight predictor does NAG with predicted
+            # tell self.true_weights_storage thats we are in stashed more.
+            self.true_weights_storage.record_change_mode("stashed")
         else:
             assert batch_index not in self.theta_buffer
-
-    def post_restore(self, batch_index):
-        """ Called **only** after step """
-        if self.temporery_short_term_buff:
-            buff = self.temporery_short_term_buff.pop()
-            self._restore_from_buff(buff)
-
-    def post_restore_from_top(self, batch_index):
-        if self.temporery_short_term_buff:
-            # TODO: assert micro batch belongs batch
-            buff = self.temporery_short_term_buff[-1]
-            self._restore_from_buff(buff)
 
     # Exposed for statistics and alike
     def get_stashed_buff(self, batch_index, default=None):
         return self.theta_buffer.get(batch_index, default)
-
-    def tmp_buff_top(self):
-        """ if tmp_buff, returns its top. else returns None.
-        a None return value means that current weight is "correct".
-        """
-        if self.temporery_short_term_buff:
-            return self.temporery_short_term_buff[-1]
-
-        # return None
