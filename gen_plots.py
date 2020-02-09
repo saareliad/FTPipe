@@ -2,7 +2,7 @@ from misc import plot
 from experiments import load_experiment
 import matplotlib.pyplot as plt
 import os
-
+import numpy as np
 # plot.plot_grad_norm
 # plot.plot_fit
 
@@ -106,7 +106,7 @@ def wrn16x4_c100_p2():
     out_dir = "results/figs"
     plot_fn = plot.plot_grad_norm
 
-    datadir="results"
+    datadir = "results"
     fn_to_contour = {
         f"ninja4_wrn_16x4_c100_p2_cifar100_stale_seed_42.json": "stale",
         f"ninja4_wrn_16x4_c100_p2_cifar100_msnag_seed_42.json": "nag",
@@ -116,7 +116,8 @@ def wrn16x4_c100_p2():
         # f"ninja4_wrn_16x4_p2_cifar10_msnag_seed_42.json": "",
     }
 
-    fn_to_contour = {os.path.join(datadir,i): v for i,v in fn_to_contour.items()}
+    fn_to_contour = {os.path.join(
+        datadir, i): v for i, v in fn_to_contour.items()}
 
     gen_plot_from_dict(fn_to_contour, plot_fn, out_base_name, out_dir=out_dir)
 
@@ -125,7 +126,7 @@ def wrn16x4_c100_p2_gap():
     out_base_name = "wrn16x4_cifar100_p2_Gap"
     out_dir = "results/figs"
     plot_fn = plot.plot_gap
-    datadir="results"
+    datadir = "results"
 
     fn_to_contour = {
         # f"ninja4_wrn_16x4_c100_p2_cifar100_stale_seed_42.json": "stale",
@@ -134,9 +135,32 @@ def wrn16x4_c100_p2_gap():
         f"ninja4_wrn_16x4_c100_p2_cifar100_msnag_ws_seed_42.json": "nag+ws",
         f"ninja4_wrn_16x4_c100_p2_cifar100_msnag_ws_ga_seed_42.json": "ws+nag+ga",
     }
-    fn_to_contour = {os.path.join(datadir,i): v for i,v in fn_to_contour.items()}
+    fn_to_contour = {os.path.join(
+        datadir, i): v for i, v in fn_to_contour.items()}
 
     gen_plot_from_dict(fn_to_contour, plot_fn, out_base_name, out_dir=out_dir)
+
+
+def debug_gap_wrn16x4_c100():
+
+    out_base_name = "debug_gap_wrn16x4_c100"
+    out_dir = "results/figs"
+    # plot_fn = plot.plot_gap
+    plot_fn = plot.plot_grad_norm
+    datadir = "results/4partitions/wrn16x4_cifar100"
+
+    fn_to_contour = {
+        # f"ninja4_wrn_16x4_c100_p2_cifar100_stale_seed_42.json": "stale",
+        # f"ninja4_wrn_16x4_c100_p2_cifar100_msnag_seed_42.json": "nag",
+        f"agg_wrn_16x4_c100_p4_cifar100_stale_ws_bs_128_se_4_seed_1322019.json": "ws",
+        f"exp_wrn_16x4_c100_p4_cifar100_msnag_ws_bs_128_se_1_seed_42.json": "nag+ws",
+        # f"ninja4_wrn_16x4_c100_p2_cifar100_msnag_ws_ga_seed_42.json": "ws+nag+ga",
+    }
+    fn_to_contour = {os.path.join(
+        datadir, i): v for i, v in fn_to_contour.items()}
+
+    gen_plot_from_dict(fn_to_contour, plot_fn, out_base_name, out_dir=out_dir)
+
 
 
 if __name__ == "__main__":
@@ -145,5 +169,6 @@ if __name__ == "__main__":
     # wrn_28x10_4p_with_grad_norm()
     # wrn_28x10_4p_with_grad_norm_with_old()
     # wrn16x4_c100_p2()
-    wrn16x4_c100_p2_gap()
+    # wrn16x4_c100_p2_gap()
+    debug_gap_wrn16x4_c100()
     exit(0)

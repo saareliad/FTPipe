@@ -5,23 +5,23 @@
     "auto_file_name": false,
     "out_filename": "debug_28x10_100",
     "distributed_backend": "mpi",
-    "task": "cv",
-    "statistics": "cv_theta_dist_grad_norm",
+    "task": "cv_sep",
+    "statistics": "cv_theta_dist",
     "model": "wrn_28x10_c100_dr03_p4",
     "dataset": "cifar100",
     "trainer": {
         "type": "cv",
         "args": {
-            "always_calc_grad_norm": true
+            "always_calc_grad_norm": false 
         }
     },
     "bs_train": 128,
     "bs_test": 200,
-    "num_data_workers": 20,
+    "num_data_workers": 10,
     "optimizer": {
         "type": "sgd1",
         "args": {
-            "lr": 0.8,
+            "lr": 0.1,
             "weight_decay": 0.0005,
             "momentum": 0.9,
             "nesterov": false
@@ -61,6 +61,6 @@
     "weight_stashing": true,
     "work_scheduler": "1F1B",
     "cudnn_benchmark": true,
-    "max_buffers": 2,
-    "step_every": 8
+    "max_buffers": 1,
+    "step_every": 1
 }

@@ -17,7 +17,7 @@ import torch.distributed as dist
 
 # Fallback to this dataset dir of no other dir is given as arument to functions.
 DEFAULT_DATA_DIR = os.path.expanduser('~/.pytorch-datasets')
-
+DOWNLOAD = False
 # torch.backends.cudnn.deterministic = True
 # torch.backends.cudnn.benchmark = False
 # CIFAR best practice:
@@ -31,9 +31,9 @@ def get_cifar_10_train_test_ds(DATA_DIR=DEFAULT_DATA_DIR):
 
     train_transform, test_transform = cifar_transformations(mean, std)
 
-    ds_train = CIFAR10(root=DATA_DIR, download=True,
+    ds_train = CIFAR10(root=DATA_DIR, download=DOWNLOAD,
                        train=True, transform=train_transform)
-    ds_test = CIFAR10(root=DATA_DIR, download=True,
+    ds_test = CIFAR10(root=DATA_DIR, download=DOWNLOAD,
                       train=False, transform=test_transform)
     return ds_train, ds_test
 
@@ -53,9 +53,9 @@ def get_cifar_100_train_test_ds(DATA_DIR=DEFAULT_DATA_DIR):
 
     train_transform, test_transform = cifar_transformations(mean, std)
 
-    ds_train = CIFAR100(root=DATA_DIR, download=True,
+    ds_train = CIFAR100(root=DATA_DIR, download=DOWNLOAD,
                         train=True, transform=train_transform)
-    ds_test = CIFAR100(root=DATA_DIR, download=True,
+    ds_test = CIFAR100(root=DATA_DIR, download=DOWNLOAD,
                        train=False, transform=test_transform)
     return ds_train, ds_test
 
@@ -422,14 +422,14 @@ def get_cifar_100_seperate_train_test_ds(DATA_DIR=DEFAULT_DATA_DIR):
     train_transform, test_transform = cifar_transformations(mean, std)
 
     ds_train_X = CIFAR100JustX(
-        root=DATA_DIR, download=True, train=True, transform=train_transform)
+        root=DATA_DIR, download=DOWNLOAD, train=True, transform=train_transform)
     ds_train_Y = CIFAR100JustY(
-        root=DATA_DIR, download=True, train=True, transform=train_transform)
+        root=DATA_DIR, download=DOWNLOAD, train=True, transform=train_transform)
 
     ds_test_X = CIFAR100JustX(
-        root=DATA_DIR, download=True, train=False, transform=test_transform)
+        root=DATA_DIR, download=DOWNLOAD, train=False, transform=test_transform)
     ds_test_Y = CIFAR100JustY(
-        root=DATA_DIR, download=True, train=False, transform=test_transform)
+        root=DATA_DIR, download=DOWNLOAD, train=False, transform=test_transform)
 
     return ds_train_X, ds_train_Y, ds_test_X, ds_test_Y
 
@@ -441,13 +441,13 @@ def get_cifar_10_seperate_train_test_ds(DATA_DIR=DEFAULT_DATA_DIR):
     train_transform, test_transform = cifar_transformations(mean, std)
 
     ds_train_X = CIFAR10JustX(
-        root=DATA_DIR, download=True, train=True, transform=train_transform)
+        root=DATA_DIR, download=DOWNLOAD, train=True, transform=train_transform)
     ds_train_Y = CIFAR10JustY(
-        root=DATA_DIR, download=True, train=True, transform=train_transform)
+        root=DATA_DIR, download=DOWNLOAD, train=True, transform=train_transform)
 
-    ds_test_X = CIFAR10JustX(root=DATA_DIR, download=True,
+    ds_test_X = CIFAR10JustX(root=DATA_DIR, download=DOWNLOAD,
                              train=False, transform=test_transform)
-    ds_test_Y = CIFAR10JustY(root=DATA_DIR, download=True,
+    ds_test_Y = CIFAR10JustY(root=DATA_DIR, download=DOWNLOAD,
                              train=False, transform=test_transform)
 
     return ds_train_X, ds_train_Y, ds_test_X, ds_test_Y
@@ -461,15 +461,15 @@ def get_cifar_100_just_x_or_y_train_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR):
     just = just.lower()
     if just == 'x':
         ds_train_X = CIFAR100JustX(
-            root=DATA_DIR, download=True, train=True, transform=train_transform)
+            root=DATA_DIR, download=DOWNLOAD, train=True, transform=train_transform)
         ds_test_X = CIFAR100JustX(
-            root=DATA_DIR, download=True, train=False, transform=test_transform)
+            root=DATA_DIR, download=DOWNLOAD, train=False, transform=test_transform)
         return ds_train_X, ds_test_X
     elif just == 'y':
         ds_train_Y = CIFAR100JustY(
-            root=DATA_DIR, download=True, train=True, transform=train_transform)
+            root=DATA_DIR, download=DOWNLOAD, train=True, transform=train_transform)
         ds_test_Y = CIFAR100JustY(
-            root=DATA_DIR, download=True, train=False, transform=test_transform)
+            root=DATA_DIR, download=DOWNLOAD, train=False, transform=test_transform)
         return ds_train_Y, ds_test_Y
     else:
         raise ValueError(f"'just' should be in x,y. Got {just} instead.")
@@ -483,15 +483,15 @@ def get_cifar_10_just_x_or_y_train_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR):
     just = just.lower()
     if just == 'x':
         ds_train_X = CIFAR10JustX(
-            root=DATA_DIR, download=True, train=True, transform=train_transform)
+            root=DATA_DIR, download=DOWNLOAD, train=True, transform=train_transform)
         ds_test_X = CIFAR10JustX(
-            root=DATA_DIR, download=True, train=False, transform=test_transform)
+            root=DATA_DIR, download=DOWNLOAD, train=False, transform=test_transform)
         return ds_train_X, ds_test_X
     elif just == 'y':
         ds_train_Y = CIFAR10JustY(
-            root=DATA_DIR, download=True, train=True, transform=train_transform)
+            root=DATA_DIR, download=DOWNLOAD, train=True, transform=train_transform)
         ds_test_Y = CIFAR10JustY(
-            root=DATA_DIR, download=True, train=False, transform=test_transform)
+            root=DATA_DIR, download=DOWNLOAD, train=False, transform=test_transform)
         return ds_train_Y, ds_test_Y
     else:
         raise ValueError(f"'just' should be in x,y. Got {just} instead.")

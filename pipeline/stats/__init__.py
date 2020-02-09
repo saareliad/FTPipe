@@ -1,4 +1,4 @@
-from .cv import CVStats, NormCVstats, CVDistanceNorm
+from .cv import CVStats, NormCVstats, CVDistanceNorm, CVDistance
 from .interface import Stats
 
 AVAILBALE_STATS = {
@@ -9,6 +9,9 @@ AVAILBALE_STATS = {
     'cv_grad_norm_loss_per_batch': NormCVstats(record_loss_per_batch=True),
 
     'cv_theta_dist_grad_norm': CVDistanceNorm(record_loss_per_batch=False),
-    'cv_theta_dist_grad_norm_loss_per_batch': CVDistanceNorm(record_loss_per_batch=False)
+    'cv_theta_dist_grad_norm_loss_per_batch': CVDistanceNorm(record_loss_per_batch=False),
+
+    'cv_theta_dist': CVDistance(record_loss_per_batch=False),
+    'cv_theta_dist_loss_per_batch': CVDistance(record_loss_per_batch=False),
 
 }

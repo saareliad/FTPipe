@@ -150,3 +150,6 @@ After talk with Amit Nadav
 
 ## NOTICE
 * some ga resulst ran without GA! re running.... (some: thous after thier application was before decoupling step for last partition) I rerun all gap aware just in case...
+
+
+I see that with 2 buffers we are actually slower, probobly the time to create 2 buffers not worth it.

@@ -256,8 +256,9 @@ class SinglePartitionManager:
         _, (sent_request_objects, tmp_sent_items) = obj_holder.popitem(
             last=False)
         for i in sent_request_objects:
-            while(not i.is_completed()):
-                pass
+            i.wait()
+            # while(not i.is_completed()):
+            #     pass
 
     def get_input_data_forward(self, batch_idx, num_batches):
 

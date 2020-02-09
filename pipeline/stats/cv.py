@@ -247,7 +247,59 @@ class CVDistanceNorm(NormCVstats):
 
     def fit_result_init_dict(self):
         return dict(gap=[], **super().fit_result_init_dict())
-    
+
+    def non_latst_partition_on_epoch_end(self):
+        assert(self.training)
+        self.fit_res.gap.append(
+            self.epoch_gap_meter.get_avg())
+        self.epoch_gap_meter.reset()
+        super().non_latst_partition_on_epoch_end()
+
+    # Removed it, because its useless to see just for last partition...
+    # def get_epoch_info_str(self, is_train):
+    #     if is_train:
+    #         my_addition = ' | gap {:6.3f}'.format(
+    #             self.fit_res.gap[-1])
+    #         return super().get_epoch_info_str(is_train) + my_addition
+    #     return super().get_epoch_info_str(is_train)
+
+    def get_stats(self, stage_id):
+        fit_res = super().get_stats(stage_id)
+        new_name = f"p{stage_id}_gap"
+        old_name = 'gap'
+        fit_res[new_name] = fit_res.pop(old_name)
+        return fit_res
+
+
+class FitResultWithDistance(FitResult):
+    """
+    Represents the result of fitting a model for multiple epochs given a
+    training and test (or validation) set.
+    The losses are for each batch (or per epoch, depends on config)
+    and the accuracies are per epoch.
+    """
+    num_epochs: int
+    gap: List[float]
+    train_loss: List[float]
+    train_acc: List[float]
+    test_loss: List[float]
+    test_acc: List[float]
+
+
+# Code copy from ^
+class CVDistance(CVStats):
+    # FIXME: This whole chain of classes has HORRIBLE design. just implement it simple.
+    FIT_RESULTS_CLASS = FitResultWithDistance
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.add_statistic("gap", AverageMeter())
+        # self.epoch_gap_meter = AverageMeter()
+        assert not (self.fit_res is None)
+
+    def fit_result_init_dict(self):
+        return dict(gap=[], **super().fit_result_init_dict())
+
     def non_latst_partition_on_epoch_end(self):
         assert(self.training)
         self.fit_res.gap.append(
