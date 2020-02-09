@@ -2,6 +2,7 @@ import abc
 import pprint
 import pandas as pd
 
+
 class WorkScheduler(abc.ABC):
     def __init__(self, step_every):
         self.step_every = step_every
@@ -158,16 +159,15 @@ def print_for_stage(stage, scheduler, num_stages, num_batches):
 #     d = get_staleness_for_stage(
 #                     stage, scheduler, num_stages, num_batches, step_every)
 #     # to list of records...
-    
+
 #     df = pd.DataFrame.from_record(list(d.values()))
 #     l = df.groupby('mv').apply(lambda df: len(df)).to_dict()
 #     df['unique_mv'] = list(map(i.get, df['mv']))
 #     df['unique_mv_cs'] = df['unique_mv'].cumsum()
 
 
-
 # 0,1,2,3 -> 2
-    
+
 
 def get_fwds_between_first_and_seconds_step_for_stage(scheduler, stage, num_stages, num_batches):
     s = print_for_stage(stage, scheduler, num_stages, num_batches)
@@ -191,6 +191,7 @@ def get_fwds_between_first_and_seconds_step_for_stage(scheduler, stage, num_stag
 
 # def get_micro_batch(batch_idx, se):
 #     return batch_idx % se
+
 
 def should_do_step(batch_idx, se):
     do_step = (batch_idx % se) == (se-1)
@@ -258,7 +259,6 @@ if __name__ == "__main__":
     PRINT_JUST_PROBLEMATIC_STAGES = True
     PRINT_JUST_FOR_THE_FWDS = False
 
-
     d = dict(sched_name=sched_name,
              step_every=step_every, num_stages=num_stages)
     print(f"-I- got args: {pprint.pformat(d)}")
@@ -296,7 +296,6 @@ if __name__ == "__main__":
     print()
     print("Problematic stages:", stage_fwds_problematic)
 
-
     if PRINT_EXTRA_INFO:
         for stage in range(num_stages):
             print(f"Stage {stage}")
@@ -306,5 +305,5 @@ if __name__ == "__main__":
                 if stage not in stage_fwds_problematic:
                     continue
                 if PRINT_JUST_FOR_THE_FWDS:
-                    d = {i : d[i] for i in stage_fwds_between_first_step[stage]}
+                    d = {i: d[i] for i in stage_fwds_between_first_step[stage]}
             pprint.pprint(d)

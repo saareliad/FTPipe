@@ -12,7 +12,8 @@ class SGDRevertableLinearWeightPrediction(WeightPredictor):
 
     # FIXME: handle the error obtained from linear prediction (error < 1e-7)
     def __init__(self, *args, **kw):
-        raise NotImplementedError("SGDRevertableLinearWeightPrediction not yet supported for pipeline")
+        raise NotImplementedError(
+            "SGDRevertableLinearWeightPrediction not yet supported for pipeline")
         super().__init__(*args, **kw)
 
     def forward(self):
@@ -25,18 +26,18 @@ class SGDRevertableLinearWeightPrediction(WeightPredictor):
             for pg, fix_fn_item in zip(self.optimizer.param_groups, self.buffered_fixes):
                 if fix_fn_item:
                     for p in pg['params']:
-                        p.add_(-fix_fn_item,
-                               self.optimizer.state[p]["momentum_buffer"].data)
+                        p.data.add_(-fix_fn_item,
+                                    self.optimizer.state[p]["momentum_buffer"].data)
 
     def revert(self):
         if not self.n_steps:
-            return        
+            return
         with torch.no_grad():
             for pg, fix_fn_item in zip(self.optimizer.param_groups, self.buffered_fixes):
                 if fix_fn_item:
                     for p in pg['params']:
-                        p.add_(fix_fn_item,
-                               self.optimizer.state[p]["momentum_buffer"].data)
+                        p.data.add_(fix_fn_item,
+                                    self.optimizer.state[p]["momentum_buffer"].data)
 
 
 class SGDClonedWeightPrediction(WeightPredictor):
@@ -61,17 +62,17 @@ class SGDClonedWeightPrediction(WeightPredictor):
 
             self.true_weights_storage.create_cloned_if_needed()
             self.true_weights_storage.record_change_mode("pred")
-            
+
             # self.theta_buffer = [[p.data.clone() for p in pg['params']]
             #                      for pg in self.optimizer.param_groups]
+            pgs = self.optimizer.param_groups
 
-            self.buffered_fixes = [self.fix_fn(
-                self, pg) for pg in self.optimizer.param_groups]
-            for pg, fix_fn_item in zip(self.optimizer.param_groups, self.buffered_fixes):
+            self.buffered_fixes = [self.fix_fn(self, pg) for pg in pgs]
+            for pg, fix_fn_item in zip(pgs, self.buffered_fixes):
                 if fix_fn_item:
                     for p in pg['params']:
-                        p.add_(-fix_fn_item,
-                               self.optimizer.state[p]["momentum_buffer"].data)
+                        p.data.add_(-fix_fn_item,
+                                    self.optimizer.state[p]["momentum_buffer"].data)
 
     def revert(self):
         if not self.n_steps:
@@ -120,10 +121,14 @@ SGD_TYPE_TO_MSNAG_CLASS = {
 
 
 def get_sgd_weight_predictor(sgd_type: str, pred_mem: str,
-                             optimizer, scheduler=None, nag_with_predictor=False, true_weights_storage=None) -> WeightPredictor:
+                             optimizer, scheduler=None, 
+                             nag_with_predictor=False, 
+                             true_weights_storage=None) -> WeightPredictor:
     fix_fn_cls = SGD_TYPE_TO_MSNAG_CLASS.get(sgd_type, None)
     fix_fn = fix_fn_cls()
     pred_cls = PRED_MEM_TO_CLASS.get(pred_mem, None)
     # pred_cls: WeightPredictor
     # fix_fn: FixFunction
-    return pred_cls(optimizer, fix_fn, scheduler=scheduler, nag_with_predictor=nag_with_predictor, true_weights_storage=true_weights_storage)
+    return pred_cls(optimizer, fix_fn, scheduler=scheduler,
+                    nag_with_predictor=nag_with_predictor,
+                    true_weights_storage=true_weights_storage)

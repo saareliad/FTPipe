@@ -30,7 +30,9 @@ class TrueWeightsStorage:
     def create_cloned_if_needed(self):
         if (not self.true_weights_exist):
             buff = self._create_current_cloned_buff()
-            self.set_true_weights_buffer(buff)
+            # self.set_true_weights_buffer(buff)
+            self.true_weights = buff
+            self.true_weights_exist = True
 
     def restore_if_needed(self):
         if self.true_weights_exist and self.change_mode:

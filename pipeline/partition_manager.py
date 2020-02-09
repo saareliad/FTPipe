@@ -295,6 +295,16 @@ class SinglePartitionManager:
 
         return x, ctx
 
+    def forward_pass_and_send(self, batch_idx, num_batches):
+        x, ctx = self.get_input_data_forward(batch_idx, num_batches)
+        x = self.partition(x, batch_idx)
+        request_objects = None
+        if not self.is_last_partition:
+            send_ctx = self.task.pack_send_context(x, *ctx)
+            request_objects = self.comm_handler.send_activations(
+                send_ctx, batch_idx)
+        return request_objects, x, ctx
+
     def run_batch_forward(self, batch_idx, num_batches, done_bwds=None):
         """ Handles the forward pass, for last partition also handles the backward pass.
 
@@ -305,6 +315,17 @@ class SinglePartitionManager:
                     optional: Weight Stashing (ws)
                 - Send to next partition (*if needed)
                 - If last partition: do the backward and send to previous partition
+
+
+            In more detail:
+                # (1) PRELOAD (do stuff like load wieghts, NAG, etc....)
+                # (2) the actual forward
+                # (3) send activation (if not last partition)
+                # (4) stash weights if needed, etc. (NOTE: last partition don't stash)
+                # (5) last partition does its thing:
+                # (5.1) recompute
+                # (5.2) send activation back
+                # (5.3) resotre, step,...
 
             TODO:
                 - Pre load Y to last partition if possible
@@ -318,8 +339,6 @@ class SinglePartitionManager:
         if self.is_last_partition:
             preload_ctx = self.task.preload_last_partition(
                 getattr(self, "dl_iter", None), self.device)
-        # TODO: can do stuff like load wieghts, NAG, etc....
-        x, ctx = self.get_input_data_forward(batch_idx, num_batches)
 
         # Do the forward pass with optionals
         # optional (1): Weight Prediction
@@ -332,54 +351,49 @@ class SinglePartitionManager:
             if weight_predictor is not None:
                 # TODO: last partition can do bengio nesterov instead of predicting.
                 # Requires per partition optimizer config, or some hack.
-                # FIXME: for predictor to work with step_every > 1 it must know if are going to step
                 expected_staleness = self.expected_staleness(
                     batch_idx, done_bwds)
 
+                # NOTE: (1) we scale LR here just to tell weight predictor. will do it again when we step.
+                # NOTE: (2) true_weights_storage stuff handled inside predictor.
                 old_lrs = None
                 if batch_idx >= self.first_effected_batch:
                     old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
 
-                # TODO:
-                # self.true_weights_storage.create_cloned_if_needed()
                 weight_predictor.setup(expected_staleness)
                 weight_predictor.forward()
 
-                # We do it twice: this is the 1st time, just to tell th weight predictor
                 if old_lrs:
                     pgs = self.trainer.optimizer.param_groups
                     for pg, old_lr in zip(pgs, old_lrs):
                         pg['lr'] = old_lr
 
-                x = partition(x, batch_idx)
+                request_objects, x, ctx = self.forward_pass_and_send(batch_idx, num_batches)
+
                 if self.weight_stasher is not None:
                     # Stash parameters for later.
                     # Note: wait stasher should be None be in last partition.
                     if expected_staleness == 0 and weight_predictor.nag_with_predictor:
                         expected_staleness = 1
-                        # TODO: if not planned to do exp at this batch.
-                        # self.needs_own_post_restore[batch_idx] = False
-                        # FIXME: no reason to stash, and no reason to post restore from top!!!!!
+                        # FIXME: no reason to stash, so why we do it here?
 
                     # HACK: will set dirty ahead!
-                    self.weight_stasher.stash_current(
-                        batch_idx, expected_staleness)
+                    self.weight_stasher.stash_current(batch_idx, expected_staleness)
 
-                # HACK: reverting after send.
+                # HACK: will revert after send.
                 # weight_predictor.revert()
             else:
-                x = partition(x, batch_idx)
+                # No weight predictor
+                request_objects, x, ctx = self.forward_pass_and_send(batch_idx, num_batches)
                 if self.weight_stasher is not None:
                     self.weight_stasher.stash_current(
                         batch_idx, self.expected_staleness(batch_idx, done_bwds))
         else:
-            x = partition(x, batch_idx)
+            # Not training. just go on as usual
+            request_objects, x, ctx = self.forward_pass_and_send(batch_idx, num_batches)
 
         if not self.is_last_partition:
-            send_ctx = self.task.pack_send_context(x, *ctx)
-            request_objects = self.comm_handler.send_activations(
-                send_ctx, batch_idx)
-
+            # For the last partition - we restore later.
             if is_training:
                 self.true_weights_storage.restore_if_needed()
             return request_objects
@@ -404,8 +418,7 @@ class SinglePartitionManager:
 
             self.true_weights_storage.restore_if_needed()  # check=False
 
-            # BIG_BATCH allow skipping steps.
-            # HACK: last partition- batch idx is the same as num backwards.
+            # NOTE: for last partition- batch idx is the same as num backwards.
             do_step, old_lrs = self.should_do_step(batch_idx)
 
             # For the last batch, we must scale down the learning rate, and then restore.
@@ -419,8 +432,6 @@ class SinglePartitionManager:
 
             if do_step:
                 self.true_weights_storage.reset_on_step()
-
-            # TODO: true weights
 
             # Print training statistics.
             self.batches += 1
@@ -459,7 +470,7 @@ class SinglePartitionManager:
         if self.weight_stasher:
             # Restore to parameters which the fwd ran on
             self.weight_stasher.pop_restore_stashed(batch_idx)
-            self.true_weights_storage.record_change_mode("stashed")
+            # self.true_weights_storage.record_change_mode("stashed")
 
         self.partition.recompute(batch_idx)
 
