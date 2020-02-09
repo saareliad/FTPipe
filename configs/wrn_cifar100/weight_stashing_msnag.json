@@ -4,7 +4,7 @@
     "auto_file_name": true,
     "out_filename": "exp",
     "distributed_backend": "mpi",
-    "task": "cv",
+    "task": "cv_sep",
     "statistics": "cv_grad_norm",
     "model": "wrn_28x10_c100_dr03_p4",
     "dataset": "cifar100",
@@ -50,5 +50,7 @@
     "flush_rate": -1,
     "weight_stashing": true,
     "work_scheduler": "1F1B",
-    "seed_from_cmd": true
+    "seed_from_cmd": true,
+    "max_buffers": 1,
+    "cudnn_benchmark": true
 }

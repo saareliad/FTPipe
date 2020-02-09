@@ -121,8 +121,8 @@ SGD_TYPE_TO_MSNAG_CLASS = {
 
 
 def get_sgd_weight_predictor(sgd_type: str, pred_mem: str,
-                             optimizer, scheduler=None, 
-                             nag_with_predictor=False, 
+                             optimizer, scheduler=None,
+                             nag_with_predictor=False,
                              true_weights_storage=None) -> WeightPredictor:
     fix_fn_cls = SGD_TYPE_TO_MSNAG_CLASS.get(sgd_type, None)
     fix_fn = fix_fn_cls()

@@ -5,8 +5,8 @@
     "auto_file_name": true,
     "out_filename": "exp",
     "distributed_backend": "mpi",
-    "task": "cv",
-    "statistics": "cv_grad_norm",
+    "task": "cv_sep",
+    "statistics": "cv_theta_dist_grad_norm",
     "model": "wrn_16x4_c100_p4",
     "dataset": "cifar100",
     "trainer": {
@@ -45,5 +45,6 @@
     "weight_stashing": true,
     "work_scheduler": "1F1B",
     "seed_from_cmd": true,
-    "stage_to_device_map": [0, 0, 0, 0]
+    "cudnn_benchmark": true,
+    "max_buffers": 1
 }

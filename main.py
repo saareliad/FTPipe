@@ -459,12 +459,13 @@ def get_weight_predictor(args, optimizer, scheduler=None, true_weights_storage=N
     # if pred_mem['type'] == "msnag":
     if 'sgd' in optimizer_type:
         weight_predictor = get_sgd_weight_predictor(
-            optimizer_type, pred_mem, optimizer, scheduler=scheduler, 
-            nag_with_predictor=nag_with_predictor, 
+            optimizer_type, pred_mem, optimizer, scheduler=scheduler,
+            nag_with_predictor=nag_with_predictor,
             true_weights_storage=true_weights_storage)
         return weight_predictor, nag_with_predictor
     else:
         raise NotImplementedError()
+
 
 def hack_trainer_type_to_gap_aware(args):
 
@@ -857,14 +858,14 @@ def main():
         args, optimizer, scheduler=scheduler, true_weights_storage=true_weights_storage)
     if weight_predictor:
         partition.set_weight_predictor(weight_predictor, nag_with_predictor)
-        # TODO: wp with reminder from step every.
 
     # Set Weight Stashing
     if hasattr(args, "weight_stashing") and args.weight_stashing:
-        weight_stasher = WeightStasher(optimizer, step_every=args.step_every,
-                                       has_weight_predictor=(weight_predictor is not None), 
-                                       true_weights_storage=true_weights_storage)
         if not is_last_partition:
+            weight_stasher = WeightStasher(optimizer, step_every=args.step_every,
+                                           has_weight_predictor=(
+                                               weight_predictor is not None),
+                                           true_weights_storage=true_weights_storage)
             partition.set_weight_stasher(weight_stasher)
 
     # Set Task

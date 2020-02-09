@@ -54,9 +54,8 @@ class WeightStasher:
                 return (batch_index+1) % se
         elif policy == 'EVERY_BATCH':
             def get_micro_batch(self, batch_index):
-                return 0  # TODO: this can be improved, but I have problems with the dirty...
-                # return batch_index if batch_index < se else 0
-
+                # return 0  # TODO: this can be improved, but I have problems with the dirty...
+                return batch_index if batch_index < se else 0
         else:
             raise NotImplementedError()
 
@@ -100,11 +99,12 @@ class WeightStasher:
         #     print(self.dirty_mark)
         # Aviod stashing in case of no staleness.
         if expected_updates > 0:
-            
+
             # HACK: we use the same buffer for differnt micro batches!
             # we can do it because we don't step on stashed wieghts.
             micro_batch = self.get_micro_batch_forward(batch_index)
-            buff = self.theta_buffer.get(batch_index - 1, None) if micro_batch > 0 else None
+            buff = self.theta_buffer.get(
+                batch_index - 1, None) if micro_batch > 0 else None
 
             if buff is None:
                 buff = self._create_current_cloned_buff()
@@ -115,15 +115,17 @@ class WeightStasher:
                         {rank} b:{batch_index}, mb:{micro_batch}, prev b:{batch_index-1} \
                           expected_updates:{expected_updates}"
                     raise RuntimeError(s)
-            
+
             self.theta_buffer[batch_index] = buff
-            
+
             if self.has_weight_predictor:
-                self.dirty_mark[batch_index] = True   # So we post restore true weights!
+                # So we post restore true weights!
+                self.dirty_mark[batch_index] = True
             else:
                 self.dirty_mark[batch_index] = False
         else:
-            self.dirty_mark[batch_index] = False  # HACK: mark as not dirty anyway.
+            # HACK: mark as not dirty anyway.
+            self.dirty_mark[batch_index] = False
 
     def _restore_from_buff(self, buff):
         with torch.no_grad():

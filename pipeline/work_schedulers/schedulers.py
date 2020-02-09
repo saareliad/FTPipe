@@ -235,7 +235,8 @@ def get_staleness_for_stage(stage, scheduler, num_stages, num_batches, se):
             steps_so_far = done_bwds // se
             if not (steps_so_far == d[done_bwds]['bv']):
                 # pprint.pprint(d)
-                raise AssertionError(f"Stage:{stage}, batch:{done_bwds}, steps_so_far:{steps_so_far}, but predicted: {d[done_bwds]['bv']}.\n \
+                raise AssertionError(f"Stage:{stage}, batch:{done_bwds}, steps_so_far:{steps_so_far},\
+                    but predicted: {d[done_bwds]['bv']}.\n \
                     Extra:\n {pprint.pformat(d)},\n {s[:done_fwds+done_bwds+1]}")
 
             done_bwds += 1
