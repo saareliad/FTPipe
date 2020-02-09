@@ -1,6 +1,7 @@
 import torch
 from torch import Tensor
-
+import functools
+import os
 from ..utils import tensorDict, layerDict, OrderedSet, Tensors, _get_size
 from .control_flow_graph import NodeTypes, Node, Graph, GraphNodes
 from .network_profiler import profile_network, Profile
@@ -10,6 +11,8 @@ import re
 import string
 from typing import Callable, List, Dict, OrderedDict as OrderedDictType, Optional, Tuple, Set
 import warnings
+import logging
+import sys
 
 __all__ = ["build_graph"]
 
@@ -21,6 +24,34 @@ __all__ = ["build_graph"]
 
 
 # TODO there are still some problems with lstms should think if we want to tackle it
+
+
+DEBUG_MODEL_NAME = ""
+
+
+def DEBUG_DUMP_GRAPH(func):
+    """ a fancy debug decorator should anything fail during the graph building process
+    saves the graph,trace_graph and execution traceback
+    """
+    @functools.wraps(func)
+    def wrapper_dump(*args, **kwargs):
+        assert len(args) >= 1
+        nodes = args[0]
+        assert isinstance(nodes, OrderedDict)
+        graph_path = f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_before_{func.__name__}"
+        Graph(nodes).serialize(graph_path)
+        try:
+            value = func(*args, **kwargs)
+            os.remove(f"{graph_path}.graph")
+            return value
+        except Exception as e:
+            LOG_FILENAME = f'GPIPE_DEBUG/{DEBUG_MODEL_NAME}_log.out'
+            logging.basicConfig(filename=LOG_FILENAME, level=logging.DEBUG)
+            logging.error(e, exc_info=True, stack_info=False)
+            raise type(e)(str(
+                e) + " an error occured during graph building please report this issue and attach the contents of GPIPE_DEBUG/").with_traceback(sys.exc_info()[2])
+    return wrapper_dump
+
 
 def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, max_depth: int = 1000, basic_blocks: Optional[Tuple[torch.nn.Module, ...]] = None, n_iter: int = 10) -> Graph:
     if kwargs is None:
@@ -68,12 +99,21 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
         warnings.warn(
             "trace_feature not found. falling back to regular trace which is less accurate and might not work\n please build it")
         torch._C._jit_pass_inline(trace_graph)
+
+    global DEBUG_MODEL_NAME
+    DEBUG_MODEL_NAME = model.__class__.__name__
+    if not os.path.exists("GPIPE_DEBUG/"):
+        os.mkdir("GPIPE_DEBUG/")
+    with open(f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_DEBUG_trace.txt", "w") as f:
+        f.write(str(trace_graph))
+
     # build the graph from trace
     nodes, unpack_fix = add_nodes(trace_graph, new_to_old,
                                   partials, tensors)
-    outputs = output_scopes(trace_graph, nodes)
+    outputs = output_scopes(nodes, trace_graph)
 
     nodes = add_unpack_nodes(nodes, unpack_fix)
+
     # optimization passes and graph fixes
     nodes = remove_useless_clone(nodes)
     nodes = remove_empty_view(nodes)
@@ -95,9 +135,9 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
             node.shape = layer_profiles[node.scope].output_shape
             node.value_type = Tensor if len(node.shape) == 1 else list
 
-    nodes = set_indices(nodes)
-
-    return Graph._check(Graph(nodes, outputs, max_depth, basic_blocks))
+    graph = graph_check_and_cleanup(nodes, outputs, max_depth, basic_blocks)
+    os.rmdir("GPIPE_DEBUG/")
+    return graph
 
 ##Initial graph construction####################################################################################################################################################################
 
@@ -271,7 +311,7 @@ def add_accessor(nodes: GraphNodes, trace_node: torch._C.Node, accessors: Dict[i
 
 
 ##fit initial graph to profile#################################################################################################################################################
-
+@DEBUG_DUMP_GRAPH
 def optimize_graph(nodes: GraphNodes, layer_scopes: List[str]) -> GraphNodes:
     '''
     this module takes the raw Graph and removes/merges nodes in order to get the requested graph.
@@ -282,6 +322,7 @@ def optimize_graph(nodes: GraphNodes, layer_scopes: List[str]) -> GraphNodes:
     return nodes
 
 
+@DEBUG_DUMP_GRAPH
 def _combine_OP_nodes_under_the_same_scope(nodes: GraphNodes) -> GraphNodes:
     # optimization that reduces number of nodes in the graph
     # combine nodes that have a commom scope we do this because\n
@@ -321,6 +362,7 @@ def _combine_OP_nodes_under_the_same_scope(nodes: GraphNodes) -> GraphNodes:
     return OrderedDict(reversed(optimized_graph.items()))
 
 
+@DEBUG_DUMP_GRAPH
 def _combine_params_and_buffers_into_OP_nodes(nodes: GraphNodes, layer_scopes: List[str]) -> GraphNodes:
     def is_buffer_or_param(n):
         return n.type == NodeTypes.BUFF_PARAM and any(n.scope.startswith(layer_scope) for layer_scope in layer_scopes)
@@ -328,6 +370,7 @@ def _combine_params_and_buffers_into_OP_nodes(nodes: GraphNodes, layer_scopes: L
     return _remove_nodes(nodes, is_buffer_or_param)
 
 
+@DEBUG_DUMP_GRAPH
 def add_missing_types(nodes: GraphNodes) -> GraphNodes:
     for node in nodes.values():
         if node.valueType() is type(None):
@@ -356,12 +399,13 @@ def add_missing_types(nodes: GraphNodes) -> GraphNodes:
     return nodes
 
 
-def output_scopes(trace_graph, nodes: GraphNodes) -> OrderedSet[str]:
+def output_scopes(nodes: GraphNodes, trace_graph: torch._C.Graph) -> OrderedSet[str]:
     return OrderedSet(nodes[output.unique()].scope for output in trace_graph.outputs())
 
 ######cleanup methods##############################################################################################################################################
 
 
+@DEBUG_DUMP_GRAPH
 def remove_tensor_int_tensor(nodes) -> GraphNodes:
     def predicate(node):
         if 'prim::ImplicitTensorToNum' in node.scope or 'aten::Int' in node.scope or 'prim::NumToTensor' in node.scope:
@@ -373,12 +417,14 @@ def remove_tensor_int_tensor(nodes) -> GraphNodes:
     return _remove_nodes(nodes, predicate)
 
 
+@DEBUG_DUMP_GRAPH
 def remove_useless_clone(nodes: GraphNodes) -> GraphNodes:
     def predicate(n: Node):
         return ('aten::clone' in n.scope) and (len(n.out_nodes) == 0)
     return _remove_nodes(nodes, predicate)
 
 
+@DEBUG_DUMP_GRAPH
 def remove_layer_to_list(nodes: GraphNodes) -> GraphNodes:
     '''can happen when not using our trace feature as result of merging nodes
         this indicates that a merged scope returns a list/tuple so we remove it
@@ -390,6 +436,7 @@ def remove_layer_to_list(nodes: GraphNodes) -> GraphNodes:
     return _remove_nodes(nodes, predicate)
 
 
+@DEBUG_DUMP_GRAPH
 def remove_empty_view(nodes: GraphNodes) -> GraphNodes:
     def predicate(n: Node):
         if ('aten::view' in n.scope):
@@ -401,6 +448,7 @@ def remove_empty_view(nodes: GraphNodes) -> GraphNodes:
     return _remove_nodes(nodes, predicate)
 
 
+@DEBUG_DUMP_GRAPH
 def remove_useless_node_inputs(nodes: GraphNodes) -> GraphNodes:
     # stupid fix where for some odd reason arithmetic ops have a third input with value 1
     # and Tensor.contiguous has a second input with value 0
@@ -422,6 +470,7 @@ def remove_useless_node_inputs(nodes: GraphNodes) -> GraphNodes:
     return _remove_nodes(nodes, pred)
 
 
+@DEBUG_DUMP_GRAPH
 def _remove_nodes_that_go_nowhere(nodes: GraphNodes, scopes: OrderedSet[str]) -> GraphNodes:
     '''remove nodes without out edges that are not outputs of the model'''
     # necessary because the trace can contain such nodes for certain ops
@@ -479,7 +528,7 @@ def opMatch(scope: str, op_name: str) -> bool:
 
 
 ####################Packing and Unpacking of inputs/outputs########################################################################################################################################
-
+@DEBUG_DUMP_GRAPH
 def add_unpack_nodes(nodes: GraphNodes, to_fix: Dict[int, int]) -> GraphNodes:
     '''
     when not all of a tuple elements are used it is possible that not all of the unpack nodes will be emitted by the trace
@@ -538,6 +587,7 @@ def add_unpack_nodes(nodes: GraphNodes, to_fix: Dict[int, int]) -> GraphNodes:
     return new_graph
 
 
+@DEBUG_DUMP_GRAPH
 def unpack_all_node_outputs(nodes: GraphNodes, layer_profiles: Dict[str, Profile]) -> GraphNodes:
     new_graph = OrderedDict()
     # as we add nodes there might be idx collisions we fix this by expanding the range
@@ -605,6 +655,7 @@ def _unpack_outputs(node: Node, outputs) -> Tuple[List[Node], int]:
     return unpack_nodes, num_new
 
 
+@DEBUG_DUMP_GRAPH
 def pack_all_node_inputs(nodes: GraphNodes, layer_profiles: Dict[str, Profile]) -> GraphNodes:
     "a model that have a tuple input may not be registered correctly so we create the necessary packing if necessary"
     new_graph = OrderedDict()
@@ -763,6 +814,15 @@ def longest_prefix(strings: List[str], scope: str) -> str:
 
 
 ##################################################################################################################################################################################################
+
+@DEBUG_DUMP_GRAPH
+def graph_check_and_cleanup(nodes, outputs, max_depth, basic_blocks) -> Graph:
+    nodes = set_indices(nodes)
+
+    graph = Graph._check(Graph(nodes, outputs, max_depth, basic_blocks))
+
+    os.remove(f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_DEBUG_trace.txt")
+    return graph
 
 
 def set_indices(nodes: GraphNodes):
