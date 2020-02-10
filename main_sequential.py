@@ -177,7 +177,7 @@ def save_sequential_experiment(statistics, args):
         save_experiment(args.out_filename, args.out_dir, config, fit_res)
 
 
-def training_loop(args, logger, train_dl, test_dl, partition, scheduler, statistics):
+def training_loop(args, logger, train_dl, test_dl, partition, scheduler, statistics, samplers):
     epochs = 0
     steps = 0
     logger.info(f"Running for {args.epochs} epochs and {args.steps} steps")
@@ -195,6 +195,8 @@ def training_loop(args, logger, train_dl, test_dl, partition, scheduler, statist
             args, "test_batches_limit") >= 0 else len(test_dl)
 
     while epochs < args.epochs or args.epochs < 0:
+        for i in samplers:
+            i.set_epoch(epochs)
         if args.steps > 0:
             TRAIN_BATCHES_TO_RUN = min(
                 TRAIN_BATCHES_TO_RUN, args.steps - steps)
@@ -304,10 +306,10 @@ def get_dataloaders(args):
     if hasattr(args, 'ddp') and args.ddp:
         get_dls_fn = new_distributed_get_train_test_dl_from_args
         # num_splits=None, use_split=None
-    train_dl, test_dl = get_dls_fn(
+    train_dl, test_dl, *samplers = get_dls_fn(
         args, verbose=False, **dl_kw)
 
-    return train_dl, test_dl
+    return train_dl, test_dl, samplers
 
 
 def yuck_from_main():
@@ -364,7 +366,7 @@ def yuck_from_main():
 
     assert_args(args)
 
-    train_dl, test_dl = get_dataloaders(args)
+    train_dl, test_dl, samplers = get_dataloaders(args)
     trainer_cls = AVAILABLE_TRAINERS.get(args.trainer['type'])
     # task_cls = AVAILABLE_TASKS.get(args.task)  # TODO:
     optimizer_cls = AVAILBALE_OPTIMIZERS.get(args.optimizer_type)
@@ -388,7 +390,7 @@ def yuck_from_main():
         auto_file_name(args)
 
     training_loop(args, logger, train_dl, test_dl,
-                  partition, scheduler, statistics)
+                  partition, scheduler, statistics, samplers)
 
     save_sequential_experiment(statistics, args)
     # NO_DP = True

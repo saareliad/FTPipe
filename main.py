@@ -123,7 +123,7 @@ def parse_cli():
                         "With 1: it actaully means the recv is sync.(default=2 for best performance).")
 
     parser.add_argument("--keep_buffers_alive", action="store_true",
-                        default=False, 
+                        default=False,
                         help="Keep forward buffers for both train and eval "
                         "instead of dynamically creating them every iteration")
     # TODO: option for weigth stashing just statistics.
@@ -552,7 +552,8 @@ def save_distributed_experiment(statistics, args, world_size, rank, local_rank, 
         torch.distributed.barrier()
 
 
-def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition, statistics, train_dl_len, test_dl_len):
+def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition, statistics,
+                  train_dl_len, test_dl_len, samplers):
     epochs = 0
     steps = 0
     logger.info(f"flush rate {args.flush_rate}")
@@ -567,6 +568,9 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition
     TEST_BATCHES_TO_RUN = test_dl_len if TEST_BATCHES_TO_RUN < 0 else TEST_BATCHES_TO_RUN
 
     while epochs < args.epochs or args.epochs < 0:
+        for s in samplers:
+            s.set_epoch(epochs)
+
         if args.steps > 0:
             TRAIN_BATCHES_TO_RUN = min(
                 TRAIN_BATCHES_TO_RUN, args.steps - steps)
@@ -668,14 +672,14 @@ def get_dataloaders(args, explicit_seperated_dataset=False):
 
     # if args.task == 'cv_sep'
     if explicit_seperated_dataset:
-        train_dl, test_dl = get_seperate_just_x_or_y_train_test_dl_from_args(
+        train_dl, test_dl, samplers = get_seperate_just_x_or_y_train_test_dl_from_args(
             args, verbose=False, **dl_kw)
     else:
         # Note: sometimes used to infer all parameters, (by all partitions).
-        train_dl, test_dl = simplified_get_train_test_dl_from_args(
+        train_dl, test_dl, *samplers = simplified_get_train_test_dl_from_args(
             args, verbose=False, **dl_kw)
 
-    return train_dl, test_dl
+    return train_dl, test_dl, samplers
 
 
 def get_device(args):
@@ -756,7 +760,7 @@ def main():
         logger.info(f"Stage {args.stage} will use Gap Aware")
 
     # Get dataloaders
-    train_dl, test_dl = get_dataloaders(args)
+    train_dl, test_dl, samplers = get_dataloaders(args)
 
     ######################################## Start OF UGLY BLOCK ########################################
     # TODO: do the following block generically and automatically using tasks, or alon's code.
@@ -884,15 +888,15 @@ def main():
     # Try getting seperate X,Y dataloaders
     if is_first_partition or is_last_partition:
         if "_sep" in args.task:
-            train_dl, test_dl = get_dataloaders(
+            train_dl, test_dl, samplers = get_dataloaders(
                 args, explicit_seperated_dataset=True)
     else:
-        train_dl, test_dl = None, None
+        train_dl, test_dl, samplers = None, None, []
 
     # Main Training Loop
 
     training_loop(args, logger, train_dl, test_dl,
-                  is_first_partition, partition, statistics, train_dl_len, test_dl_len)
+                  is_first_partition, partition, statistics, train_dl_len, test_dl_len, samplers)
 
     # Synchronize and save statistics from all partitions
     save_distributed_experiment(

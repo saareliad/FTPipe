@@ -300,7 +300,7 @@ def new_distributed_simplified_get_train_test_dl(dataset, bs_train, bs_test, shu
         print(f'Train: {len(dl_train) * bs_train} samples')
         print(f'Test: {len(dl_test) * bs_test} samples')
 
-    return dl_train, dl_test
+    return dl_train, dl_test, train_sampler
 
 
 def new_distributed_get_train_test_dl_from_args(args, **kw):
@@ -530,7 +530,7 @@ def get_seperate_just_x_or_y_train_test_dl(dataset, bs_train, bs_test, just,
         print(f'Train: {len(dl_train) * bs_train} samples')
         print(f'Test: {len(dl_test) * bs_test} samples')
 
-    return dl_train, dl_test
+    return dl_train, dl_test, [train_sampler, test_sampler]
 
 
 def get_seperate_just_x_or_y_train_test_dl_from_args(args, **kw):
