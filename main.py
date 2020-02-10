@@ -122,6 +122,10 @@ def parse_cli():
                         help="Maximal Number of async recv buffers. "
                         "With 1: it actaully means the recv is sync.(default=2 for best performance).")
 
+    parser.add_argument("--keep_buffers_alive", action="store_true",
+                        default=False, 
+                        help="Keep forward buffers for both train and eval "
+                        "instead of dynamically creating them every iteration")
     # TODO: option for weigth stashing just statistics.
 
     args = parser.parse_args()
@@ -808,6 +812,7 @@ def main():
     work_scheduler = AVAILABLE_WORK_SCHEDULERS.get(args.work_scheduler)
 
     # Init the partition manager
+
     partition = SinglePartitionManager(
         args.stage,
         configs, configs[args.stage]['model'],
@@ -816,8 +821,8 @@ def main():
         device, is_last_partition, is_first_partition,
         log_frequency=args.log_frequency,
         max_buffers=args.max_buffers,
-        step_every=args.step_every
-    )
+        step_every=args.step_every,
+        keep_buffers_alive=args.keep_buffers_alive)
 
     if hasattr(args, "ddp_sim_num_gpus") and args.ddp_sim_num_gpus > 1:
         print(

@@ -62,5 +62,6 @@
     "work_scheduler": "1F1B",
     "cudnn_benchmark": true,
     "max_buffers": 1,
-    "step_every": 1
+    "step_every": 1,
+    "keep_buffers_alive": true
 }

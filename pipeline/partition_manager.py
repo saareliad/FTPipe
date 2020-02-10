@@ -26,7 +26,8 @@ class SinglePartitionManager:
     def __init__(self, stage, configs: Dict, partition: torch.nn.Module, comm_handler: CommunicationHandlerBase,
                  work_scheduler: WorkScheduler,
                  training_tensor_shapes, eval_tensor_shapes, training_tensor_dtypes,  # FIXME
-                 device, is_last_partition, is_first_partition, log_frequency=100, max_buffers=2, step_every=1):
+                 device, is_last_partition, is_first_partition, log_frequency=100, max_buffers=2, step_every=1,
+                 keep_buffers_alive=False):
 
         if is_last_partition:
             partition_cls = LastPartition
@@ -79,13 +80,43 @@ class SinglePartitionManager:
         # State for recv buffers
         if max_buffers > 2:  # FIXME
             raise NotImplementedError()
-        self.fwd_rcev_buffers = Buffers(
-            max_buffers, self.comm_handler.create_activations_recv_buffers,
-            self.device, self.comm_handler.recv_activations, is_grad=False)
-        self.bwd_rcev_buffers = Buffers(
-            max_buffers, self.comm_handler.create_gradients_rcv_buffers,
-            self.device, self.comm_handler.recv_gradients, is_grad=True)
-        self.recv_all_bwd = True
+
+        def make_buff(is_bwd, create=False):
+
+            if is_bwd:
+                b = Buffers(
+                    max_buffers, self.comm_handler.create_gradients_rcv_buffers,
+                    self.device, self.comm_handler.recv_gradients, is_grad=True)
+
+            else:
+                b = Buffers(
+                    max_buffers, self.comm_handler.create_activations_recv_buffers,
+                    self.device, self.comm_handler.recv_activations, is_grad=False)
+
+            if create:
+                b.create()
+            return b
+
+        self.keep_buffers_alive = keep_buffers_alive
+
+        if keep_buffers_alive:
+            # Create once.
+
+            # itertools.product(['fwd', 'bwd'], ['train', 'eval'])
+
+            self.comm_handler.set_tensor_shapes(self.training_tensor_shapes)
+            self.comm_handler.set_tensor_dtypes(self.training_tensor_dtypes)
+
+            self.fwd_rcev_buffers_train = make_buff(is_bwd=False, create=True)
+            self.bwd_rcev_buffers = make_buff(is_bwd=True, create=False)
+
+            self.comm_handler.set_tensor_shapes(self.eval_tensor_shapes)
+            # FIXME: we set eval dtypes as training too.
+            self.comm_handler.set_tensor_dtypes(self.training_tensor_dtypes)
+            self.fwd_rcev_buffers_eval = make_buff(is_bwd=False, create=True)
+        else:
+            self.fwd_rcev_buffers = make_buff(is_bwd=False)
+            self.bwd_rcev_buffers = make_buff(is_bwd=True)
 
         # Holds Async handle objects (for isends)
         self.async_fwd_objects = OrderedDict()
@@ -229,9 +260,13 @@ class SinglePartitionManager:
         self.partition.train()
 
         # Handles the transition : eval -> train
-
-        if self.fwd_rcev_buffers.is_initialized():
-            self.fwd_rcev_buffers.create()
+        if self.keep_buffers_alive:
+            self.fwd_rcev_buffers = self.fwd_rcev_buffers_train.reset_state()
+            self.bwd_rcev_buffers.reset_state()
+        else:
+            if self.fwd_rcev_buffers.is_initialized():
+                self.fwd_rcev_buffers.create()
+            self.bwd_rcev_buffers.reset_state()
 
     def eval(self):
         self.comm_handler.set_tensor_shapes(self.eval_tensor_shapes)
@@ -241,10 +276,11 @@ class SinglePartitionManager:
         self.partition.eval()
 
         # Handles the transition : train -> eval
-        if self.fwd_rcev_buffers.is_initialized():
-            self.fwd_rcev_buffers.create()
-
-        self.recv_all_bwd = True  # TODO: i don't like this hack
+        if self.keep_buffers_alive:
+            self.fwd_rcev_buffers = self.fwd_rcev_buffers_eval.reset_state()
+        else:
+            if self.fwd_rcev_buffers.is_initialized():
+                self.fwd_rcev_buffers.create()
 
     def wait_on_sent_object(self, is_fwd):
         # TODO: can write the entire thing MUCH more nicely
@@ -369,7 +405,8 @@ class SinglePartitionManager:
                     for pg, old_lr in zip(pgs, old_lrs):
                         pg['lr'] = old_lr
 
-                request_objects, x, ctx = self.forward_pass_and_send(batch_idx, num_batches)
+                request_objects, x, ctx = self.forward_pass_and_send(
+                    batch_idx, num_batches)
 
                 if self.weight_stasher is not None:
                     # Stash parameters for later.
@@ -379,19 +416,22 @@ class SinglePartitionManager:
                         # FIXME: no reason to stash, so why we do it here?
 
                     # HACK: will set dirty ahead!
-                    self.weight_stasher.stash_current(batch_idx, expected_staleness)
+                    self.weight_stasher.stash_current(
+                        batch_idx, expected_staleness)
 
                 # HACK: will revert after send.
                 # weight_predictor.revert()
             else:
                 # No weight predictor
-                request_objects, x, ctx = self.forward_pass_and_send(batch_idx, num_batches)
+                request_objects, x, ctx = self.forward_pass_and_send(
+                    batch_idx, num_batches)
                 if self.weight_stasher is not None:
                     self.weight_stasher.stash_current(
                         batch_idx, self.expected_staleness(batch_idx, done_bwds))
         else:
             # Not training. just go on as usual
-            request_objects, x, ctx = self.forward_pass_and_send(batch_idx, num_batches)
+            request_objects, x, ctx = self.forward_pass_and_send(
+                batch_idx, num_batches)
 
         if not self.is_last_partition:
             # For the last partition - we restore later.
@@ -462,8 +502,7 @@ class SinglePartitionManager:
             bwd_rcev_buffers.create()
 
         recved_all = False
-        if self.recv_all_bwd or bwd_rcev_buffers.first_rcv_after_created or bwd_rcev_buffers.max_buffers == 1:
-            self.recv_all_bwd = False
+        if bwd_rcev_buffers.first_rcv_after_created or bwd_rcev_buffers.max_buffers == 1:
             bwd_rcev_buffers.recv_all(batch_idx, num_batches)
             recved_all = True
 

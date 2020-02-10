@@ -39,6 +39,10 @@ class Buffers:
         self._is_initialized = True
         for i in range(self.max_buffers):
             self.buffers = [self.create_fn() for _ in range(self.max_buffers)]
+        return self.reset_state()
+
+    def reset_state(self):
+        # self._is_initialized = True
         if self.is_grad:
             self.itr = PreProcIter(cycle(self.buffers), zero_grad_fn)
         else:
@@ -46,6 +50,8 @@ class Buffers:
 
         self.pointer = 0
         self.first_rcv_after_created = True
+
+        return self
         # assert len(self.handlers) == 0
 
     def get_one(self):
@@ -104,7 +110,8 @@ class Buffers:
         self.pointer = (self.pointer + 1) % self.max_buffers
         request_objects = self.handlers.popleft()
         for obj in request_objects:
-            while(not obj.is_completed()):
-                pass
+            obj.wait()
+            # while(not obj.is_completed()):
+            #     pass
 
         return res
