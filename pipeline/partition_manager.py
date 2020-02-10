@@ -97,6 +97,10 @@ class SinglePartitionManager:
                 b.create()
             return b
 
+        shapes_are_equal = eval_tensor_shapes == training_tensor_shapes
+        if shapes_are_equal:  # FIXME: also for eval dtypes.
+            keep_buffers_alive = True  # HACK: if same shapes and datatypes, the buffers can remain!
+
         self.keep_buffers_alive = keep_buffers_alive
 
         if keep_buffers_alive:
@@ -113,7 +117,10 @@ class SinglePartitionManager:
             self.comm_handler.set_tensor_shapes(self.eval_tensor_shapes)
             # FIXME: we set eval dtypes as training too.
             self.comm_handler.set_tensor_dtypes(self.training_tensor_dtypes)
-            self.fwd_rcev_buffers_eval = make_buff(is_bwd=False, create=True)
+            if not shapes_are_equal:
+                self.fwd_rcev_buffers_eval = make_buff(is_bwd=False, create=True)
+            else:
+                self.fwd_rcev_buffers_eval = self.fwd_rcev_buffers_train  # HACK: same buffer!
         else:
             self.fwd_rcev_buffers = make_buff(is_bwd=False)
             self.bwd_rcev_buffers = make_buff(is_bwd=True)
@@ -364,13 +371,15 @@ class SinglePartitionManager:
                 # (5.2) send activation back
                 # (5.3) resotre, step,...
 
-            TODO:
+            Feature:
                 - Pre load Y to last partition if possible
         """
-        # TODO: BIG_BATCH: fix delay in case micro batches.
-        if self.gap_aware and self.partition.training:
-            self.delay_at_batch[batch_idx] = self.expected_staleness(
-                batch_idx, done_bwds)
+        partition = self.partition
+        is_training = partition.training
+
+        if is_training:
+            expected_staleness = self.expected_staleness(batch_idx, done_bwds)
+            self.delay_at_batch[batch_idx] = expected_staleness
 
         # Get the data to run forward on, (and target)
         if self.is_last_partition:
@@ -380,16 +389,12 @@ class SinglePartitionManager:
         # Do the forward pass with optionals
         # optional (1): Weight Prediction
         # optional (2): Weight Stashing
-        weight_predictor = self.weight_predictor
-        partition = self.partition
-        is_training = partition.training
-
         if is_training:
+            weight_predictor = self.weight_predictor
+            weight_stasher = self.weight_stasher
             if weight_predictor is not None:
                 # TODO: last partition can do bengio nesterov instead of predicting.
                 # Requires per partition optimizer config, or some hack.
-                expected_staleness = self.expected_staleness(
-                    batch_idx, done_bwds)
 
                 # NOTE: (1) we scale LR here just to tell weight predictor. will do it again when we step.
                 # NOTE: (2) true_weights_storage stuff handled inside predictor.
@@ -408,15 +413,15 @@ class SinglePartitionManager:
                 request_objects, x, ctx = self.forward_pass_and_send(
                     batch_idx, num_batches)
 
-                if self.weight_stasher is not None:
+                if weight_stasher is not None:
                     # Stash parameters for later.
                     # Note: wait stasher should be None be in last partition.
                     if expected_staleness == 0 and weight_predictor.nag_with_predictor:
                         expected_staleness = 1
-                        # FIXME: no reason to stash, so why we do it here?
+                        # HACK: apparently, no reason to stash, so why we do it here? so we can reload.
 
                     # HACK: will set dirty ahead!
-                    self.weight_stasher.stash_current(
+                    weight_stasher.stash_current(
                         batch_idx, expected_staleness)
 
                 # HACK: will revert after send.
@@ -425,9 +430,8 @@ class SinglePartitionManager:
                 # No weight predictor
                 request_objects, x, ctx = self.forward_pass_and_send(
                     batch_idx, num_batches)
-                if self.weight_stasher is not None:
-                    self.weight_stasher.stash_current(
-                        batch_idx, self.expected_staleness(batch_idx, done_bwds))
+                if weight_stasher is not None:
+                    weight_stasher.stash_current(batch_idx, expected_staleness)
         else:
             # Not training. just go on as usual
             request_objects, x, ctx = self.forward_pass_and_send(
@@ -506,11 +510,16 @@ class SinglePartitionManager:
             bwd_rcev_buffers.recv_all(batch_idx, num_batches)
             recved_all = True
 
+        weight_stasher = self.weight_stasher
         #  Recompute before waiting to the first, so parallelize communication and computation
-        if self.weight_stasher:
+        if weight_stasher:
             # Restore to parameters which the fwd ran on
-            self.weight_stasher.pop_restore_stashed(batch_idx)
+            weight_stasher.pop_restore_stashed(batch_idx)
             # self.true_weights_storage.record_change_mode("stashed")
+        elif self.weight_predictor and self.weight_predictor.nag_with_predictor and self.delay_at_batch.get(batch_idx) == 0:
+            self.weight_predictor.setup(0)
+            self.weight_predictor.forward()
+            # self.true_weights_storage.record_change_mode("pred")
 
         self.partition.recompute(batch_idx)
 

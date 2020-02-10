@@ -22,6 +22,8 @@ def run_function_on_several_gpus(required_gpus, func, cfg, q):
         q.put(gpu)
 
 # TODO: this is not working it...
+
+
 def map_to_several_limited_gpus(func, configs, gpus_per_config, NUM_AVAIALBLE_GPUS, CUDA_VISIBLE_DEVICES=None):
     with Manager() as manager:
         q = manager.Queue()
@@ -36,12 +38,15 @@ def map_to_several_limited_gpus(func, configs, gpus_per_config, NUM_AVAIALBLE_GP
                 q.put(i)
 
         if not isinstance(gpus_per_config, list):
-            required_gpus_list = [gpus_per_config for _ in range(len(configs))]
-        
+            gpus_per_config = [gpus_per_config for _ in range(len(configs))]
+
         assert len(gpus_per_config) == len(configs)
 
-        Parallel(n_jobs=NUM_AVAIALBLE_GPUS, verbose=10)(
-            delayed(run_function_on_several_gpus)(required_gpus, func, cfg, q) for cfg, required_gpus in zip(configs, required_gpus_list))
+        n_jobs = NUM_AVAIALBLE_GPUS // max(gpus_per_config)
+
+        Parallel(n_jobs=n_jobs, verbose=10)(
+            delayed(run_function_on_several_gpus)(required_gpus, func, cfg, q)
+            for cfg, required_gpus in zip(configs, gpus_per_config))
 
 
 def map_to_limited_gpus(func, configs, NUM_AVAIALBLE_GPUS, CUDA_VISIBLE_DEVICES=None):

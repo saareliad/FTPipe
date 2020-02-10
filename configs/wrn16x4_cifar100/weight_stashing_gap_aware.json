@@ -3,7 +3,7 @@
     "data_dir": "/home_local/saareliad/data",
     "out_dir":"results/4partitions/wrn16x4_cifar100/DEBUG/",
     "auto_file_name": true,
-    "out_filename": "exp",
+    "out_filename": "exp_fixed_sep",
     "distributed_backend": "mpi",
     "task": "cv_sep",
     "statistics": "cv_theta_dist_grad_norm",
@@ -55,5 +55,6 @@
     "work_scheduler": "1F1B",
     "seed_from_cmd": true,
     "cudnn_benchmark": true,
-    "max_buffers": 1
+    "max_buffers": 1,
+    "keep_buffers_alive": true
 }

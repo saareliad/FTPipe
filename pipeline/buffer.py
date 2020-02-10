@@ -106,12 +106,13 @@ class Buffers:
 
     def wait_first(self):
         # print(f"waiting for {self.pointer}")
-        res = self.buffers[self.pointer]
-        self.pointer = (self.pointer + 1) % self.max_buffers
+
         request_objects = self.handlers.popleft()
         for obj in request_objects:
             obj.wait()
             # while(not obj.is_completed()):
             #     pass
 
+        res = self.buffers[self.pointer]
+        self.pointer = (self.pointer + 1) % self.max_buffers
         return res

@@ -5,13 +5,13 @@
     "out_filename": "exp",
     "distributed_backend": "mpi",
     "task": "cv_sep",
-    "statistics": "cv_grad_norm",
+    "statistics": "cv",
     "model": "wrn_28x10_c100_dr03_p4",
     "dataset": "cifar100",
     "trainer": {
         "type": "cv",
         "args": {
-            "always_calc_grad_norm": true
+            "always_calc_grad_norm": false
         }
     },
     "bs_train": 128,
@@ -52,5 +52,6 @@
     "work_scheduler": "1F1B",
     "seed_from_cmd": true,
     "max_buffers": 1,
-    "cudnn_benchmark": true
+    "cudnn_benchmark": true,
+    "keep_buffers_alive": true
 }

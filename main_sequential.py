@@ -7,7 +7,8 @@ import time
 import logging
 # TODO: fix train acc for DDP
 # parse_env_vars
-from main import parse_cli, parse_json_config, get_scheduler, parse_env_vars  # get_dataloaders
+# get_dataloaders
+from main import parse_cli, parse_json_config, get_scheduler, parse_env_vars
 from models import create_normal_model_instance  # , get_partitioning
 from experiments import save_experiment
 
@@ -25,9 +26,9 @@ from pipeline.partition import FirstPartition
 import torch.distributed as dist
 from pipeline.util import get_world_size
 from torch.nn.parallel import DistributedDataParallel
-from misc.datasets import (distributed_get_train_test_dl_from_args, 
-simplified_get_train_test_dl_from_args,
-new_distributed_get_train_test_dl_from_args)
+from misc.datasets import (distributed_get_train_test_dl_from_args,
+                           simplified_get_train_test_dl_from_args,
+                           new_distributed_get_train_test_dl_from_args)
 
 
 class SyncCVTask(DLTask):
@@ -71,12 +72,10 @@ class SequentailManager:
         self.log_frequency = log_frequency
         self.batches = 0
 
-
         # self.trainer
         # self.task
 
         self.task = SyncCVTask(device)
-
 
     def unwrap_model(self):
         # Have to unwrap DDP & FP16, if using.
@@ -138,9 +137,10 @@ class SequentailManager:
                 x, *ctx = self.task.unpack_data_for_partition(data)
                 x = self.model(x)
                 self.trainer.calc_test_stats(x,  *ctx)
-        
+
         eval_end_time = time.time()
         # TODO: add eval time to statistics
+
 
 def assert_args(args):
     assert (args.epochs >= 1 or args.steps >= 1)
@@ -180,6 +180,7 @@ def save_sequential_experiment(statistics, args):
 def training_loop(args, logger, train_dl, test_dl, partition, scheduler, statistics, samplers):
     epochs = 0
     steps = 0
+    total_epoch_times_list = []
     logger.info(f"Running for {args.epochs} epochs and {args.steps} steps")
 
     if not hasattr(args, "train_batches_limit"):
@@ -251,9 +252,12 @@ def training_loop(args, logger, train_dl, test_dl, partition, scheduler, statist
 
                 epochs += 1
 
+        total_epoch_time = (time.time() - epoch_start_time)
+        total_epoch_times_list.append(total_epoch_time)
+
         logger.info('-' * 89)
         info_str = '| end of epoch {:3d} | time: {:5.2f}s | steps: {:5d}'.format(
-            epochs, (time.time() - epoch_start_time), steps)
+            epochs, total_epoch_time, steps)
         if did_train:
             info_str += statistics.get_epoch_info_str(is_train=True)
         if did_eval:
@@ -267,6 +271,8 @@ def training_loop(args, logger, train_dl, test_dl, partition, scheduler, statist
                 f"Finished all steps. Total steps:{steps}, rank:{args.local_rank}")
             break  # steps condition met
 
+    return total_epoch_times_list
+
 
 def init_DDP(args, logger):
     if args.distributed_backend == 'mpi':
@@ -279,7 +285,6 @@ def init_DDP(args, logger):
     args.rank = dist.get_rank()
     logger.info(f"Initialized process group; backend: {args.distributed_backend}, rank: {args.rank}, "
                 f"local_rank: {args.local_rank}, world_size: {args.world_size}")
-    
 
     # base_lr_batch_size = args.get("base_lr_batch_size", None)
     # if base_lr_batch_size is None:
@@ -289,7 +294,8 @@ def init_DDP(args, logger):
 
     args.optimizer["args"]['lr'] *= args.world_size
     lr = args.optimizer["args"]['lr']
-    logger.info(f"Applying linear scaling bs-per-worker:{args.bs_train}, lr:{lr}, workers:{args.world_size}, epochs:{args.epochs}, steps:{args.steps}")
+    logger.info(
+        f"Applying linear scaling bs-per-worker:{args.bs_train}, lr:{lr}, workers:{args.world_size}, epochs:{args.epochs}, steps:{args.steps}")
 
 
 def get_dataloaders(args):
@@ -324,7 +330,6 @@ def yuck_from_main():
     console = logging.StreamHandler()
     console.setLevel(logging.DEBUG)
     logger.addHandler(console)
-    
 
     # Set Random Seed
     if args.seed is None:
@@ -389,8 +394,13 @@ def yuck_from_main():
     if hasattr(args, "auto_file_name"):
         auto_file_name(args)
 
-    training_loop(args, logger, train_dl, test_dl,
-                  partition, scheduler, statistics, samplers)
+    exp_start_time = time.time()
+    total_epoch_times_list = training_loop(args, logger, train_dl, test_dl,
+                                           partition, scheduler, statistics, samplers)
+    exp_total_time = time.time() - exp_start_time
+
+    args.total_epoch_times = total_epoch_times_list
+    args.exp_total_time = exp_total_time
 
     save_sequential_experiment(statistics, args)
     # NO_DP = True

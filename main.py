@@ -118,7 +118,7 @@ def parse_cli():
                         default=False, help="Do weight Stashing")
     parser.add_argument("--log_frequency", type=int, default=100,
                         help="Print extra statistics every given number of batches")
-    parser.add_argument("--max_buffers", type=int, default=2,
+    parser.add_argument("--max_buffers", type=int, default=1,
                         help="Maximal Number of async recv buffers. "
                         "With 1: it actaully means the recv is sync.(default=2 for best performance).")
 
@@ -541,7 +541,7 @@ def save_distributed_experiment(statistics, args, world_size, rank, local_rank, 
                 config, fit_res = load_experiment_for_update(
                     args.out_filename, args.out_dir)
 
-                # Update just the fit res
+                # Update just the fit res (wityoyt overriding)
                 for k, v in my_fit_res.items():
                     if k not in fit_res:
                         fit_res[k] = v
@@ -556,6 +556,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition
                   train_dl_len, test_dl_len, samplers):
     epochs = 0
     steps = 0
+    total_epoch_times_list = []
     logger.info(f"flush rate {args.flush_rate}")
     logger.info(f"Running for {args.epochs} epochs and {args.steps} steps")
     if (args.flush_rate >= 0):
@@ -640,12 +641,14 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition
         if did_train:
             steps += math.ceil(TRAIN_BATCHES_TO_RUN / args.step_every)
 
+        total_epoch_time = (time.time() - epoch_start_time)
+        total_epoch_times_list.append(total_epoch_time)
         # if is_last_partition
         if args.local_rank == args.world_size - 1:
             logger.info('-' * 89)
             # ms/batch {:5.2f}
             info_str = '| end of epoch {:3d} | time: {:5.2f}s | steps: {:5d}'.format(
-                epochs, (time.time() - epoch_start_time), steps)
+                epochs, total_epoch_time, steps)
             if did_train:
                 info_str += statistics.get_epoch_info_str(is_train=True)
             if did_eval:
@@ -658,7 +661,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition
             logger.info(
                 f"Finished all steps. Total steps:{steps}, rank:{args.local_rank}")
             break  # steps condition met
-
+    return total_epoch_times_list
 
 def get_dataloaders(args, explicit_seperated_dataset=False):
     dl_kw = dict()
@@ -895,8 +898,13 @@ def main():
 
     # Main Training Loop
 
-    training_loop(args, logger, train_dl, test_dl,
-                  is_first_partition, partition, statistics, train_dl_len, test_dl_len, samplers)
+    exp_start_time = time.time()
+    total_epoch_times_list = training_loop(args, logger, train_dl, test_dl, is_first_partition, partition, statistics, train_dl_len, test_dl_len, samplers)
+    exp_total_time = time.time() - exp_start_time
+
+    # Save # FIXME
+    args.total_epoch_times = total_epoch_times_list
+    args.exp_total_time = exp_total_time
 
     # Synchronize and save statistics from all partitions
     save_distributed_experiment(

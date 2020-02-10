@@ -77,7 +77,18 @@ python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_nod
 
 * simulation with more than one partition per GPU + cuda aware: add `--mca btl_smcuda_use_cuda_ipc_same_gpu 0` to mpirun.
 
+* for delay=0 with msnag without weight stashing, so far I did `nag_with_predictor` even for non last partitions. This is problematic, as we would like to **return to the moved weights** in the backward pass. So what we can do is, create a dict were we save staleness from fwd to backward (we already do this, but for GA purpose) and if the staleness is 0 (and not last partition, which is the case in `run_batch_backward`) then, with the weight predictor: do `setup(0)->forward()->recomputation()->backward()->revert()->step`. 
+(The condition for this is weight predictor + nag with predictor, without weight stashing)
+
 ## TODOs
+
+* Currently, we do some extra "reverts" (e.g in case of several backwards one after another and weight stashing) Check this. its very small optimization I guess (not in steady state), and may be yucky to implement.
+
+* with `step_every` > 2 and weight stashing -> we don't really understand whats going on.
+
+* with `step_every`=4 for example, we can save some computations for MSNAG by using more memory. but this is not so interesting.
+
+* GBN in pipe (support it by scheduler)
 
 * fix batch normalization in `torch.no_grad()` to something better than monkey patch
   * Monkey patch batch normalization: is just a moneky patch.
@@ -153,3 +164,4 @@ After talk with Amit Nadav
 
 
 I see that with 2 buffers we are actually slower, probobly the time to create 2 buffers not worth it.
+

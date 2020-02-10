@@ -35,10 +35,10 @@
             "last_epoch": -1
         }
     },
-    "epochs": 230,
+    "epochs": 220,
     "steps": -1,
     "seed": 42,
     "verbose_comm": false,
-    "seed_from_cmd": true
-    
+    "seed_from_cmd": true,
+    "cudnn_benchmark": true
 }

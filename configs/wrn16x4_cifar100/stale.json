@@ -1,11 +1,11 @@
 {
     "logdir": "logs/",
     "data_dir": "/home_local/saareliad/data",
-    "out_dir":"results/4partitions/wrn16x4_cifar100/",
+    "out_dir": "results/4partitions/wrn16x4_cifar100/DEBUG/",
     "auto_file_name": true,
-    "out_filename": "exp",
+    "out_filename": "exp_sep",
     "distributed_backend": "mpi",
-    "task": "cv",
+    "task": "cv_sep",
     "statistics": "cv_grad_norm",
     "model": "wrn_16x4_c100_p4",
     "dataset": "cifar100",
@@ -43,6 +43,6 @@
     "verbose_comm": false,
     "flush_rate": -1,
     "seed_from_cmd": true,
-    "stage_to_device_map": [0, 0, 0, 0]
-
+    "cudnn_benchmark": true,
+    "keep_buffers_alive": true
 }

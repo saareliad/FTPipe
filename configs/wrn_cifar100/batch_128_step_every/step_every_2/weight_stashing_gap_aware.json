@@ -5,7 +5,7 @@
     "auto_file_name": true,
     "out_filename": "agg",
     "distributed_backend": "mpi",
-    "task": "cv",
+    "task": "cv_sep",
     "statistics": "cv_theta_dist_grad_norm",
     "model": "wrn_28x10_c100_dr03_p4",
     "dataset": "cifar100",
@@ -46,8 +46,8 @@
         }
     },
     "epochs": 220,
-"step_every": 2,
-"cudnn_benchmark": true,
+    "step_every": 2,
+    "cudnn_benchmark": true,
     "steps": -1,
     "seed": 42,
     "num_chunks": 1,
@@ -56,7 +56,7 @@
     "weight_stashing": true,
     "work_scheduler": "1F1B",
     "seed_from_cmd": true,
-    "stage_to_device_map": [0, 0, 0, 0]
+    "keep_buffers_alive": true
 
 
 }
