@@ -1,9 +1,8 @@
 import sys
 from collections import Counter, OrderedDict, deque
 from enum import Enum, auto, unique
-from types import TracebackType
-from typing import Dict, List, Optional, Tuple, Type, cast, Iterator, Any, Union
-
+from typing import Dict, List, Optional, Tuple, Iterator, Any, Union
+from multiprocessing import Queue as PQueue, Process
 from threading import Thread
 from queue import Queue as TQueue
 import torch
@@ -12,8 +11,7 @@ from torch.nn import Module, ModuleList
 import logging
 from itertools import chain
 from pytorch_Gpipe.delayedNorm import DelayedBatchNorm
-
-ExcInfo = Tuple[Type[BaseException], BaseException, TracebackType]
+import traceback
 
 
 @unique
@@ -33,12 +31,18 @@ class InvalidState(Exception):
     '''
 
 
+class EmptyException(Exception):
+    def __init__(self, msg):
+        self.args = msg,
+        sys.exit(self)
+
+
 class Result():
     ''' a wrapper to an asychronous result can be either data or an exception
     attempting to retrieve the data will trigger the exception (if present)
     '''
 
-    def __init__(self, minibatch: int, data: Optional[Tensor] = None, exc_info: Optional[ExcInfo] = None, metadata=None):
+    def __init__(self, minibatch: int, data: Optional[Tensor] = None, exc_info: Optional[str] = None, metadata=None):
         if not (data is None or exc_info is None):
             raise ValueError(
                 f"data and exc_info fields are mutually excelusive but got {data} {exc_info}")
@@ -50,8 +54,8 @@ class Result():
     def get(self) -> Tensor:
         if self.exc_info is None:
             return self.data
-        raise self.exc_info[0].with_traceback(self.exc_info[1],
-                                              self.exc_info[2])
+
+        raise EmptyException(self.exc_info)
 
     def hasException(self) -> bool:
         return not (self.exc_info is None)
@@ -67,7 +71,7 @@ class Result():
             else:
                 return s + f"{type(self.data).__name__} {self.data} with metadata {self.metadata}"
         else:
-            return s + f"exception {self.exc_info[0]},{self.exc_info[1]}"
+            return s + f"exception {self.exc_info}"
 
     def __repr__(self) -> str:
         return str(self)
@@ -181,18 +185,25 @@ class StateStack():
 
 
 class Pipeline():
-    def __init__(self, configs: Dict, output_device: Optional[int] = None, split_dim=0, use_delayedNorm: bool = False):
+    def __init__(self, configs: Dict, output_device: Optional[int] = None, split_dim=0, use_delayedNorm: bool = False, use_multiprocessing=False):
         if output_device is None:
             default = 'cuda' if torch.cuda.is_available() else 'cpu'
             self.output_device = torch.device(default)
         else:
             self.output_device = torch.device(output_device)
 
+        if use_multiprocessing:
+            queue_class = PQueue
+            worker_class = PWorker
+        else:
+            queue_class = TQueue
+            worker_class = TWorker
+
         self.split_dim = split_dim
         self.input_names = configs.pop('model inputs')
         self.output_names = configs.pop('model outputs')
 
-        self.command_queues = [TQueue() for _ in configs]
+        self.command_queues = [queue_class() for _ in configs]
 
         # this tells how many workers(including master) use each value
         # for example if 2 partitions share an input, we need to send it twice
@@ -201,7 +212,7 @@ class Pipeline():
                         for k in config['inputs']])
         uses.update([k for k in self.output_names])
 
-        data_queues = {k: TQueue() for k in uses.keys()}
+        data_queues = {k: queue_class() for k in uses.keys()}
 
         # input and output queues are in the same order as
         # specified in the original's model forward method
@@ -230,7 +241,7 @@ class Pipeline():
                             output_uses)
             args = (idx, model, device, IO,
                     command_queue, use_delayedNorm)
-            workers.append(Worker(*args))
+            workers.append(worker_class(*args))
             shards.append(model)
 
         self.shards = ModuleList(shards)
@@ -245,10 +256,10 @@ class Pipeline():
         self.num_DEBUG_messages = 0
 
         logging.basicConfig(
-            filename="pipelineLog.log", level=logging.DEBUG, format='%(relativeCreated)6d %(threadName)s %(message)s')
+            filename="pipelineLog.log", level=logging.DEBUG, format='%(relativeCreated)6d %(message)s')
 
     def log(self, msg: str):
-        logging.debug(f"master msg{self.num_DEBUG_messages} {msg}")
+        logging.debug(f"Master msg_{self.num_DEBUG_messages} {msg}")
         self.num_DEBUG_messages += 1
 
     def __call__(self, *xs: Tensor, num_chunks: Optional[int] = None):
@@ -447,9 +458,9 @@ class Pipeline():
         return (len(self.workers) > 0) and all(w.is_alive() for w in self.workers)
 
 
-class Worker(Thread):
-    def __init__(self, idx: int, model: Module, device: int, IO: Connection, command_queue: TQueue, use_delayedNorm: bool):
-        super(Worker, self).__init__(daemon=True)
+class Worker():
+    def __init__(self, idx: int, model: Module, device: int, IO: Connection, command_queue: Union[TQueue, PQueue], use_delayedNorm: bool):
+        super(Worker, self).__init__()
         self.idx = idx
         self.model = model
         self.device = device
@@ -468,7 +479,7 @@ class Worker(Thread):
         ''' simple thread safe logging
         '''
         logging.debug(
-            f"worker {self.idx+1} msg{self.num_DEBUG_messages} {msg}")
+            f"worker_{self.idx+1} msg_{self.num_DEBUG_messages} {msg}")
         self.num_DEBUG_messages += 1
 
     def run(self):
@@ -491,9 +502,9 @@ class Worker(Thread):
                 # propagate the Exception eventually reaching the master
                 # a worker should always work unless explicitly shut down by master
                 # or untill master process terminates
-                exc_info = cast(ExcInfo, sys.exc_info())
+                stack_trace = f"worker_{self.idx+1}\n{traceback.format_exc()}"
                 self.IO.put(Result(minibatch=0,
-                                   exc_info=exc_info), forward=self.FORWARD)
+                                   exc_info=stack_trace), forward=self.FORWARD)
 
     def moveInputs(self, inputs: List[Result]) -> List[Optional[Tensor]]:
         outs = []
@@ -557,3 +568,22 @@ class Worker(Thread):
                     m: DelayedBatchNorm
                     m.is_recomputing = not self.FORWARD
                     m.num_micro_batches = self.num_minibatches
+
+
+class TWorker(Worker, Thread):
+    def __init__(self, idx: int, model: Module, device: int, IO: Connection, command_queue: TQueue, use_delayedNorm: bool):
+        Worker.__init__(self, idx, model, device, IO,
+                        command_queue, use_delayedNorm)
+        Thread.__init__(self, name=f"Worker_{self.idx+1}", daemon=True)
+
+
+class PWorker(Worker, Process):
+    def __init__(self, idx: int, model: Module, device: int, IO: Connection, command_queue: PQueue, use_delayedNorm: bool):
+        Worker.__init__(self, idx, model, device, IO,
+                        command_queue, use_delayedNorm)
+        Process.__init__(self, name=f"Worker_{self.idx+1}", daemon=True)
+
+
+# TODO add fancy pants logging
+# TODO implement using RPC and compare to the best of the previous 2
+# TODO if prev options are not good enough maybe check CUDA-aware-MPI(like ms-nag pipeline) / Broadcast based comm(like pipedream) / autograd hacks(like torchgpipe)

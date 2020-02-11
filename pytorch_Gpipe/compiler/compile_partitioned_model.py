@@ -215,7 +215,7 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]], mo
         f"# creating configuration\n{tab}config = {{{exp}\n{dtab}{tab}}}")
 
     for idx in sorted(list(ios.keys())):
-        lines.extend([f"device = 'cpu' if DEBUG else torch.device('cuda:{idx}')",
+        lines.extend([f"device = torch.device('cpu') if DEBUG else torch.device('cuda:{idx}')",
                       f"partition{idx}.device=device",
                       f"config[{idx}]['model'] = partition{idx}.to(device)"])
 

@@ -29,6 +29,7 @@ from pytorch_Gpipe.model_profiling.graph_builder import translate_scopes
 from pytorch_Gpipe.utils import (OrderedSet, layerDict, tensorDict,
                                  traverse_model, traverse_params_buffs)
 import sample_models
+from partitioned_models.tmp.resnet18_2p import create_pipeline_configuration
 
 
 def node_weight_function(node: Node):
@@ -41,7 +42,7 @@ def node_weight_function(node: Node):
     return 0
 
 
-def edge_weight_function(bandwidth_gps):
+def edge_weight_function(bandwidth_gps=10):
     def f(u: Node, v: Node):
         if u.type is NodeTypes.LAYER:
             return max(1, int(u.weight.output_size / bandwidth_gps))
@@ -542,4 +543,20 @@ def check_LSTM():
 
 
 if __name__ == "__main__":
-    check_gnmt()
+    model = sample_models.resnet18().cuda()
+    sample = torch.randn(16, 3, 224, 224).cuda()
+
+    # pipe_model(model, sample, nparts=2, node_weight_function=node_weight_function,
+    #            edge_weight_function=edge_weight_function(), output_file="resnet18_2p")
+
+    model = model.cpu()
+    sample = sample.cpu()
+
+    config = create_pipeline_configuration(model, DEBUG=True)
+
+    pipe = Pipeline(config, output_device='cpu', use_multiprocessing=False)
+
+    out = pipe(sample, num_chunks=4)
+    pipe.backward(torch.ones_like(out))
+
+    print("done")
