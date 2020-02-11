@@ -8,7 +8,6 @@ from queue import Queue as TQueue
 import torch
 from torch import Tensor
 from torch.nn import Module, ModuleList
-import logging
 from itertools import chain
 from pytorch_Gpipe.delayedNorm import DelayedBatchNorm
 import traceback
@@ -255,13 +254,6 @@ class Pipeline():
         self.training = True
         self.num_DEBUG_messages = 0
 
-        logging.basicConfig(
-            filename="pipelineLog.log", level=logging.DEBUG, format='%(relativeCreated)6d %(message)s')
-
-    def log(self, msg: str):
-        logging.debug(f"Master msg_{self.num_DEBUG_messages} {msg}")
-        self.num_DEBUG_messages += 1
-
     def __call__(self, *xs: Tensor, num_chunks: Optional[int] = None):
         '''runs the pipeline forward pass input is split across batch dim
            and fed to workers process order and result order are presereved
@@ -474,13 +466,6 @@ class Worker():
         self.state_stack = StateStack(self.device)
         self.num_minibatches = 0
         self.minibatch_idx = 0
-
-    def log(self, msg: str):
-        ''' simple thread safe logging
-        '''
-        logging.debug(
-            f"worker_{self.idx+1} msg_{self.num_DEBUG_messages} {msg}")
-        self.num_DEBUG_messages += 1
 
     def run(self):
         while self.running:
