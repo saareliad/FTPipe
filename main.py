@@ -1,7 +1,7 @@
 import argparse
 from pipeline import CommunicationHandlerBase, get_auto_comm_handler_cls
 from pipeline import SinglePartitionManager
-from pipeline import BigBatchManager
+# from pipeline import BigBatchManager
 
 from pipeline.training import AVAILABLE_TRAINERS
 from pipeline.tasks import AVAILABLE_TASKS
@@ -561,6 +561,9 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition
     epochs = 0
     steps = 0
     total_epoch_times_list = []
+    train_epochs_times_list = []
+    # eval_epochs_times_list = []
+
     logger.info(f"flush rate {args.flush_rate}")
     logger.info(f"Running for {args.epochs} epochs and {args.steps} steps")
     if (args.flush_rate >= 0):
@@ -596,6 +599,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition
             logger.info(f"Running {'train' if TRAIN else 'eval'}")
 
             if TRAIN:
+                train_epoch_start_time = time.time()
                 if TRAIN_BATCHES_TO_RUN == 0:
                     continue
                 # Set Dataloader
@@ -616,6 +620,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition
                 #         partition.run_until_flush(reminder)
                 # else:
                 partition.run_until_flush(TRAIN_BATCHES_TO_RUN)
+                train_epochs_times_list.append(time.time() - train_epoch_start_time)
 
                 did_train = True
                 if args.local_rank == args.world_size - 1:
@@ -623,6 +628,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition
                 else:
                     statistics.non_latst_partition_on_epoch_end()
             else:  # EVAL
+                # eval_epoch_start_time = time.time()
                 # Set Dataloader
                 # sets only to first (+last) partition
                 if TEST_BATCHES_TO_RUN == 0:
@@ -637,6 +643,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition
                 with torch.no_grad():  # TODO maybe remove this?
                     partition.run_forward_until_flush(TEST_BATCHES_TO_RUN)
 
+                # eval_epochs_times_list.append(time.time() - eval_epoch_start_time)
                 did_eval = True
                 if args.local_rank == args.world_size - 1:
                     statistics.on_epoch_end()
@@ -665,7 +672,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition
             logger.info(
                 f"Finished all steps. Total steps:{steps}, rank:{args.local_rank}")
             break  # steps condition met
-    return total_epoch_times_list
+    return total_epoch_times_list, train_epochs_times_list
 
 
 def get_dataloaders(args, explicit_seperated_dataset=False):
@@ -906,12 +913,13 @@ def main():
     # Main Training Loop
 
     exp_start_time = time.time()
-    total_epoch_times_list = training_loop(
+    total_epoch_times_list, train_epochs_times_list = training_loop(
         args, logger, train_dl, test_dl, is_first_partition, partition, statistics, train_dl_len, test_dl_len, samplers)
     exp_total_time = time.time() - exp_start_time
 
     # Save # FIXME
     args.total_epoch_times = total_epoch_times_list
+    args.train_epochs_times = train_epochs_times_list
     args.exp_total_time = exp_total_time
 
     # Synchronize and save statistics from all partitions

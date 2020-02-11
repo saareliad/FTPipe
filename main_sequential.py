@@ -24,10 +24,9 @@ from pipeline.partition import FirstPartition
 
 # Distributed stuff
 import torch.distributed as dist
-from pipeline.util import get_world_size
+# from pipeline.util import get_world_size
 from torch.nn.parallel import DistributedDataParallel
-from misc.datasets import (distributed_get_train_test_dl_from_args,
-                           simplified_get_train_test_dl_from_args,
+from misc.datasets import (simplified_get_train_test_dl_from_args,
                            new_distributed_get_train_test_dl_from_args)
 
 
@@ -130,7 +129,7 @@ class SequentailManager:
 
     def run_forward_until_flush(self, num_batches):
         # model = self.unwrap_model()
-        eval_start_time = time.time()
+        # eval_start_time = time.time()
         with torch.no_grad():
             for batch_idx in range(num_batches):
                 data = next(self.dl_iter)
@@ -138,7 +137,7 @@ class SequentailManager:
                 x = self.model(x)
                 self.trainer.calc_test_stats(x,  *ctx)
 
-        eval_end_time = time.time()
+        # eval_end_time = time.time()
         # TODO: add eval time to statistics
 
 
@@ -181,6 +180,7 @@ def training_loop(args, logger, train_dl, test_dl, partition, scheduler, statist
     epochs = 0
     steps = 0
     total_epoch_times_list = []
+    train_epochs_times_list = []
     logger.info(f"Running for {args.epochs} epochs and {args.steps} steps")
 
     if not hasattr(args, "train_batches_limit"):
@@ -225,12 +225,13 @@ def training_loop(args, logger, train_dl, test_dl, partition, scheduler, statist
 
                 partition.run_until_flush(
                     min(TRAIN_BATCHES_TO_RUN, len(train_dl)))
+                train_epochs_times_list.append(
+                    time.time() - train_epoch_start_time)
 
                 # TODO: support generically stepping per batch...
                 scheduler.step()
                 did_train = True
                 steps += TRAIN_BATCHES_TO_RUN
-                train_epoch_end_time = time.time()
                 # TODO record it
                 statistics.on_epoch_end()
             else:  # EVAL
@@ -271,7 +272,7 @@ def training_loop(args, logger, train_dl, test_dl, partition, scheduler, statist
                 f"Finished all steps. Total steps:{steps}, rank:{args.local_rank}")
             break  # steps condition met
 
-    return total_epoch_times_list
+    return total_epoch_times_list, train_epochs_times_list
 
 
 def init_DDP(args, logger):
@@ -395,11 +396,12 @@ def yuck_from_main():
         auto_file_name(args)
 
     exp_start_time = time.time()
-    total_epoch_times_list = training_loop(args, logger, train_dl, test_dl,
-                                           partition, scheduler, statistics, samplers)
+    total_epoch_times_list, train_epochs_times_list = training_loop(args, logger, train_dl, test_dl,
+                                                                    partition, scheduler, statistics, samplers)
     exp_total_time = time.time() - exp_start_time
 
     args.total_epoch_times = total_epoch_times_list
+    args.train_epochs_times = train_epochs_times_list
     args.exp_total_time = exp_total_time
 
     save_sequential_experiment(statistics, args)

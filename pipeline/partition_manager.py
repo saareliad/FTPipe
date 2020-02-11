@@ -28,7 +28,7 @@ class SinglePartitionManager:
                  work_scheduler: WorkScheduler,
                  training_tensor_shapes, eval_tensor_shapes, training_tensor_dtypes,  # FIXME
                  device, is_last_partition, is_first_partition, log_frequency=100, max_buffers=2, step_every=1,
-                 keep_buffers_alive=False, use_recomputation=True):
+                 keep_buffers_alive=False, use_recomputation=True, parallel_inference_sends=1):
 
         # Set partition.
         if use_recomputation:
@@ -63,6 +63,7 @@ class SinglePartitionManager:
         self.is_first_partition = is_first_partition
         self.stage = stage
         self.num_stages = len(configs)
+        self.parallel_inference_sends = parallel_inference_sends
 
         self.step_every = step_every
         self.work_scheduler = work_scheduler(step_every)
@@ -639,6 +640,8 @@ class SinglePartitionManager:
             eval() was called
         """
 
+        wait_at = self.parallel_inference_sends - 1
+        async_fwd_objects = self.async_fwd_objects
         for done_fwds in range(num_batches):
 
             sent_request_objects = self.run_batch_forward(
@@ -646,14 +649,14 @@ class SinglePartitionManager:
             if sent_request_objects:  # last partition returns empty list.
                 # if self.async_fwd_objects:
                 #     self.wait_on_sent_object(is_fwd=True)
-                self.async_fwd_objects[done_fwds] = sent_request_objects
+                async_fwd_objects[done_fwds] = sent_request_objects
 
             # Can change this number...
-            if len(self.async_fwd_objects) > 1:
+            if len(async_fwd_objects) > wait_at:
                 self.wait_on_sent_object(is_fwd=True)
 
         # Also clear in the end, just in case...
-        while len(self.async_fwd_objects) > 0:
+        while len(async_fwd_objects) > 0:
             self.wait_on_sent_object(is_fwd=True)
 
     def run_until_flush(self, num_batches, sched_step=True):

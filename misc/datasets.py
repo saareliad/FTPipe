@@ -3,7 +3,8 @@ import numpy as np
 
 import torch
 import torchvision
-from torchvision.datasets import CIFAR10, CIFAR100
+from torchvision import transforms
+from torchvision.datasets import CIFAR10, CIFAR100, ImageFolder, DatasetFolder
 from PIL import Image
 
 from torch.utils.data import Dataset, DistributedSampler
@@ -17,6 +18,7 @@ import torch.distributed as dist
 
 # Fallback to this dataset dir of no other dir is given as arument to functions.
 DEFAULT_DATA_DIR = os.path.expanduser('~/.pytorch-datasets')
+IMAGENET_ROOT_DIR = "/home_local/saareliad/imagenet/"
 DOWNLOAD = False
 # torch.backends.cudnn.deterministic = True
 # torch.backends.cudnn.benchmark = False
@@ -24,40 +26,11 @@ DOWNLOAD = False
 # https://github.com/facebookresearch/pycls/tree/master/configs/cifar
 # torch.backends.cudnn.benchmark = False
 
+AVAILABLE_DATASETS = {'cifar10', 'cifar100', 'imagenet'}
 
-def get_cifar_10_train_test_ds(DATA_DIR=DEFAULT_DATA_DIR):
-    mean = np.array([0.49139968, 0.48215841, 0.44653091])
-    std = np.array([0.24703223, 0.24348513, 0.26158784])
-
-    train_transform, test_transform = cifar_transformations(mean, std)
-
-    ds_train = CIFAR10(root=DATA_DIR, download=DOWNLOAD,
-                       train=True, transform=train_transform)
-    ds_test = CIFAR10(root=DATA_DIR, download=DOWNLOAD,
-                      train=False, transform=test_transform)
-    return ds_train, ds_test
-
-
-def get_cifar_train_test_dl(ds_train, ds_test, bs_train, bs_test, shuffle_train=True, pin_memory=True, **kw):
-    # TODO: X to first device and y to last device.
-    dl_train = torch.utils.data.DataLoader(
-        ds_train, bs_train, shuffle=shuffle_train, pin_memory=pin_memory, **kw)
-    dl_test = torch.utils.data.DataLoader(
-        ds_test, bs_test, shuffle=False, pin_memory=pin_memory, **kw)
-    return dl_train, dl_test
-
-
-def get_cifar_100_train_test_ds(DATA_DIR=DEFAULT_DATA_DIR):
-    mean = np.array([0.5071, 0.4867, 0.4408])
-    std = np.array([0.2675, 0.2565, 0.2761])
-
-    train_transform, test_transform = cifar_transformations(mean, std)
-
-    ds_train = CIFAR100(root=DATA_DIR, download=DOWNLOAD,
-                        train=True, transform=train_transform)
-    ds_test = CIFAR100(root=DATA_DIR, download=DOWNLOAD,
-                       train=False, transform=test_transform)
-    return ds_train, ds_test
+################
+# Transforms
+################
 
 
 def cifar_transformations(mean, std):
@@ -74,17 +47,111 @@ def cifar_transformations(mean, std):
     return train_transform, test_transform
 
 
+def cifar10_transformations():
+    mean = np.array([0.49139968, 0.48215841, 0.44653091])
+    std = np.array([0.24703223, 0.24348513, 0.26158784])
+    train_transform, test_transform = cifar_transformations(mean, std)
+    return train_transform, test_transform
+
+
+def cifar100_transformations():
+    mean = np.array([0.5071, 0.4867, 0.4408])
+    std = np.array([0.2675, 0.2565, 0.2761])
+    train_transform, test_transform = cifar_transformations(mean, std)
+    return train_transform, test_transform
+
+
+def imangenet_transformations(mean, std):
+
+    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])
+
+    train_transform = transforms.Compose([
+        transforms.RandomResizedCrop(224),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        normalize,
+    ])
+
+    test_transform = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        normalize,
+    ])
+    return train_transform, test_transform
+
+################
+# Get DS
+################
+
+
+def get_cifar_10_train_test_ds(DATA_DIR=DEFAULT_DATA_DIR):
+    train_transform, test_transform = cifar10_transformations()
+
+    ds_train = CIFAR10(root=DATA_DIR, download=DOWNLOAD,
+                       train=True, transform=train_transform)
+    ds_test = CIFAR10(root=DATA_DIR, download=DOWNLOAD,
+                      train=False, transform=test_transform)
+    return ds_train, ds_test
+
+
+def get_imagenet_train_test_ds(DATA_DIR=IMAGENET_ROOT_DIR):
+    train_transform, test_transform = imangenet_transformations()
+    traindir = os.path.join(DATA_DIR, 'train')
+    valdir = os.path.join(DATA_DIR, 'val')
+
+    ds_train = ImageFolder(traindir, transform=train_transform)
+    ds_test = ImageFolder(valdir, transform=test_transform)
+
+    return ds_train, ds_test
+
+
+def get_cifar_100_train_test_ds(DATA_DIR=DEFAULT_DATA_DIR):
+    train_transform, test_transform = cifar100_transformations()
+
+    ds_train = CIFAR100(root=DATA_DIR, download=DOWNLOAD,
+                        train=True, transform=train_transform)
+    ds_test = CIFAR100(root=DATA_DIR, download=DOWNLOAD,
+                       train=False, transform=test_transform)
+    return ds_train, ds_test
+
+
 DATASET_TO_DS_FN = {
     'cifar10': get_cifar_10_train_test_ds,
-    'cifar100': get_cifar_100_train_test_ds
+    'cifar100': get_cifar_100_train_test_ds,
+    'imagenet': get_imagenet_train_test_ds,
 }
+
+################
+# Get DL
+################
+
+
+def get_cifar_train_test_dl(ds_train, ds_test, bs_train, bs_test, shuffle_train=True, pin_memory=True, **kw):
+    # TODO: X to first device and y to last device.
+    dl_train = torch.utils.data.DataLoader(
+        ds_train, bs_train, shuffle=shuffle_train, pin_memory=pin_memory, **kw)
+    dl_test = torch.utils.data.DataLoader(
+        ds_test, bs_test, shuffle=False, pin_memory=pin_memory, **kw)
+    return dl_train, dl_test
 
 
 DATASET_TO_DL_FN = {
     'cifar10': get_cifar_train_test_dl,
-    'cifar100': get_cifar_train_test_dl
+    'cifar100': get_cifar_train_test_dl,
+    'imagenet': get_cifar_train_test_dl
 }
 
+
+# DICT_DATASET_JUST_XY_FUNC = {
+#     'cifar10': get_cifar_10_just_x_or_y_train_test_ds,
+#     'cifar100': get_cifar_100_just_x_or_y_train_test_ds
+# }
+
+############################
+# Generic "get" functions
+############################
 
 def get_train_test_ds(dataset, DATA_DIR=DEFAULT_DATA_DIR):
     get_dataset_fn = DATASET_TO_DS_FN.get(dataset, None)
@@ -101,6 +168,10 @@ def get_train_test_dl(dataset, *args, **kw):
     else:
         raise ValueError(dataset)
 
+############################
+# Simpplified. dataset by name.
+############################
+
 
 def simplified_get_train_test_dl(dataset, bs_train, bs_test, shuffle_train=True, verbose=True,
                                  DATA_DIR=DEFAULT_DATA_DIR, **kw):
@@ -116,6 +187,24 @@ def simplified_get_train_test_dl(dataset, bs_train, bs_test, shuffle_train=True,
     return dl_train, dl_test
 
 
+###################################
+# Dataset from args and key words.
+###################################
+
+def add_dataset_argument(parser, default='cifar10', required=False):
+    parser.add_argument('--dataset', default=default,
+                        choices=list(AVAILABLE_DATASETS), required=required)
+
+
+def args_extractor1(args):
+    """extracts: 
+        args.dataset, args.bs_train, args.bs_test, args.data_dir 
+    """
+    DATA_DIR = getattr(args, "data_dir", DEFAULT_DATA_DIR)
+    DATA_DIR = DATA_DIR if DATA_DIR else DEFAULT_DATA_DIR
+    return dict(DATA_DIR=DATA_DIR, dataset=args.dataset, bs_train=args.bs_train, bs_test=args.bs_test)
+
+
 def simplified_get_train_test_dl_from_args(args, shuffle_train=True, verbose=True, **kw):
 
     DATA_DIR = getattr(args, "data_dir", DEFAULT_DATA_DIR)
@@ -126,14 +215,9 @@ def simplified_get_train_test_dl_from_args(args, shuffle_train=True, verbose=Tru
                                         DATA_DIR=DATA_DIR, **kw)
 
 
-def add_dataset_argument(parser, default='cifar10', required=False):
-    parser.add_argument('--dataset', default=default,
-                        choices=DATASET_TO_DS_FN.keys(), required=required)
-
-
-##################
-# Distributed...
-##################
+#################################################
+# Distributed. (v1): Create a partition (once)
+#################################################
 
 class Partition(Dataset):
     """ Dataset partitioning helper """
@@ -238,6 +322,10 @@ def distributed_get_train_test_dl_from_args(args, shuffle_train=True,
                                                     DATA_DIR=DATA_DIR, dist_kw=dist_kw, **kw)
 
 
+##########################################################
+# Distributed. (v2): Using a modified DistributedSampler
+###########################################################
+
 class MyNewDistributedSampler(DistributedSampler):
     # Better use this class, as it was tested by pytorch.
     # only problem with it is *deterministic shuffling*, which will be the same for all experiments.
@@ -285,7 +373,7 @@ def new_distributed_simplified_get_train_test_dl(dataset, bs_train, bs_test, shu
         experiment_manual_seed, ds_train, num_replicas=None, rank=None, shuffle=shuffle_train)
     # test_sampler = MyNewDistributedSampler(
     #     experiment_manual_seed, ds_test, num_replicas=None, rank=None, shuffle=False)
-    test_sampler = None
+    test_sampler = None  # FIXME:
 
     # Note: explicitly set shuffle to False, its handled by samplers.
     dl_train = torch.utils.data.DataLoader(
@@ -318,8 +406,53 @@ def new_distributed_get_train_test_dl_from_args(args, **kw):
 # get x seperate from y, both with same seed
 #############################################
 
+class DatasetFolderJustX(DatasetFolder):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+
+    def __getitem__(self, index):
+        """
+        Args:
+            index (int): Index
+
+        Returns:
+            sample
+        """
+        path, target = self.samples[index]
+        sample = self.loader(path)
+        if self.transform is not None:
+            sample = self.transform(sample)
+
+        return sample
+
+
+class DatasetFolderJustY(DatasetFolder):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+
+    def __getitem__(self, index):
+        """
+        Args:
+            index (int): Index
+
+        Returns:
+            target where target is class_index of the target class.
+        """
+        _, target = self.samples[index]
+        # sample = self.loader(path)
+        # if self.transform is not None:
+        #     sample = self.transform(sample)
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        return target
+
 
 class CIFAR10JustX(CIFAR10):
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+
     def __getitem__(self, index):
         """
         Args:
@@ -345,6 +478,9 @@ class CIFAR10JustX(CIFAR10):
 
 
 class CIFAR10JustY(CIFAR10):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+
     def __getitem__(self, index):
         """
         Args:
@@ -416,10 +552,7 @@ class CIFAR100JustY(CIFAR10JustY):
 
 
 def get_cifar_100_seperate_train_test_ds(DATA_DIR=DEFAULT_DATA_DIR):
-    mean = np.array([0.5071, 0.4867, 0.4408])
-    std = np.array([0.2675, 0.2565, 0.2761])
-
-    train_transform, test_transform = cifar_transformations(mean, std)
+    train_transform, test_transform = cifar100_transformations()
 
     ds_train_X = CIFAR100JustX(
         root=DATA_DIR, download=DOWNLOAD, train=True, transform=train_transform)
@@ -435,10 +568,8 @@ def get_cifar_100_seperate_train_test_ds(DATA_DIR=DEFAULT_DATA_DIR):
 
 
 def get_cifar_10_seperate_train_test_ds(DATA_DIR=DEFAULT_DATA_DIR):
-    mean = np.array([0.49139968, 0.48215841, 0.44653091])
-    std = np.array([0.24703223, 0.24348513, 0.26158784])
 
-    train_transform, test_transform = cifar_transformations(mean, std)
+    train_transform, test_transform = cifar10_transformations()
 
     ds_train_X = CIFAR10JustX(
         root=DATA_DIR, download=DOWNLOAD, train=True, transform=train_transform)
@@ -454,10 +585,7 @@ def get_cifar_10_seperate_train_test_ds(DATA_DIR=DEFAULT_DATA_DIR):
 
 
 def get_cifar_100_just_x_or_y_train_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR):
-    mean = np.array([0.5071, 0.4867, 0.4408])
-    std = np.array([0.2675, 0.2565, 0.2761])
-
-    train_transform, test_transform = cifar_transformations(mean, std)
+    train_transform, test_transform = cifar100_transformations()
     just = just.lower()
     if just == 'x':
         ds_train_X = CIFAR100JustX(
@@ -476,10 +604,7 @@ def get_cifar_100_just_x_or_y_train_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR):
 
 
 def get_cifar_10_just_x_or_y_train_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR):
-    mean = np.array([0.49139968, 0.48215841, 0.44653091])
-    std = np.array([0.24703223, 0.24348513, 0.26158784])
-
-    train_transform, test_transform = cifar_transformations(mean, std)
+    train_transform, test_transform = cifar10_transformations()
     just = just.lower()
     if just == 'x':
         ds_train_X = CIFAR10JustX(
@@ -500,14 +625,15 @@ def get_cifar_10_just_x_or_y_train_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR):
 def get_seperate_just_x_or_y_train_test_dl(dataset, bs_train, bs_test, just,
                                            shuffle_train=True, verbose=True,
                                            DATA_DIR=DEFAULT_DATA_DIR, pin_memory=True, **kw):
-    ds_train, ds_test = get_train_test_ds(dataset, DATA_DIR=DATA_DIR)
+
+    # ds_train, ds_test = get_train_test_ds(dataset, DATA_DIR=DATA_DIR)
+
+    experiment_manual_seed = torch.initial_seed()
 
     DICT_DATASET_JUST_XY_FUNC = {
         'cifar10': get_cifar_10_just_x_or_y_train_test_ds,
         'cifar100': get_cifar_100_just_x_or_y_train_test_ds
     }
-
-    experiment_manual_seed = torch.initial_seed()
 
     ds_train, ds_test = DICT_DATASET_JUST_XY_FUNC.get(
         dataset)(just=just, DATA_DIR=DATA_DIR)
