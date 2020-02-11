@@ -3,7 +3,7 @@ import logging
 from typing import Dict
 from collections import OrderedDict
 from . import CommunicationHandlerBase
-from .partition import Partition, LastPartition, FirstPartition
+from .partition import Partition, LastPartition, FirstPartition, PartitionWithoutRecomputation
 from .training.interface import PartitionedTrainer
 from .tasks import DLTask
 from .weight_prediction.interface import WeightPredictor
@@ -23,20 +23,37 @@ class SinglePartitionManager:
     PROBLEMATIC_POLICY = 'SAME'
     # PROBLEMATIC_POLICY = 'SKIP'
 
-    def __init__(self, stage, configs: Dict, partition: torch.nn.Module, comm_handler: CommunicationHandlerBase,
+    def __init__(self, stage, configs: Dict, partition: torch.nn.Module,
+                 comm_handler: CommunicationHandlerBase,
                  work_scheduler: WorkScheduler,
                  training_tensor_shapes, eval_tensor_shapes, training_tensor_dtypes,  # FIXME
                  device, is_last_partition, is_first_partition, log_frequency=100, max_buffers=2, step_every=1,
-                 keep_buffers_alive=False):
+                 keep_buffers_alive=False, use_recomputation=True):
 
-        if is_last_partition:
-            partition_cls = LastPartition
-        elif is_first_partition:
-            partition_cls = FirstPartition
+        # Set partition.
+        if use_recomputation:
+            if is_last_partition:
+                partition_cls = LastPartition
+            elif is_first_partition:
+                partition_cls = FirstPartition
+            else:
+                partition_cls = Partition
+            self.partition = partition_cls(partition, device, to_device=True)
         else:
-            partition_cls = Partition
+            # Partition without recomputation
+            if is_last_partition:
+                partition_cls = LastPartition
+                self.partition = partition_cls(
+                    partition, device, to_device=True)
+            elif is_first_partition:
+                partition_cls = PartitionWithoutRecomputation
+                self.partition = partition_cls(
+                    partition, device, to_device=True, _REQ_GRAD=False)
+            else:
+                partition_cls = PartitionWithoutRecomputation
+                self.partition = partition_cls(
+                    partition, device, to_device=True, _REQ_GRAD=True)
 
-        self.partition = partition_cls(partition, device, to_device=True)
         self.comm_handler = comm_handler
         self.training_tensor_shapes = training_tensor_shapes
         self.eval_tensor_shapes = eval_tensor_shapes
@@ -118,7 +135,8 @@ class SinglePartitionManager:
             # FIXME: we set eval dtypes as training too.
             self.comm_handler.set_tensor_dtypes(self.training_tensor_dtypes)
             if not shapes_are_equal:
-                self.fwd_rcev_buffers_eval = make_buff(is_bwd=False, create=True)
+                self.fwd_rcev_buffers_eval = make_buff(
+                    is_bwd=False, create=True)
             else:
                 self.fwd_rcev_buffers_eval = self.fwd_rcev_buffers_train  # HACK: same buffer!
         else:
@@ -516,7 +534,8 @@ class SinglePartitionManager:
             # Restore to parameters which the fwd ran on
             weight_stasher.pop_restore_stashed(batch_idx)
             # self.true_weights_storage.record_change_mode("stashed")
-        elif self.weight_predictor and self.weight_predictor.nag_with_predictor and self.delay_at_batch.get(batch_idx) == 0:
+        elif (self.weight_predictor and self.weight_predictor.nag_with_predictor
+              and (self.delay_at_batch.get(batch_idx) == 0)):
             self.weight_predictor.setup(0)
             self.weight_predictor.forward()
             # self.true_weights_storage.record_change_mode("pred")

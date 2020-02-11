@@ -52,7 +52,9 @@ python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_nod
 * gpu bcast not working yet. (some deadlock)
   * The problem is that p0 does 'send' bcast to p1 while p1 does 'send' bcast to p0, on the same group. Therefore need more groups.
 
-* We need to manualy `wait()` on async handlers, otherwise memory explodes.
+* pipedream scheduler stopped working (deadlock)?
+
+* We need to pop/destroy async handlers, otherwise memory explodes.
 
 * With `torch.distributed.launch` we may need to manually do ```kill -9 <PIDs>``` in case of errors to kill workers.
 
@@ -163,5 +165,5 @@ After talk with Amit Nadav
 * some ga resulst ran without GA! re running.... (some: thous after thier application was before decoupling step for last partition) I rerun all gap aware just in case...
 
 
-I see that with 2 buffers we are actually slower, probobly the time to create 2 buffers not worth it.
+* I see that with 2 buffers we are actually slower, probobly the time to create 2 buffers not worth it.
 

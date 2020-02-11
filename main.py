@@ -126,6 +126,10 @@ def parse_cli():
                         default=False,
                         help="Keep forward buffers for both train and eval "
                         "instead of dynamically creating them every iteration")
+
+    parser.add_argument("--no_recomputation", action="store_true", default=False,
+                        help="Will not use recomputation (trading speed for memory).")
+
     # TODO: option for weigth stashing just statistics.
 
     args = parser.parse_args()
@@ -663,6 +667,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition
             break  # steps condition met
     return total_epoch_times_list
 
+
 def get_dataloaders(args, explicit_seperated_dataset=False):
     dl_kw = dict()
     if args.cpu:
@@ -829,7 +834,9 @@ def main():
         log_frequency=args.log_frequency,
         max_buffers=args.max_buffers,
         step_every=args.step_every,
-        keep_buffers_alive=args.keep_buffers_alive)
+        keep_buffers_alive=args.keep_buffers_alive,
+        use_recomputation=(not args.no_recomputation)
+    )
 
     if hasattr(args, "ddp_sim_num_gpus") and args.ddp_sim_num_gpus > 1:
         print(
@@ -899,7 +906,8 @@ def main():
     # Main Training Loop
 
     exp_start_time = time.time()
-    total_epoch_times_list = training_loop(args, logger, train_dl, test_dl, is_first_partition, partition, statistics, train_dl_len, test_dl_len, samplers)
+    total_epoch_times_list = training_loop(
+        args, logger, train_dl, test_dl, is_first_partition, partition, statistics, train_dl_len, test_dl_len, samplers)
     exp_total_time = time.time() - exp_start_time
 
     # Save # FIXME

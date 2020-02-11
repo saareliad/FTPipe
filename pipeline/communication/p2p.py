@@ -48,7 +48,8 @@ class P2PCommunicationHandler(SimpleCommBase):
                         # we do not clone. so don't torch it until then.
                         tensor = tensor.data
                 else:
-                    tensor.detach_()
+                    # tensor.detach_()
+                    tensor = tensor.detach()
                 tensor = tensor.chunk(self.num_chunks)
                 tensor_tag = self.tensor_tags[tensor_name] + \
                     (self.TOTAL_TAGS * batch_idx)

@@ -73,5 +73,6 @@
     "ddp_sim_num_gpus": 4,
     "ddp": true,
     "cudnn_benchmark": true,
-    "keep_buffers_alive": true
+    "keep_buffers_alive": true,
+    "no_recomputation": true
 }
