@@ -133,8 +133,6 @@ def generateStatements(partition: List[Node], scope_to_class_field: Dict[str, st
         elif node.type == NodeTypes.CONSTANT:
             generateConstantExpression(ready_expressions, expression_len, node)
         elif node.type == NodeTypes.OP:
-            # statements.append(generateFunctionCallExpressionOld(ready_expressions, expression_len,
-            #                                                  node, arg_gen, verbose=verbose))
             statements.append(generateFunctionCallExpression(ready_expressions, expression_len,
                                                              node, arg_gen, verbose=verbose))
 

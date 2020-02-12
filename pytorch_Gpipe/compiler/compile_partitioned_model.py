@@ -6,11 +6,11 @@ import torch.nn.functional as F
 from pytorch_Gpipe.model_profiling.control_flow_graph import Node, NodeTypes, Graph
 from pytorch_Gpipe.utils import traverse_model, traverse_params_buffs, layerDict, tensorDict
 import string
-from .partition_forward_method import generate_forward_method
+from .partition_forward_method import generate_forward_method, variableNameGenerator
 from .partition_init_method import generate_init_method
 from .state_methods import generate_state_methods
 from typing import List, Tuple, Dict, Optional
-from collections import OrderedDict
+from collections import OrderedDict, deque
 import inspect
 import os
 import pathlib
@@ -62,8 +62,10 @@ def compile_partitoned_model(graph: Graph, model: Module, verbose: bool = False,
         partitions_code.append(state_methods_functions)
         ios[idx] = io
 
-    lines.append(create_pipeline_configuration(
-        graph, parts, model, ios, layer_classes))
+    lines.append(create_pipeline_configuration(graph, parts, model,
+                                               ios, layer_classes))
+    lines.append(create_model_parallel_module(graph.model_name, ios,
+                                              graph.num_inputs, graph.output_scopes))
     lines += partitions_code
     lines.append(generateHelpFunctions())
 
@@ -140,7 +142,7 @@ def generateImports(layer_classes: Dict[str, Module]) -> List[str]:
 
 def generateHelpFunctions() -> str:
     '''generates traverse_model, layerDict, traverse_params_buffs, tensorDict functions
-    to be used in the create_pipeline_configuration function 
+    to be used in the create_pipeline_configuration function
     '''
     lines = [inspect.getsource(f) for f in
              [traverse_model, layerDict, traverse_params_buffs, tensorDict]]
@@ -259,3 +261,85 @@ def connections(graph: Graph) -> str:
     lines.append(
         f"# model outputs {adj_matrix[num_partitions + 1]['inputs']}")
     return '\n'.join(lines) + '\n'
+
+
+def create_model_parallel_module(name: str, ios: Dict[int, Dict[str, List[str]]], num_inputs: int, model_outputs: List[str]) -> str:
+    '''create a modelParallel version of the partition config
+    '''
+    model_inputs = [f'input{idx}' for idx in range(num_inputs)]
+    class_decl_and_init = "\n".join([
+        f"class {name}ModelParallel(nn.Module):",
+        f"{tab}def __init__(self,config):",
+        f"{dtab}super({name}ModelParallel,self).__init__()",
+        dtab + f"\n{dtab}".join(
+            f"self.stage{i} = config[{i}]['model']" for i in ios)
+    ])
+
+    forward = model_parallel_forward(ios, model_inputs, model_outputs)
+
+    states = f",\n{dtab}{dtab}".join([f"**self.stage{i}.state_dict(self.stage{i}.device)"
+                                      for i in ios])
+
+    states = f"{{{states}}}"
+
+    state_dict = f"\n{dtab}".join(["def state_dict(self):",
+                                   f"return {states}"])
+
+    loads = f"\n{dtab}".join([f"self.stage{i}.load_state(state)" for i in ios])
+    load_state_dict = f"\n{tab}{tab}".join(
+        ["def load_state_dict(self,state):", loads])
+
+    buffer_states = f",\n{dtab}{dtab}{tab} ".join(
+        [f"self.stage{i}.named_buffers()" for i in ios])
+    named_buffers = f"\n{dtab}".join(
+        [f"def named_buffers(self):", f"return chain({buffer_states})"])
+
+    parameter_states = f",\n{dtab}{dtab}{tab} ".join(
+        [f"self.stage{i}.named_parameters()" for i in ios])
+    named_parameters = f"\n{dtab}".join(
+        [f"def named_parameters(self):", f"return chain({parameter_states})"])
+
+    parameters = f"\n{dtab}".join(["def parameters(self):",
+                                   f"return [p for _,p in self.named_parameters()]"])
+
+    buffers = f"\n{dtab}".join(["def buffers(self):",
+                                f"return [b for _,b in self.named_buffers()]"])
+
+    return f"\n\n{tab}".join([class_decl_and_init, forward, state_dict, load_state_dict, named_buffers, named_parameters, buffers, parameters]) + "\n\n"
+
+
+def model_parallel_forward(ios: Dict[int, Dict[str, List[str]]], model_inputs: List[str], model_outputs: List[str]) -> str:
+    '''generates the forward nethod of the model parallel version of the config
+    '''
+    n_partitions = len(ios)
+    arg_gen = variableNameGenerator()
+    activations = {}
+    statements = [f"def forward(self,{', '.join(model_inputs)}):"]
+
+    for idx, i in enumerate(model_inputs):
+        activations[i] = f'input{idx}'
+
+    parts = deque(range(n_partitions))
+
+    while len(parts) > 0:
+        idx = parts.popleft()
+
+        if all(tensor in activations for tensor in ios[idx]['inputs']):
+            inputs = ", ".join(f"{activations[tensor]}.to(self.stage{idx}.device)"
+                               for tensor in ios[idx]['inputs'])
+            outputs = []
+            for o, t in zip(ios[idx]['outputs'], arg_gen):
+                activations[o] = t
+                outputs.append(t)
+
+            outputs = ", ".join(outputs)
+
+            statements.append(f"{outputs} = self.stage{idx}({inputs})")
+
+        else:
+            parts.append(idx)
+
+    outputs = ", ".join(activations[o] for o in model_outputs)
+    statements.append(f"return {outputs}")
+
+    return f"\n{dtab}".join(statements)
