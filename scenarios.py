@@ -546,17 +546,27 @@ if __name__ == "__main__":
     model = sample_models.resnet18().cuda()
     sample = torch.randn(16, 3, 224, 224).cuda()
 
-    # pipe_model(model, sample, nparts=2, node_weight_function=node_weight_function,
-    #            edge_weight_function=edge_weight_function(), output_file="resnet18_2p")
+    pipe_model(model, sample, nparts=2, node_weight_function=node_weight_function,
+               edge_weight_function=edge_weight_function(), output_file="resnet18_2p")
 
     model = model.cpu()
     sample = sample.cpu()
 
     config = create_pipeline_configuration(model, DEBUG=True)
+    config[0]['model'].cpu()
+    config[0]['model'].device = 'cpu'
+    config[1]['model'].cuda()
+    config[1]['model'].device = 'cuda'
 
-    pipe = Pipeline(config, output_device='cpu', use_multiprocessing=False)
+    from resnet18_2p import ResNetModelParallel
 
-    out = pipe(sample, num_chunks=4)
-    pipe.backward(torch.ones_like(out))
+    model = ResNetModelParallel(config)
+
+    output = model(sample)
+    assert output.is_cuda
+    # pipe = Pipeline(config, output_device='cpu', use_multiprocessing=False)
+
+    # out = pipe(sample, num_chunks=4)
+    # pipe.backward(torch.ones_like(out))
 
     print("done")

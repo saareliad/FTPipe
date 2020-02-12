@@ -335,6 +335,8 @@ def model_parallel_forward(ios: Dict[int, Dict[str, List[str]]], model_inputs: L
             outputs = ", ".join(outputs)
 
             statements.append(f"{outputs} = self.stage{idx}({inputs})")
+            if len(ios[idx]['outputs']) == 1:
+                statements[-1] += '[0]'
 
         else:
             parts.append(idx)
