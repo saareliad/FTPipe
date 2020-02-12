@@ -148,7 +148,7 @@ class SinglePartitionManager:
         self.async_fwd_objects = OrderedDict()
         self.async_bwd_objects = OrderedDict()
 
-        self.logger = logging.getLogger("msnag")
+        self.logger = logging.getLogger("msnag")  # FIXME
 
         # self.modify_gradients_before_send = False  # TODO add as option
         self.delay_at_batch = {}
@@ -423,7 +423,7 @@ class SinglePartitionManager:
 
                 weight_predictor.setup(expected_staleness)
                 weight_predictor.forward()
-
+                # Moved by: sum(i.norm() for i in self.true_weights_storage.true_weights[0]) - sum([i.norm() for i in self.trainer.optimizer.param_groups[0]['params']])
                 if old_lrs:
                     pgs = self.trainer.optimizer.param_groups
                     for pg, old_lr in zip(pgs, old_lrs):
@@ -486,7 +486,7 @@ class SinglePartitionManager:
             do_step, old_lrs = self.should_do_step(batch_idx)
 
             # For the last batch, we must scale down the learning rate, and then restore.
-            if not do_step and (batch_idx == (num_batches - 1)):
+            if (not do_step) and (batch_idx == (num_batches - 1)):
                 do_step = True
                 old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
 

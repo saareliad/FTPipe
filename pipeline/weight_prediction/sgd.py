@@ -95,8 +95,8 @@ class SGD2MSNAG(FixFunction):
 
     def __call__(self, p: WeightPredictor, pg):
         gamma = pg['momentum']
-        # if p.n_steps == 1:
-        #     return gamma
+        if p.n_steps == 1:
+            return gamma
         return (gamma - math.pow(gamma, p.n_steps + 1)) / (1 - gamma)
         # return torch.tensor(gamma).pow_(d + 1).add_(- gamma).div_(gamma - 1)
 

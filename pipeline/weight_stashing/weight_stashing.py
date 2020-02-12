@@ -128,6 +128,8 @@ class WeightStasher:
             self.dirty_mark[batch_index] = False
 
     def _restore_from_buff(self, buff):
+        # "Copy" pointers.
+        # NOTE: its ok to do so, because we only stash once.
         with torch.no_grad():
             for pg, cloned in zip(self.optimizer.param_groups, buff):
                 for p, bp in zip(pg['params'], cloned):
@@ -170,6 +172,7 @@ class WeightStasher:
             # Ensure correct post resotore:
             # create temporary buffer -> (do backward) -> ... -> (do step)-> then restore it
             # Same versions as backward!
+            # NOTE: where ws+msnag is used, this is "copy on write"
             self.true_weights_storage.create_cloned_if_needed()
         if is_dirty:
             buff = self.theta_buffer.pop(batch_index)
