@@ -8,6 +8,7 @@ from queue import Queue as TQueue
 import torch
 from torch import Tensor
 from torch.nn import Module, ModuleList
+from torch.optim import Optimizer
 from itertools import chain
 from pytorch_Gpipe.delayedNorm import DelayedBatchNorm
 import traceback
@@ -25,7 +26,7 @@ class COMMAND(Enum):
 
 
 class InvalidState(Exception):
-    ''' Error used to indicate that the pipeline is not in the correct state 
+    ''' Error used to indicate that the pipeline is not in the correct state
     for some operation for eg. backward when in eval mode will raise this exception
     '''
 
@@ -42,9 +43,6 @@ class Result():
     '''
 
     def __init__(self, minibatch: int, data: Optional[Tensor] = None, exc_info: Optional[str] = None, metadata=None):
-        if not (data is None or exc_info is None):
-            raise ValueError(
-                f"data and exc_info fields are mutually excelusive but got {data} {exc_info}")
         self.data = data
         self.exc_info = exc_info
         self.minibatch = minibatch
@@ -231,15 +229,24 @@ class Pipeline():
             output_uses = OrderedDict([(k, uses[k])
                                        for k in output_queues.keys()])
 
-            model = config['model'].share_memory()
+            worker_inputs = [(k, k not in self.input_names)
+                             for k in config['inputs']]
+            worker_outputs = [(k, k not in self.output_names)
+                              for k in config['outputs']]
+
+            model = config['model']
             device = model.device
+            model.share_memory().to(device)
+            optimizer = config.get('optimizer', None)
+
             if use_delayedNorm:
                 model = DelayedBatchNorm.convertBatchNorm(model)
+
             command_queue = self.command_queues[idx]
             IO = Connection(input_queues, output_queues,
                             output_uses)
-            args = (idx, model, device, IO,
-                    command_queue, use_delayedNorm)
+            args = (idx, model, device, IO, worker_inputs, worker_outputs,
+                    command_queue, use_delayedNorm, optimizer)
             workers.append(worker_class(*args))
             shards.append(model)
 
@@ -338,7 +345,7 @@ class Pipeline():
             for idx, grad_chunk in enumerate(g_chunks):
                 queue.put(Result(minibatch=idx, data=grad_chunk))
 
-        # wait untill all workers are done
+        # wait untill all workers are done collect acks not tensors
         for _ in range(self.num_chunks):
             for k, q in self.input_queues.items():
                 for _ in range(self.uses[k]):
@@ -451,7 +458,7 @@ class Pipeline():
 
 
 class Worker():
-    def __init__(self, idx: int, model: Module, device: int, IO: Connection, command_queue: Union[TQueue, PQueue], use_delayedNorm: bool):
+    def __init__(self, idx: int, model: Module, device: int, IO: Connection, input_scopes: List[Tuple[str, bool]], output_scopes: List[Tuple[str, bool]], command_queue: PQueue, use_delayedNorm: bool, optimizer: Optional[Optimizer] = None):
         super(Worker, self).__init__()
         self.idx = idx
         self.model = model
@@ -466,16 +473,25 @@ class Worker():
         self.state_stack = StateStack(self.device)
         self.num_minibatches = 0
         self.minibatch_idx = 0
+        self.optimizer = optimizer
+        self.input_scopes = input_scopes
+        self.output_scopes = output_scopes
 
     def run(self):
         while self.running:
             try:
+                # wait for command from master
+                # note that we continue only if we start a new batch
                 if self.minibatch_idx == self.num_minibatches:
                     cmd, metadata = self.command_queue.get()
                     self.changeMode(cmd, metadata)
                     continue
+
+                # receive minibatch
                 inputs = self.IO.get(self.minibatch_idx, forward=self.FORWARD)
                 inputs = self.moveInputs(inputs)
+
+                # process minibatch
                 if self.FORWARD:
                     outputs = self.forward(inputs)
                     self.IO.put(outputs, forward=True)
@@ -483,6 +499,12 @@ class Worker():
                     grads = self.backward(inputs)
                     self.IO.put(grads, forward=False)
                 self.minibatch_idx += 1
+
+                # optimization have each worker take a step as soon as possible(once the batch has finished recomputing)
+                if self.optimizer and ((not self.FORWARD) and (self.minibatch_idx == self.num_minibatches)):
+                    self.optimizer.step()
+                    self.optimizer.zero_grad()
+
             except Exception:
                 # propagate the Exception eventually reaching the master
                 # a worker should always work unless explicitly shut down by master
@@ -520,7 +542,7 @@ class Worker():
         with torch.enable_grad():
             outputs = self.model(*inputs)
             torch.autograd.backward(outputs, grad_input)
-        return [Result(minibatch=self.minibatch_idx, data=i.grad) for i in inputs]
+        return [Result(minibatch=self.minibatch_idx, data=i.grad if used else None) for i, (_, used) in zip(inputs, self.input_scopes)]
 
     def changeMode(self, mode: COMMAND, metadata: Any):
         if mode is COMMAND.TRAIN:
@@ -556,19 +578,20 @@ class Worker():
 
 
 class TWorker(Worker, Thread):
-    def __init__(self, idx: int, model: Module, device: int, IO: Connection, command_queue: TQueue, use_delayedNorm: bool):
-        Worker.__init__(self, idx, model, device, IO,
-                        command_queue, use_delayedNorm)
+    def __init__(self, idx: int, model: Module, device: int, IO: Connection, input_scopes: List[Tuple[str, bool]], output_scopes: List[Tuple[str, bool]], command_queue: PQueue, use_delayedNorm: bool, optimizer: Optional[Optimizer] = None):
+        Worker.__init__(self, idx, model, device, IO, input_scopes, output_scopes,
+                        command_queue, use_delayedNorm, optimizer=optimizer)
         Thread.__init__(self, name=f"Worker_{self.idx+1}", daemon=True)
 
 
 class PWorker(Worker, Process):
-    def __init__(self, idx: int, model: Module, device: int, IO: Connection, command_queue: PQueue, use_delayedNorm: bool):
-        Worker.__init__(self, idx, model, device, IO,
-                        command_queue, use_delayedNorm)
+    def __init__(self, idx: int, model: Module, device: int, IO: Connection, input_scopes: List[Tuple[str, bool]], output_scopes: List[Tuple[str, bool]], command_queue: PQueue, use_delayedNorm: bool, optimizer: Optional[Optimizer] = None):
+        Worker.__init__(self, idx, model, device, IO, input_scopes, output_scopes,
+                        command_queue, use_delayedNorm, optimizer=optimizer)
         Process.__init__(self, name=f"Worker_{self.idx+1}", daemon=True)
 
 
+# TODO optimization no need to send gradient of inputs to the master a simple ack will suffice
 # TODO add fancy pants logging
 # TODO implement using RPC and compare to the best of the previous 2
 # TODO if prev options are not good enough maybe check CUDA-aware-MPI(like ms-nag pipeline) / Broadcast based comm(like pipedream) / autograd hacks(like torchgpipe)
