@@ -542,12 +542,33 @@ def check_LSTM():
     build_graph(rnn, sample).save_as_pdf("LLSTM", ".")
 
 
-if __name__ == "__main__":
+def pipeline_with_optimizer():
     model = sample_models.resnet18().cuda()
     sample = torch.randn(16, 3, 224, 224).cuda()
 
-    pipe_model(model, sample, nparts=2, node_weight_function=node_weight_function,
-               edge_weight_function=edge_weight_function(), output_file="resnet18_2p")
+    config = create_pipeline_configuration(model, DEBUG=True)
+    config[0]['model'].cpu()
+    config[0]['model'].device = 'cpu'
+    config[1]['model'].cpu()
+    config[1]['model'].device = 'cpu'
+
+    config[0]['optimizer'] = torch.optim.SGD(config[0]['model'].parameters(),
+                                             lr=1e-3)
+    config[1]['optimizer'] = torch.optim.SGD(config[1]['model'].parameters(),
+                                             lr=1e-3)
+
+    model = Pipeline(config, output_device='cpu', use_multiprocessing=True)
+
+    out = model(sample.cpu(), num_chunks=4)
+    model.backward(torch.ones_like(out))
+
+    print(out.device)
+    print("done")
+
+
+def model_parallel():
+    model = sample_models.resnet18().cuda()
+    sample = torch.randn(16, 3, 224, 224).cuda()
 
     model = model.cpu()
     sample = sample.cpu()
@@ -558,15 +579,12 @@ if __name__ == "__main__":
     config[1]['model'].cuda()
     config[1]['model'].device = 'cuda'
 
-    from resnet18_2p import ResNetModelParallel
-
     model = ResNetModelParallel(config)
 
     output = model(sample)
     assert output.is_cuda
-    # pipe = Pipeline(config, output_device='cpu', use_multiprocessing=False)
-
-    # out = pipe(sample, num_chunks=4)
-    # pipe.backward(torch.ones_like(out))
-
     print("done")
+
+
+if __name__ == "__main__":
+    pass
