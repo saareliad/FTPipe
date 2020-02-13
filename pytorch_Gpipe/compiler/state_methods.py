@@ -1,4 +1,4 @@
-
+from typing import Tuple
 tab = '    '
 dtab = tab + tab
 
@@ -12,7 +12,9 @@ def generate_state_methods() -> str:
     named_parameters = generateNamedParametersFunction()
     named_buffers = generateNamedBuffersFunction()
 
-    return "\n".join([state_dict, load_state_dict, named_parameters, named_buffers]) + "\n\n"
+    cpu, cuda, to = generateCpuCudaToMethods()
+
+    return "\n".join([state_dict, load_state_dict, named_parameters, named_buffers, cpu, cuda, to]) + "\n\n"
 
 
 def generateStateDictFunction() -> str:
@@ -93,3 +95,38 @@ def generateLoadStateDict() -> str:
             'super().load_state_dict(new_state, strict=True)']
 
     return f"\n{tab}" + f"\n{dtab}".join(func)
+
+
+def generateCpuCudaToMethods() -> Tuple[str, str, str]:
+    """generates the cpu cuda and to methods of the partitions
+       the generated code keeps track of on which device the partition is placed
+
+    Returns:
+        Tuple[str, str, str] the generated code
+    """
+    pu = f"\n{tab}def cpu(self):\n{dtab}self.device=torch.device('cpu')\n{dtab}return super().cpu()\n"
+
+    cuda = [f"{tab}def cuda(self,device=None):",
+            f"if device is None:",
+            f"{tab}device=torch.cuda.current_device()",
+            "self.device=torch.device(device)",
+            "return super().cuda(self.device)\n",
+            ]
+
+    to = [f"{tab}def to(self, *args, **kwargs):",
+          "device = None",
+          "if 'device' in kwargs:",
+          f"{tab}device = kwargs['device']",
+          "elif 'tensor' in kwargs:",
+          f"{tab}device = kwargs['tensor'].device",
+          "if args:",
+          f"{tab}if isinstance(args[0], (torch.device, int, str)):",
+          f"{dtab}device = args[0]",
+          f"{tab}if torch.is_tensor(args[0]):",
+          f"{dtab}device = args[0].device",
+          "if not (device is None):",
+          f"{tab}self.device = torch.device(device)",
+          "return super().to(*args, **kwargs)",
+          ]
+
+    return cpu, f"\n{dtab}".join(cuda), f"\n{dtab}".join(to)

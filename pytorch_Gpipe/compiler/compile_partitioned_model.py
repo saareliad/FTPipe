@@ -218,7 +218,6 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]], mo
 
     for idx in sorted(list(ios.keys())):
         lines.extend([f"device = torch.device('cpu') if DEBUG else torch.device('cuda:{idx}')",
-                      f"partition{idx}.device=device",
                       f"config[{idx}]['model'] = partition{idx}.to(device)"])
 
     input_ids = [f"'input{idx}'" for idx in range(graph.num_inputs)]

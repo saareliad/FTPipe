@@ -547,10 +547,6 @@ def pipeline_with_optimizer():
     sample = torch.randn(16, 3, 224, 224).cuda()
 
     config = create_pipeline_configuration(model, DEBUG=True)
-    config[0]['model'].cpu()
-    config[0]['model'].device = 'cpu'
-    config[1]['model'].cpu()
-    config[1]['model'].device = 'cpu'
 
     config[0]['optimizer'] = torch.optim.SGD(config[0]['model'].parameters(),
                                              lr=1e-3)
@@ -570,21 +566,19 @@ def model_parallel():
     model = sample_models.resnet18().cuda()
     sample = torch.randn(16, 3, 224, 224).cuda()
 
-    model = model.cpu()
-    sample = sample.cpu()
-
     config = create_pipeline_configuration(model, DEBUG=True)
     config[0]['model'].cpu()
-    config[0]['model'].device = 'cpu'
     config[1]['model'].cuda()
-    config[1]['model'].device = 'cuda'
-
+    assert config[1]['model'].device.type == 'cuda'
     model = ResNetModelParallel(config)
 
     output = model(sample)
     assert output.is_cuda
     print("done")
 
+    for n, p in model.named_parameters():
+        print(n, p.device)
+
 
 if __name__ == "__main__":
-    pass
+    model_parallel()
