@@ -591,7 +591,6 @@ class PWorker(Worker, Process):
         Process.__init__(self, name=f"Worker_{self.idx+1}", daemon=True)
 
 
-# TODO optimization no need to send gradient of inputs to the master a simple ack will suffice
 # TODO add fancy pants logging
 # TODO implement using RPC and compare to the best of the previous 2
 # TODO if prev options are not good enough maybe check CUDA-aware-MPI(like ms-nag pipeline) / Broadcast based comm(like pipedream) / autograd hacks(like torchgpipe)

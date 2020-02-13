@@ -297,7 +297,7 @@ contains our logic for synchronous pipeline according to [Gpipe](https://arxiv.o
   class Pipeline()
 ```
 
-TODO still needs testing tested on cpus and single GPU
+TODO functional but need to run experiments to see if performance is actually good 
 
 # Experiments
 
@@ -314,6 +314,9 @@ we've implemented throughput/memory and accuracy experiments
 - transformers 2.2.1 for GPT2 and BERT NLP models
 
 # TODOS
-
+- compare pipedream partition to our own use their partitioned models to do so
+- add documentation and full training loop
+- finish pipedream partition
+- lstms and packed_sequences are problematic
 - string arguments for functions like nll_loss are not supported with tracing but yes with scripting
 - optional inputs problem

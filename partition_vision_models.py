@@ -148,10 +148,6 @@ if __name__ == "__main__":
     model = create_model(args.model)
     sample = create_random_sample(args, analysis=False)
 
-    if isinstance(model, AmoebaNet_D) and args.dataset != 'imagenet':
-        error = "amoebanet supported input size is 3x224x244, use imagenet dataset instead"
-        raise ValueError(error)
-
     if args.model_too_big:
         model = model.cpu()
         sample = sample.cpu()

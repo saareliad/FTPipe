@@ -29,7 +29,7 @@ from pytorch_Gpipe.model_profiling.graph_builder import translate_scopes
 from pytorch_Gpipe.utils import (OrderedSet, layerDict, tensorDict,
                                  traverse_model, traverse_params_buffs)
 import sample_models
-from partitioned_models.tmp.resnet18_2p import create_pipeline_configuration
+from partitioned_models.tmp.resnet18_2p import create_pipeline_configuration, ResNetModelParallel
 
 
 def node_weight_function(node: Node):
