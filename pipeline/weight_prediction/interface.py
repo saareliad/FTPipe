@@ -13,8 +13,12 @@ class WeightPredictor(abc.ABC):
         self.true_weights_storage = true_weights_storage
 
     def setup(self, n_steps):
-        if n_steps == 0 and self.nag_with_predictor:
-            n_steps = 1
+        if self.nag_with_predictor:
+            n_steps += 1
+            # FIXME: I think this create a problem with gap aware.
+        # OR: nag with predictor just for the last partition.
+        # if n_steps == 0 and self.nag_with_predictor:
+        #     n_steps = 1
         self.n_steps = n_steps
 
     @abc.abstractmethod

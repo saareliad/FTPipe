@@ -74,5 +74,6 @@
     "ddp": true,
     "cudnn_benchmark": true,
     "keep_buffers_alive": true,
-    "no_recomputation": true
+    "no_recomputation": true,
+    "nesterov_set_for_last_partition": true
 }

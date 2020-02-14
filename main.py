@@ -445,6 +445,21 @@ def get_gap_aware(args, optimizer):
     return gap_aware_cls(optimizer, **gap_aware_args)
 
 
+def try_replace_prediction_with_nesterov(args):
+    # If last partition: just use nesterov.
+    optimizer_type = getattr(args, 'optimizer')['type']
+    if "sgd" in optimizer_type and getattr(args, "nesterov_set_for_last_partition", False):
+        tmp = args.optimizer['args']
+        if not tmp.get('nesterov', False):
+            pred = getattr(args, 'weight_prediction', None)
+            if (pred is not None) and pred['args'].get('nag_with_predictor', False):
+                tmp['nesterov'] = True
+                pred['args']['nag_with_predictor'] = False
+                args.nesterov_set_for_last_partition = True
+                print("-I- Setting nesterov=True for last partition")
+                delattr(args, 'weight_prediction')
+
+
 def get_weight_predictor(args, optimizer, scheduler=None, true_weights_storage=None):
     """
         Returns:
@@ -495,8 +510,15 @@ def hack_trainer_type_to_gap_aware(args):
             if not is_last_partition:
                 hack()
                 return True
+        elif args.gap_aware['policy'] == 'all_except_last_two':
+            is_last_partition = args.local_rank == args.world_size - 1
+            is_almost_last_partition = args.local_rank == args.world_size - 2
+            if (not is_last_partition) and (not is_almost_last_partition):
+                hack()
+                return True
         else:
-            SUPPORTED_POLICIES = {'almost_last_partition', 'all_except_last'}
+            SUPPORTED_POLICIES = {'almost_last_partition',
+                                  'all_except_last', 'all_except_last_two'}
             raise ValueError(f"Uknown policy for GA {args.gap_aware['policy']}.\
                              suported policies are {SUPPORTED_POLICIES}")
 
@@ -620,7 +642,8 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, partition
                 #         partition.run_until_flush(reminder)
                 # else:
                 partition.run_until_flush(TRAIN_BATCHES_TO_RUN)
-                train_epochs_times_list.append(time.time() - train_epoch_start_time)
+                train_epochs_times_list.append(
+                    time.time() - train_epoch_start_time)
 
                 did_train = True
                 if args.local_rank == args.world_size - 1:
@@ -849,6 +872,9 @@ def main():
         print(
             f"-I- simulating DDP accuracy with {args.ddp_sim_num_gpus} (DDP) GPUs per stage")
         dp_sim.convert_to_num_gpus(partition.partition, args.ddp_sim_num_gpus)
+
+    if is_last_partition:
+        try_replace_prediction_with_nesterov(args)
 
     # After the partition is on its device:
     # Set optimizer

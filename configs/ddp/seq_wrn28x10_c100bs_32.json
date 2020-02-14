@@ -4,13 +4,13 @@
     "out_dir":"results/",
     "out_filename": "ddp_32perworker",
     "auto_file_name": true,
-    "statistics": "cv_grad_norm",
+    "statistics": "cv",
     "model": "wrn_28x10_c100_dr03_p4",
     "dataset": "cifar100",
     "trainer": {
         "type": "cv",
         "args": {
-            "always_calc_grad_norm": true
+            "always_calc_grad_norm": false
         }
     },
     "bs_train": 32,

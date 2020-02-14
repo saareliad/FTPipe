@@ -132,3 +132,58 @@ def plot_gap(fit_res: Union[NamedTuple, dict], fig=None, legend=None, **kw):
 
     return fig, axes
 
+def plot_tta(fit_res: Union[NamedTuple, dict], fig=None, log_loss=False, legend=None, loss_per_batch=False):
+
+
+    time_units = "hours"
+    time_div_factor = {"seconds": 1, "minutes": 60, "hours": 3600}
+    time_div_factor = time_div_factor.get(time_units)
+
+
+    if loss_per_batch:
+        raise NotImplementedError()
+
+    if fig is None:
+        fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(16, 10),
+                                 sharex='col', sharey=False)
+        axes = axes.reshape(-1)
+    else:
+        axes = fig.axes
+
+    for ax in axes:
+        for line in ax.lines:
+            if line.get_label() == legend:
+                line.remove()
+
+    p = itertools.product(['train', 'test'], ['loss', 'acc'])
+    for idx, (traintest, lossacc) in enumerate(p):
+        ax = axes[idx]
+        attr = f'{traintest}_{lossacc}'
+        time_attr = 'train_epochs_times'  # total_epoch_times
+
+        if isinstance(fit_res, NamedTuple):
+            data = getattr(fit_res, attr)
+            raise NotImplementedError()
+        else:
+            data = fit_res[attr]
+            time = fit_res[time_attr]
+
+        time = np.array(time) / time_div_factor
+        time = np.cumsum(time)
+        # print(time)
+        # sh = ax.scatter(time[::10], data[::10])
+        h = ax.plot(time, data, label=legend)
+        ax.set_title(attr)
+        
+        if lossacc == 'loss':
+            ax.set_xlabel(f'Time ({time_units})')
+            ax.set_ylabel('Loss')
+            if log_loss:
+                ax.set_yscale('log')
+                ax.set_ylabel('Loss (log)')
+        else:
+            ax.set_xlabel(f'Time ({time_units})')
+            ax.set_ylabel('Accuracy (%)')
+        if legend:
+            ax.legend()
+    return fig, axes
