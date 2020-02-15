@@ -1,7 +1,7 @@
 import sys
 from collections import Counter, OrderedDict, deque
 from enum import Enum, auto, unique
-from typing import Dict, List, Optional, Tuple, Iterator, Any, Union
+from typing import Dict, List, Optional, Tuple, Iterator, Any, Union, Callable, Generator
 from multiprocessing import Queue as PQueue, Process
 from threading import Thread
 from queue import Queue as TQueue
@@ -9,6 +9,7 @@ import torch
 from torch import Tensor
 from torch.nn import Module, ModuleList
 from torch.optim import Optimizer
+from torch.utils.data import DataLoader
 from itertools import chain
 from pytorch_Gpipe.delayedNorm import DelayedBatchNorm
 import traceback
@@ -351,6 +352,78 @@ class Pipeline():
                 for _ in range(self.uses[k]):
                     q.get().get()
 
+    def train_epoch(self, dataloader: DataLoader, loss_function: Callable, num_chunks: Optional[int] = None) -> Generator[Tuple]:
+        """perform a train epoch using the given dataloader and loss function yielding the loss for each batch
+
+        Parameters:
+            dataloader: Dataloader
+                an iterator generating inputs and targets
+                such that inputs,targets = dataloader[0]
+                if targets are tensors then they must be already on the output_device
+
+            loss_function: Callable
+                a function which will be called loss_function(outputs,targets) calculationg the losss/losses of the model
+
+            num_chunks: int
+                the number of chunks to split the inputs to
+                if not given defaults to number of partitions
+        Yields:
+            the output and loss for every batch
+
+        for example:
+            for outputs,loss in pipeline.train_epoch(train_dl,loss_fn,num_chunks):
+                # do something with outputs and loss like calculate statistics
+        """
+        self.train()
+        for xs, ys in dataloader:
+            outputs = self(xs, num_chunks=num_chunks)
+            loss = loss_function(outputs, ys)
+            grads = torch.autograd.grad(loss, outputs)
+            self.backward(grads)
+            yield outputs, loss
+
+    def eval_epoch(self, dataloader: DataLoader, criterion: Optional[Callable] = None, has_targets: bool = False, num_chunks: Optional[int] = None) -> Generator[Tuple]:
+        """ performs an evaluation epoch using given dataloader and optional criterion
+            yielding the batch output and criterion output for each batch
+
+        Arguments:
+            dataloader: Dataloader
+                an iterator generating inputs and possibly targets
+                if has_targets is true assumes inputs,targets=dataloader[0]
+                otherwise assumes inputs=dataloader[0]
+                if targets are tensors then they must be already on the output_device
+
+            criterion: Optional[Callable]
+                optional function to be called with the batch output and the optional targets
+            has_targets: bool
+                if true assumes the dataloader yields a tuple of inputs and targets
+
+            num_chunks: int
+                the number of chunks to split the inputs to
+                if not given defaults to number of partitions
+
+        Yields:
+            the output and criterion for every batch
+
+        for example:
+            for outputs,criterion in pipeline.train_epoch(test_dl,criterion_fn,num_chunks):
+                # do something with outputs and criterion
+        """
+        self.eval()
+
+        for data in dataloader:
+            if has_targets:
+                xs, targets = data
+            else:
+                xs = data
+
+            outputs = self(xs, num_chunks=num_chunks)
+
+            if has_targets:
+                yield outputs, criterion(outputs, targets)
+            else:
+                yield outputs, criterion(outputs)
+
     def _postProcessResults(self, results):
         '''
         detaches the output from the pipeline so that gradient will flow only
@@ -591,6 +664,7 @@ class PWorker(Worker, Process):
         Process.__init__(self, name=f"Worker_{self.idx+1}", daemon=True)
 
 
-# TODO add fancy pants logging
-# TODO implement using RPC and compare to the best of the previous 2
-# TODO if prev options are not good enough maybe check CUDA-aware-MPI(like ms-nag pipeline) / Broadcast based comm(like pipedream) / autograd hacks(like torchgpipe)
+# TODO think about multinode support
+# TODO think about stage replication
+# TODO think about multinode with stage replication
+# TODO add fancy pants stats logging

@@ -271,7 +271,7 @@ def create_model_parallel_module(name: str, ios: Dict[int, Dict[str, List[str]]]
         f"{tab}def __init__(self,config):",
         f"{dtab}super({name}ModelParallel,self).__init__()",
         dtab + f"\n{dtab}".join(
-            f"self.stage{i} = config[{i}]['model'].to(config[{i}]['model'].device)" for i in ios)
+            f"self.stage{i} = config[{i}]['model']" for i in ios)
     ])
 
     forward = model_parallel_forward(ios, model_inputs, model_outputs)

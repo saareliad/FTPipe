@@ -542,7 +542,7 @@ def check_LSTM():
     build_graph(rnn, sample).save_as_pdf("LLSTM", ".")
 
 
-def pipeline_with_optimizer():
+def single_node_pipeline_with_optimizer():
     model = sample_models.resnet18().cuda()
     sample = torch.randn(16, 3, 224, 224).cuda()
 
@@ -562,7 +562,7 @@ def pipeline_with_optimizer():
     print("done")
 
 
-def model_parallel():
+def single_node_model_parallel():
     model = sample_models.resnet18().cuda()
     sample = torch.randn(16, 3, 224, 224).cuda()
 
@@ -574,11 +574,13 @@ def model_parallel():
 
     output = model(sample)
     assert output.is_cuda
-    print("done")
+
+    output.sum().backward()
 
     for n, p in model.named_parameters():
-        print(n, p.device)
+        print(n, p.grad)
+    print("done")
 
 
 if __name__ == "__main__":
-    model_parallel()
+    single_node_model_parallel()
