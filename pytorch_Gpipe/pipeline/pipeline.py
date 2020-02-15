@@ -43,8 +43,11 @@ class Result():
     attempting to retrieve the data will trigger the exception (if present)
     '''
 
-    def __init__(self, minibatch: int, data: Optional[Tensor] = None, exc_info: Optional[str] = None, metadata=None):
-        self.data = data
+    def __init__(self, minibatch: int, data: Optional[Tensor] = None, exc_info: Optional[str] = None, metadata=None, DEBUG_CPU_ONLY: bool = False):
+        if DEBUG_CPU_ONLY and isinstance(data, Tensor):
+            self.data = data.cpu()
+        else:
+            self.data = data
         self.exc_info = exc_info
         self.minibatch = minibatch
         self.metadata = metadata
@@ -183,12 +186,14 @@ class StateStack():
 
 
 class Pipeline():
-    def __init__(self, configs: Dict, output_device: Optional[int] = None, split_dim=0, use_delayedNorm: bool = False, use_multiprocessing=False):
+    def __init__(self, configs: Dict, output_device: Optional[int] = None, split_dim=0, use_delayedNorm: bool = False, use_multiprocessing: bool = False, DEBUG_CPU_ONLY: bool = False):
         if output_device is None:
             default = 'cuda' if torch.cuda.is_available() else 'cpu'
             self.output_device = torch.device(default)
         else:
             self.output_device = torch.device(output_device)
+
+        self.DEBUG_CPU_ONLY = DEBUG_CPU_ONLY
 
         if use_multiprocessing:
             queue_class = PQueue
@@ -247,7 +252,7 @@ class Pipeline():
             IO = Connection(input_queues, output_queues,
                             output_uses)
             args = (idx, model, device, IO, worker_inputs, worker_outputs,
-                    command_queue, use_delayedNorm, optimizer)
+                    command_queue, use_delayedNorm, optimizer, self.DEBUG_CPU_ONLY)
             workers.append(worker_class(*args))
             shards.append(model)
 
@@ -456,7 +461,13 @@ class Pipeline():
         scatters each tensor across split_dim
         returns list of chunks
         '''
-        chunked_input = [x.chunk(num_chunks, dim=self.split_dim) for x in xs]
+        if self.DEBUG_CPU_ONLY:
+            chunked_input = [x.cpu().chunk(num_chunks, dim=self.split_dim)
+                             for x in xs]
+        else:
+            chunked_input = [x.chunk(num_chunks, dim=self.split_dim)
+                             for x in xs]
+
         return list(zip(*chunked_input))
 
     def _sendCommand(self, command: COMMAND, metadata=None):
@@ -531,7 +542,7 @@ class Pipeline():
 
 
 class Worker():
-    def __init__(self, idx: int, model: Module, device: int, IO: Connection, input_scopes: List[Tuple[str, bool]], output_scopes: List[Tuple[str, bool]], command_queue: PQueue, use_delayedNorm: bool, optimizer: Optional[Optimizer] = None):
+    def __init__(self, idx: int, model: Module, device: int, IO: Connection, input_scopes: List[Tuple[str, bool]], output_scopes: List[Tuple[str, bool]], command_queue: PQueue, use_delayedNorm: bool, optimizer: Optional[Optimizer] = None, DEBUG_CPU_ONLY: bool = False):
         super(Worker, self).__init__()
         self.idx = idx
         self.model = model
@@ -549,6 +560,7 @@ class Worker():
         self.optimizer = optimizer
         self.input_scopes = input_scopes
         self.output_scopes = output_scopes
+        self.DEBUG_CPU_ONLY = DEBUG_CPU_ONLY
 
     def run(self):
         while self.running:
@@ -605,7 +617,7 @@ class Worker():
                 save_state = self.minibatch_idx == 0
                 self.state_stack.push(inputs, save_state=save_state)
             results = self.model(*inputs)
-            return [Result(minibatch=self.minibatch_idx, data=r) for r in results]
+            return [Result(minibatch=self.minibatch_idx, data=r, DEBUG_CPU_ONLY=self.DEBUG_CPU_ONLY) for r in results]
 
     def backward(self, grad_input: List[Optional[Tensor]]) -> List[Result]:
         if not self.training:
@@ -615,7 +627,7 @@ class Worker():
         with torch.enable_grad():
             outputs = self.model(*inputs)
             torch.autograd.backward(outputs, grad_input)
-        return [Result(minibatch=self.minibatch_idx, data=i.grad if used else None) for i, (_, used) in zip(inputs, self.input_scopes)]
+        return [Result(minibatch=self.minibatch_idx, data=i.grad if used else None, DEBUG_CPU_ONLY=self.DEBUG_CPU_ONLY) for i, (_, used) in zip(inputs, self.input_scopes)]
 
     def changeMode(self, mode: COMMAND, metadata: Any):
         if mode is COMMAND.TRAIN:
@@ -651,16 +663,16 @@ class Worker():
 
 
 class TWorker(Worker, Thread):
-    def __init__(self, idx: int, model: Module, device: int, IO: Connection, input_scopes: List[Tuple[str, bool]], output_scopes: List[Tuple[str, bool]], command_queue: PQueue, use_delayedNorm: bool, optimizer: Optional[Optimizer] = None):
+    def __init__(self, idx: int, model: Module, device: int, IO: Connection, input_scopes: List[Tuple[str, bool]], output_scopes: List[Tuple[str, bool]], command_queue: PQueue, use_delayedNorm: bool, optimizer: Optional[Optimizer] = None, DEBUG_CPU_ONLY: bool = False):
         Worker.__init__(self, idx, model, device, IO, input_scopes, output_scopes,
-                        command_queue, use_delayedNorm, optimizer=optimizer)
+                        command_queue, use_delayedNorm, optimizer=optimizer, DEBUG_CPU_ONLY=DEBUG_CPU_ONLY)
         Thread.__init__(self, name=f"Worker_{self.idx+1}", daemon=True)
 
 
 class PWorker(Worker, Process):
-    def __init__(self, idx: int, model: Module, device: int, IO: Connection, input_scopes: List[Tuple[str, bool]], output_scopes: List[Tuple[str, bool]], command_queue: PQueue, use_delayedNorm: bool, optimizer: Optional[Optimizer] = None):
+    def __init__(self, idx: int, model: Module, device: int, IO: Connection, input_scopes: List[Tuple[str, bool]], output_scopes: List[Tuple[str, bool]], command_queue: PQueue, use_delayedNorm: bool, optimizer: Optional[Optimizer] = None, DEBUG_CPU_ONLY: bool = False):
         Worker.__init__(self, idx, model, device, IO, input_scopes, output_scopes,
-                        command_queue, use_delayedNorm, optimizer=optimizer)
+                        command_queue, use_delayedNorm, optimizer=optimizer, DEBUG_CPU_ONLY=DEBUG_CPU_ONLY)
         Process.__init__(self, name=f"Worker_{self.idx+1}", daemon=True)
 
 
