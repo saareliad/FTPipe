@@ -535,11 +535,13 @@ class SinglePartitionManager:
             # Restore to parameters which the fwd ran on
             weight_stasher.pop_restore_stashed(batch_idx)
             # self.true_weights_storage.record_change_mode("stashed")
-        elif (self.weight_predictor and self.weight_predictor.nag_with_predictor
-              and (self.delay_at_batch.get(batch_idx) == 0)):
-            self.weight_predictor.setup(0)
-            self.weight_predictor.forward()
-            # self.true_weights_storage.record_change_mode("pred")
+
+        # elif (self.weight_predictor and self.weight_predictor.nag_with_predictor
+        #       and (self.delay_at_batch.get(batch_idx) == 0)):
+        #     # HACK: feature: do nag in for the backward pass.
+        #     self.weight_predictor.setup(0)
+        #     self.weight_predictor.forward()
+        #     # self.true_weights_storage.record_change_mode("pred")
 
         self.partition.recompute(batch_idx)
 
