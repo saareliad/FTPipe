@@ -54,25 +54,22 @@ class SGDClonedWeightPrediction(WeightPredictor):
     def forward(self):
         if not self.n_steps:
             return
+
+        os_state = self.optimizer.state
+        self.true_weights_storage.create_cloned_if_needed()
+        self.true_weights_storage.record_change_mode("pred")
+        pgs = self.optimizer.param_groups
         with torch.no_grad():
             # init theta for clone
             # TODO: we are doing unneccery clone for batches without staleness.
             # e.g first batch in run_until_flush()
             # however when we NAG we predictor (current practice), the staleness is 1 instead of 0.
+            buffered_fixes = [self.fix_fn(self, pg) for pg in pgs]
 
-            self.true_weights_storage.create_cloned_if_needed()
-            self.true_weights_storage.record_change_mode("pred")
-
-            # self.theta_buffer = [[p.data.clone() for p in pg['params']]
-            #                      for pg in self.optimizer.param_groups]
-            pgs = self.optimizer.param_groups
-
-            self.buffered_fixes = [self.fix_fn(self, pg) for pg in pgs]
-            for pg, fix_fn_item in zip(pgs, self.buffered_fixes):
-                if fix_fn_item:
-                    for p in pg['params']:
-                        p.data.add_(-fix_fn_item,
-                                    self.optimizer.state[p]["momentum_buffer"].data)
+            for pg, fix_fn_item in zip(pgs, buffered_fixes):
+                for p in pg['params']:
+                    p.data.add_(-fix_fn_item,
+                                os_state[p]["momentum_buffer"].data)
 
     def revert(self):
         if not self.n_steps:

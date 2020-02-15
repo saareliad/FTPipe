@@ -457,7 +457,9 @@ def try_replace_prediction_with_nesterov(args):
                 pred['args']['nag_with_predictor'] = False
                 args.nesterov_set_for_last_partition = True
                 print("-I- Setting nesterov=True for last partition")
+                res = getattr(args, 'weight_prediction')
                 delattr(args, 'weight_prediction')
+                return res
 
 
 def get_weight_predictor(args, optimizer, scheduler=None, true_weights_storage=None):
@@ -874,7 +876,7 @@ def main():
         dp_sim.convert_to_num_gpus(partition.partition, args.ddp_sim_num_gpus)
 
     if is_last_partition:
-        try_replace_prediction_with_nesterov(args)
+        lp_wp_arg = try_replace_prediction_with_nesterov(args)
 
     # After the partition is on its device:
     # Set optimizer
@@ -925,7 +927,16 @@ def main():
     partition.set_task(task)
 
     if hasattr(args, "auto_file_name"):
+        # make sure this specific replacement does not ruin experiment name
+        if is_last_partition and lp_wp_arg:
+            setattr(args, 'weight_prediction', lp_wp_arg)
+        
         auto_file_name(args)
+        
+        if is_last_partition and lp_wp_arg:
+            delattr(args, 'weight_prediction')
+            del lp_wp_arg
+
 
     train_dl_len, test_dl_len = len(train_dl), len(test_dl)
     # Try getting seperate X,Y dataloaders

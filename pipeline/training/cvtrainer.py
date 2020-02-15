@@ -116,17 +116,18 @@ class GapAwareCVTrainer(CVTrainer):
 
     def modify_gradients(self, real_theta=None, delay=None):
         # TODO: we may want to save some statistics before we modify grad.
-        self.gap_aware.update_running_avg()
-        self.gap_aware.inc_step_count()
+        ga = self.gap_aware
+        ga.update_running_avg()
+        ga.inc_step_count()
         # It does not help to modify the (Gap Aware) gradients before we send,
         # so do everything here.
-        if real_theta is None or delay is None:
+        if (real_theta is None) or (delay is None):
             # TODO: note this should be called only before step, assuming delay of exactly 1.
             # FIXME: its very problematic if almost last partition calls this if step_every > 1.
             # This means: for the "gap_aware.json" configs !!!
-            self.gap_aware.apply()
+            ga.apply()
         else:
-            self.gap_aware.apply_on_theta(real_theta, delay)
+            ga.apply_on_theta(real_theta, delay)
 
         # self.gap_aware.apply_grad_only()  # Modifys gradients, don't
 

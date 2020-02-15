@@ -92,7 +92,7 @@ class GapAware:
         self.optimizer = optimizer
 
         for pg in optimizer.param_groups:
-            pg[self.MAX_LR_NAME] = pg['lr']
+            pg[GapAware.MAX_LR_NAME] = pg['lr']
 
         self.big_gamma = big_gamma  # FIXME can be of optimizer of given. e.g adam
 
@@ -120,7 +120,7 @@ class GapAware:
     def update_max_lr(self):
         """ should be called after scheduler step. """
         for pg in self.optimizer.param_groups:
-            pg[self.MAX_LR_NAME] = max(pg[self.MAX_LR_NAME], pg['lr'])
+            pg[GapAware.MAX_LR_NAME] = max(pg[GapAware.MAX_LR_NAME], pg['lr'])
 
     def skip_one_apply(self):
         self.skip_next_apply = True
@@ -135,16 +135,20 @@ class GapAware:
         """
         # For SGD...
         # Note: its pow 2 because we later do pow 0.5
-        for pg in self.optimizer.param_groups:
-            if pg['momentum'] != 0:
-                for p in pg['params']:
-                    self.running_avg_step[id(p)].data = self.big_gamma * self.running_avg_step[id(p)].data + \
-                        (1 - self.big_gamma) * \
-                        (self.optimizer.state[p]["momentum_buffer"].data ** 2)
-            else:
-                for p in pg['params']:
-                    self.running_avg_step[id(p)].data = self.big_gamma * self.running_avg_step[id(p)].data + \
-                        (1 - self.big_gamma) * ((p.grad.data) ** 2)
+        opt_s = self.optimizer.state
+        ra = self.running_avg_step
+        bg = self.big_gamma
+        with torch.no_grad():
+            for pg in self.optimizer.param_groups:
+                if pg['momentum'] != 0:
+                    for p in pg['params']:
+                        ra[id(p)].data = bg * ra[id(p)].data + \
+                            (1 - bg) * \
+                            (opt_s[p]["momentum_buffer"].data ** 2)
+                else:
+                    for p in pg['params']:
+                        ra[id(p)].data = bg * ra[id(p)].data + \
+                            (1 - bg) * ((p.grad.data) ** 2)
 
     # Note: I wanted to decorate the function, but seems like there is a bug
     # https://discuss.pytorch.org/t/combining-no-grad-decorator-and-with-torch-no-grad-operator-causes-gradients-to-be-enabled/39203
@@ -172,7 +176,7 @@ class GapAware:
             bias_correction = 1 - (self.big_gamma ** self.step_count)
             # Calculate gap from grad
             for pg in self.optimizer.param_groups:
-                if pg[self.MAX_LR_NAME] <= 0:
+                if pg[GapAware.MAX_LR_NAME] <= 0:
                     continue
                 weight_decay = pg['weight_decay']
                 for p in pg['params']:
@@ -180,7 +184,7 @@ class GapAware:
                     #     continue
                     # calculate C coefficient per-element
                     # Note: can remove the "data". but whatever.
-                    avg_steps_needed = pg[self.MAX_LR_NAME] * \
+                    avg_steps_needed = pg[GapAware.MAX_LR_NAME] * \
                         (((self.running_avg_step[id(
                             p)].data / bias_correction) ** 0.5) + self.epsilon)
 
@@ -225,12 +229,13 @@ class GapAware:
         if from_grad:
             raise NotImplementedError(
                 "Use the other function")
-
         with torch.no_grad():
+            ra = self.running_avg_step
             bias_correction = 1 - (self.big_gamma ** self.step_count)
+            eps = self.epsilon
             # Calculate gap from grad
             for pg, rpg in zip(self.optimizer.param_groups, real_theta):
-                if pg[self.MAX_LR_NAME] <= 0:
+                if pg[GapAware.MAX_LR_NAME] <= 0:
                     continue
                 weight_decay = pg['weight_decay']
                 for p, rp in zip(pg['params'], rpg):
@@ -238,11 +243,10 @@ class GapAware:
                     #     continue
                     # calculate C coefficient per-element
                     # Note: can remove the "data". but whatever.
-                    avg_steps_needed = pg[self.MAX_LR_NAME] * \
-                        (((self.running_avg_step[id(
-                            p)].data / bias_correction) ** 0.5) + self.epsilon)
+                    avg_steps_needed = pg[GapAware.MAX_LR_NAME] * \
+                        (((ra[id(p)].data / bias_correction) ** 0.5) + eps)
 
-                    avg_steps_needed *= delay
+                    # avg_steps_needed *= delay
                     gap = (p - rp).abs()
                     # pg['lr'] * p.grad.abs()
 
@@ -264,10 +268,11 @@ class GapAware:
                     # so we do
                     #   d_p += z
                     # z =  p.data * weight_decay * ((1 - penalty) / penalty)
+
+                    # NOTE: we apply the weight decay on the real parameter weight, rp.
                     if try_on_wd:
                         if self.penatly_for_weight_decay:
-                            p.grad.data += p.data.mul(weight_decay *
-                                                      ((1 - penalty) / penalty))
+                            p.grad.data += rp.data.mul(weight_decay * ((1 - penalty) / penalty))
 
     def apply_grad_only(self, from_grad=True):
         # This call does not flips the "skip one apply"
