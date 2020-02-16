@@ -130,7 +130,7 @@ if __name__ == "__main__":
     parser.add_argument("--depth", default=1000, type=int,
                         help="the depth in which we will partition the model")
     parser.add_argument("--partition_layer_graph", action="store_true",
-                        default=True, help="whether to partition a graph containing only layers")
+                        default=False, help="whether to partition a graph containing only layers")
     parser.add_argument("--analysis_batch_size", default=8, type=int,
                         help="batch size to use during the post partition analysis")
 

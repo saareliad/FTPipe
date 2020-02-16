@@ -185,7 +185,7 @@ def partition_model(args, train_dataset, model, tokenizer):
                        output_file=args.output_file, DEBUG=False)
 
     graph.save_as_pdf(args.output_file, ".")
-    graph.serialize(args.output_file, ".")
+    graph.serialize(args.output_file)
 
     generated = importlib.import_module(args.output_file)
     create_pipeline_configuration = generated.create_pipeline_configuration
@@ -272,7 +272,7 @@ def main():
     parser.add_argument("--depth", default=1000, type=int,
                         help="the depth in which we will partition the model")
     parser.add_argument("--partition_layer_graph", action="store_true",
-                        default=True, help="whether to partition a graph containing only layers")
+                        default=False, help="whether to partition a graph containing only layers")
 
     args = parser.parse_args()
 

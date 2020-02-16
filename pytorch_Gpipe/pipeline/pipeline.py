@@ -1,188 +1,21 @@
-import sys
-from collections import Counter, OrderedDict, deque
-from enum import Enum, auto, unique
-from typing import Dict, List, Optional, Tuple, Iterator, Any, Union, Callable, Generator
-from multiprocessing import Queue as PQueue, Process
-from threading import Thread
+from collections import Counter, OrderedDict
+from itertools import chain
+from multiprocessing import Queue as PQueue
 from queue import Queue as TQueue
+from typing import Callable, Dict, Iterator, List, Optional, Tuple
+
 import torch
 from torch import Tensor
-from torch.nn import Module, ModuleList
+from torch.nn import ModuleList
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
-from itertools import chain
+
 from pytorch_Gpipe.delayedNorm import DelayedBatchNorm
-import traceback
 
-
-@unique
-class COMMAND(Enum):
-    '''Enum representing the possible commands recognized by the workers
-    '''
-    TRAIN = auto()
-    EVAL = auto()
-    FORWARD = auto()
-    BACKWARD = auto()
-    TERMINATE = auto()
-
-
-class InvalidState(Exception):
-    ''' Error used to indicate that the pipeline is not in the correct state
-    for some operation for eg. backward when in eval mode will raise this exception
-    '''
-
-
-class EmptyException(Exception):
-    def __init__(self, msg):
-        self.args = msg,
-        sys.exit(self)
-
-
-class Result():
-    ''' a wrapper to an asychronous result can be either data or an exception
-    attempting to retrieve the data will trigger the exception (if present)
-    '''
-
-    def __init__(self, minibatch: int, data: Optional[Tensor] = None, exc_info: Optional[str] = None, metadata=None, DEBUG_CPU_ONLY: bool = False):
-        if DEBUG_CPU_ONLY and isinstance(data, Tensor):
-            self.data = data.cpu()
-        else:
-            self.data = data
-        self.exc_info = exc_info
-        self.minibatch = minibatch
-        self.metadata = metadata
-
-    def get(self) -> Tensor:
-        if self.exc_info is None:
-            return self.data
-
-        raise EmptyException(self.exc_info)
-
-    def hasException(self) -> bool:
-        return not (self.exc_info is None)
-
-    def isValid(self) -> bool:
-        return not self.hasException()
-
-    def __str__(self) -> str:
-        s = f"minibatch:{self.minibatch} "
-        if self.isValid():
-            if isinstance(self.data, Tensor):
-                return s + f"tensor with shape {self.data.shape}"
-            else:
-                return s + f"{type(self.data).__name__} {self.data} with metadata {self.metadata}"
-        else:
-            return s + f"exception {self.exc_info}"
-
-    def __repr__(self) -> str:
-        return str(self)
-
-
-Data = Union[Result, List[Result]]
-
-
-class Connection():
-    ''' Abstraction of partition input/output channels with awareness to flow mode
-    in forward mode data is pass from inputs to outputs and in backward mode it's reversed
-
-    '''
-
-    def __init__(self, in_queues: OrderedDict, out_queues: OrderedDict, output_uses: OrderedDict):
-        self.in_queues = in_queues
-        self.out_queues = out_queues
-        self.output_uses = output_uses
-
-    def get(self, minibatch: int, forward: bool = True) -> List[Result]:
-        if forward:
-            queues = self.in_queues
-        else:
-            queues = self.out_queues
-
-        uses = [self.output_uses.get(q, 1) for q in queues]
-
-        inputs = []
-        for q, n in zip(queues.values(), uses):
-            i = 0
-            # recive inputs only if they are from the current microbatch
-            # to avoid race conditions between workers that share inputs
-            while True:
-                if i == n:
-                    break
-                data = q.get()
-                if data.minibatch != minibatch:
-                    q.put(data)
-                else:
-                    i += 1
-                    inputs.append(data)
-
-        if forward:
-            return inputs
-        return self.reduceGrads(inputs)
-
-    def put(self, data: Data, forward: bool = True):
-        if forward:
-            queues = self.out_queues
-        else:
-            queues = self.in_queues
-
-        if not isinstance(data, (tuple, list)):
-            data = [data for _ in queues]
-
-        uses = [self.output_uses.get(q, 1) for q in queues]
-
-        for x, q, n in zip(data, queues.values(), uses):
-            for _ in range(n):
-                q.put(x)
-
-    def reduceGrads(self, grads: List[Result]) -> List[Optional[Tensor]]:
-        index = self.output_uses.values()
-        minibatch = grads[0].minibatch
-
-        i = 0
-        reduced = []
-        for n in index:
-            gs = grads[i:i + n]
-            gs = [g.get() for g in gs]
-            notNone = [g for g in gs if not (g is None)]
-            if len(notNone) == 0:
-                reduced.append(Result(minibatch, data=None))
-            else:
-                reduced.append(Result(minibatch, data=sum(notNone)))
-            i += n
-
-        return reduced
-
-
-class StateStack():
-    ''' A stack managing the saved activations and rng state of the partition
-    '''
-
-    def __init__(self, device):
-        self.device = device
-        self.states = deque()
-        self.activations = deque()
-
-    def push(self, xs: List[Tensor], save_state: bool = False):
-        cloned = [x.clone() for x in xs]
-        self.activations.append(cloned)
-        if save_state:
-            if self.device == 'cpu':
-                self.states.appendleft(torch.get_rng_state())
-            else:
-                self.states.appendleft(torch.cuda.get_rng_state(self.device))
-
-    def pop(self, remove_state: bool = False) -> List[Tensor]:
-        if len(self.activations) == 0 or len(self.states) == 0:
-            raise InvalidState("cannot restore activation as none are saved")
-        activations = self.activations.pop()
-        activations = [t.requires_grad_() for t in activations]
-        if self.device == 'cpu':
-            torch.set_rng_state(self.states[-1])
-        else:
-            torch.cuda.set_rng_state(self.states[-1], device=self.device)
-        if remove_state:
-            self.states.pop()
-        return activations
+from .messages import COMMAND, Result
+from .stage_io import StageIO
+from .utils import InvalidState
+from .workers import PWorker, TWorker
 
 
 class Pipeline():
@@ -241,17 +74,19 @@ class Pipeline():
                               for k in config['outputs']]
 
             model = config['model']
-            device = model.device
+            device = torch.device(model.device)
             model.share_memory().to(device)
             optimizer = config.get('optimizer', None)
+            if optimizer:
+                assert isinstance(optimizer, Optimizer)
 
             if use_delayedNorm:
                 model = DelayedBatchNorm.convertBatchNorm(model)
 
             command_queue = self.command_queues[idx]
-            IO = Connection(input_queues, output_queues,
-                            output_uses)
-            args = (idx, model, device, IO, worker_inputs, worker_outputs,
+            stage_io = StageIO(input_queues, output_queues,
+                               output_uses)
+            args = (idx, model, device, stage_io, worker_inputs, worker_outputs,
                     command_queue, use_delayedNorm, optimizer, self.DEBUG_CPU_ONLY)
             workers.append(worker_class(*args))
             shards.append(model)
@@ -357,7 +192,7 @@ class Pipeline():
                 for _ in range(self.uses[k]):
                     q.get().get()
 
-    def train_epoch(self, dataloader: DataLoader, loss_function: Callable, num_chunks: Optional[int] = None) -> Generator[Tuple]:
+    def train_epoch(self, dataloader: DataLoader, loss_function: Callable, num_chunks: Optional[int] = None) -> Iterator[Tuple]:
         """perform a train epoch using the given dataloader and loss function yielding the loss for each batch
 
         Parameters:
@@ -387,7 +222,7 @@ class Pipeline():
             self.backward(grads)
             yield outputs, loss
 
-    def eval_epoch(self, dataloader: DataLoader, criterion: Optional[Callable] = None, has_targets: bool = False, num_chunks: Optional[int] = None) -> Generator[Tuple]:
+    def eval_epoch(self, dataloader: DataLoader, criterion: Optional[Callable] = None, has_targets: bool = False, num_chunks: Optional[int] = None) -> Iterator[Tuple]:
         """ performs an evaluation epoch using given dataloader and optional criterion
             yielding the batch output and criterion output for each batch
 
@@ -541,142 +376,11 @@ class Pipeline():
         return (len(self.workers) > 0) and all(w.is_alive() for w in self.workers)
 
 
-class Worker():
-    def __init__(self, idx: int, model: Module, device: int, IO: Connection, input_scopes: List[Tuple[str, bool]], output_scopes: List[Tuple[str, bool]], command_queue: PQueue, use_delayedNorm: bool, optimizer: Optional[Optimizer] = None, DEBUG_CPU_ONLY: bool = False):
-        super(Worker, self).__init__()
-        self.idx = idx
-        self.model = model
-        self.device = device
-        self.IO = IO
-        self.FORWARD = True
-        self.running = True
-        self.training = True
-        self.command_queue = command_queue
-        self.use_delayedNorm = use_delayedNorm
-        self.num_DEBUG_messages = 0
-        self.state_stack = StateStack(self.device)
-        self.num_minibatches = 0
-        self.minibatch_idx = 0
-        self.optimizer = optimizer
-        self.input_scopes = input_scopes
-        self.output_scopes = output_scopes
-        self.DEBUG_CPU_ONLY = DEBUG_CPU_ONLY
-
-    def run(self):
-        while self.running:
-            try:
-                # wait for command from master
-                # note that we continue only if we start a new batch
-                if self.minibatch_idx == self.num_minibatches:
-                    cmd, metadata = self.command_queue.get()
-                    self.changeMode(cmd, metadata)
-                    continue
-
-                # receive minibatch
-                inputs = self.IO.get(self.minibatch_idx, forward=self.FORWARD)
-                inputs = self.moveInputs(inputs)
-
-                # process minibatch
-                if self.FORWARD:
-                    outputs = self.forward(inputs)
-                    self.IO.put(outputs, forward=True)
-                else:
-                    grads = self.backward(inputs)
-                    self.IO.put(grads, forward=False)
-                self.minibatch_idx += 1
-
-                # optimization have each worker take a step as soon as possible(once the batch has finished recomputing)
-                if self.optimizer and ((not self.FORWARD) and (self.minibatch_idx == self.num_minibatches)):
-                    self.optimizer.step()
-                    self.optimizer.zero_grad()
-
-            except Exception:
-                # propagate the Exception eventually reaching the master
-                # a worker should always work unless explicitly shut down by master
-                # or untill master process terminates
-                stack_trace = f"worker_{self.idx+1}\n{traceback.format_exc()}"
-                self.IO.put(Result(minibatch=0,
-                                   exc_info=stack_trace), forward=self.FORWARD)
-
-    def moveInputs(self, inputs: List[Result]) -> List[Optional[Tensor]]:
-        outs = []
-        for i in inputs:
-            t = i.get()
-            if t is None:
-                outs.append(None)
-            else:
-                if not isinstance(t, Tensor):
-                    raise TypeError(
-                        f"expected Tensor but got {type(t).__name__}")
-                outs.append(t.to(self.device))
-        return outs
-
-    def forward(self, inputs: List[Tensor]) -> List[Tensor]:
-        with torch.no_grad():
-            if self.training:
-                save_state = self.minibatch_idx == 0
-                self.state_stack.push(inputs, save_state=save_state)
-            results = self.model(*inputs)
-            return [Result(minibatch=self.minibatch_idx, data=r, DEBUG_CPU_ONLY=self.DEBUG_CPU_ONLY) for r in results]
-
-    def backward(self, grad_input: List[Optional[Tensor]]) -> List[Result]:
-        if not self.training:
-            raise InvalidState("cannot backward in eval mode")
-        remove_state = self.minibatch_idx == self.num_minibatches
-        inputs = self.state_stack.pop(remove_state=remove_state)
-        with torch.enable_grad():
-            outputs = self.model(*inputs)
-            torch.autograd.backward(outputs, grad_input)
-        return [Result(minibatch=self.minibatch_idx, data=i.grad if used else None, DEBUG_CPU_ONLY=self.DEBUG_CPU_ONLY) for i, (_, used) in zip(inputs, self.input_scopes)]
-
-    def changeMode(self, mode: COMMAND, metadata: Any):
-        if mode is COMMAND.TRAIN:
-            self.model.train()
-            self.training = True
-        elif mode is COMMAND.EVAL:
-            self.model.eval()
-            self.training = False
-        elif mode is COMMAND.FORWARD:
-            self.FORWARD = True
-            self.minibatch_idx = 0
-            self.num_minibatches = metadata
-            self.switchDelayedNormMode()
-        elif mode is COMMAND.BACKWARD:
-            self.FORWARD = False
-            self.minibatch_idx = 0
-            self.num_minibatches = metadata
-            self.switchDelayedNormMode()
-        elif mode is COMMAND.TERMINATE:
-            self.running = False
-        else:
-            raise ValueError(f"change mode should not happen{mode}")
-
-    def switchDelayedNormMode(self):
-        '''flip all delayedBatchNorm layers between computation and recomputation
-        '''
-        if self.use_delayedNorm:
-            for m in self.model.modules():
-                if isinstance(m, DelayedBatchNorm):
-                    m: DelayedBatchNorm
-                    m.is_recomputing = not self.FORWARD
-                    m.num_micro_batches = self.num_minibatches
-
-
-class TWorker(Worker, Thread):
-    def __init__(self, idx: int, model: Module, device: int, IO: Connection, input_scopes: List[Tuple[str, bool]], output_scopes: List[Tuple[str, bool]], command_queue: PQueue, use_delayedNorm: bool, optimizer: Optional[Optimizer] = None, DEBUG_CPU_ONLY: bool = False):
-        Worker.__init__(self, idx, model, device, IO, input_scopes, output_scopes,
-                        command_queue, use_delayedNorm, optimizer=optimizer, DEBUG_CPU_ONLY=DEBUG_CPU_ONLY)
-        Thread.__init__(self, name=f"Worker_{self.idx+1}", daemon=True)
-
-
-class PWorker(Worker, Process):
-    def __init__(self, idx: int, model: Module, device: int, IO: Connection, input_scopes: List[Tuple[str, bool]], output_scopes: List[Tuple[str, bool]], command_queue: PQueue, use_delayedNorm: bool, optimizer: Optional[Optimizer] = None, DEBUG_CPU_ONLY: bool = False):
-        Worker.__init__(self, idx, model, device, IO, input_scopes, output_scopes,
-                        command_queue, use_delayedNorm, optimizer=optimizer, DEBUG_CPU_ONLY=DEBUG_CPU_ONLY)
-        Process.__init__(self, name=f"Worker_{self.idx+1}", daemon=True)
-
+# TODO think if we can move outputs/gradients async before sending to queue(or if it makes it faster)
+    # _gather_outputs move_inputs for starters
 
 # TODO think about multinode support
 # TODO think about stage replication
 # TODO think about multinode with stage replication
 # TODO add fancy pants stats logging
+# TODO internal and external documentation

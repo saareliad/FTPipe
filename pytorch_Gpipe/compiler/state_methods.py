@@ -104,7 +104,7 @@ def generateCpuCudaToMethods() -> Tuple[str, str, str]:
     Returns:
         Tuple[str, str, str] the generated code
     """
-    pu = f"\n{tab}def cpu(self):\n{dtab}self.device=torch.device('cpu')\n{dtab}return super().cpu()\n"
+    cpu = f"\n{tab}def cpu(self):\n{dtab}self.device=torch.device('cpu')\n{dtab}return super().cpu()\n"
 
     cuda = [f"{tab}def cuda(self,device=None):",
             f"if device is None:",
