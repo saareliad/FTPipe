@@ -30,8 +30,8 @@ import importlib
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset, RandomSampler
-
-
+import warnings
+import sys
 from transformers import (BertConfig, BertForMaskedLM, BertTokenizer,
                           GPT2Config,
                           #    GPT2LMHeadModel,
@@ -195,11 +195,9 @@ def partition_model(args, train_dataset, model, tokenizer):
     config = create_pipeline_configuration(model, partitions_only=False,
                                            DEBUG=GET_PARTITIONS_ON_CPU)
 
-    # out = run_partitions(sample, config)
     bandwidth_gps = args.bandwidth_gps
     recomputation = not args.no_recomputation
 
-    # _ = run_partitions(sample, config)
     if not args.no_analysis:
         # TODO assumes batch is first
         shape = (args.analysis_batch_size, inputs.shape[1])
@@ -208,10 +206,12 @@ def partition_model(args, train_dataset, model, tokenizer):
         expanded_labels = labels[0].unsqueeze(0).expand(shape)
 
         analysis_sample = (expanded_inputs, expanded_labels)
+        warnings.warn(
+            "nested tuples are possibly returned this is not supported by the analysis")
 
         run_analysis(analysis_sample, graph, config, args.n_iter,
                      recomputation=recomputation, bandwidth_gps=bandwidth_gps)
-
+        sys.exit()
     # model(inputs)
     # outputs = model(inputs, masked_lm_labels=labels) if args.mlm else model(
     #     inputs, labels=labels)
