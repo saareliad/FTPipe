@@ -47,8 +47,7 @@
         "policy": "all_except_last",
         "args": {
             "big_gamma": 0.999,
-            "epsilon": 1e-8,
-            "penatly_for_weight_decay": true
+            "epsilon": 1e-8
         }
     },
     "epochs": 205,
@@ -63,6 +62,7 @@
     "max_buffers": 1,
     "cudnn_benchmark": true,
     "keep_buffers_alive": true,
-    "no_recomputation": true
+    "no_recomputation": true,
+    "nesterov_set_for_last_partition": true
 
 }

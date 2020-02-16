@@ -1,17 +1,17 @@
 {
     "logdir": "logs/",
-    "out_dir":"results/",
+    "out_dir":"results/2p_new_nesterov/",
     "out_filename": "ninja",
     "auto_file_name": true,
     "distributed_backend": "mpi",
     "task": "cv",
-    "statistics": "cv_grad_norm",
+    "statistics": "cv",
     "model": "wrn_28x10_c100_dr03_p2",
     "dataset": "cifar100",
     "trainer": {
         "type": "cv",
         "args": {
-            "always_calc_grad_norm": true
+            "always_calc_grad_norm": false
         }
     },
     "bs_train": 128,
@@ -42,11 +42,14 @@
             "nag_with_predictor": true
         }
     },
-    "epochs": 220,
+    "epochs": 205,
     "steps": -1,
     "seed": 42,
     "num_chunks": 1,
     "verbose_comm": false,
     "flush_rate": -1,
-    "seed_from_cmd": true
+    "seed_from_cmd": true,
+    "max_buffers": 1,
+    "cudnn_benchmark": true,
+    "keep_buffers_alive": true
 }

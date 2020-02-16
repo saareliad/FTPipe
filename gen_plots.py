@@ -184,22 +184,50 @@ def regime_adaptation():
     out_dir = "results/figs"
     plot_fn = plot.plot_fit
 
-    ddp = {"results/RA/RA_wrn_28x10_c100_dr03_p4_cifar100_msnag_ws_bs_64_se_1_seed_1322019.json": "b64_ra_msnag_ws"}
+    ra = {"results/RA/RA_wrn_28x10_c100_dr03_p4_cifar100_msnag_ws_bs_64_se_1_seed_1322019.json": "b64_ra_msnag_ws"}
     normal = {"results/with_times_good/norecomp_wrn_28x10_c100_dr03_p4_cifar100_msnag_ws_bs_128_se_1_seed_1322019.json": "b128_msnag_ws"}
     fn_to_contour = {**ra, **normal}
 
     gen_plot_from_dict(fn_to_contour, plot_fn, out_base_name, out_dir=out_dir)
 
-
 def tta():
-    out_base_name = "tta1"
+    out_base_name = "tta2"
     out_dir = "results/figs"
     plot_fn = plot.plot_tta
     ddp = {"results/ddp_all/ddp_32perworker_wrn_28x10_c100_dr03_p4_cifar100_seq_bs_128_seed_20202020.json": "SSGD"}
-    normal = {"results/with_times_good/norecomp_wrn_28x10_c100_dr03_p4_cifar100_msnag_ws_bs_128_se_1_seed_1322019.json": "msnag+ws"}
-    fn_to_contour = {**normal, **ddp}
+    ddp_bs_512 = {"results/ddp_all/ddp_wrn_28x10_c100_dr03_p4_cifar100_seq_bs_512_seed_20202020.json": "SSGD,512"}
+
+    # normal = {"results/with_times_good/norecomp_wrn_28x10_c100_dr03_p4_cifar100_msnag_ws_bs_128_se_1_seed_1322019.json": "msnag+ws"}
+    normal = {}
+    ws_wp = {"results/NEW_NESTEROV/NESTEROV_norecomp_wrn_28x10_c100_dr03_p4_cifar100_msnag_ws_bs_128_se_1_seed_1322019.json": "msnag+ws"}
+    ws_wp_ga = {"results/NEW_NESTEROV/NESTEROV_norecomp_wrn_28x10_c100_dr03_p4_cifar100_msnag_ws_ga_bs_128_se_1_seed_1322019.json": "msnag+ws+ga" }
+    msnag_recomp = {"results/NEW_NESTEROV/exp_rn_wrn_28x10_c100_dr03_p4_cifar100_msnag_bs_128_se_1_seed_314159.json" : "msnag+recomp"}
+    pipedream = {"results/with_times_good/pipedream_wrn_28x10_c100_dr03_p4_cifar100_stale_ws_bs_128_se_1_seed_42.json": "pipedream"}
+
+    fn_to_contour = {**normal, **msnag_recomp, **ws_wp, **ws_wp_ga, **ddp, **pipedream, **ddp_bs_512}
 
     gen_plot_from_dict(fn_to_contour, plot_fn, out_base_name, out_dir=out_dir)
+
+
+def tta_wo_512():
+    out_base_name = "tta3"
+    out_dir = "results/figs"
+    plot_fn = plot.plot_tta
+    ddp = {"results/ddp_all/ddp_32perworker_wrn_28x10_c100_dr03_p4_cifar100_seq_bs_128_seed_20202020.json": "SSGD"}
+    # ddp_bs_512 = {"results/ddp_all/ddp_wrn_28x10_c100_dr03_p4_cifar100_seq_bs_512_seed_20202020.json": "SSGD,512"}
+
+    # normal = {"results/with_times_good/norecomp_wrn_28x10_c100_dr03_p4_cifar100_msnag_ws_bs_128_se_1_seed_1322019.json": "msnag+ws"}
+    normal = {}
+    ws_wp = {"results/NEW_NESTEROV/NESTEROV_norecomp_wrn_28x10_c100_dr03_p4_cifar100_msnag_ws_bs_128_se_1_seed_1322019.json": "msnag+ws"}
+    ws_wp_ga = {"results/NEW_NESTEROV/NESTEROV_norecomp_wrn_28x10_c100_dr03_p4_cifar100_msnag_ws_ga_bs_128_se_1_seed_1322019.json": "msnag+ws+ga" }
+    msnag_recomp = {"results/NEW_NESTEROV/exp_rn_wrn_28x10_c100_dr03_p4_cifar100_msnag_bs_128_se_1_seed_314159.json" : "msnag+recomp"}
+    pipedream = {"results/with_times_good/pipedream_wrn_28x10_c100_dr03_p4_cifar100_stale_ws_bs_128_se_1_seed_42.json": "pipedream"}
+
+    fn_to_contour = {**normal, **msnag_recomp, **ws_wp, **ws_wp_ga, **ddp, **pipedream}
+
+    gen_plot_from_dict(fn_to_contour, plot_fn, out_base_name, out_dir=out_dir)
+
+
 
 if __name__ == "__main__":
     # wrn_16x4_4p_with_grad_norm()
@@ -214,4 +242,5 @@ if __name__ == "__main__":
     # regime_adaptation()
 
     tta()
+    tta_wo_512()
     exit(0)

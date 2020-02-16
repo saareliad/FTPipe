@@ -47,8 +47,7 @@
         "policy": "almost_last_partition",
         "args": {
             "big_gamma": 0.999,
-            "epsilon": 1e-8,
-            "penatly_for_weight_decay": false
+            "epsilon": 1e-8
         }
     },
     "epochs": 200,
@@ -75,5 +74,6 @@
     "cudnn_benchmark": true,
     "keep_buffers_alive": true,
     "no_recomputation": true,
-    "nesterov_set_for_last_partition": true
+    "nesterov_set_for_last_partition": true,
+    "gap_aware_just_loss": true
 }

@@ -119,15 +119,16 @@ class GapAwareCVTrainer(CVTrainer):
         ga = self.gap_aware
         ga.update_running_avg()
         ga.inc_step_count()
-        # It does not help to modify the (Gap Aware) gradients before we send,
-        # so do everything here.
-        if (real_theta is None) or (delay is None):
-            # TODO: note this should be called only before step, assuming delay of exactly 1.
-            # FIXME: its very problematic if almost last partition calls this if step_every > 1.
-            # This means: for the "gap_aware.json" configs !!!
-            ga.apply()
-        else:
-            ga.apply_on_theta(real_theta, delay)
+        if delay:
+            # It does not help to modify the (Gap Aware) gradients before we send,
+            # so do everything here.
+            if real_theta is None:
+                # TODO: note this should be called only before step, assuming delay of exactly 1.
+                # FIXME: its very problematic if almost last partition calls this if step_every > 1.
+                # This means: for the "gap_aware.json" configs !!!
+                ga.apply()
+            else:
+                ga.apply_on_theta(real_theta, delay)
 
         # self.gap_aware.apply_grad_only()  # Modifys gradients, don't
 

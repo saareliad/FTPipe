@@ -211,13 +211,56 @@ def wrn16x4_c100_gap():
     print(f"saving file to {out_file_name}")
 
 
+def for_meeting():
+    csv = "for_meeting.csv"
+    out_file_name = "for_meeting.png"
+    out_file_name = os.path.join(".", out_file_name)
+
+
+    df = pd.read_csv(csv).query("dataset == 'cifar100'").query("epoch == 200").query("bs_train == 32 and alg == 'ddp' or bs_train == 128 and alg != 'ddp'")
+    ax = sns.barplot(x="epoch", y="test_acc", hue="alg", data=df)
+
+    model = pd.unique(df.model)
+    assert(len(model) == 1)
+    model = model[0]
+
+    ax.set_ylim(80, 83)
+    ax.set_title(model)
+    fig = ax.get_figure()
+    fig.savefig(out_file_name)
+    print(f"saving file to {out_file_name}")
+
+
+def for_meeting2():
+    csv = "for_meeting.csv"
+    out_file_name = "for_meeting_bigger_ddp.png"
+    out_file_name = os.path.join(".", out_file_name)
+
+
+    df = pd.read_csv(csv).query("dataset == 'cifar100'").query("epoch == 200").query("bs_train == 128 and alg == 'ddp' or bs_train == 128 and alg != 'ddp'")
+    ax = sns.barplot(x="epoch", y="test_acc", hue="alg", data=df)
+
+    model = pd.unique(df.model)
+    assert(len(model) == 1)
+    model = model[0]
+
+    ax.set_ylim(80, 83)
+    ax.set_title(model)
+    fig = ax.get_figure()
+    fig.savefig(out_file_name)
+    print(f"saving file to {out_file_name}")
+
+
+
 if __name__ == "__main__":
     
+    for_meeting2()
+    # for_meeting()
 
     # plt.clf()
     # p2()
     # p1_fit_plots()
-    wrn16x4_c100()
+    # wrn16x4_c100()
     # wrn16x4_c100_gap()
     # p2_2partitions()
     # p2_2partitions_16x4()

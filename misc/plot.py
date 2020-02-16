@@ -159,7 +159,8 @@ def plot_tta(fit_res: Union[NamedTuple, dict], fig=None, log_loss=False, legend=
     for idx, (traintest, lossacc) in enumerate(p):
         ax = axes[idx]
         attr = f'{traintest}_{lossacc}'
-        time_attr = 'train_epochs_times'  # total_epoch_times
+        # time_attr = 'train_epochs_times'  # total_epoch_times
+        time_attr = 'total_epoch_times'
 
         if isinstance(fit_res, NamedTuple):
             data = getattr(fit_res, attr)

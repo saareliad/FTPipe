@@ -23,7 +23,11 @@ class TrueWeightsStorage:
             self.change_mode += f" -> {mode}"
 
     def get_true_weights(self):
-        return self.true_weights
+        true_weights = self.true_weights
+        # HACK
+        if true_weights is None:
+            true_weights = self._return_current_weights()
+        return true_weights
 
     # def set_true_weights_buffer(self, buff):
     #     self.true_weights = buff
@@ -31,9 +35,7 @@ class TrueWeightsStorage:
 
     def create_cloned_if_needed(self):
         if (not self.true_weights_exist) or self.restored_true_weights_to_the_model:
-            buff = self._create_current_cloned_buff()
-            # self.set_true_weights_buffer(buff)
-            self.true_weights = buff
+            self.true_weights = self._create_current_cloned_buff()
             self.true_weights_exist = True
 
             # Flip
@@ -46,8 +48,8 @@ class TrueWeightsStorage:
  
             self.change_mode = None
 
-           # A naive solution here is to pop,
-           # A smarter solution is to clone on the second time "copy on write"
+            # A naive solution here is to pop,
+            # A smarter solution is to clone on the second time "copy on write"
             self.restored_true_weights_to_the_model = True
 
     def check_restore_if_needed(self, check=True):
@@ -62,6 +64,8 @@ class TrueWeightsStorage:
         self.true_weights = None
         self.true_weights_exist = False
         self.change_mode = None
+        # NOTE: this is not really neccasarry
+        self.restored_true_weights_to_the_model = False
 
     def _restore_from_buff(self, buff):
         # Copy pointers.
@@ -73,6 +77,12 @@ class TrueWeightsStorage:
     def _create_current_cloned_buff(self):
         with torch.no_grad():
             buff = [[p.data.clone() for p in pg['params']]
+                    for pg in self.optimizer.param_groups]
+        return buff
+
+    def _return_current_weights(self):
+        with torch.no_grad():
+            buff = [[p.data for p in pg['params']]
                     for pg in self.optimizer.param_groups]
         return buff
 

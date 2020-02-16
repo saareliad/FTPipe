@@ -59,15 +59,19 @@ class InferStuff:
         pipedream = "work_scheduler" in self.config and (
             self.config["work_scheduler"] == "PIPEDREAM")
         sync = "is_sync" in self.config and self.config['is_sync']
+        ddp = "ddp" in self.config and self.config['ddp']
 
         wp_name = "wp" if wp else ("stale" if not sync else '')
         ga_name = "ga" if ga else ''
         ws_name = "ws" if ws else ''
         pipedream_name = 'pipedream' if pipedream else ''
         sync_name = 'sync' if sync else ''
+        ddp = 'ddp' if ddp else ''
+        if ddp:
+            sync_name = ''
 
         names = filter(None, [wp_name, ga_name, ws_name,
-                              pipedream_name, sync_name])
+                              pipedream_name, sync_name, ddp])
 
         # Alg is contour name
         alg = "_".join(names)
@@ -225,5 +229,20 @@ if __name__ == "__main__":
         csv_name = os.path.join(csv_out_dir, csv_name)
         all_results_to_csv(paths, csv_name)
         print_uniques(csv_name)
+
+    def four_partitions_ddp_for_meeting():
+        paths = ["results/4partitions/stale",
+        "results/4partitions/ws/",
+        "results/4partitions/ws_msnag_ga/",
+        "results/4partitions/msnag_ws/",
+        "results/4partitions/msnag/",
+        "results/4partitions/msnag_ga/",
+         'results/ddp_all']     
+        csv_name = "for_meeting.csv"
+        csv_out_dir = "."
+        csv_name = os.path.join(csv_out_dir, csv_name)
+        all_results_to_csv(paths, csv_name)
+        print_uniques(csv_name)
     
-    all_results_with_sequential()
+    four_partitions_ddp_for_meeting()
+    # all_results_with_sequential()

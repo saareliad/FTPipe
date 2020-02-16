@@ -41,8 +41,7 @@
         "policy": "all_except_last",
         "args": {
             "big_gamma": 0.999,
-            "epsilon": 1e-8,
-            "penatly_for_weight_decay": true
+            "epsilon": 1e-8
         }
     },
     "epochs": 220,

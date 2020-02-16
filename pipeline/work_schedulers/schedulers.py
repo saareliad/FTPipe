@@ -172,7 +172,12 @@ def print_for_stage(stage, scheduler, num_stages, num_batches):
 def get_fwds_between_first_and_seconds_step_for_stage(scheduler, stage, num_stages, num_batches):
     s = print_for_stage(stage, scheduler, num_stages, num_batches)
     step_every = scheduler.step_every
+    if step_every == 1:
+        print("-W- with step_every=1, all scheudlers are not problematic. Skipping check.")
+        return [], False
+
     fwds = get_fwds_between_first_step_from_str(s, step_every)
+    print(stage, fwds)
     # These fwds have the same "mv" (forward version)
     # now, we need to check if thier "bv" (backward versions)
 
@@ -250,11 +255,12 @@ def get_staleness_for_stage(stage, scheduler, num_stages, num_batches, se):
 if __name__ == "__main__":
     # TODO: automatic tests
     num_stages = 4
-    EXTRA = 20
+    EXTRA = 10
     # stage = 0  # Should test the edge case.
     num_batches = num_stages*2 + 1 + EXTRA
-    step_every = 3
-    sched_name = "1F1B"
+    step_every = 1
+    # sched_name = "1F1B"
+    sched_name = "PIPEDREAM"
     PRINT_STAGE_STRINGS = False
     PRINT_EXTRA_INFO = True
     PRINT_JUST_PROBLEMATIC_STAGES = True

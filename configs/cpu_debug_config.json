@@ -41,8 +41,7 @@
         "policy": "almost_last_partition",
         "args": {
             "big_gamma": 0.999,
-            "epsilon": 1e-8,
-            "penatly_for_weight_decay": false
+            "epsilon": 1e-8
         }
     },
     "epochs": 200,

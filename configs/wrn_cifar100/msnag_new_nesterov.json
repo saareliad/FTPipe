@@ -2,7 +2,7 @@
     "logdir": "logs/",
     "out_dir":"results/NEW_NESTEROV/",
     "auto_file_name": true,
-    "out_filename": "exp_recomp_nesterov",
+    "out_filename": "exp_rn",
     "distributed_backend": "mpi",
     "task": "cv_sep",
     "statistics": "cv",
