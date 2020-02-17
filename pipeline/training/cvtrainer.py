@@ -103,7 +103,7 @@ class GapAwareCVTrainer(CVTrainer):
         super().__init__(*args, **kw)
         self.gap_aware = gap_aware
 
-    def modify_gradients(self, real_theta=None, delay=None, stahsed_theta=None):
+    def modify_gradients(self, real_theta=None, delay=None, stashed_theta=None):
         """ NOTE: we assume that if "real_theta" is given, a stashed weight is loaded into the model """
         # TODO: we may want to save some statistics before we modify grad.
         ga = self.gap_aware
@@ -112,8 +112,8 @@ class GapAwareCVTrainer(CVTrainer):
         if delay:
             if real_theta:
                 ga.apply_on_theta(real_theta)
-            elif stahsed_theta:
-                ga.apply_on_stashed(stahsed_theta)
+            elif stashed_theta:
+                ga.apply_on_stashed(stashed_theta)
             else:
                 # TODO: note this should be called only before step, assuming delay of exactly 1.
                 # FIXME: its very problematic if almost last partition calls this if step_every > 1.
