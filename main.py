@@ -907,6 +907,7 @@ def main():
         gap_aware = get_gap_aware(args, optimizer)
         trainer = trainer_cls(gap_aware, partition.partition, optimizer=optimizer,
                               scheduler=scheduler, statistics=statistics, **trainer_extra_args)
+        partition.set_gap_aware(gap_aware)
     else:
         gap_aware = None
         trainer = trainer_cls(partition.partition, optimizer=optimizer,
