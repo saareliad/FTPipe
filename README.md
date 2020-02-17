@@ -167,3 +167,10 @@ After talk with Amit Nadav
 
 * I see that with 2 buffers we are actually slower, probobly the time to create 2 buffers not worth it.
 
+## Building (pytorch, ompenmpi)
+see conda recipe for cuda aware openmpi.
+
+To see how pytorch is compiled, use 
+``` 
+torch.__config__.show() 
+```

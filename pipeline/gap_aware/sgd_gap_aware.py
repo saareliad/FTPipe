@@ -149,15 +149,8 @@ class GapAware:
                         ra[id(p)].data = bg * ra[id(p)].data + \
                             (1 - bg) * ((p.grad.data) ** 2)
 
-    # Note: I wanted to decorate the function, but seems like there is a bug
-    # https://discuss.pytorch.org/t/combining-no-grad-decorator-and-with-torch-no-grad-operator-causes-gradients-to-be-enabled/39203
-    # and i'm afraid of it...
     def apply_from_grad(self):
-
-        # if not from_grad:
-        #     raise NotImplementedError(
-        #         "Gap claculation is supported only from grad")
-
+        """ Calculate gap aware from gradient. Requires knowing the exact gap """
         with torch.no_grad():
             ra = self.running_avg_step
             bias_correction = 1 - (self.big_gamma ** self.step_count)
@@ -192,13 +185,10 @@ class GapAware:
                     # so we do
                     #   d_p += z
                     # z =  p.data * weight_decay * ((1 - penalty) / penalty)
-                    p.grad.data += p.data.mul(weight_decay * ((1 - penalty) / penalty))
+                    p.grad.data += p.data.mul(weight_decay *
+                                              ((1 - penalty) / penalty))
 
-    def apply_on_theta(self, real_theta, delay, from_grad=False):
-
-        if from_grad:
-            raise NotImplementedError(
-                "Use the other function")
+    def apply_on_theta(self, real_theta):
         with torch.no_grad():
             ra = self.running_avg_step
             bias_correction = 1 - (self.big_gamma ** self.step_count)
@@ -216,7 +206,6 @@ class GapAware:
                     avg_steps_needed = pg[GapAware.MAX_LR_NAME] * \
                         (((ra[id(p)].data / bias_correction) ** 0.5) + eps)
 
-                    # avg_steps_needed *= delay
                     gap = (p - rp).abs()
                     # pg['lr'] * p.grad.abs()
 
@@ -239,7 +228,52 @@ class GapAware:
                     # z =  p.data * weight_decay * ((1 - penalty) / penalty)
 
                     # NOTE: we apply the weight decay on the real parameter weight, rp.
-                    p.grad.data += rp.data.mul(weight_decay * ((1 - penalty) / penalty))
+                    p.grad.data += rp.data.mul(weight_decay *
+                                               ((1 - penalty) / penalty))
+
+    def apply_on_stashed(self, stashed_theta):
+        """ True weights are loaded into the model, and given a stashed theta """
+        with torch.no_grad():
+            ra = self.running_avg_step
+            bias_correction = 1 - (self.big_gamma ** self.step_count)
+            eps = self.epsilon
+            # Calculate gap from grad
+            for pg, spg in zip(self.optimizer.param_groups, stashed_theta):
+                if pg[GapAware.MAX_LR_NAME] <= 0:
+                    continue
+                weight_decay = pg['weight_decay']
+                for p, sp in zip(pg['params'], spg):
+                    # if p.grad is None:
+                    #     continue
+                    # calculate C coefficient per-element
+                    # Note: can remove the "data". but whatever.
+                    avg_steps_needed = pg[GapAware.MAX_LR_NAME] * \
+                        (((ra[id(p)].data / bias_correction) ** 0.5) + eps)
+
+                    gap = (p - sp).abs()
+                    # pg['lr'] * p.grad.abs()
+
+                    # calculate the gap per-element
+                    penalty = 1 + (gap / avg_steps_needed)
+
+                    # Apply penalty to gradient
+                    p.grad.data /= penalty
+                    # Apply penalty to weight decay (as it will be part of the gradient)
+                    # HACK: we know that sgd does
+                    #   d_p += p*wd
+                    # and we want:
+                    #   d_p += p*wd/penalty
+                    # so we solve:
+                    # x + z + p*wd = x + (p*wd / penalty)
+                    # giving:
+                    # z = p*wd ((1/penalty) - 1) = ((1 - penalty) / penalty)
+                    # so we do
+                    #   d_p += z
+                    # z =  p.data * weight_decay * ((1 - penalty) / penalty)
+
+                    # NOTE: we apply the weight decay on the real parameter weight, rp.
+                    p.grad.data += p.data.mul(weight_decay *
+                                              ((1 - penalty) / penalty))
 
 
 # FIXME: keys are hardcoded from optimizers...
@@ -247,6 +281,7 @@ SGD_TYPE_TO_GAP_AWARE_CLASS = {
     'sgd1': GapAware,  # Pytorch
     # 'sgd2':   # TF # TODO
 }
+
 
 def get_sgd_gap_aware_cls(sgd_type: str) -> GapAware:
     gap_aware_cls = SGD_TYPE_TO_GAP_AWARE_CLASS.get(sgd_type, None)

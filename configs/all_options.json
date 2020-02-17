@@ -67,7 +67,6 @@
     "stage_to_device_map": [0, 0, 0, 0],
     "step_every": 1,
     "base_lr_batch_size": 128,
-    "max_buffers": 2,
     "log_frequency": 100,
     "ddp_sim_num_gpus": 4,
     "ddp": true,
@@ -75,5 +74,6 @@
     "keep_buffers_alive": true,
     "no_recomputation": true,
     "nesterov_set_for_last_partition": true,
+    "max_buffers": 1,
     "gap_aware_just_loss": true
 }

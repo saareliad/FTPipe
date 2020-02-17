@@ -434,10 +434,6 @@ def get_gap_aware(args, optimizer):
     gap_aware_args = getattr(args, 'gap_aware')['args']
     optimizer_type = getattr(args, 'optimizer')['type']
 
-    # if gap_aware_args['penatly_for_weight_decay']:
-    #     if not (hasattr(args, "weight_predictor")):
-    #         raise ValueError("Do not use penatly_for_weight_decay with msnag/DANA weight predictor")
-
     # TODO: this could be implemented by using the gap...
     if not optimizer_type == 'sgd1':  # pytorch
         raise NotImplementedError()
@@ -536,7 +532,8 @@ def auto_file_name(args):
     ga = "ga_" if hasattr(args, "gap_aware") else ""
     bs = f"bs_{args.bs_train * args.step_every}_"
     se = f"se_{args.step_every}_"
-    ga_just_for_loss = "gaJFL_" if getattr(args, 'gap_aware_just_loss', False) else ""
+    ga_just_for_loss = "gaJFL_" if getattr(
+        args, 'gap_aware_just_loss', False) else ""
     s = f'{args.model}_{args.dataset}_{wp}_{ws}{ga}{bs}{se}{ga_just_for_loss}seed_{args.seed}'
     args.out_filename = f"{args.out_filename}_{s}"
     print(f"Out File Name will be: {args.out_filename}")
@@ -861,7 +858,8 @@ def main():
             gap_aware_just_loss = False
         else:
             if args.no_recomputation:
-                raise NotImplementedError("gap_aware_just_loss works only with recomputation on")
+                raise NotImplementedError(
+                    "gap_aware_just_loss works only with recomputation on")
 
     # Init the partition manager
 
@@ -904,7 +902,8 @@ def main():
 
     # Set Trainer (and Gap Aware)
     trainer_extra_args = args.trainer['args']
-    if hasattr(trainer_cls, "HAS_GAP_AWARE"):
+    if getattr(trainer_cls, "HAS_GAP_AWARE", False):
+        
         gap_aware = get_gap_aware(args, optimizer)
         trainer = trainer_cls(gap_aware, partition.partition, optimizer=optimizer,
                               scheduler=scheduler, statistics=statistics, **trainer_extra_args)
@@ -931,14 +930,12 @@ def main():
                                            true_weights_storage=true_weights_storage)
             partition.set_weight_stasher(weight_stasher)
 
-
     if gap_aware_just_loss:
         assert (getattr(args, "weight_stashing", False))
 
     # Set Task
     task = task_cls(device, is_last_partition, is_first_partition)
-    partition.set_task(task)        
-
+    partition.set_task(task)
 
     if hasattr(args, "auto_file_name"):
         # make sure this specific replacement does not ruin experiment name

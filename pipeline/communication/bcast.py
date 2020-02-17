@@ -35,6 +35,7 @@ class BCASTCommunicationHandler(SimpleCommBase):
             # (its problematic with the tensor.grad, which we plan to avoid anyway.)
             if is_grad:
                 with torch.no_grad():
+                    # FIXME: what is this...
                     tensor = tensor.clone().detach_()
             else:
                 tensor.detach_()

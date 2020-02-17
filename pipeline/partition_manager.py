@@ -36,6 +36,8 @@ class SinglePartitionManager:
             raise NotImplementedError("gap_aware_just_loss works only with recomputation on")
 
         self.gap_aware_just_loss = gap_aware_just_loss
+        # TODO: work in progress, need to support exp name too, etc.
+        self.weight_stashing_just_for_stats = False
 
         # Set partition.
         if use_recomputation:
@@ -571,9 +573,6 @@ class SinglePartitionManager:
         if (not recved_all) and batch_idx - 1 + bwd_rcev_buffers.max_buffers < num_batches:
             bwd_rcev_buffers.recv_next(batch_idx-1)
 
-        if self.gap_aware_just_loss and weight_stasher:
-            weight_stasher.pop_restore_stashed(batch_idx)  # HACK: just to calculate loss
-
         # BIG_BATCH allow skiping steps.
         do_step, old_lrs = self.should_do_step(batch_idx)
 
@@ -585,14 +584,19 @@ class SinglePartitionManager:
         if do_step:
             trainer = self.trainer
             weight_stasher = self.weight_stasher
-
             # TODO: allow access to real theta just for statistics
-            # real_theta = weight_stasher.get_saved_real_theta() if weight_stasher else None
             if weight_stasher:
-                real_theta = self.true_weights_storage.get_true_weights()
-                trainer.try_record_real_gap_from_current(real_theta)
+                if self.gap_aware_just_loss:
+                    stashed_theta = weight_stasher.pop_stashed_buff(batch_idx)
+                    trainer.try_record_real_gap_from_current(stashed_theta)
+                    real_theta = None
+                else:
+                    real_theta = self.true_weights_storage.get_true_weights()
+                    trainer.try_record_real_gap_from_current(real_theta)
+                    stashed_theta = None
             else:
                 real_theta = None
+                stashed_theta = None
             # ####### Preparing to step
 
             if self.gap_aware:
@@ -606,7 +610,7 @@ class SinglePartitionManager:
                     delay = self.delay_at_batch.pop(batch_idx)
 
                 # Modify gradients
-                trainer.modify_gradients(real_theta, delay)
+                trainer.modify_gradients(real_theta=real_theta, delay=delay, stashed_theta=stashed_theta)
 
             if weight_stasher:
                 # Mark previously stashed weights as dirty
@@ -624,6 +628,9 @@ class SinglePartitionManager:
                     g['lr'] = old_lr
         else:
             self.true_weights_storage.restore_if_needed()
+            # FIXME: probobly should be removed...
+            if self.gap_aware_just_loss and self.weight_stasher:
+                weight_stasher.pop_stashed_buff(batch_idx)
 
         return request_objects
 

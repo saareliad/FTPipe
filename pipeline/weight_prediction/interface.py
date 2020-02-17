@@ -10,15 +10,13 @@ class WeightPredictor(abc.ABC):
         self.fix_fn = fix_fn  # ()
         self.scheduler = scheduler
         self.nag_with_predictor = nag_with_predictor
+        if nag_with_predictor:
+            print("-I- Doing NAG with predictor")
         self.true_weights_storage = true_weights_storage
 
     def setup(self, n_steps):
-        if self.nag_with_predictor:
-            n_steps += 1
-            # FIXME: I think this create a problem with gap aware.
-        # OR: nag with predictor just for the last partition.
-        # if n_steps == 0 and self.nag_with_predictor:
-        #     n_steps = 1
+        if n_steps == 0 and self.nag_with_predictor:
+            n_steps = 1
         self.n_steps = n_steps
 
     @abc.abstractmethod

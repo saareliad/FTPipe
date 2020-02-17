@@ -18,17 +18,6 @@ def calc_norm(parameters, norm_type=2):
     return total_norm
 
 
-def calc_gap(i1, i2, p=2):
-    # i1 = chain.from_iterable([[p for p in pg['params']] for pg in self.trainer.optimizer.param_groups])
-    # i2 = chain.from_iterable(real_theta)
-
-    with torch.no_grad():
-        total_norm = torch.sum([torch.dist(a, b, p=p)
-                                for a, b in zip(i1, i2)]).item()
-
-    return total_norm
-
-
 class CVTrainer(PartitionedSupervisedTrainer):
     def __init__(self, model, optimizer, scheduler, statistics, max_grad_norm=None,
                  always_calc_grad_norm=False):
@@ -114,23 +103,23 @@ class GapAwareCVTrainer(CVTrainer):
         super().__init__(*args, **kw)
         self.gap_aware = gap_aware
 
-    def modify_gradients(self, real_theta=None, delay=None):
+    def modify_gradients(self, real_theta=None, delay=None, stahsed_theta=None):
+        """ NOTE: we assume that if "real_theta" is given, a stashed weight is loaded into the model """
         # TODO: we may want to save some statistics before we modify grad.
         ga = self.gap_aware
         ga.update_running_avg()
         ga.inc_step_count()
         if delay:
-            # It does not help to modify the (Gap Aware) gradients before we send,
-            # so do everything here.
-            if real_theta is None:
+            if real_theta:
+                ga.apply_on_theta(real_theta)
+            elif stahsed_theta:
+                ga.apply_on_stashed(stahsed_theta)
+            else:
                 # TODO: note this should be called only before step, assuming delay of exactly 1.
                 # FIXME: its very problematic if almost last partition calls this if step_every > 1.
                 # This means: for the "gap_aware.json" configs !!!
-                ga.apply()
-            else:
-                ga.apply_on_theta(real_theta, delay)
-
-        # self.gap_aware.apply_grad_only()  # Modifys gradients, don't
+                assert delay == 1
+                ga.apply_from_grad()
 
     def last_partition_step_and_statistics(self, x, y, loss, step=True):
         """
