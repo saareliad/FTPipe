@@ -185,3 +185,6 @@ class WeightStasher:
     # Exposed for statistics and alike
     def get_stashed_buff(self, batch_index, default=None):
         return self.theta_buffer.get(batch_index, default)
+
+    def pop_stashed_buff(self, batch_index):
+        return self.theta_buffer.pop(batch_index, None)
