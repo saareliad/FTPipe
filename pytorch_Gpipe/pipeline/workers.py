@@ -1,31 +1,29 @@
 import traceback
 from multiprocessing import Process
-from multiprocessing import Queue as PQueue
-from queue import Queue as TQueue
-from threading import Thread
-from typing import Any, List, Optional, Tuple, Union
-
+from multiprocessing import Queue
+from typing import Any, List, Optional
 import torch
 from torch import Tensor
 from torch.nn import Module
 from torch.optim import Optimizer
-
 from pytorch_Gpipe.delayedNorm import DelayedBatchNorm
-
-from .messages import COMMAND, Result
-from .stage_io import StageIO
+import torch.distributed as dist
+from .messages import COMMAND
+from .stage_io import RankIO
 from .state_stack import StateStack
-from .utils import InvalidState
-
-Queue = Union[TQueue, PQueue]
+from .utils import InvalidState, SyncBuffersMode, SyncParametersMode, StepEveryMode
 
 
-class Worker():
-    def __init__(self, idx: int, model: Module, device: torch.device, IO: StageIO, input_scopes: List[Tuple[str, bool]], output_scopes: List[Tuple[str, bool]], command_queue: Queue, use_delayedNorm: bool, optimizer: Optional[Optimizer] = None, DEBUG_CPU_ONLY: bool = False):
-        super(Worker, self).__init__()
-        self.idx = idx
+class Worker(Process):
+    def __init__(self, backend, world_size: int, stage_id: int, rank: int, ranks_in_stage: int, model: Module, stateStack: StateStack, IO: RankIO,
+                 send_input_gradient: List[bool], command_queue: Queue, groups: List[List[int]], use_delayedNorm: bool, optimizer: Optional[Optimizer],
+                 buffer_sync: SyncBuffersMode, parameter_sync: SyncParametersMode, step_mode: StepEveryMode):
+        super(Worker, self).__init__(self, name=f"stage_{stage_id+1}_Worker_{rank+1}",
+                                     daemon=True)
+        self.stage_id = stage_id
+        self.rank = rank
+        self.ranks_in_stage = ranks_in_stage
         self.model = model
-        self.device = device
         self.IO = IO
         self.FORWARD = True
         self.running = True
@@ -33,27 +31,37 @@ class Worker():
         self.command_queue = command_queue
         self.use_delayedNorm = use_delayedNorm
         self.num_DEBUG_messages = 0
-        self.state_stack = StateStack(self.device)
+        self.state_stack = stateStack
         self.num_minibatches = 0
         self.minibatch_idx = 0
         self.optimizer = optimizer
-        self.input_scopes = input_scopes
-        self.output_scopes = output_scopes
-        self.DEBUG_CPU_ONLY = DEBUG_CPU_ONLY
+        self.send_input_gradient = send_input_gradient
+        self.sync_buffers_mode = buffer_sync
+        self.sync_parameters_mode = parameter_sync
+        self.step_mode = step_mode
+        self.stage_process_group = self._init_process_groups(backend, world_size,
+                                                             groups)
+
+        # we sort to be aboslutly sure we reduce in the same order
+        buffers = sorted(self.model.named_buffers(), lambda t: t[0])
+        self.buffers = [t[1] for t in buffers]
+
+        parameters = sorted(self.model.named_parameters(), lambda t: t[0])
+        self.parameters = [t[1] for t in parameters]
 
     def run(self):
         while self.running:
             try:
                 # wait for command from master
-                # note that we continue only if we start a new batch
+                # note that we continue only if we start a new batch and reset minibatch_idx and num_minibatches
+                # no busy wait
                 if self.minibatch_idx == self.num_minibatches:
                     cmd, metadata = self.command_queue.get()
                     self.changeMode(cmd, metadata)
                     continue
 
                 # receive minibatch
-                inputs = self.IO.get(self.minibatch_idx, forward=self.FORWARD)
-                inputs = self.moveInputs(inputs)
+                inputs = self.IO.get(forward=self.FORWARD)
 
                 # process minibatch
                 if self.FORWARD:
@@ -64,8 +72,13 @@ class Worker():
                     self.IO.put(grads, forward=False)
                 self.minibatch_idx += 1
 
-                # optimization have each worker take a step as soon as possible(once the batch has finished recomputing)
-                if self.optimizer and ((not self.FORWARD) and (self.minibatch_idx == self.num_minibatches)):
+                if self.should_sync_parameters():
+                    self.sync_parameters()
+                elif self.should_sync_buffers():
+                    self.sync_buffers()
+
+                # have each worker take a step as soon as possible
+                if self.should_take_step():
                     self.optimizer.step()
                     self.optimizer.zero_grad()
 
@@ -73,32 +86,17 @@ class Worker():
                 # propagate the Exception eventually reaching the master
                 # a worker should always work unless explicitly shut down by master
                 # or untill master process terminates
-                stack_trace = f"worker_{self.idx+1}\n{traceback.format_exc()}"
-                self.IO.put(Result(minibatch=0,
-                                   exc_info=stack_trace), forward=self.FORWARD)
-
-    def moveInputs(self, inputs: List[Result]) -> List[Optional[Tensor]]:
-        outs = []
-        for i in inputs:
-            t = i.get()
-            if t is None:
-                outs.append(None)
-            else:
-                if not isinstance(t, Tensor):
-                    raise TypeError(
-                        f"expected Tensor but got {type(t).__name__}")
-                outs.append(t.to(self.device))
-        return outs
+                stack_trace = f"worker stage_{self.stage_id+1} rank_{self.rank+1} raised exception\n{traceback.format_exc()}"
+                self.IO.propagate_exeption(stack_trace, forward=self.FORWARD)
 
     def forward(self, inputs: List[Tensor]) -> List[Tensor]:
         with torch.no_grad():
             if self.training:
                 save_state = self.minibatch_idx == 0
                 self.state_stack.push(inputs, save_state=save_state)
-            results = self.model(*inputs)
-            return [Result(minibatch=self.minibatch_idx, data=r, DEBUG_CPU_ONLY=self.DEBUG_CPU_ONLY) for r in results]
+            return self.model(*inputs)
 
-    def backward(self, grad_input: List[Optional[Tensor]]) -> List[Result]:
+    def backward(self, grad_input: List[Optional[Tensor]]) -> List[Optional[Tensor]]:
         if not self.training:
             raise InvalidState("cannot backward in eval mode")
         remove_state = self.minibatch_idx == self.num_minibatches
@@ -106,7 +104,7 @@ class Worker():
         with torch.enable_grad():
             outputs = self.model(*inputs)
             torch.autograd.backward(outputs, grad_input)
-        return [Result(minibatch=self.minibatch_idx, data=i.grad if used else None, DEBUG_CPU_ONLY=self.DEBUG_CPU_ONLY) for i, (_, used) in zip(inputs, self.input_scopes)]
+        return [i.grad if to_send else None for i, to_send in zip(inputs, self.send_input_gradient)]
 
     def changeMode(self, mode: COMMAND, metadata: Any):
         if mode is COMMAND.TRAIN:
@@ -115,6 +113,8 @@ class Worker():
         elif mode is COMMAND.EVAL:
             self.model.eval()
             self.training = False
+            if self.sync_buffers_mode is SyncBuffersMode.BEFORE_EVAL:
+                self.sync_buffers()
         elif mode is COMMAND.FORWARD:
             self.FORWARD = True
             self.minibatch_idx = 0
@@ -140,41 +140,69 @@ class Worker():
                     m.is_recomputing = not self.FORWARD
                     m.num_micro_batches = self.num_minibatches
 
+    def should_take_step(self) -> bool:
+        if self.step_mode is StepEveryMode.DISABLED or (not self.optimizer):
+            return False
 
-class TWorker(Worker, Thread):
-    def __init__(self, idx: int, model: Module, device: torch.device, IO: StageIO, input_scopes: List[Tuple[str, bool]], output_scopes: List[Tuple[str, bool]], command_queue: TQueue, use_delayedNorm: bool, optimizer: Optional[Optimizer] = None, DEBUG_CPU_ONLY: bool = False):
-        Worker.__init__(self, idx, model, device, IO, input_scopes, output_scopes,
-                        command_queue, use_delayedNorm, optimizer=optimizer, DEBUG_CPU_ONLY=DEBUG_CPU_ONLY)
-        Thread.__init__(self, name=f"Worker_{self.idx+1}", daemon=True)
+        if self.FORWARD:
+            return False
+
+        return (self.step_mode is StepEveryMode.EVERY_MINIBATCH) or (self.minibatch_idx == self.num_minibatches)
+
+    def should_sync_buffers(self) -> bool:
+        return self.sync_buffers_mode is SyncBuffersMode.EVERY_BATCH and self.FORWARD
+
+    def should_sync_parameters(self) -> bool:
+        return self.sync_parameters_mode is SyncParametersMode.EVERY_BATCH and (not self.FORWARD)
+
+    def sync_buffers(self):
+        if self.ranks_in_stage == 1 or len(self.buffers) == 0 or self.sync_buffers_mode is SyncBuffersMode.DISABLED:
+            return
+
+        with torch.no_grad():
+            dist.all_reduce_coalesced(self.buffers, group=self.stage_process_group,
+                                      op=dist.ReduceOp.SUM, async_op=False)
+
+            for b in self.buffers:
+                b.data /= self.ranks_in_stage
+
+    def sync_parameters(self):
+        if self.ranks_in_stage == 1 or len(self.parameters) == 0 or self.sync_parameters_mode is SyncParametersMode.DISABLED:
+            return
+
+        with torch.no_grad():
+            gradients = [p.grad.data for p in self.parameters]
+            dist.all_reduce_coalesced(gradients, group=self.stage_process_group,
+                                      op=dist.ReduceOp.SUM, async_op=False)
+            for p in self.parameters:
+                p.grad.data /= self.ranks_in_stage
+
+    def _init_process_groups(self, backend, world_size, groups: List[List[int]]):
+        dist.init_process_group(backend, init_method='tcp://127.0.0.1:8000',
+                                world_size=world_size, rank=self.rank)
+
+        stage_group = None
+        for group in groups:
+            pg = dist.new_group(ranks=group, backend=backend)
+            if self.rank in group:
+                # only one group per replicated stage
+                assert self.stage_process_group is None
+                stage_group = pg
+
+        return stage_group
 
 
-class PWorker(Worker, Process):
-    def __init__(self, idx: int, model: Module, device: torch.device, IO: StageIO, input_scopes: List[Tuple[str, bool]], output_scopes: List[Tuple[str, bool]], command_queue: PQueue, use_delayedNorm: bool, optimizer: Optional[Optimizer] = None, DEBUG_CPU_ONLY: bool = False):
-        Worker.__init__(self, idx, model, device, IO, input_scopes, output_scopes,
-                        command_queue, use_delayedNorm, optimizer=optimizer, DEBUG_CPU_ONLY=DEBUG_CPU_ONLY)
-        Process.__init__(self, name=f"Worker_{self.idx+1}", daemon=True)
-
-
-# stage replication design notes:
-    # a single process with multiple worker threads(ThreadPool/Tworkers)
-    # the process is tasked with IO and state management(mini batch saving and synchronizing replicas)
-    # when a minibatch arrives it will be split among assigned GPUS (multiple StateStacks will be maintained)
-
-    # when a batch finishes forward we sync buffers
-    # when a batch finishes backward we sync gradients
-    # so we will only sync twice per batch instead of twice per minibatch
-
-    # each worker will backward on the same microbatch as in the forward pass
-    # grad/activation input will be split between workers(need to match the split from the forward)
-    # grad/activation output will be merged and sent to previous stages
-        # this means that for every send and recive a single gpu will be the staging ground(must be large enough)
-        # for memory load balancing we can recieve and send from different gpus
-
-    # crazy idea when sending/receiving to/from a replicated stage the sender/reciever will be tasked with spliting/merging the input
-        # resulting in optimal memory effieciency no(staging ground needed) also it possibly can be done asynchronously
-        # that would mean the each result must have a minibatch and microbatch indices annoying to implement
-
-
-# naive stage replication a single process maintaining a nn.DataParallel module
-# drawbacks we will have 2*num_minibatches state replications/thread spawing which can be expensive
-# as the state will be saved on a single gpu we probably won't scale as much in regards to batch size
+# workplan:
+    # make a queue for each edge instead of each output DONE
+    # make the sender responsible to send tensors to required GPU DONE
+    # make all queue.put and tensor.to with block=False and non_blocking=True DONE
+    # make the sender place it's output on their target device DONE
+    # add support for receiving an input from multiple sources DONE
+    # add support for sending output to replicated stage DONE
+    # create configs for send to and receive from replicated stages DONE
+    # add syncBuffersMode DONE
+    # add syncParametersMode DONE
+    # add buffer synchronization across the stage DONE
+    # add parameter synchronization acrosss the stage DONE
+    # add logic for creating all process groups on all workers DONE
+    # switch from queue based solution to using torch.distributed only

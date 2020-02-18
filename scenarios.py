@@ -136,7 +136,7 @@ def check_inception():
     from inception import create_pipeline_configuration
     # return
     configs = create_pipeline_configuration(model, DEBUG=True)
-    pipe = Pipeline(configs, output_device='cpu', use_delayedNorm=False)
+    pipe = Pipeline(configs, output_device='cpu')
     for _ in range(num_batches):
         pipe.zero_grad()
         torch.manual_seed(0)
@@ -548,12 +548,13 @@ def single_node_pipeline_with_optimizer():
 
     config = create_pipeline_configuration(model, DEBUG=True)
 
+    config[1]['model'] = config[1]['model'].to('cuda:0')
     config[0]['optimizer'] = torch.optim.SGD(config[0]['model'].parameters(),
                                              lr=1e-3)
     config[1]['optimizer'] = torch.optim.SGD(config[1]['model'].parameters(),
                                              lr=1e-3)
 
-    model = Pipeline(config, output_device='cpu', use_multiprocessing=True)
+    model = Pipeline(config, output_device='cuda:0')
 
     out = model(sample.cpu(), num_chunks=4)
     model.backward(torch.ones_like(out))
@@ -583,4 +584,6 @@ def single_node_model_parallel():
 
 
 if __name__ == "__main__":
-    single_node_model_parallel()
+    if False:
+        single_node_pipeline_with_optimizer()
+    print("done")

@@ -1,7 +1,7 @@
 import sys
 from enum import Enum, auto, unique
-from typing import List, Optional, Union
-
+from typing import Optional
+import torch
 from torch import Tensor
 
 
@@ -27,16 +27,11 @@ class Result():
     attempting to retrieve the data will trigger the exception (if present)
     '''
 
-    def __init__(self, minibatch: int, data: Optional[Tensor] = None, exc_info: Optional[str] = None, metadata=None, DEBUG_CPU_ONLY: bool = False):
-        if DEBUG_CPU_ONLY and isinstance(data, Tensor):
-            self.data = data.cpu()
-        else:
-            self.data = data
+    def __init__(self, data: Optional[Tensor] = None, exc_info: Optional[str] = None):
+        self.data = data
         self.exc_info = exc_info
-        self.minibatch = minibatch
-        self.metadata = metadata
 
-    def get(self) -> Tensor:
+    def get(self) -> Optional[Tensor]:
         if self.exc_info is None:
             return self.data
 
@@ -45,21 +40,12 @@ class Result():
     def hasException(self) -> bool:
         return not (self.exc_info is None)
 
-    def isValid(self) -> bool:
-        return not self.hasException()
-
-    def __str__(self) -> str:
-        s = f"minibatch:{self.minibatch} "
-        if self.isValid():
-            if isinstance(self.data, Tensor):
-                return s + f"tensor with shape {self.data.shape}"
-            else:
-                return s + f"{type(self.data).__name__} {self.data} with metadata {self.metadata}"
-        else:
-            return s + f"exception {self.exc_info}"
-
     def __repr__(self) -> str:
         return str(self)
 
+    def to(self, device: torch.device):
+        if isinstance(self.data, Tensor):
+            data = self.data.to(device=device, non_blocking=True)
+            return Result(data=data, exc_info=self.exc_info)
 
-Data = Union[Result, List[Result]]
+        return self
