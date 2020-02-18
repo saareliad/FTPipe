@@ -220,7 +220,7 @@ def partition_model(args, train_dataset, model, tokenizer):
 
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     # parameter required by the repo
     parser.add_argument("--train_data_file", default=None, type=str, required=True,

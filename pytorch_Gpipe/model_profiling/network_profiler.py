@@ -13,7 +13,8 @@ Profile = namedtuple('Profile',
                      'forward_time backward_time cuda_memory_forward cuda_memory_backward layer_size input_size output_size input_shape output_shape')
 
 
-def profile_network(net: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, basic_blocks: Optional[List[nn.Module]] = None, max_depth=100, n_iter=10) -> Dict[str, Profile]:
+def profile_network(net: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None,
+                    basic_blocks: Optional[List[nn.Module]] = None, max_depth=100, n_iter=10) -> Dict[str, Profile]:
     '''
     profiles a network's computation time(forward/backward) and memory consumption
     returns a dictionary from layer_scope to Profile
@@ -50,7 +51,8 @@ def profile_network(net: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict
     # wrap all individula layers for profiling
     layers_dict = _wrap_profiled_layers(net, max_depth, basic_blocks)
 
-    # perform n_iter symbolic forward backward run first one is warmup as we have seen the first time measurements are higher
+    # perform n_iter symbolic forward backward run
+    # first one is warmup as we have seen the first time measurements are higher
     for _ in range(n_iter + 1):
         _perform_forward_backward_pass(net, *sample_batch, **kwargs)
 
@@ -77,8 +79,12 @@ def profile_network(net: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict
     output_shapes = [layer.output_shape for layer in layers_dict.values()]
 
     # prepare profiling results
-    layers_profile = {name: Profile(forward, backward, *cuda_mem, param_size + buffer_size, in_size, out_size, in_shape, out_shape) for name, forward, backward, param_size, buffer_size, in_size, out_size, cuda_mem, in_shape, out_shape in zip(
-        layers_dict.keys(), forward_times, backward_times, param_sizes, buffer_sizes, layer_input_sizes, layer_output_sizes, cuda_memory, input_shapes, output_shapes)}
+    layers_profile = {name: Profile(forward, backward, *cuda_mem, param_size + buffer_size,
+                                    in_size, out_size, in_shape, out_shape)
+                      for name, forward, backward, param_size, buffer_size, in_size,
+                      out_size, cuda_mem, in_shape, out_shape in zip(
+        layers_dict.keys(), forward_times, backward_times, param_sizes,
+        buffer_sizes, layer_input_sizes, layer_output_sizes, cuda_memory, input_shapes, output_shapes)}
 
     _unwrap_layers(net)
 
@@ -260,12 +266,12 @@ class Wrapper(nn.Module):
 
     def avg_time(self, forward=False):
         if forward:
-            l = self.forward_time
+            forward_times = self.forward_time
         else:
-            l = self.backward_time
-        max_v = max(l)
+            forward_times = self.backward_time
+        max_v = max(forward_times)
 
-        return sum([t for t in l if t < max_v]) / (len(l) - 1)
+        return sum([t for t in forward_times if t < max_v]) / (len(forward_times) - 1)
 
     # just in case those operations are required we pass them to the profiled layer
 

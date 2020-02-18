@@ -49,8 +49,15 @@ class Node():
 
      parallel edges in the same direction are not allowed
     '''
-
-    def __init__(self, scope: str, idx: int, node_type: NodeTypes, incoming_nodes: Optional[OrderedSet["Node"]] = None, weight: Union[Profile, int] = 0, part: int = 0, value: Optional[Any] = None, shape: Optional[List[int]] = None):
+    def __init__(self,
+                 scope: str,
+                 idx: int,
+                 node_type: NodeTypes,
+                 incoming_nodes: Optional[OrderedSet["Node"]] = None,
+                 weight: Union[Profile, int] = 0,
+                 part: int = 0,
+                 value: Optional[Any] = None,
+                 shape: Optional[List[int]] = None):
         self.scope = scope
         self.idx = idx
         self.type = node_type
@@ -93,11 +100,12 @@ class Node():
             # we handle the case for iterable, if value is not then we recall with [value]
             iter(value)
             keys = value
-            to_add = [v for v in keys if (
-                v not in before) and (v not in after)]
+            to_add = [
+                v for v in keys if (v not in before) and (v not in after)
+            ]
             self.out_nodes = OrderedSet(before + to_add + after)
 
-        except TypeError as _:
+        except TypeError:
             self.replace_out_node(to_replace, [value])
 
     def replace_in_node(self, to_replace, value):
@@ -112,11 +120,12 @@ class Node():
             # we handle the case for iterable, if value is not then we recall with [value]
             iter(value)
             keys = value
-            to_add = [v for v in keys if (
-                v not in before) and (v not in after)]
+            to_add = [
+                v for v in keys if (v not in before) and (v not in after)
+            ]
             self.in_nodes = OrderedSet(before + to_add + after)
 
-        except TypeError as _:
+        except TypeError:
             self.replace_in_node(to_replace, [value])
 
     def __repr__(self):
@@ -151,12 +160,16 @@ class Graph():
     num_partitions: int:
         the number of partitions for the nodes
     '''
-
-    def __init__(self, nodes: Optional[GraphNodes] = None, graph_output_scopes: Optional[OrderedSet[str]] = None, depth: Optional[int] = None, basic_blocks: Optional[Tuple[Module, ...]] = None):
+    def __init__(self,
+                 nodes: Optional[GraphNodes] = None,
+                 graph_output_scopes: Optional[OrderedSet[str]] = None,
+                 depth: Optional[int] = None,
+                 basic_blocks: Optional[Tuple[Module, ...]] = None):
         self._nodes = nodes if nodes else collections.OrderedDict()
-        self.output_scopes = graph_output_scopes if graph_output_scopes else OrderedSet()
-        self.depth = depth if depth != None else 0
-        self.basic_blocks = basic_blocks if basic_blocks != None else ()
+        self.output_scopes = graph_output_scopes if graph_output_scopes else OrderedSet(
+        )
+        self.depth = depth if depth is not None else 0
+        self.basic_blocks = basic_blocks if basic_blocks is not None else ()
 
     def __getitem__(self, idx) -> Node:
         return self._nodes[idx]
@@ -179,7 +192,8 @@ class Graph():
     def num_partitions(self) -> int:
         return len(set(node.part for node in self.nodes))
 
-    def asNetworkx(self, directed: bool = False,
+    def asNetworkx(self,
+                   directed: bool = False,
                    node_weight_function: Optional[NodeWeightFunction] = None,
                    edge_weight_function: Optional[EdgeWeightFunction] = None):
         '''
@@ -202,7 +216,7 @@ class Graph():
         '''
         try:
             import networkx as nx
-        except ImportError as _:
+        except ImportError:
             print("networkx package not found")
             return
 
@@ -231,7 +245,9 @@ class Graph():
 
         return G
 
-    def build_dot(self, show_buffs_params: bool = False, show_profiles: bool = True):
+    def build_dot(self,
+                  show_buffs_params: bool = False,
+                  show_profiles: bool = True):
         '''
         return a graphviz representation of the graph
         Parameters
@@ -242,14 +258,16 @@ class Graph():
             whether to display the nodes weight
         '''
 
-        theme = {"background_color": "#FFFFFF",
-                 "fill_color": "#E8E8E8",
-                 "outline_color": "#000000",
-                 "font_color": "#000000",
-                 "font_name": "Times",
-                 "font_size": "10",
-                 "margin": "0,0",
-                 "padding": "1.0,0.5"}
+        theme = {
+            "background_color": "#FFFFFF",
+            "fill_color": "#E8E8E8",
+            "outline_color": "#000000",
+            "font_color": "#000000",
+            "font_name": "Times",
+            "font_size": "10",
+            "margin": "0,0",
+            "padding": "1.0,0.5"
+        }
         from graphviz import Digraph
 
         dot = Digraph()
@@ -264,15 +282,18 @@ class Graph():
                  rankdir="TB",
                  pad=theme["padding"])
 
-        dot.attr("node", shape="box",
-                 style="filled", margin="0,0",
+        dot.attr("node",
+                 shape="box",
+                 style="filled",
+                 margin="0,0",
                  fillcolor=theme["fill_color"],
                  color=theme["outline_color"],
                  fontsize=theme["font_size"],
                  fontcolor=theme["font_color"],
                  fontname=theme["font_name"])
 
-        dot.attr("edge", style="solid",
+        dot.attr("edge",
+                 style="solid",
                  color=theme["outline_color"],
                  fontsize=theme["font_size"],
                  fontcolor=theme["font_color"],
@@ -280,11 +301,20 @@ class Graph():
 
         # TODO split big graphs to multiple pdfs
 
-        colors = {0: 'grey', 1: 'green', 2: 'red', 3: 'yellow',
-                  4: 'orange', 5: 'brown', 6: 'purple', 7: 'pink'}
+        colors = {
+            0: 'grey',
+            1: 'green',
+            2: 'red',
+            3: 'yellow',
+            4: 'orange',
+            5: 'brown',
+            6: 'purple',
+            7: 'pink'
+        }
 
         def hide_node(node):
-            return (node.type == NodeTypes.BUFF_PARAM) and (not show_buffs_params)
+            return (node.type == NodeTypes.BUFF_PARAM) and (
+                not show_buffs_params)
 
         for node in self.nodes:
             if hide_node(node):
@@ -310,7 +340,9 @@ class Graph():
 
         return dot
 
-    def display(self, show_buffs_params: bool = False, show_profiles: bool = True):
+    def display(self,
+                show_buffs_params: bool = False,
+                show_profiles: bool = True):
         '''
         display the graph in Jupyter
 
@@ -324,11 +356,16 @@ class Graph():
         try:
             from IPython.core.display import display_svg
             display_svg(self.build_dot(show_buffs_params,
-                                       show_profiles=show_profiles), raw=False)
-        except ImportError as _:
-            print("only works in python notebooks")
+                                       show_profiles=show_profiles),
+                        raw=False)
+        except ImportError:
+            print("only works in ipython notebooks")
 
-    def save_as_pdf(self, file_name: str, directory: str, show_buffs_params: bool = True, show_profiles: bool = False):
+    def save_as_pdf(self,
+                    file_name: str,
+                    directory: str,
+                    show_buffs_params: bool = True,
+                    show_profiles: bool = False):
         '''
         save the rendered graph to a pdf file
 
@@ -376,16 +413,26 @@ class Graph():
         for u in self.nodes:
             in_nodes = [v.idx for v in u.in_nodes]
             out_nodes = [v.idx for v in u.out_nodes]
-            node_data = {"idx": u.idx, "part": u.part, "weight": u.weight,
-                         "scope": u.scope, "type": u.type, "value": u.value,
-                         "value_type": u.value_type,
-                         "in_nodes": in_nodes, "out_nodes": out_nodes, "shape": u.shape}
+            node_data = {
+                "idx": u.idx,
+                "part": u.part,
+                "weight": u.weight,
+                "scope": u.scope,
+                "type": u.type,
+                "value": u.value,
+                "value_type": u.value_type,
+                "in_nodes": in_nodes,
+                "out_nodes": out_nodes,
+                "shape": u.shape
+            }
             graph_nodes_data.append(node_data)
 
-        graph = {"depth": graph_depth,
-                 "output_scopes": graph_output_scopes,
-                 "basic_blocks": graph_basic_blocks,
-                 "nodes_data": graph_nodes_data}
+        graph = {
+            "depth": graph_depth,
+            "output_scopes": graph_output_scopes,
+            "basic_blocks": graph_basic_blocks,
+            "nodes_data": graph_nodes_data
+        }
 
         return graph
 
@@ -405,16 +452,21 @@ class Graph():
             value = node["value"]
             value_type = node["value_type"]
             shape = node["shape"]
-            nodes[idx] = Node(scope, idx, node_type,
-                              weight=weight, part=part, value=value, shape=shape)
+            nodes[idx] = Node(scope,
+                              idx,
+                              node_type,
+                              weight=weight,
+                              part=part,
+                              value=value,
+                              shape=shape)
             nodes[idx].value_type = value_type
 
         # add edges
         for node in state["nodes_data"]:
-            nodes[node["idx"]].in_nodes = OrderedSet([nodes[u]
-                                                      for u in node["in_nodes"]])
-            nodes[node["idx"]].out_nodes = OrderedSet([nodes[u]
-                                                       for u in node["out_nodes"]])
+            nodes[node["idx"]].in_nodes = OrderedSet(
+                [nodes[u] for u in node["in_nodes"]])
+            nodes[node["idx"]].out_nodes = OrderedSet(
+                [nodes[u] for u in node["out_nodes"]])
 
         self._nodes = nodes
         self.output_scopes = state["output_scopes"]
@@ -426,7 +478,8 @@ class Graph():
     def graphs_equal(self, other) -> bool:
         '''
         check if 2 graphs are equal\n
-        graphs are equal if the topography is the same and if the nodes data is the same (upto weights and partition idx)
+        graphs are equal if the topography is the same and if the nodes data is the same 
+            (upto weights and partition idx)
         '''
         if not isinstance(other, Graph):
             return False
@@ -441,9 +494,11 @@ class Graph():
                 return False
 
             if u.valueType() is Tensor:
-                if (u.value is None or v.value is None) and (not (u.value is v.value)):
+                if (u.value is None
+                        or v.value is None) and (not (u.value is v.value)):
                     return False
-                if (u.value != None and v.value != None) and (not torch.allclose(u.value, v.value)):
+                if (u.value is not None and v.value is not None) and (
+                        not torch.allclose(u.value, v.value)):
                     return False
             if u.valueType() != Tensor and u.value != v.value:
                 return False
@@ -522,9 +577,13 @@ class Graph():
         g = Graph().load_state(self.state())
 
         def predicate(n: Node):
-            if n.scope in g.output_scopes or n.type is [NodeTypes.IN, NodeTypes.BUFF_PARAM]:
+            if n.scope in g.output_scopes or n.type is [
+                    NodeTypes.IN, NodeTypes.BUFF_PARAM
+            ]:
                 return False
-            return n.type in {NodeTypes.PYTHON_PRIMITIVE, NodeTypes.CONSTANT} or (len(n.in_nodes) == 0 and n.type is NodeTypes.OP)
+            return n.type in {
+                NodeTypes.PYTHON_PRIMITIVE, NodeTypes.CONSTANT
+            } or (len(n.in_nodes) == 0 and n.type is NodeTypes.OP)
 
         # inefficient but should only be called once
         nodes = _remove_nodes(g._nodes, predicate)
@@ -537,7 +596,8 @@ class Graph():
         return g, new_to_old
 
 
-def _remove_nodes(nodes: GraphNodes, condition: Callable[[Node], bool]) -> GraphNodes:
+def _remove_nodes(nodes: GraphNodes, condition: Callable[[Node],
+                                                         bool]) -> GraphNodes:
     # TODO code duplication from graph builder
     while True:
         changed = False

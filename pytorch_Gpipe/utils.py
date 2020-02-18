@@ -16,7 +16,8 @@ Device = Union[torch.device, int, str]
 Devices = Union[List[Device], Tuple[Device, ...]]
 
 
-def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None, basic_blocks: Optional[Iterable[nn.Module]] = None, full: bool = False) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
+def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
+                   basic_blocks: Optional[Iterable[nn.Module]] = None, full: bool = False) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
     '''
     iterate over model layers yielding the layer,layer_scope,encasing_module
     Parameters:
@@ -35,7 +36,8 @@ def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None, 
 
     for name, sub_module in module.named_children():
         scope = prefix + "/" + type(sub_module).__name__ + f"[{name}]"
-        if len(list(sub_module.children())) == 0 or (basic_blocks != None and isinstance(sub_module, tuple(basic_blocks))) or depth == 0:
+        if len(list(sub_module.children())) == 0 or ((basic_blocks is not None)
+                                                     and isinstance(sub_module, tuple(basic_blocks))) or depth == 0:
             yield sub_module, scope, module
         else:
             if full:
@@ -113,7 +115,7 @@ def _detach_inputs(*inputs: Tensors):
     return detached[0] if len(detached) == 1 else tuple(detached)
 
 
-def _get_size(x: Tensors) -> int:
+def _get_size(x: Tensors) -> Tuple[int, Tuple[int]]:
     size = 0
     shapes = []
 
