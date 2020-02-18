@@ -35,7 +35,7 @@ class Pipeline():
         self.split_dim = split_dim
 
         master_IO, command_queues, groups, worker_args = create_worker_args(configs, self.input_names, self.output_names,
-                                                                            Queue, self.output_device, self.split_dim)
+                                                                            self.output_device, self.split_dim)
 
         self.IO = master_IO
         self.command_queues = command_queues
@@ -46,7 +46,7 @@ class Pipeline():
         # launch workers
         for stage_id, rank, ranks_in_stage, io, command_queue, state_stack, model, optimizer in worker_args.values():
             use_delayedNorm = any(isinstance(m, DelayedBatchNorm)
-                                  for m in model.modules)
+                                  for m in model.modules())
             send_input_gradient = [k in self.input_names
                                    for k in configs[stage_id]['inputs']]
 
@@ -360,7 +360,7 @@ class Pipeline():
         # ranks devices assigned to this stage
         # optimizers optional optimizers assigned to this stage
 
-def create_worker_args(configs, model_inputs, model_outputs, queueClass, output_device, split_dim):
+def create_worker_args(configs, model_inputs, model_outputs, output_device, split_dim):
     consumers = defaultdict(list)
     producers = dict()
 
@@ -375,7 +375,7 @@ def create_worker_args(configs, model_inputs, model_outputs, queueClass, output_
     rank_to_device = dict()
     rank_to_device[-1] = output_device
     n_ranks = 0
-    rank_to_optimizer = defaultdict(None)
+    rank_to_optimizer = dict()
     rank_to_model = dict()
     rank_to_stage = dict()
     for stage_id, config in configs.items():
@@ -406,28 +406,30 @@ def create_worker_args(configs, model_inputs, model_outputs, queueClass, output_
 
         n_ranks += stage_size
 
-    rank_to_queues = defaultdict(defaultdict(list))
+    rank_to_queues = defaultdict(lambda: defaultdict(list))
     for output, producer_stage in producers.items():
         producer_ranks = stage_to_ranks[producer_stage]
         producer_devices = [rank_to_device[r] for r in producer_ranks]
 
         for consumer_stage in consumers[output]:
             consumer_ranks = stage_to_ranks[consumer_stage]
-            consumer_devices = [rank_to_device[r] for r in consumer_devices]
+            consumer_devices = [rank_to_device[r] for r in consumer_ranks]
 
             if len(producer_ranks) == 1:
                 if len(consumer_ranks) == 1:
                     # one to one
-                    print("one to one")
-                    queue = queueClass()
+                    print(
+                        f"one to one {producer_stage} -> {consumer_stage} activation: {output}")
+                    queue = Queue()
                     producers_queues = [QueueWrapper(queue,
                                                      consumer_devices[0])]
                     consumers_queues = [QueueWrapper(queue,
                                                      producer_devices[0])]
                 else:
                     # one to many
-                    print("one to many")
-                    consumers_queues = [queueClass() for _ in consumer_ranks]
+                    print(
+                        f"one to many {producer_stage} -> {consumer_stage} activation: {output}")
+                    consumers_queues = [Queue() for _ in consumer_ranks]
                     producers_queues = [SplitConnection(consumers_queues,
                                                         split_dim, consumer_devices)]
                     consumers_queues = [QueueWrapper(q, producer_devices[0])
@@ -435,16 +437,18 @@ def create_worker_args(configs, model_inputs, model_outputs, queueClass, output_
 
             elif len(consumer_ranks) == 1:
                 # many to one
-                print("many to one")
-                producers_queues = [queueClass() for _ in producer_ranks]
+                print(
+                    f"many to one {producer_stage} -> {consumer_stage} activation: {output}")
+                producers_queues = [Queue() for _ in producer_ranks]
                 consumers_queues = [SplitConnection(producers_queues,
                                                     split_dim, producer_devices)]
                 producers_queues = [QueueWrapper(q, consumer_devices[0])
                                     for q in producers_queues]
             else:
                 # many to many
-                print("many to many")
-                consumers_queues = [queueClass() for _ in consumer_ranks]
+                print(
+                    f"many to many {producer_stage} -> {consumer_stage} activation: {output}")
+                consumers_queues = [Queue() for _ in consumer_ranks]
                 queue_groups = split_to_n(consumers_queues,
                                           len(producer_ranks))
                 device_groups = split_to_n(consumer_devices,
@@ -460,10 +464,10 @@ def create_worker_args(configs, model_inputs, model_outputs, queueClass, output_
                 consumers_queues = queues
 
             for rank, queue in zip(producer_ranks, producers_queues):
-                rank_to_queues[rank]['outputs'].append(output, queue)
+                rank_to_queues[rank]['outputs'].append((output, queue))
 
             for rank, queue in zip(consumer_ranks, consumers_queues):
-                rank_to_queues[rank]['inputs'].append(output, queue)
+                rank_to_queues[rank]['inputs'].append((output, queue))
 
     # make sure to sort by name as our convention
     for rank in rank_to_queues:
@@ -479,10 +483,10 @@ def create_worker_args(configs, model_inputs, model_outputs, queueClass, output_
     # preserve order of model inputs and outptus
     scope_to_number = {s: i for i, s in
                        enumerate(chain(model_inputs, model_outputs))}
-    rank_to_queues[-1]['inputs'] = sorted(rank_to_queues[-1]
-                                          ['inputs'], lambda t: scope_to_number[t[0]])
-    rank_to_queues[-1]['outputs'] = sorted(rank_to_queues[-1]
-                                           ['outputs'], lambda t: scope_to_number[t[0]])
+    rank_to_queues[-1]['inputs'] = sorted(rank_to_queues[-1]['inputs'],
+                                          key=lambda t: scope_to_number[t[0]])
+    rank_to_queues[-1]['outputs'] = sorted(rank_to_queues[-1]['outputs'],
+                                           key=lambda t: scope_to_number[t[0]])
 
     # create IOs
     rank_to_IO = dict()
@@ -512,9 +516,9 @@ def create_worker_args(configs, model_inputs, model_outputs, queueClass, output_
     for rank in sorted(rank_to_IO.keys()):
         io = rank_to_IO[rank]
         model = rank_to_model[rank]
-        optimizer = rank_to_optimizer[rank]
+        optimizer = rank_to_optimizer.get(rank, None)
         state_stack = StateStack(model.device)
-        command_queue = queueClass()
+        command_queue = Queue()
         command_queues.append(command_queue)
         stage_id = rank_to_stage[rank]
         ranks_in_stage = len(stage_to_ranks[stage_id])
