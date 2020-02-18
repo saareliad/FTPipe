@@ -58,6 +58,9 @@
     "flush_rate": -1,
     "weight_stashing": true,
     "work_scheduler": "1F1B",
-    "seed_from_cmd": true
-
+    "seed_from_cmd": true,
+    "nesterov_set_for_last_partition": true,
+    "no_recomputation": true,
+    "keep_buffers_alive": true,
+    "max_buffers": 1
 }

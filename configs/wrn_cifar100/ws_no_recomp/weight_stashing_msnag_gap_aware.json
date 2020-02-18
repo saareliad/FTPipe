@@ -1,6 +1,6 @@
 {
     "logdir": "logs/",
-    "out_dir":"results/NEW_NESTEROV/P0/",
+    "out_dir":"results/FIXED_GA/P1/",
     "auto_file_name": true,
     "out_filename": "norecomp",
     "distributed_backend": "mpi",
@@ -39,7 +39,7 @@
         "type": "msnag",
         "args": {
             "pred_mem": "clone",
-            "nag_with_predictor": false
+            "nag_with_predictor": true
         }
     },
     "gap_aware": {

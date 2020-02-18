@@ -1,6 +1,6 @@
 {
     "logdir": "logs/",
-    "out_dir":"results/2p_norecomp",
+    "out_dir":"results/2p_ga_study",
     "auto_file_name": true,
     "out_filename": "ninja_norecomp",
     "distributed_backend": "mpi",
