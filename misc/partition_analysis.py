@@ -17,15 +17,15 @@ def run_analysis(sample,
         graph, config, recomputation=recomputation, async_pipeline=async_pipeline)
     edges = edge_cut(graph)
     # theoretical analysis based on the graph assuming the computation is sequential
-    theoretical_sequential_b_imbalance = worst_imbalance(sequential_b)
-    theoretical_sequential_f_imbalance = worst_imbalance(sequential_f)
-    (topology_aware_sequential_f_imbalance,
-     topology_aware_sequential_b_imbalance) = topology_aware_imbalance(
+    theoretical_sequential_b_balance = worst_balance(sequential_b)
+    theoretical_sequential_f_balance = worst_balance(sequential_f)
+    (topology_aware_sequential_f_balance,
+     topology_aware_sequential_b_balance) = topology_aware_balance(
          sequential_f, sequential_b, edges)
     # theoretical anaysis based on the graph assuming the computation is fully parallel
-    theoretical_parallel_b_imbalance = worst_imbalance(parallel_b)
-    theoretical_parallel_f_imbalance = worst_imbalance(parallel_f)
-    topology_aware_parallel_f_imbalance, topology_aware_parallel_b_imbalance = topology_aware_imbalance(
+    theoretical_parallel_b_balance = worst_balance(parallel_b)
+    theoretical_parallel_f_balance = worst_balance(parallel_f)
+    topology_aware_parallel_f_balance, topology_aware_parallel_b_balance = topology_aware_balance(
         parallel_f, parallel_b, edges)
     # real statistics based on generated partitions
     ((real_f_times, f_vars, f_deviance), (real_b_times, b_vars, b_deviance),
@@ -35,10 +35,10 @@ def run_analysis(sample,
                                       recomputation=recomputation,
                                       bandwidth_gps=bandwidth_gps,
                                       async_pipeline=async_pipeline)
-    real_b_imbalance = worst_imbalance(real_b_times)
-    real_f_imbalance = worst_imbalance(real_f_times)
-    (topology_aware_real_f_imbalance,
-     topology_aware_real_b_imbalance) = topology_aware_imbalance(
+    real_b_balance = worst_balance(real_b_times)
+    real_f_balance = worst_balance(real_f_times)
+    (topology_aware_real_f_balance,
+     topology_aware_real_b_balance) = topology_aware_balance(
          real_f_times, real_b_times, edges)
 
     # TODO: save this into some data structure
@@ -62,32 +62,33 @@ def run_analysis(sample,
 
         s += f"avg diviation from the mean of real execution times ms\nforward{f_deviance}\nbackward{b_deviance}\n"
 
-        s += "\nimbalance is ratio of computation time between fastest and slowest parts."
+        s += "\nbalance is ratio of computation time between fastest and slowest parts."
         s += " (between 0 and 1 higher is better)\n"
-        s += f"theoretical sequential imbalance:\n"
-        s += f"forward {theoretical_sequential_f_imbalance:.3f}\nbackward {theoretical_sequential_b_imbalance:.3f}\n"
-        s += f"theoretical parallel imbalance:\n"
-        s += f"forward {theoretical_parallel_f_imbalance:.3f}\nbackward {theoretical_parallel_b_imbalance:.3f}\n"
+        s += f"theoretical sequential balance:\n"
+        s += f"forward {theoretical_sequential_f_balance:.3f}\nbackward {theoretical_sequential_b_balance:.3f}\n"
+        s += f"theoretical parallel balance:\n"
+        s += f"forward {theoretical_parallel_f_balance:.3f}\nbackward {theoretical_parallel_b_balance:.3f}\n"
 
-        s += f"\nreal imbalance:\n"
-        s += f"forward {real_f_imbalance:.3f}\nbackward {real_b_imbalance:.3f}\n"
+        s += f"\nreal balance:\n"
+        s += f"forward {real_f_balance:.3f}\nbackward {real_b_balance:.3f}\n"
 
-        s += "\ntopology aware imbalance is worst imbalance between 2 connected partitions\n"
-        s += f"theoretical sequential topology aware imbalance:\n"
-        s += f"forwad {topology_aware_sequential_f_imbalance:.3f}\n"
-        s += f"backward {topology_aware_sequential_b_imbalance:.3f}\n"
-        s += f"theoretical parallel topology aware imbalance:\n"
-        s += f"forwad {topology_aware_parallel_f_imbalance:.3f}\n"
-        s += f"backward {topology_aware_parallel_b_imbalance:.3f}\n"
+        s += "\ntopology aware balance is worst balance between 2 connected partitions\n"
+        s += f"theoretical sequential topology aware balance:\n"
+        s += f"forwad {topology_aware_sequential_f_balance:.3f}\n"
+        s += f"backward {topology_aware_sequential_b_balance:.3f}\n"
+        s += f"theoretical parallel topology aware balance:\n"
+        s += f"forwad {topology_aware_parallel_f_balance:.3f}\n"
+        s += f"backward {topology_aware_parallel_b_balance:.3f}\n"
 
-        s += f"\nreal topology aware imbalance:\n"
-        s += f"forwad {topology_aware_real_f_imbalance:.3f}\nbackward {topology_aware_real_b_imbalance:.3f}\n"
+        s += f"\nreal topology aware balance:\n"
+        s += f"forwad {topology_aware_real_f_balance:.3f}\nbackward {topology_aware_real_b_balance:.3f}\n"
 
         s += f"\ncommunication volumes size of activations of each partition\n"
         for idx, volume in comm_volume.items():
             s += f"{idx}: {volume}\n"
 
         print(s)
+    return real_f_balance, real_b_balance
 
 
 #################################
@@ -396,18 +397,18 @@ def extract_time(w, forward=False):
 
 
 ####################################
-# imbalance computation
+# balance computation
 # ##################################
 
 
-def worst_imbalance(times):
+def worst_balance(times):
     return min(times.values()) / max(times.values())
 
 
-def topology_aware_imbalance(f_times, b_times, cutting_edges):
+def topology_aware_balance(f_times, b_times, cutting_edges):
     ''' find the lowest balance between 2 connected partitions
     '''
-    f_imbalance = b_imbalance = 10
+    f_balance = b_balance = 10
     for u, v in cutting_edges:
         f_ratio = min(f_times[u.part], f_times[v.part]) / \
             max(f_times[u.part], f_times[v.part])
@@ -415,13 +416,13 @@ def topology_aware_imbalance(f_times, b_times, cutting_edges):
         b_ratio = min(b_times[u.part], b_times[v.part]) / \
             max(b_times[u.part], b_times[v.part])
 
-        if f_ratio < f_imbalance:
-            f_imbalance = f_ratio
+        if f_ratio < f_balance:
+            f_balance = f_ratio
 
-        if b_ratio < b_imbalance:
-            b_imbalance = b_ratio
+        if b_ratio < b_balance:
+            b_balance = b_ratio
 
-    return f_imbalance, b_imbalance
+    return f_balance, b_balance
 
 
 ######################
