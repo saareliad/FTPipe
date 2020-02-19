@@ -1,6 +1,5 @@
 import traceback
-from multiprocessing import Process
-from multiprocessing import Queue
+from torch.multiprocessing import Process, Queue
 from typing import Any, List, Optional
 import torch
 from torch import Tensor
@@ -18,7 +17,7 @@ class Worker(Process):
     def __init__(self, backend, world_size: int, stage_id: int, rank: int, ranks_in_stage: int, model: Module, stateStack: StateStack, IO: RankIO,
                  send_input_gradient: List[bool], command_queue: Queue, groups: List[List[int]], use_delayedNorm: bool, optimizer: Optional[Optimizer],
                  buffer_sync: SyncBuffersMode, parameter_sync: SyncParametersMode, step_mode: StepEveryMode):
-        super(Worker, self).__init__(self, name=f"stage_{stage_id+1}_Worker_{rank+1}",
+        super(Worker, self).__init__(name=f"stage_{stage_id+1}_Worker_{rank+1}",
                                      daemon=True)
         self.stage_id = stage_id
         self.rank = rank
@@ -30,7 +29,6 @@ class Worker(Process):
         self.training = True
         self.command_queue = command_queue
         self.use_delayedNorm = use_delayedNorm
-        self.num_DEBUG_messages = 0
         self.state_stack = stateStack
         self.num_minibatches = 0
         self.minibatch_idx = 0
@@ -43,10 +41,10 @@ class Worker(Process):
                                                              groups)
 
         # we sort to be aboslutly sure we reduce in the same order
-        buffers = sorted(self.model.named_buffers(), lambda t: t[0])
+        buffers = sorted(self.model.named_buffers(), key=lambda t: t[0])
         self.buffers = [t[1] for t in buffers]
 
-        parameters = sorted(self.model.named_parameters(), lambda t: t[0])
+        parameters = sorted(self.model.named_parameters(), key=lambda t: t[0])
         self.parameters = [t[1] for t in parameters]
 
     def run(self):
@@ -61,15 +59,15 @@ class Worker(Process):
                     continue
 
                 # receive minibatch
-                inputs = self.IO.get(forward=self.FORWARD)
+                inputs = self.IO.receive(forward=self.FORWARD)
 
                 # process minibatch
                 if self.FORWARD:
                     outputs = self.forward(inputs)
-                    self.IO.put(outputs, forward=True)
+                    self.IO.send(outputs, forward=True)
                 else:
                     grads = self.backward(inputs)
-                    self.IO.put(grads, forward=False)
+                    self.IO.send(grads, forward=False)
                 self.minibatch_idx += 1
 
                 if self.should_sync_parameters():
@@ -93,7 +91,7 @@ class Worker(Process):
         with torch.no_grad():
             if self.training:
                 save_state = self.minibatch_idx == 0
-                self.state_stack.push(inputs, save_state=save_state)
+                inputs = self.state_stack.push(inputs, save_state=save_state)
             return self.model(*inputs)
 
     def backward(self, grad_input: List[Optional[Tensor]]) -> List[Optional[Tensor]]:
@@ -178,18 +176,21 @@ class Worker(Process):
                 p.grad.data /= self.ranks_in_stage
 
     def _init_process_groups(self, backend, world_size, groups: List[List[int]]):
-        dist.init_process_group(backend, init_method='tcp://127.0.0.1:8000',
-                                world_size=world_size, rank=self.rank)
+        # right know we use process groups only for replicated stages
+        # so we do not initialize the backend if there is no need
+        if groups:
+            dist.init_process_group(backend, init_method='tcp://127.0.0.1:8000',
+                                    world_size=world_size, rank=self.rank)
+            stage_group = None
+            for group in groups:
+                pg = dist.new_group(ranks=group, backend=backend)
+                if self.rank in group:
+                    # only one group per replicated stage
+                    assert self.stage_process_group is None
+                    stage_group = pg
+            return stage_group
 
-        stage_group = None
-        for group in groups:
-            pg = dist.new_group(ranks=group, backend=backend)
-            if self.rank in group:
-                # only one group per replicated stage
-                assert self.stage_process_group is None
-                stage_group = pg
-
-        return stage_group
+        return None
 
 
 # workplan:

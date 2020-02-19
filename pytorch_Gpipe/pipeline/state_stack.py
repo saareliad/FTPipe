@@ -16,14 +16,15 @@ class StateStack():
         self.states = deque()
         self.activations = deque()
 
-    def push(self, xs: List[Tensor], save_state: bool = False):
-        cloned = [x.clone() for x in xs]
-        self.activations.append(cloned)
+    def push(self, xs: List[Tensor], save_state: bool = False) -> List[Tensor]:
+        xs = [x.data.clone() for x in xs]
+        self.activations.append(xs)
         if save_state:
             if self.device.type == 'cpu':
                 self.states.appendleft(torch.get_rng_state())
             else:
                 self.states.appendleft(torch.cuda.get_rng_state(self.device))
+        return xs
 
     def pop(self, remove_state: bool = False) -> List[Tensor]:
         if len(self.activations) == 0 or len(self.states) == 0:

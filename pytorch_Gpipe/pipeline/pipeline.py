@@ -1,6 +1,6 @@
 from collections import defaultdict
 from itertools import chain, groupby
-from multiprocessing import Queue
+from torch.multiprocessing import Queue
 from typing import Callable, Dict, Iterator, List, Optional, Tuple, Any, Union
 
 import torch
@@ -39,7 +39,7 @@ class Pipeline():
 
         self.IO = master_IO
         self.command_queues = command_queues
-
+        world_size = len(self.command_queues)
         shards = defaultdict(list)
         workers = defaultdict(list)
 
@@ -47,10 +47,11 @@ class Pipeline():
         for stage_id, rank, ranks_in_stage, io, command_queue, state_stack, model, optimizer in worker_args.values():
             use_delayedNorm = any(isinstance(m, DelayedBatchNorm)
                                   for m in model.modules())
-            send_input_gradient = [k in self.input_names
+            send_input_gradient = [k not in self.input_names
                                    for k in configs[stage_id]['inputs']]
 
-            worker = Worker(backend, len(self.command_queues), stage_id, rank, ranks_in_stage, model, state_stack, io,
+            model = model.share_memory()
+            worker = Worker(backend, world_size, stage_id, rank, ranks_in_stage, model, state_stack, io,
                             send_input_gradient, command_queue, groups, use_delayedNorm, optimizer,
                             buffer_sync, parameter_sync, step_mode)
 
@@ -66,7 +67,6 @@ class Pipeline():
             worker.start()
 
         self.training = True
-        self.num_DEBUG_messages = 0
 
     def __call__(self, *xs: Tensor, num_chunks: Optional[int] = None):
         '''runs the pipeline forward pass input is split across batch dim
@@ -147,7 +147,13 @@ class Pipeline():
             self.IO.receive(forward=False)
 
     def train_epoch(self, dataloader: DataLoader, loss_function: Callable, num_chunks: Optional[int] = None) -> Iterator[Tuple]:
-        """perform a train epoch using the given dataloader and loss function yielding the loss for each batch
+        """perform a train epoch using the given dataloader and loss function yielding the loss for each batch.
+
+           optimizers for each stage must be given as part of the config for actual training. because although parameters/buffers are shared.
+           gradients are process local and are not exposed outside of the stage workers.
+           for example:
+               for batch_output,batch_loss in pipeline.train_epoch(train_dl,loss_fn,num_chunks):
+                    optimizer.step() # this will not update parameters as gradients will be None
 
         Parameters:
             dataloader: Dataloader
@@ -163,10 +169,6 @@ class Pipeline():
                 if not given defaults to number of partitions
         Yields:
             the output and loss for every batch
-
-        for example:
-            for outputs,loss in pipeline.train_epoch(train_dl,loss_fn,num_chunks):
-                # do something with outputs and loss like calculate statistics
         """
         self.train()
         for xs, ys in dataloader:
@@ -326,22 +328,22 @@ class Pipeline():
         return (len(self.workers) > 0) and all(w.is_alive() for w in self.workers)
 
     @property
-    def workers(self):
+    def workers(self) -> List[Worker]:
         return [w for stage in self._workers.values() for w in stage]
 
     @property
-    def shards(self):
+    def shards(self) -> List[torch.nn.Module]:
         return [s for stage in self._shards.values() for s in stage]
 
     @property
-    def stage_representatives(self):
+    def stage_representatives(self) -> List[torch.nn.Module]:
         """return one shard from each stage
            used when accessing the models state as we do not want to return the state of each stage
            and not of every stage replica
         Returns:
             List[nn.Module]
         """
-        return [s[0] for s in self._shards]
+        return [s[0] for s in self._shards.values()]
 
 # TODO think about multinode support
 # TODO think about multinode with stage replication
@@ -358,26 +360,29 @@ class Pipeline():
         # model legacy ignored
         # replicas stage models
         # ranks devices assigned to this stage
-        # optimizers optional optimizers assigned to this stage
+        # optimizers optimizers assigned to this stage
 
-def create_worker_args(configs, model_inputs, model_outputs, output_device, split_dim):
+def create_worker_args(configs: Dict, model_inputs: List[str],
+                       model_outputs: List[str], output_device: torch.device,
+                       split_dim: int) -> Tuple[RankIO, List[Queue], List[List[int]], Dict]:
     consumers = defaultdict(list)
     producers = dict()
 
+    master_stage = master_rank = -1
     # we think of the master as the one who produces model inputs and consumes model outputs
     for i in model_inputs:
-        producers[i] = -1
+        producers[i] = master_stage
     for o in model_outputs:
-        consumers[o].append(-1)
+        consumers[o].append(master_stage)
 
     stage_to_ranks = defaultdict(list)
-    stage_to_ranks[-1].append(-1)
+    stage_to_ranks[master_stage].append(master_rank)
     rank_to_device = dict()
-    rank_to_device[-1] = output_device
+    rank_to_device[master_rank] = output_device
     n_ranks = 0
     rank_to_optimizer = dict()
     rank_to_model = dict()
-    rank_to_stage = dict()
+    rank_to_stage = {master_rank: master_stage}
     for stage_id, config in configs.items():
         for o in config['outputs']:
             producers[o] = stage_id
@@ -394,6 +399,7 @@ def create_worker_args(configs, model_inputs, model_outputs, output_device, spli
         # assign optimizers if given we expect that every replica will have an optimizer or none at all
         n_optimizers = len(config['optimizers'])
         assert n_optimizers in [0, stage_size]
+
         for idx, optimizer in enumerate(config['optimizers']):
             assert isinstance(optimizer, Optimizer)
             rank_to_optimizer[n_ranks + idx] = optimizer
@@ -404,8 +410,13 @@ def create_worker_args(configs, model_inputs, model_outputs, output_device, spli
             assert replica.device == rank_to_device[n_ranks + idx]
             rank_to_model[n_ranks + idx] = replica
 
+        if n_optimizers == 0 and config['replicas'][0].training:
+            print(
+                f"stage {stage_id} is in training mode and has no optimizers assigned so it's parameters will changed as gradients are process local")
         n_ranks += stage_size
 
+    # create communication channels between stages
+    print("creating communication channels master is stage -1 rank -1")
     rank_to_queues = defaultdict(lambda: defaultdict(list))
     for output, producer_stage in producers.items():
         producer_ranks = stage_to_ranks[producer_stage]
@@ -419,7 +430,7 @@ def create_worker_args(configs, model_inputs, model_outputs, output_device, spli
                 if len(consumer_ranks) == 1:
                     # one to one
                     print(
-                        f"one to one {producer_stage} -> {consumer_stage} activation: {output}")
+                        f"stage[{producer_stage}] -> stage[{consumer_stage}]\nrank{producer_ranks} -> rank{consumer_ranks}\nactivation: {output}\n")
                     queue = Queue()
                     producers_queues = [QueueWrapper(queue,
                                                      consumer_devices[0])]
@@ -428,17 +439,16 @@ def create_worker_args(configs, model_inputs, model_outputs, output_device, spli
                 else:
                     # one to many
                     print(
-                        f"one to many {producer_stage} -> {consumer_stage} activation: {output}")
+                        f"stage[{producer_stage}] -> stage[{consumer_stage}]\nrank{producer_ranks} -> ranks{consumer_ranks}\nactivation: {output}\n")
                     consumers_queues = [Queue() for _ in consumer_ranks]
                     producers_queues = [SplitConnection(consumers_queues,
                                                         split_dim, consumer_devices)]
                     consumers_queues = [QueueWrapper(q, producer_devices[0])
                                         for q in consumers_queues]
-
             elif len(consumer_ranks) == 1:
                 # many to one
                 print(
-                    f"many to one {producer_stage} -> {consumer_stage} activation: {output}")
+                    f"stage[{producer_stage}] -> stage[{consumer_stage}]\nranks{producer_ranks} -> rank{consumer_ranks}\nactivation: {output}\n")
                 producers_queues = [Queue() for _ in producer_ranks]
                 consumers_queues = [SplitConnection(producers_queues,
                                                     split_dim, producer_devices)]
@@ -447,21 +457,30 @@ def create_worker_args(configs, model_inputs, model_outputs, output_device, spli
             else:
                 # many to many
                 print(
-                    f"many to many {producer_stage} -> {consumer_stage} activation: {output}")
+                    f"stage[{producer_stage}] -> stage[{consumer_stage}]")
                 consumers_queues = [Queue() for _ in consumer_ranks]
                 queue_groups = split_to_n(consumers_queues,
                                           len(producer_ranks))
                 device_groups = split_to_n(consumer_devices,
                                            len(producer_ranks))
 
-                producers_queues = [SplitConnection(group, split_dim, devices)
+                # if a producer is assgined only one consumer we use a QueueWrapper to remove the split/merge overhead
+                producers_queues = [SplitConnection(group, split_dim, devices) if len(group) > 1 else QueueWrapper(group[0], devices[0])
                                     for group, devices in zip(queue_groups, device_groups)]
 
                 queues = []
-                for group, device in zip(queue_groups, producer_devices):
+                start = 0
+                end = 0
+                for group, device, producer_rank in zip(queue_groups, producer_devices, producer_ranks):
                     for q in group:
+                        end += 1
                         queues.append(QueueWrapper(q, device))
+                    print(
+                        f"rank[{producer_rank}] -> ranks{consumer_ranks[start:end]}")
+                    start = end
                 consumers_queues = queues
+
+                print(f"activation: {output}\n")
 
             for rank, queue in zip(producer_ranks, producers_queues):
                 rank_to_queues[rank]['outputs'].append((output, queue))
@@ -483,24 +502,32 @@ def create_worker_args(configs, model_inputs, model_outputs, output_device, spli
     # preserve order of model inputs and outptus
     scope_to_number = {s: i for i, s in
                        enumerate(chain(model_inputs, model_outputs))}
-    rank_to_queues[-1]['inputs'] = sorted(rank_to_queues[-1]['inputs'],
+    rank_to_queues[master_rank]['inputs'] = sorted(rank_to_queues[-1]['inputs'],
                                           key=lambda t: scope_to_number[t[0]])
-    rank_to_queues[-1]['outputs'] = sorted(rank_to_queues[-1]['outputs'],
+    rank_to_queues[master_rank]['outputs'] = sorted(rank_to_queues[-1]['outputs'],
                                            key=lambda t: scope_to_number[t[0]])
 
     # create IOs
     rank_to_IO = dict()
     for rank, io_config in rank_to_queues.items():
-        io_in = io_config['inputs']
+        io_in = [t[1] for t in io_config['inputs']]
         io_out = []
 
-        # if an output need to sent to multiple stages we will replicate it
+        # if an output needs to sent to multiple stages we will replicate it
         for name, group in groupby(io_config['outputs'], key=lambda t: t[0]):
             group = list(group)
             if len(group) == 1:
                 io_out.append(group[0][1])
             else:
                 io_out.append(ReplicatedConnection([t[1] for t in group]))
+        print(rank)
+        print("in")
+        for q in io_in:
+            print(type(q))
+        print("out")
+        for q in io_out:
+            print(type(q))
+        print()
 
         rank_to_IO[rank] = RankIO(io_in, io_out)
 
@@ -510,7 +537,7 @@ def create_worker_args(configs, model_inputs, model_outputs, output_device, spli
         if len(ranks) > 1:
             groups.append(ranks)
 
-    master_IO = rank_to_IO.pop(-1)
+    master_IO = rank_to_IO.pop(master_rank)
     command_queues = []
     worker_args = dict()
     for rank in sorted(rank_to_IO.keys()):

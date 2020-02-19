@@ -4,11 +4,7 @@ import torch
 from torch import Tensor
 from .messages import Result
 
-from multiprocessing import Queue as PQueue
-from queue import Queue as TQueue
-
-
-Queue = Union[TQueue, PQueue]
+from torch.multiprocessing import Queue
 
 
 class QueueWrapper():
@@ -25,12 +21,12 @@ class QueueWrapper():
     def send(self, result: Result, block=False):
         if isinstance(result.data, Tensor):
             result = Result(data=result.get().to(self.destination_device,
-                                                 non_blocking=True))
+                                                 non_blocking=not block))
 
         self.queue.put(result, block=block)
 
-    def receive(self) -> Result:
-        return self.queue.get()
+    def receive(self, block=True) -> Result:
+        return self.queue.get(block=block)
 
 
 class SplitConnection():
@@ -59,8 +55,8 @@ class SplitConnection():
         for r, q in zip(data, self.queues):
             q.send(r, block=block)
 
-    def receive(self) -> Result:
-        xs = [q.receive().get() for q in self.queues]
+    def receive(self, block=True) -> Result:
+        xs = [q.receive(block=block).get() for q in self.queues]
 
         notNone = [x for x in xs if not (x is None)]
         if len(notNone) == 0:
@@ -90,8 +86,8 @@ class ReplicatedConnection():
         for connection in self.connections:
             connection.send(data, block=block)
 
-    def receive(self) -> Result:
-        inputs = [c.receive().get() for c in self.connections]
+    def receive(self, block=True) -> Result:
+        inputs = [c.receive(block=block).get() for c in self.connections]
         notNone = [x for x in inputs if not (x is None)]
         if len(notNone) == 0:
             data = None
@@ -117,13 +113,13 @@ class RankIO():
         self.in_connections = in_connections
         self.out_connections = out_connections
 
-    def receive(self, forward: bool) -> List[Optional[Tensor]]:
+    def receive(self, forward: bool, block=True) -> List[Optional[Tensor]]:
         if forward:
             queues = self.in_connections
         else:
             queues = self.out_connections
 
-        return [queue.receive().get() for queue in queues]
+        return [queue.receive(block=block).get() for queue in queues]
 
     def send(self, data: List[Optional[Tensor]], forward: bool, block: bool = False):
         self._send([Result(data=d) for d in data], forward, block=block)
@@ -149,4 +145,5 @@ class RankIO():
 # 2 workers are connected using a QueueWrapper that handles the device transfer
 # when a worker is connected to a replicated stage it will use splitConnection to split/merge the activation/gradient accross the batch dim
 # when a worker sends an output to multiple stages it will use a replicatedConnection to send the same data to each stage
-# RankIO is a group of communication channles where each channel corresponds to a unique stage input/output
+# RankIO is a group of communication channels where each channel corresponds to a unique stage input/output
+# sends are nonblocking and recieve are blocking by default nonblocking recive are not working(we use queues)
