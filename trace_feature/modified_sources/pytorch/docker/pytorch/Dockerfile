@@ -37,7 +37,7 @@ RUN TORCH_CUDA_ARCH_LIST="3.5 5.2 6.0 6.1 7.0+PTX" TORCH_NVCC_FLAGS="-Xfatbin -c
 # RUN pip uninstall pillow
 # RUN CC="cc -mavx2" pip install -U --force-reinstall pillow-simd
 
-RUN if [ "$WITH_TORCHVISION" = "1" ] ; then git clone https://github.com/pytorch/vision.git@v0.5.0 && cd vision && pip install -v . ; else echo "building without torchvision" ; fi
+RUN if [ "$WITH_TORCHVISION" = "1" ] ; then git clone https://github.com/pytorch/vision.git && cd vision && git checkout v0.5.0 && pip install -v . ; else echo "building without torchvision" ; fi
 
 WORKDIR /workspace
 RUN chmod -R a+w .

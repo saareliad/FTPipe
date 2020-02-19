@@ -10,10 +10,11 @@ def run_analysis(sample,
                  n_iter,
                  recomputation=True,
                  bandwidth_gps=12,
-                 verbose=True):
+                 verbose=True,
+                 async_pipeline=False):
     # thoeretical analysis
     sequential_f, sequential_b, parallel_f, parallel_b = theoretical_analysis(
-        graph, config, recomputation=recomputation)
+        graph, config, recomputation=recomputation, async_pipeline=async_pipeline)
     edges = edge_cut(graph)
     # theoretical analysis based on the graph assuming the computation is sequential
     theoretical_sequential_b_imbalance = worst_imbalance(sequential_b)
@@ -32,7 +33,8 @@ def run_analysis(sample,
                                       config,
                                       n_iter + 1,
                                       recomputation=recomputation,
-                                      bandwidth_gps=bandwidth_gps)
+                                      bandwidth_gps=bandwidth_gps,
+                                      async_pipeline=async_pipeline)
     real_b_imbalance = worst_imbalance(real_b_times)
     real_f_imbalance = worst_imbalance(real_f_times)
     (topology_aware_real_f_imbalance,
@@ -47,6 +49,8 @@ def run_analysis(sample,
         s += f"number of cutting edges: {len(edges)}\n\n"
 
         s += f"backward times {'do not ' if not recomputation else ''}include recomputation\n"
+        if async_pipeline and recomputation:
+            s += f"Analysis for async_pipeline=True: last partition will not do recomputation.\n"
 
         s += f"\ntheoretical times are execution time based on sum of graph weights ms\n"
         s += f"\nsequential forward {sequential_f}\nsequential backward {sequential_b}\n"
@@ -84,7 +88,6 @@ def run_analysis(sample,
             s += f"{idx}: {volume}\n"
 
         print(s)
-    
 
 
 #################################
@@ -95,7 +98,8 @@ def profile_execution(model_inputs,
                       partition_config,
                       n,
                       recomputation=True,
-                      bandwidth_gps=12):
+                      bandwidth_gps=12,
+                      async_pipeline=False):
     '''perfrom forward/backward passes and measure execution times accross n batches
     '''
     n_partitions = sum([1 for k in partition_config if isinstance(k, int)])
@@ -116,6 +120,13 @@ def profile_execution(model_inputs,
         # perform one run of the partitions
         while len(parts) > 0:
             idx = parts.popleft()
+
+            # For async pipeline, do no use recomputation on last partition
+            is_last_partition = (len(parts) == 0)
+            partition_specific_recomputation = recomputation
+            if async_pipeline and is_last_partition:
+                partition_specific_recomputation = False
+
             if all(tensor in activations
                    for tensor in partition_config[idx]['inputs']):
                 inputs = [
@@ -137,12 +148,12 @@ def profile_execution(model_inputs,
                     f_time, b_time, outputs = cuda_time(
                         partition_config[idx]['model'],
                         inputs,
-                        recomputation=recomputation)
+                        recomputation=partition_specific_recomputation)
                 else:
                     f_time, b_time, outputs = cpu_time(
                         partition_config[idx]['model'],
                         inputs,
-                        recomputation=recomputation)
+                        recomputation=partition_specific_recomputation)
 
                 # output statistics
                 out_size_mb = 0
@@ -215,10 +226,12 @@ def cuda_backward(partition, inputs, recomputation=True):
     inputs = [i.to('cuda') for i in inputs]
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
-    torch.cuda.synchronize(device='cuda')
-    start.record()
-    outputs = partition(*inputs)
-    if not recomputation:
+    if recomputation:
+        torch.cuda.synchronize(device='cuda')
+        start.record()
+        outputs = partition(*inputs)
+    else:
+        outputs = partition(*inputs)
         start = torch.cuda.Event(enable_timing=True)
         torch.cuda.synchronize(device='cuda')
         start.record()
@@ -300,7 +313,7 @@ def edge_cut(graph):
     return edges
 
 
-def theoretical_analysis(graph, partition_config, recomputation=True):
+def theoretical_analysis(graph, partition_config, recomputation=True, async_pipeline=False):
     ''' find execution time of partitions based on the model's graph using 2 a sequential assumption and parallel assumption
         the sequential assumption is that in the partition all operation are linear.
         the parallel assumption assumes that all computation paths are concurrent.
@@ -328,6 +341,11 @@ def theoretical_analysis(graph, partition_config, recomputation=True):
 
     # new way of measuring time as longest path where all paths are concurrent
     for i in range(n_parts):
+        partition_sepsific_recomputation = recomputation
+        is_last_partition = (i == n_parts - 1)
+        if async_pipeline and is_last_partition:
+            partition_sepsific_recomputation = False
+
         outputs = [nodes[name] for name in partition_config[i]['outputs']]
         cache = dict()
         parallel_f[i] = 0
@@ -337,7 +355,7 @@ def theoretical_analysis(graph, partition_config, recomputation=True):
             parallel_f[i] = max(parallel_f[i], f)
             parallel_b[i] = max(parallel_b[i], b)
 
-        if recomputation:
+        if partition_sepsific_recomputation:
             sequential_b[i] += sequential_f[i]
             parallel_b[i] += parallel_f[i]
 

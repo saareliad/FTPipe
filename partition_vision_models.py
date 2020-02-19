@@ -7,7 +7,7 @@ import argparse
 import importlib
 from misc import run_analysis, run_partitions
 
-_RESENETS = dict(resnet50_imagnet=dict(
+_RESENETS = dict(resnet50_imagenet=dict(
     block=Bottleneck, layers=[3, 4, 6, 3], num_classes=1000))
 
 _WIDE_RESNETS = dict(
@@ -41,12 +41,27 @@ _AMOEBANET_D = dict(amoebanet_4x512_c10=dict(num_layers=4,
                                               num_filters=512,
                                               num_classes=100))
 
-MODEL_CONFIGS = {**_WIDE_RESNETS, **_AMOEBANET_D, **_RESENETS}
+MODEL_CFG_TO_SAMPLE_MODEL = {}
+MODEL_CONFIGS = {}
+# CFG_TO_GENERATED_FILE_NAME = {}
 
-# (note) originally used to get generated pipeline name later
-MODEL_CFG_TO_SAMPLE_MODEL = {k: WideResNet for k in _WIDE_RESNETS.keys()}
-MODEL_CFG_TO_SAMPLE_MODEL.update({k: amoebanetd for k in _AMOEBANET_D.keys()})
-MODEL_CFG_TO_SAMPLE_MODEL.update({k: ResNet for k in _RESENETS.keys()})
+
+def _register_model(dict_params, model_cls):
+    global MODEL_CFG_TO_SAMPLE_MODEL
+    global MODEL_CONFIGS
+    # global CFG_TO_GENERATED_FILE_NAME
+
+    MODEL_CONFIGS.update(dict_params)
+    MODEL_CFG_TO_SAMPLE_MODEL.update(
+        {k: model_cls
+         for k in dict_params.keys()})
+
+    # CFG_TO_GENERATED_FILE_NAME = {i: i for i in MODEL_CONFIGS.keys()}
+
+
+_register_model(_WIDE_RESNETS, WideResNet)
+_register_model(_RESENETS, ResNet)
+_register_model(_AMOEBANET_D, amoebanetd)
 
 DATASETS = ['cifar10', 'cifar100', 'imagenet']
 
@@ -55,6 +70,8 @@ def create_model(cfg='wrn_16x4'):
     return MODEL_CFG_TO_SAMPLE_MODEL[cfg](**MODEL_CONFIGS[cfg])
 
 
+# TODO: option to be more accurate if we use real data,
+# taking stuff like sparsity in considuration.
 def create_random_sample(args, analysis=False):
     dataset = args.dataset
     if analysis:
@@ -133,8 +150,8 @@ if __name__ == "__main__":
     parser.add_argument('--model',
                         default='wrn_16x4',
                         choices=MODEL_CONFIGS.keys())
-    parser.add_argument('--dataset', default='cifar10', choices=DATASETS)
-    parser.add_argument('--batch_size', type=int, default=128)
+    parser.add_argument('-d', '--dataset', default='cifar10', choices=DATASETS)
+    parser.add_argument('-b', '--batch_size', type=int, default=128)
     parser.add_argument(
         '--model_too_big',
         action='store_true',
@@ -142,8 +159,8 @@ if __name__ == "__main__":
         help=
         "if the model is too big run the whole partitioning process on CPU, "
         "and drink a cup of coffee in the meantime")
-    parser.add_argument('--n_partitions', type=int, default=4)
-    parser.add_argument('--output_file', default='wrn_16x4')
+    parser.add_argument('-p', '--n_partitions', type=int, default=4)
+    parser.add_argument('-o', '--output_file', default='wrn_16x4')
     parser.add_argument('--no_auto_file_name',
                         action='store_true',
                         default=False,
@@ -164,7 +181,7 @@ if __name__ == "__main__":
         '--no_recomputation',
         action='store_true',
         default=False,
-        help="whether to use recomputation for the backward pass")
+        help="whether to (not) use recomputation for the backward pass")
     parser.add_argument('--no_analysis',
                         action='store_true',
                         default=False,
@@ -183,7 +200,11 @@ if __name__ == "__main__":
         default=8,
         type=int,
         help="batch size to use during the post partition analysis")
-
+    parser.add_argument("-a", "--async_pipeline",
+                        default=False,
+                        action="store_true",
+                        help="Do analysis for async pipeline")
+    parser.add_argument("--dot", default=False, action="store_true", help="Save and plot it using graphviz")
     args = parser.parse_args()
     args.auto_file_name = not args.no_auto_file_name
     if args.auto_file_name:
@@ -223,8 +244,9 @@ if __name__ == "__main__":
                            args.bandwidth_gps),
                        n_iter=n_iter)
 
-    graph.save_as_pdf(args.output_file, ".")
-    graph.serialize(args.output_file)
+    if args.dot:
+        graph.save_as_pdf(args.output_file, ".")
+        graph.serialize(args.output_file)
 
     generated = importlib.import_module(args.output_file)
     create_pipeline_configuration = generated.create_pipeline_configuration
@@ -246,5 +268,6 @@ if __name__ == "__main__":
                                        n_iter,
                                        recomputation=recomputation,
                                        bandwidth_gps=bandwidth_gps,
-                                       verbose=True)
+                                       verbose=True,
+                                       async_pipeline=args.async_pipeline)
     # test_gpipe_stuff()
