@@ -345,8 +345,11 @@ class Pipeline():
         """
         return [s[0] for s in self._shards.values()]
 
-# TODO think about multinode support
-# TODO think about multinode with stage replication
+# TODO add easy way to create a full replicated config with optimizers ranks etc.
+# TODO add shape descovery phase if we wish to pass data using torch.distributed...:
+#  a dummy run so each worker will know the size of its' buffers
+# TODO think about multinode support the simplest solution is to split the config and add "distributed glue" between masters
+# TODO think about multinode with stage replication(a stage must reside on a single server if not complicated but doable)
 # TODO add fancy pants stats logging
 # TODO internal and external documentation
 
@@ -421,13 +424,14 @@ def create_worker_args(configs: Dict, model_inputs: List[str],
     for output, producer_stage in producers.items():
         producer_ranks = stage_to_ranks[producer_stage]
         producer_devices = [rank_to_device[r] for r in producer_ranks]
-
+        n_producers = len(producer_ranks)
         for consumer_stage in consumers[output]:
             consumer_ranks = stage_to_ranks[consumer_stage]
             consumer_devices = [rank_to_device[r] for r in consumer_ranks]
+            n_consumers = len(consumer_ranks)
 
-            if len(producer_ranks) == 1:
-                if len(consumer_ranks) == 1:
+            if n_producers == 1:
+                if n_consumers == 1:
                     # one to one
                     print(
                         f"stage[{producer_stage}] -> stage[{consumer_stage}]\nrank{producer_ranks} -> rank{consumer_ranks}\nactivation: {output}\n")
@@ -445,10 +449,11 @@ def create_worker_args(configs: Dict, model_inputs: List[str],
                                                         split_dim, consumer_devices)]
                     consumers_queues = [QueueWrapper(q, producer_devices[0])
                                         for q in consumers_queues]
-            elif len(consumer_ranks) == 1:
+            elif n_consumers == 1:
                 # many to one
-                print(
-                    f"stage[{producer_stage}] -> stage[{consumer_stage}]\nranks{producer_ranks} -> rank{consumer_ranks}\nactivation: {output}\n")
+                print(f"stage[{producer_stage}] -> stage[{consumer_stage}]")
+                print(f"ranks{producer_ranks} -> rank{consumer_ranks}")
+                print(f"activation: {output}\n")
                 producers_queues = [Queue() for _ in producer_ranks]
                 consumers_queues = [SplitConnection(producers_queues,
                                                     split_dim, producer_devices)]
@@ -456,31 +461,51 @@ def create_worker_args(configs: Dict, model_inputs: List[str],
                                     for q in producers_queues]
             else:
                 # many to many
+                # several producers for one consumer or vice versa
+                # each rank of the minority will be connected to several majority ranks using a splitConnection
                 print(
                     f"stage[{producer_stage}] -> stage[{consumer_stage}]")
-                consumers_queues = [Queue() for _ in consumer_ranks]
-                queue_groups = split_to_n(consumers_queues,
-                                          len(producer_ranks))
-                device_groups = split_to_n(consumer_devices,
-                                           len(producer_ranks))
 
-                # if a producer is assgined only one consumer we use a QueueWrapper to remove the split/merge overhead
-                producers_queues = [SplitConnection(group, split_dim, devices) if len(group) > 1 else QueueWrapper(group[0], devices[0])
+                if n_producers <= n_consumers:
+                    majority_ranks, majority_devices = consumer_ranks, consumer_devices
+                    minority_ranks, minority_devices = producer_ranks, producer_devices
+                else:
+                    majority_ranks, majority_devices = producer_ranks, producer_devices
+                    minority_ranks, minority_devices = consumer_ranks, consumer_devices
+
+                minority_size = len(minority_ranks)
+
+                majority_queues = [Queue() for _ in majority_ranks]
+                queue_groups = split_to_n(majority_queues, minority_size)
+                device_groups = split_to_n(majority_devices, minority_size)
+
+                # if a minority rank is assgined only one majority rank we use a QueueWrapper to remove the split/merge overhead
+                minority_queues = [SplitConnection(group, split_dim, devices) if len(group) > 1 else QueueWrapper(group[0], devices[0])
                                     for group, devices in zip(queue_groups, device_groups)]
 
                 queues = []
                 start = 0
                 end = 0
-                for group, device, producer_rank in zip(queue_groups, producer_devices, producer_ranks):
+                for group, device, minority_rank in zip(queue_groups, minority_devices, minority_ranks):
                     for q in group:
                         end += 1
                         queues.append(QueueWrapper(q, device))
+                    if majority_ranks is consumer_ranks:
+                        print(
+                            f"rank[{minority_rank}] -> ranks{majority_ranks[start:end]}")
+                    else:
                     print(
-                        f"rank[{producer_rank}] -> ranks{consumer_ranks[start:end]}")
+                            f"ranks{majority_ranks[start:end]} -> rank[{minority_rank}]")
                     start = end
-                consumers_queues = queues
-
+                majority_queues = queues
                 print(f"activation: {output}\n")
+
+                if n_producers <= n_consumers:
+                    producers_queues = minority_queues
+                    consumers_queues = majority_queues
+                else:
+                    producers_queues = majority_queues
+                    consumers_queues = minority_queues
 
             for rank, queue in zip(producer_ranks, producers_queues):
                 rank_to_queues[rank]['outputs'].append((output, queue))

@@ -31,6 +31,16 @@ class Stage2(nn.Module):
         self.l = nn.Linear(100, 100)
 
     def forward(self, x):
+        return (self.l(x),)
+
+
+class Stage3(nn.Module):
+    def __init__(self):
+        super(Stage3, self).__init__()
+        self.device = torch.device('cpu')
+        self.l = nn.Linear(100, 100)
+
+    def forward(self, x):
         x = self.l(x)
         return (x, x + 1)
 
@@ -39,7 +49,7 @@ if __name__ == "__main__":
     config = {
         'model inputs': ['input0'],
         'model outputs': ['output1', 'output0', 'output2'],
-        0: {
+        0: {  # p2p
             'inputs': ['input0'],
             'outputs': ['output2'],
             'model': Stage0(),
@@ -47,7 +57,7 @@ if __name__ == "__main__":
             'replicas': [Stage0().share_memory() for _ in range(1)],
             'optimizers': []
         },
-        1: {
+        1: {  # replicated input p2mp
             'inputs': ['input0'],
             'outputs': ['t0'],
             'model': Stage1(),
@@ -55,12 +65,20 @@ if __name__ == "__main__":
             'replicas': [Stage1().share_memory() for _ in range(2)],
             'optimizers': []
         },
-        2: {
+        2: {  # mp2mp expand
             'inputs': ['t0'],
-            'outputs': ['output0', 'output1'],
+            'outputs': ['t1'],
             'model': Stage2(),
             'ranks': [torch.device('cpu') for _ in range(4)],
             'replicas': [Stage2().share_memory() for _ in range(4)],
+            'optimizers': []
+        },
+        3: {  # mp2mp reduce
+            'inputs': ['t1'],
+            'outputs': ['output0', 'output1'],
+            'model': Stage3(),
+            'ranks': [torch.device('cpu') for _ in range(2)],
+            'replicas': [Stage3().share_memory() for _ in range(2)],
             'optimizers': []
         }
     }
@@ -78,6 +96,8 @@ if __name__ == "__main__":
 
     grads = torch.autograd.grad([loss], [o0, o1, o2])
 
+    assert (o0.shape == o1.shape) and(o1.shape == o2.shape)
+    assert o0.shape == torch.Size([240, 100])
     print("master before backward")
     print(model._shards[0][0].l.weight)
     model.backward(grads)
