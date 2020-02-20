@@ -141,7 +141,7 @@ def generateImports(layer_classes: Dict[str, Module]) -> List[str]:
     imports = 'import torch\nfrom torch import Tensor\nimport torch.nn as nn\nimport torch.nn.functional as F\n'
     imports += 'from itertools import chain\n'
     imports += 'import operator\n'
-    imports += 'from typing import Optional, Tuple, Iterator, Iterable,OrderedDict,Dict\n'
+    imports += 'from typing import Optional, Tuple, Iterator, Iterable, OrderedDict, Dict\n'
     imports += 'import collections'
     imports += '\n'
     unique_classes = set(layer_classes.values())
@@ -205,8 +205,8 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
 
     # function header
     lines = [
-        f"def create_pipeline_configuration(model,DEBUG=False,partitions_only=False):",
-        f"layer_dict = layerDict(model,depth={graph.depth},basic_blocks=({basic_blocks}))",
+        f"def create_pipeline_configuration(model, DEBUG=False, partitions_only=False):",
+        f"layer_dict = layerDict(model, depth={graph.depth}, basic_blocks=({basic_blocks}))",
         "tensor_dict = tensorDict(model)",
         f"\n{tab}# now constructing the partitions in order"
     ]
@@ -239,7 +239,7 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
             f"layers = {{l: layer_dict[l] for l in layer_scopes}}",
             f"buffers = {{b: tensor_dict[b] for b in buffer_scopes}}",
             f"parameters = {{p: tensor_dict[p] for p in parameter_scopes}}",
-            f"partition{idx} = {model_class}Partition{idx}(layers,buffers,parameters)\n"
+            f"partition{idx} = {model_class}Partition{idx}(layers, buffers, parameters)\n"
         ])
 
     # create and return the partition config
