@@ -60,7 +60,9 @@ def build_graph(model: torch.nn.Module,
                 kwargs: Optional[Dict] = None,
                 max_depth: int = 1000,
                 basic_blocks: Optional[Tuple[torch.nn.Module, ...]] = None,
-                n_iter: int = 10) -> Graph:
+                n_iter: int = 10,
+                recomputation=False,
+                save_memory_mode=False) -> Graph:
     if kwargs is None:
         kwargs = dict()
         # TODO tracing not tested with kwargs
@@ -79,7 +81,9 @@ def build_graph(model: torch.nn.Module,
                                      kwargs=kwargs,
                                      n_iter=n_iter,
                                      max_depth=max_depth,
-                                     basic_blocks=basic_blocks)
+                                     basic_blocks=basic_blocks,
+                                     recomputation=recomputation,
+                                     save_memory_mode=save_memory_mode)
 
     tensors = tensorDict(model)
     profiled_layers = layerDict(model,
@@ -109,8 +113,9 @@ def build_graph(model: torch.nn.Module,
         # if extension not built fall back to a default solution
         # TODO remove it at some point as it's not a best practice
         warnings.warn(
-            "trace_feature not found. falling back to regular trace which is less accurate and might not work\n please build it"
-        )
+            "Trace_feature not found."
+            "Falling back to regular trace which is less accurate and might not work\n."
+            "Please build it.")
         torch._C._jit_pass_inline(trace_graph)
 
     global DEBUG_MODEL_NAME
@@ -539,7 +544,8 @@ def _remove_nodes_that_go_nowhere(nodes: GraphNodes,
             return False
 
         # if we have for example 2 unpacking and only the second is used then
-        # because we decide the unpacking index by position we cant remove the unused first unpacking as it will lead to the wrong index being used
+        # because we decide the unpacking index by position we cant remove the unused first unpacking
+        # as it will lead to the wrong index being used
         if "prim::TupleUnpack" in node.scope or "prim::ListUnpack" in node.scope:
             assert node.type is NodeTypes.PYTHON_PRIMITIVE
             return False
@@ -575,7 +581,7 @@ def _remove_nodes(nodes: GraphNodes, condition: Callable[[Node],
 
 
 def opMatch(scope: str, op_name: str) -> bool:
-    return re.search(f"{op_name}[{string.digits}]", scope) != None
+    return re.search(f"{op_name}[{string.digits}]", scope) is not None
 
 
 ###########################################
@@ -584,7 +590,8 @@ def opMatch(scope: str, op_name: str) -> bool:
 @DEBUG_DUMP_GRAPH
 def add_unpack_nodes(nodes: GraphNodes, to_fix: Dict[int, int]) -> GraphNodes:
     '''
-    when not all of a tuple elements are used it is possible that not all of the unpack nodes will be emitted by the trace
+    when not all of a tuple elements are used it is possible that
+    not all of the unpack nodes will be emitted by the trace,
     so we add them here if necessary
     '''
     new_graph = OrderedDict()
@@ -802,8 +809,11 @@ def _pack_inputs(node: Node, inputs, offset):
 
 
 def accessor_paths(outputs, path=()):
-    '''given a tuple yields the indices to access each element and if the nested element if terminal or iterable
-       for example l=(1,(6,(7,8))) will result in (0,) True , (1,) False, (1,0) True (1,1) False, (1,1,0) True, (1,1,1) True
+    '''
+    Given a tuple yields the indices to access each element and if the nested element if terminal or iterable
+    Example:
+        l=(1,(6,(7,8))) 
+        will result in (0,) True , (1,) False, (1,0) True (1,1) False, (1,1,0) True, (1,1,1) True
     '''
     for idx, val in enumerate(outputs):
         accessor = path + (idx, )

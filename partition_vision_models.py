@@ -88,25 +88,25 @@ def create_random_sample(args, analysis=False):
 
 
 def node_weight_function(node: Node):
+    # TODO: factory with recomputation.
     if node.type is NodeTypes.LAYER:
-        return int(node.weight.forward_time + node.weight.backward_time)
+        return int(100 *
+                   (node.weight.forward_time + node.weight.backward_time))
     if node.type is NodeTypes.CONSTANT:
         return 0
-    if node.type is NodeTypes.OP:
-        return 1
+    if node.type is NodeTypes.OP:  # FIXME:
+        return 0
     return 0
 
 
 def edge_weight_function(bandwidth_gps):
     def f(u: Node, v: Node):
         if u.type is NodeTypes.LAYER:
-            return max(1, int(u.weight.output_size / bandwidth_gps))
-            # print(f"u.weight.output_size:{u.weight.output_size}")  # FIXME: this fucntion is never called...
+            return max(1, int(100 * u.weight.output_size / bandwidth_gps))
         if v.type is NodeTypes.LAYER:
-            return max(1, int(v.weight.input_size / bandwidth_gps))
-            # print(f"u.weight.output_size:{v.weight.input_size}")  # FIXME: this fucntion is never called...
+            return max(1, int(100 * v.weight.input_size / bandwidth_gps))
         if u.type is NodeTypes.CONSTANT:
-            return 1000
+            return 100000  # FIXME: why penalize constants?
         return 1
 
     return f
@@ -187,7 +187,7 @@ if __name__ == "__main__":
                         default=False,
                         help="disable partition analysis")
     parser.add_argument("--depth",
-                        default=1000,
+                        default=-1,
                         type=int,
                         help="the depth in which we will partition the model")
     parser.add_argument(
@@ -200,11 +200,52 @@ if __name__ == "__main__":
         default=8,
         type=int,
         help="batch size to use during the post partition analysis")
-    parser.add_argument("-a", "--async_pipeline",
+    parser.add_argument("-a",
+                        "--async_pipeline",
                         default=False,
                         action="store_true",
                         help="Do analysis for async pipeline")
-    parser.add_argument("--dot", default=False, action="store_true", help="Save and plot it using graphviz")
+    parser.add_argument("--dot",
+                        default=False,
+                        action="store_true",
+                        help="Save and plot it using graphviz")
+
+    parser.add_argument(
+        "--save_memory_mode",
+        default=False,
+        action="store_true",
+        help="Save memory during profiling by storing everything on cpu," +
+        " but sending each layer to GPU before the profiling.")
+
+    metis_opts = parser.add_argument_group("METIS options")
+    metis_opts.add_argument("--seed",
+                            required=False,
+                            type=int,
+                            help="Random seed for Metis algorithm")
+    metis_opts.add_argument(
+        '--compress', default=False, action='store_true',
+        help="Compress")  # NOTE: this is differnt from default!
+    metis_opts.add_argument(
+        '--metis_niter',
+        help=
+        "Specifies the number of iterations for the refinement algorithms at each stage of the uncoarsening process."
+        "Default is 10.")
+    metis_opts.add_argument(
+        '--nseps',
+        help=
+        "Specifies the number of different separators that it will compute at each level of nested dissection."
+        "The final separator that is used is the smallest one. Default is 1.")
+    metis_opts.add_argument(
+        "--ncuts",
+        help=
+        "Specifies the number of different partitionings that it will compute."
+        " The final partitioning is the one that achieves the best edgecut or communication volume."
+        "Default is 1.")
+
+    metis_opts.add_argument(
+        '--metis_dbglvl',
+        help="Metis debug level. Refer to the docs for explanation")
+
     args = parser.parse_args()
     args.auto_file_name = not args.no_auto_file_name
     if args.auto_file_name:
@@ -213,12 +254,47 @@ if __name__ == "__main__":
     VERBOSE_PARTITIONING = False
     GET_PARTITIONS_ON_CPU = True
 
+    # TODO: build metis options
+    # We can set to None to get the default
+    # See See : https://github.com/networkx/networkx-metis/blob/master/nxmetis/enums.py
+    METIS_opt = {
+        'seed': getattr(args, "seed", None),
+        'nseps': getattr(args, "nseps", None),
+        'niter': getattr(args, "metis_niter", None),
+        'compress': False,  # NOTE: this is differnt from default!
+        'ncuts': getattr(args, "ncuts", None),
+
+        # NOTE: default is -1, # TODO: add getattr getattr(args, "metis_dbglvl", None),
+        '_dbglvl': 1  # TODO: can't make it print...
+    }
+
+    #     {'ptype': -1,
+    #  'objtype': -1,
+    #  'ctype': -1,
+    #  'iptype': -1,
+    #  'rtype': -1,
+    #  'ncuts': -1,
+    #  'nseps': -1,
+    #  'numbering': -1,
+    #  'niter': -1, # default is 10
+    #  'seed': -1,
+    #  'minconn': True,
+    #  'no2hop': True,
+    #  'contig': True,
+    #  'compress': True,
+    #  'ccorder': True,
+    #  'pfactor': -1,
+    #  'ufactor': -1,
+    #  '_dbglvl': -1,
+    #  }
+
     # if the model is too big run the whole partitioning process on CPU
     # and drink a cup of coffee in the meantime
     # define model and sample batch
     model = create_model(args.model)
     sample = create_random_sample(args, analysis=False)
 
+    # TODO: combine the save_memory_mode with this...
     if args.model_too_big:
         model = model.cpu()
         sample = sample.cpu()
@@ -231,6 +307,7 @@ if __name__ == "__main__":
     # if the model needs kwargs pass a dictionary
     # DEBUG switches between verbose generated code and compressed code
     n_iter = args.n_iter
+    recomputation = not args.no_recomputation
     graph = pipe_model(model,
                        sample,
                        depth=args.depth,
@@ -242,7 +319,10 @@ if __name__ == "__main__":
                        node_weight_function=node_weight_function,
                        edge_weight_function=edge_weight_function(
                            args.bandwidth_gps),
-                       n_iter=n_iter)
+                       n_iter=n_iter,
+                       recomputation=recomputation,
+                       save_memory_mode=args.save_memory_mode,
+                       METIS_opt=METIS_opt)
 
     if args.dot:
         graph.save_as_pdf(args.output_file, ".")
@@ -257,7 +337,9 @@ if __name__ == "__main__":
                                            partitions_only=False,
                                            DEBUG=GET_PARTITIONS_ON_CPU)
 
+    # Test # TODO: can do it on GPU...
     _ = run_partitions(sample, config)
+
     bandwidth_gps = args.bandwidth_gps
     recomputation = not args.no_recomputation
     if not args.no_analysis:

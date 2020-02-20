@@ -1,4 +1,3 @@
-
 from typing import Optional, Dict, List
 
 from ..model_profiling import Graph, NodeWeightFunction, EdgeWeightFunction
@@ -7,11 +6,12 @@ from .process_partition import post_process_partition
 __all__ = ["METIS_partition"]
 
 
-def METIS_partition(graph: Graph, num_partitions: int,
+def METIS_partition(graph: Graph,
+                    num_partitions: int,
                     node_weight_function: Optional[NodeWeightFunction] = None,
                     edge_weight_function: Optional[EdgeWeightFunction] = None,
                     use_layers_only_graph: bool = False,
-                    ** METIS_opts: Dict) -> Graph:
+                    **METIS_opts: Dict) -> Graph:
     '''
     performs METIS Kway partitioning on the given graph
 
@@ -27,7 +27,8 @@ def METIS_partition(graph: Graph, num_partitions: int,
         an optional weight function for the edges should be a function (Node,Node) to int
         if not given a default value of 1 will be given to all edges
     use_layers_only_graph:
-        whether to partition a smaller version of the graph containing only the layers (usefull fo big models with lots of unprofiled ops)
+        whether to partition a smaller version of the graph containing only the layers
+        (usefull fo big models with lots of unprofiled ops)
     METIS_opts:
         additional kwargs to pass to the METIS partitioning algorithm
     '''
@@ -44,8 +45,14 @@ def METIS_partition(graph: Graph, num_partitions: int,
                      edge_weight_function=edge_weight_function)
 
     options = nxmetis.MetisOptions(**METIS_opts)
-    objval, parts = nxmetis.partition(G, num_partitions, options=options)
-    parts = sorted((idx, n) for n, p in enumerate(parts)for idx in p)
+    objval, parts = nxmetis.partition(G,
+                                      num_partitions,
+                                      options=options,
+                                      node_weight='weight',
+                                      node_size='size',
+                                      edge_weight='weight',
+                                      recursive=False)
+    parts = sorted((idx, n) for n, p in enumerate(parts) for idx in p)
     parts = [n for _, n in parts]
 
     if use_layers_only_graph:
@@ -62,15 +69,19 @@ def METIS_partition(graph: Graph, num_partitions: int,
 
     actual_nparts = len({n.part for n in graph.nodes})
 
-    if(actual_nparts < num_partitions):
+    if (actual_nparts < num_partitions):
         print(
-            f"expected {num_partitions} partitions but only {actual_nparts} found implicating that the model to partition is too small")
-        print("consider increasing the depth of graph or disabling the basic blocks option")
+            f"expected {num_partitions} partitions but only {actual_nparts} found"
+            " implicating that the model to partition is too small")
+        print(
+            "consider increasing the depth of graph or disabling the basic blocks option"
+        )
         print(f"before post processing there were {n_parts} partitions")
     return graph
 
 
-def induce_layer_partition(original_graph: Graph, parts: List[int], layers_to_original: Dict[int, int]) -> Graph:
+def induce_layer_partition(original_graph: Graph, parts: List[int],
+                           layers_to_original: Dict[int, int]) -> Graph:
     old_to_new = {v: k for k, v in layers_to_original.items()}
 
     for node in reversed(original_graph.nodes):

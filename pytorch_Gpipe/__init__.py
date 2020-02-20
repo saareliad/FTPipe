@@ -27,7 +27,9 @@ def pipe_model(model: nn.Module,
                use_layers_only_graph: bool = False,
                output_file: str = None,
                DEBUG=False,
-               **METIS_opt) -> Graph:
+               recomputation=False,
+               save_memory_mode=False,
+               METIS_opt=dict()) -> Graph:
     '''attemps to partition a model to given number of parts using our profiler
        this will produce a python file with the partition config
 
@@ -63,7 +65,7 @@ def pipe_model(model: nn.Module,
     DEBUG:
         whether to generate the debug version of the partition more comments and assertions in the generated file
     METIS_opt:
-        additional kwargs to pass to the METIS partitioning algorithm
+        dict of additional kwargs to pass to the METIS partitioning algorithm
     '''
 
     graph = partition_model(model,
@@ -76,6 +78,8 @@ def pipe_model(model: nn.Module,
                             node_weight_function=node_weight_function,
                             edge_weight_function=edge_weight_function,
                             use_layers_only_graph=use_layers_only_graph,
+                            recomputation=recomputation,
+                            save_memory_mode=save_memory_mode,
                             METIS_opt=METIS_opt)
 
     compile_partitoned_model(graph,
@@ -96,7 +100,9 @@ def partition_model(model: nn.Module,
                     node_weight_function: Optional[NodeWeightFunction] = None,
                     edge_weight_function: Optional[EdgeWeightFunction] = None,
                     use_layers_only_graph: bool = False,
-                    **METIS_opt) -> Graph:
+                    recomputation: bool = False,
+                    save_memory_mode: bool = False,
+                    METIS_opt=dict()) -> Graph:
     '''
     profiles the network and return a graph representing the partition
 
@@ -124,14 +130,16 @@ def partition_model(model: nn.Module,
     use_layers_only_graph:
         whether to partition a smaller version of the graph containing only the layers (usefull fo big models with lots of unprofiled ops)
     METIS_opt:
-        additional kwargs to pass to the METIS partitioning algorithm
+        dict of additional kwargs to pass to the METIS partitioning algorithm
     '''
     graph = build_graph(model,
                         sample_batch,
                         kwargs=kwargs,
                         max_depth=max_depth,
                         basic_blocks=basic_blocks,
-                        n_iter=n_iter)
+                        n_iter=n_iter,
+                        recomputation=recomputation,
+                        save_memory_mode=save_memory_mode)
 
     graph = METIS_partition(graph,
                             nparts,
