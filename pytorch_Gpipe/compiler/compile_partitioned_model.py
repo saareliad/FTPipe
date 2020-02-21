@@ -47,7 +47,7 @@ def compile_partitoned_model(graph: Graph, model: Module, verbose: bool = False,
     partitions_code = []
     ios = dict()
     for idx, part in parts:
-        class_name = f'{graph.model_name}Partition{idx}'
+        class_name = f'Partition{idx}'
         layer_names = [n.scope for n in part if n.type == NodeTypes.LAYER]
         buff_param_names = {n.scope for n in part
                             if n.type == NodeTypes.BUFF_PARAM}
@@ -182,8 +182,8 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]], mo
     # function header
     lines = [
         f"def create_pipeline_configuration(model,DEBUG=False,partitions_only=False):",
-        f"layer_dict = layerDict(model,depth={graph.depth},basic_blocks=({basic_blocks}))",
-        "tensor_dict = tensorDict(model)",
+        f"layers = layerDict(model,depth={graph.depth},basic_blocks=({basic_blocks}))",
+        "tensors = tensorDict(model)",
         f"\n{tab}# now constructing the partitions in order"
     ]
 
@@ -206,10 +206,7 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]], mo
         p_scopes = 'parameter_scopes = [' + \
             f",\n{dtab}".join(parameter_scopes) + ']'
         lines.extend([l_scopes, b_scopes, p_scopes,
-                      f"layers = {{l: layer_dict[l] for l in layer_scopes}}",
-                      f"buffers = {{b: tensor_dict[b] for b in buffer_scopes}}",
-                      f"parameters = {{p: tensor_dict[p] for p in parameter_scopes}}",
-                      f"partition{idx} = {model_class}Partition{idx}(layers,buffers,parameters)\n"])
+                      f"partition{idx} = Partition{idx}(layers,tensors)\n"])
 
     # create and return the partition config
     exp = f',\n{dtab}{tab}'.join([f"{k}: {v}" for k, v in ios.items()])
@@ -267,9 +264,9 @@ def create_model_parallel_module(name: str, ios: Dict[int, Dict[str, List[str]]]
     '''
     model_inputs = [f'input{idx}' for idx in range(num_inputs)]
     class_decl_and_init = "\n".join([
-        f"class {name}ModelParallel(nn.Module):",
+        f"class ModelParallel(nn.Module):",
         f"{tab}def __init__(self,config):",
-        f"{dtab}super({name}ModelParallel,self).__init__()",
+        f"{dtab}super(ModelParallel,self).__init__()",
         dtab + f"\n{dtab}".join(
             f"self.stage{i} = config[{i}]['model']" for i in ios)
     ])
