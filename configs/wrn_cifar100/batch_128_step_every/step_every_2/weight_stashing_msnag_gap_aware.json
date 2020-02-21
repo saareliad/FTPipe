@@ -1,18 +1,18 @@
 {
     "logdir": "logs/",
     "data_dir": "/home_local/saareliad/data",
-    "out_dir":"results/4partitions/wrn28x10_cifar100/",
+    "out_dir":"results/4partitions/wrn28x10_cifar100/fixed_ga/",
     "auto_file_name": true,
     "out_filename": "agg",
     "distributed_backend": "mpi",
     "task": "cv_sep",
-    "statistics": "cv_theta_dist_grad_norm",
+    "statistics": "cv",
     "model": "wrn_28x10_c100_dr03_p4",
     "dataset": "cifar100",
     "trainer": {
         "type": "cv",
         "args": {
-            "always_calc_grad_norm": true
+            "always_calc_grad_norm": false
         }
     },
     "bs_train": 64,
@@ -51,7 +51,7 @@
             "epsilon": 1e-8
         }
     },
-    "epochs": 220,
+    "epochs": 205,
     "step_every": 2,
     "cudnn_benchmark": true,
     "steps": -1,
@@ -62,5 +62,7 @@
     "weight_stashing": true,
     "work_scheduler": "1F1B",
     "seed_from_cmd": true,
-    "keep_buffers_alive": true
+    "keep_buffers_alive": true,
+    "no_recomputation": true,
+    "max_buffers": 1
 }
