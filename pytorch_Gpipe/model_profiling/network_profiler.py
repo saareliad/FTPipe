@@ -186,8 +186,6 @@ class Wrapper(nn.Module):
                  scope: str,
                  save_memory_mode=False,
                  recomputation=False):
-        # TODO: recomputation: impl,
-        # TODO: recomputation, saved_memory mode at calling functions.
         super(Wrapper, self).__init__()
         self.layer = sub_module
         self.forward_time = []
@@ -247,20 +245,27 @@ class Wrapper(nn.Module):
         #  the grad has to be passed backward.
         # However, then gradient creation will be computed for all
 
-        forward_time, outputs, self.forward_cuda_mem = self._time_op(
-            self.layer, *detached_inputs, **kwargs)
+        with torch.set_grad_enabled(not self.recomputation):
+            # if recomputation: its a dummy forward
+            forward_time, outputs, self.forward_cuda_mem = self._time_op(
+                self.layer, *detached_inputs, **kwargs)
 
-        # FIXME: it does not compute forward times without graph creation.
-        # FIXME: Currently, backward times include just the backward (+artificially added FULL fwd pass).
-        #  (in case of recomputation: should be both)
         self.forward_time.append(forward_time)
         # reduce outputs to calculate dummy loss
         loss = torch.zeros(1, requires_grad=False, device=device)
+
+        if self.recomputation:
+            # Then, we do fwd+bwd
+            # FIXME: self.forward_cuda_mem...
+            forward_time, outputs, self.forward_cuda_mem = self._time_op(
+                self.layer, *detached_inputs, **kwargs)
+
         for out in flatten(outputs):
             if isinstance(out, torch.Tensor):
                 loss = loss + out.sum()
 
         # measure backward execution time
+
         if loss.grad_fn is not None or loss.requires_grad:
             backward_time, _, self.backward_cuda_mem = self._time_op(
                 torch.autograd.backward, loss)
@@ -272,6 +277,9 @@ class Wrapper(nn.Module):
             self.layer.zero_grad()
         else:
             backward_time, self.backward_cuda_mem = 0.0, 0.0
+
+        if self.recomputation:
+            backward_time = forward_time + backward_time
 
         self.backward_time.append(backward_time)
 

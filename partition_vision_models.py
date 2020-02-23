@@ -87,11 +87,14 @@ def create_random_sample(args, analysis=False):
     return sample
 
 
+MULT_FACTOR = 1000
+
+
 def node_weight_function(node: Node):
     # TODO: factory with recomputation.
     if node.type is NodeTypes.LAYER:
-        return int(100 *
-                   (node.weight.forward_time + node.weight.backward_time))
+        return int(MULT_FACTOR *
+                   (node.weight.backward_time))  # + node.weight.forward_time
     if node.type is NodeTypes.CONSTANT:
         return 0
     if node.type is NodeTypes.OP:  # FIXME:
@@ -102,11 +105,13 @@ def node_weight_function(node: Node):
 def edge_weight_function(bandwidth_gps):
     def f(u: Node, v: Node):
         if u.type is NodeTypes.LAYER:
-            return max(1, int(100 * u.weight.output_size / bandwidth_gps))
+            return max(1,
+                       int(MULT_FACTOR * u.weight.output_size / bandwidth_gps))
         if v.type is NodeTypes.LAYER:
-            return max(1, int(100 * v.weight.input_size / bandwidth_gps))
+            return max(1,
+                       int(MULT_FACTOR * v.weight.input_size / bandwidth_gps))
         if u.type is NodeTypes.CONSTANT:
-            return 100000  # FIXME: why penalize constants?
+            return 1000 * MULT_FACTOR  # FIXME: why penalize constants?
         return 1
 
     return f
@@ -227,23 +232,26 @@ if __name__ == "__main__":
         help="Compress")  # NOTE: this is differnt from default!
     metis_opts.add_argument(
         '--metis_niter',
+        type=int,
         help=
         "Specifies the number of iterations for the refinement algorithms at each stage of the uncoarsening process."
         "Default is 10.")
     metis_opts.add_argument(
         '--nseps',
+        type=int,
         help=
         "Specifies the number of different separators that it will compute at each level of nested dissection."
         "The final separator that is used is the smallest one. Default is 1.")
     metis_opts.add_argument(
         "--ncuts",
+        type=int,
         help=
         "Specifies the number of different partitionings that it will compute."
         " The final partitioning is the one that achieves the best edgecut or communication volume."
         "Default is 1.")
-
     metis_opts.add_argument(
         '--metis_dbglvl',
+        type=int,
         help="Metis debug level. Refer to the docs for explanation")
 
     args = parser.parse_args()
@@ -299,7 +307,9 @@ if __name__ == "__main__":
         model = model.cpu()
         sample = sample.cpu()
     else:
-        model = model.cuda()
+        if not args.save_memory_mode:
+            # Will be sent to cuda when needed.
+            model = model.cuda()
         sample = sample.cuda()
 
     # partition the model using our profiler
