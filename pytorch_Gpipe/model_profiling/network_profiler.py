@@ -181,6 +181,7 @@ class Wrapper(nn.Module):
         a nn.module to be profiled
 
     '''
+
     def __init__(self,
                  sub_module: nn.Module,
                  scope: str,
@@ -274,7 +275,8 @@ class Wrapper(nn.Module):
             #  in case this is the domminant case
 
             # delete gradients to save memory after backward.
-            self.layer.zero_grad()
+            for p in self.parameters():
+                p.grad = None
         else:
             backward_time, self.backward_cuda_mem = 0.0, 0.0
 
