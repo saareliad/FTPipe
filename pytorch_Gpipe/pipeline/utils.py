@@ -26,19 +26,3 @@ class SyncBuffersMode(Enum):
     EVERY_BATCH = auto()
     # sync buffers only when switching to eval model during training
     BEFORE_EVAL = auto()
-
-
-@unique
-class SyncParametersMode(Enum):
-    DISABLED = auto()
-    # sync buffers after every batch during training
-    EVERY_BATCH = auto()
-
-
-@unique
-class StepEveryMode(Enum):
-    DISABLED = auto()
-    # step after each batch
-    EVERY_BATCH = auto()
-    # step after every minibatch
-    EVERY_MINIBATCH = auto()

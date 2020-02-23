@@ -7,16 +7,17 @@ from torch.nn import Module
 from torch.optim import Optimizer
 from pytorch_Gpipe.delayedNorm import DelayedBatchNorm
 import torch.distributed as dist
+import os
 from .messages import COMMAND
 from .stage_io import RankIO
 from .state_stack import StateStack
-from .utils import InvalidState, SyncBuffersMode, SyncParametersMode, StepEveryMode
+from .utils import SyncBuffersMode
 
 
 class Worker(Process):
     def __init__(self, backend, world_size: int, stage_id: int, rank: int, ranks_in_stage: int, model: Module, stateStack: StateStack, IO: RankIO,
                  send_input_gradient: List[bool], command_queue: Queue, groups: List[List[int]], use_delayedNorm: bool, optimizer: Optional[Optimizer],
-                 buffer_sync: SyncBuffersMode, parameter_sync: SyncParametersMode, step_mode: StepEveryMode):
+                 buffer_sync: SyncBuffersMode, gradient_accumulation_steps: int):
         super(Worker, self).__init__(name=f"stage_{stage_id+1}_Worker_{rank+1}",
                                      daemon=True)
         self.stage_id = stage_id
@@ -31,14 +32,14 @@ class Worker(Process):
         self.use_delayedNorm = use_delayedNorm
         self.state_stack = stateStack
         self.num_minibatches = 0
-        self.minibatch_idx = 0
         self.optimizer = optimizer
         self.send_input_gradient = send_input_gradient
         self.sync_buffers_mode = buffer_sync
-        self.sync_parameters_mode = parameter_sync
-        self.step_mode = step_mode
+        self.step_every = gradient_accumulation_steps
         self.stage_process_group = self._init_process_groups(backend, world_size,
                                                              groups)
+        self.done_fwds = 0
+        self.done_bckwds = 0
 
         # we sort to be aboslutly sure we reduce in the same order
         buffers = sorted(self.model.named_buffers(), key=lambda t: t[0])
@@ -48,37 +49,22 @@ class Worker(Process):
         self.parameters = [t[1] for t in parameters]
 
     def run(self):
+        # wait until we start forward for the first time
+        # we do this so that we will have a do while semantic instead of while do
+        while self.running and self.num_minibatches == 0:
+            cmd, metadata = self.command_queue.get()
+            self.changeMode(cmd, metadata)
+
         while self.running:
             try:
-                # wait for command from master
-                # note that we continue only if we start a new batch and reset minibatch_idx and num_minibatches
-                # no busy wait
-                if self.minibatch_idx == self.num_minibatches:
-                    cmd, metadata = self.command_queue.get()
-                    self.changeMode(cmd, metadata)
-                    continue
-
-                # receive minibatch
-                inputs = self.IO.receive(forward=self.FORWARD)
-
-                # process minibatch
                 if self.FORWARD:
-                    outputs = self.forward(inputs)
-                    self.IO.send(outputs, forward=True)
+                    self.forward()
                 else:
-                    grads = self.backward(inputs)
-                    self.IO.send(grads, forward=False)
-                self.minibatch_idx += 1
+                    self.backward()
 
-                if self.should_sync_parameters():
-                    self.sync_parameters()
-                elif self.should_sync_buffers():
-                    self.sync_buffers()
-
-                # have each worker take a step as soon as possible
-                if self.should_take_step():
-                    self.optimizer.step()
-                    self.optimizer.zero_grad()
+                self.on_batch_end()
+                cmd, metadata = self.command_queue.get()
+                self.changeMode(cmd, metadata)
 
             except Exception:
                 # propagate the Exception eventually reaching the master
@@ -87,18 +73,28 @@ class Worker(Process):
                 stack_trace = f"worker stage_{self.stage_id+1} rank_{self.rank+1} raised exception\n{traceback.format_exc()}"
                 self.IO.propagate_exeption(stack_trace, forward=self.FORWARD)
 
-    def forward(self, inputs: List[Tensor]) -> List[Tensor]:
+    def forward(self):
+        for _ in range(self.num_minibatches):
+            inputs = self.IO.receive(forward=True, block=True)
+            outputs = self.minibatch_forward(inputs)
+            self.IO.send(outputs, forward=True, block=False)
+
+    def minibatch_forward(self, inputs: List[Tensor]) -> List[Tensor]:
         with torch.no_grad():
             if self.training:
-                save_state = self.minibatch_idx == 0
-                inputs = self.state_stack.push(inputs, save_state=save_state)
+                self.state_stack.save_rng_state()
+                inputs = self.state_stack.save_activation(inputs)
             return self.model(*inputs)
 
-    def backward(self, grad_input: List[Optional[Tensor]]) -> List[Optional[Tensor]]:
-        if not self.training:
-            raise InvalidState("cannot backward in eval mode")
-        remove_state = self.minibatch_idx == self.num_minibatches
-        inputs = self.state_stack.pop(remove_state=remove_state)
+    def backward(self):
+        for _ in range(self.num_minibatches):
+            gradient_in = self.IO.receive(forward=False, block=True)
+            grad_out = self.minibatch_backward(gradient_in)
+            self.IO.send(grad_out, forward=False, block=False)
+
+    def minibatch_backward(self, grad_input: List[Optional[Tensor]]) -> List[Optional[Tensor]]:
+        self.state_stack.restore_rng_state()
+        inputs = self.state_stack.restore_activation()
         with torch.enable_grad():
             outputs = self.model(*inputs)
             torch.autograd.backward(outputs, grad_input)
@@ -115,12 +111,10 @@ class Worker(Process):
                 self.sync_buffers()
         elif mode is COMMAND.FORWARD:
             self.FORWARD = True
-            self.minibatch_idx = 0
             self.num_minibatches = metadata
             self.switchDelayedNormMode()
         elif mode is COMMAND.BACKWARD:
             self.FORWARD = False
-            self.minibatch_idx = 0
             self.num_minibatches = metadata
             self.switchDelayedNormMode()
         elif mode is COMMAND.TERMINATE:
@@ -139,48 +133,46 @@ class Worker(Process):
                     m.num_micro_batches = self.num_minibatches
 
     def should_take_step(self) -> bool:
-        if self.step_mode is StepEveryMode.DISABLED or (not self.optimizer):
-            return False
-
-        if self.FORWARD:
-            return False
-
-        return (self.step_mode is StepEveryMode.EVERY_MINIBATCH) or (self.minibatch_idx == self.num_minibatches)
+        return self.optimizer and (not self.FORWARD) and (self.done_bckwds % self.step_every == 0)
 
     def should_sync_buffers(self) -> bool:
         return self.sync_buffers_mode is SyncBuffersMode.EVERY_BATCH and self.FORWARD
-
-    def should_sync_parameters(self) -> bool:
-        return self.sync_parameters_mode is SyncParametersMode.EVERY_BATCH and (not self.FORWARD)
 
     def sync_buffers(self):
         if self.ranks_in_stage == 1 or len(self.buffers) == 0 or self.sync_buffers_mode is SyncBuffersMode.DISABLED:
             return
 
         with torch.no_grad():
-            dist.all_reduce_coalesced(self.buffers, group=self.stage_process_group,
-                                      op=dist.ReduceOp.SUM, async_op=False)
-
             for b in self.buffers:
-                b.data /= self.ranks_in_stage
+                dist.all_reduce(b, group=self.stage_process_group,
+                                op=dist.ReduceOp.SUM, async_op=False)
+                b /= float(self.ranks_in_stage)
 
     def sync_parameters(self):
-        if self.ranks_in_stage == 1 or len(self.parameters) == 0 or self.sync_parameters_mode is SyncParametersMode.DISABLED:
+        if self.ranks_in_stage == 1 or len(self.parameters) == 0:
             return
 
         with torch.no_grad():
-            gradients = [p.grad.data for p in self.parameters]
-            dist.all_reduce_coalesced(gradients, group=self.stage_process_group,
-                                      op=dist.ReduceOp.SUM, async_op=False)
             for p in self.parameters:
-                p.grad.data /= self.ranks_in_stage
+                dist.all_reduce(p.grad, group=self.stage_process_group,
+                                op=dist.ReduceOp.SUM, async_op=False)
+                p.grad /= float(self.ranks_in_stage)
 
     def _init_process_groups(self, backend, world_size, groups: List[List[int]]):
         # right know we use process groups only for replicated stages
         # so we do not initialize the backend if there is no need
         if groups:
-            dist.init_process_group(backend, init_method='tcp://127.0.0.1:8000',
-                                    world_size=world_size, rank=self.rank)
+            # TODO address/port should not be hardcoded
+            os.environ["MASTER_ADDR"] = '127.0.0.1'
+            os.environ["MASTER_PORT"] = '29500'
+
+            if backend == 'mpi':
+                raise Exception("mpi not supported")
+                rank = os.environ["OMPI_COMM_WORLD_RANK"]
+                world_size = os.environ["OMPI_COMM_WORLD_SIZE"]
+
+            dist.init_process_group(backend, init_method="env://",
+                                    rank=rank, world_size=world_size)
             stage_group = None
             for group in groups:
                 pg = dist.new_group(ranks=group, backend=backend)
@@ -192,6 +184,20 @@ class Worker(Process):
 
         return None
 
+    def on_batch_end(self):
+        if self.FORWARD:
+            self.done_fwds += 1
+        else:
+            self.done_bckwds += 1
+
+        if self.should_sync_buffers():
+            self.sync_buffers()
+
+        # have each stage take a step as soon as possible
+        if self.should_take_step():
+            self.sync_parameters()
+            self.optimizer.step()
+            self.optimizer.zero_grad()
 
 # workplan:
     # make a queue for each edge instead of each output DONE

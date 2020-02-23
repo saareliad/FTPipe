@@ -1,6 +1,6 @@
 from collections import defaultdict
 from itertools import chain, groupby
-from torch.multiprocessing import Queue
+from torch.multiprocessing import Queue, set_start_method
 from typing import Callable, Dict, Iterator, List, Optional, Tuple, Any, Union
 
 import torch
@@ -12,7 +12,7 @@ from pytorch_Gpipe.delayedNorm import DelayedBatchNorm
 
 from .messages import COMMAND
 from .stage_io import RankIO, ReplicatedConnection, QueueWrapper, SplitConnection
-from .utils import InvalidState, split_to_n, StepEveryMode, SyncBuffersMode, SyncParametersMode
+from .utils import InvalidState, split_to_n, SyncBuffersMode
 from .workers import Worker
 from .state_stack import StateStack
 from torch.distributed import Backend
@@ -20,9 +20,8 @@ from torch.distributed import Backend
 
 class Pipeline():
     def __init__(self, configs: Dict, output_device: Optional[int] = None, split_dim=0,
-                 buffer_sync: SyncBuffersMode = SyncBuffersMode.EVERY_BATCH, parameter_sync: SyncParametersMode = SyncParametersMode.EVERY_BATCH,
-                 step_mode: StepEveryMode = StepEveryMode.EVERY_BATCH,
-                 backend=Backend.GLOO):
+                 buffer_sync: SyncBuffersMode = SyncBuffersMode.EVERY_BATCH,
+                 gradient_accumulation_steps: int = 1, backend=Backend.GLOO):
         self.input_names = configs.pop('model inputs')
         self.output_names = configs.pop('model outputs')
 
@@ -44,6 +43,8 @@ class Pipeline():
         workers = defaultdict(list)
 
         # launch workers
+        # set this to not reinitialize CUDA context
+        set_start_method("spawn")
         for stage_id, rank, ranks_in_stage, io, command_queue, state_stack, model, optimizer in worker_args.values():
             use_delayedNorm = any(isinstance(m, DelayedBatchNorm)
                                   for m in model.modules())
@@ -53,7 +54,7 @@ class Pipeline():
             model = model.share_memory()
             worker = Worker(backend, world_size, stage_id, rank, ranks_in_stage, model, state_stack, io,
                             send_input_gradient, command_queue, groups, use_delayedNorm, optimizer,
-                            buffer_sync, parameter_sync, step_mode)
+                            buffer_sync, gradient_accumulation_steps)
 
             workers[stage_id].append(worker)
             shards[stage_id].append(model)
@@ -345,11 +346,9 @@ class Pipeline():
         """
         return [s[0] for s in self._shards.values()]
 
-# TODO add easy way to create a full replicated config with optimizers ranks etc.
 # TODO add shape descovery phase if we wish to pass data using torch.distributed...:
 #  a dummy run so each worker will know the size of its' buffers
 # TODO think about multinode support the simplest solution is to split the config and add "distributed glue" between masters
-# TODO think about multinode with stage replication(a stage must reside on a single server if not complicated but doable)
 # TODO add fancy pants stats logging
 # TODO internal and external documentation
 
@@ -415,7 +414,7 @@ def create_worker_args(configs: Dict, model_inputs: List[str],
 
         if n_optimizers == 0 and config['replicas'][0].training:
             print(
-                f"stage {stage_id} is in training mode and has no optimizers assigned so it's parameters will changed as gradients are process local")
+                f"stage {stage_id} is in training mode and has no optimizers assigned so it's parameters will not be changed as gradients are process local")
         n_ranks += stage_size
 
     # create communication channels between stages
@@ -481,7 +480,7 @@ def create_worker_args(configs: Dict, model_inputs: List[str],
 
                 # if a minority rank is assgined only one majority rank we use a QueueWrapper to remove the split/merge overhead
                 minority_queues = [SplitConnection(group, split_dim, devices) if len(group) > 1 else QueueWrapper(group[0], devices[0])
-                                    for group, devices in zip(queue_groups, device_groups)]
+                                   for group, devices in zip(queue_groups, device_groups)]
 
                 queues = []
                 start = 0
@@ -494,7 +493,7 @@ def create_worker_args(configs: Dict, model_inputs: List[str],
                         print(
                             f"rank[{minority_rank}] -> ranks{majority_ranks[start:end]}")
                     else:
-                    print(
+                        print(
                             f"ranks{majority_ranks[start:end]} -> rank[{minority_rank}]")
                     start = end
                 majority_queues = queues
@@ -528,9 +527,9 @@ def create_worker_args(configs: Dict, model_inputs: List[str],
     scope_to_number = {s: i for i, s in
                        enumerate(chain(model_inputs, model_outputs))}
     rank_to_queues[master_rank]['inputs'] = sorted(rank_to_queues[-1]['inputs'],
-                                          key=lambda t: scope_to_number[t[0]])
+                                                   key=lambda t: scope_to_number[t[0]])
     rank_to_queues[master_rank]['outputs'] = sorted(rank_to_queues[-1]['outputs'],
-                                           key=lambda t: scope_to_number[t[0]])
+                                                    key=lambda t: scope_to_number[t[0]])
 
     # create IOs
     rank_to_IO = dict()
@@ -545,14 +544,6 @@ def create_worker_args(configs: Dict, model_inputs: List[str],
                 io_out.append(group[0][1])
             else:
                 io_out.append(ReplicatedConnection([t[1] for t in group]))
-        print(rank)
-        print("in")
-        for q in io_in:
-            print(type(q))
-        print("out")
-        for q in io_out:
-            print(type(q))
-        print()
 
         rank_to_IO[rank] = RankIO(io_in, io_out)
 

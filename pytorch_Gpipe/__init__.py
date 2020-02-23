@@ -6,7 +6,7 @@ import torch.nn as nn
 from .model_partitioning import METIS_partition
 from .compiler import compile_partitoned_model
 from .model_profiling import Graph, profile_network, build_graph, Profile, NodeWeightFunction, EdgeWeightFunction
-from .pipeline import Pipeline
+from .pipeline import Pipeline, PipelineConfig, StageConfig, SyncBuffersMode
 from .utils import Devices, Tensors
 
 __all__ = ['pipe_model', 'profile_network',
