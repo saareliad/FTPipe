@@ -9,7 +9,7 @@ def run_analysis(sample,
                  config,
                  n_iter,
                  recomputation=True,
-                 bandwidth_gps=12,
+                 bw_GBps=12,
                  verbose=True,
                  async_pipeline=False,
                  add_comm_times_to_balance=True):
@@ -46,7 +46,7 @@ def run_analysis(sample,
          config,
          n_iter + 1,
          recomputation=recomputation,
-         bandwidth_gps=bandwidth_gps,
+         bw_GBps=bw_GBps,
          async_pipeline=async_pipeline,
          add_comm_times_to_balance=add_comm_times_to_balance)
 
@@ -135,6 +135,7 @@ def run_analysis(sample,
             s += f"\nreal topology aware balance:\n"
             s += f"forwad {topology_aware_real_f_balance:.3f}\nbackward {topology_aware_real_b_balance:.3f}\n"
 
+        s +=f"\nAssuming bandwidth of {bw_GBps} GBps between GPUs\n"
         s += f"\ncommunication volumes size of activations of each partition\n"
         for idx, volume in comm_volume_str.items():
             s += f"{idx}: {volume}\n"
@@ -165,7 +166,7 @@ def profile_execution(model_inputs,
                       partition_config,
                       n,
                       recomputation=True,
-                      bandwidth_gps=12,
+                      bw_GBps=12,
                       async_pipeline=False,
                       add_comm_times_to_balance=True):
     '''perfrom forward/backward passes and measure execution times accross n batches
@@ -209,7 +210,7 @@ def profile_execution(model_inputs,
                 # input statistics
                 in_size_mb = sum([(t.nelement() * t.element_size())
                                   for t in inputs]) / 1e6
-                recv_time = in_size_mb / bandwidth_gps
+                recv_time = in_size_mb / bw_GBps
 
                 # time measurement
                 if torch.cuda.is_available():
@@ -230,7 +231,7 @@ def profile_execution(model_inputs,
                     # save activation on CPU in order to save GPU memory
                     activations[o] = t.detach().cpu()
                     t_mb = (t.nelement() * t.element_size()) / 1e6
-                    t_send = t_mb / bandwidth_gps
+                    t_send = t_mb / bw_GBps
                     out_size_mb += t_mb
                     send_time += t_send
 
@@ -262,7 +263,7 @@ def profile_execution(model_inputs,
 
                 if add_comm_times_to_balance:
                     f_time += send_time
-                    b_time += in_size_mb / bandwidth_gps  # HACK: activation input = gradient size
+                    b_time += in_size_mb / bw_GBps  # HACK: activation input = gradient size
                 f_times[idx].append(f_time)
                 b_times[idx].append(b_time)
 

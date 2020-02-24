@@ -102,14 +102,12 @@ def node_weight_function(node: Node):
     return 0
 
 
-def edge_weight_function(bandwidth_gps):
+def edge_weight_function(bw_GBps):
     def f(u: Node, v: Node):
         if u.type is NodeTypes.LAYER:
-            return max(1,
-                       int(MULT_FACTOR * u.weight.output_size / bandwidth_gps))
+            return max(1, int(MULT_FACTOR * u.weight.output_size / bw_GBps))
         if v.type is NodeTypes.LAYER:
-            return max(1,
-                       int(MULT_FACTOR * v.weight.input_size / bandwidth_gps))
+            return max(1, int(MULT_FACTOR * v.weight.input_size / bw_GBps))
         if u.type is NodeTypes.CONSTANT:
             return 1000 * MULT_FACTOR  # FIXME: why penalize constants?
         return 1
@@ -178,10 +176,10 @@ if __name__ == "__main__":
         "number of iteration used in order to profile the network and run analysis"
     )
     parser.add_argument(
-        '--bandwidth_gps',
+        '--bw',
         type=float,
         default=12,
-        help="data transfer rate between gpus in gigabaytes per second")
+        help="data transfer rate between gpus in GBps (Gigabytes per second)")
     parser.add_argument(
         '--no_recomputation',
         action='store_true',
@@ -214,6 +212,11 @@ if __name__ == "__main__":
                         default=False,
                         action="store_true",
                         help="Save and plot it using graphviz")
+
+    parser.add_argument("--no_test_run",
+                        default=False,
+                        action="store_true",
+                        help="Do not try to run partitions after done")
 
     parser.add_argument(
         "--save_memory_mode",
@@ -327,8 +330,7 @@ if __name__ == "__main__":
                        output_file=args.output_file,
                        use_layers_only_graph=args.partition_layer_graph,
                        node_weight_function=node_weight_function,
-                       edge_weight_function=edge_weight_function(
-                           args.bandwidth_gps),
+                       edge_weight_function=edge_weight_function(args.bw),
                        n_iter=n_iter,
                        recomputation=recomputation,
                        save_memory_mode=args.save_memory_mode,
@@ -348,9 +350,9 @@ if __name__ == "__main__":
                                            DEBUG=GET_PARTITIONS_ON_CPU)
 
     # Test # TODO: can do it on GPU...
-    _ = run_partitions(sample, config)
+    if not args.no_test_run:
+        _ = run_partitions(sample, config)
 
-    bandwidth_gps = args.bandwidth_gps
     recomputation = not args.no_recomputation
     if not args.no_analysis:
         sample = create_random_sample(args, analysis=True)
@@ -359,7 +361,7 @@ if __name__ == "__main__":
                                        config,
                                        n_iter,
                                        recomputation=recomputation,
-                                       bandwidth_gps=bandwidth_gps,
+                                       bw_GBps=args.bw,
                                        verbose=True,
                                        async_pipeline=args.async_pipeline)
     # test_gpipe_stuff()

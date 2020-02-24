@@ -210,7 +210,7 @@ def partition_model(args, train_dataset, model, tokenizer):
             "nested tuples are possibly returned this is not supported by the analysis")
 
         run_analysis(analysis_sample, graph, config, args.n_iter,
-                     recomputation=recomputation, bandwidth_gps=bandwidth_gps)
+                     recomputation=recomputation, bw_GBps=bandwidth_gps)
         sys.exit()
     # model(inputs)
     # outputs = model(inputs, masked_lm_labels=labels) if args.mlm else model(
