@@ -18,6 +18,7 @@ def run_analysis(sample,
     # setting to false is mainly for our own debug
 
     TOPO_AWARE = False
+    UTILIZATION_SLOWDOWN_SPEEDUP = True
 
     # thoeretical analysis
     sequential_f, sequential_b, parallel_f, parallel_b = theoretical_analysis(
@@ -39,7 +40,8 @@ def run_analysis(sample,
         parallel_f, parallel_b, edges)
     # real statistics based on generated partitions
     ((real_f_times, f_vars, f_deviance), (real_b_times, b_vars, b_deviance),
-     comm_volume_str, comm_volume_stats) = profile_execution(
+     comm_volume_str, comm_volume_stats, nocomm_real_f_times,
+     nocomm_real_b_times) = profile_execution(
          sample,
          config,
          n_iter + 1,
@@ -56,11 +58,19 @@ def run_analysis(sample,
          topology_aware_real_b_balance) = topology_aware_balance(
              real_f_times, real_b_times, edges)
 
-    real_b_slowdown = slowdown(real_b_times)
-    real_f_slowdown = slowdown(real_f_times)
+    real_b_slowdown = slowdown(real_b_times, nocomm_real_b_times)
+    real_f_slowdown = slowdown(real_f_times, nocomm_real_f_times)
 
+    # NOTE: can also print imbalance slowdown.
+
+    # FIXME: this assumes that the GPU is utilized while we do comunication. (but its generally not)
     real_b_utilization = utilization(real_b_times)
     real_f_utilization = utilization(real_f_times)
+
+    n_partitions = sum([1 for k in config if isinstance(k, int)])
+    expected_speedup = expected_speedup_after_partitioning(
+        real_f_times, real_b_times, nocomm_real_f_times, nocomm_real_b_times)
+
     # TODO: save this into some data structure
     # where we could analyze it later, compare between partitions, etc.
     if verbose:
@@ -92,12 +102,6 @@ def run_analysis(sample,
         s += f"\nreal balance:\n"
         s += f"forward {real_f_balance:.3f}\nbackward {real_b_balance:.3f}\n"
 
-        s += "\nSlowDown is the ratio between worst to ideal execution times (real)\n"
-        s += f"forward {real_f_slowdown:.3f}\nbackward {real_b_slowdown:.3f}\n"
-
-        s += "\nExpected utilization by partition\n"
-        s += f"forward {real_f_utilization}\nbackward {real_b_utilization}\n"
-
         if TOPO_AWARE:
             s += "\ntopology aware balance is worst balance between 2 connected partitions\n"
             s += f"theoretical sequential topology aware balance:\n"
@@ -113,6 +117,15 @@ def run_analysis(sample,
         s += f"\ncommunication volumes size of activations of each partition\n"
         for idx, volume in comm_volume_str.items():
             s += f"{idx}: {volume}\n"
+
+        if UTILIZATION_SLOWDOWN_SPEEDUP:
+            s += "\nSlow Down is the ratio between worst to ideal execution times (real)\n"
+            s += f"forward {real_f_slowdown:.3f}\nbackward {real_b_slowdown:.3f}\n"
+
+            s += "\nExpected utilization by partition\n"
+            s += f"forward {real_f_utilization}\nbackward {real_b_utilization}\n"
+
+            s += f"\nExpected speedup for {n_partitions} partitions is: {expected_speedup:.3f}"
 
         print(s)
     return real_f_slowdown, real_b_slowdown  # real_f_balance, real_b_balance
@@ -135,6 +148,9 @@ def profile_execution(model_inputs,
     n_partitions = sum([1 for k in partition_config if isinstance(k, int)])
     f_times = {i: [] for i in range(n_partitions)}
     b_times = {i: [] for i in range(n_partitions)}
+
+    nocommf_times = {i: [] for i in range(n_partitions)}
+    nocommb_times = {i: [] for i in range(n_partitions)}
 
     communication_volume = {}
     communication_stats = {}
@@ -206,7 +222,7 @@ def profile_execution(model_inputs,
                     "out": "MB",
                     "send time": "ms",
                 }
-                newd = {k: f"{stats[k]} {units[k]}" for k in stats}
+                newd = {k: f"{stats[k]:.2f} {units[k]}" for k in stats}
                 communication_volume[idx] = ', '.join(
                     "{!s}:{!r}".format(key, val)
                     for (key, val) in newd.items())
@@ -215,6 +231,10 @@ def profile_execution(model_inputs,
 
                 # Adding communication time to balance:
                 # time = time + comm_send
+
+                nocommf_times[idx].append(f_time)
+                nocommb_times[idx].append(b_time)
+
                 if add_comm_times_to_balance:
                     f_time += send_time
                     b_time += in_size_mb / bandwidth_gps  # HACK: activation input = gradient size
@@ -226,7 +246,8 @@ def profile_execution(model_inputs,
 
     # calculate mean and variance
     return mean_var(f_times), mean_var(
-        b_times), communication_volume, communication_stats
+        b_times), communication_volume, communication_stats, mean_var(
+            nocommf_times)[0], mean_var(nocommb_times)[0]
 
 
 def mean_var(times):
@@ -442,18 +463,64 @@ def extract_time(w, forward=False):
 
 def utilization(times):
     worst = max(times.values())
-    return {k: v / worst for k, v in times.items()}
+    return {k: round(v / worst, 2) for k, v in times.items()}
 
 
-def slowdown(times):
+def slowdown(times, times_wo_comm):
+
     worst = max(times.values())
+    n_partitions = len(times)
+
+    total = sum(times_wo_comm.values())
+    actual = n_partitions * worst
+
+    model_parallel_and_partitioning_slowdown = actual / total
+
+    return model_parallel_and_partitioning_slowdown
+
+
+def imbbalance_slowdown(times):
+    worst = max(times.values())
+    n_partitions = len(times)
 
     total = sum(times.values())
-    actual = len(times) * worst
+    actual = n_partitions * worst
 
     partitioning_slowdown = actual / total
 
+    # NOTE: Expected speedup for X accelerators:
+    #  Expected_speedup = sum(times.values()) / worst
+    # # So, we should optimize towards lowering the worstcase as much as possible.
+    # expected_speedup = n_partitions / partitioning_slowdown
+
     return partitioning_slowdown
+
+
+def expected_speedup_after_partitioning(fwd_times, bwd_times,
+                                        fwd_times_wo_comm, bwd_times_wo_comm):
+
+    n_partitions = len(fwd_times)
+    assert (len(fwd_times) == len(bwd_times))
+
+    fwd_slowdown = slowdown(fwd_times, fwd_times_wo_comm)
+    bwd_slowdown = slowdown(bwd_times, bwd_times_wo_comm)
+
+    worst_fwd = max(fwd_times.values())
+    worst_bwd = max(bwd_times.values())
+    fwd_plus_bwd = worst_fwd + worst_bwd
+
+    bwd_to_fwd_ratio = worst_bwd / fwd_plus_bwd
+    fwd_to_bwd_ratio = worst_fwd / fwd_plus_bwd
+
+    partitioning_slowdown = (bwd_to_fwd_ratio *
+                             bwd_slowdown) + (fwd_to_bwd_ratio * fwd_slowdown)
+
+    #  Expected speedup for X accelerators:
+    #  NOTE: Expected_speedup = sum(times.values()) / worst
+    # So, we should optimize towards lowering the worstcase as much as possible.
+    expected_speedup = n_partitions / partitioning_slowdown
+
+    return expected_speedup
 
 
 def worst_balance(times):
