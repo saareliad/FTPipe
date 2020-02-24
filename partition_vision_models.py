@@ -258,6 +258,10 @@ def parse_cli():
         '--metis_dbglvl',
         type=int,
         help="Metis debug level. Refer to the docs for explanation")
+    metis_opts.add_argument(
+        '--objtype',
+        type=int,
+        help="Extra objective type to miminize (0: edgecut, 1: vol, default: edgecut)")
 
     args = parser.parse_args()
     args.auto_file_name = not args.no_auto_file_name
@@ -273,7 +277,7 @@ def parse_cli():
         'niter': getattr(args, "metis_niter", None),
         'compress': False,  # NOTE: this is differnt from default!
         'ncuts': getattr(args, "ncuts", None),
-
+        'objtype': getattr(args, 'objtype', None),  # 0, edgecut, 1 Vol minimization! # NOTE: this is differnt from default edgecut.
         # NOTE: default is -1, # TODO: add getattr getattr(args, "metis_dbglvl", None),
         '_dbglvl': 1  # TODO: can't make it print...
     }

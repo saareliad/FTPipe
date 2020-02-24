@@ -194,6 +194,7 @@ def profile_execution(model_inputs,
             # save activations on CPU in order to save GPU memory
             activations[i] = t.cpu()
 
+        # TODO: make it just a forward pass, then do a backward pass. (Will allow handling nested tuples)
         # perform one run of the partitions
         while len(parts) > 0:
             idx = parts.popleft()
@@ -300,15 +301,15 @@ def cuda_time(partition, inputs, recomputation=True):
     # now we move partition to GPU
     partition = partition.to('cuda')
     partition.device = 'cuda'
-    b_time, outputs = cuda_backward(partition,
-                                    inputs,
-                                    recomputation=recomputation)
+    b_time = cuda_backward(partition, inputs, recomputation=recomputation)
 
     # Delete gradeinets to save space
     for p in partition.parameters():
         p.grad = None
 
-    f_time = cuda_forward(partition, inputs, recomputation=recomputation)
+    f_time, outputs = cuda_forward(partition,
+                                   inputs,
+                                   recomputation=recomputation)
     partition = partition.cpu()
     partition.device = 'cpu'
     return f_time, b_time, outputs
@@ -336,7 +337,7 @@ def cuda_backward(partition, inputs, recomputation=True):
     torch.cuda.synchronize(device='cuda')
     b_time = (start.elapsed_time(end))
 
-    return b_time, outputs
+    return b_time
 
 
 def cuda_forward(partition, inputs, recomputation=True):
@@ -347,11 +348,11 @@ def cuda_forward(partition, inputs, recomputation=True):
     torch.cuda.synchronize(device='cuda')
     with torch.set_grad_enabled(not recomputation):
         start.record()
-        partition(*inputs)
+        outputs = partition(*inputs)
         end.record()
         torch.cuda.synchronize(device='cuda')
         f_time = (start.elapsed_time(end))
-    return f_time
+    return f_time, outputs
 
 
 def cpu_time(partition, inputs, recomputation=True):
@@ -359,10 +360,10 @@ def cpu_time(partition, inputs, recomputation=True):
     '''
     partition = partition.to('cpu')
     partition.device = 'cpu'
-    b_time, outputs = cpu_backward(partition,
-                                   inputs,
-                                   recomputation=recomputation)
-    f_time = cpu_forward(partition, inputs, recomputation=recomputation)
+    b_time = cpu_backward(partition, inputs, recomputation=recomputation)
+    f_time, outputs = cpu_forward(partition,
+                                  inputs,
+                                  recomputation=recomputation)
 
     return f_time, b_time, outputs
 
@@ -371,11 +372,11 @@ def cpu_forward(partition, inputs, recomputation=True):
     inputs = [i.cpu() for i in inputs]
     with torch.set_grad_enabled(not recomputation):
         start = time.time()
-        partition(*inputs)
+        outputs = partition(*inputs)
         end = time.time()
         f_time = 1000 * (end - start)
 
-    return f_time
+    return f_time, outputs
 
 
 def cpu_backward(partition, inputs, recomputation=True):
@@ -389,7 +390,7 @@ def cpu_backward(partition, inputs, recomputation=True):
     end = time.time()
     b_time = 1000 * (end - start)
 
-    return b_time, outputs
+    return b_time
 
 
 ###################################
