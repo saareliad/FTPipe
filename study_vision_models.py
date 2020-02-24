@@ -114,7 +114,8 @@ def edge_weight_function(bw_GBps):
     return f
 
 
-def test_gpipe_stuff():
+def test_gpipe_stuff(create_pipeline_configuration, model,
+                     GET_PARTITIONS_ON_CPU, sample):
 
     # create a pipeLine from the given model
     # split dim the dim to split inputs and gradients across
@@ -298,8 +299,20 @@ def parse_cli():
     return args, METIS_opt
 
 
-if __name__ == "__main__":
-    args, METIS_opt = parse_cli()
+def single_partitioning_loop_with_override(args, METIS_opt, **override_dict):
+    # Override variables
+    ALLOW_OVERRIDE = {'bw', 'n_partitions'}
+    for i, v in override_dict.items():
+        if i not in ALLOW_OVERRIDE:
+            raise NotImplementedError(
+                f"Overriding {i} is not supported\nAllowed Overrides are:\n{ALLOW_OVERRIDE}"
+            )
+        # locals()[i] = v
+    print(f"Overriding: {override_dict}")
+    bw = override_dict.get('bw', getattr(args, 'bw'))
+    n_partitions = override_dict.get('n_partitions',
+                                     getattr(args, 'n_partitions'))
+
     VERBOSE_PARTITIONING = False
     GET_PARTITIONS_ON_CPU = True
 
@@ -325,8 +338,7 @@ if __name__ == "__main__":
     # DEBUG switches between verbose generated code and compressed code
     n_iter = args.n_iter
     recomputation = not args.no_recomputation
-    bw = args.bw
-    n_partitions = args.n_partitions
+
     graph = pipe_model(model,
                        sample,
                        depth=args.depth,
@@ -361,12 +373,36 @@ if __name__ == "__main__":
 
     if not args.no_analysis:
         sample = create_random_sample(args, analysis=True)
-        analysis_result = run_analysis(sample,
-                                       graph,
-                                       config,
-                                       n_iter,
-                                       recomputation=recomputation,
-                                       bw_GBps=bw,
-                                       verbose=True,
-                                       async_pipeline=args.async_pipeline)
+        expected_speedup = run_analysis(sample,
+                                        graph,
+                                        config,
+                                        n_iter,
+                                        recomputation=recomputation,
+                                        bw_GBps=bw,
+                                        verbose=True,
+                                        async_pipeline=args.async_pipeline)
+
+    return expected_speedup
+
+
+if __name__ == "__main__":
+    args, METIS_opt = parse_cli()
+    BW_RANGE = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+
+    expected_speedup = []
+    i = 0
+
+    # for bw in BW_RANGE:
+    while i < len(BW_RANGE):
+        try:
+            es = single_partitioning_loop_with_override(args, METIS_opt, bw=bw)
+            expected_speedup.append(es)
+            i += 1
+        except:
+            pass
+
+    print('-I- final study results:')
+    print("bw", BW_RANGE)
+    print("speedup", expected_speedup)
+
     # test_gpipe_stuff()
