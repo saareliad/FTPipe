@@ -1,10 +1,12 @@
 import torch
-from models.normal import WideResNet, amoebanetd, ResNet
+from models.normal import WideResNet, amoebanetd, ResNet, vgg16_bn
 from pytorch_Gpipe import pipe_model
 from pytorch_Gpipe.model_profiling import Node, NodeTypes
 import argparse
 import importlib
 from misc import run_analysis, run_partitions
+
+_VGG16_BN = dict(vgg16_bn=dict())
 
 _RESENETS = dict(resnet50_imagenet=dict(
     block=ResNet.Bottleneck, layers=[3, 4, 6, 3], num_classes=1000))
@@ -61,6 +63,7 @@ def _register_model(dict_params, model_cls):
 _register_model(_WIDE_RESNETS, WideResNet)
 _register_model(_RESENETS, ResNet.ResNet)
 _register_model(_AMOEBANET_D, amoebanetd)
+_register_model(_VGG16_BN, vgg16_bn)
 
 DATASETS = ['cifar10', 'cifar100', 'imagenet']
 
