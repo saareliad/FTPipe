@@ -42,7 +42,7 @@ from transformers import (BertConfig, BertForMaskedLM, BertTokenizer,
                           #   CamembertConfig, CamembertForMaskedLM, CamembertTokenizer
                           )
 
-from sample_models import GPT2LMHeadModel
+from models.normal import GPT2LMHeadModel
 
 from pytorch_Gpipe import pipe_model
 from misc import run_analysis, run_partitions

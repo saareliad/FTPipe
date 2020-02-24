@@ -1,6 +1,6 @@
 import torch
-from sample_models import WideResNet, amoebanetd
-from sample_models.ResNet import ResNet, Bottleneck
+from models.normal import WideResNet, amoebanetd
+from models.normal.ResNet import ResNet, Bottleneck
 from pytorch_Gpipe import pipe_model
 from pytorch_Gpipe.model_profiling import Node, NodeTypes
 import argparse
