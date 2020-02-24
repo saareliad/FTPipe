@@ -71,6 +71,22 @@ def run_analysis(sample,
     expected_speedup = expected_speedup_after_partitioning(
         real_f_times, real_b_times, nocomm_real_f_times, nocomm_real_b_times)
 
+    def rounddict(d, x=2):
+        return {k: round(v, x) for k, v in d.items()}
+
+    comp_comm_ratio_f = computation_communication_ratio(
+        nocomm_real_f_times,
+        {k: v['send time']
+         for k, v in comm_volume_stats.items()})
+
+    comp_comm_ratio_b = computation_communication_ratio(
+        nocomm_real_b_times,
+        {k: v['recieve_time']
+         for k, v in comm_volume_stats.items()})
+
+    comp_comm_ratio_f = rounddict(comp_comm_ratio_f)
+    comp_comm_ratio_b = rounddict(comp_comm_ratio_b)
+
     # TODO: save this into some data structure
     # where we could analyze it later, compare between partitions, etc.
     if verbose:
@@ -87,10 +103,13 @@ def run_analysis(sample,
         s += f"parallel forward {parallel_f}\nparallel backward {parallel_b}\n"
 
         s += f"\nreal times are based on real measurements of execution time of generated partitions ms\n"
-        s += f"forward {real_f_times}\nbackward {real_b_times}\n"
-        s += f"variance of real execution times ms\nforward{f_vars}\nbackward{b_vars}\n"
 
-        s += f"avg diviation from the mean of real execution times ms\nforward{f_deviance}\nbackward{b_deviance}\n"
+        s += f"forward {rounddict(real_f_times)}\nbackward {rounddict(real_b_times)}\n"
+        s += f"variance of real execution times ms\n"
+        s += f"forward{rounddict(f_vars)}\nbackward{rounddict(b_vars)}\n"
+
+        s += f"avg diviation from the mean of real execution times ms\n"
+        s += f"forward{rounddict(f_deviance)}\nbackward{rounddict(b_deviance)}\n"
 
         s += "\nbalance is ratio of computation time between fastest and slowest parts."
         s += " (between 0 and 1 higher is better)\n"
@@ -118,6 +137,9 @@ def run_analysis(sample,
         for idx, volume in comm_volume_str.items():
             s += f"{idx}: {volume}\n"
 
+        s += "\nCompuatation/Communication ratios:\n"
+        s += f"forward {comp_comm_ratio_f} \nbackward {comp_comm_ratio_b}"
+
         if UTILIZATION_SLOWDOWN_SPEEDUP:
             s += "\nSlow Down is the ratio between worst to ideal execution times (real)\n"
             s += f"forward {real_f_slowdown:.3f}\nbackward {real_b_slowdown:.3f}\n"
@@ -128,7 +150,8 @@ def run_analysis(sample,
             s += f"\nExpected speedup for {n_partitions} partitions is: {expected_speedup:.3f}"
 
         print(s)
-    return real_f_slowdown, real_b_slowdown  # real_f_balance, real_b_balance
+
+    return expected_speedup  # real_f_balance, real_b_balance
 
 
 #################################
@@ -459,6 +482,16 @@ def extract_time(w, forward=False):
 ####################################
 # balance computation
 # ##################################
+
+
+def computation_communication_ratio(comp_times, comm_times):
+
+    # comm_times = {k: v['send time'] for k, v in comm_times.items()}
+    # comm_times = {k: v['recieve_times'] for k, v in comm_times.items()}
+
+    assert (len(comp_times) == len(comm_times))
+    ratio = {k: comp_times[k] / comm_times[k] for k in comp_times}
+    return ratio
 
 
 def utilization(times):
