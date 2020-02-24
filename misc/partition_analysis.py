@@ -63,17 +63,6 @@ def run_analysis(sample,
 
     # NOTE: can also print imbalance slowdown.
 
-    # FIXME: this assumes that the GPU is utilized while we do comunication. (but its generally not)
-    real_b_utilization = utilization(real_b_times)
-    real_f_utilization = utilization(real_f_times)
-
-    n_partitions = sum([1 for k in config if isinstance(k, int)])
-    expected_speedup = expected_speedup_after_partitioning(
-        real_f_times, real_b_times, nocomm_real_f_times, nocomm_real_b_times)
-
-    def rounddict(d, x=2):
-        return {k: round(v, x) for k, v in d.items()}
-
     comp_comm_ratio_f = computation_communication_ratio(
         nocomm_real_f_times,
         {k: v['send time']
@@ -84,8 +73,21 @@ def run_analysis(sample,
         {k: v['recieve_time']
          for k, v in comm_volume_stats.items()})
 
+    real_f_utilization = utilization(real_f_times, comp_comm_ratio_f)
+    real_b_utilization = utilization(real_b_times, comp_comm_ratio_b)
+
+    n_partitions = sum([1 for k in config if isinstance(k, int)])
+    expected_speedup = expected_speedup_after_partitioning(
+        real_f_times, real_b_times, nocomm_real_f_times, nocomm_real_b_times)
+
+    def rounddict(d, x=2):
+        return {k: round(v, x) for k, v in d.items()}
+
     comp_comm_ratio_f = rounddict(comp_comm_ratio_f)
     comp_comm_ratio_b = rounddict(comp_comm_ratio_b)
+
+    real_b_utilization = rounddict(real_b_utilization)
+    real_f_utilization = rounddict(real_f_utilization)
 
     # TODO: save this into some data structure
     # where we could analyze it later, compare between partitions, etc.
@@ -137,11 +139,11 @@ def run_analysis(sample,
         for idx, volume in comm_volume_str.items():
             s += f"{idx}: {volume}\n"
 
-        s += "\nCompuatation/Communication ratios:\n"
-        s += f"forward {comp_comm_ratio_f} \nbackward {comp_comm_ratio_b}"
+        s += "\nCompuatation Communication ratio (comp/(comp+comm)):\n"
+        s += f"forward {comp_comm_ratio_f} \nbackward {comp_comm_ratio_b}\n"
 
         if UTILIZATION_SLOWDOWN_SPEEDUP:
-            s += "\nSlow Down is the ratio between worst to ideal execution times (real)\n"
+            s += "\nPipeline Slowdown: (compared to sequential executation with no communication)\n"
             s += f"forward {real_f_slowdown:.3f}\nbackward {real_b_slowdown:.3f}\n"
 
             s += "\nExpected utilization by partition\n"
@@ -490,13 +492,23 @@ def computation_communication_ratio(comp_times, comm_times):
     # comm_times = {k: v['recieve_times'] for k, v in comm_times.items()}
 
     assert (len(comp_times) == len(comm_times))
-    ratio = {k: comp_times[k] / comm_times[k] for k in comp_times}
+    ratio = {
+        k: comp_times[k] / (comm_times[k] + comp_times[k])
+        for k in comp_times
+    }
     return ratio
 
 
-def utilization(times):
+def utilization(times, comp_fraction):
+    # TODO: I still think this statistic can be improved... its just an estimation.
+
     worst = max(times.values())
-    return {k: round(v / worst, 2) for k, v in times.items()}
+    # This assumes that the GPU is utilized while we do comunication. (but its generally not)
+    base_util = {k: round(v / worst, 2) for k, v in times.items()}
+
+    # Therefore we mutiply by comp fraction
+    comp_util = {k: base_util[k] * comp_fraction[k] for k in comp_fraction}
+    return comp_util
 
 
 def slowdown(times, times_wo_comm):
