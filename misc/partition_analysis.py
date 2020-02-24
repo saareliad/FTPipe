@@ -19,6 +19,8 @@ def run_analysis(sample,
 
     TOPO_AWARE = False
     UTILIZATION_SLOWDOWN_SPEEDUP = True
+    PRINT_THEORETICAL = False
+    PRINT_VAR_STD = False
 
     # thoeretical analysis
     sequential_f, sequential_b, parallel_f, parallel_b = theoretical_analysis(
@@ -99,26 +101,28 @@ def run_analysis(sample,
         s += f"backward times {'do not ' if not recomputation else ''}include recomputation\n"
         if async_pipeline and recomputation:
             s += f"Analysis for async_pipeline=True: last partition will not do recomputation.\n"
-
-        s += f"\ntheoretical times are execution time based on sum of graph weights ms\n"
-        s += f"\nsequential forward {sequential_f}\nsequential backward {sequential_b}\n"
-        s += f"parallel forward {parallel_f}\nparallel backward {parallel_b}\n"
+        if PRINT_THEORETICAL:
+            s += f"\ntheoretical times are execution time based on sum of graph weights ms\n"
+            s += f"\nsequential forward {sequential_f}\nsequential backward {sequential_b}\n"
+            s += f"parallel forward {parallel_f}\nparallel backward {parallel_b}\n"
 
         s += f"\nreal times are based on real measurements of execution time of generated partitions ms\n"
 
         s += f"forward {rounddict(real_f_times)}\nbackward {rounddict(real_b_times)}\n"
-        s += f"variance of real execution times ms\n"
-        s += f"forward{rounddict(f_vars)}\nbackward{rounddict(b_vars)}\n"
+        if PRINT_VAR_STD:
+            s += f"variance of real execution times ms\n"
+            s += f"forward{rounddict(f_vars)}\nbackward{rounddict(b_vars)}\n"
 
-        s += f"avg diviation from the mean of real execution times ms\n"
-        s += f"forward{rounddict(f_deviance)}\nbackward{rounddict(b_deviance)}\n"
+            s += f"avg diviation from the mean of real execution times ms\n"
+            s += f"forward{rounddict(f_deviance)}\nbackward{rounddict(b_deviance)}\n"
 
         s += "\nbalance is ratio of computation time between fastest and slowest parts."
         s += " (between 0 and 1 higher is better)\n"
-        s += f"theoretical sequential balance:\n"
-        s += f"forward {theoretical_sequential_f_balance:.3f}\nbackward {theoretical_sequential_b_balance:.3f}\n"
-        s += f"theoretical parallel balance:\n"
-        s += f"forward {theoretical_parallel_f_balance:.3f}\nbackward {theoretical_parallel_b_balance:.3f}\n"
+        if PRINT_THEORETICAL:
+            s += f"theoretical sequential balance:\n"
+            s += f"forward {theoretical_sequential_f_balance:.3f}\nbackward {theoretical_sequential_b_balance:.3f}\n"
+            s += f"theoretical parallel balance:\n"
+            s += f"forward {theoretical_parallel_f_balance:.3f}\nbackward {theoretical_parallel_b_balance:.3f}\n"
 
         s += f"\nreal balance:\n"
         s += f"forward {real_f_balance:.3f}\nbackward {real_b_balance:.3f}\n"
@@ -135,7 +139,7 @@ def run_analysis(sample,
             s += f"\nreal topology aware balance:\n"
             s += f"forwad {topology_aware_real_f_balance:.3f}\nbackward {topology_aware_real_b_balance:.3f}\n"
 
-        s +=f"\nAssuming bandwidth of {bw_GBps} GBps between GPUs\n"
+        s += f"\nAssuming bandwidth of {bw_GBps} GBps between GPUs\n"
         s += f"\ncommunication volumes size of activations of each partition\n"
         for idx, volume in comm_volume_str.items():
             s += f"{idx}: {volume}\n"
@@ -235,6 +239,8 @@ def profile_execution(model_inputs,
                     out_size_mb += t_mb
                     send_time += t_send
 
+                del outputs
+
                 stats = {
                     "input size": in_size_mb,  # "MB "
                     "recieve_time": recv_time,  # "ms"
@@ -297,6 +303,11 @@ def cuda_time(partition, inputs, recomputation=True):
     b_time, outputs = cuda_backward(partition,
                                     inputs,
                                     recomputation=recomputation)
+
+    # Delete gradeinets to save space
+    for p in partition.parameters():
+        p.grad = None
+
     f_time = cuda_forward(partition, inputs, recomputation=recomputation)
     partition = partition.cpu()
     partition.device = 'cpu'
