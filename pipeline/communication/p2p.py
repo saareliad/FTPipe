@@ -14,18 +14,24 @@ class P2PCommunicationHandler(SimpleCommBase):
     def _recv_tensors_p2p(self, x, batch_idx, ranks_dict_items):
         with torch.no_grad():
             request_objects = []
-            for tensor, (tensor_name, receive_ranks) in zip(grouper(x, self.num_chunks), ranks_dict_items):
+            for tensor, (tensor_name,
+                         receive_ranks) in zip(grouper(x, self.num_chunks),
+                                               ranks_dict_items):
                 assert len(receive_ranks) == 1
                 receive_rank = receive_ranks[0]
                 tensor_tag = self.tensor_tags[tensor_name] + \
                     (self.TOTAL_TAGS * batch_idx)
                 if self.verbose:
                     self.logger.info(
-                        f"irecv, src={receive_rank}, tag={tensor_tag}, name={tensor_name}, rank={self.local_rank}")
+                        f"irecv, src={receive_rank}, tag={tensor_tag}, name={tensor_name}, rank={self.local_rank}"
+                    )
 
-                for chunk, chunk_tag in zip(tensor, range(tensor_tag, tensor_tag + self.num_chunks)):
-                    request_obj = dist.irecv(
-                        chunk, receive_rank, tag=chunk_tag)
+                for chunk, chunk_tag in zip(
+                        tensor, range(tensor_tag,
+                                      tensor_tag + self.num_chunks)):
+                    request_obj = dist.irecv(chunk,
+                                             receive_rank,
+                                             tag=chunk_tag)
                     request_objects.append(request_obj)
 
         return request_objects
@@ -53,19 +59,13 @@ class P2PCommunicationHandler(SimpleCommBase):
                 tensor = tensor.chunk(self.num_chunks)
                 tensor_tag = self.tensor_tags[tensor_name] + \
                     (self.TOTAL_TAGS * batch_idx)
-                # try:
-                #     tensor.detach_()
-                # except RuntimeError as e:
-                #     self.logger.debug(f"isend, tag={tensor_tag}, name={tensor_name}, rank={self.local_rank}")
-                #     self.logger.debug(tensor)
-                #     raise e
-                # One message per tensor, regardles of number of chunks.
                 for send_rank in send_ranks:
                     if self.verbose:
                         self.logger.info(
-                            f"isend, dst={send_rank}, tag={tensor_tag}, name={tensor_name}, rank={self.local_rank}")
+                            f"isend, dst={send_rank}, tag={tensor_tag}, name={tensor_name}, rank={self.local_rank}"
+                        )
 
-                    # FIXME: accuracy crashes with num_chunks > 1 if we synchronize here once
+                    # FIXME: accuracy used to crashe with num_chunks > 1 when we synchronize here once
                     if not self.cpu:
                         # HACK: synchronize.
                         torch.cuda.synchronize(device=self.device)
@@ -73,27 +73,16 @@ class P2PCommunicationHandler(SimpleCommBase):
                     # TODO: if self.num_chunks > 1:
                     for i, chunk in enumerate(tensor):
                         chunk_tag = tensor_tag + i
-                        # if self.verbose:
-                        #     self.logger.info(
-                        #         f"isend, dst={send_rank}, tag={chunk_tag}, shape={chunk.shape}, rank={self.local_rank}")
-
-                        # if torch.isnan(chunk).any():
-                        #     self.logger.info(f"isend, dst={send_rank}, tag={chunk_tag}, shape={chunk.shape}, rank={self.local_rank}")
-                        #     self.logger.info(f"Sent chunk {chunk}")
-                        #     raise RuntimeError()
-
-                        # if not self.cpu:
-                        #     # HACK: synchronize.
-                        #     torch.cuda.synchronize(device=self.device)
-                        # assert chunk.is_contiguous()
-                        request_obj = dist.isend(
-                            chunk, send_rank, tag=chunk_tag)
+                        request_obj = dist.isend(chunk,
+                                                 send_rank,
+                                                 tag=chunk_tag)
                         request_objects.append(request_obj)
                         sent_items.append(None)  # FIXME: stop saving this.
         return request_objects, sent_items
 
     def send_activations(self, x, batch_idx):
-        return self._send_tensors_p2p(x, batch_idx, self.send_ranks.items(), False)
+        return self._send_tensors_p2p(x, batch_idx, self.send_ranks.items(),
+                                      False)
 
     def send_gradients(self, x, batch_idx):
         return self._send_tensors_p2p(x, batch_idx, self.grad_send_items, True)
