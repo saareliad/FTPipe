@@ -1,8 +1,11 @@
-from pytorch_Gpipe.pipeline.mpi_io import P2PConnection, P2MPScatterConnection, P2MPBroadcastConnection, P2PRankIO
-import os
-import torch
-import torch.distributed as dist
 from torch.multiprocessing import spawn
+import torch.distributed as dist
+import torch
+import os
+import sys
+sys.path.append("../")
+from pytorch_Gpipe.pipeline.mpi_io import P2PConnection, P2MPScatterConnection, P2MPBroadcastConnection, P2PRankIO
+import traceback
 
 
 def tests(rank, world_size):
@@ -43,7 +46,7 @@ def test_p2p_connection(rank):
                         req.wait()
                 else:
                     expected = torch.arange(10, dtype=torch.float32) + sender
-                    t = torch.empty(10)
+                    t = torch.randn(10)
                     req = comm.receive(t, block=block_reciever)
                     if not block_reciever:
                         req.wait()
@@ -52,43 +55,45 @@ def test_p2p_connection(rank):
 
 def test_p2mp_scatter(rank):
     if rank in [1, 2]:
-        comm = P2PConnection(0, tag=(rank - 1), total_tags=2)
+        comm = P2PConnection(0, tag=rank, total_tags=2)
     else:
-        comm = P2MPScatterConnection(0, [1, 2], [0, 1], 2)
+        assert rank == 0
+        comm = P2MPScatterConnection(0, [1, 2], [1, 2], 2)
 
-        # send
-        for block_sender in [True, False]:
-            for block_recievers in [True, False]:
-                if rank == 0:
-                    t = torch.arange(10, dtype=torch.float32) + 1
-                    req = comm.send(t, block=block_sender)
-                    if not block_sender:
-                        req.wait()
-                else:
-                    t = torch.empty(5)
-                    expected = torch.arange((rank - 1) * 5, rank * 5,
-                                            dtype=torch.float32) + 1
-                    req = comm.receive(t, block=block_recievers)
-                    if not block_recievers:
-                        req.wait()
-                    assert torch.allclose(expected, t)
+    # send
+    for block_sender in [True, False]:
+        for block_recievers in [True, False]:
+            if rank == 0:
+                t = torch.arange(10, dtype=torch.float32) + 1
+                req = comm.send(t, block=block_sender)
+                if not block_sender:
+                    req.wait()
+            else:
+                t = torch.randn(5)
+                expected = torch.arange((rank - 1) * 5, rank * 5,
+                                        dtype=torch.float32) + 1
+                req = comm.receive(t, block=block_recievers)
+                if not block_recievers:
+                    req.wait()
+                assert torch.allclose(expected, t)
 
-        # recive
-        for block_senders in [True, False]:
-            for block_reciever in [True, False]:
-                if rank == 0:
-                    expected = torch.arange(10, dtype=torch.float32)
-                    t = torch.empty(10)
-                    req = comm.receive(t, block=block_reciever)
-                    if not block_reciever:
-                        req.wait()
-                    assert torch.allclose(expected, t)
-                else:
-                    t = torch.arange((rank - 1) * 5, rank * 5,
-                                     dtype=torch.float32)
-                    req = comm.receive(t, block=block_senders)
-                    if not block_senders:
-                        req.wait()
+    # recive
+    for block_senders in [True, False]:
+        for block_reciever in [True, False]:
+            if rank == 0:
+                expected = torch.arange(10, dtype=torch.float32)
+                t = torch.randn(10)
+                req = comm.receive(t, block=block_reciever)
+                if not block_reciever:
+                    req.wait()
+
+                assert torch.allclose(expected, t)
+            else:
+                t = torch.arange((rank - 1) * 5, rank * 5,
+                                 dtype=torch.float32)
+                req = comm.send(t, block=block_senders)
+                if not block_senders:
+                    req.wait()
 
 
 def test_p2mp_broadcast(rank):
@@ -101,6 +106,7 @@ def test_p2mp_broadcast(rank):
                                       tags=[1, 2], total_tags=total_tags)
         comm = P2MPBroadcastConnection([comm0, comm1])
     elif rank == 1:
+        # p2p 1->0
         comm = P2PConnection(dst=0, tag=0, total_tags=total_tags)
     else:
         # p2p 2,3 -> 0
@@ -115,7 +121,7 @@ def test_p2mp_broadcast(rank):
                 if not block_sender:
                     req.wait()
             elif rank == 1:
-                t = torch.empty(10)
+                t = torch.randn(10)
                 expected = torch.arange(10, dtype=torch.float32) + 3
                 req = comm.receive(t, block=block_recievers)
                 if not block_recievers:
@@ -124,7 +130,7 @@ def test_p2mp_broadcast(rank):
             else:
                 expected = torch.arange((rank - 2) * 5, (rank - 1) * 5,
                                         dtype=torch.float32) + 3
-                t = torch.empty(5)
+                t = torch.randn(5)
                 req = comm.receive(t, block=block_recievers)
                 if not block_recievers:
                     req.wait()
@@ -135,7 +141,7 @@ def test_p2mp_broadcast(rank):
         for block_reciever in [True, False]:
             if rank == 0:
                 expected = torch.arange(10, dtype=torch.float32) * 2
-                t = torch.empty(10)
+                t = torch.randn(10)
                 req = comm.receive(t, block=block_reciever)
                 if not block_reciever:
                     req.wait()
@@ -159,16 +165,16 @@ def forward_flow(rank):
     if rank == 0:
         b = torch.arange(64, dtype=torch.float32)
     elif rank in [1, 2]:
-        b0, b1 = torch.empty(32)
+        b0, b1 = torch.randn(32), torch.randn(32)
     elif rank in [3, 4, 5, 6]:
-        b0, b1 = torch.empty(8)
+        b0, b1 = torch.randn(16), torch.randn(16)
     else:
-        b = torch.empty(64)
+        b = torch.randn(64)
 
     if rank == 0:
         for i in range(1, 10):
             comm.send([b * i], forward=True, block=True)
-    if rank == 7:
+    elif rank == 7:
         for i in range(1, 10):
             expected = torch.arange(64, dtype=torch.float32)
             comm.receive([b], forward=True, block=True)
@@ -180,6 +186,7 @@ def forward_flow(rank):
         recv = comm.receive([bs[1 - idx]], forward=True, block=False)
         r = bs[idx] * 2
         idx = 1 - idx
+
         send = comm.send([r], forward=True, block=False)
         for _ in range(7):
             recv.wait()
@@ -188,6 +195,7 @@ def forward_flow(rank):
             r = bs[idx] * 2
             idx = 1 - idx
             send = comm.send([r], forward=True, block=False)
+
         send.wait()
         recv.wait()
         r = bs[idx] * 2
@@ -197,19 +205,19 @@ def forward_flow(rank):
 def backward_flow(rank):
     comm = get_comm(rank)
 
-    if rank == 0:
+    if rank == 7:
         b = torch.arange(64, dtype=torch.float32)
     elif rank in [1, 2]:
-        b0, b1 = torch.empty(32)
+        b0, b1 = torch.randn(32), torch.randn(32)
     elif rank in [3, 4, 5, 6]:
-        b0, b1 = torch.empty(8)
+        b0, b1 = torch.randn(16), torch.randn(16)
     else:
-        b = torch.empty(64)
+        b = torch.randn(64)
 
     if rank == 7:
         for i in range(1, 10):
             comm.send([b * i], forward=False, block=True)
-    if rank == 0:
+    elif rank == 0:
         for i in range(1, 10):
             expected = torch.arange(64, dtype=torch.float32)
             comm.receive([b], forward=False, block=True)
