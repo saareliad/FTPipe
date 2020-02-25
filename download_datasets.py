@@ -26,6 +26,7 @@ def download_wiki2():
     print(f"-I- Donwloaded wikitext2 to {path_to_zip_file}. Extracting...")
     with zipfile.ZipFile(path_to_zip_file, 'r') as zip_ref:
         zip_ref.extractall(DATA_DIR)
+    # NOTE: The data will be in DATA_DIR/wikitext-2-raw
     print("-I- Done")
 
 

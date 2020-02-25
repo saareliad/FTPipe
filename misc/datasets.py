@@ -10,9 +10,9 @@ from PIL import Image
 
 from torch.utils.data import Dataset, DistributedSampler
 import torch.distributed as dist
+import pickle
 
 # new_distributed_get_train_test_dl_from_args
-# distributed_get_train_test_dl_from_args
 # simplified_get_train_test_dl_from_args
 # get_seperate_just_x_or_y_train_test_dl_from_args
 
@@ -20,6 +20,7 @@ import torch.distributed as dist
 DEFAULT_DATA_DIR = os.path.expanduser('~/.pytorch-datasets')
 IMAGENET_ROOT_DIR = "/home_local/saareliad/data/imagenet/"
 DOWNLOAD = False
+# WIKI2_DATA_DIR = DATA_DIR/wikitext-2-raw
 # torch.backends.cudnn.deterministic = True
 # torch.backends.cudnn.benchmark = False
 # CIFAR best practice:
@@ -27,6 +28,61 @@ DOWNLOAD = False
 # torch.backends.cudnn.benchmark = False
 
 AVAILABLE_DATASETS = {'cifar10', 'cifar100', 'imagenet'}
+
+############################
+# Forward decalted Datasets # FIXME
+############################
+
+
+class TextDataset(Dataset):
+    # Dataset adapted from huggingface LM example.
+    # https://github.com/huggingface/transformers/blob/master/examples/run_language_modeling.py
+    # (but without the args thing...)
+    def __init__(self,
+                 tokenizer,
+                 model_name_or_path,
+                 overwrite_cache=False,
+                 file_path='train',
+                 block_size=512):
+        assert os.path.isfile(file_path), file_path
+        directory, filename = os.path.split(file_path)
+        cached_features_file = os.path.join(
+            directory, model_name_or_path + '_cached_lm_' + str(block_size) +
+            '_' + filename)
+
+        if os.path.exists(cached_features_file) and not overwrite_cache:
+            with open(cached_features_file, 'rb') as handle:
+                self.examples = pickle.load(handle)
+
+        else:
+            self.examples = []
+            with open(file_path, encoding="utf-8") as f:
+                # NOTE: this makes it is sutible mostly for small datasets...
+                text = f.read()
+
+            tokenized_text = tokenizer.convert_tokens_to_ids(
+                tokenizer.tokenize(text))
+
+            # Truncate in block of block_size
+            for i in range(0,
+                           len(tokenized_text) - block_size + 1, block_size):
+                self.examples.append(
+                    tokenizer.build_inputs_with_special_tokens(
+                        tokenized_text[i:i + block_size]))
+            # Note that we are loosing the last truncated example here for the sake of simplicity (no padding)
+            # If your dataset is small, first you should loook for a bigger one :-) and second you
+            # can change this behavior by adding (model specific) padding.
+            with open(cached_features_file, 'wb') as handle:
+                pickle.dump(self.examples,
+                            handle,
+                            protocol=pickle.HIGHEST_PROTOCOL)
+
+    def __len__(self):
+        return len(self.examples)
+
+    def __getitem__(self, item):
+        return torch.tensor(self.examples[item])
+
 
 ################
 # Transforms
@@ -126,6 +182,42 @@ def get_cifar_100_train_test_ds(DATA_DIR=DEFAULT_DATA_DIR):
     return ds_train, ds_test
 
 
+def get_wikitext2_raw_train_valid_test_ds(model_name_or_path,
+                                          tokenizer,
+                                          block_size=512,
+                                          overwrite_cache=False,
+                                          DATA_DIR=DEFAULT_DATA_DIR,
+                                          split='all'):
+    wt2_data_path = os.path.join(DATA_DIR, "wikitext-2-raw")
+    train_file = os.path.join(wt2_data_path, "wiki.train.raw")
+    valid_file = os.path.join(wt2_data_path, "wiki.valid.raw")
+    test_file = os.path.join(wt2_data_path, "wiki.test.raw")
+
+    def get_ds(file_path):
+        return TextDataset(tokenizer,
+                           model_name_or_path,
+                           overwrite_cache=overwrite_cache,
+                           file_path=file_path,
+                           block_size=block_size)
+
+    if split == 'all':
+        train_ds = get_ds(train_file)
+        valid_ds = get_ds(valid_file)
+        test_ds = get_ds(test_file)
+        return train_ds, valid_ds, test_ds
+    elif split == 'train':
+        train_ds = get_ds(train_file)
+        return train_ds
+    elif split == 'valid':
+        valid_ds = get_ds(valid_file)
+        return valid_ds
+    elif split == 'test':
+        test_ds = get_ds(test_file)
+        return test_ds
+    else:
+        raise ValueError(f"Unsupported split {split}.")
+
+
 DATASET_TO_DS_FN = {
     'cifar10': get_cifar_10_train_test_ds,
     'cifar100': get_cifar_100_train_test_ds,
@@ -156,6 +248,11 @@ def get_cv_train_test_dl(ds_train,
                                           pin_memory=pin_memory,
                                           **kw)
     return dl_train, dl_test
+
+
+def get_lm_train_test_dl():
+    # TODO
+    pass
 
 
 DATASET_TO_DL_FN = {
