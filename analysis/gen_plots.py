@@ -1,8 +1,11 @@
-from misc import plot
-from experiments import load_experiment
+from . import plot
 import matplotlib.pyplot as plt
 import os
 import numpy as np
+
+import sys
+sys.path.append("..")
+from experiments import load_experiment
 
 # Options are:
 # plot.plot_grad_norm

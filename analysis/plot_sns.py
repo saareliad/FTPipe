@@ -2,7 +2,7 @@ import pandas as pd
 import seaborn as sns
 import os
 import matplotlib.pyplot as plt
-from all_results_to_df import print_uniques
+from .all_results_to_df import print_uniques
 
 
 def p1(graph='test_acc'):

@@ -1,13 +1,13 @@
 import os
-from experiments import load_experiment
-
 from typing import NamedTuple  # for bwd compatibility
 import itertools
 import pandas as pd
 import numpy as np
 import os
 import argparse
-
+import sys
+sys.path.append("..")
+from experiments import load_experiment
 
 def is_json(fn):
     return ".json" in fn

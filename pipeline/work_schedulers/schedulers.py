@@ -258,12 +258,12 @@ if __name__ == "__main__":
     EXTRA = 10
     # stage = 0  # Should test the edge case.
     num_batches = num_stages*2 + 1 + EXTRA
-    step_every = 1
-    # sched_name = "1F1B"
-    sched_name = "PIPEDREAM"
+    step_every = 2
+    sched_name = "1F1B"
+    # sched_name = "PIPEDREAM"
     PRINT_STAGE_STRINGS = False
     PRINT_EXTRA_INFO = True
-    PRINT_JUST_PROBLEMATIC_STAGES = True
+    PRINT_JUST_PROBLEMATIC_STAGES = False
     PRINT_JUST_FOR_THE_FWDS = False
 
     d = dict(sched_name=sched_name,

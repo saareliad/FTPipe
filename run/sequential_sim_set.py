@@ -1,6 +1,6 @@
 import os
 from sklearn.model_selection import ParameterGrid
-from gpu_queue import map_to_limited_gpus, map_to_several_limited_gpus
+from .gpu_queue import map_to_limited_gpus, map_to_several_limited_gpus
 from functools import partial
 
 import shlex
