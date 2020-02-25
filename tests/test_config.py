@@ -1,4 +1,4 @@
-from sample_models import dummy
+from models.normal import dummy
 from pytorch_Gpipe.utils import layerDict, tensorDict
 from pytorch_Gpipe import PipelineConfig
 import torch
