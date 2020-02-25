@@ -1,4 +1,3 @@
-
 import torch
 from torch import Tensor
 from torch.nn import Module
@@ -19,8 +18,12 @@ tab = '    '
 dtab = tab + tab
 
 
-def compile_partitoned_model(graph: Graph, model: Module, verbose: bool = False, output_file: Optional[str] = None):
-    '''generates the code for the partitioned model. the partitions can be consumed using the create_pipeline_configuration method in the generated code
+def compile_partitoned_model(graph: Graph,
+                             model: Module,
+                             verbose: bool = False,
+                             output_file: Optional[str] = None):
+    '''generates the code for the partitioned model.
+       The partitions can be consumed using the `create_pipeline_configuration` method in the generated code
 
     Parameters:
     graph:
@@ -32,10 +35,15 @@ def compile_partitoned_model(graph: Graph, model: Module, verbose: bool = False,
     output_file:
         optional path to the generated code. if None uses generated_{model_name}{numberOfPatitions}.py
     '''
-    layer_classes = {scope: type(layer) for layer, scope, _
-                     in traverse_model(model, depth=graph.depth, basic_blocks=graph.basic_blocks)}
-    is_param_dict = {scope: t.requires_grad for t,
-                     scope in traverse_params_buffs(model)}
+    layer_classes = {
+        scope: type(layer)
+        for layer, scope, _ in traverse_model(
+            model, depth=graph.depth, basic_blocks=graph.basic_blocks)
+    }
+    is_param_dict = {
+        scope: t.requires_grad
+        for t, scope in traverse_params_buffs(model)
+    }
 
     parts = groupByPartition(graph.nodes)
 
@@ -49,23 +57,28 @@ def compile_partitoned_model(graph: Graph, model: Module, verbose: bool = False,
     for idx, part in parts:
         class_name = f'Partition{idx}'
         layer_names = [n.scope for n in part if n.type == NodeTypes.LAYER]
-        buff_param_names = {n.scope for n in part
-                            if n.type == NodeTypes.BUFF_PARAM}
-        class_decl, scope_to_class_field = generate_init_method(class_name, layer_names,
-                                                                layer_classes, is_param_dict,
-                                                                buff_param_names)
+        buff_param_names = {
+            n.scope
+            for n in part if n.type == NodeTypes.BUFF_PARAM
+        }
+        class_decl, scope_to_class_field = generate_init_method(
+            class_name, layer_names, layer_classes, is_param_dict,
+            buff_param_names)
         state_methods_functions = generate_state_methods()
-        forward_function, io = generate_forward_method(part, graph.output_scopes, scope_to_class_field,
+        forward_function, io = generate_forward_method(part,
+                                                       graph.output_scopes,
+                                                       scope_to_class_field,
                                                        verbose=verbose)
         partitions_code.append(class_decl)
         partitions_code.extend(forward_function)
         partitions_code.append(state_methods_functions)
         ios[idx] = io
 
-    lines.append(create_pipeline_configuration(graph, parts, model,
-                                               ios, layer_classes))
-    lines.append(create_model_parallel_module(graph.model_name, ios,
-                                              graph.num_inputs, graph.output_scopes))
+    lines.append(
+        create_pipeline_configuration(graph, parts, model, ios, layer_classes))
+    lines.append(
+        create_model_parallel_module(graph.model_name, ios, graph.num_inputs,
+                                     graph.output_scopes))
     lines += partitions_code
     lines.append(generateHelpFunctions())
 
@@ -103,7 +116,8 @@ def groupByPartition(nodes: List[Node]) -> List[Tuple[int, List[Node]]]:
             scope = n.scope
             # we handle torch,Tensor and torch.nn.functional nameSpaces
             func_name = getFunctionName(scope)
-            if hasattr(torch, func_name) or hasattr(F, func_name) or hasattr(Tensor, func_name):
+            if hasattr(torch, func_name) or hasattr(F, func_name) or hasattr(
+                    Tensor, func_name):
                 parts[n.part].append(n)
             elif 'aten::slice' in scope or 'aten::Int' in scope:
                 parts[n.part].append(n)
@@ -127,7 +141,7 @@ def generateImports(layer_classes: Dict[str, Module]) -> List[str]:
     imports = 'import torch\nfrom torch import Tensor\nimport torch.nn as nn\nimport torch.nn.functional as F\n'
     imports += 'from itertools import chain\n'
     imports += 'import operator\n'
-    imports += 'from typing import Optional, Tuple, Iterator, Iterable,OrderedDict,Dict\n'
+    imports += 'from typing import Optional, Tuple, Iterator, Iterable, OrderedDict, Dict\n'
     imports += 'import collections'
     imports += '\n'
     unique_classes = set(layer_classes.values())
@@ -144,8 +158,10 @@ def generateHelpFunctions() -> str:
     '''generates traverse_model, layerDict, traverse_params_buffs, tensorDict functions
     to be used in the create_pipeline_configuration function
     '''
-    lines = [inspect.getsource(f) for f in
-             [traverse_model, layerDict, traverse_params_buffs, tensorDict]]
+    lines = [
+        inspect.getsource(f) for f in
+        [traverse_model, layerDict, traverse_params_buffs, tensorDict]
+    ]
 
     return "\n\n".join(lines)
 
@@ -162,13 +178,21 @@ def getFunctionName(scope: str) -> str:
     return scope.split(sep)[1].rstrip(string.digits)
 
 
-def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]], model: Module, ios: Dict[int, Dict[str, List[str]]], basic_blocks: Dict[str, Module]) -> str:
+def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
+                                  model: Module, ios: Dict[int,
+                                                           Dict[str,
+                                                                List[str]]],
+                                  basic_blocks: Dict[str, Module]) -> str:
     '''generates the create_pipeline_configuration method which given a model creates his partitioned counterpart
     '''
-    model_buffers = {scope: t for t, scope in traverse_params_buffs(model)
-                     if not t.requires_grad}
-    model_parameteres = {scope: t for t, scope in traverse_params_buffs(model)
-                         if t.requires_grad}
+    model_buffers = {
+        scope: t
+        for t, scope in traverse_params_buffs(model) if not t.requires_grad
+    }
+    model_parameteres = {
+        scope: t
+        for t, scope in traverse_params_buffs(model) if t.requires_grad
+    }
     model_class = model.__class__.__name__
     if graph.basic_blocks:
         basic_blocks = [cls.__name__ for cls in set(basic_blocks.values())]
@@ -190,17 +214,22 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]], mo
     # hard code which layers buffers and parameters belong to each partition
     construction_args = []
     for idx, part in partitions:
-        layer_scopes = [f"'{n.scope}'"
-                        for n in part if n.type == NodeTypes.LAYER]
+        layer_scopes = [
+            f"'{n.scope}'" for n in part if n.type == NodeTypes.LAYER
+        ]
         buffer_scopes = [
-            f"'{n.scope}'" for n in part if n.scope in model_buffers]
-        parameter_scopes = [f"'{n.scope}'" for n in part
-                            if n.scope in model_parameteres]
+            f"'{n.scope}'" for n in part if n.scope in model_buffers
+        ]
+        parameter_scopes = [
+            f"'{n.scope}'" for n in part if n.scope in model_parameteres
+        ]
         construction_args.append(
             (layer_scopes, buffer_scopes, parameter_scopes))
 
     # create partition generation statements
-    for idx, (layer_scopes, buffer_scopes, parameter_scopes) in zip(sorted(list(ios.keys())), construction_args):
+    for idx, (layer_scopes, buffer_scopes,
+              parameter_scopes) in zip(sorted(list(ios.keys())),
+                                       construction_args):
         l_scopes = 'layer_scopes = [' + f",\n{dtab}".join(layer_scopes) + ']'
         b_scopes = 'buffer_scopes = [' + f",\n{dtab}".join(buffer_scopes) + ']'
         p_scopes = 'parameter_scopes = [' + \
@@ -214,13 +243,17 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]], mo
         f"# creating configuration\n{tab}config = {{{exp}\n{dtab}{tab}}}")
 
     for idx in sorted(list(ios.keys())):
-        lines.extend([f"device = torch.device('cpu') if DEBUG else torch.device('cuda:{idx}')",
-                      f"config[{idx}]['model'] = partition{idx}.to(device)"])
+        lines.extend([
+            f"device = torch.device('cpu') if DEBUG else torch.device('cuda:{idx}')",
+            f"config[{idx}]['model'] = partition{idx}.to(device)"
+        ])
 
     input_ids = [f"'input{idx}'" for idx in range(graph.num_inputs)]
-    lines.extend([f"config['model inputs'] = [{', '.join(input_ids)}]",
-                  f"config['model outputs'] = {list(graph.output_scopes)}",
-                  f"\n{tab}return [config[i]['model'] for i in range({len(ios)})] if partitions_only else config"])
+    lines.extend([
+        f"config['model inputs'] = [{', '.join(input_ids)}]",
+        f"config['model outputs'] = {list(graph.output_scopes)}",
+        f"\n{tab}return [config[i]['model'] for i in range({len(ios)})] if partitions_only else config"
+    ])
 
     return f"\n{tab}".join(lines) + "\n"
 
@@ -230,8 +263,10 @@ def connections(graph: Graph) -> str:
     to be embeded in the generated file
     '''
     num_partitions = graph.num_partitions
-    adj_matrix = [{"inputs": set(), "outputs": set()}
-                  for i in range(num_partitions + 2)]
+    adj_matrix = [{
+        "inputs": set(),
+        "outputs": set()
+    } for i in range(num_partitions + 2)]
 
     for node in graph.nodes:
         if node.type is NodeTypes.IN:
@@ -254,32 +289,34 @@ def connections(graph: Graph) -> str:
     lines.append(f"# model inputs {adj_matrix[0]['outputs']}")
     for i, line in enumerate(adj_matrix[1:-1:]):
         lines.append(f"# partition {i} {line}")
-    lines.append(
-        f"# model outputs {adj_matrix[num_partitions + 1]['inputs']}")
+    lines.append(f"# model outputs {adj_matrix[num_partitions + 1]['inputs']}")
     return '\n'.join(lines) + '\n'
 
 
-def create_model_parallel_module(name: str, ios: Dict[int, Dict[str, List[str]]], num_inputs: int, model_outputs: List[str]) -> str:
+def create_model_parallel_module(name: str, ios: Dict[int, Dict[str,
+                                                                List[str]]],
+                                 num_inputs: int,
+                                 model_outputs: List[str]) -> str:
     '''create a modelParallel version of the partition config
     '''
     model_inputs = [f'input{idx}' for idx in range(num_inputs)]
     class_decl_and_init = "\n".join([
         f"class ModelParallel(nn.Module):",
         f"{tab}def __init__(self,config):",
-        f"{dtab}super(ModelParallel,self).__init__()",
-        dtab + f"\n{dtab}".join(
-            f"self.stage{i} = config[{i}]['model']" for i in ios)
+        f"{dtab}super({name}ModelParallel,self).__init__()",
+        dtab + f"\n{dtab}".join(f"self.stage{i} = config[{i}]['model']"
+                                for i in ios)
     ])
 
     forward = model_parallel_forward(ios, model_inputs, model_outputs)
 
-    states = f",\n{dtab}{dtab}".join([f"**self.stage{i}.state_dict(self.stage{i}.device)"
-                                      for i in ios])
+    states = f",\n{dtab}{dtab}".join(
+        [f"**self.stage{i}.state_dict(self.stage{i}.device)" for i in ios])
 
     states = f"{{{states}}}"
 
-    state_dict = f"\n{dtab}".join(["def state_dict(self):",
-                                   f"return {states}"])
+    state_dict = f"\n{dtab}".join(
+        ["def state_dict(self):", f"return {states}"])
 
     loads = f"\n{dtab}".join([f"self.stage{i}.load_state(state)" for i in ios])
     load_state_dict = f"\n{tab}{tab}".join(
@@ -295,16 +332,23 @@ def create_model_parallel_module(name: str, ios: Dict[int, Dict[str, List[str]]]
     named_parameters = f"\n{dtab}".join(
         [f"def named_parameters(self):", f"return chain({parameter_states})"])
 
-    parameters = f"\n{dtab}".join(["def parameters(self):",
-                                   f"return [p for _,p in self.named_parameters()]"])
+    parameters = f"\n{dtab}".join([
+        "def parameters(self):",
+        f"return [p for _,p in self.named_parameters()]"
+    ])
 
-    buffers = f"\n{dtab}".join(["def buffers(self):",
-                                f"return [b for _,b in self.named_buffers()]"])
+    buffers = f"\n{dtab}".join(
+        ["def buffers(self):", f"return [b for _,b in self.named_buffers()]"])
 
-    return f"\n\n{tab}".join([class_decl_and_init, forward, state_dict, load_state_dict, named_buffers, named_parameters, buffers, parameters]) + "\n\n"
+    return f"\n\n{tab}".join([
+        class_decl_and_init, forward, state_dict, load_state_dict,
+        named_buffers, named_parameters, buffers, parameters
+    ]) + "\n\n"
 
 
-def model_parallel_forward(ios: Dict[int, Dict[str, List[str]]], model_inputs: List[str], model_outputs: List[str]) -> str:
+def model_parallel_forward(ios: Dict[int, Dict[str, List[str]]],
+                           model_inputs: List[str],
+                           model_outputs: List[str]) -> str:
     '''generates the forward nethod of the model parallel version of the config
     '''
     n_partitions = len(ios)
@@ -321,8 +365,9 @@ def model_parallel_forward(ios: Dict[int, Dict[str, List[str]]], model_inputs: L
         idx = parts.popleft()
 
         if all(tensor in activations for tensor in ios[idx]['inputs']):
-            inputs = ", ".join(f"{activations[tensor]}.to(self.stage{idx}.device)"
-                               for tensor in ios[idx]['inputs'])
+            inputs = ", ".join(
+                f"{activations[tensor]}.to(self.stage{idx}.device)"
+                for tensor in ios[idx]['inputs'])
             outputs = []
             for o, t in zip(ios[idx]['outputs'], arg_gen):
                 activations[o] = t

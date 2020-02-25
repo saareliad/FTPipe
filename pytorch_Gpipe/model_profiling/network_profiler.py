@@ -9,12 +9,22 @@ from ..utils import Tensors, _detach_inputs, _get_size, get_device, traverse_mod
 
 __all__ = ['profile_network', 'Profile']
 
-Profile = namedtuple('Profile',
-                     'forward_time backward_time cuda_memory_forward cuda_memory_backward layer_size input_size output_size input_shape output_shape')
+Profile = namedtuple(
+    'Profile',
+    'forward_time backward_time cuda_memory_forward cuda_memory_backward layer_size input_size output_size input_shape output_shape'
+)
 
 
-def profile_network(net: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None,
-                    basic_blocks: Optional[List[nn.Module]] = None, max_depth=100, n_iter=10) -> Dict[str, Profile]:
+def profile_network(
+        net: nn.Module,
+        sample_batch: Tensors,
+        kwargs: Optional[Dict] = None,
+        basic_blocks: Optional[List[nn.Module]] = None,
+        max_depth=100,
+        n_iter=10,
+        save_memory_mode=False,
+        recomputation=False,
+) -> Dict[str, Profile]:
     '''
     profiles a network's computation time(forward/backward) and memory consumption
     returns a dictionary from layer_scope to Profile
@@ -46,10 +56,14 @@ def profile_network(net: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict
     if kwargs is None:
         kwargs = {}
     if not isinstance(sample_batch, tuple):
-        sample_batch = (sample_batch,)
+        sample_batch = (sample_batch, )
 
     # wrap all individula layers for profiling
-    layers_dict = _wrap_profiled_layers(net, max_depth, basic_blocks)
+    layers_dict = _wrap_profiled_layers(net,
+                                        max_depth,
+                                        basic_blocks,
+                                        save_memory_mode=save_memory_mode,
+                                        recomputation=recomputation)
 
     # perform n_iter symbolic forward backward run
     # first one is warmup as we have seen the first time measurements are higher
@@ -57,10 +71,12 @@ def profile_network(net: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict
         _perform_forward_backward_pass(net, *sample_batch, **kwargs)
 
     # gather forward and backward execution times
-    backward_times = [layer.avg_time(forward=False)
-                      for layer in layers_dict.values()]
-    forward_times = [layer.avg_time(forward=True)
-                     for layer in layers_dict.values()]
+    backward_times = [
+        layer.avg_time(forward=False) for layer in layers_dict.values()
+    ]
+    forward_times = [
+        layer.avg_time(forward=True) for layer in layers_dict.values()
+    ]
 
     # gather input and output sizes
     layer_input_sizes = [layer.input_size for layer in layers_dict.values()]
@@ -79,19 +95,23 @@ def profile_network(net: nn.Module, sample_batch: Tensors, kwargs: Optional[Dict
     output_shapes = [layer.output_shape for layer in layers_dict.values()]
 
     # prepare profiling results
-    layers_profile = {name: Profile(forward, backward, *cuda_mem, param_size + buffer_size,
-                                    in_size, out_size, in_shape, out_shape)
-                      for name, forward, backward, param_size, buffer_size, in_size,
-                      out_size, cuda_mem, in_shape, out_shape in zip(
-        layers_dict.keys(), forward_times, backward_times, param_sizes,
-        buffer_sizes, layer_input_sizes, layer_output_sizes, cuda_memory, input_shapes, output_shapes)}
+    layers_profile = {
+        name: Profile(forward, backward, *cuda_mem, param_size + buffer_size,
+                      in_size, out_size, in_shape, out_shape)
+        for name, forward, backward, param_size, buffer_size,
+        in_size, out_size, cuda_mem, in_shape, out_shape in zip(
+            layers_dict.keys(), forward_times, backward_times, param_sizes,
+            buffer_sizes, layer_input_sizes, layer_output_sizes, cuda_memory,
+            input_shapes, output_shapes)
+    }
 
     _unwrap_layers(net)
 
     return layers_profile
 
 
-def _perform_forward_backward_pass(net, *sample_batch: Tensors, **kwargs: Dict):
+def _perform_forward_backward_pass(net, *sample_batch: Tensors,
+                                   **kwargs: Dict):
     if len(sample_batch) > 0:
         device = get_device(sample_batch)
     else:
@@ -112,12 +132,21 @@ def _perform_forward_backward_pass(net, *sample_batch: Tensors, **kwargs: Dict):
     return out
 
 
-def _wrap_profiled_layers(module: nn.Module, depth, basic_blocks: List[nn.Module]):
+def _wrap_profiled_layers(module: nn.Module,
+                          depth,
+                          basic_blocks: List[nn.Module],
+                          save_memory_mode=False,
+                          recomputation=False):
     layers_dict = {}
 
-    for sub_layer, scope, parent in traverse_model(module, depth, basic_blocks=basic_blocks):
+    for sub_layer, scope, parent in traverse_model(module,
+                                                   depth,
+                                                   basic_blocks=basic_blocks):
         name = scope[scope.rfind('[') + 1:-1]
-        wrapper = Wrapper(sub_layer, scope)
+        wrapper = Wrapper(sub_layer,
+                          scope,
+                          save_memory_mode=save_memory_mode,
+                          recomputation=recomputation)
         parent.add_module(name, wrapper)
         layers_dict[scope] = wrapper
 
@@ -127,6 +156,7 @@ def _wrap_profiled_layers(module: nn.Module, depth, basic_blocks: List[nn.Module
 def _unwrap_layers(module: nn.Module):
     for name, sub_module in module.named_children():
         if isinstance(sub_module, Wrapper):
+            sub_module.on_unwrap()
             module.add_module(name, sub_module.layer)
         else:
             _unwrap_layers(sub_module)
@@ -152,7 +182,11 @@ class Wrapper(nn.Module):
 
     '''
 
-    def __init__(self, sub_module: nn.Module, scope: str):
+    def __init__(self,
+                 sub_module: nn.Module,
+                 scope: str,
+                 save_memory_mode=False,
+                 recomputation=False):
         super(Wrapper, self).__init__()
         self.layer = sub_module
         self.forward_time = []
@@ -165,6 +199,11 @@ class Wrapper(nn.Module):
         self.input_shape = []
         self.output_shape = []
         self.scope = scope
+        self.save_memory_mode = save_memory_mode
+        self.recomputation = recomputation  # TODO
+
+        if save_memory_mode:
+            self.layer.to('cpu')
 
     def _layer_size(self):
         '''
@@ -183,7 +222,7 @@ class Wrapper(nn.Module):
         perform forward and backward pass of the underlying layer and measure metrics
         '''
         ts = list(chain(self.parameters(), self.buffers()))
-        if len(ts) > 0:
+        if len(ts) > 0 and not self.save_memory_mode:
             device = ts[0].device
         elif len(inputs) > 0:
             device = get_device(inputs)
@@ -195,24 +234,55 @@ class Wrapper(nn.Module):
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
         self.device = torch.device(device)
+
+        if self.save_memory_mode:
+            self.layer.to(self.device)
+
         # detach inputs from previous history enabling us to measure execution time
         # only for this layer
 
         detached_inputs = _detach_inputs(inputs)
+        # TODO: we  the input as requires grad, as this is mostly the case,
+        #  the grad has to be passed backward.
+        # However, then gradient creation will be computed for all
 
-        forward_time, outputs, self.forward_cuda_mem = self._time_op(
-            self.layer, *detached_inputs, **kwargs)
+        with torch.set_grad_enabled(not self.recomputation):
+            # if recomputation: its a dummy forward
+            forward_time, outputs, self.forward_cuda_mem = self._time_op(
+                self.layer, *detached_inputs, **kwargs)
 
         self.forward_time.append(forward_time)
         # reduce outputs to calculate dummy loss
-        loss = torch.zeros(1, requires_grad=True, device=device)
+        loss = torch.zeros(1, requires_grad=False, device=device)
+
+        if self.recomputation:
+            # Then, we do fwd+bwd
+            # FIXME: self.forward_cuda_mem...
+            forward_time, outputs, self.forward_cuda_mem = self._time_op(
+                self.layer, *detached_inputs, **kwargs)
+
         for out in flatten(outputs):
             if isinstance(out, torch.Tensor):
                 loss = loss + out.sum()
 
         # measure backward execution time
-        backward_time, _, self.backward_cuda_mem = self._time_op(
-            torch.autograd.backward, loss)
+
+        if loss.grad_fn is not None or loss.requires_grad:
+            backward_time, _, self.backward_cuda_mem = self._time_op(
+                torch.autograd.backward, loss)
+
+            # TODO: also create option to check gradient accumulation,
+            #  in case this is the domminant case
+
+            # delete gradients to save memory after backward.
+            for p in self.parameters():
+                p.grad = None
+        else:
+            backward_time, self.backward_cuda_mem = 0.0, 0.0
+
+        if self.recomputation:
+            backward_time = forward_time + backward_time
+
         self.backward_time.append(backward_time)
 
         # input and output size
@@ -220,9 +290,9 @@ class Wrapper(nn.Module):
         self.output_size, self.output_shape = _get_size(outputs)
 
         if isinstance(self.input_shape, torch.Size):
-            self.input_shape = (self.input_shape,)
+            self.input_shape = (self.input_shape, )
         if isinstance(self.output_shape, torch.Size):
-            self.output_shape = (self.output_shape,)
+            self.output_shape = (self.output_shape, )
 
         # size in MegaBytes
         self.backward_cuda_mem /= 1e6
@@ -232,13 +302,16 @@ class Wrapper(nn.Module):
         self.parameters_size /= 1e6
         self.buffers_size /= 1e6
 
+        if self.save_memory_mode:
+            self.layer.to('cpu')
+
         return outputs
 
     def _time_op(self, func, *inputs: Tensors, **kwargs: Dict):
         exec_time = 0
         cuda_mem = 0
         device = self.device
-        if(device.type == 'cuda'):
+        if (device.type == 'cuda'):
             torch.cuda.reset_max_memory_allocated(device=device)
             base_mem = torch.cuda.max_memory_allocated(device=device)
 
@@ -271,7 +344,8 @@ class Wrapper(nn.Module):
             forward_times = self.backward_time
         max_v = max(forward_times)
 
-        return sum([t for t in forward_times if t < max_v]) / (len(forward_times) - 1)
+        return sum([t for t in forward_times if t < max_v
+                    ]) / (len(forward_times) - 1)
 
     # just in case those operations are required we pass them to the profiled layer
 
@@ -298,3 +372,7 @@ class Wrapper(nn.Module):
             return super().__getattr__(name)
         except Exception:
             return getattr(self.layer, name)
+
+    def on_unwrap(self):
+        if self.save_memory_mode:
+            self.layer.to('cuda')  # HACK, assuming its called only at cuda.

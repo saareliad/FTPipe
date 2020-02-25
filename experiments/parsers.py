@@ -2,7 +2,7 @@ import sys
 sys.path.append("../")
 import argparse
 import torch
-import sample_models
+import models.normal
 import inspect
 from importlib import import_module
 
@@ -27,7 +27,7 @@ class ExpParser(argparse.ArgumentParser):
 
         self.available_models = self._get_available_models()
         self.add_argument('--model', '-m',
-                          help='The sample model we want to run the experiment on.\n for example alexnet in order to use sample_models.alexnet',
+                          help='The sample model we want to run the experiment on.\n for example alexnet in order to use models.normal.alexnet',
                           choices=self.available_models.keys(), required=True, dest='model_class')
         self.add_argument('--pipeline_config', '-p',
                           help="module of pipeline config")
@@ -81,7 +81,7 @@ class ExpParser(argparse.ArgumentParser):
 
     def _get_available_models(self):
         classes = dict()
-        for name, t in inspect.getmembers(sample_models):
+        for name, t in inspect.getmembers(models.normal):
             if inspect.isfunction(t) or inspect.isclass(t):
                 classes[name] = t
 
@@ -135,7 +135,7 @@ class ImageNetParser(argparse.ArgumentParser):
                           default=0)
 
         self.add_argument('--model', '-m',
-                          help='The sample model we want to run the experiment on.\n for example alexnet in order to use sample_models.alexnet',
+                          help='The sample model we want to run the experiment on.\n for example alexnet in order to use models.normal.alexnet',
                           choices=self.available_models.keys(), required=True, dest='model_class')
         self.add_argument('--model_args',
                           help='The parameters for the model\nkeys are always string and values can be ints or strings with int taking precedence',

@@ -9,37 +9,87 @@ def run_analysis(sample,
                  config,
                  n_iter,
                  recomputation=True,
-                 bandwidth_gps=12,
+                 bw_GBps=12,
                  verbose=True,
-                 async_pipeline=False):
+                 async_pipeline=False,
+                 add_comm_times_to_balance=True):
+
+    # NOTE: add_comm_times_to_balance, should be true...
+    # setting to false is mainly for our own debug
+
+    TOPO_AWARE = False
+    UTILIZATION_SLOWDOWN_SPEEDUP = True
+    PRINT_THEORETICAL = False
+    PRINT_VAR_STD = False
+
     # thoeretical analysis
     sequential_f, sequential_b, parallel_f, parallel_b = theoretical_analysis(
-        graph, config, recomputation=recomputation, async_pipeline=async_pipeline)
+        graph,
+        config,
+        recomputation=recomputation,
+        async_pipeline=async_pipeline)
     edges = edge_cut(graph)
     # theoretical analysis based on the graph assuming the computation is sequential
-    theoretical_sequential_b_imbalance = worst_imbalance(sequential_b)
-    theoretical_sequential_f_imbalance = worst_imbalance(sequential_f)
-    (topology_aware_sequential_f_imbalance,
-     topology_aware_sequential_b_imbalance) = topology_aware_imbalance(
+    theoretical_sequential_b_balance = worst_balance(sequential_b)
+    theoretical_sequential_f_balance = worst_balance(sequential_f)
+    (topology_aware_sequential_f_balance,
+     topology_aware_sequential_b_balance) = topology_aware_balance(
          sequential_f, sequential_b, edges)
     # theoretical anaysis based on the graph assuming the computation is fully parallel
-    theoretical_parallel_b_imbalance = worst_imbalance(parallel_b)
-    theoretical_parallel_f_imbalance = worst_imbalance(parallel_f)
-    topology_aware_parallel_f_imbalance, topology_aware_parallel_b_imbalance = topology_aware_imbalance(
+    theoretical_parallel_b_balance = worst_balance(parallel_b)
+    theoretical_parallel_f_balance = worst_balance(parallel_f)
+    topology_aware_parallel_f_balance, topology_aware_parallel_b_balance = topology_aware_balance(
         parallel_f, parallel_b, edges)
     # real statistics based on generated partitions
     ((real_f_times, f_vars, f_deviance), (real_b_times, b_vars, b_deviance),
-     comm_volume) = profile_execution(sample,
-                                      config,
-                                      n_iter + 1,
-                                      recomputation=recomputation,
-                                      bandwidth_gps=bandwidth_gps,
-                                      async_pipeline=async_pipeline)
-    real_b_imbalance = worst_imbalance(real_b_times)
-    real_f_imbalance = worst_imbalance(real_f_times)
-    (topology_aware_real_f_imbalance,
-     topology_aware_real_b_imbalance) = topology_aware_imbalance(
-         real_f_times, real_b_times, edges)
+     comm_volume_str, comm_volume_stats, nocomm_real_f_times,
+     nocomm_real_b_times) = profile_execution(
+         sample,
+         config,
+         n_iter + 1,
+         recomputation=recomputation,
+         bw_GBps=bw_GBps,
+         async_pipeline=async_pipeline,
+         add_comm_times_to_balance=add_comm_times_to_balance)
+
+    real_b_balance = worst_balance(real_b_times)
+    real_f_balance = worst_balance(real_f_times)
+
+    if TOPO_AWARE:
+        (topology_aware_real_f_balance,
+         topology_aware_real_b_balance) = topology_aware_balance(
+             real_f_times, real_b_times, edges)
+
+    real_b_slowdown = slowdown(real_b_times, nocomm_real_b_times)
+    real_f_slowdown = slowdown(real_f_times, nocomm_real_f_times)
+
+    # NOTE: can also print imbalance slowdown.
+
+    comp_comm_ratio_f = computation_communication_ratio(
+        nocomm_real_f_times,
+        {k: v['send time']
+         for k, v in comm_volume_stats.items()})
+
+    comp_comm_ratio_b = computation_communication_ratio(
+        nocomm_real_b_times,
+        {k: v['recieve_time']
+         for k, v in comm_volume_stats.items()})
+
+    real_f_utilization = utilization(real_f_times, comp_comm_ratio_f)
+    real_b_utilization = utilization(real_b_times, comp_comm_ratio_b)
+
+    n_partitions = sum([1 for k in config if isinstance(k, int)])
+    expected_speedup = expected_speedup_after_partitioning(
+        real_f_times, real_b_times, nocomm_real_f_times, nocomm_real_b_times)
+
+    def rounddict(d, x=2):
+        return {k: round(v, x) for k, v in d.items()}
+
+    comp_comm_ratio_f = rounddict(comp_comm_ratio_f)
+    comp_comm_ratio_b = rounddict(comp_comm_ratio_b)
+
+    real_b_utilization = rounddict(real_b_utilization)
+    real_f_utilization = rounddict(real_f_utilization)
 
     # TODO: save this into some data structure
     # where we could analyze it later, compare between partitions, etc.
@@ -51,62 +101,89 @@ def run_analysis(sample,
         s += f"backward times {'do not ' if not recomputation else ''}include recomputation\n"
         if async_pipeline and recomputation:
             s += f"Analysis for async_pipeline=True: last partition will not do recomputation.\n"
-
-        s += f"\ntheoretical times are execution time based on sum of graph weights ms\n"
-        s += f"\nsequential forward {sequential_f}\nsequential backward {sequential_b}\n"
-        s += f"parallel forward {parallel_f}\nparallel backward {parallel_b}\n"
+        if PRINT_THEORETICAL:
+            s += f"\ntheoretical times are execution time based on sum of graph weights ms\n"
+            s += f"\nsequential forward {sequential_f}\nsequential backward {sequential_b}\n"
+            s += f"parallel forward {parallel_f}\nparallel backward {parallel_b}\n"
 
         s += f"\nreal times are based on real measurements of execution time of generated partitions ms\n"
-        s += f"forward {real_f_times}\nbackward {real_b_times}\n"
-        s += f"variance of real execution times ms\nforward{f_vars}\nbackward{b_vars}\n"
 
-        s += f"avg diviation from the mean of real execution times ms\nforward{f_deviance}\nbackward{b_deviance}\n"
+        s += f"forward {rounddict(real_f_times)}\nbackward {rounddict(real_b_times)}\n"
+        if PRINT_VAR_STD:
+            s += f"variance of real execution times ms\n"
+            s += f"forward{rounddict(f_vars)}\nbackward{rounddict(b_vars)}\n"
 
-        s += "\nimbalance is ratio of computation time between fastest and slowest parts."
+            s += f"avg diviation from the mean of real execution times ms\n"
+            s += f"forward{rounddict(f_deviance)}\nbackward{rounddict(b_deviance)}\n"
+
+        s += "\nbalance is ratio of computation time between fastest and slowest parts."
         s += " (between 0 and 1 higher is better)\n"
-        s += f"theoretical sequential imbalance:\n"
-        s += f"forward {theoretical_sequential_f_imbalance:.3f}\nbackward {theoretical_sequential_b_imbalance:.3f}\n"
-        s += f"theoretical parallel imbalance:\n"
-        s += f"forward {theoretical_parallel_f_imbalance:.3f}\nbackward {theoretical_parallel_b_imbalance:.3f}\n"
+        if PRINT_THEORETICAL:
+            s += f"theoretical sequential balance:\n"
+            s += f"forward {theoretical_sequential_f_balance:.3f}\nbackward {theoretical_sequential_b_balance:.3f}\n"
+            s += f"theoretical parallel balance:\n"
+            s += f"forward {theoretical_parallel_f_balance:.3f}\nbackward {theoretical_parallel_b_balance:.3f}\n"
 
-        s += f"\nreal imbalance:\n"
-        s += f"forward {real_f_imbalance:.3f}\nbackward {real_b_imbalance:.3f}\n"
+        s += f"\nreal balance:\n"
+        s += f"forward {real_f_balance:.3f}\nbackward {real_b_balance:.3f}\n"
 
-        s += "\ntopology aware imbalance is worst imbalance between 2 connected partitions\n"
-        s += f"theoretical sequential topology aware imbalance:\n"
-        s += f"forwad {topology_aware_sequential_f_imbalance:.3f}\n"
-        s += f"backward {topology_aware_sequential_b_imbalance:.3f}\n"
-        s += f"theoretical parallel topology aware imbalance:\n"
-        s += f"forwad {topology_aware_parallel_f_imbalance:.3f}\n"
-        s += f"backward {topology_aware_parallel_b_imbalance:.3f}\n"
+        if TOPO_AWARE:
+            s += "\ntopology aware balance is worst balance between 2 connected partitions\n"
+            s += f"theoretical sequential topology aware balance:\n"
+            s += f"forwad {topology_aware_sequential_f_balance:.3f}\n"
+            s += f"backward {topology_aware_sequential_b_balance:.3f}\n"
+            s += f"theoretical parallel topology aware balance:\n"
+            s += f"forwad {topology_aware_parallel_f_balance:.3f}\n"
+            s += f"backward {topology_aware_parallel_b_balance:.3f}\n"
 
-        s += f"\nreal topology aware imbalance:\n"
-        s += f"forwad {topology_aware_real_f_imbalance:.3f}\nbackward {topology_aware_real_b_imbalance:.3f}\n"
+            s += f"\nreal topology aware balance:\n"
+            s += f"forwad {topology_aware_real_f_balance:.3f}\nbackward {topology_aware_real_b_balance:.3f}\n"
 
+        s += f"\nAssuming bandwidth of {bw_GBps} GBps between GPUs\n"
         s += f"\ncommunication volumes size of activations of each partition\n"
-        for idx, volume in comm_volume.items():
+        for idx, volume in comm_volume_str.items():
             s += f"{idx}: {volume}\n"
 
+        s += "\nCompuatation Communication ratio (comp/(comp+comm)):\n"
+        s += f"forward {comp_comm_ratio_f} \nbackward {comp_comm_ratio_b}\n"
+
+        if UTILIZATION_SLOWDOWN_SPEEDUP:
+            s += "\nPipeline Slowdown: (compared to sequential executation with no communication)\n"
+            s += f"forward {real_f_slowdown:.3f}\nbackward {real_b_slowdown:.3f}\n"
+
+            s += "\nExpected utilization by partition\n"
+            s += f"forward {real_f_utilization}\nbackward {real_b_utilization}\n"
+
+            s += f"\nExpected speedup for {n_partitions} partitions is: {expected_speedup:.3f}"
+
         print(s)
+
+    return expected_speedup  # real_f_balance, real_b_balance
 
 
 #################################
 # analyze generated partitions
 # ##############################
 
+
 def profile_execution(model_inputs,
                       partition_config,
                       n,
                       recomputation=True,
-                      bandwidth_gps=12,
-                      async_pipeline=False):
+                      bw_GBps=12,
+                      async_pipeline=False,
+                      add_comm_times_to_balance=True):
     '''perfrom forward/backward passes and measure execution times accross n batches
     '''
     n_partitions = sum([1 for k in partition_config if isinstance(k, int)])
     f_times = {i: [] for i in range(n_partitions)}
     b_times = {i: [] for i in range(n_partitions)}
 
+    nocommf_times = {i: [] for i in range(n_partitions)}
+    nocommb_times = {i: [] for i in range(n_partitions)}
+
     communication_volume = {}
+    communication_stats = {}
     if not isinstance(model_inputs, tuple):
         model_inputs = (model_inputs, )
 
@@ -135,13 +212,9 @@ def profile_execution(model_inputs,
                 ]
 
                 # input statistics
-                in_size_mb = 0
-                recv_time = 0
-                for t in inputs:
-                    t_mb = (t.nelement() * t.element_size()) / 1e6
-                    t_recv = t_mb / bandwidth_gps
-                    in_size_mb += t_mb
-                    recv_time = max(recv_time, t_recv)
+                in_size_mb = sum([(t.nelement() * t.element_size())
+                                  for t in inputs]) / 1e6
+                recv_time = in_size_mb / bw_GBps
 
                 # time measurement
                 if torch.cuda.is_available():
@@ -162,9 +235,11 @@ def profile_execution(model_inputs,
                     # save activation on CPU in order to save GPU memory
                     activations[o] = t.detach().cpu()
                     t_mb = (t.nelement() * t.element_size()) / 1e6
-                    t_send = t_mb / bandwidth_gps
+                    t_send = t_mb / bw_GBps
                     out_size_mb += t_mb
-                    send_time = max(t_send, send_time)
+                    send_time += t_send
+
+                del outputs
 
                 stats = {
                     "input size": in_size_mb,  # "MB "
@@ -179,17 +254,32 @@ def profile_execution(model_inputs,
                     "out": "MB",
                     "send time": "ms",
                 }
-                newd = {k: f"{stats[k]} {units[k]}" for k in stats}
+                newd = {k: f"{stats[k]:.2f} {units[k]}" for k in stats}
                 communication_volume[idx] = ', '.join(
                     "{!s}:{!r}".format(key, val)
                     for (key, val) in newd.items())
+
+                communication_stats[idx] = stats
+
+                # Adding communication time to balance:
+                # time = time + comm_send
+
+                nocommf_times[idx].append(f_time)
+                nocommb_times[idx].append(b_time)
+
+                if add_comm_times_to_balance:
+                    f_time += send_time
+                    b_time += in_size_mb / bw_GBps  # HACK: activation input = gradient size
                 f_times[idx].append(f_time)
                 b_times[idx].append(b_time)
+
             else:
                 parts.append(idx)
 
     # calculate mean and variance
-    return mean_var(f_times), mean_var(b_times), communication_volume
+    return mean_var(f_times), mean_var(
+        b_times), communication_volume, communication_stats, mean_var(
+            nocommf_times)[0], mean_var(nocommb_times)[0]
 
 
 def mean_var(times):
@@ -213,6 +303,11 @@ def cuda_time(partition, inputs, recomputation=True):
     b_time, outputs = cuda_backward(partition,
                                     inputs,
                                     recomputation=recomputation)
+
+    # Delete gradeinets to save space
+    for p in partition.parameters():
+        p.grad = None
+
     f_time = cuda_forward(partition, inputs, recomputation=recomputation)
     partition = partition.cpu()
     partition.device = 'cpu'
@@ -235,7 +330,7 @@ def cuda_backward(partition, inputs, recomputation=True):
         start = torch.cuda.Event(enable_timing=True)
         torch.cuda.synchronize(device='cuda')
         start.record()
-    loss = sum(o.norm() for o in outputs)
+    loss = sum(o.norm() for o in outputs)  # FIXME: just use real loss.
     loss.backward()
     end.record()
     torch.cuda.synchronize(device='cuda')
@@ -313,7 +408,10 @@ def edge_cut(graph):
     return edges
 
 
-def theoretical_analysis(graph, partition_config, recomputation=True, async_pipeline=False):
+def theoretical_analysis(graph,
+                         partition_config,
+                         recomputation=True,
+                         async_pipeline=False):
     ''' find execution time of partitions based on the model's graph using 2 a sequential assumption and parallel assumption
         the sequential assumption is that in the partition all operation are linear.
         the parallel assumption assumes that all computation paths are concurrent.
@@ -396,18 +494,100 @@ def extract_time(w, forward=False):
 
 
 ####################################
-# imbalance computation
+# balance computation
 # ##################################
 
 
-def worst_imbalance(times):
+def computation_communication_ratio(comp_times, comm_times):
+
+    # comm_times = {k: v['send time'] for k, v in comm_times.items()}
+    # comm_times = {k: v['recieve_times'] for k, v in comm_times.items()}
+
+    assert (len(comp_times) == len(comm_times))
+    ratio = {
+        k: comp_times[k] / (comm_times[k] + comp_times[k])
+        for k in comp_times
+    }
+    return ratio
+
+
+def utilization(times, comp_fraction):
+    # TODO: I still think this statistic can be improved... its just an estimation.
+
+    worst = max(times.values())
+    # This assumes that the GPU is utilized while we do comunication. (but its generally not)
+    base_util = {k: round(v / worst, 2) for k, v in times.items()}
+
+    # Therefore we mutiply by comp fraction
+    comp_util = {k: base_util[k] * comp_fraction[k] for k in comp_fraction}
+    return comp_util
+
+
+def slowdown(times, times_wo_comm):
+
+    worst = max(times.values())
+    n_partitions = len(times)
+
+    total = sum(times_wo_comm.values())
+    actual = n_partitions * worst
+
+    model_parallel_and_partitioning_slowdown = actual / total
+
+    return model_parallel_and_partitioning_slowdown
+
+
+def imbbalance_slowdown(times):
+    worst = max(times.values())
+    n_partitions = len(times)
+
+    total = sum(times.values())
+    actual = n_partitions * worst
+
+    partitioning_slowdown = actual / total
+
+    # NOTE: Expected speedup for X accelerators:
+    #  Expected_speedup = sum(times.values()) / worst
+    # # So, we should optimize towards lowering the worstcase as much as possible.
+    # expected_speedup = n_partitions / partitioning_slowdown
+
+    return partitioning_slowdown
+
+
+def expected_speedup_after_partitioning(fwd_times, bwd_times,
+                                        fwd_times_wo_comm, bwd_times_wo_comm):
+
+    n_partitions = len(fwd_times)
+    assert (len(fwd_times) == len(bwd_times))
+
+    fwd_slowdown = slowdown(fwd_times, fwd_times_wo_comm)
+    bwd_slowdown = slowdown(bwd_times, bwd_times_wo_comm)
+
+    worst_fwd = max(fwd_times.values())
+    worst_bwd = max(bwd_times.values())
+    fwd_plus_bwd = worst_fwd + worst_bwd
+
+    bwd_to_fwd_ratio = worst_bwd / fwd_plus_bwd
+    fwd_to_bwd_ratio = worst_fwd / fwd_plus_bwd
+
+    partitioning_slowdown = (bwd_to_fwd_ratio *
+                             bwd_slowdown) + (fwd_to_bwd_ratio * fwd_slowdown)
+
+    #  Expected speedup for X accelerators:
+    #  NOTE: Expected_speedup = sum(times.values()) / worst
+    # So, we should optimize towards lowering the worstcase as much as possible.
+    expected_speedup = n_partitions / partitioning_slowdown
+
+    return expected_speedup
+
+
+def worst_balance(times):
     return min(times.values()) / max(times.values())
 
 
-def topology_aware_imbalance(f_times, b_times, cutting_edges):
+def topology_aware_balance(f_times, b_times, cutting_edges):
     ''' find the lowest balance between 2 connected partitions
     '''
-    f_imbalance = b_imbalance = 10
+    f_balance = b_balance = 10
     for u, v in cutting_edges:
         f_ratio = min(f_times[u.part], f_times[v.part]) / \
             max(f_times[u.part], f_times[v.part])
@@ -415,13 +595,13 @@ def topology_aware_imbalance(f_times, b_times, cutting_edges):
         b_ratio = min(b_times[u.part], b_times[v.part]) / \
             max(b_times[u.part], b_times[v.part])
 
-        if f_ratio < f_imbalance:
-            f_imbalance = f_ratio
+        if f_ratio < f_balance:
+            f_balance = f_ratio
 
-        if b_ratio < b_imbalance:
-            b_imbalance = b_ratio
+        if b_ratio < b_balance:
+            b_balance = b_ratio
 
-    return f_imbalance, b_imbalance
+    return f_balance, b_balance
 
 
 ######################

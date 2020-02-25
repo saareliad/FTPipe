@@ -28,8 +28,8 @@ from pytorch_Gpipe.model_profiling.control_flow_graph import Graph, Node
 from pytorch_Gpipe.model_profiling.graph_builder import translate_scopes
 from pytorch_Gpipe.utils import (OrderedSet, layerDict, tensorDict,
                                  traverse_model, traverse_params_buffs)
-import sample_models
-from partitioned_models.tmp.resnet18_2p import create_pipeline_configuration, ResNetModelParallel
+import models.normal
+from models.partitioned.tmp.resnet18_2p import create_pipeline_configuration, ResNetModelParallel
 
 
 def node_weight_function(node: Node):
@@ -514,7 +514,7 @@ def clear_file(path):
 
 
 def check_gnmt():
-    model = sample_models.GNMT(512, hidden_size=512, num_layers=2,
+    model = models.normal.GNMT(512, hidden_size=512, num_layers=2,
                                share_embedding=False).cuda()
 
     sample = torch.randint(512, (512, 2)).cuda()
@@ -543,7 +543,7 @@ def check_LSTM():
 
 
 def single_node_pipeline_with_optimizer():
-    model = sample_models.resnet18().cuda()
+    model = models.normal.resnet18().cuda()
     sample = torch.randn(16, 3, 224, 224).cuda()
 
     config = create_pipeline_configuration(model, DEBUG=True)
@@ -564,7 +564,7 @@ def single_node_pipeline_with_optimizer():
 
 
 def single_node_model_parallel():
-    model = sample_models.resnet18().cuda()
+    model = models.normal.resnet18().cuda()
     sample = torch.randn(16, 3, 224, 224).cuda()
 
     config = create_pipeline_configuration(model, DEBUG=True)

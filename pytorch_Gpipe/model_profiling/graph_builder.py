@@ -22,9 +22,7 @@ __all__ = ["build_graph"]
 #      with the trace feature it will fail. without the trace feature we can know as each use gets a node
 #      but when we merge scopes they are all merged together
 
-
 # TODO there are still some problems with lstms should think if we want to tackle it
-
 
 DEBUG_MODEL_NAME = ""
 
@@ -48,30 +46,48 @@ def DEBUG_DUMP_GRAPH(func):
             LOG_FILENAME = f'GPIPE_DEBUG/{DEBUG_MODEL_NAME}_log.out'
             logging.basicConfig(filename=LOG_FILENAME, level=logging.DEBUG)
             logging.error(e, exc_info=True, stack_info=False)
-            raise type(e)(str(
-                e) + " an error occured during graph building please report this issue and attach the contents of GPIPE_DEBUG/").with_traceback(sys.exc_info()[2])
+            raise type(
+                e
+            )(str(e) +
+              " an error occured during graph building please report this issue and attach the contents of GPIPE_DEBUG/"
+              ).with_traceback(sys.exc_info()[2])
+
     return wrapper_dump
 
 
-def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[Dict] = None, max_depth: int = 1000, basic_blocks: Optional[Tuple[torch.nn.Module, ...]] = None, n_iter: int = 10) -> Graph:
+def build_graph(model: torch.nn.Module,
+                sample_batch: Tensors,
+                kwargs: Optional[Dict] = None,
+                max_depth: int = 1000,
+                basic_blocks: Optional[Tuple[torch.nn.Module, ...]] = None,
+                n_iter: int = 10,
+                recomputation=False,
+                save_memory_mode=False) -> Graph:
     if kwargs is None:
         kwargs = dict()
         # TODO tracing not tested with kwargs
     assert len(kwargs) == 0, "kwargs not supported yet"
 
     if not isinstance(sample_batch, tuple):
-        sample_batch = (sample_batch,)
+        sample_batch = (sample_batch, )
 
     if basic_blocks is None:
         basic_blocks = ()
     else:
         basic_blocks = tuple(basic_blocks)
 
-    layer_profiles = profile_network(model, sample_batch, kwargs=kwargs, n_iter=n_iter, max_depth=max_depth,
-                                     basic_blocks=basic_blocks)
+    layer_profiles = profile_network(model,
+                                     sample_batch,
+                                     kwargs=kwargs,
+                                     n_iter=n_iter,
+                                     max_depth=max_depth,
+                                     basic_blocks=basic_blocks,
+                                     recomputation=recomputation,
+                                     save_memory_mode=save_memory_mode)
 
     tensors = tensorDict(model)
-    profiled_layers = layerDict(model, depth=max_depth,
+    profiled_layers = layerDict(model,
+                                depth=max_depth,
                                 basic_blocks=basic_blocks)
     layer_scopes = list(profiled_layers.keys())
     new_to_old = translate_scopes(layer_scopes)
@@ -97,7 +113,9 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
         # if extension not built fall back to a default solution
         # TODO remove it at some point as it's not a best practice
         warnings.warn(
-            "trace_feature not found. falling back to regular trace which is less accurate and might not work\n please build it")
+            "Trace_feature not found."
+            "Falling back to regular trace which is less accurate and might not work\n."
+            "Please build it.")
         torch._C._jit_pass_inline(trace_graph)
 
     global DEBUG_MODEL_NAME
@@ -108,8 +126,7 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
         f.write(str(trace_graph))
 
     # build the graph from trace
-    nodes, unpack_fix = add_nodes(trace_graph, new_to_old,
-                                  partials, tensors)
+    nodes, unpack_fix = add_nodes(trace_graph, new_to_old, partials, tensors)
     outputs = output_scopes(nodes, trace_graph)
 
     nodes = add_unpack_nodes(nodes, unpack_fix)
@@ -139,16 +156,22 @@ def build_graph(model: torch.nn.Module, sample_batch: Tensors, kwargs: Optional[
     os.rmdir("GPIPE_DEBUG/")
     return graph
 
-##Initial graph construction####################################################################################################################################################################
+
+##############################
+# Initial graph construction
+##############################
 
 
-def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials: Dict[str, str], tensors: OrderedDictType[str, Tensor]) -> Tuple[GraphNodes, Dict[int, int]]:
+def add_nodes(
+    trace_graph: torch._C.Graph, new_to_old: Dict[str, str],
+    partials: Dict[str, str], tensors: OrderedDictType[str, Tensor]
+) -> Tuple[GraphNodes, Dict[int, int]]:
     nodes, accessors = add_inputs_and_self_accessor(tensors, trace_graph)
     multiple_output_fix = dict()
     for trace_node in trace_graph.nodes():
         if trace_node.kind() == "prim::GetAttr":
-            add_accessor(nodes, trace_node, accessors,
-                         new_to_old, partials, tensors)
+            add_accessor(nodes, trace_node, accessors, new_to_old, partials,
+                         tensors)
             continue
 
         if trace_node.kind() == "prim::CallFunction":
@@ -164,12 +187,12 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
             encasing_scope = longest_prefix(new_to_old, layer_scope)
             assert encasing_scope != "", "an unporfiled layer found should never happen"
             # inputs without the self arg
-            inputs = OrderedSet([nodes[i.unique()]
-                                 for i in list(trace_node.inputs())[1:]])
+            inputs = OrderedSet(
+                [nodes[i.unique()] for i in list(trace_node.inputs())[1:]])
         else:
             # this is an op
-            inputs = OrderedSet([nodes[i.unique()]
-                                 for i in trace_node.inputs()])
+            inputs = OrderedSet(
+                [nodes[i.unique()] for i in trace_node.inputs()])
             trace_scope = extract_new_scope(trace_node.scopeName())
             encasing_scope = longest_prefix(new_to_old, trace_scope)
 
@@ -207,7 +230,9 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
                 # unprofiled other
                 assert False, f"unknown scope {trace_node.scopeName()}"
 
-        if trace_node.outputsSize() > 1 and trace_node.kind() not in ["prim::TupleUnpack", "prim::ListUnpack"]:
+        if trace_node.outputsSize() > 1 and trace_node.kind() not in [
+                "prim::TupleUnpack", "prim::ListUnpack"
+        ]:
             idx = next(trace_node.outputs()).unique()
             multiple_output_fix[idx] = trace_node.outputsSize()
         # add node for each output
@@ -223,8 +248,12 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
             if i == 0 and node_type != NodeTypes.LAYER:
                 node_scope += str(unique_id)
             # create new node
-            new_node = Node(node_scope, unique_id,
-                            node_type, incoming_nodes=inputs, value=value, shape=shape)
+            new_node = Node(node_scope,
+                            unique_id,
+                            node_type,
+                            incoming_nodes=inputs,
+                            value=value,
+                            shape=shape)
 
             # add incoming edges
             for node in inputs:
@@ -243,13 +272,16 @@ def add_nodes(trace_graph: torch._C.Graph, new_to_old: Dict[str, str], partials:
 
         # add output idx for op with multiple outputs
         # uses last values of unique_id and i not best practice but ok here
-        if trace_node.outputsSize() > 1 and nodes[unique_id - i].type != NodeTypes.LAYER:
+        if trace_node.outputsSize() > 1 and nodes[unique_id -
+                                                  i].type != NodeTypes.LAYER:
             nodes[unique_id - i].scope += "0 "
 
     return nodes, multiple_output_fix
 
 
-def add_inputs_and_self_accessor(tensors: OrderedDictType[str, Tensor], trace_graph: torch._C.Graph) -> Tuple[OrderedDictType[int, Node], Dict[int, str]]:
+def add_inputs_and_self_accessor(
+    tensors: OrderedDictType[str, Tensor], trace_graph: torch._C.Graph
+) -> Tuple[OrderedDictType[int, Node], Dict[int, str]]:
     items = list(tensors.items())
     for k, t in items:
         partial_key = k[:k.rfind("/")] + "/" + k[k.rfind("["):]
@@ -264,8 +296,11 @@ def add_inputs_and_self_accessor(tensors: OrderedDictType[str, Tensor], trace_gr
             node_type = NodeTypes.IN
             t = tensors[scope]
             size, shape = _get_size(t)
-            node = Node(scope, unique_id,
-                        node_type, weight=size / 1e6, shape=shape)
+            node = Node(scope,
+                        unique_id,
+                        node_type,
+                        weight=size / 1e6,
+                        shape=shape)
             node.value_type = Tensor
             nodes[unique_id] = node
         else:
@@ -274,7 +309,9 @@ def add_inputs_and_self_accessor(tensors: OrderedDictType[str, Tensor], trace_gr
     return nodes, accessors
 
 
-def add_accessor(nodes: GraphNodes, trace_node: torch._C.Node, accessors: Dict[int, str], new_to_old: Dict[str, str], partials: Dict[str, str], tensors: Dict[str, Tensor]):
+def add_accessor(nodes: GraphNodes, trace_node: torch._C.Node,
+                 accessors: Dict[int, str], new_to_old: Dict[str, str],
+                 partials: Dict[str, str], tensors: Dict[str, Tensor]):
     # first we do book keeping we remember the accessor to know where are we in the model's hierarchy
     # we do not add accessor nodes to the graph as they only provide context
     accessor_name = trace_node.s('name')
@@ -302,15 +339,18 @@ def add_accessor(nodes: GraphNodes, trace_node: torch._C.Node, accessors: Dict[i
             tensor_scope = f"{parent_scope}/{type(t).__name__}[{accessor_name}]"
             size_in_mb = (t.nelement() * t.element_size()) / 1e6
             shape = t.shape
-        node = Node(tensor_scope, idx, node_type,
-                    weight=size_in_mb, shape=shape)
+        node = Node(tensor_scope,
+                    idx,
+                    node_type,
+                    weight=size_in_mb,
+                    shape=shape)
         node.value_type = Tensor
         nodes[idx] = node
 
-##################################################################################################################################################################################################
 
-
-##fit initial graph to profile#################################################################################################################################################
+##################################
+# fit initial graph to profile
+##################################
 @DEBUG_DUMP_GRAPH
 def optimize_graph(nodes: GraphNodes, layer_scopes: List[str]) -> GraphNodes:
     '''
@@ -333,7 +373,7 @@ def _combine_OP_nodes_under_the_same_scope(nodes: GraphNodes) -> GraphNodes:
 
     # get the nodes of the optimized graph
     for unique_id, node in reversed(nodes.items()):
-        if not node.scope in scope_representative:
+        if node.scope not in scope_representative:
             optimized_graph[unique_id] = node
             scope_representative[node.scope] = node
         else:
@@ -363,9 +403,11 @@ def _combine_OP_nodes_under_the_same_scope(nodes: GraphNodes) -> GraphNodes:
 
 
 @DEBUG_DUMP_GRAPH
-def _combine_params_and_buffers_into_OP_nodes(nodes: GraphNodes, layer_scopes: List[str]) -> GraphNodes:
+def _combine_params_and_buffers_into_OP_nodes(
+        nodes: GraphNodes, layer_scopes: List[str]) -> GraphNodes:
     def is_buffer_or_param(n):
-        return n.type == NodeTypes.BUFF_PARAM and any(n.scope.startswith(layer_scope) for layer_scope in layer_scopes)
+        return n.type == NodeTypes.BUFF_PARAM and any(
+            n.scope.startswith(layer_scope) for layer_scope in layer_scopes)
 
     return _remove_nodes(nodes, is_buffer_or_param)
 
@@ -382,7 +424,9 @@ def add_missing_types(nodes: GraphNodes) -> GraphNodes:
                 node.value_type = list
             elif 'ImplicitTensorToNum' in node.scope:
                 node.value_type = int
-            elif any('prim::ListUnpack' in o.scope or 'prim::TupleUnpack' in o.scope for o in node.out_nodes):
+            elif any('prim::ListUnpack' in o.scope
+                     or 'prim::TupleUnpack' in o.scope
+                     for o in node.out_nodes):
                 node.value_type = tuple
             elif 'prim::ListUnpack' in node.scope or 'prim::TupleUnpack' in node.scope:
                 father = node.in_nodes[0]
@@ -399,10 +443,15 @@ def add_missing_types(nodes: GraphNodes) -> GraphNodes:
     return nodes
 
 
-def output_scopes(nodes: GraphNodes, trace_graph: torch._C.Graph) -> OrderedSet[str]:
-    return OrderedSet(nodes[output.unique()].scope for output in trace_graph.outputs())
+def output_scopes(nodes: GraphNodes,
+                  trace_graph: torch._C.Graph) -> OrderedSet[str]:
+    return OrderedSet(nodes[output.unique()].scope
+                      for output in trace_graph.outputs())
 
-######cleanup methods##############################################################################################################################################
+
+#################################
+# cleanup methods
+# ###############################
 
 
 @DEBUG_DUMP_GRAPH
@@ -421,6 +470,7 @@ def remove_tensor_int_tensor(nodes) -> GraphNodes:
 def remove_useless_clone(nodes: GraphNodes) -> GraphNodes:
     def predicate(n: Node):
         return ('aten::clone' in n.scope) and (len(n.out_nodes) == 0)
+
     return _remove_nodes(nodes, predicate)
 
 
@@ -431,7 +481,8 @@ def remove_layer_to_list(nodes: GraphNodes) -> GraphNodes:
     '''
     def predicate(n: Node):
         if "prim::ListConstruct" in n.scope or "prim::TupleConstruct" in n.scope:
-            return (len(n.in_nodes) == 1) and (n.in_nodes[0].type is NodeTypes.LAYER)
+            return (len(
+                n.in_nodes) == 1) and (n.in_nodes[0].type is NodeTypes.LAYER)
 
     return _remove_nodes(nodes, predicate)
 
@@ -444,7 +495,9 @@ def remove_empty_view(nodes: GraphNodes) -> GraphNodes:
                 return True
             sizes = list(n.in_nodes)[1]
             return len(sizes.in_nodes) == 0
-        return('prim::ListConstruct' in n.scope or 'prim::TupleConstruct' in n.scope) and (len(n.in_nodes) == 0)
+        return ('prim::ListConstruct' in n.scope or
+                'prim::TupleConstruct' in n.scope) and (len(n.in_nodes) == 0)
+
     return _remove_nodes(nodes, predicate)
 
 
@@ -457,22 +510,27 @@ def remove_useless_node_inputs(nodes: GraphNodes) -> GraphNodes:
         if node.type == NodeTypes.CONSTANT and (node.value in [0, 1]):
             assert len(node.out_nodes) == 1, "Constant should have one use"
             out = node.out_nodes[0]
-            arithmetic_ops = ['aten::add',
-                              'aten::div', 'aten::mul', 'aten::sub']
-            arithmetic = any(opMatch(out.scope, o) or opMatch(out.scope, o + "_") for o in arithmetic_ops) and (
-                out.in_nodes.indexOf(node) == 2)
+            arithmetic_ops = [
+                'aten::add', 'aten::div', 'aten::mul', 'aten::sub'
+            ]
+            arithmetic = any(
+                opMatch(out.scope, o) or opMatch(out.scope, o + "_")
+                for o in arithmetic_ops) and (out.in_nodes.indexOf(node) == 2)
             contiguous_input = ('aten::contiguous' in out.scope) and (
                 out.in_nodes.indexOf(node) == 1)
             arange_input = ('aten::arange' in out.scope) and (
                 out.in_nodes.indexOf(node) == (len(out.in_nodes) - 3))
             return arithmetic or contiguous_input or arange_input
         return False
+
     return _remove_nodes(nodes, pred)
 
 
 @DEBUG_DUMP_GRAPH
-def _remove_nodes_that_go_nowhere(nodes: GraphNodes, scopes: OrderedSet[str]) -> GraphNodes:
+def _remove_nodes_that_go_nowhere(nodes: GraphNodes,
+                                  scopes: OrderedSet[str]) -> GraphNodes:
     '''remove nodes without out edges that are not outputs of the model'''
+
     # necessary because the trace can contain such nodes for certain ops
     # those nodes provide no additional info to the graph
     def going_nowhere(node):
@@ -486,7 +544,8 @@ def _remove_nodes_that_go_nowhere(nodes: GraphNodes, scopes: OrderedSet[str]) ->
             return False
 
         # if we have for example 2 unpacking and only the second is used then
-        # because we decide the unpacking index by position we cant remove the unused first unpacking as it will lead to the wrong index being used
+        # because we decide the unpacking index by position we cant remove the unused first unpacking
+        # as it will lead to the wrong index being used
         if "prim::TupleUnpack" in node.scope or "prim::ListUnpack" in node.scope:
             assert node.type is NodeTypes.PYTHON_PRIMITIVE
             return False
@@ -496,7 +555,8 @@ def _remove_nodes_that_go_nowhere(nodes: GraphNodes, scopes: OrderedSet[str]) ->
     return _remove_nodes(nodes, going_nowhere)
 
 
-def _remove_nodes(nodes: GraphNodes, condition: Callable[[Node], bool]) -> GraphNodes:
+def _remove_nodes(nodes: GraphNodes, condition: Callable[[Node],
+                                                         bool]) -> GraphNodes:
     while True:
         changed = False
         optimized_graph = OrderedDict()
@@ -521,17 +581,17 @@ def _remove_nodes(nodes: GraphNodes, condition: Callable[[Node], bool]) -> Graph
 
 
 def opMatch(scope: str, op_name: str) -> bool:
-    return re.search(f"{op_name}[{string.digits}]", scope) != None
+    return re.search(f"{op_name}[{string.digits}]", scope) is not None
 
 
-##################################################################################################################################################################################################
-
-
-####################Packing and Unpacking of inputs/outputs########################################################################################################################################
+###########################################
+# Packing and Unpacking of inputs/outputs
+###########################################
 @DEBUG_DUMP_GRAPH
 def add_unpack_nodes(nodes: GraphNodes, to_fix: Dict[int, int]) -> GraphNodes:
     '''
-    when not all of a tuple elements are used it is possible that not all of the unpack nodes will be emitted by the trace
+    when not all of a tuple elements are used it is possible that
+    not all of the unpack nodes will be emitted by the trace,
     so we add them here if necessary
     '''
     new_graph = OrderedDict()
@@ -544,8 +604,12 @@ def add_unpack_nodes(nodes: GraphNodes, to_fix: Dict[int, int]) -> GraphNodes:
             continue
         if node.idx in to_fix:
             assert skip == 0
-            tuple_node = Node(node.scope, node.idx + offset, node.type,
-                              incoming_nodes=node.in_nodes, shape=node.shape, value=node.value)
+            tuple_node = Node(node.scope,
+                              node.idx + offset,
+                              node.type,
+                              incoming_nodes=node.in_nodes,
+                              shape=node.shape,
+                              value=node.value)
             tuple_node.value_type = tuple
 
             offset += 1
@@ -588,7 +652,8 @@ def add_unpack_nodes(nodes: GraphNodes, to_fix: Dict[int, int]) -> GraphNodes:
 
 
 @DEBUG_DUMP_GRAPH
-def unpack_all_node_outputs(nodes: GraphNodes, layer_profiles: Dict[str, Profile]) -> GraphNodes:
+def unpack_all_node_outputs(nodes: GraphNodes,
+                            layer_profiles: Dict[str, Profile]) -> GraphNodes:
     new_graph = OrderedDict()
     # as we add nodes there might be idx collisions we fix this by expanding the range
     expanded_graph = OrderedDict()
@@ -604,10 +669,11 @@ def unpack_all_node_outputs(nodes: GraphNodes, layer_profiles: Dict[str, Profile
             continue
         assert node.idx not in new_graph, "idx collision when fixing nested iterables"
         new_graph[node.idx] = node
-        if node.type is NodeTypes.LAYER and len(layer_profiles[node.scope].output_shape) > 1:
+        if node.type is NodeTypes.LAYER and len(
+                layer_profiles[node.scope].output_shape) > 1:
             assert skip == 0
-            fixed_nodes, num_new = _unpack_outputs(node,
-                                                   layer_profiles[node.scope].output_shape)
+            fixed_nodes, num_new = _unpack_outputs(
+                node, layer_profiles[node.scope].output_shape)
             for n in fixed_nodes:
                 assert n.idx not in new_graph, "idx collision when fixing nested iterables"
                 new_graph[n.idx] = n
@@ -656,7 +722,8 @@ def _unpack_outputs(node: Node, outputs) -> Tuple[List[Node], int]:
 
 
 @DEBUG_DUMP_GRAPH
-def pack_all_node_inputs(nodes: GraphNodes, layer_profiles: Dict[str, Profile]) -> GraphNodes:
+def pack_all_node_inputs(nodes: GraphNodes,
+                         layer_profiles: Dict[str, Profile]) -> GraphNodes:
     "a model that have a tuple input may not be registered correctly so we create the necessary packing if necessary"
     new_graph = OrderedDict()
 
@@ -669,9 +736,10 @@ def pack_all_node_inputs(nodes: GraphNodes, layer_profiles: Dict[str, Profile]) 
 
     offset = 0
     for node in expanded_graph.values():
-        if node.type is NodeTypes.LAYER and len(layer_profiles[node.scope].input_shape) > 1:
-            fixed_nodes, offset = _pack_inputs(node,
-                                               layer_profiles[node.scope].input_shape, offset)
+        if node.type is NodeTypes.LAYER and len(
+                layer_profiles[node.scope].input_shape) > 1:
+            fixed_nodes, offset = _pack_inputs(
+                node, layer_profiles[node.scope].input_shape, offset)
             for n in fixed_nodes:
                 assert n.idx not in new_graph, "idx collision"
                 new_graph[n.idx] = n
@@ -706,7 +774,8 @@ def _pack_inputs(node: Node, inputs, offset):
                 # we need to create a new input node
                 num_new += 1
                 offset += 1
-                input_node = Node(base_scope + str(node.idx - idx - offset), node.idx - idx - offset,
+                input_node = Node(base_scope + str(node.idx - idx - offset),
+                                  node.idx - idx - offset,
                                   NodeTypes.PYTHON_PRIMITIVE)
 
                 input_node.value_type = tuple
@@ -721,7 +790,8 @@ def _pack_inputs(node: Node, inputs, offset):
         else:
             num_new += 1
             offset += 1
-            input_node = Node(base_scope + str(node.idx - idx - offset), node.idx - idx - offset,
+            input_node = Node(base_scope + str(node.idx - idx - offset),
+                              node.idx - idx - offset,
                               NodeTypes.PYTHON_PRIMITIVE)
 
             input_node.value_type = tuple
@@ -739,8 +809,11 @@ def _pack_inputs(node: Node, inputs, offset):
 
 
 def accessor_paths(outputs, path=()):
-    '''given a tuple yields the indices to access each element and if the nested element if terminal or iterable
-       for example l=(1,(6,(7,8))) will result in (0,) True , (1,) False, (1,0) True (1,1) False, (1,1,0) True, (1,1,1) True
+    '''
+    Given a tuple yields the indices to access each element and if the nested element if terminal or iterable
+    Example:
+        l=(1,(6,(7,8))) 
+        will result in (0,) True , (1,) False, (1,0) True (1,1) False, (1,1,0) True, (1,1,1) True
     '''
     for idx, val in enumerate(outputs):
         accessor = path + (idx, )
@@ -752,9 +825,9 @@ def accessor_paths(outputs, path=()):
             yield from accessor_paths(val, accessor)
 
 
-##################################################################################################################################################################################################
-
-###################Scope allocation and conversion to human readable format#######################################################################################################################
+#############################################################
+# Scope allocation and conversion to human readable format
+# ###########################################################
 def translate_scopes(old_scopes: List[str]) -> Dict[str, str]:
     translation = dict()
 
@@ -762,14 +835,16 @@ def translate_scopes(old_scopes: List[str]) -> Dict[str, str]:
     matcher = re.compile(pattern)
     for scope in old_scopes:
         search_results = matcher.finditer(scope)
-        translated = ("__module." + ".".join(s.group()
-                                             [1:-1] for s in search_results))
+        translated = ("__module." + ".".join(s.group()[1:-1]
+                                             for s in search_results))
         translation[translated] = scope
 
     return translation
 
 
-def basic_blocks_new_scopes(basic_blocks: Tuple[torch.nn.Module, ...], profiled_layers: Dict[str, torch.nn.Module], new_to_old: Dict[str, str]) -> Set[str]:
+def basic_blocks_new_scopes(basic_blocks: Tuple[torch.nn.Module, ...],
+                            profiled_layers: Dict[str, torch.nn.Module],
+                            new_to_old: Dict[str, str]) -> Set[str]:
     blocks_old_scopes = set()
     for old_scope, layer in profiled_layers.items():
         if isinstance(layer, basic_blocks):
@@ -813,7 +888,8 @@ def longest_prefix(strings: List[str], scope: str) -> str:
     return strings[most_specific] if most_specific != "" else ""
 
 
-##################################################################################################################################################################################################
+##############################################################################
+
 
 @DEBUG_DUMP_GRAPH
 def graph_check_and_cleanup(nodes, outputs, max_depth, basic_blocks) -> Graph:

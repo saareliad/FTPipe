@@ -12,7 +12,7 @@ from exp_utils import dp_model, single_gpu, pipeline_model, display_system_info
 from parsers import ImageNetParser
 
 
-from sample_models import alexnet, resnet101, vgg19_bn, squeezenet1_1, densenet201, \
+from models.normal import alexnet, resnet101, vgg19_bn, squeezenet1_1, densenet201, \
     WideResNet, AmoebaNet_D
 
 MODELS = {
