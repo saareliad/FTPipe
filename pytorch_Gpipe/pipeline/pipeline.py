@@ -20,7 +20,7 @@ from torch.distributed import Backend
 
 class Pipeline():
     def __init__(self, configs: Dict, output_device: Optional[int] = None, split_dim=0,
-                 buffer_sync: SyncBuffersMode = SyncBuffersMode.EVERY_BATCH,
+                 buffer_sync: SyncBuffersMode = SyncBuffersMode.BEFORE_EVAL,
                  gradient_accumulation_steps: int = 1, backend=Backend.GLOO):
         self.input_names = configs.pop('model inputs')
         self.output_names = configs.pop('model outputs')
@@ -51,7 +51,6 @@ class Pipeline():
             send_input_gradient = [k not in self.input_names
                                    for k in configs[stage_id]['inputs']]
 
-            model = model.share_memory()
             worker = Worker(backend, world_size, stage_id, rank, ranks_in_stage, model, state_stack, io,
                             send_input_gradient, command_queue, groups, use_delayedNorm, optimizer,
                             buffer_sync, gradient_accumulation_steps)
@@ -347,8 +346,7 @@ class Pipeline():
         return [s[0] for s in self._shards.values()]
 
 
-# TODO test the p2p_io
-# TODO check that replicated stages work
+# TODO use distibuted data parallel for replicated stage
 # TODO add pipeline support for p2p based io
 # TODO compare between queue based and distributed based (CPU easy GPU will require using the docker image)
 # TODO decide which config to generate obviously the new config in it's dict form and possibly the old config

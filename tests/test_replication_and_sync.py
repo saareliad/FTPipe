@@ -5,6 +5,7 @@ from copy import deepcopy
 import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel
 from itertools import chain
+import time
 
 
 class SyncModel(nn.Module):
@@ -35,12 +36,17 @@ def sync_stage_state(model: nn.Module, group, rank):
     group_size = float(dist.get_world_size(group))
     # TODO open to suggestions if we should sum or average?
     with torch.no_grad():
+        ops = []
         for idx, (name, tensor) in enumerate(tensors):
             if tensor.requires_grad:
                 t = tensor.grad
             else:
                 t = tensor
-            dist.all_reduce(t, group=group, op=dist.ReduceOp.SUM)
+            req = dist.all_reduce(t, group=group,
+                                  op=dist.ReduceOp.SUM, async_op=True)
+            ops.append((req, t))
+        for r, t in ops:
+            r.wait()
             t /= group_size
     return model
 
@@ -56,8 +62,10 @@ def custom_replication_and_sync(rank, world_size, replica: SyncModel):
 
     out = replica(x)
     out.sum().backward()
-
+    start = time.time()
     sync_stage_state(replica, dist.group.WORLD, rank)
+    torch.cuda.synchronize()
+    print(f"custom sync time {time.time() - start}", flush=True)
     grad = replica.w.grad
     assert torch.allclose(b, replica.b), "buffers should remain the same"
     assert torch.allclose(w, replica.w), "param data should remain the same"
@@ -78,8 +86,10 @@ def ddp_check(rank, world_size, replica: SyncModel):
     expected_grad = torch.ones(100, 100).cuda() * (batch / world_size)
 
     out = replica(x)
+    start = time.time()
     out.sum().backward()
-
+    torch.cuda.synchronize()
+    print(f"ddp sync time {time.time() - start}", flush=True)
     grad = replica.module.w.grad
     assert torch.allclose(
         b, replica.module.b), "buffers should remain the same"
@@ -87,7 +97,6 @@ def ddp_check(rank, world_size, replica: SyncModel):
         w, replica.module.w), "param data should remain the same"
     assert torch.allclose(grad, expected_grad), "gradients should be averaged"
     if rank == 0:
-        print()
         print("ddp sync done")
 
 
@@ -97,6 +106,7 @@ def fn(rank, world_size, replica):
     custom_replication_and_sync(rank, world_size, replica)
     replica.zero_grad()
     ddp_check(rank, world_size, replica)
+    replica.zero_grad()
 
 
 if __name__ == '__main__':

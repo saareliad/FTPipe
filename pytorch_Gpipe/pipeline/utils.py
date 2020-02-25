@@ -22,7 +22,5 @@ def split_to_n(l, n):
 @unique
 class SyncBuffersMode(Enum):
     DISABLED = auto()
-    # sync buffers after every batch during training
-    EVERY_BATCH = auto()
     # sync buffers only when switching to eval model during training
     BEFORE_EVAL = auto()

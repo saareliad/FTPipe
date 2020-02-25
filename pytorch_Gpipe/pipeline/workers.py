@@ -12,6 +12,9 @@ from .messages import COMMAND
 from .stage_io import QueueRankIO
 from .state_stack import StateStack
 from .utils import SyncBuffersMode
+from torch.nn.parallel import DistributedDataParallel
+from contextlib import nullcontext
+from collections import deque
 
 
 class Worker(Process):
@@ -38,15 +41,21 @@ class Worker(Process):
         self.step_every = gradient_accumulation_steps
         self.stage_process_group = self._init_process_groups(backend, world_size,
                                                              groups)
+        if self.stage_process_group:
+            self.model = DistributedDataParallel(self.model, device_ids=[self.model.device],
+                                                 output_device=[
+                                                     self.model.device],
+                                                 process_group=self.stage_process_group,
+                                                 broadcast_buffers=False,
+                                                 find_unused_parameters=False)
         self.done_fwds = 0
         self.done_bckwds = 0
 
         # we sort to be aboslutly sure we reduce in the same order
+        # grad reduction is handled by DDP
+        # we do this manually as it seems that SyncBatchNorm synchronizes buffers for every forward which is too excessive
         buffers = sorted(self.model.named_buffers(), key=lambda t: t[0])
         self.buffers = [t[1] for t in buffers]
-
-        parameters = sorted(self.model.named_parameters(), key=lambda t: t[0])
-        self.parameters = [t[1] for t in parameters]
 
     def run(self):
         # wait until we start forward for the first time
@@ -55,12 +64,14 @@ class Worker(Process):
             cmd, metadata = self.command_queue.get()
             self.changeMode(cmd, metadata)
 
+        backward_func = self.replicated_stage_backward if self.ranks_in_stage > 1 else self.backward
+
         while self.running:
             try:
                 if self.FORWARD:
                     self.forward()
                 else:
-                    self.backward()
+                    backward_func()
 
                 self.on_batch_end()
                 cmd, metadata = self.command_queue.get()
@@ -91,6 +102,26 @@ class Worker(Process):
             gradient_in = self.IO.receive(forward=False, block=True)
             grad_out = self.minibatch_backward(gradient_in)
             self.IO.send(grad_out, forward=False, block=False)
+
+    def replicated_stage_backward(self):
+        with self.model.no_sync():
+            for _ in range(self.num_minibatches) - 1:
+                gradient_in = self.IO.receive(forward=False, block=True)
+                grad_out = self.minibatch_backward(gradient_in)
+                self.IO.send(grad_out, forward=False, block=False)
+        # check if after this batch we take a step if yes initialte distributed reducer
+        self.done_bckwds += 1
+        if self.should_take_step():
+            context = self.model.no_sync
+        else:
+            context = nullcontext()
+
+        with context():
+            gradient_in = self.IO.receive(forward=False, block=True)
+            grad_out = self.minibatch_backward(gradient_in)
+            self.IO.send(grad_out, forward=False, block=False)
+
+        self.done_bckwds -= 1
 
     def minibatch_backward(self, grad_input: List[Optional[Tensor]]) -> List[Optional[Tensor]]:
         self.state_stack.restore_rng_state()
@@ -135,28 +166,23 @@ class Worker(Process):
     def should_take_step(self) -> bool:
         return self.optimizer and (not self.FORWARD) and (self.done_bckwds % self.step_every == 0)
 
-    def should_sync_buffers(self) -> bool:
-        return self.sync_buffers_mode is SyncBuffersMode.EVERY_BATCH and self.FORWARD
-
     def sync_buffers(self):
         if self.ranks_in_stage == 1 or len(self.buffers) == 0 or self.sync_buffers_mode is SyncBuffersMode.DISABLED:
             return
 
+        # TODO this can be optimized further for example we can coalesce tensors before reducing
+        # not sure if can be done with mpi but maybe with another backend like nccl or gloo
         with torch.no_grad():
+            ops = deque()
             for b in self.buffers:
-                dist.all_reduce(b, group=self.stage_process_group,
-                                op=dist.ReduceOp.SUM, async_op=False)
+                req = dist.all_reduce(b, group=self.stage_process_group,
+                                      op=dist.ReduceOp.SUM, async_op=True)
+                ops.append(req)
+
+            for b in self.buffers:
+                r = ops.popleft()
+                r.wait()
                 b /= float(self.ranks_in_stage)
-
-    def sync_parameters(self):
-        if self.ranks_in_stage == 1 or len(self.parameters) == 0:
-            return
-
-        with torch.no_grad():
-            for p in self.parameters:
-                dist.all_reduce(p.grad, group=self.stage_process_group,
-                                op=dist.ReduceOp.SUM, async_op=False)
-                p.grad /= float(self.ranks_in_stage)
 
     def _init_process_groups(self, backend, world_size, groups: List[List[int]]):
         # right know we use process groups only for replicated stages
@@ -168,11 +194,11 @@ class Worker(Process):
 
             if backend == 'mpi':
                 raise Exception("mpi not supported")
-                rank = os.environ["OMPI_COMM_WORLD_RANK"]
+                self.rank = os.environ["OMPI_COMM_WORLD_RANK"]
                 world_size = os.environ["OMPI_COMM_WORLD_SIZE"]
 
             dist.init_process_group(backend, init_method="env://",
-                                    rank=rank, world_size=world_size)
+                                    rank=self.rank, world_size=world_size)
             stage_group = None
             for group in groups:
                 pg = dist.new_group(ranks=group, backend=backend)
@@ -190,12 +216,9 @@ class Worker(Process):
         else:
             self.done_bckwds += 1
 
-        if self.should_sync_buffers():
-            self.sync_buffers()
-
         # have each stage take a step as soon as possible
         if self.should_take_step():
-            self.sync_parameters()
+            # if this is a replicated stage we've already synchronized gradients
             self.optimizer.step()
             self.optimizer.zero_grad()
 
