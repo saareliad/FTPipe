@@ -9,7 +9,7 @@ import inspect
 import json
 import os
 import importlib
-from pytorch_Gpipe.pipeline.pipeline import RankIO, Queue, QueueWrapper, SplitConnection, StateStack, ReplicatedConnection, split_to_n, chain, groupby
+from pytorch_Gpipe.pipeline.pipeline import QueueRankIO, Queue, QueueWrapper, SplitConnection, StateStack, ReplicatedConnection, split_to_n, chain, groupby
 
 
 class PipelineConfig():
@@ -178,12 +178,17 @@ class PipelineConfig():
             i += idx + 1
         return rank_to_model_and_optimizer
 
-    def toJson(self, path: Optional[str] = None) -> str:
-        def serialize(o):
-            assert isinstance(o, StageConfig)
-            return o.state()
+    def state_dict(self) -> Dict:
+        state = dict()
+        state["master_stage"] = self.master_stage.state_dict()
+        state["stages"] = {str(idx): stage.state_dict()
+                           for idx, stage in self.stages.items()}
 
-        json_str = json.dumps(self.__dict__, indent=4, default=serialize)
+        return state
+
+    def toJson(self, path: Optional[str] = None) -> str:
+
+        json_str = json.dumps(self.state_dict(), indent=4)
         if path is None:
             return json_str
 
@@ -193,20 +198,24 @@ class PipelineConfig():
         return json_str
 
     @classmethod
-    def fromJson(cls, json_path: str) -> "PipelineConfig":
-        if os.path.exists(json_path):
-            with open(json_path, "r") as f:
-                decoded = json.load(f)
-        else:
-            decoded = json.loads(json_path)
-
-        master_stage = StageConfig.fromDict(decoded['master_stage'])
+    def fromDict(cls, state) -> "PipelineConfig":
+        master_stage = StageConfig.fromDict(state['master_stage'])
         stages = {int(idx): StageConfig.fromDict(s)
-                  for idx, s in decoded['stages'].items()}
+                  for idx, s in state['stages'].items()}
         config = cls()
         config.master_stage = master_stage
         config.stages = stages
         return config
+
+    @classmethod
+    def fromJson(cls, json_path: str) -> "PipelineConfig":
+        if os.path.exists(json_path):
+            with open(json_path, "r") as f:
+                state = json.load(f)
+        else:
+            state = json.loads(json_path)
+
+        return cls.fromDict(state)
 
 
 class StageConfig():
@@ -263,7 +272,7 @@ class StageConfig():
             replicas.append((replica, device, optimizer))
         return replicas
 
-    def state(self):
+    def state_dict(self) -> Dict:
         state = dict()
         state['inputs'] = list(self.inputs)
         state['outputs'] = list(self.outputs)
@@ -314,7 +323,7 @@ class StageConfig():
 
 
 def create_worker_args(config: PipelineConfig,
-                       split_dim: int, layers, tensors) -> Tuple[RankIO, List[Queue], List[List[int]], Dict]:
+                       split_dim: int, layers, tensors) -> Tuple[QueueRankIO, List[Queue], List[List[int]], Dict]:
     assert config.isValid()
     master_rank = 0
     master_stage = -1
@@ -328,7 +337,7 @@ def create_worker_args(config: PipelineConfig,
     print(
         f"creating communication channels master is stage {master_stage} rank {master_rank}")
     rank_to_queues = defaultdict(lambda: defaultdict(list))
-    for output, producer_stage in producers.items():
+    for output, producer_stage in sorted(producers.items()):
         producer_ranks = stage_to_ranks[producer_stage]
         producer_devices = stages[producer_stage].devices
         n_producers = len(producer_ranks)
@@ -452,7 +461,7 @@ def create_worker_args(config: PipelineConfig,
 
     # create IOs
     rank_to_IO = dict()
-    for rank, io_config in rank_to_queues.items():
+    for rank, io_config in sorted(rank_to_queues.items()):
         io_in = [t[1] for t in io_config['inputs']]
         io_out = []
 
@@ -463,20 +472,12 @@ def create_worker_args(config: PipelineConfig,
                 io_out.append(group[0][1])
             else:
                 io_out.append(ReplicatedConnection([t[1] for t in group]))
-        print(rank)
-        print("in")
-        for q in io_in:
-            print(type(q))
-        print("out")
-        for q in io_out:
-            print(type(q))
-        print()
 
-        rank_to_IO[rank] = RankIO(io_in, io_out)
+        rank_to_IO[rank] = QueueRankIO(io_in, io_out)
 
     # find all process groups for replicated stages
     groups = []
-    for stage_id, ranks in stage_to_ranks.items():
+    for stage_id, ranks in sorted(stage_to_ranks.items()):
         if len(ranks) > 1:
             groups.append(ranks)
 
@@ -498,3 +499,20 @@ def create_worker_args(config: PipelineConfig,
                              state_stack, model, optimizer)
 
     return master_IO, command_queues, groups, worker_args
+
+# config structure
+
+# master stage:
+    # inputs (name,shape) should original model order
+    # outputs(name,shape) should match original model order
+    # device
+    # optimizer (ignored)
+# stages:
+    # id
+    #   inputs(name,shape)  should match partition code
+    #   outputs(name,shape) should match partition code
+    #   stage_cls
+    #   optimizer
+    #       type convention is package.path/cls
+    #       args dictionary of kwargs
+    #   devices list of devices

@@ -9,13 +9,13 @@ from pytorch_Gpipe.delayedNorm import DelayedBatchNorm
 import torch.distributed as dist
 import os
 from .messages import COMMAND
-from .stage_io import RankIO
+from .stage_io import QueueRankIO
 from .state_stack import StateStack
 from .utils import SyncBuffersMode
 
 
 class Worker(Process):
-    def __init__(self, backend, world_size: int, stage_id: int, rank: int, ranks_in_stage: int, model: Module, stateStack: StateStack, IO: RankIO,
+    def __init__(self, backend, world_size: int, stage_id: int, rank: int, ranks_in_stage: int, model: Module, stateStack: StateStack, IO: QueueRankIO,
                  send_input_gradient: List[bool], command_queue: Queue, groups: List[List[int]], use_delayedNorm: bool, optimizer: Optional[Optimizer],
                  buffer_sync: SyncBuffersMode, gradient_accumulation_steps: int):
         super(Worker, self).__init__(name=f"stage_{stage_id+1}_Worker_{rank+1}",

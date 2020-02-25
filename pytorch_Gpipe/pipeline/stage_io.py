@@ -102,7 +102,7 @@ class ReplicatedConnection():
 GeneralConnection = Union[Connection, ReplicatedConnection]
 
 
-class RankIO():
+class QueueRankIO():
     ''' Abstraction of partition input/output channels with awareness to flow mode
     in forward mode data is pass from inputs to outputs and in backward mode it's reversed
 
@@ -145,5 +145,5 @@ class RankIO():
 # 2 workers are connected using a QueueWrapper that handles the device transfer
 # when a worker is connected to a replicated stage it will use splitConnection to split/merge the activation/gradient accross the batch dim
 # when a worker sends an output to multiple stages it will use a replicatedConnection to send the same data to each stage
-# RankIO is a group of communication channels where each channel corresponds to a unique stage input/output
+# QueueRankIO is a group of communication channels where each channel corresponds to a unique stage input/output
 # sends are nonblocking and recieve are blocking by default nonblocking recive are not working(we use queues)

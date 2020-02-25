@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from pytorch_Gpipe.delayedNorm import DelayedBatchNorm
 
 from .messages import COMMAND
-from .stage_io import RankIO, ReplicatedConnection, QueueWrapper, SplitConnection
+from .stage_io import QueueRankIO, ReplicatedConnection, QueueWrapper, SplitConnection
 from .utils import InvalidState, split_to_n, SyncBuffersMode
 from .workers import Worker
 from .state_stack import StateStack
@@ -346,14 +346,21 @@ class Pipeline():
         """
         return [s[0] for s in self._shards.values()]
 
-# TODO add shape descovery phase if we wish to pass data using torch.distributed...:
-#  a dummy run so each worker will know the size of its' buffers
+
+# TODO test the p2p_io
+# TODO check that replicated stages work
+# TODO add pipeline support for p2p based io
+# TODO compare between queue based and distributed based (CPU easy GPU will require using the docker image)
+# TODO decide which config to generate obviously the new config in it's dict form and possibly the old config
+
+# TODO add shape discovery phase and add them to the config
+
 # TODO think about multinode support the simplest solution is to split the config and add "distributed glue" between masters
 # TODO add fancy pants stats logging
 # TODO internal and external documentation
 
 
-# configs structure:
+# old configs structure to be deprecated:
     # model inputs
     # model outputs
     # stage id
@@ -366,7 +373,7 @@ class Pipeline():
 
 def create_worker_args(configs: Dict, model_inputs: List[str],
                        model_outputs: List[str], output_device: torch.device,
-                       split_dim: int) -> Tuple[RankIO, List[Queue], List[List[int]], Dict]:
+                       split_dim: int) -> Tuple[QueueRankIO, List[Queue], List[List[int]], Dict]:
     consumers = defaultdict(list)
     producers = dict()
 
@@ -545,7 +552,7 @@ def create_worker_args(configs: Dict, model_inputs: List[str],
             else:
                 io_out.append(ReplicatedConnection([t[1] for t in group]))
 
-        rank_to_IO[rank] = RankIO(io_in, io_out)
+        rank_to_IO[rank] = QueueRankIO(io_in, io_out)
 
     # find all process groups for replicated stages
     groups = []

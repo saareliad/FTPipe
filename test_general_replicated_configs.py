@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from pytorch_Gpipe import Pipeline
-from pytorch_Gpipe.pipeline.pipeline import SyncBuffersMode, SyncParametersMode
+from pytorch_Gpipe.pipeline.pipeline import SyncBuffersMode
 
 
 class Stage0(nn.Module):
@@ -86,8 +86,8 @@ if __name__ == "__main__":
     config[0]['optimizers'].append(torch.optim.SGD(
         config[0]['replicas'][0].parameters(), 100))
 
-    model = Pipeline(config, output_device='cpu', buffer_sync=SyncBuffersMode.DISABLED,
-                     parameter_sync=SyncParametersMode.DISABLED)
+    model = Pipeline(config, output_device='cpu',
+                     buffer_sync=SyncBuffersMode.DISABLED)
 
     sample = torch.randn(240, 100)
 
