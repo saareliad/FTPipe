@@ -39,18 +39,13 @@ class Worker(Process):
         self.send_input_gradient = send_input_gradient
         self.sync_buffers_mode = buffer_sync
         self.step_every = gradient_accumulation_steps
-        self.stage_process_group = self._init_process_groups(backend, world_size,
-                                                             groups)
-        if self.stage_process_group:
-            self.model = DistributedDataParallel(self.model, device_ids=[self.model.device],
-                                                 output_device=[
-                                                     self.model.device],
-                                                 process_group=self.stage_process_group,
-                                                 broadcast_buffers=False,
-                                                 find_unused_parameters=False)
+        self.stage_process_group = None
         self.done_fwds = 0
         self.done_bckwds = 0
 
+        self.backend = backend
+        self.world_size = world_size
+        self.all_groups = groups
         # we sort to be aboslutly sure we reduce in the same order
         # grad reduction is handled by DDP
         # we do this manually as it seems that SyncBatchNorm synchronizes buffers for every forward which is too excessive
@@ -58,6 +53,9 @@ class Worker(Process):
         self.buffers = [t[1] for t in buffers]
 
     def run(self):
+        self._init_distributed_backend(self.backend, self.world_size,
+                                       self.all_groups)
+
         # wait until we start forward for the first time
         # we do this so that we will have a do while semantic instead of while do
         while self.running and self.num_minibatches == 0:
@@ -105,16 +103,17 @@ class Worker(Process):
 
     def replicated_stage_backward(self):
         with self.model.no_sync():
-            for _ in range(self.num_minibatches) - 1:
+            for _ in range(self.num_minibatches - 1):
                 gradient_in = self.IO.receive(forward=False, block=True)
                 grad_out = self.minibatch_backward(gradient_in)
                 self.IO.send(grad_out, forward=False, block=False)
-        # check if after this batch we take a step if yes initialte distributed reducer
+        # check if after this batch we take a step if yes initiate distributed reducer
         self.done_bckwds += 1
         if self.should_take_step():
-            context = self.model.no_sync
+            context = nullcontext
+            # DDP will setup the grad reducer the next backward will sync
         else:
-            context = nullcontext()
+            context = self.model.no_sync
 
         with context():
             gradient_in = self.IO.receive(forward=False, block=True)
@@ -184,14 +183,13 @@ class Worker(Process):
                 r.wait()
                 b /= float(self.ranks_in_stage)
 
-    def _init_process_groups(self, backend, world_size, groups: List[List[int]]):
+    def _init_distributed_backend(self, backend, world_size, groups: List[List[int]]):
         # right know we use process groups only for replicated stages
         # so we do not initialize the backend if there is no need
         if groups:
             # TODO address/port should not be hardcoded
             os.environ["MASTER_ADDR"] = '127.0.0.1'
-            os.environ["MASTER_PORT"] = '29500'
-
+            os.environ["MASTER_PORT"] = '202020'
             if backend == 'mpi':
                 raise Exception("mpi not supported")
                 self.rank = os.environ["OMPI_COMM_WORLD_RANK"]
@@ -199,16 +197,20 @@ class Worker(Process):
 
             dist.init_process_group(backend, init_method="env://",
                                     rank=self.rank, world_size=world_size)
-            stage_group = None
             for group in groups:
                 pg = dist.new_group(ranks=group, backend=backend)
                 if self.rank in group:
                     # only one group per replicated stage
                     assert self.stage_process_group is None
-                    stage_group = pg
-            return stage_group
+                    self.stage_process_group = pg
 
-        return None
+            if self.stage_process_group:
+                self.model = DistributedDataParallel(self.model, device_ids=[self.model.device],
+                                                     output_device=[
+                                                     self.model.device],
+                                                     process_group=self.stage_process_group,
+                                                     broadcast_buffers=False,
+                                                     find_unused_parameters=False)
 
     def on_batch_end(self):
         if self.FORWARD:

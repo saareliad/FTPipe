@@ -44,7 +44,10 @@ class Pipeline():
 
         # launch workers
         # set this to not reinitialize CUDA context
-        set_start_method("spawn")
+        # TODO this must be called before any and all cuda calls...
+        # can be done with new config and lazy init replicas
+        # or with puting it at the start of the main script
+        # set_start_method('spawn')
         for stage_id, rank, ranks_in_stage, io, command_queue, state_stack, model, optimizer in worker_args.values():
             use_delayedNorm = any(isinstance(m, DelayedBatchNorm)
                                   for m in model.modules())
@@ -54,7 +57,7 @@ class Pipeline():
             worker = Worker(backend, world_size, stage_id, rank, ranks_in_stage, model, state_stack, io,
                             send_input_gradient, command_queue, groups, use_delayedNorm, optimizer,
                             buffer_sync, gradient_accumulation_steps)
-
+            print(f"created worker {rank}", flush=True)
             workers[stage_id].append(worker)
             shards[stage_id].append(model)
 
@@ -346,7 +349,6 @@ class Pipeline():
         return [s[0] for s in self._shards.values()]
 
 
-# TODO use distibuted data parallel for replicated stage
 # TODO add pipeline support for p2p based io
 # TODO compare between queue based and distributed based (CPU easy GPU will require using the docker image)
 # TODO decide which config to generate obviously the new config in it's dict form and possibly the old config
