@@ -529,10 +529,10 @@ def slowdown(times, times_wo_comm):
     worst = max(times.values())
     n_partitions = len(times)
 
-    total = sum(times_wo_comm.values())
+    ideal = sum(times_wo_comm.values())
     actual = n_partitions * worst
 
-    model_parallel_and_partitioning_slowdown = actual / total
+    model_parallel_and_partitioning_slowdown = actual / ideal
 
     return model_parallel_and_partitioning_slowdown
 
@@ -567,11 +567,11 @@ def expected_speedup_after_partitioning(fwd_times, bwd_times,
     worst_bwd = max(bwd_times.values())
     fwd_plus_bwd = worst_fwd + worst_bwd
 
-    bwd_to_fwd_ratio = worst_bwd / fwd_plus_bwd
-    fwd_to_bwd_ratio = worst_fwd / fwd_plus_bwd
+    bwd_ratio = worst_bwd / fwd_plus_bwd
+    fwd_ratio = worst_fwd / fwd_plus_bwd
 
-    partitioning_slowdown = (bwd_to_fwd_ratio *
-                             bwd_slowdown) + (fwd_to_bwd_ratio * fwd_slowdown)
+    partitioning_slowdown = (bwd_ratio * bwd_slowdown) + (fwd_ratio *
+                                                          fwd_slowdown)
 
     #  Expected speedup for X accelerators:
     #  NOTE: Expected_speedup = sum(times.values()) / worst

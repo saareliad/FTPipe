@@ -1,9 +1,12 @@
 import torch
 import math
 
+# NOTE: can so simillar anaysis for ZerOs,
+# (multiply communication by x1.5 according to what they claim)
+
 
 def run_analysis(sample, model, n_workers, bw_GBps=12, verbose=True):
-    
+
     send_mb = sum([(p.nelement() * p.element_size())
                    for p in model.parameters()]) / 1e6
 
@@ -23,7 +26,7 @@ def run_analysis(sample, model, n_workers, bw_GBps=12, verbose=True):
     expected_speedup = utilization * n_workers
 
     # TODO: print something...
-    
+
     return expected_speedup
 
 
