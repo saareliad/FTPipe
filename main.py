@@ -19,9 +19,9 @@ import models
 import numpy as np
 import torch
 from collections import OrderedDict
-from misc.datasets import (add_dataset_argument,
-                           simplified_get_train_test_dl_from_args,
-                           get_seperate_just_x_or_y_train_test_dl_from_args)
+from datasets import (add_dataset_argument,
+                      simplified_get_train_test_dl_from_args,
+                      get_seperate_just_x_or_y_train_test_dl_from_args)
 from misc.filelogger import FileLogger
 from pipeline import dp_sim
 import os
@@ -206,29 +206,36 @@ def parse_cli():
     return args
 
 
-def parse_json_config(args):
-    assert (os.path.exists(args.config))
+def parse_json_config(args, config=None):
+    if config is None:
+        config = args.config
 
-    with open(args.config, 'r') as f:
+    assert (os.path.exists(config))
+
+    with open(config, 'r') as f:
         output = json.load(f)
 
-    # replace
+    # option to load a base config, reducing code duplication.
+    if "base_config_path" in output:
+        base_config_path = output.get("base_config_path")
+        parse_json_config(args, config=base_config_path)
+
     for key, value in output.items():
+
+        # Allow skipping some options and loading them from cmd.
+        # Example: seed_from_cmd
         if output.get(f'{key}_from_cmd', False):
+            if not hasattr(args, key):
+                raise RuntimeError(f"-W- {key}_from_cmd=True but not set")
             continue
-        # if key == 'seed' and output.get('seed_from_cmd', False):
-        #     continue
-        # if key == 'bs_train' and output.get('bs_train_from_cmd', False):
-        #     continue
+
+        # Replace
         setattr(args, key, value)
 
-    # Explicit yuck replace
-    # (just to get help from argparse)
+    # Explicit replace (to get help from argparse)
     if hasattr(output, 'optimizer'):
         if hasattr(output['optimizer'], 'type'):
             args.optimizer_type = output['optimizer']['type']
-
-    # return output
 
 
 def parse_env_vars(args):
@@ -809,7 +816,7 @@ def get_device(args):
 
 def main():
     args = parse_cli()
-    parse_json_config(args)
+    parse_json_config(args, args.config)
     parse_env_vars(args)
     args.world_size = get_world_size(args.distributed_backend)
 
