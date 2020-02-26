@@ -1,6 +1,5 @@
 import torch
 
-
 import random
 import numpy as np
 import time
@@ -26,12 +25,11 @@ from pipeline.partition import FirstPartition
 import torch.distributed as dist
 # from pipeline.util import get_world_size
 from torch.nn.parallel import DistributedDataParallel
-from misc.datasets import (simplified_get_train_test_dl_from_args,
-                           new_distributed_get_train_test_dl_from_args)
+from datasets import (simplified_get_train_test_dl_from_args,
+                      new_distributed_get_train_test_dl_from_args)
 
 
 class SyncCVTask(DLTask):
-
     def __init__(self, device):
         self.device = device
 
@@ -48,7 +46,13 @@ class SyncCVTask(DLTask):
 
 
 class SequentailManager:
-    def __init__(self, model, device, log_frequency=100, recompute=False, ddp=False, local_rank=None):
+    def __init__(self,
+                 model,
+                 device,
+                 log_frequency=100,
+                 recompute=False,
+                 ddp=False,
+                 local_rank=None):
 
         self.device = device
         self.needs_unwrap = False
@@ -59,8 +63,9 @@ class SequentailManager:
             if ddp:
                 self.needs_unwrap = True
                 # see https://github.com/pytorch/pytorch/blob/master/torch/distributed/launch.py
-                self.model = DistributedDataParallel(
-                    model, device_ids=[local_rank], output_device=local_rank)
+                self.model = DistributedDataParallel(model,
+                                                     device_ids=[local_rank],
+                                                     output_device=local_rank)
                 self.logger.info("-I- using DDP!")
         else:
             raise NotImplementedError()
@@ -116,7 +121,7 @@ class SequentailManager:
             self.trainer.last_partition_step_and_statistics(
                 x, *ctx, step_and_stats_ctx)
 
-            assert(self.model.training)
+            assert (self.model.training)
             self.batches += 1
             if self.batches % self.log_frequency == 0:
                 batch_log_str = ''
@@ -135,7 +140,7 @@ class SequentailManager:
                 data = next(self.dl_iter)
                 x, *ctx = self.task.unpack_data_for_partition(data)
                 x = self.model(x)
-                self.trainer.calc_test_stats(x,  *ctx)
+                self.trainer.calc_test_stats(x, *ctx)
 
         # eval_end_time = time.time()
         # TODO: add eval time to statistics
@@ -157,13 +162,15 @@ def auto_file_name(args):
 
 
 def save_sequential_experiment(statistics, args):
-
     def carefull_del(config, name):
         if name in config:
             del config[name]
 
-    UN_NEEDED_ARGS = ['stage', 'rank', 'local_rank', 'flush_rate', 'distributed_backend',
-                      'num_chunks', 'verbose_comm', 'flush_rate', 'seed_from_cmd', 'verbose_comm', 'auto_file_name']
+    UN_NEEDED_ARGS = [
+        'stage', 'rank', 'local_rank', 'flush_rate', 'distributed_backend',
+        'num_chunks', 'verbose_comm', 'flush_rate', 'seed_from_cmd',
+        'verbose_comm', 'auto_file_name'
+    ]
 
     if statistics:
         fit_res = statistics.get_stats()
@@ -176,7 +183,8 @@ def save_sequential_experiment(statistics, args):
         save_experiment(args.out_filename, args.out_dir, config, fit_res)
 
 
-def training_loop(args, logger, train_dl, test_dl, partition, scheduler, statistics, samplers):
+def training_loop(args, logger, train_dl, test_dl, partition, scheduler,
+                  statistics, samplers):
     epochs = 0
     steps = 0
     total_epoch_times_list = []
@@ -199,8 +207,8 @@ def training_loop(args, logger, train_dl, test_dl, partition, scheduler, statist
         for i in samplers:
             i.set_epoch(epochs)
         if args.steps > 0:
-            TRAIN_BATCHES_TO_RUN = min(
-                TRAIN_BATCHES_TO_RUN, args.steps - steps)
+            TRAIN_BATCHES_TO_RUN = min(TRAIN_BATCHES_TO_RUN,
+                                       args.steps - steps)
 
         did_train = False
         did_eval = False
@@ -225,8 +233,8 @@ def training_loop(args, logger, train_dl, test_dl, partition, scheduler, statist
 
                 partition.run_until_flush(
                     min(TRAIN_BATCHES_TO_RUN, len(train_dl)))
-                train_epochs_times_list.append(
-                    time.time() - train_epoch_start_time)
+                train_epochs_times_list.append(time.time() -
+                                               train_epoch_start_time)
 
                 # TODO: support generically stepping per batch...
                 scheduler.step()
@@ -269,7 +277,8 @@ def training_loop(args, logger, train_dl, test_dl, partition, scheduler, statist
 
         if args.steps > 0 and steps >= args.steps:
             logger.info(
-                f"Finished all steps. Total steps:{steps}, rank:{args.local_rank}")
+                f"Finished all steps. Total steps:{steps}, rank:{args.local_rank}"
+            )
             break  # steps condition met
 
     return total_epoch_times_list, train_epochs_times_list
@@ -284,8 +293,9 @@ def init_DDP(args, logger):
     dist.init_process_group(args.distributed_backend, init_method='env://')
     assert dist.get_world_size() == args.world_size
     args.rank = dist.get_rank()
-    logger.info(f"Initialized process group; backend: {args.distributed_backend}, rank: {args.rank}, "
-                f"local_rank: {args.local_rank}, world_size: {args.world_size}")
+    logger.info(
+        f"Initialized process group; backend: {args.distributed_backend}, rank: {args.rank}, "
+        f"local_rank: {args.local_rank}, world_size: {args.world_size}")
 
     # base_lr_batch_size = args.get("base_lr_batch_size", None)
     # if base_lr_batch_size is None:
@@ -296,7 +306,8 @@ def init_DDP(args, logger):
     args.optimizer["args"]['lr'] *= args.world_size
     lr = args.optimizer["args"]['lr']
     logger.info(
-        f"Applying linear scaling bs-per-worker:{args.bs_train}, lr:{lr}, workers:{args.world_size}, epochs:{args.epochs}, steps:{args.steps}")
+        f"Applying linear scaling bs-per-worker:{args.bs_train}, lr:{lr}, workers:{args.world_size}, epochs:{args.epochs}, steps:{args.steps}"
+    )
 
 
 def get_dataloaders(args):
@@ -313,8 +324,7 @@ def get_dataloaders(args):
     if hasattr(args, 'ddp') and args.ddp:
         get_dls_fn = new_distributed_get_train_test_dl_from_args
         # num_splits=None, use_split=None
-    train_dl, test_dl, *samplers = get_dls_fn(
-        args, verbose=False, **dl_kw)
+    train_dl, test_dl, *samplers = get_dls_fn(args, verbose=False, **dl_kw)
 
     return train_dl, test_dl, samplers
 
@@ -334,7 +344,7 @@ def yuck_from_main():
 
     # Set Random Seed
     if args.seed is None:
-        args.seed = random.randint(0, 2 ** 31)
+        args.seed = random.randint(0, 2**31)
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
@@ -360,12 +370,17 @@ def yuck_from_main():
         # config = get_partitioning(args.model, model_instance=model)
         # print("-I- Using recomputation")
 
-    partition = SequentailManager(
-        model, device, log_frequency=100, recompute=recompute, ddp=args.ddp, local_rank=args.local_rank)
+    partition = SequentailManager(model,
+                                  device,
+                                  log_frequency=100,
+                                  recompute=recompute,
+                                  ddp=args.ddp,
+                                  local_rank=args.local_rank)
 
     if hasattr(args, "ddp_sim_num_gpus") and args.ddp_sim_num_gpus > 1:
         print(
-            f"-I- simulating DDP accuracy with {args.ddp_sim_num_gpus} (DDP) GPUs per stage")
+            f"-I- simulating DDP accuracy with {args.ddp_sim_num_gpus} (DDP) GPUs per stage"
+        )
         dp_sim.convert_to_num_gpus(partition.model, args.ddp_sim_num_gpus)
 
     # model.to(device)
@@ -380,15 +395,18 @@ def yuck_from_main():
     assert not (statistics is None)
 
     # Set optimizer
-    optimizer = optimizer_cls(
-        partition.model.parameters(), **args.optimizer['args'])
+    optimizer = optimizer_cls(partition.model.parameters(),
+                              **args.optimizer['args'])
 
     # Set Scheduler
     # TODO: scheduler for sched aware prediction
     scheduler = get_scheduler(args, optimizer)
     trainer_extra_args = args.trainer['args']
-    trainer = trainer_cls(model, optimizer=optimizer,
-                          scheduler=scheduler, statistics=statistics, **trainer_extra_args)
+    trainer = trainer_cls(model,
+                          optimizer=optimizer,
+                          scheduler=scheduler,
+                          statistics=statistics,
+                          **trainer_extra_args)
 
     partition.set_trainer(trainer)
 
@@ -396,8 +414,9 @@ def yuck_from_main():
         auto_file_name(args)
 
     exp_start_time = time.time()
-    total_epoch_times_list, train_epochs_times_list = training_loop(args, logger, train_dl, test_dl,
-                                                                    partition, scheduler, statistics, samplers)
+    total_epoch_times_list, train_epochs_times_list = training_loop(
+        args, logger, train_dl, test_dl, partition, scheduler, statistics,
+        samplers)
     exp_total_time = time.time() - exp_start_time
 
     args.total_epoch_times = total_epoch_times_list
