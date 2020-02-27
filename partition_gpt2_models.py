@@ -51,13 +51,13 @@ from transformers import (
     #   CamembertConfig, CamembertForMaskedLM, CamembertTokenizer
 )
 
-from models.normal import GPT2LMHeadModel
+from models.normal import GPT2LMHeadModel, GPT2Model
 
 from pytorch_Gpipe import pipe_model
-from misc import run_analysis, run_partitions
+from misc import run_analysis  # , run_partitions
 from pytorch_Gpipe.model_profiling import Node, NodeTypes
 
-MODEL_CLASSES = {
+MODEL_CLASSES_LM_HEAD = {
     'gpt2': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
     'openai-gpt': (OpenAIGPTConfig, OpenAIGPTLMHeadModel, OpenAIGPTTokenizer),
     'bert': (BertConfig, BertForMaskedLM, BertTokenizer),
@@ -67,6 +67,11 @@ MODEL_CLASSES = {
     # 'camembert': (CamembertConfig, CamembertForMaskedLM, CamembertTokenizer)
 }
 
+MODEL_CLASSES = {
+    'gpt2': (GPT2Config, GPT2Model, GPT2Tokenizer),
+}
+
+# MODEL_CLASSES=MODEL_CLASSES_LM_HEAD
 
 class TextDataset(Dataset):
     def __init__(self, tokenizer, args, file_path='train', block_size=512):
@@ -128,7 +133,7 @@ def set_seed(args):
 def mask_tokens(inputs, tokenizer, args):
     """ Prepare masked tokens inputs/labels for masked language modeling: 80% MASK, 10% random, 10% original. """
     labels = inputs.clone()
-    # We sample a few tokens in each sequence for masked-LM training 
+    # We sample a few tokens in each sequence for masked-LM training
     # (with probability args.mlm_probability defaults to 0.15 in Bert/RoBERTa)
     probability_matrix = torch.full(labels.shape, args.mlm_probability)
     special_tokens_mask = [
@@ -166,7 +171,8 @@ def node_weight_function(node: Node):
     # TODO: factory with recomputation.
     if node.type is NodeTypes.LAYER:
         return int(MULT_FACTOR *
-                   (node.weight.backward_time + node.weight.forward_time))  # FIXME: + node.weight.forward_time to stay 
+                   (node.weight.backward_time + node.weight.forward_time)
+                   )  # FIXME: + node.weight.forward_time to stay
     if node.type is NodeTypes.CONSTANT:
         return 0
     if node.type is NodeTypes.OP:  # FIXME:
@@ -187,7 +193,7 @@ def edge_weight_function(bw_GBps):
     return f
 
 
-def partition_model(args, train_dataset, model, tokenizer):
+def partition_model(args, train_dataset, model, tokenizer, lm=True):
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset,
                                   sampler=train_sampler,
@@ -204,7 +210,10 @@ def partition_model(args, train_dataset, model, tokenizer):
                                  args) if args.mlm else (batch, batch)
     inputs = inputs.to(args.device)
     labels = labels.to(args.device)
-    sample = (inputs, labels)
+    if lm:
+        sample = (inputs, labels)
+    else:
+        sample = inputs
     model.train()
     graph = pipe_model(model,
                        sample,
@@ -392,6 +401,11 @@ def main():
                         action="store_true",
                         help="Save and plot it using graphviz")
 
+    parser.add_argument("--lmhead",
+                        default=False,
+                        action="store_true",
+                        help="Partition a model with LM head")
+
     args = parser.parse_args()
 
     if args.auto_file_name:
@@ -413,7 +427,8 @@ def main():
     set_seed(args)
 
     # Load pretrained model and tokenizer
-    config_class, model_class, tokenizer_class = MODEL_CLASSES[args.model_type]
+    model_class_dict_to_use = MODEL_CLASSES_LM_HEAD if args.lmhead else MODEL_CLASSES
+    config_class, model_class, tokenizer_class = model_class_dict_to_use[args.model_type]
     config = config_class.from_pretrained(
         args.config_name if args.config_name else args.model_name_or_path,
         cache_dir=args.cache_dir if args.cache_dir else None)
@@ -436,13 +451,13 @@ def main():
 
     train_dataset = load_and_cache_examples(args, tokenizer)
 
-    partition_model(args, train_dataset, model, tokenizer)
+    partition_model(args, train_dataset, model, tokenizer, lm=args.lmhead)
 
 
 # download dataset from https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip
 
 # export TRAIN_FILE=wikitext-2-raw/wiki.train.raw
-# python partition_gpt2_models.py --train_data_file=$TRAIN_FILE
+# python partition_gpt2_models.py --train_data_file=$TRAIN_FILE --no_analysis
 # add --dot to get serialized & pdf.
 if __name__ == "__main__":
     main()

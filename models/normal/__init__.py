@@ -9,6 +9,6 @@ from .WideResNet import WideResNet
 from .Inception import inception_v3
 from .SqueezeNet import squeezenet1_0, squeezenet1_1
 from .amoebaNet import amoebanetd
-from .NLP_models import GPT2LMHeadModel
+from .NLP_models import GPT2LMHeadModel, GPT2Model
 from .UNet import UNet
 from .seq2seq import GNMT
