@@ -5,6 +5,9 @@ import zipfile
 
 DATA_DIR = "/home_local/saareliad/data"
 
+# DEFAULT_DATA_DIR = os.path.expanduser('~/.pytorch-datasets')
+# DATA_DIR = DEFAULT_DATA_DIR
+
 
 def download_file(url, DATA_DIR=DATA_DIR):
     local_filename = url.split('/')[-1]

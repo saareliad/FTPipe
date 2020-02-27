@@ -3,6 +3,9 @@ from .normal import WideResNet, Bottleneck, ResNet
 
 _PARTITIONED_MODELS_PACKAGE = "models.partitioned"
 
+# HACK: called with a ready model instance.
+_GPT2 = dict(dict(gpt2=dict()))
+
 _RESENETS = dict(resnet50_imagenet_p8=dict(
     block=Bottleneck, layers=[3, 4, 6, 3], num_classes=1000))
 
@@ -62,6 +65,8 @@ def _register_model(dict_params, model_cls):
 
 _register_model(_WIDE_RESNETS, WideResNet)
 _register_model(_RESENETS, ResNet)
+# HACK: called with a ready model instance.
+_register_model(_GPT2, None)
 
 
 def create_normal_model_instance(cfg):
@@ -73,6 +78,7 @@ def normal_model_class(cfg):
     return MODEL_CFG_TO_SAMPLE_MODEL[cfg]
 
 
+# TODO: for transfomers, we need to also get the tokenizer.
 def get_partitioning(cfg, model_instance=None):
     # Import generated model
     generated_file_name = CFG_TO_GENERATED_FILE_NAME[cfg]
@@ -84,8 +90,8 @@ def get_partitioning(cfg, model_instance=None):
 
     # Create instance of normal model
     if model_instance:
-        model_cls = normal_model_class(cfg)
-        assert isinstance(model_instance, model_cls)
+        # assert isinstance(model_instance, normal_model_class(cfg))
+        pass
     else:
         model_instance = create_normal_model_instance(cfg)
 

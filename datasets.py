@@ -8,9 +8,13 @@ from torchvision.datasets import CIFAR10, CIFAR100, ImageFolder, DatasetFolder
 from torchvision.datasets.folder import default_loader
 from PIL import Image
 
-from torch.utils.data import Dataset, DistributedSampler
+from torch.utils.data import Dataset, DistributedSampler, RandomSampler, SequentialSampler, DataLoader
 import torch.distributed as dist
 import pickle
+from transformers import PreTrainedTokenizer
+
+from torch.nn.utils.rnn import pad_sequence
+from typing import List, Tuple
 
 # new_distributed_get_train_test_dl_from_args
 # simplified_get_train_test_dl_from_args
@@ -27,7 +31,7 @@ DOWNLOAD = False
 # https://github.com/facebookresearch/pycls/tree/master/configs/cifar
 # torch.backends.cudnn.benchmark = False
 
-AVAILABLE_DATASETS = {'cifar10', 'cifar100', 'imagenet'}
+AVAILABLE_DATASETS = {'cifar10', 'cifar100', 'imagenet', 'wt2'}
 
 ############################
 # Forward decalted Datasets # FIXME
@@ -138,6 +142,161 @@ def imagenet_transformations():
     return train_transform, test_transform
 
 
+# NOTE: This is like a "transform", Should be used stright in the dataset,
+# so the dataloader will handle this.
+# NOTE: we also provide 2 more functions just for inputs/labels
+# Adapted from https://github.com/huggingface/transformers/blob/master/examples/run_language_modeling.py
+# commitid: f54a5bd37f99e3933a396836cb0be0b5a497c077
+def mask_tokens(inputs: torch.Tensor,
+                tokenizer: PreTrainedTokenizer,
+                mlm_probability=0.15,
+                generator=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    """ Prepare masked tokens inputs/labels for masked language modeling:
+     80% MASK, 10% random, 10% original.
+
+     Usage:
+        inputs, labels = mask_tokens(batch, tokenizer, args.mlm_probability, generator) if args.mlm else (batch, batch)
+     """
+
+    if tokenizer.mask_token is None:
+        raise ValueError(
+            "This tokenizer does not have a mask token which is necessary for masked language modeling. "
+            "Remove the --mlm flag if you want to use this tokenizer.")
+
+    labels = inputs.clone()
+    # We sample a few tokens in each sequence for masked-LM training
+    # (with probability args.mlm_probability defaults to 0.15 in Bert/RoBERTa)
+    probability_matrix = torch.full(labels.shape, mlm_probability)
+    special_tokens_mask = [
+        tokenizer.get_special_tokens_mask(val, already_has_special_tokens=True)
+        for val in labels.tolist()
+    ]
+    probability_matrix.masked_fill_(torch.tensor(special_tokens_mask,
+                                                 dtype=torch.bool),
+                                    value=0.0)
+    if tokenizer._pad_token is not None:
+        padding_mask = labels.eq(tokenizer.pad_token_id)
+        probability_matrix.masked_fill_(padding_mask, value=0.0)
+    masked_indices = torch.bernoulli(probability_matrix,
+                                     generator=generator).bool()
+    labels[~masked_indices] = -100  # We only compute loss on masked tokens
+
+    # 80% of the time, we replace masked input tokens with tokenizer.mask_token ([MASK])
+    indices_replaced = torch.bernoulli(
+        torch.full(labels.shape,
+                   0.8), generator=generator).bool() & masked_indices
+    inputs[indices_replaced] = tokenizer.convert_tokens_to_ids(
+        tokenizer.mask_token)
+
+    # 10% of the time, we replace masked input tokens with random word
+    indices_random = torch.bernoulli(torch.full(
+        labels.shape, 0.5)).bool() & masked_indices & ~indices_replaced
+    random_words = torch.randint(len(tokenizer),
+                                 labels.shape,
+                                 dtype=torch.long,
+                                 generator=generator)
+    inputs[indices_random] = random_words[indices_random]
+
+    # The rest of the time (10% of the time) we keep the masked input tokens unchanged
+    return inputs, labels
+
+
+def mask_tokens_just_inputs(inputs: torch.Tensor,
+                            tokenizer: PreTrainedTokenizer,
+                            mlm_probability=0.15,
+                            generator=None
+                            ) -> Tuple[torch.Tensor, torch.Tensor]:
+    """ Prepare masked tokens inputs/labels for masked language modeling:
+     80% MASK, 10% random, 10% original.
+
+     Usage:
+        inputs, labels = mask_tokens(batch, tokenizer, args.mlm_probability, generator) if args.mlm else (batch, batch)
+     """
+
+    if tokenizer.mask_token is None:
+        raise ValueError(
+            "This tokenizer does not have a mask token which is necessary for masked language modeling. "
+            "Remove the --mlm flag if you want to use this tokenizer.")
+
+    labels = inputs  # HACK: to change less code...
+    # We sample a few tokens in each sequence for masked-LM training
+    # (with probability args.mlm_probability defaults to 0.15 in Bert/RoBERTa)
+    probability_matrix = torch.full(labels.shape, mlm_probability)
+    special_tokens_mask = [
+        tokenizer.get_special_tokens_mask(val, already_has_special_tokens=True)
+        for val in labels.tolist()
+    ]
+    probability_matrix.masked_fill_(torch.tensor(special_tokens_mask,
+                                                 dtype=torch.bool),
+                                    value=0.0)
+    if tokenizer._pad_token is not None:
+        padding_mask = labels.eq(tokenizer.pad_token_id)
+        probability_matrix.masked_fill_(padding_mask, value=0.0)
+    masked_indices = torch.bernoulli(probability_matrix,
+                                     generator=generator).bool()
+    # NOTE: line below removed:
+    # labels[~masked_indices] = -100  # We only compute loss on masked tokens
+
+    # 80% of the time, we replace masked input tokens with tokenizer.mask_token ([MASK])
+    indices_replaced = torch.bernoulli(
+        torch.full(labels.shape,
+                   0.8), generator=generator).bool() & masked_indices
+    inputs[indices_replaced] = tokenizer.convert_tokens_to_ids(
+        tokenizer.mask_token)
+
+    # 10% of the time, we replace masked input tokens with random word
+    indices_random = torch.bernoulli(torch.full(
+        labels.shape, 0.5)).bool() & masked_indices & ~indices_replaced
+    random_words = torch.randint(len(tokenizer),
+                                 labels.shape,
+                                 dtype=torch.long,
+                                 generator=generator)
+    inputs[indices_random] = random_words[indices_random]
+
+    # The rest of the time (10% of the time) we keep the masked input tokens unchanged
+    return inputs  # NOTE: returning just inputs.
+
+
+def mask_tokens_just_labels(inputs: torch.Tensor,
+                            tokenizer: PreTrainedTokenizer,
+                            mlm_probability=0.15,
+                            generator=None
+                            ) -> Tuple[torch.Tensor, torch.Tensor]:
+    """ Prepare masked tokens inputs/labels for masked language modeling:
+     80% MASK, 10% random, 10% original.
+
+     Usage:
+        inputs, labels = mask_tokens(batch, tokenizer, args.mlm_probability, generator) if args.mlm else (batch, batch)
+     """
+
+    if tokenizer.mask_token is None:
+        raise ValueError(
+            "This tokenizer does not have a mask token which is necessary for masked language modeling. "
+            "Remove the --mlm flag if you want to use this tokenizer.")
+
+    labels = inputs  # HACK: to change less code.
+    # We sample a few tokens in each sequence for masked-LM training
+    # (with probability args.mlm_probability defaults to 0.15 in Bert/RoBERTa)
+    probability_matrix = torch.full(labels.shape, mlm_probability)
+    special_tokens_mask = [
+        tokenizer.get_special_tokens_mask(val, already_has_special_tokens=True)
+        for val in labels.tolist()
+    ]
+    probability_matrix.masked_fill_(torch.tensor(special_tokens_mask,
+                                                 dtype=torch.bool),
+                                    value=0.0)
+    if tokenizer._pad_token is not None:
+        padding_mask = labels.eq(tokenizer.pad_token_id)
+        probability_matrix.masked_fill_(padding_mask, value=0.0)
+    masked_indices = torch.bernoulli(probability_matrix,
+                                     generator=generator).bool()
+    labels[~masked_indices] = -100  # We only compute loss on masked tokens
+    # NOTE: deleted code lines not concering labels.
+
+    # The rest of the time (10% of the time) we keep the masked input tokens unchanged
+    return labels  # NOTE: returning just labels.
+
+
 ################
 # Get DS
 ################
@@ -182,12 +341,13 @@ def get_cifar_100_train_test_ds(DATA_DIR=DEFAULT_DATA_DIR):
     return ds_train, ds_test
 
 
-def get_wikitext2_raw_train_valid_test_ds(model_name_or_path,
-                                          tokenizer,
-                                          block_size=512,
-                                          overwrite_cache=False,
-                                          DATA_DIR=DEFAULT_DATA_DIR,
-                                          split='all'):
+def get_wikitext2_raw_train_valid_test_ds(
+        model_name_or_path,
+        tokenizer,
+        block_size=512,  # NOTE: This is the sequence length
+        overwrite_cache=False,
+        DATA_DIR=DEFAULT_DATA_DIR,
+        split='all'):
     wt2_data_path = os.path.join(DATA_DIR, "wikitext-2-raw")
     train_file = os.path.join(wt2_data_path, "wiki.train.raw")
     valid_file = os.path.join(wt2_data_path, "wiki.valid.raw")
@@ -218,10 +378,29 @@ def get_wikitext2_raw_train_valid_test_ds(model_name_or_path,
         raise ValueError(f"Unsupported split {split}.")
 
 
+def get_wikitext2_raw_train_valid_ds(model_name_or_path,
+                                     tokenizer,
+                                     train_seq_len=512,
+                                     valid_seq_len=512,
+                                     overwrite_cache=False,
+                                     DATA_DIR=DEFAULT_DATA_DIR):
+
+    train_ds = get_wikitext2_raw_train_valid_test_ds(
+        split='train',
+        block_size=train_seq_len,
+        overwrite_cache=overwrite_cache)
+    valid_ds = get_wikitext2_raw_train_valid_test_ds(
+        split='valid',
+        block_size=valid_seq_len,
+        overwrite_cache=overwrite_cache)
+    return train_ds, valid_ds
+
+
 DATASET_TO_DS_FN = {
     'cifar10': get_cifar_10_train_test_ds,
     'cifar100': get_cifar_100_train_test_ds,
     'imagenet': get_imagenet_train_test_ds,
+    'wt2': get_wikitext2_raw_train_valid_ds,  # TODO
 }
 
 ################
@@ -250,31 +429,79 @@ def get_cv_train_test_dl(ds_train,
     return dl_train, dl_test
 
 
-def get_lm_train_test_dl():
-    # TODO
-    pass
+def lm_collate_factory(tokenizer):
+    assert tokenizer is not None
 
+    def lm_collate(examples: List[torch.Tensor]):
+        if tokenizer._pad_token is None:
+            return pad_sequence(examples, batch_first=True)
+        return pad_sequence(examples,
+                            batch_first=True,
+                            padding_value=tokenizer.pad_token_id)
+
+    return lm_collate
+
+
+def get_lm_train_dl(ds_train, bs_train, tokenizer=None, collate_fn=None):
+    collate = collate_fn if collate_fn else lm_collate_factory(tokenizer)
+    train_sampler = RandomSampler(ds_train)
+    train_dl = DataLoader(ds_train,
+                          sampler=train_sampler,
+                          batch_size=bs_train,
+                          collate_fn=collate)
+    return train_dl
+
+
+def get_lm_eval_dl(ds_eval, bs_eval, tokenizer=None, collate_fn=None):
+    collate = collate_fn if collate_fn else lm_collate_factory(tokenizer)
+    eval_sampler = SequentialSampler(ds_eval)
+    eval_dl = DataLoader(bs_eval,
+                         sampler=eval_sampler,
+                         batch_size=bs_eval,
+                         collate_fn=collate)
+    return eval_dl
+
+
+def get_lm_train_valid_dl(ds_train, ds_test, bs_train, bs_test,
+                          tokenizer=None):
+    # HACK: tokenizer as kwarg.
+    # HACK: parameters names are 'test' for backward compatability.
+    collate = lm_collate_factory(tokenizer)
+
+    train_dl = get_lm_train_dl(ds_train, bs_train, collate_fn=collate)
+    valid_dl = get_lm_eval_dl(ds_test, bs_test, collate_fn=collate)
+
+    return train_dl, valid_dl
+
+
+#     # UNUSED
+# def get_lm_train_valid_test_dl(ds_train, ds_valid, ds_test,
+#                                bs_train, bs_valid, bs_test, tokenizer=None):
+#     # HACK: tokenizer as kwarg.
+#     collate = lm_collate_factory(tokenizer)
+
+#     train_dl = get_lm_train_dl(ds_train, bs_train, collate_fn=collate)
+#     valid_dl = get_lm_eval_dl(ds_valid, bs_valid, collate_fn=collate)
+#     test_dl = get_lm_eval_dl(ds_test, bs_test, collate_fn=collate)
+
+#     return train_dl, valid_dl, test_dl
 
 DATASET_TO_DL_FN = {
     'cifar10': get_cv_train_test_dl,
     'cifar100': get_cv_train_test_dl,
-    'imagenet': get_cv_train_test_dl
+    'imagenet': get_cv_train_test_dl,
+    'wt2': get_lm_train_valid_dl,  # HACK
 }
-
-# DICT_DATASET_JUST_XY_FUNC = {
-#     'cifar10': get_cifar_10_just_x_or_y_train_test_ds,
-#     'cifar100': get_cifar_100_just_x_or_y_train_test_ds
-# }
 
 ############################
 # Generic "get" functions
 ############################
 
 
-def get_train_test_ds(dataset, DATA_DIR=DEFAULT_DATA_DIR):
+def get_train_test_ds(dataset, DATA_DIR=DEFAULT_DATA_DIR, **kw):
     get_dataset_fn = DATASET_TO_DS_FN.get(dataset, None)
     if get_dataset_fn:
-        return get_dataset_fn(DATA_DIR=DATA_DIR)
+        return get_dataset_fn(DATA_DIR=DATA_DIR, **kw)
     else:
         raise ValueError(dataset)
 
@@ -292,20 +519,24 @@ def get_train_test_dl(dataset, *args, **kw):
 ############################
 
 
+# TODO : this works just for CV
 def simplified_get_train_test_dl(dataset,
                                  bs_train,
                                  bs_test,
                                  shuffle_train=True,
                                  verbose=True,
                                  DATA_DIR=DEFAULT_DATA_DIR,
+                                 dataset_keywords=dict(),
                                  **kw):
-    ds_train, ds_test = get_train_test_ds(dataset, DATA_DIR=DATA_DIR)
-
+    ds_train, ds_test = get_train_test_ds(dataset,
+                                          DATA_DIR=DATA_DIR,
+                                          **dataset_keywords)
+    # HACK: all as keywords
     dl_train, dl_test = get_train_test_dl(dataset,
-                                          ds_train,
-                                          ds_test,
-                                          bs_train,
-                                          bs_test,
+                                          ds_train=ds_train,
+                                          ds_test=ds_test,
+                                          bs_train=bs_train,
+                                          bs_test=bs_test,
                                           shuffle_train=shuffle_train,
                                           **kw)
 
@@ -402,11 +633,14 @@ def new_distributed_simplified_get_train_test_dl(dataset,
                                                  verbose=True,
                                                  DATA_DIR=DEFAULT_DATA_DIR,
                                                  pin_memory=True,
+                                                 dataset_keywords=dict(),
                                                  **kw):
     """ Requires:
          that a manual seed is set to the experiment and restorable via torch.initial_seed() """
 
-    ds_train, ds_test = get_train_test_ds(dataset, DATA_DIR=DATA_DIR)
+    ds_train, ds_test = get_train_test_ds(dataset,
+                                          DATA_DIR=DATA_DIR,
+                                          **dataset_keywords)
     experiment_manual_seed = torch.initial_seed()
 
     # Note: choosing None will infer these args from torch.distributed calls.
@@ -433,9 +667,6 @@ def new_distributed_simplified_get_train_test_dl(dataset,
                                           sampler=test_sampler,
                                           **kw)
 
-    # dl_train, dl_test = get_train_test_dl(
-    #     dataset, ds_train, ds_test, bs_train, bs_test, shuffle_train=shuffle_train, **kw)
-
     if verbose:
         print(f'Train: {len(dl_train) * bs_train} samples')
         print(f'Test: {len(dl_test) * bs_test} samples')
@@ -448,6 +679,15 @@ def new_distributed_get_train_test_dl_from_args(args, **kw):
     DATA_DIR = getattr(args, "data_dir", DEFAULT_DATA_DIR)
     DATA_DIR = DATA_DIR if DATA_DIR else DEFAULT_DATA_DIR
 
+    # HACK create collate if needed... FIXME TODO
+    # TODO: move this to the use code.
+    if 'dataset_keywords' in kw:
+        dataset_keywords = kw['dataset_keywords']
+        if 'tokenizer' in dataset_keywords:
+            tokenizer = dataset_keywords['tokenizer']
+            collate = lm_collate_factory(tokenizer)
+            kw['collate'] = collate
+
     # num_replicas=None, rank=None
     return new_distributed_simplified_get_train_test_dl(args.dataset,
                                                         args.bs_train,
@@ -459,7 +699,7 @@ def new_distributed_get_train_test_dl_from_args(args, **kw):
 #############################################
 # get x seperate from y, both with same seed
 #############################################
-
+# TODO: for masked/normal LM.
 
 class DatasetFolderJustX(DatasetFolder):
     def __init__(self, *args, **kw):
@@ -820,9 +1060,8 @@ def get_seperate_just_x_or_y_train_test_dl(dataset,
                                            verbose=True,
                                            DATA_DIR=DEFAULT_DATA_DIR,
                                            pin_memory=True,
+                                           dataset_keywords=dict(),
                                            **kw):
-
-    # ds_train, ds_test = get_train_test_ds(dataset, DATA_DIR=DATA_DIR)
 
     experiment_manual_seed = torch.initial_seed()
 
@@ -833,7 +1072,7 @@ def get_seperate_just_x_or_y_train_test_dl(dataset,
     }
 
     ds_train, ds_test = DICT_DATASET_JUST_XY_FUNC.get(dataset)(
-        just=just, DATA_DIR=DATA_DIR)
+        just=just, DATA_DIR=DATA_DIR, **dataset_keywords)
 
     # Note: choosing None will infer these args from torch.distributed calls.
     # HACK: we set everything to rank 0 and 1 replica.

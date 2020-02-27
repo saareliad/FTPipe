@@ -425,11 +425,11 @@ def infer_dtypes_and_shapes(config,
     return training_tensor_dtypes, training_tensor_shapes, eval_tensor_shapes
 
 
-def create_distributed_communcation_context(args,
-                                            config,
-                                            stage,
-                                            target_tensor_names=None,
-                                            stage_to_rank_map=None):
+def get_comm_init_args(args,
+                       config,
+                       stage,
+                       target_tensor_names=None,
+                       stage_to_rank_map=None):
     """
     Returns:
     comm_init_args = (receive_ranks,
@@ -889,48 +889,58 @@ def main():
 
     ######################################## Start OF UGLY BLOCK ########################################
     # TODO: do the following block generically and automatically using tasks, or alon's code.
-    x, y = next(iter(train_dl))
-    bs_train = to_tuple(args.bs_train)
-    bs_test = to_tuple(args.bs_test)
+    if "cv" in args.task:
+        x, y = next(iter(train_dl))
+        bs_train = to_tuple(args.bs_train)
+        bs_test = to_tuple(args.bs_test)
 
-    BASE_INPUT_SHAPE = x.shape[1:]
-    BASE_TARGET_SHAPE = y.shape[1:]
+        BASE_INPUT_SHAPE = x.shape[1:]
+        BASE_TARGET_SHAPE = y.shape[1:]
 
-    # TODO formalize with function according to dataset/task
-    USE_TARGET = not ('_sep' in args.task)
-    target_tensor_names = {}
-    training_tensor_dtypes = {"input0": x.dtype}
-    training_tensor_shapes = {"input0": (*bs_train, *BASE_INPUT_SHAPE)}
-    eval_tensor_shapes = {"input0": (*bs_test, *BASE_INPUT_SHAPE)}
+        # TODO formalize with function according to dataset/task
+        SEND_TARGET_IN_PIPE = not ('_sep' in args.task)
+        target_tensor_names = {}
+        training_tensor_dtypes = {"input0": x.dtype}
+        training_tensor_shapes = {"input0": (*bs_train, *BASE_INPUT_SHAPE)}
+        eval_tensor_shapes = {"input0": (*bs_test, *BASE_INPUT_SHAPE)}
 
-    if USE_TARGET:
-        target_tensor_names = {"target"}
-        training_tensor_dtypes["target"] = y.dtype
-        training_tensor_shapes["target"] = (*bs_train, *BASE_TARGET_SHAPE)
-        eval_tensor_shapes["target"] = (*bs_test, *BASE_TARGET_SHAPE)
+        if SEND_TARGET_IN_PIPE:
+            target_tensor_names = {"target"}
+            training_tensor_dtypes["target"] = y.dtype
+            training_tensor_shapes["target"] = (*bs_train, *BASE_TARGET_SHAPE)
+            eval_tensor_shapes["target"] = (*bs_test, *BASE_TARGET_SHAPE)
 
-    SAMPLE_BATCH_SIZE = 1  # Smallest batch as possible.
-    random_input_sample = torch.randn(SAMPLE_BATCH_SIZE, *BASE_INPUT_SHAPE)
-
-    del x
-    del y
+        SAMPLE_BATCH_SIZE = 1  # Smallest batch as possible.
+        random_input_sample = torch.randn(SAMPLE_BATCH_SIZE, *BASE_INPUT_SHAPE)
+        del x
+        del y
+    elif "lm" in args.task:
+        pass
+    else:
+        raise NotImplementedError(f"task: {args.task}")
 
     # eval_tensor_shapes, training_tensor_shapes, target_tensor_names, random_input_sample
 
-    comm_init_args = \
-        create_distributed_communcation_context(args, configs, args.stage,
-                                                target_tensor_names=target_tensor_names,
-                                                stage_to_rank_map=None)
+    comm_init_args = get_comm_init_args(
+        args,
+        configs,
+        args.stage,
+        target_tensor_names=target_tensor_names,
+        stage_to_rank_map=None)
 
     comm_handler = create_comm_handler(args, comm_init_args, device)
 
-    (training_tensor_dtypes,
-     training_tensor_shapes,
-     eval_tensor_shapes) = \
-        infer_dtypes_and_shapes(
-        configs, bs_train, bs_test, random_input_sample,
-        training_tensor_dtypes, training_tensor_shapes, eval_tensor_shapes, just_for_stage=None)
+    (training_tensor_dtypes, training_tensor_shapes,
+     eval_tensor_shapes) = infer_dtypes_and_shapes(configs,
+                                                   bs_train,
+                                                   bs_test,
+                                                   random_input_sample,
+                                                   training_tensor_dtypes,
+                                                   training_tensor_shapes,
+                                                   eval_tensor_shapes,
+                                                   just_for_stage=None)
 
+    del random_input_sample
     ######################################## END OF UGLY BLOCK ########################################
 
     trainer_cls = AVAILABLE_TRAINERS.get(args.trainer['type'])
@@ -995,8 +1005,8 @@ def main():
 
     # Set Trainer (and Gap Aware)
     trainer_extra_args = args.trainer['args']
+    # NOTE: With hack_trainer_type_to_gap_aware  we modified trainer type if needed.
     if getattr(trainer_cls, "HAS_GAP_AWARE", False):
-
         gap_aware = get_gap_aware(args, optimizer)
         trainer = trainer_cls(gap_aware,
                               partition.partition,
