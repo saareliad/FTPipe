@@ -386,10 +386,14 @@ def get_wikitext2_raw_train_valid_ds(model_name_or_path,
                                      DATA_DIR=DEFAULT_DATA_DIR):
 
     train_ds = get_wikitext2_raw_train_valid_test_ds(
+        model_name_or_path,
+        tokenizer,
         split='train',
         block_size=train_seq_len,
         overwrite_cache=overwrite_cache)
     valid_ds = get_wikitext2_raw_train_valid_test_ds(
+        model_name_or_path,
+        tokenizer,
         split='valid',
         block_size=valid_seq_len,
         overwrite_cache=overwrite_cache)
@@ -412,13 +416,13 @@ def get_cv_train_test_dl(ds_train,
                          ds_test,
                          bs_train,
                          bs_test,
-                         shuffle_train=True,
+                         shuffle=True,
                          pin_memory=True,
                          **kw):
     # TODO: X to first device and y to last device.
     dl_train = torch.utils.data.DataLoader(ds_train,
                                            bs_train,
-                                           shuffle=shuffle_train,
+                                           shuffle=shuffle,
                                            pin_memory=pin_memory,
                                            **kw)
     dl_test = torch.utils.data.DataLoader(ds_test,
@@ -442,34 +446,38 @@ def lm_collate_factory(tokenizer):
     return lm_collate
 
 
-def get_lm_train_dl(ds_train, bs_train, tokenizer=None, collate_fn=None):
+def get_lm_train_dl(ds_train, bs_train, tokenizer=None, collate_fn=None, shuffle=True, **kw):
     collate = collate_fn if collate_fn else lm_collate_factory(tokenizer)
     train_sampler = RandomSampler(ds_train)
     train_dl = DataLoader(ds_train,
+                          shuffle=False,
                           sampler=train_sampler,
                           batch_size=bs_train,
-                          collate_fn=collate)
+                          collate_fn=collate, **kw)
     return train_dl
 
 
-def get_lm_eval_dl(ds_eval, bs_eval, tokenizer=None, collate_fn=None):
+def get_lm_eval_dl(ds_eval, bs_eval, tokenizer=None, shuffle=False, collate_fn=None, **kw):
     collate = collate_fn if collate_fn else lm_collate_factory(tokenizer)
     eval_sampler = SequentialSampler(ds_eval)
     eval_dl = DataLoader(bs_eval,
                          sampler=eval_sampler,
                          batch_size=bs_eval,
-                         collate_fn=collate)
+                         shuffle=False,
+                         collate_fn=collate, **kw)
     return eval_dl
 
 
 def get_lm_train_valid_dl(ds_train, ds_test, bs_train, bs_test,
-                          tokenizer=None):
+                          tokenizer=None, **kw):
     # HACK: tokenizer as kwarg.
     # HACK: parameters names are 'test' for backward compatability.
-    collate = lm_collate_factory(tokenizer)
+    if 'collate_fn' not in kw:
+        collate = lm_collate_factory(tokenizer)
+        kw['collate_fn'] = collate
 
-    train_dl = get_lm_train_dl(ds_train, bs_train, collate_fn=collate)
-    valid_dl = get_lm_eval_dl(ds_test, bs_test, collate_fn=collate)
+    train_dl = get_lm_train_dl(ds_train, bs_train, **kw)
+    valid_dl = get_lm_eval_dl(ds_test, bs_test, **kw)
 
     return train_dl, valid_dl
 
@@ -537,7 +545,7 @@ def simplified_get_train_test_dl(dataset,
                                           ds_test=ds_test,
                                           bs_train=bs_train,
                                           bs_test=bs_test,
-                                          shuffle_train=shuffle_train,
+                                          shuffle=shuffle_train,
                                           **kw)
 
     if verbose:
@@ -1052,6 +1060,10 @@ def get_cifar_10_just_x_or_y_train_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR):
         raise ValueError(f"'just' should be in x,y. Got {just} instead.")
 
 
+def get_wt2_just_x_or_y_train_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR, **kw):
+    return get_wikitext2_raw_train_valid_ds(DATA_DIR=DATA_DIR, **kw)
+
+
 def get_seperate_just_x_or_y_train_test_dl(dataset,
                                            bs_train,
                                            bs_test,
@@ -1068,7 +1080,8 @@ def get_seperate_just_x_or_y_train_test_dl(dataset,
     DICT_DATASET_JUST_XY_FUNC = {
         'cifar10': get_cifar_10_just_x_or_y_train_test_ds,
         'cifar100': get_cifar_100_just_x_or_y_train_test_ds,
-        'imagenet': get_imagenet_just_x_or_y_train_test_ds
+        'imagenet': get_imagenet_just_x_or_y_train_test_ds,
+        'wt2': get_wt2_just_x_or_y_train_test_ds
     }
 
     ds_train, ds_test = DICT_DATASET_JUST_XY_FUNC.get(dataset)(

@@ -76,3 +76,11 @@ def gpt2_lowecase_partitioning():
     return partitioning_cfg, tokenizer, config
 
 
+PARTITIONING_AND_TOKENIZER_FUNCTIONS = {
+    'gpt2_lowercase': gpt2_lowecase_partitioning
+}
+
+
+def get_partitioning_tokenizer_and_config_by_name(name):
+    print(name)
+    return PARTITIONING_AND_TOKENIZER_FUNCTIONS.get(name)()

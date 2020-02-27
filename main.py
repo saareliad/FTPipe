@@ -16,12 +16,16 @@ from pipeline.weight_stashing import WeightStasher
 from pipeline import TrueWeightsStorage
 
 import models
+
 import numpy as np
 import torch
 from collections import OrderedDict
 from datasets import (add_dataset_argument,
                       simplified_get_train_test_dl_from_args,
                       get_seperate_just_x_or_y_train_test_dl_from_args)
+
+from datasets import lm_collate_factory
+
 from misc.filelogger import FileLogger
 from pipeline import dp_sim
 import os
@@ -783,7 +787,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
     return total_epoch_times_list, train_epochs_times_list
 
 
-def get_dataloaders(args, explicit_seperated_dataset=False):
+def get_dataloaders(args, explicit_seperated_dataset=False, **kw):
     dl_kw = dict()
     if args.cpu:
         dl_kw['pin_memory'] = False
@@ -793,13 +797,28 @@ def get_dataloaders(args, explicit_seperated_dataset=False):
     dl_kw['num_workers'] = args.num_data_workers
     dl_kw['drop_last'] = True
 
+    if "lm" in args.task:
+        # FIXME
+        # NOTE: From the function get_wikitext2_raw_train_valid_ds
+        tokenizer = kw.pop('tokenizer')
+        overwrite_cache = kw.pop('overwrite_cache', False)
+        dataset_keywords = dict(model_name_or_path='gpt2',
+                                tokenizer=tokenizer,
+                                train_seq_len=args.train_seq_len,
+                                valid_seq_len=args.valid_seq_len,
+                                overwrite_cache=overwrite_cache)
+        collate = lm_collate_factory(tokenizer)
+        dl_kw['collate_fn'] = collate
+    else:
+        dataset_keywords = None
+
     if explicit_seperated_dataset:
         train_dl, test_dl, samplers = get_seperate_just_x_or_y_train_test_dl_from_args(
-            args, verbose=False, **dl_kw)
+            args, verbose=False, dataset_keywords=dataset_keywords, **dl_kw)
     else:
         # Note: sometimes used to infer all parameters, (by all partitions).
         train_dl, test_dl, *samplers = simplified_get_train_test_dl_from_args(
-            args, verbose=False, **dl_kw)
+            args, verbose=False, dataset_keywords=dataset_keywords, **dl_kw)
 
     return train_dl, test_dl, samplers
 
@@ -836,8 +855,19 @@ def main():
     if hasattr(args, "cudnn_benchmark") and args.cudnn_benchmark:
         torch.backends.cudnn.benchmark = True
 
-    # Get partitioning config
-    configs = models.get_partitioning(args.model, model_instance=None)
+    dataset_keywords = dict()
+
+    if "cv" in args.task:
+        # Get partitioning config
+        configs = models.get_partitioning(args.model, model_instance=None)
+    elif "lm" in args.task:  # TODO: find some option to do this.
+        partitioning_function = models.transformers_utils.get_partitioning_tokenizer_and_config_by_name
+        # FIXME: remove hardcoded.
+        configs, tokenizer, _ = partitioning_function('gpt2_lowercase')
+        dataset_keywords['tokenizer'] = tokenizer
+    else:
+        raise NotImplementedError()
+
     configs.pop('model inputs')  # We don't use thous.
     configs.pop('model outputs')  # We don't use thous.
 
@@ -859,6 +889,8 @@ def main():
         torch.cuda.set_device(device)
 
     args.step_every = getattr(args, "step_every", 1)
+    # TODO: I have completly differnt plan for using it like micro batches.
+    # TODO: this is currently unused.
     args.base_lr_batch_size = getattr(args, "base_lr_batch_size",
                                       args.bs_train)
 
@@ -885,7 +917,7 @@ def main():
         logger.info(f"Stage {args.stage} will use Gap Aware")
 
     # Get dataloaders
-    train_dl, test_dl, samplers = get_dataloaders(args)
+    train_dl, test_dl, samplers = get_dataloaders(args, **dataset_keywords)
 
     ######################################## Start OF UGLY BLOCK ########################################
     # TODO: do the following block generically and automatically using tasks, or alon's code.
@@ -915,7 +947,27 @@ def main():
         del x
         del y
     elif "lm" in args.task:
-        pass
+        x = next(iter(train_dl))
+        bs_train = to_tuple(args.bs_train)
+        bs_test = to_tuple(args.bs_test)
+
+        BASE_INPUT_SHAPE = x.shape[1:]
+        # BASE_TARGET_SHAPE = y.shape[1:]
+
+        # TODO formalize with function according to dataset/task
+        SEND_TARGET_IN_PIPE = not ('_sep' in args.task)
+        target_tensor_names = {}
+        training_tensor_dtypes = {"input0": x.dtype}
+        training_tensor_shapes = {"input0": (*bs_train, *BASE_INPUT_SHAPE)}
+        eval_tensor_shapes = {"input0": (*bs_test, *BASE_INPUT_SHAPE)}
+
+        if SEND_TARGET_IN_PIPE:
+            raise NotImplementedError()
+
+        # SAMPLE_BATCH_SIZE = 1  # Smallest batch as possible.
+        # TODO: we take the input inself, there was some dtype problem constructing it.
+        random_input_sample = x  # torch.randn(SAMPLE_BATCH_SIZE, *BASE_INPUT_SHAPE)
+        del x
     else:
         raise NotImplementedError(f"task: {args.task}")
 
@@ -1068,9 +1120,10 @@ def main():
     if is_first_partition or is_last_partition:
         if "_sep" in args.task:
             train_dl, test_dl, samplers = get_dataloaders(
-                args, explicit_seperated_dataset=True)
+                args, explicit_seperated_dataset=True, **dataset_keywords)
     else:
         train_dl, test_dl, samplers = None, None, []
+    del dataset_keywords
 
     # Main Training Loop
 
