@@ -30,7 +30,7 @@ class Stage1(nn.Module):
 
 if __name__ == "__main__":
     mp.set_start_method("spawn")
-    m0 = Stage0()
+    m0 = Stage0().share_memory()
     m1, m2 = Stage1().to('cuda:0').share_memory(), Stage1().to('cuda:1').share_memory()
     m1.device = torch.device('cuda:0')
     m2.device = torch.device('cuda:1')

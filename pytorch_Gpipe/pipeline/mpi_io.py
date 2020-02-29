@@ -3,9 +3,84 @@ from typing import List, Optional, Union
 import torch
 from torch import Tensor
 import torch.distributed as dist
+from .utils import tensor_chunk
+from itertools import cycle
 
 __all__ = ["P2PConnection", "RequestsWrapper",
-           "P2MPScatterConnection", "BroadcastResult", "P2MPBroadcastConnection", "P2PRankIO"]
+           "P2MPScatterConnection", "BroadcastResult", "P2MPBroadcastConnection", "P2PRankIO", "RoundRobinBufferGenerator"]
+
+
+class RoundRobinBufferGenerator():
+    def __init__(self, device: torch.device, batch_dim: int, batch_size: int, num_minibatches: int, input_shapes: List[List[int]], output_shapes: List[List[int]]):
+        self.num_minibatches = num_minibatches
+        self.batch_size = batch_size
+        self.batch_dim = batch_dim
+        self.device = device
+
+        sizes = self._buffer_cycle()
+
+        # we preallocate all input/gradient buffers ahead of time
+
+        self.activation_input_buffers = []
+        self.input_shapes = []
+        for size in sizes:
+            buffers = []
+            shapes = []
+            for s in input_shapes:
+                shape = s[:batch_dim] + [size] + s[batch_dim + 1:]
+                buffers.append(torch.empty(shape, device=self.device))
+                shapes.append(shape)
+            self.input_shapes.append(shapes)
+            self.activation_input_buffers.append(buffers)
+
+        self.activation_input_buffers = cycle(self.activation_input_buffers)
+
+        self.gradient_input_buffers = None
+        self.gradient_shapes = []
+        for size in sizes:
+            buffers = []
+            shapes = []
+            for s in output_shapes:
+                shape = s[:batch_dim] + [size] + s[batch_dim + 1:]
+                shapes.append(shape)
+            self.gradient_shapes.append(shapes)
+
+    def allocate_input_buffers(self) -> List[Tensor]:
+        return next(self.activation_input_buffers)
+
+    def allocate_gradient_buffer(self) -> List[Tensor]:
+        return next(self.gradient_input_buffers)
+
+    def _buffer_cycle(self):
+        sizes = [self.batch_size // self.num_minibatches
+                 for _ in range(self.num_minibatches)]
+
+        for idx in range(self.num_minibatches):
+            if idx < (self.batch_size % self.num_minibatches):
+                sizes[idx] += 1
+
+        return sizes
+
+    def create_gradient_input_buffers(self):
+        if self.gradient_input_buffers is None:
+            buffers = []
+            for minibatch_shapes in self.gradient_shapes:
+                buffers.append([torch.empty(s, device=self.device)
+                                for s in minibatch_shapes])
+            self.gradient_input_buffers = cycle(buffers)
+
+    def purge_gradient_buffers(self):
+        self.gradient_input_buffers = None
+
+    def __repr__(self):
+        return str(self)
+
+    def __str__(self):
+        s = [f"RoundRobinBufferGenerator for device {self.device}",
+             f"activation input shapes {self.input_shapes}",
+             f"gradient input shape {self.gradient_shapes}"]
+
+        return "\n".join(s)
 
 
 class P2PConnection():
@@ -46,6 +121,16 @@ class P2PConnection():
         self.recv_counter += 1
         return tag
 
+    def set_total_tags(self, total_tags: int):
+        self.total_tags = total_tags
+
+    def __repr__(self):
+        return str(self)
+
+    def __str(self):
+        s = [f"P2P channel connected to rank {self.dst} with tag {self.tag}"]
+        return "\n".join(s)
+
 
 class RequestsWrapper():
     def __init__(self, requests):
@@ -72,6 +157,7 @@ class P2MPScatterConnection():
         self.split_dim = split_dim
         self.destinations = destinations
         self.total_tags = total_tags
+        self.tags = tags
 
         self.connections = [P2PConnection(d, t, total_tags)
                             for d, t in zip(destinations, tags)]
@@ -79,7 +165,8 @@ class P2MPScatterConnection():
     def send(self, tensor: Tensor, block: bool = False) -> Optional[RequestsWrapper]:
         n = len(self.connections)
 
-        chunks = tensor.chunk(n, dim=self.split_dim)
+        # we do not use the native torch.chunk as it's less balanced
+        chunks = tensor_chunk(tensor, n, self.split_dim)
         reqs = []
         for q, c in zip(self.connections, chunks):
             reqs.append(q.send(c, block=False))
@@ -94,7 +181,7 @@ class P2MPScatterConnection():
     def receive(self, buffer: Tensor, block: bool = False) -> Optional[RequestsWrapper]:
         n = len(self.connections)
         reqs = [q.receive(c, block=False) for q, c in zip(
-            self.connections, buffer.chunk(n, dim=self.split_dim))]
+            self.connections, tensor_chunk(buffer, n, self.split_dim))]
 
         request = RequestsWrapper(reqs)
         if block:
@@ -102,6 +189,18 @@ class P2MPScatterConnection():
             return None
 
         return request
+
+    def set_total_tags(self, total_tags: int):
+        for c in self.connections:
+            c.set_total_tags(total_tags)
+
+    def __repr__(self):
+        return str(self)
+
+    def __str(self):
+        s = [
+            f"P2PScatter connection connected to ranks {self.destinations} with tags {self.tags}"]
+        return "\n".join(s)
 
 
 Connection = Union[P2PConnection, P2MPScatterConnection]
@@ -177,6 +276,18 @@ class P2MPBroadcastConnection():
 
         return BroadcastResult(zeros_buffer, tmp_buffers, reqs)
 
+    def set_total_tags(self, total_tags: int):
+        for c in self.connections:
+            c.set_total_tags(total_tags)
+
+    def __repr__(self):
+        return str(self)
+
+    def __str(self):
+        s = [f"P2PBroadcast channel"]
+        s.extend([str(c) for c in self.connections])
+        return "\n".join(s)
+
 
 GeneralConnection = Union[Connection, P2MPBroadcastConnection]
 
@@ -198,7 +309,11 @@ class P2PRankIO():
         else:
             queues = self.in_connections
 
-        reqs = [q.send(t, block=False) for q, t in zip(queues, tensors)]
+        reqs = []
+        for q, t in zip(queues, tensors):
+            if t is None:
+                continue
+            reqs.append(q.send(t, block=False))
 
         request = RequestsWrapper(reqs)
         if block:
@@ -222,3 +337,18 @@ class P2PRankIO():
             return None
 
         return request
+
+    def set_total_tags(self, total_tags: int):
+        for c in self.in_connections + self.out_connections:
+            c.set_total_tags(total_tags)
+
+    def __repr__(self):
+        return str(self)
+
+    def __str(self):
+        s = [f"P2PRankIO",
+             "input channels:"]
+        s.extend([str(c) for c in self.in_connections])
+        s.append("output channels")
+        s.extend([str(c) for c in self.out_connections])
+        return "\n".join(s)

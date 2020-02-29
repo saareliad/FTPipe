@@ -4,8 +4,7 @@ import torch
 import os
 import sys
 sys.path.append("../")
-from pytorch_Gpipe.pipeline.mpi_io import P2PConnection, P2MPScatterConnection, P2MPBroadcastConnection, P2PRankIO
-import traceback
+from pytorch_Gpipe.pipeline.mpi_io import P2PConnection, P2MPScatterConnection, P2MPBroadcastConnection, P2PRankIO, RoundRobinBufferGenerator
 
 
 def tests(rank, world_size):
@@ -18,6 +17,8 @@ def tests(rank, world_size):
     dist.barrier()
     if rank in {0, 1, 2, 3}:
         test_p2mp_broadcast(rank)
+    dist.barrier()
+    test_bufferAllocator(rank)
     dist.barrier()
     forward_flow(rank)
     dist.barrier()
@@ -159,18 +160,67 @@ def test_p2mp_broadcast(rank):
                     req.wait()
 
 
+def test_bufferAllocator(rank):
+    if torch.cuda.is_available():
+        device = f"cuda:{rank % torch.cuda.device_count()}"
+    else:
+        device = "cpu"
+
+    device = torch.device(device)
+    num_minibatches = 11
+    batch_size = 10 * (rank + 2)
+    batch_dim = 0
+    input_shapes = [[1, 100 * (rank + 1)]]
+    output_shapes = [1, 3, rank + 1, rank + 1]
+    buffer_allocator = RoundRobinBufferGenerator(device, batch_dim, batch_size, num_minibatches,
+                                                 input_shapes, output_shapes)
+    buffer_allocator.allocate_gradient_buffer()
+    input_buffers = [buffer_allocator.allocate_input_buffers()
+                     for _ in range(num_minibatches + 1)]
+    gradient_buffers = [buffer_allocator.allocate_gradient_buffer()
+                        for _ in range(num_minibatches + 1)]
+
+    act_ptrs = [t.data_ptr() for bs in input_buffers for t in bs]
+    grad_ptrs = [t.data_ptr() for bs in gradient_buffers for t in bs]
+
+    # ensure that we indeed have a roundrobin behaviour
+    assert act_ptrs[0] == act_ptrs[-1]
+    assert grad_ptrs[0] == grad_ptrs[-1]
+    assert len(set(act_ptrs) == num_minibatches)
+    assert len(set(grad_ptrs) == num_minibatches)
+
+    # ensure that mini batch size are allocated correctly
+    for idx, mb in enumerate(input_buffers[:-1]):
+        mb_size = batch_size // num_minibatches
+        if idx < batch_size % num_minibatches:
+            mb_size += 1
+        for t, s in zip(mb, input_shapes):
+            shape = s[:batch_dim] + [mb_size] + s[batch_dim + 1:]
+            assert torch.Size(shape) == t.shape
+            assert t.device == device
+
+    for idx, mb in enumerate(gradient_buffers[:-1]):
+        mb_size = batch_size // num_minibatches
+        if idx < batch_size % num_minibatches:
+            mb_size += 1
+        for t, s in zip(mb, output_shapes):
+            shape = s[:batch_dim] + [mb_size] + s[batch_dim + 1:]
+            assert torch.Size(shape) == t.shape
+
+
 def forward_flow(rank):
     comm = get_comm(rank)
 
     if rank == 0:
         b = torch.arange(64, dtype=torch.float32)
     elif rank in [1, 2]:
-        b0, b1 = torch.randn(32), torch.randn(32)
+        # b0, b1 = torch.randn(32), torch.randn(32)
+        b = RoundRobinBufferGenerator(torch.device('cpu'), 0, 32, 2, [], [[1]])
     elif rank in [3, 4, 5, 6]:
-        b0, b1 = torch.randn(16), torch.randn(16)
+        # b0, b1 = torch.randn(16), torch.randn(16)
+        b = RoundRobinBufferGenerator(torch.device('cpu'), 0, 16, 2, [], [[1]])
     else:
         b = torch.randn(64)
-
     if rank == 0:
         for i in range(1, 10):
             comm.send([b * i], forward=True, block=True)
@@ -180,25 +230,25 @@ def forward_flow(rank):
             comm.receive([b], forward=True, block=True)
             assert torch.allclose(expected * i * 4, b)
     else:
-        bs = [b0, b1]
-        idx = 0
-        comm.receive([bs[idx]], forward=True, block=True)
-        recv = comm.receive([bs[1 - idx]], forward=True, block=False)
-        r = bs[idx] * 2
-        idx = 1 - idx
-
+        current_input = b.allocate_input_buffers()
+        comm.receive(current_input, forward=True, block=True)
+        next_input = b.allocate_input_buffers()
+        recv = comm.receive(next_input, forward=True, block=False)
+        r = current_input * 2
         send = comm.send([r], forward=True, block=False)
         for _ in range(7):
             recv.wait()
             send.wait()
-            recv = comm.receive([bs[1 - idx]], forward=True, block=False)
-            r = bs[idx] * 2
-            idx = 1 - idx
+            current_input = next_input
+            next_input = b.allocate_input_buffers()
+            recv = comm.receive(b, forward=True, block=False)
+            r = current_input * 2
             send = comm.send([r], forward=True, block=False)
 
         send.wait()
         recv.wait()
-        r = bs[idx] * 2
+        current_input = next_input
+        r = current_input * 2
         comm.send([r], forward=True, block=True)
 
 
@@ -208,9 +258,11 @@ def backward_flow(rank):
     if rank == 7:
         b = torch.arange(64, dtype=torch.float32)
     elif rank in [1, 2]:
-        b0, b1 = torch.randn(32), torch.randn(32)
+        # b0, b1 = torch.randn(32), torch.randn(32)
+        b = RoundRobinBufferGenerator(torch.device('cpu'), 0, 32, 2, [[1]], [])
     elif rank in [3, 4, 5, 6]:
-        b0, b1 = torch.randn(16), torch.randn(16)
+        # b0, b1 = torch.randn(16), torch.randn(16)
+        b = RoundRobinBufferGenerator(torch.device('cpu'), 0, 16, 2, [[1]], [])
     else:
         b = torch.randn(64)
 
@@ -223,23 +275,25 @@ def backward_flow(rank):
             comm.receive([b], forward=False, block=True)
             assert torch.allclose(expected * i * 4, b)
     else:
-        bs = [b0, b1]
-        idx = 0
-        comm.receive([bs[idx]], forward=False, block=True)
-        recv = comm.receive([bs[1 - idx]], forward=False, block=False)
-        r = bs[idx] * 2
-        idx = 1 - idx
+        current_input = b.allocate_gradient_buffer()
+        comm.receive(current_input, forward=False, block=True)
+        next_input = b.allocate_gradient_buffer()
+        recv = comm.receive(next_input, forward=False, block=False)
+        r = current_input * 2
         send = comm.send([r], forward=False, block=False)
         for _ in range(7):
             recv.wait()
             send.wait()
-            recv = comm.receive([bs[1 - idx]], forward=False, block=False)
-            r = bs[idx] * 2
-            idx = 1 - idx
+            current_input = next_input
+            next_input = b.allocate_gradient_buffer()
+            recv = comm.receive(b, forward=False, block=False)
+            r = current_input * 2
             send = comm.send([r], forward=False, block=False)
+
         send.wait()
         recv.wait()
-        r = bs[idx] * 2
+        current_input = next_input
+        r = current_input * 2
         comm.send([r], forward=False, block=True)
 
 

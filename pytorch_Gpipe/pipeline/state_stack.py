@@ -30,7 +30,7 @@ class StateStack():
             torch.cuda.set_rng_state(gpu_state, self.device)
 
     def save_activation(self, xs: List[Tensor]) -> List[Tensor]:
-        xs = [x.data.clone() for x in xs]
+        xs = [x.detach_() for x in xs]
         self.activations.append(xs)
         return xs
 

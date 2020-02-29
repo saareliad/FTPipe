@@ -5,57 +5,56 @@ from typing import Callable, Dict, Iterator, List, Optional, Tuple, Any, Union
 
 import torch
 from torch import Tensor
-from torch.optim import Optimizer
+import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from pytorch_Gpipe.delayedNorm import DelayedBatchNorm
-
+from copy import copy
 from .messages import COMMAND
-from .stage_io import QueueRankIO, ReplicatedConnection, QueueWrapper, SplitConnection
-from .utils import InvalidState, split_to_n, SyncBuffersMode
+from .utils import InvalidState, SyncBuffersMode, tensor_chunk, list_chunk
 from .workers import Worker
 from .state_stack import StateStack
-from torch.distributed import Backend
+from .mpi_io import RoundRobinBufferGenerator, P2PRankIO, P2PConnection, P2MPScatterConnection, P2MPBroadcastConnection
+from .config import PipelineConfig
+# TODO this whole class should not exist
 
 
 class Pipeline():
-    def __init__(self, configs: Dict, output_device: Optional[int] = None, split_dim=0,
+    def __init__(self, layers: Dict[str, nn.Module], tensors: Dict[str, Tensor], config: PipelineConfig, batch_size: int,
                  buffer_sync: SyncBuffersMode = SyncBuffersMode.BEFORE_EVAL,
-                 gradient_accumulation_steps: int = 1, backend=Backend.GLOO):
-        self.input_names = configs.pop('model inputs')
-        self.output_names = configs.pop('model outputs')
-
-        if output_device is None:
-            default = 'cuda' if torch.cuda.is_available() else 'cpu'
-            self.output_device = torch.device(default)
-        else:
-            self.output_device = torch.device(output_device)
-
-        self.split_dim = split_dim
-
-        master_IO, command_queues, groups, worker_args = create_worker_args(configs, self.input_names, self.output_names,
-                                                                            self.output_device, self.split_dim)
-
-        self.IO = master_IO
-        self.command_queues = command_queues
-        world_size = len(self.command_queues)
-        shards = defaultdict(list)
-        workers = defaultdict(list)
-
-        # launch workers
+                 gradient_accumulation_steps: int = 1, backend='gloo'):
         # set this to not reinitialize CUDA context
         # TODO this must be called before any and all cuda calls...
         # can be done with new config and lazy init replicas
         # or with puting it at the start of the main script
         # set_start_method('spawn')
-        for stage_id, rank, ranks_in_stage, io, command_queue, state_stack, model, optimizer in worker_args.values():
+
+        self.buffer = RoundRobinBufferGenerator('cpu', config.batch_dim, batch_size,
+                                                config.num_minibatches, config.model_output_shapes,
+                                                [[1] for _ in config.model_input_shapes])
+        self.input_names = config.model_inputs
+        self.output_names = config.model_outputs
+
+        self.split_dim = config.batch_dim
+
+        master_IO, command_queues, groups, worker_args = create_worker_args(config, batch_size,
+                                                                            self.split_dim, layers, tensors)
+
+        self.IO = master_IO
+        self.command_queues: List[Queue] = command_queues
+        world_size = len(self.command_queues)
+        shards = defaultdict(list)
+        workers = defaultdict(list)
+
+        # launch workers
+        for stage_id, device, rank, ranks_in_stage, io, buffer_generator, command_queue, state_stack, model, optimizer, lr_sched in worker_args.values():
             use_delayedNorm = any(isinstance(m, DelayedBatchNorm)
                                   for m in model.modules())
             send_input_gradient = [k not in self.input_names
-                                   for k in configs[stage_id]['inputs']]
+                                   for k in config.stages[stage_id].inputs]
 
-            worker = Worker(backend, world_size, stage_id, rank, ranks_in_stage, model, state_stack, io,
-                            send_input_gradient, command_queue, groups, use_delayedNorm, optimizer,
+            worker = Worker(backend, world_size, stage_id, device, rank, ranks_in_stage, model, state_stack, io, buffer_generator,
+                            send_input_gradient, command_queue, groups, use_delayedNorm, optimizer, lr_sched,
                             buffer_sync, gradient_accumulation_steps)
             print(f"created worker {rank}", flush=True)
             workers[stage_id].append(worker)
@@ -70,6 +69,15 @@ class Pipeline():
             worker.start()
 
         self.training = True
+
+    def receive_minibatch_output(self):
+        return self.IO.receive(self.buffer.allocate_input_buffers(), forward=True, block=True)
+
+    def gather_acks(self):
+        for q in self.command_queues:
+            msg = q.get()
+            if msg != "ack":
+                raise Exception(msg)
 
     def __call__(self, *xs: Tensor, num_chunks: Optional[int] = None):
         '''runs the pipeline forward pass input is split across batch dim
@@ -98,23 +106,23 @@ class Pipeline():
         minibatches = self._scatterInputs(xs, num_chunks)
         num_chunks = len(minibatches)
         self.num_chunks = num_chunks
-        self._sendCommand(COMMAND.FORWARD, num_chunks)
+        self._sendCommand(COMMAND.FORWARD, num_chunks, block=False)
 
         # send inputs one microbatch at a time
         for mb in minibatches:
             self.IO.send(mb, forward=True, block=False)
 
+        self.gather_acks()
         # collect outputs one micro batch at a time
-        results = [self.IO.receive(forward=True)
+        results = [self.receive_minibatch_output()
                    for _ in range(self.num_chunks)]
-
         results = self._gatherOutputs(results)
 
         results = self._postProcessResults(results)
 
         return results
 
-    def backward(self, grad_input: List[Optional[Tensor]]):
+    def backward(self, grad_input: List[Tensor]):
         '''runs the pipeline backward pass using the gradient input and the saved activations
 
         Parameters:
@@ -139,15 +147,16 @@ class Pipeline():
         if not isinstance(grad_input, (list, tuple)):
             grad_input = [grad_input]
 
-        self._sendCommand(COMMAND.BACKWARD, self.num_chunks)
+        self._sendCommand(COMMAND.BACKWARD, self.num_chunks, block=False)
 
         # seed gradients one gradient at a time
         for gradient_mb in self._scatterInputs(grad_input, self.num_chunks):
             self.IO.send(gradient_mb, forward=False)
 
-        # wait untill all workers are done collect acks not tensors
-        for _ in range(self.num_chunks):
-            self.IO.receive(forward=False)
+        self.gather_acks()
+
+    def lr_scheduler_step(self, epoch=None):
+        self._sendCommand(COMMAND.LR_STEP, metadata=epoch)
 
     def train_epoch(self, dataloader: DataLoader, loss_function: Callable, num_chunks: Optional[int] = None) -> Iterator[Tuple]:
         """perform a train epoch using the given dataloader and loss function yielding the loss for each batch.
@@ -250,23 +259,26 @@ class Pipeline():
                       for minibatches_out in outputs]
         return batch_outs[0] if len(batch_outs) == 1 else batch_outs
 
-    def _scatterInputs(self, xs: Tuple[Optional[Tensor]], num_chunks: int) -> List[Tuple[Optional[Tensor], ...]]:
+    def _scatterInputs(self, xs: Tuple[Tensor, ...], num_chunks: int) -> List[Tuple[Tensor, ...]]:
         '''
         scatters each tensor across split_dim
         returns list of chunks
         '''
-        chunked_input = [[None] * num_chunks if x is None else x.chunk(num_chunks, dim=self.split_dim)
+        chunked_input = [tensor_chunk(x, num_chunks, self.split_dim)
                          for x in xs]
 
         return list(zip(*chunked_input))
 
-    def _sendCommand(self, command: COMMAND, metadata: Any = None):
+    def _sendCommand(self, command: COMMAND, metadata: Any = None, block=True):
         if not self.WorkersRunning():
             raise InvalidState("workers are not running")
         r = (command, metadata)
 
         for q in self.command_queues:
             q.put(r, block=False)
+
+        if block:
+            self.gather_acks()
 
     def train(self, training: bool = True):
         cmd = COMMAND.TRAIN if training else COMMAND.EVAL
@@ -276,7 +288,7 @@ class Pipeline():
     def eval(self):
         self.train(training=False)
 
-    def state_dict(self, out_device: Optional[torch.device] = None) -> Dict[str, Optional[Tensor]]:
+    def state_dict(self, out_device: Optional[torch.device] = None) -> Dict[str, Tensor]:
         '''gathers the state dicts of all shards
            resulting in a state_dict with the same keys as the non pipelined model
            Parameters:
@@ -289,7 +301,7 @@ class Pipeline():
             res.update(s.state_dict(out_device))
         return res
 
-    def load_state_dict(self, state: Dict[str, Optional[Tensor]]):
+    def load_state_dict(self, state: Dict[str, Tensor]):
         '''loads the given state dict into the partitions
         Parameters:
         -----------
@@ -319,12 +331,6 @@ class Pipeline():
         '''
         return chain(*[s.named_buffers() for s in self.stage_representatives])
 
-    def zero_grad(self):
-        '''zeros the gradients across all model shards
-        '''
-        for s in self.shards:
-            s.zero_grad()
-
     def WorkersRunning(self) -> bool:
         '''checks whether all workers are in a valid state
         '''
@@ -349,198 +355,129 @@ class Pipeline():
         return [s[0] for s in self._shards.values()]
 
 
-# TODO add pipeline support for p2p based io
-# TODO compare between queue based and distributed based (CPU easy GPU will require using the docker image)
-# TODO decide which config to generate obviously the new config in it's dict form and possibly the old config
-
-# TODO add shape discovery phase and add them to the config
-
-# TODO think about multinode support the simplest solution is to split the config and add "distributed glue" between masters
 # TODO add fancy pants stats logging
 # TODO internal and external documentation
 
 
-# old configs structure to be deprecated:
-    # model inputs
-    # model outputs
-    # stage id
-        # inputs
-        # outputs
-        # model legacy ignored
-        # replicas stage models
-        # ranks devices assigned to this stage
-        # optimizers optimizers assigned to this stage
+def create_worker_args(config: PipelineConfig, batch_size: int,
+                       split_dim: int, layers, tensors, debug=True) -> Tuple[P2PRankIO, List[Queue], List[List[int]], Dict]:
+    assert config.isValid()
+    # this ensures all workers will have minibatch size >=1
+    assert batch_size >= (config.num_minibatches * config.largest_stage_size)
 
-def create_worker_args(configs: Dict, model_inputs: List[str],
-                       model_outputs: List[str], output_device: torch.device,
-                       split_dim: int) -> Tuple[QueueRankIO, List[Queue], List[List[int]], Dict]:
-    consumers = defaultdict(list)
-    producers = dict()
-
-    master_stage = master_rank = -1
-    # we think of the master as the one who produces model inputs and consumes model outputs
-    for i in model_inputs:
-        producers[i] = master_stage
-    for o in model_outputs:
-        consumers[o].append(master_stage)
-
-    stage_to_ranks = defaultdict(list)
-    stage_to_ranks[master_stage].append(master_rank)
-    rank_to_device = dict()
-    rank_to_device[master_rank] = output_device
-    n_ranks = 0
-    rank_to_optimizer = dict()
-    rank_to_model = dict()
-    rank_to_stage = {master_rank: master_stage}
-    for stage_id, config in configs.items():
-        for o in config['outputs']:
-            producers[o] = stage_id
-        for i in config['inputs']:
-            consumers[i].append(stage_id)
-
-        # ranks should contain all devices allocated to this stage
-        stage_size = len(config['ranks'])
-        for idx, device in enumerate(config['ranks']):
-            stage_to_ranks[stage_id].append(n_ranks + idx)
-            rank_to_device[n_ranks + idx] = torch.device(device)
-            rank_to_stage[n_ranks + idx] = stage_id
-
-        # assign optimizers if given we expect that every replica will have an optimizer or none at all
-        n_optimizers = len(config['optimizers'])
-        assert n_optimizers in [0, stage_size]
-
-        for idx, optimizer in enumerate(config['optimizers']):
-            assert isinstance(optimizer, Optimizer)
-            rank_to_optimizer[n_ranks + idx] = optimizer
-
-        # replicas should be given to each rank
-        assert len(config['replicas']) == stage_size
-        for idx, replica in enumerate(config['replicas']):
-            assert replica.device == rank_to_device[n_ranks + idx]
-            rank_to_model[n_ranks + idx] = replica
-
-        if n_optimizers == 0 and config['replicas'][0].training:
-            print(
-                f"stage {stage_id} is in training mode and has no optimizers assigned so it's parameters will not be changed as gradients are process local")
-        n_ranks += stage_size
-
+    master_rank = -1
+    master_stage = -1
+    stages = copy(config.stages)
+    stages[master_stage] = config.master_stage
+    producers, consumers = config.producers, config.consumers
+    stage_to_ranks = config.stage_to_ranks()
+    rank_to_stage = {r: stage for stage, ranks in stage_to_ranks.items()
+                     for r in ranks}
+    total_tags = 0
     # create communication channels between stages
-    print("creating communication channels master is stage -1 rank -1")
-    rank_to_queues = defaultdict(lambda: defaultdict(list))
-    for output, producer_stage in producers.items():
+    if debug:
+        print(
+            f"creating communication channels master is stage {master_stage} rank {master_rank}")
+    rank_to_connections = defaultdict(lambda: defaultdict(list))
+    for output, producer_stage in sorted(producers.items()):
         producer_ranks = stage_to_ranks[producer_stage]
-        producer_devices = [rank_to_device[r] for r in producer_ranks]
+        producer_devices = stages[producer_stage].devices
         n_producers = len(producer_ranks)
         for consumer_stage in consumers[output]:
             consumer_ranks = stage_to_ranks[consumer_stage]
-            consumer_devices = [rank_to_device[r] for r in consumer_ranks]
+            consumer_devices = stages[consumer_stage].devices
             n_consumers = len(consumer_ranks)
 
-            if n_producers == 1:
-                if n_consumers == 1:
-                    # one to one
-                    print(
-                        f"stage[{producer_stage}] -> stage[{consumer_stage}]\nrank{producer_ranks} -> rank{consumer_ranks}\nactivation: {output}\n")
-                    queue = Queue()
-                    producers_queues = [QueueWrapper(queue,
-                                                     consumer_devices[0])]
-                    consumers_queues = [QueueWrapper(queue,
-                                                     producer_devices[0])]
-                else:
-                    # one to many
-                    print(
-                        f"stage[{producer_stage}] -> stage[{consumer_stage}]\nrank{producer_ranks} -> ranks{consumer_ranks}\nactivation: {output}\n")
-                    consumers_queues = [Queue() for _ in consumer_ranks]
-                    producers_queues = [SplitConnection(consumers_queues,
-                                                        split_dim, consumer_devices)]
-                    consumers_queues = [QueueWrapper(q, producer_devices[0])
-                                        for q in consumers_queues]
-            elif n_consumers == 1:
-                # many to one
-                print(f"stage[{producer_stage}] -> stage[{consumer_stage}]")
-                print(f"ranks{producer_ranks} -> rank{consumer_ranks}")
-                print(f"activation: {output}\n")
-                producers_queues = [Queue() for _ in producer_ranks]
-                consumers_queues = [SplitConnection(producers_queues,
-                                                    split_dim, producer_devices)]
-                producers_queues = [QueueWrapper(q, consumer_devices[0])
-                                    for q in producers_queues]
-            else:
-                # many to many
-                # several producers for one consumer or vice versa
-                # each rank of the minority will be connected to several majority ranks using a splitConnection
+            # every comunication can be generalized as many to many
+            if debug:
                 print(
                     f"stage[{producer_stage}] -> stage[{consumer_stage}]")
 
-                if n_producers <= n_consumers:
-                    majority_ranks, majority_devices = consumer_ranks, consumer_devices
-                    minority_ranks, minority_devices = producer_ranks, producer_devices
-                else:
-                    majority_ranks, majority_devices = producer_ranks, producer_devices
-                    minority_ranks, minority_devices = consumer_ranks, consumer_devices
+            if n_producers <= n_consumers:
+                majority_ranks, majority_devices = consumer_ranks, consumer_devices
+                minority_ranks, minority_devices = producer_ranks, producer_devices
+            else:
+                majority_ranks, majority_devices = producer_ranks, producer_devices
+                minority_ranks, minority_devices = consumer_ranks, consumer_devices
 
-                minority_size = len(minority_ranks)
+            minority_size = len(minority_ranks)
+            majority_size = len(majority_ranks)
 
-                majority_queues = [Queue() for _ in majority_ranks]
-                queue_groups = split_to_n(majority_queues, minority_size)
-                device_groups = split_to_n(majority_devices, minority_size)
+            error = f"unbalanced communication detected between stages {producer_stage} with {n_producers} workers and {consumer_stage} with {n_consumers} workers\n"
+            error += f"the worker ratio between the stages must be a whole number for good performance but got {majority_size/minority_size}"
+            assert majority_size % minority_size == 0, error
 
-                # if a minority rank is assgined only one majority rank we use a QueueWrapper to remove the split/merge overhead
-                minority_queues = [SplitConnection(group, split_dim, devices) if len(group) > 1 else QueueWrapper(group[0], devices[0])
-                                   for group, devices in zip(queue_groups, device_groups)]
+            tags = [total_tags + idx for idx in range(majority_size)]
+            rank_groups = list_chunk(majority_ranks, minority_size)
+            tag_groups = list_chunk(tags, minority_size)
+            # if a minority rank is assgined only one majority rank we use a p2pConnection to remove the split/merge overhead
+            # a minority rank aggregates multiple ranks from the majority stage
+            minority_connections = [P2MPScatterConnection(split_dim, rank_group, tag_groups, 0) if len(rank_group) > 1
+                                    else P2PConnection(rank_group[0], tag_group[0], 0)
+                                    for rank_group, tag_group in zip(rank_groups, tag_groups)]
+            majority_connections = []
+            start = 0
+            end = 0
+            for rank_group, tag_group, device, minority_rank in zip(rank_groups, tag_groups, minority_devices, minority_ranks):
+                for r, t in zip(rank_group, tag_group):
+                    end += 1
+                    connection = P2PConnection(minority_rank, r, t)
+                    majority_connections.append(connection)
 
-                queues = []
-                start = 0
-                end = 0
-                for group, device, minority_rank in zip(queue_groups, minority_devices, minority_ranks):
-                    for q in group:
-                        end += 1
-                        queues.append(QueueWrapper(q, device))
+                if debug:
                     if majority_ranks is consumer_ranks:
                         print(
                             f"rank[{minority_rank}] -> ranks{majority_ranks[start:end]}")
+                        print(
+                            f"device[{device}] -> devices{majority_devices[start:end]}")
                     else:
                         print(
                             f"ranks{majority_ranks[start:end]} -> rank[{minority_rank}]")
-                    start = end
-                majority_queues = queues
+                        print(
+                            f"devices{majority_devices[start:end]} -> device[{device}]")
+                start = end
+            if debug:
                 print(f"activation: {output}\n")
+            total_tags += majority_size
 
-                if n_producers <= n_consumers:
-                    producers_queues = minority_queues
-                    consumers_queues = majority_queues
-                else:
-                    producers_queues = majority_queues
-                    consumers_queues = minority_queues
+            if n_producers <= n_consumers:
+                producers_connections = minority_connections
+                consumer_connections = majority_connections
+            else:
+                producers_connections = majority_connections
+                consumer_connections = minority_connections
 
-            for rank, queue in zip(producer_ranks, producers_queues):
-                rank_to_queues[rank]['outputs'].append((output, queue))
+            for rank, connection in zip(producer_ranks, producers_connections):
+                rank_to_connections[rank]['outputs'].append((output,
+                                                             connection))
 
-            for rank, queue in zip(consumer_ranks, consumers_queues):
-                rank_to_queues[rank]['inputs'].append((output, queue))
+            for rank, connection in zip(consumer_ranks, consumer_connections):
+                rank_to_connections[rank]['inputs'].append((output,
+                                                            connection))
 
-    # make sure to sort by name as our convention
-    for rank in rank_to_queues:
-        inputs = rank_to_queues[rank]['inputs']
-        sorted_inputs = sorted(inputs, key=lambda t: t[0])
+    # make sure to sort according to the order in the stage config
+    stage_input_output_order = dict()
+    for stage_id, stage in stages.items():
+        stage_input_output_order[stage_id] = {s: i for i, s in
+                                              enumerate(chain(stage.inputs, stage.outputs))}
 
-        outputs = rank_to_queues[rank]['outputs']
-        sorted_outputs = sorted(outputs, key=lambda t: t[0])
+    for rank in rank_to_connections:
+        order = stage_input_output_order[rank_to_stage[rank]]
 
-        rank_to_queues[rank]['inputs'] = sorted_inputs
-        rank_to_queues[rank]['outputs'] = sorted_outputs
+        inputs = rank_to_connections[rank]['inputs']
+        sorted_inputs = sorted(inputs, key=lambda t: order[t[0]])
 
-    # preserve order of model inputs and outptus
-    scope_to_number = {s: i for i, s in
-                       enumerate(chain(model_inputs, model_outputs))}
-    rank_to_queues[master_rank]['inputs'] = sorted(rank_to_queues[-1]['inputs'],
-                                                   key=lambda t: scope_to_number[t[0]])
-    rank_to_queues[master_rank]['outputs'] = sorted(rank_to_queues[-1]['outputs'],
-                                                    key=lambda t: scope_to_number[t[0]])
+        outputs = rank_to_connections[rank]['outputs']
+        sorted_outputs = sorted(outputs, key=lambda t: order[t[0]])
+
+        rank_to_connections[rank]['inputs'] = sorted_inputs
+        rank_to_connections[rank]['outputs'] = sorted_outputs
+    if debug:
+        print(f"total number of p2p channels: {total_tags}")
 
     # create IOs
     rank_to_IO = dict()
-    for rank, io_config in rank_to_queues.items():
+    for rank, io_config in sorted(rank_to_connections.items()):
         io_in = [t[1] for t in io_config['inputs']]
         io_out = []
 
@@ -550,29 +487,36 @@ def create_worker_args(configs: Dict, model_inputs: List[str],
             if len(group) == 1:
                 io_out.append(group[0][1])
             else:
-                io_out.append(ReplicatedConnection([t[1] for t in group]))
+                io_out.append(P2MPBroadcastConnection([t[1] for t in group]))
 
-        rank_to_IO[rank] = QueueRankIO(io_in, io_out)
-
+        # assign comm handlers and set the total number of tags
+        rank_to_IO[rank] = P2PRankIO(io_in, io_out)
+        rank_to_IO[rank].set_total_tags(total_tags)
     # find all process groups for replicated stages
     groups = []
-    for stage_id, ranks in stage_to_ranks.items():
+    for stage_id, ranks in sorted(stage_to_ranks.items()):
         if len(ranks) > 1:
             groups.append(ranks)
 
+    rank_to_stage = {r: stage for stage, ranks in stage_to_ranks.items()
+                     for r in ranks}
     master_IO = rank_to_IO.pop(master_rank)
     command_queues = []
     worker_args = dict()
+    rank_to_model_args = config.realize(layers, tensors, batch_size)
     for rank in sorted(rank_to_IO.keys()):
         io = rank_to_IO[rank]
-        model = rank_to_model[rank]
-        optimizer = rank_to_optimizer.get(rank, None)
-        state_stack = StateStack(model.device)
+        model, device, optimizer, lr_sched, split_size = rank_to_model_args[rank]
+        state_stack = StateStack(device)
         command_queue = Queue()
         command_queues.append(command_queue)
         stage_id = rank_to_stage[rank]
         ranks_in_stage = len(stage_to_ranks[stage_id])
-        worker_args[rank] = (stage_id, rank, ranks_in_stage, io, command_queue,
-                             state_stack, model, optimizer)
+        stage = stages[stage_id]
+        input_shapes, output_shapes = stage.input_shapes, stage.output_shapes
+        buffer_generator = RoundRobinBufferGenerator(device, split_dim, split_size,
+                                                     config.num_minibatches, input_shapes, output_shapes)
+        worker_args[rank] = (stage_id, device, rank, ranks_in_stage, io, buffer_generator, command_queue,
+                             state_stack, model, optimizer, lr_sched)
 
     return master_IO, command_queues, groups, worker_args
