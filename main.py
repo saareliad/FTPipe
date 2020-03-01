@@ -222,7 +222,11 @@ def parse_json_config(args, config=None):
     # option to load a base config, reducing code duplication.
     if "base_config_path" in output:
         base_config_path = output.get("base_config_path")
-        parse_json_config(args, config=base_config_path)
+        if isinstance(base_config_path, list):
+            for i in base_config_path:
+                parse_json_config(args, config=base_config_path)
+        else:
+            parse_json_config(args, config=base_config_path)
 
     for key, value in output.items():
 
@@ -386,6 +390,7 @@ def infer_dtypes_and_shapes(config,
 
     # FIXME: we don't want this pass to record statistic for batch norm!
     # TODO: maybe write this to some file and load from it if exists,
+    # TODO: handle adjecency list
     #  to aviod doing this pass every time
     """
     assert (len(training_tensor_shapes) == len(training_tensor_dtypes))
@@ -535,6 +540,7 @@ def try_replace_prediction_with_nesterov(args):
                 print("-I- Setting nesterov=True for last partition")
                 res = getattr(args, 'weight_prediction')
                 delattr(args, 'weight_prediction')
+                # Return, so we can use it for stuff like file nameing, etc.
                 return res
 
 
@@ -973,14 +979,19 @@ def main():
 
     # eval_tensor_shapes, training_tensor_shapes, target_tensor_names, random_input_sample
 
-    comm_init_args = get_comm_init_args(
-        args,
-        configs,
-        args.stage,
-        target_tensor_names=target_tensor_names,
-        stage_to_rank_map=None)
+    COMM_VERSION = 1
+    if COMM_VERSION == 1:
+        comm_init_args = get_comm_init_args(
+            args,
+            configs,
+            args.stage,
+            target_tensor_names=target_tensor_names,
+            stage_to_rank_map=None)
 
-    comm_handler = create_comm_handler(args, comm_init_args, device)
+        comm_handler = create_comm_handler(args, comm_init_args, device)
+    else:
+        pass
+
 
     (training_tensor_dtypes, training_tensor_shapes,
      eval_tensor_shapes) = infer_dtypes_and_shapes(configs,
