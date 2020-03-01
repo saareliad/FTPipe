@@ -121,19 +121,21 @@ def generateStatements(partition: List[Node],
         i += 1
         if i > (2 * len(partition)):
             # cycle detection
-            print(
-                f"we've detected that the code generation performed {(2*len(partition))} iterations\n"
-                f"while the partition has only {(len(partition))} statements\n"
+            error = [
+                f"we've detected that the code generation performed {(2*len(partition))} iterations",
+                f"while the partition has only {(len(partition))} statements",
                 "we suspect that there is a loop in the control flow graph"
-                "it is possible that you you the same layer twice? for eg.\n"
-                "relu=nn.ReLU()\n"
-                "identity=x\n"
-                "x=layer(x)\n"
-                "x+=identity\n"
-                "x=relu(x)\n")
-            print("we suggest to avoid using layers for stateless operations")
-            print("for eg. F.relu() is preffered to nn.ReLU")
-            assert False
+                "it is possible that you you the same layer twice? for eg.",
+                "relu=nn.ReLU()",
+                "identity=x",
+                "x=layer(x)",
+                "x+=identity",
+                "x=relu(x)",
+                "we suggest to avoid using layers for stateless operations",
+                "for eg. F.relu() is preffered to nn.ReLU",
+            ]
+            error = "\n".join(error)
+            assert False, error
 
         # actual code generation
         if node.type == NodeTypes.LAYER:

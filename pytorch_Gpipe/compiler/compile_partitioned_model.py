@@ -254,7 +254,6 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
         f"config['model outputs'] = {list(graph.output_scopes)}",
         f"\n{tab}return [config[i]['model'] for i in range({len(ios)})] if partitions_only else config"
     ])
-
     return f"\n{tab}".join(lines) + "\n"
 
 
@@ -263,10 +262,8 @@ def connections(graph: Graph) -> str:
     to be embeded in the generated file
     '''
     num_partitions = graph.num_partitions
-    adj_matrix = [{
-        "inputs": set(),
-        "outputs": set()
-    } for i in range(num_partitions + 2)]
+    adj_matrix = [{"inputs": set(), "outputs": set()}
+                  for i in range(num_partitions + 2)]
 
     for node in graph.nodes:
         if node.type is NodeTypes.IN:
@@ -289,41 +286,9 @@ def connections(graph: Graph) -> str:
     lines.append(f"# model inputs {adj_matrix[0]['outputs']}")
     for i, line in enumerate(adj_matrix[1:-1:]):
         lines.append(f"# partition {i} {line}")
-    lines.append(f"# model outputs {adj_matrix[num_partitions + 1]['inputs']}")
-
-    # Make a function...
-    inputs_partitions = adj_matrix[0]['outputs']
-    outputs_partitions = adj_matrix[num_partitions + 1]['inputs']
-    del adj_matrix[0]
-    del adj_matrix[num_partitions + 1]
-    adj_matrix = {i: j for i, j in adj_matrix.items()}
-    lines.append("def partition_adjacency():")
-    lines.append(f"{tab}adj_matrix = {adj_matrix}")
-    lines.append(f"{tab}inputs_partitions = {inputs_partitions}")
-    lines.append(f"{tab}outputs_partitions = {outputs_partitions}")
     lines.append(
-        f"{tab}return adj_matrix, inputs_partitions, outputs_partitions")
-
+        f"# model outputs {adj_matrix[num_partitions + 1]['inputs']}")
     return '\n'.join(lines) + '\n'
-
-
-def create_infer_module_shapes_and_dtypes(name: str,
-                                          ios: Dict[int, Dict[str, List[str]]],
-                                          num_inputs: int,
-                                          model_outputs: List[str]) -> str:
-    
-    model_inputs = [f'input{idx}' for idx in range(num_inputs)]
-
-    class_decl_and_init = "\n".join([
-        f"class {name}ShapeInferer(nn.Module):",
-        f"{tab}def __init__(self,config):",
-        f"{dtab}super({name}ShapeInferer,self).__init__()",
-        dtab + f"\n{dtab}".join(f"self.stage{i} = config[{i}]['model']"
-                                for i in ios)
-    ])
-    forward = model_parallel_forward(ios, model_inputs, model_outputs)
-
-    pass
 
 
 def create_model_parallel_module(name: str, ios: Dict[int, Dict[str,
@@ -336,7 +301,7 @@ def create_model_parallel_module(name: str, ios: Dict[int, Dict[str,
     class_decl_and_init = "\n".join([
         f"class ModelParallel(nn.Module):",
         f"{tab}def __init__(self,config):",
-        f"{dtab}super({name}ModelParallel,self).__init__()",
+        f"{dtab}super(ModelParallel,self).__init__()",
         dtab + f"\n{dtab}".join(f"self.stage{i} = config[{i}]['model']"
                                 for i in ios)
     ])
@@ -394,7 +359,10 @@ def model_parallel_forward(ios: Dict[int, Dict[str, List[str]]],
 
     parts = deque(range(n_partitions))
 
+    cnt = 0
     while len(parts) > 0:
+        if cnt > 3 * n_partitions:
+            assert False, "error cycle detected mutual dependecy between generated partitions"
         idx = parts.popleft()
 
         if all(tensor in activations for tensor in ios[idx]['inputs']):
@@ -413,23 +381,10 @@ def model_parallel_forward(ios: Dict[int, Dict[str, List[str]]],
                 statements[-1] += '[0]'
 
         else:
+            cnt += 1
             parts.append(idx)
 
     outputs = ", ".join(activations[o] for o in model_outputs)
     statements.append(f"return {outputs}")
 
     return f"\n{dtab}".join(statements)
-
-
-def shape_and_dtype_inference_hook(self, input, output):
-    shapes = []
-    dtypes = []
-
-    # To tuple
-    if not (isinstance(output, tuple) or isinstance(output, list)):
-        output = (output,)
-
-    # Infer
-    for i in output:
-        shapes.append(i.data.size())
-        dtypes.append(i.data.dtype)
