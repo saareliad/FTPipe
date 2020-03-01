@@ -39,6 +39,8 @@ class SinglePartitionManager:
         # TODO: work in progress, need to support exp name too, etc.
         self.weight_stashing_just_for_stats = False
 
+        TO_DEVICE = False
+
         # Set partition.
         if use_recomputation:
             if is_last_partition:
@@ -47,23 +49,28 @@ class SinglePartitionManager:
                 partition_cls = FirstPartition
             else:
                 partition_cls = Partition
-            self.partition = partition_cls(partition, device, to_device=True)
+            self.partition = partition_cls(partition, device, to_device=TO_DEVICE)
         else:
             # Partition without recomputation
             if is_last_partition:
                 partition_cls = LastPartition
                 self.partition = partition_cls(
-                    partition, device, to_device=True)
+                    partition, device, to_device=TO_DEVICE)
             elif is_first_partition:
                 partition_cls = PartitionWithoutRecomputation
                 self.partition = partition_cls(
-                    partition, device, to_device=True, _REQ_GRAD=False)
+                    partition, device, to_device=TO_DEVICE, _REQ_GRAD=False)
             else:
                 partition_cls = PartitionWithoutRecomputation
                 self.partition = partition_cls(
-                    partition, device, to_device=True, _REQ_GRAD=True)
+                    partition, device, to_device=TO_DEVICE, _REQ_GRAD=True)
 
+        if not TO_DEVICE:
+            self.partition.to(device)
+        
         self.comm_handler = comm_handler
+        comm_handler.init_process_group()
+
         self.training_tensor_shapes = training_tensor_shapes
         self.eval_tensor_shapes = eval_tensor_shapes
         self.training_tensor_dtypes = training_tensor_dtypes

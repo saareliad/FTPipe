@@ -34,6 +34,7 @@ from experiments import save_experiment, load_experiment_for_update
 import time
 import random
 import math
+import config as json_config
 
 # TODO: support multiple servers,
 # TODO heterogenous servers
@@ -874,8 +875,8 @@ def main():
     else:
         raise NotImplementedError()
 
-    configs.pop('model inputs')  # We don't use thous.
-    configs.pop('model outputs')  # We don't use thous.
+    model_inputs = configs.pop('model inputs')  # We don't use thous.
+    model_outputs = configs.pop('model outputs')  # We don't use thous.
 
     NO_DP = True
     # TODO: make it nicer.
@@ -989,19 +990,28 @@ def main():
             stage_to_rank_map=None)
 
         comm_handler = create_comm_handler(args, comm_init_args, device)
+
+        (training_tensor_dtypes, training_tensor_shapes,
+         eval_tensor_shapes) = infer_dtypes_and_shapes(configs,
+                                                       bs_train,
+                                                       bs_test,
+                                                       random_input_sample,
+                                                       training_tensor_dtypes,
+                                                       training_tensor_shapes,
+                                                       eval_tensor_shapes,
+                                                       just_for_stage=None)
     else:
-        pass
+        raise NotImplementedError("In progress")
+        configs['model inputs'] = model_inputs  # We don't use thous.
+        configs['model outputs'] = model_outputs
 
+        (training_tensor_shapes,
+         training_tensor_dtypes) = json_config.find_shapes_and_dtypes(
+             random_input_sample, configs)
+        eval_tensor_shapes = training_tensor_shapes
 
-    (training_tensor_dtypes, training_tensor_shapes,
-     eval_tensor_shapes) = infer_dtypes_and_shapes(configs,
-                                                   bs_train,
-                                                   bs_test,
-                                                   random_input_sample,
-                                                   training_tensor_dtypes,
-                                                   training_tensor_shapes,
-                                                   eval_tensor_shapes,
-                                                   just_for_stage=None)
+        configs['model inputs'] = model_inputs  # We don't use thous.
+        model_outputs = configs.pop('model outputs')  # We don't use thous.
 
     del random_input_sample
     ######################################## END OF UGLY BLOCK ########################################
