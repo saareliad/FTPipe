@@ -291,6 +291,9 @@ class Worker(Process):
                 self.stage_process_group = pg
 
         if self.stage_process_group:
+            if backend == 'mpi':
+                raise NotImplementedError("According to pytorh manual. DDP is not supported with MPI")
+            
             ddp = DistributedDataParallel(self.model, device_ids=[self.model.device],
                                           output_device=[self.model.device],
                                           process_group=self.stage_process_group,
