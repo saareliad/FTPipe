@@ -116,8 +116,8 @@ class Attention(nn.Module):
 
         self.c_attn = Conv1D(n_state * 3, nx)
         self.c_proj = Conv1D(n_state, nx)
-        self.attn_dropout = nn.Dropout(config.attn_pdrop)
-        self.resid_dropout = nn.Dropout(config.resid_pdrop)
+        self.attn_dropout = nn.Dropout(config.attn_pdrop, inplace=True)
+        self.resid_dropout = nn.Dropout(config.resid_pdrop, inplace=True)
         self.pruned_heads = set()
 
     def prune_heads(self, heads):
@@ -221,7 +221,7 @@ class MLP(nn.Module):
         self.c_fc = Conv1D(n_state, nx)
         self.c_proj = Conv1D(nx, n_state)
         self.act = gelu
-        self.dropout = nn.Dropout(config.resid_pdrop)
+        self.dropout = nn.Dropout(config.resid_pdrop, inplace=True)
 
     def forward(self, x):
         h = self.act(self.c_fc(x))
@@ -604,7 +604,7 @@ class GPT2Model(GPT2PreTrainedModel):
 
         self.wte = nn.Embedding(config.vocab_size, config.n_embd)
         self.wpe = nn.Embedding(config.n_positions, config.n_embd)
-        self.drop = nn.Dropout(config.embd_pdrop)
+        self.drop = nn.Dropout(config.embd_pdrop, inplace=True)
         self.output_shape = (-1,config.n_positions,config.n_embd)
         # self.h = nn.ModuleList(
         #     [Block(config.n_ctx, config, scale=True) for _ in range(1)])

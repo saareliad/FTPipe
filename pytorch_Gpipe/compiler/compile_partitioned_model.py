@@ -295,7 +295,40 @@ def connections(graph: Graph) -> str:
     for i, line in enumerate(adj_matrix[1:-1:]):
         lines.append(f"# partition {i} {line}")
     lines.append(f"# model outputs {adj_matrix[num_partitions + 1]['inputs']}")
+
+    # Make a function...
+    inputs_partitions = adj_matrix[0]['outputs']
+    outputs_partitions = adj_matrix[num_partitions + 1]['inputs']
+    del adj_matrix[0]
+    del adj_matrix[num_partitions + 1]
+    adj_matrix = {i: j for i, j in adj_matrix.items()}
+    lines.append("def partition_adjacency():")
+    lines.append(f"{tab}adj_matrix = {adj_matrix}")
+    lines.append(f"{tab}inputs_partitions = {inputs_partitions}")
+    lines.append(f"{tab}outputs_partitions = {outputs_partitions}")
+    lines.append(
+        f"{tab}return adj_matrix, inputs_partitions, outputs_partitions")
+
     return '\n'.join(lines) + '\n'
+
+
+def create_infer_module_shapes_and_dtypes(name: str,
+                                          ios: Dict[int, Dict[str, List[str]]],
+                                          num_inputs: int,
+                                          model_outputs: List[str]) -> str:
+    
+    model_inputs = [f'input{idx}' for idx in range(num_inputs)]
+
+    class_decl_and_init = "\n".join([
+        f"class {name}ShapeInferer(nn.Module):",
+        f"{tab}def __init__(self,config):",
+        f"{dtab}super({name}ShapeInferer,self).__init__()",
+        dtab + f"\n{dtab}".join(f"self.stage{i} = config[{i}]['model']"
+                                for i in ios)
+    ])
+    forward = model_parallel_forward(ios, model_inputs, model_outputs)
+
+    pass
 
 
 def create_model_parallel_module(name: str, ios: Dict[int, Dict[str,
@@ -391,3 +424,17 @@ def model_parallel_forward(ios: Dict[int, Dict[str, List[str]]],
     statements.append(f"return {outputs}")
 
     return f"\n{dtab}".join(statements)
+
+
+def shape_and_dtype_inference_hook(self, input, output):
+    shapes = []
+    dtypes = []
+
+    # To tuple
+    if not (isinstance(output, tuple) or isinstance(output, list)):
+        output = (output,)
+
+    # Infer
+    for i in output:
+        shapes.append(i.data.size())
+        dtypes.append(i.data.dtype)
