@@ -71,7 +71,6 @@ MODEL_CLASSES = {
     'gpt2': (GPT2Config, GPT2Model, GPT2Tokenizer),
 }
 
-# MODEL_CLASSES=MODEL_CLASSES_LM_HEAD
 
 class TextDataset(Dataset):
     def __init__(self, tokenizer, args, file_path='train', block_size=512):
@@ -188,6 +187,13 @@ def edge_weight_function(bw_GBps):
             return max(1, int(MULT_FACTOR * v.weight.input_size / bw_GBps))
         if u.type is NodeTypes.CONSTANT:
             return 1000 * MULT_FACTOR  # FIXME: why penalize constants?
+        if v.type is NodeTypes.PYTHON_PRIMITIVE and v.valueType() in [list, tuple]:
+            if "prim::TupleUnpack" in v.scope or "prim::ListUnpack" in v.scope:
+                return 1000 * MULT_FACTOR
+        if u.type is NodeTypes.PYTHON_PRIMITIVE and u.valueType() in [list, tuple]:
+            if "prim::ListConstruct" in u.scope or "prim::TupleConstruct" in u.scope:
+                print(f"penalize lists and tuples {u.scope}")
+                return 1000 * MULT_FACTOR
         return 1
 
     return f
@@ -226,7 +232,6 @@ def partition_model(args, train_dataset, model, tokenizer, lm=True):
                        use_layers_only_graph=args.partition_layer_graph,
                        output_file=args.output_file,
                        DEBUG=False)
-
     if args.dot:
         graph.save_as_pdf(args.output_file, ".")
         graph.serialize(args.output_file)
@@ -292,8 +297,7 @@ def main():
     tr_params.add_argument(
         "--mlm",
         action='store_true',
-        help=
-        "Train with masked-language modeling loss instead of language modeling."
+        help="Train with masked-language modeling loss instead of language modeling."
     )
     tr_params.add_argument(
         "--mlm_probability",
@@ -304,22 +308,19 @@ def main():
         "--config_name",
         default="",
         type=str,
-        help=
-        "Optional pretrained config name or path if not the same as model_name_or_path"
+        help="Optional pretrained config name or path if not the same as model_name_or_path"
     )
     tr_params.add_argument(
         "--tokenizer_name",
         default="",
         type=str,
-        help=
-        "Optional pretrained tokenizer name or path if not the same as model_name_or_path"
+        help="Optional pretrained tokenizer name or path if not the same as model_name_or_path"
     )
     tr_params.add_argument(
         "--cache_dir",
         default="",
         type=str,
-        help=
-        "Optional directory to store the pre-trained models downloaded from s3 (instread of the default one)"
+        help="Optional directory to store the pre-trained models downloaded from s3 (instread of the default one)"
     )
     tr_params.add_argument(
         "--block_size",
@@ -351,8 +352,7 @@ def main():
         '--model_too_big',
         action='store_true',
         default=False,
-        help=
-        "if the model is too big run the whole partitioning process on CPU, and drink a cup of coffee in the meantime"
+        help="if the model is too big run the whole partitioning process on CPU, and drink a cup of coffee in the meantime"
     )
     parser.add_argument('--n_partitions', type=int, default=4)
     parser.add_argument('--output_file', default='gpt2')
@@ -364,8 +364,7 @@ def main():
         '--n_iter',
         type=int,
         default=10,
-        help=
-        "number of iteration used in order to profile the network and run analysis"
+        help="number of iteration used in order to profile the network and run analysis"
     )
     parser.add_argument(
         '--bandwidth_gps',

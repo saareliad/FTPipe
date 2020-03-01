@@ -18,10 +18,10 @@ def post_process_partition(graph: Graph) -> Graph:
     '''
 
     cannonize_partition_indices(graph)
-    constants_fix(graph)
-    remove_backward_edges(graph)
-    do_not_send_lists(graph)
-    constants_fix(graph)
+    # constants_fix(graph)
+    # remove_backward_edges(graph)
+    # do_not_send_lists(graph)
+    # constants_fix(graph)
 
     return graph
 
