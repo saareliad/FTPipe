@@ -5,12 +5,15 @@ import torch.distributed as dist
 from itertools import cycle
 from typing import Tuple
 from .interface import CommunicationHandlerBase
+from torch.distributed import DistributedDataParallel
 
 __all__ = [
     "P2PConnection", "RequestsWrapper", "P2MPScatterConnection",
     "BroadcastResult", "P2MPBroadcastConnection", "P2PRankIO",
     "RoundRobinBufferGenerator"
 ]
+
+# P2PRankIO is the actuall comm handler here.
 
 
 def tensor_chunk(t: Tensor, n: int, dim: int = 0) -> Tuple[Tensor, ...]:
@@ -103,7 +106,7 @@ class RoundRobinBufferGenerator():
 
 
 class P2PConnection():
-    ''' a connection between 2 workers 
+    ''' a connection between 2 workers
     '''
 
     # p2p between single worker stages
@@ -286,7 +289,7 @@ class P2MPBroadcastConnection():
         # TODO logically this is a reduce sum operation
         # but in practice one of the conections can be a split connection
         # making it basically a tree reduce operation
-        # in total we will have one buffer per connected stage 
+        # in total we will have one buffer per connected stage
         # which is not really memory efficient but it's fine for now
 
         tmp_buffers = [zeros_buffer]
@@ -330,12 +333,16 @@ class P2PRankIO(CommunicationHandlerBase):
 
     # all of the above with supprot for multiple input/output
 
-    def __init__(self, in_connections: List[GeneralConnection],
-                 out_connections: List[GeneralConnection], device, cpu=False):
+    def __init__(self,
+                 in_connections: List[GeneralConnection],
+                 out_connections: List[GeneralConnection],
+                 device,
+                 cpu=False):
         self.in_connections = in_connections
         self.out_connections = out_connections
         self.device = device
         self.cpu = cpu
+        self.stage_ddp_process_group = None
 
     def send(self,
              batch_index,
@@ -348,6 +355,7 @@ class P2PRankIO(CommunicationHandlerBase):
             queues = self.in_connections
 
         reqs = []
+
         if not self.cpu:
             # HACK: synchronize.
             torch.cuda.synchronize(device=self.device)
@@ -421,7 +429,36 @@ class P2PRankIO(CommunicationHandlerBase):
     def create_gradients_rcv_buffers(self, device, requires_grad=False):
         pass
 
-    def init_proccess_groups(self, *args):  # stage, num_stages
-        raise NotImplementedError()
+    def init_proccess_groups(self, backend, ddp_backend, rank, local_rank,
+                             world_size,
+                             groups: List[List[int]]):  # stage, num_stages
+
+        dist.init_process_group(backend)
+        assert dist.get_world_size() == world_size
+        self.logger.info(
+            f"Initialized process group; backend: {backend}, rank: {rank}, "
+            f"local_rank: {local_rank}, world_size: {world_size}")
+
+        # dist.init_process_group(backend, init_method="env://",
+        #                         rank=self.rank, world_size=world_size)
+        for group in groups:
+            pg = dist.new_group(ranks=group, backend=ddp_backend)
+            if self.rank in group:
+                # only one group per replicated stage
+                assert self.stage_ddp_process_group is None
+                self.stage_ddp_process_group = pg
 
     # def fix_after_recv(self, x):
+
+    def init_ddp_context(self, model, device):
+        assert self.stage_ddp_process_group is not None
+
+        ddp = DistributedDataParallel(
+            model,
+            device_ids=[device],
+            output_device=[device],
+            process_group=self.stage_ddp_process_group,
+            broadcast_buffers=False,
+            find_unused_parameters=False)
+
+        return ddp
