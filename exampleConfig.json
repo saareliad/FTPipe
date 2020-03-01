@@ -1,0 +1,89 @@
+{
+  "batch_dim": 0,
+  "model_inputs": ["input0"],
+  "model_input_shapes": [[1, 100]],
+  "model_outputs": ["output0", "output1", "output2"],
+  "model_output_shapes": [
+    [1, 100],
+    [1, 100],
+    [1, 100]
+  ],
+  "stages": {
+    "0": {
+      "batch_dim": 0,
+      "inputs": ["input0"],
+      "outputs": ["output2"],
+      "input_shapes": [[1, 100]],
+      "output_shapes": [[1, 100]],
+      "stage_cls": "models.normal.dummy.Stage0",
+      "optimizer": {
+        "type": "torch.optim.adam.Adam",
+        "args": {
+          "lr": 0.001
+        }
+      },
+      "lr_scheduler": {
+        "type": "",
+        "args": {}
+      },
+      "devices": ["cpu"]
+    },
+    "1": {
+      "batch_dim": 0,
+      "inputs": ["input0"],
+      "outputs": ["t0"],
+      "input_shapes": [[1, 100]],
+      "output_shapes": [[1, 100]],
+      "stage_cls": "models.normal.dummy.Stage1",
+      "optimizer": {
+        "type": "torch.optim.adadelta.Adadelta",
+        "args": {}
+      },
+      "lr_scheduler": {
+        "type": "",
+        "args": {}
+      },
+      "devices": ["cpu", "cpu"]
+    },
+    "2": {
+      "batch_dim": 0,
+      "inputs": ["t0"],
+      "outputs": ["t1"],
+      "input_shapes": [[1, 100]],
+      "output_shapes": [[1, 100]],
+      "stage_cls": "models.normal.dummy.Stage2",
+      "optimizer": {
+        "type": "torch.optim.adamax.Adamax",
+        "args": {}
+      },
+      "lr_scheduler": {
+        "type": "",
+        "args": {}
+      },
+      "devices": ["cpu", "cpu", "cpu", "cpu"]
+    },
+    "3": {
+      "batch_dim": 0,
+      "inputs": ["t1"],
+      "outputs": ["output0", "output1"],
+      "input_shapes": [[1, 100]],
+      "output_shapes": [
+        [1, 100],
+        [1, 100]
+      ],
+      "stage_cls": "models.normal.dummy.Stage3",
+      "optimizer": {
+        "type": "torch.optim.adamw.AdamW",
+        "args": {}
+      },
+      "lr_scheduler": {
+        "type": "torch.optim.lr_scheduler.StepLR",
+        "args": {
+          "step_size": 30,
+          "gamma": 0.1
+        }
+      },
+      "devices": ["cpu", "cuda:0"]
+    }
+  }
+}

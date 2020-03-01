@@ -1,1 +1,2 @@
-from .pipeline import Pipeline
+from .pipeline import Pipeline, SyncBuffersMode
+from .config import PipelineConfig, StageConfig
