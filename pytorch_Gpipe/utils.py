@@ -4,6 +4,8 @@ import collections
 import torch
 import torch.nn as nn
 from torch import Tensor
+from functools import reduce
+
 __all__ = ["traverse_model", "traverse_params_buffs",
            "get_device", "_detach_inputs", "_get_size",
            "Tensors", "TensorsShape", "Devices", "OrderedSet", "layerDict", "tensorDict"]
@@ -143,6 +145,13 @@ def flatten(x: Tensors):
         return ts
     else:
         raise ValueError(INCORRECT_INPUT_TYPE + f"{type(x)} ")
+
+
+def _extract_volume_from_sizes(sizes):
+    if isinstance(sizes, torch.Size):
+        return reduce(lambda total, y: total * y, sizes, 1)
+    else:
+        return reduce(lambda total, s: total + (_extract_volume_from_sizes(s)), sizes, 0)
 
 
 T = TypeVar('T')

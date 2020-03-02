@@ -314,6 +314,15 @@ class Graph():
             7: 'pink'
         }
 
+        def edge_label(sizes):
+            if isinstance(sizes, torch.Size):
+                return list(sizes)
+            else:
+                l = [edge_label(s) for s in sizes]
+                if len(l) == 1 and isinstance(l[0], list):
+                    return l[0]
+                return l
+
         def hide_node(node):
             return (node.type == NodeTypes.BUFF_PARAM) and (
                 not show_buffs_params)
@@ -322,9 +331,14 @@ class Graph():
             if hide_node(node):
                 continue
             label = node.scope + f"\nidx:{node.idx}"
-            label = f"{label}\nshape: {node.shape}"
-            if show_profiles and node.weight != 0:
-                label = f"{label}\n {node.weight}"
+            if show_profiles and isinstance(node.weight, Profile):
+                label = f"{label}\nProfile:"
+                for k, v in node.weight._asdict().items():
+                    label += f"\n{k}:{v}"
+                    if "time" in k:
+                        label += " ms"
+                    elif "memory" in k or "size" in k:
+                        label += " MB"
 
             label = f"{label}\n type: {node.valueType()}"
             if not (node.value is None):
@@ -335,10 +349,21 @@ class Graph():
         for node in self.nodes:
             if hide_node(node):
                 continue
-            for in_node in node.in_nodes:
-                if hide_node(in_node):
+            for out_node in node.out_nodes:
+                if hide_node(out_node):
                     continue
-                dot.edge(str(in_node.idx), str(node.idx))
+                if "Unpack" in out_node.scope:
+                    shape = out_node.shape
+                else:
+                    shape = node.shape
+                label = edge_label(shape)
+                if label == [[]]:
+                    label = ""
+                elif len(label) == 1:
+                    label = label[0]
+
+                dot.edge(str(node.idx), str(out_node.idx),
+                         label=str(label))
 
         return dot
 

@@ -2,6 +2,7 @@ import torch
 from models.normal import WideResNet, amoebanetd, ResNet, vgg16_bn
 from pytorch_Gpipe import pipe_model
 from pytorch_Gpipe.model_profiling import Node, NodeTypes
+from pytorch_Gpipe.utils import _extract_volume_from_sizes
 import argparse
 import importlib
 from misc import run_analysis, run_partitions
@@ -106,10 +107,6 @@ def node_weight_function(node: Node):
 
 def edge_weight_function(bw_GBps):
     def f(u: Node, v: Node):
-        if u.type is NodeTypes.LAYER:
-            return max(1, int(MULT_FACTOR * u.weight.output_size / bw_GBps))
-        if v.type is NodeTypes.LAYER:
-            return max(1, int(MULT_FACTOR * v.weight.input_size / bw_GBps))
         if u.type is NodeTypes.CONSTANT:
             return 1000 * MULT_FACTOR  # FIXME: why penalize constants?
         if v.type is NodeTypes.PYTHON_PRIMITIVE and v.valueType() in [list, tuple]:
@@ -118,9 +115,11 @@ def edge_weight_function(bw_GBps):
         if u.type is NodeTypes.PYTHON_PRIMITIVE and u.valueType() in [list, tuple]:
             if "prim::ListConstruct" in u.scope or "prim::TupleConstruct" in u.scope:
                 return 1000 * MULT_FACTOR
-        return 1
-
-    return f
+        # TODO data type not included shouldn't really matter
+        MB = 1e6
+        volume = _extract_volume_from_sizes(u.shape) / MB
+        # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
+        return max(1, int(MULT_FACTOR * volume / bw_GBps))
 
 
 def parse_cli():
