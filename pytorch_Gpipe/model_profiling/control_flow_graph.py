@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import IntEnum
 from typing import Any, List, Tuple, Optional, OrderedDict, Type, Callable, Union, Dict
 from ..utils import OrderedSet
 from .network_profiler import Profile
@@ -9,7 +9,7 @@ import pickle
 import collections
 
 
-class NodeTypes(Enum):
+class NodeTypes(IntEnum):
     '''
     Enum representing the possible types of Nodes in the Graph
     '''
@@ -49,6 +49,7 @@ class Node():
 
      parallel edges in the same direction are not allowed
     '''
+
     def __init__(self,
                  scope: str,
                  idx: int,
@@ -68,7 +69,7 @@ class Node():
             incoming_nodes, OrderedSet) else OrderedSet()
         self.value = value
         self.value_type: Optional[Type] = None
-        self.shape = [] if shape is None else shape
+        self.shape = shape
 
     def valueType(self) -> Type:
         if self.value_type:
@@ -160,6 +161,7 @@ class Graph():
     num_partitions: int:
         the number of partitions for the nodes
     '''
+
     def __init__(self,
                  nodes: Optional[GraphNodes] = None,
                  graph_output_scopes: Optional[OrderedSet[str]] = None,
@@ -320,7 +322,7 @@ class Graph():
             if hide_node(node):
                 continue
             label = node.scope + f"\nidx:{node.idx}"
-
+            label = f"{label}\nshape: {node.shape}"
             if show_profiles and node.weight != 0:
                 label = f"{label}\n {node.weight}"
 

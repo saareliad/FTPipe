@@ -192,7 +192,6 @@ def edge_weight_function(bw_GBps):
                 return 1000 * MULT_FACTOR
         if u.type is NodeTypes.PYTHON_PRIMITIVE and u.valueType() in [list, tuple]:
             if "prim::ListConstruct" in u.scope or "prim::TupleConstruct" in u.scope:
-                print(f"penalize lists and tuples {u.scope}")
                 return 1000 * MULT_FACTOR
         return 1
 

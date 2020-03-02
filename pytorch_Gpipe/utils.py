@@ -242,10 +242,16 @@ class OrderedSet(collections.MutableSet, Generic[T]):
     def __getitem__(self, idx):
         if not isinstance(idx, int):
             raise TypeError(f"expected int index got {type(idx).__name__}")
-        if idx < 0 or idx >= len(self):
+        if idx < -len(self) or idx >= len(self):
             raise ValueError("index out of range")
 
-        for i, v in enumerate(self):
+        if idx < 0:
+            idx = -idx
+            items = reversed(self)
+        else:
+            items = self
+
+        for i, v in enumerate(items):
             if i == idx:
                 return v
 

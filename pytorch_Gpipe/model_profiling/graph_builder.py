@@ -117,7 +117,6 @@ def build_graph(model: torch.nn.Module,
             "Falling back to regular trace which is less accurate and might not work\n."
             "Please build it.")
         torch._C._jit_pass_inline(trace_graph)
-
     global DEBUG_MODEL_NAME
     DEBUG_MODEL_NAME = model.__class__.__name__
     if not os.path.exists("GPIPE_DEBUG/"):
@@ -142,8 +141,6 @@ def build_graph(model: torch.nn.Module,
     nodes = remove_useless_node_inputs(nodes)
     nodes = remove_tensor_int_tensor(nodes)
 
-    nodes = add_missing_types(nodes)
-
     for node in nodes.values():
         node.weight = layer_profiles.get(node.scope, node.weight)
         # as we merge nodes its possible that shape and type are not correct so we fix this
@@ -151,6 +148,9 @@ def build_graph(model: torch.nn.Module,
         if node.type is NodeTypes.LAYER:
             node.shape = layer_profiles[node.scope].output_shape
             node.value_type = Tensor if len(node.shape) == 1 else list
+
+    nodes = add_missing_types(nodes)
+    nodes = shape_analysis(nodes)
 
     graph = graph_check_and_cleanup(nodes, outputs, max_depth, basic_blocks)
     os.rmdir("GPIPE_DEBUG/")
@@ -168,6 +168,7 @@ def add_nodes(
 ) -> Tuple[GraphNodes, Dict[int, int]]:
     nodes, accessors = add_inputs_and_self_accessor(tensors, trace_graph)
     multiple_output_fix = dict()
+
     for trace_node in trace_graph.nodes():
         if trace_node.kind() == "prim::GetAttr":
             add_accessor(nodes, trace_node, accessors, new_to_old, partials,
@@ -237,13 +238,12 @@ def add_nodes(
             multiple_output_fix[idx] = trace_node.outputsSize()
         # add node for each output
         for i, output in enumerate(trace_node.outputs()):
+            unique_id = output.unique()
             try:
                 shape = output.type().sizes()
+                shape = torch.Size(shape)
             except Exception:
                 shape = None
-
-            unique_id = output.unique()
-
             # to differentiate different non layer ops that are in the same scope
             if i == 0 and node_type != NodeTypes.LAYER:
                 node_scope += str(unique_id)
@@ -328,7 +328,7 @@ def add_accessor(nodes: GraphNodes, trace_node: torch._C.Node,
         node_type = NodeTypes.BUFF_PARAM
         layer_scope = longest_prefix(new_to_old, tensor_scope)
         if layer_scope:
-            # this tensor was profiled so it will be folder into it's layer
+            # this tensor was profiled so it will be folded into it's layer
             # this is a hack as I do not think it should have a special case
             size_in_mb = 0
             tensor_scope = layer_scope + "/" + accessor_name
@@ -412,6 +412,16 @@ def _combine_params_and_buffers_into_OP_nodes(
     return _remove_nodes(nodes, is_buffer_or_param)
 
 
+def output_scopes(nodes: GraphNodes,
+                  trace_graph: torch._C.Graph) -> OrderedSet[str]:
+    return OrderedSet(nodes[output.unique()].scope
+                      for output in trace_graph.outputs())
+
+##################################
+# types and shapes analysis
+##################################
+
+
 @DEBUG_DUMP_GRAPH
 def add_missing_types(nodes: GraphNodes) -> GraphNodes:
     for node in nodes.values():
@@ -443,10 +453,40 @@ def add_missing_types(nodes: GraphNodes) -> GraphNodes:
     return nodes
 
 
-def output_scopes(nodes: GraphNodes,
-                  trace_graph: torch._C.Graph) -> OrderedSet[str]:
-    return OrderedSet(nodes[output.unique()].scope
-                      for output in trace_graph.outputs())
+@DEBUG_DUMP_GRAPH
+def shape_analysis(nodes: GraphNodes) -> GraphNodes:
+    for node in nodes.values():
+        if node.shape != None:
+            # already has a shape
+            if type(node.shape) is torch.Size:
+                node.shape = (node.shape,)
+            assert type(node.shape) is tuple, "shape must be a tuple"
+        elif node.type is NodeTypes.CONSTANT:
+            node.shape = (torch.Size([]),)
+        elif "aten::size" in node.scope:
+            node.shape = (torch.Size([]),)
+        elif "aten::split" in node.scope or "aten::chunk" in node.scope:
+            warning = "using torch.split or torch.chunk can lead to unexpected results if the target dimention will be differ than what was recorded here"
+            warnings.warn(warning)
+            sizes = []
+            for n in node.out_nodes:
+                if type(n.shape) is tuple:
+                    sizes.append(n.shape)
+                else:
+                    assert type(n.shape) is torch.Size
+                    sizes.append((n.shape,))
+            node.shape = tuple(sizes)
+        elif "prim::ListConstruct" in node.scope or "prim::TupleConstruct" in node.scope:
+            shape = tuple([i.shape for i in node.in_nodes])
+            node.shape = shape
+        elif "prim::TupleUnpack" in node.scope or "prim::ListUnpack" in node.scope:
+            father = node.in_nodes[0]
+            idx = father.out_nodes.indexOf(node)
+            node.shape = father.shape[idx]
+        else:
+            raise Exception(f"unsupported op in shape analysis {node.scope}")
+
+    return nodes
 
 
 #################################

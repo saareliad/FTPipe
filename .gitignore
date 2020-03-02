@@ -12,7 +12,5 @@ playground.py
 glue_data/**
 wikitext-2-raw/**
 papers/*
-gpt2.pdf
-gpt2_p4.pdf
-amoebanet*pdf
+
 old/
