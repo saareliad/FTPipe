@@ -233,6 +233,8 @@ class Graph():
                     w = 1
                 else:
                     w = edge_weight_function(u, v)
+                    if w == 1:
+                        print(u.scope, v.scope)
                 G.add_edge(u.idx, v.idx, weight=w)
 
         for n in self.nodes:
@@ -318,7 +320,8 @@ class Graph():
             if isinstance(sizes, torch.Size):
                 return list(sizes)
             else:
-                l = [edge_label(s) for s in sizes]
+                l = [edge_label(s) for s in sizes if len(s) > 0]
+                l = list(filter(len, l))
                 if len(l) == 1 and isinstance(l[0], list):
                     return l[0]
                 return l
@@ -357,10 +360,8 @@ class Graph():
                 else:
                     shape = node.shape
                 label = edge_label(shape)
-                if label == [[]]:
+                if label == []:
                     label = ""
-                elif len(label) == 1:
-                    label = label[0]
 
                 dot.edge(str(node.idx), str(out_node.idx),
                          label=str(label))
