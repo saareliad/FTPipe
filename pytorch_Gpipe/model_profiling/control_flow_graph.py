@@ -233,8 +233,6 @@ class Graph():
                     w = 1
                 else:
                     w = edge_weight_function(u, v)
-                    if w == 1:
-                        print(u.scope, v.scope)
                 G.add_edge(u.idx, v.idx, weight=w)
 
         for n in self.nodes:
