@@ -4,6 +4,7 @@ from typing import Dict
 from collections import OrderedDict
 from . import CommunicationHandlerBase
 from .partition import Partition, LastPartition, FirstPartition, PartitionWithoutRecomputation
+from .partition import get_buffers_for_ddp_sync
 from .training.interface import PartitionedTrainer
 from .tasks import DLTask
 from .weight_prediction.interface import WeightPredictor
@@ -29,7 +30,7 @@ class SinglePartitionManager:
                  training_tensor_shapes, eval_tensor_shapes, training_tensor_dtypes,  # FIXME
                  device, is_last_partition, is_first_partition, log_frequency=100, max_buffers=2, step_every=1,
                  keep_buffers_alive=False, use_recomputation=True,
-                 gap_aware_just_loss=False,
+                 gap_aware_just_loss=False, sync_buffers=False,
                  ):
 
         if (gap_aware_just_loss and (not use_recomputation)):
@@ -74,6 +75,9 @@ class SinglePartitionManager:
 
         self.comm_handler = comm_handler
         comm_handler.init_process_group()
+        self.is_replicated = False
+        self.sync_buffers = sync_buffers
+        
         if hasattr(comm_handler, "init_ddp_context"):
             ddp = comm_handler.init_ddp_context(self.partition.layers)
             self.partition.layers = ddp
@@ -81,8 +85,9 @@ class SinglePartitionManager:
             self.logger.info(
                 f"Initialized DDP stage replication for for stage {stage}.")
             self.backward_nosync_context_manager = ddp.no_sync
-        else:
-            self.is_replicated = False
+            if sync_buffers:
+                self.buffers_to_sync = get_buffers_for_ddp_sync(partition.layers)
+
 
         self.training_tensor_shapes = training_tensor_shapes
         self.eval_tensor_shapes = eval_tensor_shapes
@@ -333,6 +338,9 @@ class SinglePartitionManager:
         else:
             if self.fwd_rcev_buffers.is_initialized():
                 self.fwd_rcev_buffers.create()
+        
+        if self.is_replicated and self.sync_buffers:
+            self.comm_handler.sync_buffers(self.buffers_to_sync)
 
     def wait_on_sent_object(self, is_fwd):
         # TODO: can write the entire thing MUCH more nicely

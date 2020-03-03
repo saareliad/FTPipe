@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch import Tensor
 from typing import Tuple, Union
 from .monkey_patch import DummyForwardMonkeyPatcher
+from .monkey_patch.find_modules import find_modules
 from .replace_inplace import replace_inplace_for_first_innermost_layer_
 from .rng_stasher import PartitionRngStasher
 from . import dp_sim
@@ -13,11 +14,28 @@ Tensors = Tuple[Tensor, ...]
 TensorOrTensors = Union[Tensor, Tensors]
 
 __all__ = ['Partition', 'LastPartition',
-           'FirstPartition', 'PartitionWithoutRecomputation']
+           'FirstPartition', 'PartitionWithoutRecomputation', 'get_buffers_for_ddp_sync']
 
 DEFAULT_CLASSES_LIST_TO_PATCH = [nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d,
                                  nn.SyncBatchNorm, nn.InstanceNorm1d, nn.InstanceNorm2d, nn.InstanceNorm3d,
                                  dp_sim.BatchNorm1d, dp_sim.BatchNorm2d, dp_sim.BatchNorm3d]
+
+# TODO: LayerNorm?
+
+def get_buffers_for_ddp_sync(model, classes_to_patch=DEFAULT_CLASSES_LIST_TO_PATCH):
+    # This function should be used once.
+
+    for model_to_patch in classes_to_patch:
+        found = []  # list of tuples: (access_string, model)
+        find_modules(model, "", model_to_patch, found)
+
+    found = sorted(found, key=lambda t: t[0])
+    buffers = []
+    for (access_string, model) in found:
+        buffers.extend(sorted(model.named_buffers(), key=lambda t: t[0]))
+
+    buffers = [t[1] for t in buffers]
+    return buffers
 
 
 class Partition(nn.Module):
