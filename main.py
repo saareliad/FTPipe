@@ -6,8 +6,8 @@ from pipeline import SinglePartitionManager
 from pipeline.training import AVAILABLE_TRAINERS
 from pipeline.tasks import AVAILABLE_TASKS
 from pipeline.stats import AVAILBALE_STATS  # , Stats
-from pipeline.weight_prediction import get_sgd_weight_predictor
-from pipeline.gap_aware import get_sgd_gap_aware_cls
+from pipeline.weight_prediction import get_sgd_weight_predictor, get_adam_weight_predictor
+from pipeline.gap_aware import get_sgd_gap_aware_cls, get_adam_gap_aware_cls
 from optimizers import AVAILBALE_OPTIMIZERS
 from pipeline.util import get_world_size
 import optimizers.lr_scheduler
@@ -519,9 +519,17 @@ def get_gap_aware(args, optimizer):
     optimizer_type = getattr(args, 'optimizer')['type']
 
     # TODO: this could be implemented by using the gap...
-    if not optimizer_type == 'sgd1':  # pytorch
+    if not optimizer_type == 'sgd1' and not getattr(args, 'weight_stashing', False):  # pytorch
         raise NotImplementedError()
-    gap_aware_cls = get_sgd_gap_aware_cls(optimizer_type)
+
+
+    if 'sgd' in optimizer_type:
+        gap_aware_cls = get_sgd_gap_aware_cls(optimizer_type)
+    elif 'adam' == optimizer_type:
+        gap_aware_cls = get_adam_gap_aware_cls()
+    else:
+        raise NotImplementedError
+
     return gap_aware_cls(optimizer, **gap_aware_args)
 
 
@@ -566,7 +574,7 @@ def get_weight_predictor(args,
 
     assert (pred_mem in {"clone", "calc"})
     assert (pred['type'] == "msnag")
-    assert ('sgd' in optimizer_type)
+    assert ('sgd' in optimizer_type or 'adam' == optimizer_type)
 
     # if pred_mem['type'] == "msnag":
     if 'sgd' in optimizer_type:
@@ -578,7 +586,14 @@ def get_weight_predictor(args,
             nag_with_predictor=nag_with_predictor,
             true_weights_storage=true_weights_storage)
         return weight_predictor, nag_with_predictor
-    else:
+    elif 'adam' == optimizer_type:
+        weight_predictor = get_adam_weight_predictor(
+            pred_mem,
+            optimizer,
+            scheduler=scheduler,
+            nag_with_predictor=nag_with_predictor,
+            true_weights_storage=true_weights_storage)
+    else:        
         raise NotImplementedError()
 
 

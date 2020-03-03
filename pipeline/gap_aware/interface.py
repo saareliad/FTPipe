@@ -114,3 +114,8 @@ class GapAwareBase(abc.ABC):
     @abc.abstractmethod
     def apply_on_theta(self, real_theta):
         raise NotImplementedError()
+
+    
+    def update_running_avg(self):
+        """in case there is some running avg to update"""
+        pass

@@ -1,22 +1,8 @@
 import torch
 from .interface import PartitionedSupervisedTrainer
 from torch.nn.utils import clip_grad_norm_
-# TODO: typehint for statistics. maybe it should actuallt sit under stats
-
-
-def calc_norm(parameters, norm_type=2):
-    """ Exactly like clip_grad_norm_, but without the clip. """
-    if isinstance(parameters, torch.Tensor):
-        parameters = [parameters]
-    parameters = list(filter(lambda p: p.grad is not None, parameters))
-    norm_type = float(norm_type)
-    total_norm = 0
-    for p in parameters:
-        param_norm = p.grad.data.norm(norm_type)
-        total_norm += param_norm.item() ** norm_type
-    total_norm = total_norm ** (1. / norm_type)
-    return total_norm
-
+from .utils import calc_norm
+# TODO: typehint for statistics. maybe it should actually sit under stats
 
 class CVTrainer(PartitionedSupervisedTrainer):
     def __init__(self, model, optimizer, scheduler, statistics, max_grad_norm=None,
@@ -131,15 +117,3 @@ class GapAwareCVTrainer(CVTrainer):
         # self.gap_aware.try_apply_wd_correction_before_step()
         super().last_partition_step_and_statistics(x, y, loss, step=step)
         # TODO: self.ga.update_max_lr() add when we have per step scheduler
-
-
-class GBNCVTrainer(CVTrainer):
-
-    def __init__(self, num_micro_batches, *args, **kw):
-        super().__init__(*args, **kw)
-        self.num_micro_batches = num_micro_batches
-
-    def backprop_last_partition(self, x, y):
-        micro_x = x.chunk(self.num_micro_batches)
-        micro_y = y.chunk(self.num_micro_batches)
-        return torch.cat([super().backprop_last_partition(mx, my) for mx, my in zip(micro_x, micro_y)])

@@ -1,4 +1,5 @@
 from .sgd import get_sgd_weight_predictor
+from .adam import get_adam_weight_predictor
 
 # PRED_MEM_TO_CLASS = {
 #     'clone': SGDClonedWeightPrediction,
