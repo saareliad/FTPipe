@@ -51,15 +51,15 @@ class AdamClonedWeightPrediction(WeightPredictor):
                         bias_correction1 = 1 - beta1**(step + stalness)
                         # NOTE: bias_correction2 stays the same.
                         bias_correction2 = 1 - beta2**(step)
-                        denom = exp_avg_sq.sqrt().div(
-                            (math.sqrt(bias_correction2)) + eps)
-
+                        # denom = exp_avg_sq.sqrt().div(
+                        #     (math.sqrt(bias_correction2)) + eps)
                         # NOTE: moved lr outside
                         step_size = 1 / bias_correction1
                         # NOTE: move exp_avg outside
-                        momentum_coeff += (step_size / denom)
+                        momentum_coeff += (
+                            step_size * ((math.sqrt(bias_correction2)) + eps))
 
-                    p.add_(-lr * momentum_coeff, exp_avg)
+                    p.add_(-lr * momentum_coeff, exp_avg / exp_avg_sq.sqrt())
 
     def revert(self):
         if not self.n_steps:
