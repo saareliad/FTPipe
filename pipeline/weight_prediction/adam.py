@@ -14,13 +14,7 @@ class AdamClonedWeightPrediction(WeightPredictor):
                 self.optimizer.state[p]['exp_avg'] = torch.zeros_like(p)
                 self.optimizer.state[p]['exp_avg_sq'] = torch.zeros_like(p)
 
-    # FIXME
-
     def forward(self):
-        # For each parameter
-        # - Calculate momentum fix coefficient
-        # - Do wieght prediction
-
         if not self.n_steps:
             return
 
@@ -44,22 +38,36 @@ class AdamClonedWeightPrediction(WeightPredictor):
                     exp_avg = state['exp_avg']
                     exp_avg_sq = state['exp_avg_sq']
                     step = state['step']
+                    initial_step = step + 1  # HACK: add +1 so it won't be 0.
 
                     # Compute coefficient as sum of predictions.
-                    momentum_coeff = 0
-                    for stalness in range(1, self.n_steps + 1):
-                        bias_correction1 = 1 - beta1**(step + stalness)
-                        # NOTE: bias_correction2 stays the same.
-                        bias_correction2 = 1 - beta2**(step)
-                        # denom = exp_avg_sq.sqrt().div(
-                        #     (math.sqrt(bias_correction2)) + eps)
-                        # NOTE: moved lr outside
-                        step_size = 1 / bias_correction1
-                        # NOTE: move exp_avg outside
-                        momentum_coeff += (
-                            step_size * ((math.sqrt(bias_correction2)) + eps))
+                    # (1): compute the part related to step size, as it is too annoying to derive manually.
+                    # (2): + Geometric series sum of beta1.
 
-                    p.add_(-lr * momentum_coeff, exp_avg / exp_avg_sq.sqrt())
+                    # (1)
+                    momentum_coeff = 0
+                    for staleness in range(1, self.n_steps + 1):
+                        bias_correction1 = 1 - beta1**(step + staleness)
+                        # NOTE: bias_correction2 stays the same.
+                        bias_correction2 = 1 - beta2**(initial_step)
+                        # denom = exp_avg_sq.sqrt().div(
+                        #     (math.sqrt(bias_correction2)) + eps)  -> included
+                        # NOTE: moved lr outside
+                        # step_size = 1 / bias_correction1 -> included
+                        # NOTE: move exp_avg outside
+                        momentum_coeff += (((math.sqrt(bias_correction2)) + eps) / bias_correction1) 
+
+                    # (2)
+                    # This line models the geometric series sum, which is created by
+                    # exp_avg.mul_(beta1).add_(1 - beta1, grad)
+                    momentum_coeff += (beta1 - math.pow(beta1, self.n_steps + 1)) / (1 - beta1)
+                    
+                    # Handle the case of division by zero.
+                    a = exp_avg / exp_avg_sq.sqrt()
+                    a[a != a] = 0
+
+                    # Finally, calculate theta hat.
+                    p.add_(-lr * momentum_coeff, a)
 
     def revert(self):
         if not self.n_steps:
