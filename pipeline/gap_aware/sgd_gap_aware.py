@@ -1,8 +1,8 @@
 import torch
 from itertools import chain
+from .interface import GapAwareBase
 
-
-class GapAware:
+class GapAware(GapAwareBase):
     """
     GAP aware implementation for pipeline,
     based on
@@ -88,11 +88,9 @@ class GapAware:
 
     def __init__(self, optimizer, big_gamma=0.999, epsilon=1e-8, from_grad=True):
         """ Apply Gap Aware on computed gradients """
+        super().__init__(optimizer)
         if from_grad:
             assert type(optimizer) == torch.optim.SGD
-
-        # self.max_lr = max_lr
-        self.optimizer = optimizer
 
         for pg in optimizer.param_groups:
             pg[GapAware.MAX_LR_NAME] = pg['lr']
@@ -107,25 +105,14 @@ class GapAware:
                                  for p in opt_params_iter}
 
         # FIXME can be of optimizer. e.g in adam its param_group['step']
-        self.step_count = 0   # Need to be ahead of the optimizer on 1.
+        # self.step_count = 0
         self.epsilon = epsilon  # FIXME can be of optimizer.
-
-        self.skip_next_apply = True
 
         # Ugly hack, init momentum buffer to zeros before we start
         for pg in self.optimizer.param_groups:
             for p in pg['params']:
                 if 'momentum_buffer' not in self.optimizer.state[p]:
-                    self.optimizer.state[p]['momentum_buffer'] = torch.zeros_like(
-                        p)
-
-    def update_max_lr(self):
-        """ should be called after scheduler step. """
-        for pg in self.optimizer.param_groups:
-            pg[GapAware.MAX_LR_NAME] = max(pg[GapAware.MAX_LR_NAME], pg['lr'])
-
-    def inc_step_count(self):
-        self.step_count += 1
+                    self.optimizer.state[p]['momentum_buffer'] = torch.zeros_like(p)
 
     def update_running_avg(self):
         """
