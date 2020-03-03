@@ -131,15 +131,15 @@ def build_graph(model: torch.nn.Module,
     nodes = add_unpack_nodes(nodes, unpack_fix)
 
     # optimization passes and graph fixes
-    nodes = remove_useless_clone(nodes)
-    nodes = remove_empty_view(nodes)
-    nodes = optimize_graph(nodes, layer_scopes)
-    nodes = remove_layer_to_list(nodes)
+    nodes = remove_useless_clone(nodes, outputs)
+    nodes = remove_empty_view(nodes, outputs)
+    nodes = optimize_graph(nodes, layer_scopes, outputs)
+    nodes = remove_layer_to_list(nodes, outputs)
     nodes = unpack_all_node_outputs(nodes, layer_profiles)
     nodes = pack_all_node_inputs(nodes, layer_profiles)
     nodes = _remove_nodes_that_go_nowhere(nodes, outputs)
-    nodes = remove_useless_node_inputs(nodes)
-    nodes = remove_tensor_int_tensor(nodes)
+    nodes = remove_useless_node_inputs(nodes, outputs)
+    nodes = remove_tensor_int_tensor(nodes, outputs)
 
     for node in nodes.values():
         node.weight = layer_profiles.get(node.scope, node.weight)
@@ -352,13 +352,14 @@ def add_accessor(nodes: GraphNodes, trace_node: torch._C.Node,
 # fit initial graph to profile
 ##################################
 @DEBUG_DUMP_GRAPH
-def optimize_graph(nodes: GraphNodes, layer_scopes: List[str]) -> GraphNodes:
+def optimize_graph(nodes: GraphNodes, layer_scopes: List[str], outputs: OrderedSet[str]) -> GraphNodes:
     '''
     this module takes the raw Graph and removes/merges nodes in order to get the requested graph.
     this method is called as part of graph_builder method
     '''
     nodes = _combine_OP_nodes_under_the_same_scope(nodes)
-    nodes = _combine_params_and_buffers_into_OP_nodes(nodes, layer_scopes)
+    nodes = _combine_params_and_buffers_into_OP_nodes(
+        nodes, layer_scopes, outputs)
     return nodes
 
 
@@ -404,12 +405,12 @@ def _combine_OP_nodes_under_the_same_scope(nodes: GraphNodes) -> GraphNodes:
 
 @DEBUG_DUMP_GRAPH
 def _combine_params_and_buffers_into_OP_nodes(
-        nodes: GraphNodes, layer_scopes: List[str]) -> GraphNodes:
+        nodes: GraphNodes, layer_scopes: List[str], outputs: OrderedSet[str]) -> GraphNodes:
     def is_buffer_or_param(n):
         return n.type == NodeTypes.BUFF_PARAM and any(
             n.scope.startswith(layer_scope) for layer_scope in layer_scopes)
 
-    return _remove_nodes(nodes, is_buffer_or_param)
+    return _remove_nodes(nodes, is_buffer_or_param, outputs)
 
 
 def output_scopes(nodes: GraphNodes,
@@ -495,7 +496,7 @@ def shape_analysis(nodes: GraphNodes) -> GraphNodes:
 
 
 @DEBUG_DUMP_GRAPH
-def remove_tensor_int_tensor(nodes) -> GraphNodes:
+def remove_tensor_int_tensor(nodes, outputs: OrderedSet[str]) -> GraphNodes:
     def predicate(node):
         if 'prim::ImplicitTensorToNum' in node.scope or 'aten::Int' in node.scope or 'prim::NumToTensor' in node.scope:
             for n in node.in_nodes:
@@ -503,32 +504,33 @@ def remove_tensor_int_tensor(nodes) -> GraphNodes:
             return True
         return False
 
-    return _remove_nodes(nodes, predicate)
+    return _remove_nodes(nodes, predicate, outputs)
 
 
 @DEBUG_DUMP_GRAPH
-def remove_useless_clone(nodes: GraphNodes) -> GraphNodes:
+def remove_useless_clone(nodes: GraphNodes, outputs: OrderedSet[str]) -> GraphNodes:
     def predicate(n: Node):
         return ('aten::clone' in n.scope) and (len(n.out_nodes) == 0)
 
-    return _remove_nodes(nodes, predicate)
+    return _remove_nodes(nodes, predicate, outputs)
 
 
 @DEBUG_DUMP_GRAPH
-def remove_layer_to_list(nodes: GraphNodes) -> GraphNodes:
+def remove_layer_to_list(nodes: GraphNodes, outputs: OrderedSet[str]) -> GraphNodes:
     '''can happen when not using our trace feature as result of merging nodes
         this indicates that a merged scope returns a list/tuple so we remove it
     '''
     def predicate(n: Node):
         if "prim::ListConstruct" in n.scope or "prim::TupleConstruct" in n.scope:
-            return (len(
-                n.in_nodes) == 1) and (n.in_nodes[0].type is NodeTypes.LAYER)
+            return (len(n.in_nodes) == 1) and (n.in_nodes[0].type is NodeTypes.LAYER)
+        else:
+            return False
 
-    return _remove_nodes(nodes, predicate)
+    return _remove_nodes(nodes, predicate, outputs)
 
 
 @DEBUG_DUMP_GRAPH
-def remove_empty_view(nodes: GraphNodes) -> GraphNodes:
+def remove_empty_view(nodes: GraphNodes, outputs: OrderedSet[str]) -> GraphNodes:
     def predicate(n: Node):
         if ('aten::view' in n.scope):
             if len(n.in_nodes) < 2:
@@ -538,11 +540,11 @@ def remove_empty_view(nodes: GraphNodes) -> GraphNodes:
         return ('prim::ListConstruct' in n.scope or
                 'prim::TupleConstruct' in n.scope) and (len(n.in_nodes) == 0)
 
-    return _remove_nodes(nodes, predicate)
+    return _remove_nodes(nodes, predicate, outputs)
 
 
 @DEBUG_DUMP_GRAPH
-def remove_useless_node_inputs(nodes: GraphNodes) -> GraphNodes:
+def remove_useless_node_inputs(nodes: GraphNodes, outputs: OrderedSet[str]) -> GraphNodes:
     # stupid fix where for some odd reason arithmetic ops have a third input with value 1
     # and Tensor.contiguous has a second input with value 0
     # and torch.arange having a zero input
@@ -563,12 +565,12 @@ def remove_useless_node_inputs(nodes: GraphNodes) -> GraphNodes:
             return arithmetic or contiguous_input or arange_input
         return False
 
-    return _remove_nodes(nodes, pred)
+    return _remove_nodes(nodes, pred, outputs)
 
 
 @DEBUG_DUMP_GRAPH
 def _remove_nodes_that_go_nowhere(nodes: GraphNodes,
-                                  scopes: OrderedSet[str]) -> GraphNodes:
+                                  outputs: OrderedSet[str]) -> GraphNodes:
     '''remove nodes without out edges that are not outputs of the model'''
 
     # necessary because the trace can contain such nodes for certain ops
@@ -580,9 +582,6 @@ def _remove_nodes_that_go_nowhere(nodes: GraphNodes,
             if func_name[-1] == '_':
                 return False
 
-        if node.scope in scopes:
-            return False
-
         # if we have for example 2 unpacking and only the second is used then
         # because we decide the unpacking index by position we cant remove the unused first unpacking
         # as it will lead to the wrong index being used
@@ -592,17 +591,17 @@ def _remove_nodes_that_go_nowhere(nodes: GraphNodes,
 
         return (not node.out_nodes)
 
-    return _remove_nodes(nodes, going_nowhere)
+    return _remove_nodes(nodes, going_nowhere, outputs)
 
 
 def _remove_nodes(nodes: GraphNodes, condition: Callable[[Node],
-                                                         bool]) -> GraphNodes:
+                                                         bool], outputs: OrderedSet[str]) -> GraphNodes:
     while True:
         changed = False
         optimized_graph = OrderedDict()
 
         for unique_id, node in nodes.items():
-            if condition(node):
+            if (node.scope not in outputs) and condition(node):
                 changed = True
                 for in_node in node.in_nodes:
                     in_node.replace_out_node(node, node.out_nodes)

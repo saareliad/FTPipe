@@ -268,7 +268,10 @@ def generateListOrTupleExpression(ready_expressions: Dict[str, str],
         expression = '[' + ', '.join(args) + ']'
     else:
         assert 'TupleConstruct' in node.scope
-        expression = '(' + ', '.join(args) + ')'
+        if len(args) > 1:
+            expression = '(' + ', '.join(args) + ')'
+        else:
+            expression = f"({args[0]},)"
     exp_len = 1 + max(expression_len[s] for s in operand_scopes)
 
     if (not verbose) and (exp_len < 10) and canEmbedInUseSite(node):

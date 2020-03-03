@@ -357,6 +357,7 @@ class Graph():
                     shape = out_node.shape
                 else:
                     shape = node.shape
+                # TODO for DEBUG shape may be None or undefined
                 label = edge_label(shape)
                 label = f"{label}\nweight: {edge_weight(node,out_node)}"
 
