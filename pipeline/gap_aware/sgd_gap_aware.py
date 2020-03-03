@@ -92,9 +92,6 @@ class GapAware(GapAwareBase):
         if from_grad:
             assert type(optimizer) == torch.optim.SGD
 
-        for pg in optimizer.param_groups:
-            pg[GapAware.MAX_LR_NAME] = pg['lr']
-
         self.big_gamma = big_gamma  # FIXME can be of optimizer of given. e.g adam
 
         # FIXME can be of optimizer of given. e.g adam
@@ -144,7 +141,7 @@ class GapAware(GapAwareBase):
             eps = self.epsilon
             # Calculate gap from grad
             for pg in self.optimizer.param_groups:
-                if pg[GapAware.MAX_LR_NAME] <= 0:
+                if pg[GapAwareBase.MAX_LR_NAME] <= 0:
                     continue
                 weight_decay = pg['weight_decay']
                 for p in pg['params']:
@@ -152,7 +149,7 @@ class GapAware(GapAwareBase):
                     #     continue
                     # calculate C coefficient per-element
                     # Note: can remove the "data". but whatever.
-                    avg_steps_needed = pg[GapAware.MAX_LR_NAME] * \
+                    avg_steps_needed = pg[GapAwareBase.MAX_LR_NAME] * \
                         (((ra[id(p)].data / bias_correction) ** 0.5) + eps)
 
                     # calculate the gap per-element
@@ -182,7 +179,7 @@ class GapAware(GapAwareBase):
             eps = self.epsilon
             # Calculate gap from grad
             for pg, rpg in zip(self.optimizer.param_groups, real_theta):
-                if pg[GapAware.MAX_LR_NAME] <= 0:
+                if pg[GapAwareBase.MAX_LR_NAME] <= 0:
                     continue
                 weight_decay = pg['weight_decay']
                 for p, rp in zip(pg['params'], rpg):
@@ -190,7 +187,7 @@ class GapAware(GapAwareBase):
                     #     continue
                     # calculate C coefficient per-element
                     # Note: can remove the "data". but whatever.
-                    avg_steps_needed = pg[GapAware.MAX_LR_NAME] * \
+                    avg_steps_needed = pg[GapAwareBase.MAX_LR_NAME] * \
                         (((ra[id(p)].data / bias_correction) ** 0.5) + eps)
 
                     gap = (p - rp).abs()
@@ -226,7 +223,7 @@ class GapAware(GapAwareBase):
             eps = self.epsilon
             # Calculate gap from grad
             for pg, spg in zip(self.optimizer.param_groups, stashed_theta):
-                if pg[GapAware.MAX_LR_NAME] <= 0:
+                if pg[GapAwareBase.MAX_LR_NAME] <= 0:
                     continue
                 weight_decay = pg['weight_decay']
                 for p, sp in zip(pg['params'], spg):
@@ -234,7 +231,7 @@ class GapAware(GapAwareBase):
                     #     continue
                     # calculate C coefficient per-element
                     # Note: can remove the "data". but whatever.
-                    avg_steps_needed = pg[GapAware.MAX_LR_NAME] * \
+                    avg_steps_needed = pg[GapAwareBase.MAX_LR_NAME] * \
                         (((ra[id(p)].data / bias_correction) ** 0.5) + eps)
 
                     gap = (p - sp).abs()
