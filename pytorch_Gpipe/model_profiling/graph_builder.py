@@ -425,10 +425,10 @@ def output_scopes(nodes: GraphNodes,
 @DEBUG_DUMP_GRAPH
 def add_missing_types(nodes: GraphNodes) -> GraphNodes:
     for node in nodes.values():
+        if 'aten::size' in node.scope or 'aten::Int' in node.scope:
+            node.value_type = int
         if node.valueType() is type(None):
-            if 'aten::size' in node.scope or 'aten::Int' in node.scope:
-                node.value_type = int
-            elif 'aten::chunk' in node.scope or 'prim::TupleConstruct' in node.scope:
+            if 'aten::chunk' in node.scope or 'prim::TupleConstruct' in node.scope:
                 node.value_type = tuple
             elif 'prim::ListConstruct' in node.scope:
                 node.value_type = list

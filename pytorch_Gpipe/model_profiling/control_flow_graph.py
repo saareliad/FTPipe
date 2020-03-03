@@ -1,6 +1,6 @@
 from enum import IntEnum
 from typing import Any, List, Tuple, Optional, OrderedDict, Type, Callable, Union, Dict
-from ..utils import OrderedSet
+from ..utils import OrderedSet, _extract_volume_from_sizes
 from .network_profiler import Profile
 import torch
 from torch.nn import Module
@@ -248,7 +248,7 @@ class Graph():
         return G
 
     def build_dot(self,
-                  show_buffs_params: bool = False,
+                  show_buffs_params: bool = True,
                   show_profiles: bool = True):
         '''
         return a graphviz representation of the graph
@@ -358,16 +358,15 @@ class Graph():
                 else:
                     shape = node.shape
                 label = edge_label(shape)
-                if label == []:
-                    label = ""
+                label = f"{label}\nweight: {edge_weight(node,out_node)}"
 
                 dot.edge(str(node.idx), str(out_node.idx),
-                         label=str(label))
+                         label=label)
 
         return dot
 
     def display(self,
-                show_buffs_params: bool = False,
+                show_buffs_params: bool = True,
                 show_profiles: bool = True):
         '''
         display the graph in Jupyter
@@ -391,7 +390,7 @@ class Graph():
                     file_name: str,
                     directory: str,
                     show_buffs_params: bool = True,
-                    show_profiles: bool = False):
+                    show_profiles: bool = True):
         '''
         save the rendered graph to a pdf file
 
@@ -646,3 +645,24 @@ def _remove_nodes(nodes: GraphNodes, condition: Callable[[Node],
         if not changed:
             break
     return nodes
+
+
+MULT_FACTOR = 1000
+bw_GBps = 12
+
+
+def edge_weight(u: Node, v: Node):
+    if u.type is NodeTypes.CONSTANT or (u.valueType() in [int, None] or u.shape == (torch.Size([]),)):
+        # no constant or scalars on boundries
+        return 1000 * MULT_FACTOR
+
+    if u.valueType() in [list, tuple]:
+        # no nested iterables on boundries
+        return 1000 * MULT_FACTOR
+
+    # TODO data type not included shouldn't really matter
+    MB = 1e6
+    volume = _extract_volume_from_sizes(u.shape) / MB
+    # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
+    w = max(1, int(MULT_FACTOR * (volume / bw_GBps)))
+    return w

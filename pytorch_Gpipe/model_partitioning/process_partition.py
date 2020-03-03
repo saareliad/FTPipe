@@ -18,8 +18,14 @@ def post_process_partition(graph: Graph) -> Graph:
     '''
 
     cannonize_partition_indices(graph)
-    error = "error cycle detected mutual dependecy between partitions"
-    assert no_cycles(graph), error
+
+    if has_cycles(graph):
+        graph.serialize(f"{graph.model_name}_cycle_detected")
+        graph.save_as_pdf(f"{graph.model_name}_cycle_detected",
+                          ".", show_profiles=True)
+        error = "error cycle detected mutual dependecy between partitions"
+        raise AssertionError(error)
+
     # constants_fix(graph)
     # remove_backward_edges(graph)
     # do_not_send_lists(graph)
@@ -63,13 +69,13 @@ def _topological_sort(out_edges: Dict[int, Set[int]], v: int, visited: Dict[int,
     stack.insert(0, v)
 
 
-def no_cycles(graph: Graph) -> bool:
+def has_cycles(graph: Graph) -> bool:
     for u in graph.nodes:
         for v in u.out_nodes:
             if v.part < u.part:
-                return False
+                return True
 
-    return True
+    return False
 
 
 def constants_fix(graph: Graph):

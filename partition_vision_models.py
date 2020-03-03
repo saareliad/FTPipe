@@ -107,19 +107,21 @@ def node_weight_function(node: Node):
 
 def edge_weight_function(bw_GBps):
     def f(u: Node, v: Node):
-        if u.type is NodeTypes.CONSTANT:
-            return 1000 * MULT_FACTOR  # FIXME: why penalize constants?
-        if v.type is NodeTypes.PYTHON_PRIMITIVE and v.valueType() in [list, tuple]:
-            if "prim::TupleUnpack" in v.scope or "prim::ListUnpack" in v.scope:
-                return 1000 * MULT_FACTOR
-        if u.type is NodeTypes.PYTHON_PRIMITIVE and u.valueType() in [list, tuple]:
-            if "prim::ListConstruct" in u.scope or "prim::TupleConstruct" in u.scope:
-                return 1000 * MULT_FACTOR
+        if u.type is NodeTypes.CONSTANT or (u.valueType() in [int, None] or u.shape == (torch.Size([]),)):
+            # no constant or scalars on boundries
+            return 1000 * MULT_FACTOR
+
+        if u.valueType() in [list, tuple]:
+            # no nested iterables on boundries
+            return 1000 * MULT_FACTOR
+
         # TODO data type not included shouldn't really matter
         MB = 1e6
         volume = _extract_volume_from_sizes(u.shape) / MB
         # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
-        return max(1, int(MULT_FACTOR * volume / bw_GBps))
+        w = max(1, int(MULT_FACTOR * (volume / bw_GBps)))
+        return w
+    return f
 
 
 def parse_cli():
