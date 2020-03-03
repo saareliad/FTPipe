@@ -4,6 +4,7 @@ from typing import Dict
 from collections import OrderedDict
 from . import CommunicationHandlerBase
 from .partition import Partition, LastPartition, FirstPartition, PartitionWithoutRecomputation
+from .partition import get_buffers_for_ddp_sync
 from .training.interface import PartitionedTrainer
 from .tasks import DLTask
 from .weight_prediction.interface import WeightPredictor
@@ -29,11 +30,14 @@ class SinglePartitionManager:
                  training_tensor_shapes, eval_tensor_shapes, training_tensor_dtypes,  # FIXME
                  device, is_last_partition, is_first_partition, log_frequency=100, max_buffers=2, step_every=1,
                  keep_buffers_alive=False, use_recomputation=True,
-                 gap_aware_just_loss=False,
+                 gap_aware_just_loss=False, sync_buffers=False,
                  ):
 
         if (gap_aware_just_loss and (not use_recomputation)):
-            raise NotImplementedError("gap_aware_just_loss works only with recomputation on")
+            raise NotImplementedError(
+                "gap_aware_just_loss works only with recomputation on")
+
+        self.logger = logging.getLogger("msnag")  # FIXME
 
         self.gap_aware_just_loss = gap_aware_just_loss
         # TODO: work in progress, need to support exp name too, etc.
@@ -49,7 +53,8 @@ class SinglePartitionManager:
                 partition_cls = FirstPartition
             else:
                 partition_cls = Partition
-            self.partition = partition_cls(partition, device, to_device=TO_DEVICE)
+            self.partition = partition_cls(
+                partition, device, to_device=TO_DEVICE)
         else:
             # Partition without recomputation
             if is_last_partition:
@@ -67,9 +72,22 @@ class SinglePartitionManager:
 
         if not TO_DEVICE:
             self.partition.to(device)
-        
+
         self.comm_handler = comm_handler
         comm_handler.init_process_group()
+        self.is_replicated = False
+        self.sync_buffers = sync_buffers
+        
+        if hasattr(comm_handler, "init_ddp_context"):
+            ddp = comm_handler.init_ddp_context(self.partition.layers)
+            self.partition.layers = ddp
+            self.is_replicated = True
+            self.logger.info(
+                f"Initialized DDP stage replication for for stage {stage}.")
+            self.backward_nosync_context_manager = ddp.no_sync
+            if sync_buffers:
+                self.buffers_to_sync = get_buffers_for_ddp_sync(partition.layers)
+
 
         self.training_tensor_shapes = training_tensor_shapes
         self.eval_tensor_shapes = eval_tensor_shapes
@@ -162,8 +180,6 @@ class SinglePartitionManager:
         # Holds Async handle objects (for isends)
         self.async_fwd_objects = OrderedDict()
         self.async_bwd_objects = OrderedDict()
-
-        self.logger = logging.getLogger("msnag")  # FIXME
 
         # self.modify_gradients_before_send = False  # TODO add as option
         self.delay_at_batch = {}
@@ -322,6 +338,9 @@ class SinglePartitionManager:
         else:
             if self.fwd_rcev_buffers.is_initialized():
                 self.fwd_rcev_buffers.create()
+        
+        if self.is_replicated and self.sync_buffers:
+            self.comm_handler.sync_buffers(self.buffers_to_sync)
 
     def wait_on_sent_object(self, is_fwd):
         # TODO: can write the entire thing MUCH more nicely
@@ -438,7 +457,7 @@ class SinglePartitionManager:
 
                 weight_predictor.setup(expected_staleness)
                 weight_predictor.forward()
-                # Moved by: sum(i.norm() for i in self.true_weights_storage.true_weights[0]) 
+                # Moved by: sum(i.norm() for i in self.true_weights_storage.true_weights[0])
                 # - sum([i.norm() for i in self.trainer.optimizer.param_groups[0]['params']])
                 if old_lrs:
                     pgs = self.trainer.optimizer.param_groups
@@ -452,7 +471,7 @@ class SinglePartitionManager:
                     # Stash parameters for later.
                     # Note: wait stasher should be None be in last partition.
 
-                    # TODO: option to do it in all execpt last partition.  ("NAG ONLY STALNESS 0")
+                    # TODO: option to do it in all except last partition.  ("NAG ONLY STALENESS 0")
                     # This is only one batch per epoch, so it does not really matter.
                     if expected_staleness == 0 and weight_predictor.nag_with_predictor:
                         expected_staleness = 1
@@ -490,9 +509,21 @@ class SinglePartitionManager:
                 return []
 
             trainer = self.trainer
+
+            # NOTE: for last partition- batch idx is the same as num backwards.
+            do_step, old_lrs = self.should_do_step(batch_idx)
             # Backprop
-            step_and_stats_ctx = trainer.backprop_last_partition(
-                x, *ctx)
+            # For the last batch, we must scale down the learning rate, and then restore.
+            if (not do_step) and (batch_idx == (num_batches - 1)):
+                do_step = True
+                old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
+
+            if (not do_step) and self.is_replicated:
+                with self.backward_nosync_context_manager():
+                    step_and_stats_ctx = trainer.backprop_last_partition(
+                        x, *ctx)
+            else:
+                step_and_stats_ctx = trainer.backprop_last_partition(x, *ctx)
 
             # Send partition border gradients
             grads = partition.get_grad(batch_idx)
@@ -500,14 +531,6 @@ class SinglePartitionManager:
                 grads, batch_idx)
 
             self.true_weights_storage.restore_if_needed()  # check=False
-
-            # NOTE: for last partition- batch idx is the same as num backwards.
-            do_step, old_lrs = self.should_do_step(batch_idx)
-
-            # For the last batch, we must scale down the learning rate, and then restore.
-            if (not do_step) and (batch_idx == (num_batches - 1)):
-                do_step = True
-                old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
 
             # Step
             trainer.last_partition_step_and_statistics(
@@ -567,8 +590,20 @@ class SinglePartitionManager:
         g = bwd_rcev_buffers.wait_first()
         g = self.comm_handler.fix_after_recv(g)
 
-        # Compute gradeint
-        self.partition.backward_from_recomputed(g, batch_idx)
+        # Allow skiping steps (Gradient aggregation)
+        do_step, old_lrs = self.should_do_step(batch_idx)
+
+        # also do step for the last. (but with smaller LR)
+        if not do_step and (batch_idx == (num_batches - 1)):
+            do_step = True
+            old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
+
+        # Compute gradeints
+        if (not do_step) and self.is_replicated:
+            with self.backward_nosync_context_manager():
+                self.partition.backward_from_recomputed(g, batch_idx)
+        else:
+            self.partition.backward_from_recomputed(g, batch_idx)
 
         # recompute and send backward
         request_objects = None
@@ -579,14 +614,6 @@ class SinglePartitionManager:
         # Wait for next if appropriate
         if (not recved_all) and batch_idx - 1 + bwd_rcev_buffers.max_buffers < num_batches:
             bwd_rcev_buffers.recv_next(batch_idx-1)
-
-        # BIG_BATCH allow skiping steps.
-        do_step, old_lrs = self.should_do_step(batch_idx)
-
-        # also do step for the last. (but with smaller LR)
-        if not do_step and (batch_idx == (num_batches - 1)):
-            do_step = True
-            old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
 
         if do_step:
             trainer = self.trainer
@@ -617,7 +644,8 @@ class SinglePartitionManager:
                     delay = self.delay_at_batch.pop(batch_idx)
 
                 # Modify gradients
-                trainer.modify_gradients(real_theta=real_theta, delay=delay, stashed_theta=stashed_theta)
+                trainer.modify_gradients(
+                    real_theta=real_theta, delay=delay, stashed_theta=stashed_theta)
 
             if weight_stasher:
                 # Mark previously stashed weights as dirty

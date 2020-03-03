@@ -6,6 +6,7 @@ from itertools import cycle
 from typing import Tuple
 from .interface import CommunicationHandlerBase
 from torch.distributed import DistributedDataParallel
+from collections import deque
 
 __all__ = [
     "P2PConnection", "RequestsWrapper", "P2MPScatterConnection",
@@ -343,6 +344,7 @@ class P2PRankIO(CommunicationHandlerBase):
         self.device = device
         self.cpu = cpu
         self.stage_ddp_process_group = None
+        self.num_ranks_in_stage = 1
 
     def send(self,
              batch_index,
@@ -447,6 +449,7 @@ class P2PRankIO(CommunicationHandlerBase):
                 # only one group per replicated stage
                 assert self.stage_ddp_process_group is None
                 self.stage_ddp_process_group = pg
+                self.num_ranks_in_stage = len(group)
 
     # def fix_after_recv(self, x):
 
@@ -462,3 +465,21 @@ class P2PRankIO(CommunicationHandlerBase):
             find_unused_parameters=False)
 
         return ddp
+
+
+
+    def sync_buffers(self, buffers_to_sync):
+        # TODO this can be optimized further for example we can coalesce tensors before reducing
+        # not sure if can be done with mpi but maybe with another backend like nccl or gloo
+        with torch.no_grad():
+            ops = deque()
+            for b in buffers_to_sync:
+                req = dist.all_reduce(b, group=self.stage_ddp_process_group,
+                                      op=dist.ReduceOp.SUM, async_op=True)
+                ops.append(req)
+
+            for b in buffers_to_sync:
+                r = ops.popleft()
+                r.wait()
+                b /= float(self.num_ranks_in_stage)
+    

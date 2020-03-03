@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch import Tensor
 from typing import Tuple, Union
 from .monkey_patch import DummyForwardMonkeyPatcher
+from .monkey_patch.find_modules import find_modules
 from .replace_inplace import replace_inplace_for_first_innermost_layer_
 from .rng_stasher import PartitionRngStasher
 from . import dp_sim
@@ -12,11 +13,29 @@ import types
 Tensors = Tuple[Tensor, ...]
 TensorOrTensors = Union[Tensor, Tensors]
 
-__all__ = ['Partition', 'LastPartition', 'FirstPartition', 'PartitionWithoutRecomputation']
+__all__ = ['Partition', 'LastPartition',
+           'FirstPartition', 'PartitionWithoutRecomputation', 'get_buffers_for_ddp_sync']
 
 DEFAULT_CLASSES_LIST_TO_PATCH = [nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d,
                                  nn.SyncBatchNorm, nn.InstanceNorm1d, nn.InstanceNorm2d, nn.InstanceNorm3d,
                                  dp_sim.BatchNorm1d, dp_sim.BatchNorm2d, dp_sim.BatchNorm3d]
+
+# TODO: LayerNorm?
+
+def get_buffers_for_ddp_sync(model, classes_to_patch=DEFAULT_CLASSES_LIST_TO_PATCH):
+    # This function should be used once.
+
+    for model_to_patch in classes_to_patch:
+        found = []  # list of tuples: (access_string, model)
+        find_modules(model, "", model_to_patch, found)
+
+    found = sorted(found, key=lambda t: t[0])
+    buffers = []
+    for (access_string, model) in found:
+        buffers.extend(sorted(model.named_buffers(), key=lambda t: t[0]))
+
+    buffers = [t[1] for t in buffers]
+    return buffers
 
 
 class Partition(nn.Module):
@@ -113,10 +132,6 @@ class Partition(nn.Module):
             self.rng_stasher.restore_rng_state(micro_batch_idx)
             if isinstance(x, Tensor):
                 x = self.layers(x)
-                # logging.getLogger("msnag").info(f"device:{self.layers.__class__.__name__[-1]} \
-                #  max x:{[z.data.max() for z in x]}, max grad:{[z.max() for z in g]}")
-                # for p in self.parameters():
-                #     print(p.abs().max())
             else:
                 x = self.layers(*x)
 
@@ -127,18 +142,10 @@ class Partition(nn.Module):
         x = self.bwd_graph_head_buffer.pop(micro_batch_idx)
         torch.autograd.backward(x, g)
 
-    def recompute_and_backward(self, g, micro_batch_idx):
-        self.recompute(micro_batch_idx)
-        self.backward_from_recomputed(g, micro_batch_idx)
-        # x = self.bwd_graph_head_buffer.pop(micro_batch_idx)
-        # torch.autograd.backward(x, g)
-
     def get_grad(self, micro_batch_idx):
         """ returns an iteretable of grads """
         x = self.input_buffer.pop(micro_batch_idx)
         if isinstance(x, Tensor):
-            # logging.getLogger("msnag").info(f"device:{self.layers.__class__.__name__[-1]} \
-            # max_grad_norm:{x.grad.norm()}")
             return (x.grad.data,)
         else:
             return [y.grad.data for y in x]
@@ -226,9 +233,6 @@ class LastPartition(Partition):
             return x[0]
         return x
 
-    def recompute_and_backward(self, *args):
-        raise NotImplementedError()
-
 
 class PartitionWithoutRecomputation(nn.Module):
     # _REQ_GRAD = True
@@ -240,7 +244,8 @@ class PartitionWithoutRecomputation(nn.Module):
             HACK: has misleading names to be used with existing code.
 
             NOTE:
-                (1) When used in pipeline, this partition should be acompanied by wieght stashing.
+                (1) This partition should (ideally) be accompanied by weight stashing for async pipeline, 
+                but it also works without it.
                 (2) use _REQ_GRAD=True for first partition
         """
         super().__init__()
@@ -274,10 +279,10 @@ class PartitionWithoutRecomputation(nn.Module):
         if self.training:
             # EXPLICITLY DO CLONE
             if isinstance(x, Tensor):
-                # Note - we clone here because we don't want the tensor to get overriden.
+                # Note - we clone here because we don't want the tensor to get overridden.
                 # TODO: it could be done better if we use multiple input buffers instead of allocating
                 # (when #buffers==#max(len(input_buffer)))
-                # In pytorch it can happen auto matically with THCCashingAlocator.
+                # In pytorch it can happen automatically with THCCashingAlocator.
                 x = x.data.detach().clone().requires_grad_(self._REQ_GRAD)
                 # Save activation only if gradient is needed.
                 if self._REQ_GRAD:
@@ -294,7 +299,7 @@ class PartitionWithoutRecomputation(nn.Module):
             # save the head.
             # for z in x:
             #     assert(z.grad_fn is not None)
-            
+
             self.bwd_graph_head_buffer[micro_batch_idx] = x
             return x
 
@@ -323,39 +328,3 @@ class PartitionWithoutRecomputation(nn.Module):
             return (x.grad.data,)
         else:
             return [y.grad.data for y in x]
-
-##################################################
-# Unrelated but still here, may be useful later
-##################################################
-
-
-# class GpipePartition:
-#     """ TODO: uncompleted version of GpipePartition.... """
-
-#     def __init__(self, layers, device, recomputation=True):
-#         """
-#         :param layers: list of layers (or a single layer)
-#         :param device: device of the partition
-#         """
-#         super(GpipePartition, self).__init__()
-#         self.device = device
-#         if isinstance(layers, list):
-#             self.layers = nn.Sequential(*layers)  # .to(self.device)
-#         elif isinstance(layers, nn.Module):
-#             self.layers = layers
-
-#         self.recomputation = recomputation
-#         if self.recomputation:
-#             self.input_buffer = {}
-#             self.rng_stasher = PartitionRngStasher(device=self.device)
-#         self.to(self.device)
-
-#     def on_new_batch(self, num_micro_batches):
-#         if not self.recomputation:
-#             return
-#         # Create placeholder for micro batches input
-#         self.input_buffer = {idx: None for idx in range(num_micro_batches)}
-
-#     def forward(self, x: TensorOrTensors, micro_batch_idx):
-#         # TODO
-#         pass

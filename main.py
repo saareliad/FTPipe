@@ -204,7 +204,7 @@ def parse_cli():
         default=False,
         help="Will not use recomputation (trading speed for memory).")
 
-    # TODO: option for weigth stashing just statistics.
+    # TODO: option for weight stashing just statistics.
 
     args = parser.parse_args()
 
