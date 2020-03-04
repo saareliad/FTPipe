@@ -6,15 +6,21 @@ from .gap_aware_trainer import GapAwareTrainerBase
 # TODO: typehint for statistics. maybe it should actually sit under stats
 
 
-class CVTrainer(PartitionedSupervisedTrainer):
+class BaseLossTrainer(PartitionedSupervisedTrainer):
     def __init__(self,
                  model,
                  optimizer,
                  scheduler,
                  statistics,
                  max_grad_norm=None,
-                 always_calc_grad_norm=False):
-        self.loss_fn = torch.nn.CrossEntropyLoss().cuda()
+                 always_calc_grad_norm=False,
+                 loss_fn=torch.nn.CrossEntropyLoss(),
+                 cuda=True):
+
+        self.loss_fn = loss_fn
+        if cuda:
+            self.loss_fn = self.loss_fn.cuda()
+
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.model = model
@@ -24,41 +30,10 @@ class CVTrainer(PartitionedSupervisedTrainer):
         # Stats
         self.statistics = statistics
 
-    def calc_test_stats(self, x, y):
-        # print("Called calc_test_stats")
-        loss = self.loss_fn(x, y)
-        batch_size = len(y)
-        y_pred = torch.argmax(x, 1)
-        num_correct = torch.sum(y == y_pred).item()
-        # acc = num_correct / batch_size
-        self.statistics.on_batch_end(loss.item(), num_correct, batch_size)
-
     def backprop_last_partition(self, x, y):
         loss = self.loss_fn(x, y)
         loss.backward()  # this does backward() only for the last partition
         return loss
-
-    def last_partition_step_and_statistics(self, x, y, loss, step=True):
-        """
-        step
-        stats
-
-        step can be used later for grad accumulations
-        """
-
-        batch_size = len(y)
-        y_pred = torch.argmax(x, 1)
-        num_correct = torch.sum(y == y_pred).item()
-
-        max_grad_norm = None
-        if step:
-            max_grad_norm = self.step_on_computed_grads()
-
-        if max_grad_norm:  # Handles different classes of statistics. not so nice, should be fixed
-            self.statistics.on_batch_end(loss.item(), num_correct, batch_size,
-                                         max_grad_norm)
-        else:
-            self.statistics.on_batch_end(loss.item(), num_correct, batch_size)
 
     def non_last_partition_step(self):
         max_grad_norm = self.step_on_computed_grads()
@@ -86,6 +61,42 @@ class CVTrainer(PartitionedSupervisedTrainer):
         return max_grad_norm
 
 
+class CVTrainer(BaseLossTrainer):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, loss_fn=torch.nn.CrossEntropyLoss(), **kw)
+
+    def calc_test_stats(self, x, y):
+        # print("Called calc_test_stats")
+        loss = self.loss_fn(x, y)
+        batch_size = len(y)
+        y_pred = torch.argmax(x, 1)
+        num_correct = torch.sum(y == y_pred).item()
+        # acc = num_correct / batch_size
+        self.statistics.on_batch_end(loss.item(), num_correct, batch_size)
+
+    def last_partition_step_and_statistics(self, x, y, loss, step=True):
+        """
+        step
+        stats
+
+        step can be used later for grad accumulations
+        """
+
+        batch_size = len(y)
+        y_pred = torch.argmax(x, 1)
+        num_correct = torch.sum(y == y_pred).item()
+
+        max_grad_norm = None
+        if step:
+            max_grad_norm = self.step_on_computed_grads()
+
+        if max_grad_norm:  # Handles different classes of statistics. not so nice, should be fixed
+            self.statistics.on_batch_end(loss.item(), num_correct, batch_size,
+                                         max_grad_norm)
+        else:
+            self.statistics.on_batch_end(loss.item(), num_correct, batch_size)
+
+
 # TODO: it is also possible to do the entire thing on activation gradients,
 #  avoiding the need to do it over all gradeints.
 
@@ -107,5 +118,8 @@ class GapAwareCVTrainer(CVTrainer, GapAwareTrainerBase):
         step can be used later for grad accumulations
         """
         # self.gap_aware.try_apply_wd_correction_before_step()
-        super(CVTrainer, self).last_partition_step_and_statistics(x, y, loss, step=step)
+        super(CVTrainer, self).last_partition_step_and_statistics(x,
+                                                                  y,
+                                                                  loss,
+                                                                  step=step)
         # TODO: self.ga.update_max_lr() add when we have per step scheduler
