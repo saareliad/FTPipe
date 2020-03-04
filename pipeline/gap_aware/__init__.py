@@ -6,3 +6,4 @@
 # 2. the gap is easy (e.g the gradient)
 
 from .sgd_gap_aware import GapAware, get_sgd_gap_aware_cls
+from .adam_gap_aware import AdamGapAware, get_adam_gap_aware_cls
