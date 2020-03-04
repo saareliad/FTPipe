@@ -13,13 +13,14 @@ from collections import OrderedDict, deque
 import inspect
 import os
 import pathlib
-
+from .utils import format_shape
 tab = '    '
 dtab = tab + tab
 
 
 def compile_partitoned_model(graph: Graph,
                              model: Module,
+                             batch_dim: int,
                              verbose: bool = False,
                              output_file: Optional[str] = None):
     '''generates the code for the partitioned model.
@@ -75,7 +76,7 @@ def compile_partitoned_model(graph: Graph,
         ios[idx] = io
 
     lines.append(
-        create_pipeline_configuration(graph, parts, model, ios, layer_classes))
+        create_pipeline_configuration(graph, parts, model, ios, layer_classes, batch_dim, output_file))
     lines.append(
         create_model_parallel_module(graph.model_name, ios, graph.num_inputs,
                                      graph.output_scopes))
@@ -182,9 +183,10 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
                                   model: Module, ios: Dict[int,
                                                            Dict[str,
                                                                 List[str]]],
-                                  basic_blocks: Dict[str, Module]) -> str:
+                                  model_blocks: Dict[str, Module], batch_dim: int, output_file: str) -> str:
     '''generates the create_pipeline_configuration method which given a model creates his partitioned counterpart
     '''
+    module_path = output_file.replace("/", ".")
     model_buffers = {
         scope: t
         for t, scope in traverse_params_buffs(model) if not t.requires_grad
@@ -194,21 +196,20 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
         for t, scope in traverse_params_buffs(model) if t.requires_grad
     }
     model_class = model.__class__.__name__
-    if graph.basic_blocks:
-        basic_blocks = [cls.__name__ for cls in set(basic_blocks.values())]
-    else:
-        basic_blocks = []
-    if len(basic_blocks) == 1:
-        basic_blocks = f"{basic_blocks[0]},"
-    else:
-        basic_blocks = ",".join(basic_blocks)
+    basic_blocks = ",".join(
+        map(lambda block: block.__name__, set(model_blocks.values())))
+
+    serialized_basic_blocks = f",\n{dtab}{tab}".join(f"'{inspect.getmodule(cls).__name__}.{cls.__name__}'"
+                                                     for cls in set(model_blocks.values()))
 
     # function header
     lines = [
-        f"def create_pipeline_configuration(model,DEBUG=False,partitions_only=False):",
-        f"layers = layerDict(model,depth={graph.depth},basic_blocks=({basic_blocks}))",
-        "tensors = tensorDict(model)",
-        f"\n{tab}# now constructing the partitions in order"
+        f"def create_pipeline_configuration(DEBUG=False):",
+        f"depth = {graph.depth}",
+        f"basic_blocks = ({basic_blocks})",
+        f"blocks_path = [ {serialized_basic_blocks}]",
+        f"module_path = '{module_path}'",
+        "\n"
     ]
 
     # hard code which layers buffers and parameters belong to each partition
@@ -234,25 +235,45 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
         b_scopes = 'buffer_scopes = [' + f",\n{dtab}".join(buffer_scopes) + ']'
         p_scopes = 'parameter_scopes = [' + \
             f",\n{dtab}".join(parameter_scopes) + ']'
-        lines.extend([l_scopes, b_scopes, p_scopes,
-                      f"partition{idx} = Partition{idx}(layers,tensors)\n"])
+        lines.extend([l_scopes, b_scopes, p_scopes, "\n"])
 
     # create and return the partition config
-    exp = f',\n{dtab}{tab}'.join([f"{k}: {v}" for k, v in ios.items()])
+    def format_dict(d):
+        items = [f'"{k}":{v}' for k, v in d.items()]
+        return "{" + f",\n{dtab}".join(items) + "}"
+
+    exp = f',\n{dtab}{tab}'.join(
+        [f"'{k}': {format_dict(v)}" for k, v in ios.items()])
     lines.append(
-        f"# creating configuration\n{tab}config = {{{exp}\n{dtab}{tab}}}")
+        f"# creating configuration\n{tab}stages = {{{exp}\n{dtab}{tab}}}")
 
     for idx in sorted(list(ios.keys())):
-        lines.extend([
-            f"device = torch.device('cpu') if DEBUG else torch.device('cuda:{idx}')",
-            f"config[{idx}]['model'] = partition{idx}.to(device)"
-        ])
+        lines.extend(["\n",
+                      f"stages['{idx}']['batch_dim'] = {batch_dim}",
+                      f"stages['{idx}']['stage_cls'] = module_path + '.Partition{idx}'",
+                      f"device = 'cpu' if DEBUG else'cuda:{idx}'",
+                      f"stages['{idx}']['devices'] = [device]",
+                      f"stages['{idx}']['optimizer'] = {{'type':'','args':{{}}}}",
+                      f"stages['{idx}']['lr_scheduler'] = {{'type':'','args':{{}}}}",
+                      ])
 
     input_ids = [f"'input{idx}'" for idx in range(graph.num_inputs)]
+    input_shapes = [format_shape(n.shape)[0] for n in graph.inputs]
+    model_outputs = graph.outputs
+    output_shapes = [format_shape(n.shape)[0] for n in model_outputs]
+
     lines.extend([
-        f"config['model inputs'] = [{', '.join(input_ids)}]",
-        f"config['model outputs'] = {list(graph.output_scopes)}",
-        f"\n{tab}return [config[i]['model'] for i in range({len(ios)})] if partitions_only else config"
+        "\n",
+        "config = dict()",
+        f"config['batch_dim'] = {batch_dim}",
+        f"config['depth'] = depth",
+        f"config['basic_blocks'] = blocks_path",
+        f"config['model_inputs'] = [{', '.join(input_ids)}]",
+        f"config['model_input_shapes'] = {input_shapes}",
+        f"config['model_outputs'] = {list(graph.output_scopes)}",
+        f"config['model_output_shapes'] = {output_shapes}",
+        f"config['stages'] = stages",
+        f"\n{tab}return config"
     ])
     return f"\n{tab}".join(lines) + "\n"
 
@@ -297,15 +318,15 @@ def create_model_parallel_module(name: str, ios: Dict[int, Dict[str,
                                  model_outputs: List[str]) -> str:
     '''create a modelParallel version of the partition config
     '''
-    model_inputs = [f'input{idx}' for idx in range(num_inputs)]
     class_decl_and_init = "\n".join([
         f"class ModelParallel(nn.Module):",
-        f"{tab}def __init__(self,config):",
+        f"{tab}def __init__(self,layers,tensors,CPU=False):",
         f"{dtab}super(ModelParallel,self).__init__()",
-        dtab + f"\n{dtab}".join(f"self.stage{i} = config[{i}]['model']"
+        dtab + f"\n{dtab}".join(f"self.stage{i} = Partition{i}(layers,tensors).to('cpu' if CPU else 'cuda:{i}')"
                                 for i in ios)
     ])
 
+    model_inputs = [f'input{idx}' for idx in range(num_inputs)]
     forward = model_parallel_forward(ios, model_inputs, model_outputs)
 
     states = f",\n{dtab}{dtab}".join(

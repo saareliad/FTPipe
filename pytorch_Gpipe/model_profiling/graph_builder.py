@@ -103,9 +103,13 @@ def build_graph(model: torch.nn.Module,
         tensors[k] = t
 
     # perform the trace
+    global DEBUG_MODEL_NAME
+    DEBUG_MODEL_NAME = model.__class__.__name__
+
     old_value = torch._C._jit_get_inline_everything_mode()
     torch._C._jit_set_inline_everything_mode(False)
-    trace_graph = torch.jit.trace(model, sample_batch, check_trace=False).graph
+    trace_graph: torch._C.Graph = torch.jit.trace(model, sample_batch,
+                                                  check_trace=False).graph
     torch._C._jit_set_inline_everything_mode(old_value)
     try:
         torch._C._jit_pass_inline(trace_graph, max_depth, block_scopes)
@@ -117,8 +121,7 @@ def build_graph(model: torch.nn.Module,
             "Falling back to regular trace which is less accurate and might not work\n."
             "Please build it.")
         torch._C._jit_pass_inline(trace_graph)
-    global DEBUG_MODEL_NAME
-    DEBUG_MODEL_NAME = model.__class__.__name__
+
     if not os.path.exists("GPIPE_DEBUG/"):
         os.mkdir("GPIPE_DEBUG/")
     with open(f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_DEBUG_trace.txt", "w") as f:
@@ -126,20 +129,20 @@ def build_graph(model: torch.nn.Module,
 
     # build the graph from trace
     nodes, unpack_fix = add_nodes(trace_graph, new_to_old, partials, tensors)
-    outputs = output_scopes(nodes, trace_graph)
-
+    outputs = output_nodes(nodes, trace_graph)
+    output_scopes = OrderedSet(map(lambda n: n.scope, outputs))
     nodes = add_unpack_nodes(nodes, unpack_fix)
 
     # optimization passes and graph fixes
-    nodes = remove_useless_clone(nodes, outputs)
-    nodes = remove_empty_view(nodes, outputs)
-    nodes = optimize_graph(nodes, layer_scopes, outputs)
-    nodes = remove_layer_to_list(nodes, outputs)
+    nodes = remove_useless_clone(nodes, output_scopes)
+    nodes = remove_empty_view(nodes, output_scopes)
+    nodes = optimize_graph(nodes, layer_scopes, output_scopes)
+    nodes = remove_layer_to_list(nodes, output_scopes)
     nodes = unpack_all_node_outputs(nodes, layer_profiles)
     nodes = pack_all_node_inputs(nodes, layer_profiles)
-    nodes = _remove_nodes_that_go_nowhere(nodes, outputs)
-    nodes = remove_useless_node_inputs(nodes, outputs)
-    nodes = remove_tensor_int_tensor(nodes, outputs)
+    nodes = _remove_nodes_that_go_nowhere(nodes, output_scopes)
+    nodes = remove_useless_node_inputs(nodes, output_scopes)
+    nodes = remove_tensor_int_tensor(nodes, output_scopes)
 
     for node in nodes.values():
         node.weight = layer_profiles.get(node.scope, node.weight)
@@ -413,9 +416,9 @@ def _combine_params_and_buffers_into_OP_nodes(
     return _remove_nodes(nodes, is_buffer_or_param, outputs)
 
 
-def output_scopes(nodes: GraphNodes,
-                  trace_graph: torch._C.Graph) -> OrderedSet[str]:
-    return OrderedSet(nodes[output.unique()].scope
+def output_nodes(nodes: GraphNodes,
+                 trace_graph: torch._C.Graph) -> OrderedSet[Node]:
+    return OrderedSet(nodes[output.unique()]
                       for output in trace_graph.outputs())
 
 ##################################
@@ -429,7 +432,7 @@ def add_missing_types(nodes: GraphNodes) -> GraphNodes:
         if 'aten::size' in node.scope or 'aten::Int' in node.scope:
             node.value_type = int
         if node.valueType() is type(None):
-            if 'aten::chunk' in node.scope or 'prim::TupleConstruct' in node.scope:
+            if 'aten::chunk' in node.scope or 'prim::TupleConstruct' in node.scope or 'aten::split' in node.scope:
                 node.value_type = tuple
             elif 'prim::ListConstruct' in node.scope:
                 node.value_type = list
@@ -932,9 +935,10 @@ def longest_prefix(strings: List[str], scope: str) -> str:
 
 @DEBUG_DUMP_GRAPH
 def graph_check_and_cleanup(nodes, outputs, max_depth, basic_blocks) -> Graph:
+    outputs = reset_outputs(nodes, outputs)
+    output_scopes = OrderedSet(map(lambda n: n.scope, outputs))
     nodes = set_indices(nodes)
-
-    graph = Graph._check(Graph(nodes, outputs, max_depth, basic_blocks))
+    graph = Graph._check(Graph(nodes, output_scopes, max_depth, basic_blocks))
 
     os.remove(f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_DEBUG_trace.txt")
     return graph
@@ -949,3 +953,23 @@ def set_indices(nodes: GraphNodes):
         nodes[idx] = node
 
     return nodes
+
+
+def reset_outputs(nodes: GraphNodes, outputs: OrderedSet[Node]) -> OrderedSet[Node]:
+    '''if the graph has multiple outputs it will still only have one output node\n
+       here we discard this node because we wish to have a single node for each output
+    '''
+    assert len(outputs) == 1, "only one output node expected"
+    node = outputs[0]
+
+    if node.valueType() in [list, tuple]:
+        assert node.type is NodeTypes.PYTHON_PRIMITIVE, "expected list/tuple construct"
+        # remove this node and set it's inputs as the new outputs
+        outputs = OrderedSet()
+        for n in node.in_nodes:
+            n.out_nodes.discard(node)
+            outputs.add(n)
+        nodes.pop(node.idx)
+        return outputs
+    else:
+        return outputs

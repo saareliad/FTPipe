@@ -1,8 +1,8 @@
 import torch
 from models.normal import WideResNet, amoebanetd, ResNet, vgg16_bn
-from pytorch_Gpipe import pipe_model
+from pytorch_Gpipe.utils import _extract_volume_from_sizes, layerDict, tensorDict
+from pytorch_Gpipe import PipelineConfig, pipe_model
 from pytorch_Gpipe.model_profiling import Node, NodeTypes
-from pytorch_Gpipe.utils import _extract_volume_from_sizes
 import argparse
 import importlib
 from misc import run_analysis, run_partitions
@@ -307,7 +307,9 @@ if __name__ == "__main__":
     recomputation = not args.no_recomputation
     bw = args.bw
     n_partitions = args.n_partitions
+    batch_dim = 0
     graph = pipe_model(model,
+                       batch_dim,
                        sample,
                        depth=args.depth,
                        kwargs=None,
@@ -332,18 +334,26 @@ if __name__ == "__main__":
     if GET_PARTITIONS_ON_CPU:
         sample = sample.to('cpu')
     config = create_pipeline_configuration(model,
-                                           partitions_only=False,
                                            DEBUG=GET_PARTITIONS_ON_CPU)
+
+    pipe_config = PipelineConfig.fromDict(config)
+    pipe_config.toJson(f"{args.output_file}.json")
+
+    if not (args.no_test_run and args.no_analysis):
+        depth = pipe_config.depth
+        blocks = pipe_config.basic_blocks
+        analysis_config = pipe_config._to_old_analysis_format(layerDict(model, depth=depth, basic_blocks=blocks),
+                                                              tensorDict(model))
 
     # Test # TODO: can do it on GPU...
     if not args.no_test_run:
-        _ = run_partitions(sample, config)
+        _ = run_partitions(sample, analysis_config)
 
     if not args.no_analysis:
         sample = create_random_sample(args, analysis=True)
         analysis_result = run_analysis(sample,
                                        graph,
-                                       config,
+                                       analysis_config,
                                        n_iter,
                                        recomputation=recomputation,
                                        bw_GBps=bw,

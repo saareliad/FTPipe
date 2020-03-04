@@ -194,6 +194,17 @@ class Graph():
     def num_partitions(self) -> int:
         return len(set(node.part for node in self.nodes))
 
+    @property
+    def outputs(self) -> List[Node]:
+        nodes = [n for n in self.nodes if n.scope in self.output_scopes]
+        order = {s: idx for idx, s in enumerate(self.output_scopes)}
+        return sorted(nodes, key=lambda n: order[n.scope])
+
+    @property
+    def inputs(self) -> List[Node]:
+        nodes = [n for n in self.nodes if n.type is NodeTypes.IN]
+        return sorted(nodes, key=lambda n: n.idx)
+
     def asNetworkx(self,
                    directed: bool = False,
                    node_weight_function: Optional[NodeWeightFunction] = None,

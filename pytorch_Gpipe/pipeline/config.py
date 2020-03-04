@@ -11,13 +11,13 @@ import json
 import os
 import importlib
 from itertools import chain
-from ..utils import find_shapes
-from copy import copy
 
 
 class PipelineConfig():
-    def __init__(self, batch_dim: int):
+    def __init__(self, batch_dim: int, depth: int, basic_blocks: Tuple[nn.Module, ...]):
         self.batch_dim = batch_dim
+        self.depth = depth
+        self.basic_blocks = tuple(basic_blocks)
         self.model_inputs = []
         self.model_input_shapes = []
         self.model_outputs = []
@@ -66,8 +66,8 @@ class PipelineConfig():
 
     def split(self, stage_idxs: Iterable[int]) -> Tuple["PipelineConfig", "PipelineConfig"]:
         stages_to_remove = set(stage_idxs)
-        L = PipelineConfig(self.batch_dim)
-        R = PipelineConfig(self.batch_dim)
+        L = PipelineConfig(self.batch_dim, self.depth, self.basic_blocks)
+        R = PipelineConfig(self.batch_dim, self.depth, self.basic_blocks)
 
         cut = [deepcopy(self.stages[idx]) for idx in stages_to_remove]
         remaining = [deepcopy(self.stages[idx]) for idx in self.stages
@@ -222,14 +222,14 @@ class PipelineConfig():
             return False
         return no_duplicates and has_in_out and disjoint and has_stages and stages_valid and all_inputs_used and all_outputs_used
 
-    def realize(self, layers: Dict[str, Tensor], tensors: Dict[str, Tensor], batch_size: int) -> Dict[int, Tuple[nn.Module, torch.device, Optional[Optimizer], Optional[_LRScheduler], int]]:
+    def realize(self, layers: Dict[str, Tensor], tensors: Dict[str, Tensor], batch_size: int) -> Dict[int, Tuple[int, nn.Module, torch.device, Optional[Optimizer], Optional[_LRScheduler], int]]:
         assert self.isValid()
         i = 0
         rank_to_model_args = dict()
         for stage_id in range(self.n_stages):
             for idx, (model, device, optimizer, lr_sched, split_size) in enumerate(self.stages[stage_id].realize(layers, tensors, batch_size)):
                 rank = i + idx
-                rank_to_model_args[rank] = (model, device, optimizer,
+                rank_to_model_args[rank] = (idx, model, device, optimizer,
                                             lr_sched, split_size)
             i += idx + 1
         return rank_to_model_args
@@ -244,9 +244,28 @@ class PipelineConfig():
             else:
                 i += stage.n_ranks
 
+    def _to_old_analysis_format(self, layers, tensors) -> Dict:
+        old_config = dict()
+
+        old_config['model inputs'] = self.model_inputs
+        old_config['model outputs'] = self.model_outputs
+
+        for idx, stage in self.stages.items():
+            stage_config = dict()
+            stage_config['inputs'] = stage.inputs
+            stage_config['outputs'] = stage.outputs
+            model = stage._stage_class(layers, tensors).to(stage.devices[0])
+            stage_config['model'] = model
+            old_config[idx] = stage_config
+
+        return old_config
+
     def state_dict(self) -> Dict:
         state = dict()
         state["batch_dim"] = self.batch_dim
+        state["depth"] = self.depth
+        state["basic_blocks"] = [serialize_python_class_or_function(block)
+                                 for block in self.basic_blocks]
         state["model_inputs"] = self.model_inputs
         state["model_input_shapes"] = [list(s)
                                        for s in self.model_input_shapes]
@@ -274,7 +293,10 @@ class PipelineConfig():
     def fromDict(cls, state) -> "PipelineConfig":
         stages = {int(idx): StageConfig.fromDict(s)
                   for idx, s in state['stages'].items()}
-        config = cls(state['batch_dim'])
+        depth = state['depth']
+        basic_blocks = [deserialize_python_class_or_function(p)
+                        for p in state['basic_blocks']]
+        config = cls(state['batch_dim'], depth, basic_blocks)
         config.model_inputs = state['model_inputs']
         config.model_input_shapes = [torch.Size(s)
                                      for s in state['model_input_shapes']]
@@ -410,19 +432,9 @@ class StageConfig():
         optimizer_cls, optimizer_args = self._optimizer_args
         lr_sched_cls, lr_sched_args = self._lr_scheduler_args
 
-        optimizer_module = inspect.getmodule(optimizer_cls)
-        if optimizer_module:
-            optimizer_type = optimizer_module.__name__
-            optimizer_type += f".{optimizer_cls.__name__}"
-        else:
-            optimizer_type = ""
+        optimizer_type = serialize_python_class_or_function(optimizer_cls)
 
-        lr_sched_module = inspect.getmodule(lr_sched_cls)
-        if lr_sched_module:
-            lr_sched_type = lr_sched_module.__name__
-            lr_sched_type += f".{lr_sched_cls.__name__}"
-        else:
-            lr_sched_type = ""
+        lr_sched_type = serialize_python_class_or_function(lr_sched_cls)
 
         state['optimizer'] = {'type': optimizer_type,
                               'args': optimizer_args}
@@ -445,20 +457,9 @@ class StageConfig():
         optimizer_type, optimizer_args = state['optimizer']['type'], state['optimizer']['args']
         lr_scheduler_type, lr_scheduler_args = state['lr_scheduler']['type'], state['lr_scheduler']['args']
 
-        if optimizer_type:
-            optimizer_module, optimizer_name = optimizer_type.rsplit(".", 1)
-            optimizer_module = importlib.import_module(optimizer_module)
-            optimizer_cls = getattr(optimizer_module, optimizer_name)
-        else:
-            optimizer_cls = None
-
-        if lr_scheduler_type:
-            lr_scheduler_module, lr_scheduler_name = lr_scheduler_type.rsplit(".",
-                                                                              1)
-            lr_scheduler_module = importlib.import_module(lr_scheduler_module)
-            lr_scheduler_cls = getattr(lr_scheduler_module, lr_scheduler_name)
-        else:
-            lr_scheduler_cls = None
+        optimizer_cls = deserialize_python_class_or_function(optimizer_type)
+        lr_scheduler_cls = deserialize_python_class_or_function(
+            lr_scheduler_type)
 
         devices = [torch.device(device) for device in state['devices']]
 
@@ -473,35 +474,26 @@ class StageConfig():
         return config
 
 
-def createConfig(config, sample_inputs, batch_dim) -> PipelineConfig:
-    config = copy(config)
-    shapes = find_shapes(sample_inputs, config)
+def serialize_python_class_or_function(class_or_function):
+    if class_or_function is None:
+        return ""
+    module = inspect.getmodule(class_or_function)
+    class_or_function_name = class_or_function.__name__
+    return module.__name__ + "." + class_or_function_name
 
-    pipeline_config = PipelineConfig(batch_dim)
-    for i in config.pop("model inputs"):
-        pipeline_config.add_input(i, shapes[i])
 
-    for o in config.pop("model outputs"):
-        pipeline_config.add_output(o, shapes[o])
+def deserialize_python_class_or_function(path: str):
+    if path == "":
+        return None
+    module_path, obj_name = path.rsplit(".", 1)
+    module = importlib.import_module(module_path)
+    return getattr(module, obj_name)
 
-    for stage_id in sorted(config.keys()):
-        stage_conf = config[stage_id]
-        stage_cls = stage_conf['model'].__class__
-        stage = pipeline_config.add_stage(stage_cls)
-
-        for i in stage_conf['inputs']:
-            stage.add_input(i, shapes[i])
-
-        for o in stage_conf['outputs']:
-            stage.add_output(o, shapes[o])
-
-        stage.add_devices(stage_conf['model'].device)
-
-    assert pipeline_config.isValid()
-    return pipeline_config
 
 # config structure
 # batch_dim
+# depth
+# basic_blocks
 # model_inputs
 # model_input_shapes
 # model_outputs

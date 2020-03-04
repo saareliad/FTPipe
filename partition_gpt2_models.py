@@ -56,8 +56,8 @@ from models.normal import GPT2LMHeadModel, GPT2Model
 from pytorch_Gpipe import pipe_model
 from misc import run_analysis  # , run_partitions
 from pytorch_Gpipe.model_profiling import Node, NodeTypes
-from pytorch_Gpipe.utils import _extract_volume_from_sizes
-
+from pytorch_Gpipe.utils import _extract_volume_from_sizes, layerDict, tensorDict
+from pytorch_Gpipe import PipelineConfig
 MODEL_CLASSES_LM_HEAD = {
     'gpt2': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
     'openai-gpt': (OpenAIGPTConfig, OpenAIGPTLMHeadModel, OpenAIGPTTokenizer),
@@ -221,7 +221,10 @@ def partition_model(args, train_dataset, model, tokenizer, lm=True):
     else:
         sample = inputs
     model.train()
+    batch_dim = 0
+    # TODO assumes batch_dim is 0
     graph = pipe_model(model,
+                       batch_dim,
                        sample,
                        depth=args.depth,
                        n_iter=args.n_iter,
@@ -241,14 +244,20 @@ def partition_model(args, train_dataset, model, tokenizer, lm=True):
 
     GET_PARTITIONS_ON_CPU = True
 
-    config = create_pipeline_configuration(model,
-                                           partitions_only=False,
-                                           DEBUG=GET_PARTITIONS_ON_CPU)
+    config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
+
+    pipe_config = PipelineConfig.fromDict(config)
+    pipe_config.toJson(f"{args.output_file}.json")
 
     bandwidth_gps = args.bandwidth_gps
     recomputation = not args.no_recomputation
 
     if not args.no_analysis:
+        depth = pipe_config.depth
+        blocks = pipe_config.basic_blocks
+        analysis_config = pipe_config._to_old_analysis_format(layerDict(model, depth=depth, basic_blocks=blocks),
+                                                              tensorDict(model))
+
         # TODO assumes batch is first
         shape = (args.analysis_batch_size, inputs.shape[1])
         expanded_inputs = inputs[0].unsqueeze(0).expand(shape)
@@ -256,13 +265,10 @@ def partition_model(args, train_dataset, model, tokenizer, lm=True):
         expanded_labels = labels[0].unsqueeze(0).expand(shape)
 
         analysis_sample = (expanded_inputs, expanded_labels)
-        warnings.warn(
-            "nested tuples are possibly returned this is not supported by the analysis"
-        )
 
         run_analysis(analysis_sample,
                      graph,
-                     config,
+                     analysis_config,
                      args.n_iter,
                      recomputation=recomputation,
                      bw_GBps=bandwidth_gps)

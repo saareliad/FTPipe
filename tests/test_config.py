@@ -6,7 +6,7 @@ from itertools import chain
 
 
 def get_config():
-    config = PipelineConfig(0).add_input(
+    config = PipelineConfig(0, -1, (torch.nn.Linear,)).add_input(
         "input0", (200, 100)).add_output("output0", (200, 100)).add_output("output1", (200, 100)).add_output("output2", (200, 100))
     config.batch_dim = 0
     stage0 = config.add_stage(dummy.Stage0, torch.optim.Adam, {
@@ -43,7 +43,9 @@ def test_serialize():
 def test_realize():
     config = get_config()
     model = dummy.Dummy()
-    layers = layerDict(model)
+    depth = config.depth
+    blocks = config.basic_blocks
+    layers = layerDict(model, depth=depth, basic_blocks=blocks)
     tensors = tensorDict(model)
 
     rank_args = config.realize(layers, tensors, 32)
@@ -51,7 +53,7 @@ def test_realize():
     def expected_device(m, d):
         return all(t.device == d for t in chain(m.parameters(), m.buffers()))
 
-    for rank, (replica, device, optimizer, lr_scheduler, split_size) in rank_args.items():
+    for rank, (local_stage_rank, replica, device, optimizer, lr_scheduler, split_size) in rank_args.items():
         if rank <= 7:
             assert expected_device(replica, device)
             assert device == torch.device('cpu')

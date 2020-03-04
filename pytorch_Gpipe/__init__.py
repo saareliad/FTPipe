@@ -16,6 +16,7 @@ __all__ = [
 
 
 def pipe_model(model: nn.Module,
+               batch_dim: int,
                sample_batch: Tensors,
                kwargs: Optional[Dict] = None,
                n_iter=10,
@@ -39,6 +40,8 @@ def pipe_model(model: nn.Module,
     Parameters:
     model:
         the network we wish to model
+     batch_dim:
+        the batch dimention of the sample batch
     sample_batch:
         a sample input to use for tracing
     kwargs:
@@ -84,6 +87,7 @@ def pipe_model(model: nn.Module,
 
     compile_partitoned_model(graph,
                              model,
+                             batch_dim,
                              output_file=output_file,
                              verbose=DEBUG)
 

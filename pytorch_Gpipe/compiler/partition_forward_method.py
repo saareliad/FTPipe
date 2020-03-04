@@ -9,7 +9,7 @@ from collections import OrderedDict
 from itertools import chain
 from typing import List, Tuple, Dict, Iterator
 from collections import deque
-
+from .utils import format_shape
 tab = '    '
 dtab = tab + tab
 
@@ -53,15 +53,24 @@ def generate_forward_method(
     lines.append(
         generateDeclaration(input_ids, scope_to_class_field,
                             ready_expressions))
-    out_scopes = sortedPartitionOutputs(partition, model_outputs)
-
+    outputs = sortedPartitionOutputs(partition, model_outputs)
+    out_scopes = OrderedSet([n.scope for n in outputs])
     body = generateBody(out_scopes,
                         partition,
                         scope_to_class_field,
                         ready_expressions,
                         verbose=verbose)
     lines.append(body)
-    return lines, {"inputs": list(input_scopes), "outputs": list(out_scopes)}
+
+    input_shapes = [format_shape(n.shape)[0] for n in part_inputs]
+    output_shapes = [format_shape(n.shape)[0] for n in outputs]
+
+    io = {"inputs": list(input_scopes),
+          "outputs": list(out_scopes),
+          "input_shapes": input_shapes,
+          "output_shapes": output_shapes}
+
+    return lines, io
 
 
 def generateDeclaration(input_ids: List[str], scope_to_class_field: Dict[str,
@@ -521,8 +530,8 @@ def sortedPartitionInputs(partition: List[Node]) -> List[Node]:
 
 
 def sortedPartitionOutputs(partition: List[Node],
-                           model_outputs: List[str]) -> OrderedSet[str]:
-    ''' return all scopes that are outputs of the partition\n
+                           model_outputs: List[str]) -> List[Node]:
+    ''' return all nodes that are outputs of the partition\n
         sorted in alphabetical order
     '''
     def isOutput(n):
@@ -530,11 +539,9 @@ def sortedPartitionOutputs(partition: List[Node],
         model_output = n.scope in model_outputs
         return part_output or model_output
 
-    output_scopes = {n.scope for n in partition if isOutput(n)}
+    outputs = {n for n in partition if isOutput(n)}
 
-    output_scopes = OrderedSet(sorted(output_scopes))
-
-    return output_scopes
+    return sorted(outputs, key=lambda n: n.scope)
 
 
 def sortNodes(nodes: List[Node]) -> List[Node]:

@@ -1,10 +1,12 @@
 import torch
 from models.normal import WideResNet, amoebanetd, ResNet
-from pytorch_Gpipe import pipe_model
 from pytorch_Gpipe.model_profiling import Node, NodeTypes
 import argparse
 import importlib
 from misc import run_analysis, run_partitions
+from pytorch_Gpipe.utils import _extract_volume_from_sizes, layerDict, tensorDict
+from pytorch_Gpipe import PipelineConfig, pipe_model
+
 
 _RESENETS = dict(resnet50_imagenet=dict(
     block=ResNet.Bottleneck, layers=[3, 4, 6, 3], num_classes=1000))
@@ -103,46 +105,21 @@ def node_weight_function(node: Node):
 
 def edge_weight_function(bw_GBps):
     def f(u: Node, v: Node):
-        if u.type is NodeTypes.LAYER:
-            return max(1, int(MULT_FACTOR * u.weight.output_size / bw_GBps))
-        if v.type is NodeTypes.LAYER:
-            return max(1, int(MULT_FACTOR * v.weight.input_size / bw_GBps))
-        if u.type is NodeTypes.CONSTANT:
-            return 1000 * MULT_FACTOR  # FIXME: why penalize constants?
-        return 1
+        if u.type is NodeTypes.CONSTANT or (u.valueType() in [int, None] or u.shape == (torch.Size([]),)):
+            # no constant or scalars on boundries
+            return 1000 * MULT_FACTOR
 
+        if u.valueType() in [list, tuple]:
+            # no nested iterables on boundries
+            return 1000 * MULT_FACTOR
+
+        # TODO data type not included shouldn't really matter
+        MB = 1e6
+        volume = _extract_volume_from_sizes(u.shape) / MB
+        # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
+        w = max(1, int(MULT_FACTOR * (volume / bw_GBps)))
+        return w
     return f
-
-
-def test_gpipe_stuff(create_pipeline_configuration, model,
-                     GET_PARTITIONS_ON_CPU, sample):
-
-    # create a pipeLine from the given model
-    # split dim the dim to split inputs and gradients across
-    # DEBUG switches between running workers on CPU or GPUS
-
-    partition_config = create_pipeline_configuration(
-        model, partitions_only=False, DEBUG=GET_PARTITIONS_ON_CPU)
-    output_device = 'cpu' if GET_PARTITIONS_ON_CPU else 'cuda'
-
-    from pytorch_Gpipe import Pipeline
-    pipe = Pipeline(partition_config,
-                    output_device=output_device,
-                    split_dim=0,
-                    use_delayedNorm=False)
-
-    output = pipe(sample.cpu())
-
-    # compute loss
-    loss0 = output.sum()
-    loss1 = output.abs().sum()
-    losses = [loss0, loss1]
-
-    # compute gradients of the losses in respect to model outputs
-    grads = torch.autograd.grad(losses, [output])
-
-    # pass gradients to the pipeline and compute the backward pass
-    pipe.backward(grads)
 
 
 def parse_cli():
@@ -159,8 +136,7 @@ def parse_cli():
         '--model_too_big',
         action='store_true',
         default=False,
-        help=
-        "if the model is too big run the whole partitioning process on CPU, "
+        help="if the model is too big run the whole partitioning process on CPU, "
         "and drink a cup of coffee in the meantime")
     parser.add_argument('-p', '--n_partitions', type=int, default=4)
     parser.add_argument('-o', '--output_file', default='wrn_16x4')
@@ -172,8 +148,7 @@ def parse_cli():
         '--n_iter',
         type=int,
         default=100,
-        help=
-        "number of iteration used in order to profile the network and run analysis"
+        help="number of iteration used in order to profile the network and run analysis"
     )
     parser.add_argument(
         '--bw',
@@ -236,20 +211,17 @@ def parse_cli():
     metis_opts.add_argument(
         '--metis_niter',
         type=int,
-        help=
-        "Specifies the number of iterations for the refinement algorithms at each stage of the uncoarsening process."
+        help="Specifies the number of iterations for the refinement algorithms at each stage of the uncoarsening process."
         "Default is 10.")
     metis_opts.add_argument(
         '--nseps',
         type=int,
-        help=
-        "Specifies the number of different separators that it will compute at each level of nested dissection."
+        help="Specifies the number of different separators that it will compute at each level of nested dissection."
         "The final separator that is used is the smallest one. Default is 1.")
     metis_opts.add_argument(
         "--ncuts",
         type=int,
-        help=
-        "Specifies the number of different partitionings that it will compute."
+        help="Specifies the number of different partitionings that it will compute."
         " The final partitioning is the one that achieves the best edgecut or communication volume."
         "Default is 1.")
     metis_opts.add_argument(
@@ -338,8 +310,9 @@ def single_partitioning_loop_with_override(args, METIS_opt, **override_dict):
     # DEBUG switches between verbose generated code and compressed code
     n_iter = args.n_iter
     recomputation = not args.no_recomputation
-
+    batch_dim = 0
     graph = pipe_model(model,
+                       batch_dim,
                        sample,
                        depth=args.depth,
                        kwargs=None,
@@ -364,24 +337,30 @@ def single_partitioning_loop_with_override(args, METIS_opt, **override_dict):
     if GET_PARTITIONS_ON_CPU:
         sample = sample.to('cpu')
     config = create_pipeline_configuration(model,
-                                           partitions_only=False,
                                            DEBUG=GET_PARTITIONS_ON_CPU)
+
+    pipe_config = PipelineConfig.fromDict(config)
+
+    if not (args.no_test_run and args.no_analysis):
+        depth = pipe_config.depth
+        blocks = pipe_config.basic_blocks
+        analysis_config = pipe_config._to_old_analysis_format(layerDict(model, depth=depth, basic_blocks=blocks),
+                                                              tensorDict(model))
 
     # Test # TODO: can do it on GPU...
     if not args.no_test_run:
-        _ = run_partitions(sample, config)
+        _ = run_partitions(sample, analysis_config)
 
     if not args.no_analysis:
         sample = create_random_sample(args, analysis=True)
         expected_speedup = run_analysis(sample,
                                         graph,
-                                        config,
+                                        analysis_config,
                                         n_iter,
                                         recomputation=recomputation,
                                         bw_GBps=bw,
                                         verbose=True,
                                         async_pipeline=args.async_pipeline)
-
     return expected_speedup
 
 
@@ -404,5 +383,3 @@ if __name__ == "__main__":
     print('-I- final study results:')
     print("bw", BW_RANGE)
     print("speedup", expected_speedup)
-
-    # test_gpipe_stuff()

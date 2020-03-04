@@ -1,5 +1,7 @@
 {
   "batch_dim": 0,
+  "depth": -1,
+  "basic_blocks": ["torch.nn.modules.linear.Linear"],
   "model_inputs": ["input0"],
   "model_input_shapes": [[1, 100]],
   "model_outputs": ["output0", "output1", "output2"],
