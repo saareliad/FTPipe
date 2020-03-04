@@ -9,10 +9,13 @@ class AdamClonedWeightPrediction(WeightPredictor):
         super().__init__(*args, **kw)
 
         # Ugly hack, init momentum buffer to zeros before we start
+        # State initialization
         for pg in self.optimizer.param_groups:
             for p in pg['params']:
-                self.optimizer.state[p]['exp_avg'] = torch.zeros_like(p)
-                self.optimizer.state[p]['exp_avg_sq'] = torch.zeros_like(p)
+                self.optimizer.state[p]['exp_avg'] = torch.zeros_like(p.data)
+                self.optimizer.state[p]['exp_avg_sq'] = torch.zeros_like(p.data)
+                self.optimizer.state[p]['step'] = 0
+                # NOTE: amsgrad is not supported.
 
     def forward(self):
         if not self.n_steps:
@@ -24,7 +27,7 @@ class AdamClonedWeightPrediction(WeightPredictor):
         with torch.no_grad():
             # init theta for clone
 
-            for pg in self.param_groups:
+            for pg in self.optimizer.param_groups:
 
                 beta1, beta2 = pg['betas']
                 eps = pg['eps']
@@ -79,8 +82,7 @@ class AdamMSNAG(FixFunction):
         )
 
 
-def get_adam_weight_predictor(sgd_type: str,
-                              pred_mem: str,
+def get_adam_weight_predictor(pred_mem: str,
                               optimizer,
                               scheduler=None,
                               nag_with_predictor=False,

@@ -94,7 +94,7 @@ class GapAwareBase(abc.ABC):
         self.optimizer = optimizer
 
         # FIXME can be of optimizer. e.g in adam its param_group['step']
-        self.step_count = 0  # Need to be ahead of the optimizer on 1.
+        self.step_count = 0  # Need to be ahead of the optimizer by 1.
 
     def update_max_lr(self):
         """ should be called after scheduler step. """

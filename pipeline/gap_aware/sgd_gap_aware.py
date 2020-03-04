@@ -139,7 +139,8 @@ class GapAware(GapAwareBase):
             eps = self.epsilon
             # Calculate gap from grad
             for pg in self.optimizer.param_groups:
-                if pg[GapAwareBase.MAX_LR_NAME] <= 0:
+                max_lr = pg[GapAwareBase.MAX_LR_NAME]
+                if max_lr <= 0:
                     continue
                 weight_decay = pg['weight_decay']
                 for p in pg['params']:
@@ -147,7 +148,7 @@ class GapAware(GapAwareBase):
                     #     continue
                     # calculate C coefficient per-element
                     # Note: can remove the "data". but whatever.
-                    avg_steps_needed = pg[GapAwareBase.MAX_LR_NAME] * \
+                    avg_steps_needed = max_lr * \
                         (((ra[id(p)].data / bias_correction) ** 0.5) + eps)
 
                     # calculate the gap per-element
@@ -177,7 +178,8 @@ class GapAware(GapAwareBase):
             eps = self.epsilon
             # Calculate gap from grad
             for pg, rpg in zip(self.optimizer.param_groups, real_theta):
-                if pg[GapAwareBase.MAX_LR_NAME] <= 0:
+                max_lr = pg[GapAwareBase.MAX_LR_NAME]
+                if max_lr <= 0:
                     continue
                 weight_decay = pg['weight_decay']
                 for p, rp in zip(pg['params'], rpg):
@@ -185,7 +187,7 @@ class GapAware(GapAwareBase):
                     #     continue
                     # calculate C coefficient per-element
                     # Note: can remove the "data". but whatever.
-                    avg_steps_needed = pg[GapAwareBase.MAX_LR_NAME] * \
+                    avg_steps_needed = max_lr * \
                         (((ra[id(p)].data / bias_correction) ** 0.5) + eps)
 
                     gap = (p - rp).abs()
@@ -221,7 +223,8 @@ class GapAware(GapAwareBase):
             eps = self.epsilon
             # Calculate gap from grad
             for pg, spg in zip(self.optimizer.param_groups, stashed_theta):
-                if pg[GapAwareBase.MAX_LR_NAME] <= 0:
+                max_lr = pg[GapAwareBase.MAX_LR_NAME]
+                if max_lr <= 0:
                     continue
                 weight_decay = pg['weight_decay']
                 for p, sp in zip(pg['params'], spg):
@@ -229,7 +232,7 @@ class GapAware(GapAwareBase):
                     #     continue
                     # calculate C coefficient per-element
                     # Note: can remove the "data". but whatever.
-                    avg_steps_needed = pg[GapAwareBase.MAX_LR_NAME] * \
+                    avg_steps_needed = max_lr * \
                         (((ra[id(p)].data / bias_correction) ** 0.5) + eps)
 
                     gap = (p - sp).abs()

@@ -6,11 +6,11 @@
     "out_filename": "debug_28x10_100",
     "distributed_backend": "mpi",
     "task": "lm_sep",
-    "statistics": "cv_theta_dist",
+    "statistics": "lm_theta_dist",
     "model": "gpt2",
     "dataset": "wt2",
     "trainer": {
-        "type": "cv",
+        "type": "lm",
         "args": {
             "always_calc_grad_norm": false 
         }
@@ -21,12 +21,10 @@
     "bs_test": 200,
     "num_data_workers": 10,
     "optimizer": {
-        "type": "sgd1",
+        "type": "adam",
         "args": {
-            "lr": 0.1,
-            "weight_decay": 0.0005,
-            "momentum": 0.9,
-            "nesterov": false
+            "lr": 0.01,
+            "weight_decay": 0.0005
         }
     },
     "lr_scheduler": {
@@ -46,7 +44,7 @@
         }
     },
     "gap_aware": {
-        "type": "sgd1",
+        "type": "adam",
         "policy": "all_except_last",
         "args": {
             "big_gamma": 0.999,

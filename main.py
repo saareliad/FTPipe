@@ -522,7 +522,6 @@ def get_gap_aware(args, optimizer):
     if not optimizer_type == 'sgd1' and not getattr(args, 'weight_stashing', False):  # pytorch
         raise NotImplementedError()
 
-
     if 'sgd' in optimizer_type:
         gap_aware_cls = get_sgd_gap_aware_cls(optimizer_type)
     elif 'adam' == optimizer_type:
