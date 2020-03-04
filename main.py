@@ -832,7 +832,7 @@ def get_dataloaders(args, explicit_seperated_dataset=False, **kw):
         collate = lm_collate_factory(tokenizer)
         dl_kw['collate_fn'] = collate
     else:
-        dataset_keywords = None
+        dataset_keywords = {}
 
     if explicit_seperated_dataset:
         train_dl, test_dl, samplers = get_seperate_just_x_or_y_train_test_dl_from_args(
@@ -1097,7 +1097,7 @@ def main():
     if getattr(trainer_cls, "HAS_GAP_AWARE", False):
         gap_aware = get_gap_aware(args, optimizer)
         trainer = trainer_cls(gap_aware,
-                              partition.partition,
+                              model=partition.partition,
                               optimizer=optimizer,
                               scheduler=scheduler,
                               statistics=statistics,
@@ -1105,7 +1105,7 @@ def main():
         partition.set_gap_aware(gap_aware)
     else:
         gap_aware = None
-        trainer = trainer_cls(partition.partition,
+        trainer = trainer_cls(model=partition.partition,
                               optimizer=optimizer,
                               scheduler=scheduler,
                               statistics=statistics,

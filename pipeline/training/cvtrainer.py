@@ -93,9 +93,10 @@ class CVTrainer(PartitionedSupervisedTrainer):
 class GapAwareCVTrainer(CVTrainer, GapAwareTrainerBase):
     # FIXME
     # HAS_GAP_AWARE = True
-    def __init__(self, gap_aware, *args, **kw):
-        super(CVTrainer, self).__init__(*args, **kw)
-        super(GapAwareTrainerBase, self).__init__(gap_aware)
+    def __init__(self, gap_aware, **kw):
+        super(GapAwareCVTrainer, self).__init__(**kw)
+        GapAwareTrainerBase.__init__(self, gap_aware)
+
         self.gap_aware = gap_aware
 
     def last_partition_step_and_statistics(self, x, y, loss, step=True):

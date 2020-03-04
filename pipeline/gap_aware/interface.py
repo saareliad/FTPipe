@@ -1,5 +1,6 @@
 import abc
 
+
 class GapAwareBase(abc.ABC):
     """
     GAP aware implementation for pipeline,
@@ -87,19 +88,22 @@ class GapAwareBase(abc.ABC):
     def __init__(self, optimizer):
         """ Apply Gap Aware on computed gradients """
 
+        for pg in optimizer.param_groups:
+            pg[GapAwareBase.MAX_LR_NAME] = pg['lr']
+
         self.optimizer = optimizer
 
         # FIXME can be of optimizer. e.g in adam its param_group['step']
-        self.step_count = 0   # Need to be ahead of the optimizer on 1.
+        self.step_count = 0  # Need to be ahead of the optimizer on 1.
 
     def update_max_lr(self):
         """ should be called after scheduler step. """
         for pg in self.optimizer.param_groups:
-            pg[GapAwareBase.MAX_LR_NAME] = max(pg[GapAwareBase.MAX_LR_NAME], pg['lr'])
+            pg[GapAwareBase.MAX_LR_NAME] = max(pg[GapAwareBase.MAX_LR_NAME],
+                                               pg['lr'])
 
     def inc_step_count(self):
         self.step_count += 1
-
 
     @abc.abstractmethod
     def apply_from_grad(self):
@@ -115,7 +119,6 @@ class GapAwareBase(abc.ABC):
     def apply_on_theta(self, real_theta):
         raise NotImplementedError()
 
-    
     def update_running_avg(self):
         """in case there is some running avg to update"""
         pass

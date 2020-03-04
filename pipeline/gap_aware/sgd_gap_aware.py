@@ -84,8 +84,6 @@ class GapAware(GapAwareBase):
     #       For WD mem trick, this requires applying a WD correction later.
     #       Better used with SGD+L2 than WD.
 
-    MAX_LR_NAME = "max_lr"
-
     def __init__(self, optimizer, big_gamma=0.999, epsilon=1e-8, from_grad=True):
         """ Apply Gap Aware on computed gradients """
         super().__init__(optimizer)

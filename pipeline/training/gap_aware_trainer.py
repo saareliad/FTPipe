@@ -4,8 +4,8 @@ from .interface import PartitionedTrainer
 class GapAwareTrainerBase(PartitionedTrainer):
     HAS_GAP_AWARE = True
 
-    def __init__(self, gap_aware, *args, **kw):
-        super().__init__(*args, **kw)
+    def __init__(self, gap_aware):
+        super().__init__()
         self.gap_aware = gap_aware
 
     def modify_gradients(self, real_theta=None, delay=None,
