@@ -1,7 +1,8 @@
 from typing import List
 from .interface import Stats
 from types import SimpleNamespace
-from .utils import fit_res_to_dict, AverageMeter, AccuracyMeter
+import math
+from .utils import fit_res_to_dict, AverageMeter
 
 
 class FitResult(SimpleNamespace):
@@ -9,17 +10,17 @@ class FitResult(SimpleNamespace):
     Represents the result of fitting a model for multiple epochs given a
     training and test (or validation) set.
     The losses are for each batch (or per epoch, depends on config)
-    and the accuracies are per epoch.
+    and the PPLS are per epoch.
     """
     num_epochs: int
     train_loss: List[float]
-    train_acc: List[float]
+    train_ppl: List[float]
     test_loss: List[float]
-    test_acc: List[float]
+    test_ppl: List[float]
 
 
-class CVStats(Stats):
-    """ Class to handle statistics collection for CV Tasks """
+class LMStats(Stats):
+    """ Class to handle statistics collection for LM Tasks """
     FIT_RESULTS_CLASS = FitResult
 
     def __init__(self, record_loss_per_batch=False):
@@ -27,9 +28,9 @@ class CVStats(Stats):
         self.fit_res = self.FIT_RESULTS_CLASS(**self.fit_result_init_dict())
         assert not (self.fit_res is None)
         self.epoch_loss = AverageMeter()
-        self.epoch_acc = AccuracyMeter()
+        self.epoch_ppl = AverageMeter()
 
-        self.epoch_meters = [self.epoch_loss, self.epoch_acc]
+        self.epoch_meters = [self.epoch_loss, self.epoch_ppl]
 
         self.record_loss_per_batch = record_loss_per_batch
         self.training = True
@@ -37,9 +38,9 @@ class CVStats(Stats):
     def fit_result_init_dict(self):
         return dict(num_epochs=0,
                     train_loss=[],
-                    train_acc=[],
+                    train_ppl=[],
                     test_loss=[],
-                    test_acc=[])
+                    test_ppl=[])
 
     def train(self):
         self.training = True
@@ -47,7 +48,7 @@ class CVStats(Stats):
     def eval(self):
         self.training = False
 
-    def on_batch_end(self, loss, num_correct, batch_size):
+    def on_batch_end(self, loss, batch_size):
         if self.record_loss_per_batch:
             if self.training:
                 self.fit_res.train_loss.append(loss)
@@ -55,21 +56,21 @@ class CVStats(Stats):
                 self.fit_res.test_loss.append(loss)
 
         self.epoch_loss.update(loss, batch_size)
-        self.epoch_acc.update(num_correct, batch_size)
+        self.epoch_ppl.update(math.exp(loss), batch_size)
 
     def on_epoch_end(self):
         if self.training:
             if not self.record_loss_per_batch:
                 self.fit_res.train_loss.append(self.epoch_loss.get_avg())
 
-            self.fit_res.train_acc.append(self.epoch_acc.get_avg() * 100)
+            self.fit_res.train_ppl.append(self.epoch_ppl.get_avg())
             # FIXME: its only here, currently assuming test are same as train.
             self.fit_res.num_epochs += 1
         else:
             if not self.record_loss_per_batch:
                 self.fit_res.test_loss.append(self.epoch_loss.get_avg())
 
-            self.fit_res.test_acc.append(self.epoch_acc.get_avg() * 100)
+            self.fit_res.test_ppl.append(self.epoch_ppl.get_avg())
 
         for meter in self.epoch_meters:
             meter.reset()
@@ -86,14 +87,14 @@ class CVStats(Stats):
         if is_train:
             name = "train"
             loss = self.fit_res.train_loss[-1]
-            acc = self.fit_res.train_acc[-1]
+            ppl = self.fit_res.train_ppl[-1]
         else:
             name = "valid"
             loss = self.fit_res.test_loss[-1]
-            acc = self.fit_res.test_acc[-1]
+            ppl = self.fit_res.test_ppl[-1]
 
-        return ' | {} loss {:5.2f} | {} acc {:4.2f}'.format(
-            name, loss, name, acc)
+        return ' | {} loss {:5.2f} | {} ppl {:4.2f}'.format(
+            name, loss, name, ppl)
 
 
 class FitResultWithGradNorm(FitResult):
@@ -101,17 +102,17 @@ class FitResultWithGradNorm(FitResult):
     Represents the result of fitting a model for multiple epochs given a
     training and test (or validation) set.
     The losses are for each batch (or per epoch, depends on config)
-    and the accuracies are per epoch.
+    and the ppls are per epoch.
     """
     num_epochs: int
     grad_norm: List[float]
     train_loss: List[float]
-    train_acc: List[float]
+    train_ppl: List[float]
     test_loss: List[float]
-    test_acc: List[float]
+    test_ppl: List[float]
 
 
-class NormCVstats(CVStats):
+class NormLMstats(LMStats):
     FIT_RESULTS_CLASS = FitResultWithGradNorm
 
     def __init__(self, *args, **kw):
@@ -123,9 +124,9 @@ class NormCVstats(CVStats):
     def fit_result_init_dict(self):
         return dict(grad_norm=[], **super().fit_result_init_dict())
 
-    def on_batch_end(self, loss, num_correct, batch_size, grad_norm=None):
+    def on_batch_end(self, loss, batch_size, grad_norm=None):
         # Note: This is also called for test
-        super().on_batch_end(loss, num_correct, batch_size)
+        super().on_batch_end(loss, batch_size)
 
         # TODO: not sure fi thats the best way
         if self.training and (not (grad_norm is None)):
@@ -138,6 +139,15 @@ class NormCVstats(CVStats):
         # Called just for train
         if self.training:
             self.update_statistic_after_batch("grad_norm", grad_norm)
+
+        # if self.training:
+        #     if not (grad_norm is None):
+        #         self.epoch_grad_norm_meter.update(grad_norm)
+        #     else:
+        #         logger = logging.getLogger("msnag")
+        #         logger.warning(
+        #             f"-W- grad norm is None for a non last partition. updating as 0")
+        #         self.epoch_grad_norm_meter.update(0)
 
     def on_epoch_end(self):
         if self.training:
@@ -173,18 +183,18 @@ class FitResultWithGradNormAndDistance(FitResult):
     Represents the result of fitting a model for multiple epochs given a
     training and test (or validation) set.
     The losses are for each batch (or per epoch, depends on config)
-    and the accuracies are per epoch.
+    and the PPLs are per epoch.
     """
     num_epochs: int
     grad_norm: List[float]
     gap: List[float]
     train_loss: List[float]
-    train_acc: List[float]
+    train_ppl: List[float]
     test_loss: List[float]
-    test_acc: List[float]
+    test_ppl: List[float]
 
 
-class CVDistanceNorm(NormCVstats):
+class LMDistanceNorm(NormLMstats):
     # FIXME: This whole chain of classes has HORRIBLE design. just implement it simple.
     FIT_RESULTS_CLASS = FitResultWithGradNormAndDistance
 
@@ -224,19 +234,19 @@ class FitResultWithDistance(FitResult):
     Represents the result of fitting a model for multiple epochs given a
     training and test (or validation) set.
     The losses are for each batch (or per epoch, depends on config)
-    and the accuracies are per epoch.
+    and the PPLS are per epoch.
     """
     num_epochs: int
     gap: List[float]
     train_loss: List[float]
-    train_acc: List[float]
+    train_ppl: List[float]
     test_loss: List[float]
-    test_acc: List[float]
+    test_ppl: List[float]
 
 
 # Code copy from ^
-class CVDistance(CVStats):
-    # FIXME: This whole chain of classes has HORRIBLE design. just implement it simple.
+class LMDistance(LMStats):
+    # FIXME: This whole chain of classes has HORRIBLE design. just implement it simply.
     FIT_RESULTS_CLASS = FitResultWithDistance
 
     def __init__(self, *args, **kw):
