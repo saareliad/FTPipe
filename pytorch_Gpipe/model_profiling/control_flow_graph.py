@@ -614,13 +614,11 @@ class Graph():
         g = Graph().load_state(self.state())
 
         def predicate(n: Node):
-            if n.scope in g.output_scopes or n.type is [
-                    NodeTypes.IN, NodeTypes.BUFF_PARAM
-            ]:
+            if n.scope in g.output_scopes:
                 return False
-            return n.type in {
-                NodeTypes.PYTHON_PRIMITIVE, NodeTypes.CONSTANT
-            } or (len(n.in_nodes) == 0 and n.type is NodeTypes.OP)
+            elif n.type is NodeTypes.IN:
+                return False
+            return n.type in {NodeTypes.PYTHON_PRIMITIVE, NodeTypes.CONSTANT} or (len(n.in_nodes) == 0 and n.type is NodeTypes.OP)
 
         # inefficient but should only be called once
         nodes = _remove_nodes(g._nodes, predicate)
