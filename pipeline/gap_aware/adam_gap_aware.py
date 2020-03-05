@@ -30,14 +30,62 @@ class AdamGapAware(GapAwareBase):
 
         #     # TODO: sched aware LR.
 
-    @abc.abstractmethod
     def apply_from_grad(self):
         """ Calculate gap aware from gradient. Requires knowing the exact gap """
         raise NotImplementedError()
 
-    @abc.abstractmethod
     def apply_on_stashed(self, stashed_theta):
         """ True weights are loaded into the model, and given a stashed theta """
+        opt_state = self.optimizer.state
+
+        with torch.no_grad():
+            for pg, spg in zip(self.optimizer.param_groups, stashed_theta):
+                max_lr = pg[GapAwareBase.MAX_LR_NAME]
+                if max_lr <= 0:
+                    continue
+                weight_decay = pg['weight_decay']
+                beta1, beta2 = pg['betas']
+                eps = pg['eps']
+                # FIXME: remove assert after this works.
+                step_count = pg['step'] + 1
+                assert step_count == self.step_count
+
+                for p, sp in zip(pg['params'], spg):
+                    exp_avg_sq = opt_state[p]['exp_avg_sq']
+                    bias_correction2 = 1 - beta2**(step_count)
+                    # if p.grad is None:
+                    #     continue
+                    # calculate C coefficient per-element
+                    # Note: can remove the "data". but whatever.
+                    avg_steps_needed = max_lr * \
+                        (((exp_avg_sq.data / bias_correction2) ** 0.5) + eps)
+
+                    gap = (p - sp).abs()
+                    # pg['lr'] * p.grad.abs()
+
+                    # calculate the gap per-element
+                    penalty = 1 + (gap / avg_steps_needed)
+
+                    # Apply penalty to gradient
+                    p.grad.data /= penalty
+                    # Apply penalty to weight decay (as it will be part of the gradient)
+                    # NOTE: the memory hack below also worked for SGD.
+                    # HACK: we know that adam does
+                    #   d_p += p*wd
+                    # and we want:
+                    #   d_p += p*wd/penalty
+                    # so we solve:
+                    # x + z + p*wd = x + (p*wd / penalty)
+                    # giving:
+                    # z = p*wd ((1/penalty) - 1) = ((1 - penalty) / penalty)
+                    # so we do
+                    #   d_p += z
+                    # z =  p.data * weight_decay * ((1 - penalty) / penalty)
+
+                    # NOTE: we apply the weight decay on the real parameter weight, rp.
+                    p.grad.data += p.data.mul(weight_decay *
+                                              ((1 - penalty) / penalty))
+
         raise NotImplementedError()
 
     def apply_on_theta(self, real_theta):

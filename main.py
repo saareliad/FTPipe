@@ -569,7 +569,7 @@ def get_weight_predictor(args,
     optimizer_type = getattr(args, 'optimizer')['type']
     pred = getattr(args, 'weight_prediction')
     pred_mem = pred['args']['pred_mem']
-    nag_with_predictor = pred['args']['nag_with_predictor']
+    nag_with_predictor = pred['args'].get('nag_with_predictor', False)
 
     assert (pred_mem in {"clone", "calc"})
     assert (pred['type'] == "msnag")
@@ -592,7 +592,8 @@ def get_weight_predictor(args,
             scheduler=scheduler,
             nag_with_predictor=nag_with_predictor,
             true_weights_storage=true_weights_storage)
-    else:        
+        return weight_predictor, nag_with_predictor
+    else:
         raise NotImplementedError()
 
 
@@ -1033,6 +1034,7 @@ def main():
     trainer_cls = AVAILABLE_TRAINERS.get(args.trainer['type'])
     task_cls = AVAILABLE_TASKS.get(args.task)
     optimizer_cls = AVAILBALE_OPTIMIZERS.get(args.optimizer_type)
+    print(optimizer_cls.__name__)
     statistics = AVAILBALE_STATS.get(args.statistics)
     assert not (statistics is None)
     work_scheduler = AVAILABLE_WORK_SCHEDULERS.get(args.work_scheduler)
