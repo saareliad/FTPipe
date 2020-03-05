@@ -34,7 +34,6 @@ from experiments import save_experiment, load_experiment_for_update
 import time
 import random
 import math
-import config as json_config
 
 # TODO: support multiple servers,
 # TODO heterogenous servers
@@ -1017,16 +1016,16 @@ def main():
                                                        just_for_stage=None)
     else:
         raise NotImplementedError("In progress")
-        configs['model inputs'] = model_inputs  # We don't use thous.
-        configs['model outputs'] = model_outputs
+        # configs['model inputs'] = model_inputs  # We don't use thous.
+        # configs['model outputs'] = model_outputs
 
-        (training_tensor_shapes,
-         training_tensor_dtypes) = json_config.find_shapes_and_dtypes(
-             random_input_sample, configs)
-        eval_tensor_shapes = training_tensor_shapes
+        # (training_tensor_shapes,
+        #  training_tensor_dtypes) = json_config.find_shapes_and_dtypes(
+        #      random_input_sample, configs)
+        # eval_tensor_shapes = training_tensor_shapes
 
-        configs['model inputs'] = model_inputs  # We don't use thous.
-        model_outputs = configs.pop('model outputs')  # We don't use thous.
+        # configs['model inputs'] = model_inputs  # We don't use thous.
+        # model_outputs = configs.pop('model outputs')  # We don't use thous.
 
     del random_input_sample
     ######################################## END OF UGLY BLOCK ########################################
