@@ -12,17 +12,17 @@ import os
 import importlib
 from itertools import chain
 
+from .simple_config import PipelineConfig as BasePipelineConfig
+from .simple_config import StageConfig as BaseStageConfig
 
-class PipelineConfig():
+
+class PipelineConfig(BasePipelineConfig):
+    """ 
+    Extention to BasicPipelineConfig.
+    This class handles GPipe implementation specific stuff. 
+    """
     def __init__(self, batch_dim: int, depth: int, basic_blocks: Tuple[nn.Module, ...]):
-        self.batch_dim = batch_dim
-        self.depth = depth
-        self.basic_blocks = tuple(basic_blocks)
-        self.model_inputs = []
-        self.model_input_shapes = []
-        self.model_outputs = []
-        self.model_output_shapes = []
-        self.stages: Dict[int, StageConfig] = dict()
+        super().__init__(batch_dim, depth, basic_blocks)
 
     @property
     def master_stage(self) -> "StageConfig":
@@ -34,19 +34,6 @@ class PipelineConfig():
         stage.output_shapes = self.model_output_shapes
         stage.devices = [torch.device("cpu")]
 
-    def add_input(self, input_name: str, shape: Tuple[int, ...]) -> "PipelineConfig":
-        self.model_inputs.append(input_name)
-
-        shape = shape[:self.batch_dim] + (1,) + shape[self.batch_dim + 1:]
-
-        self.model_input_shapes.append(torch.Size(shape))
-        return self
-
-    def add_output(self, output_name: str, shape: Tuple[int, ...]) -> "PipelineConfig":
-        self.model_outputs.append(output_name)
-        shape = shape[:self.batch_dim] + (1,) + shape[self.batch_dim + 1:]
-        self.model_output_shapes.append(torch.Size(shape))
-        return self
 
     def add_stage(self, stage_class: nn.Module, optimizer_cls: Optional[Optimizer] = None, optimizer_args: Dict = dict(),
                   LR_scheduler_cls: Optional[_LRScheduler] = None, LR_scheduler_args: Dict = dict()) -> "StageConfig":
@@ -55,14 +42,6 @@ class PipelineConfig():
                             LR_scheduler_cls=LR_scheduler_cls, lr_scheduler_args=LR_scheduler_args)
         self.stages[self.n_stages] = stage
         return stage
-
-    @property
-    def n_stages(self) -> int:
-        return len(self.stages)
-
-    @property
-    def n_ranks(self) -> int:
-        return sum(stage.n_ranks for stage in self.stages.values())
 
     def split(self, stage_idxs: Iterable[int]) -> Tuple["PipelineConfig", "PipelineConfig"]:
         stages_to_remove = set(stage_idxs)
@@ -110,32 +89,6 @@ class PipelineConfig():
     def __repr__(self) -> str:
         return str(self)
 
-    @property
-    def producers(self) -> Dict[str, int]:
-        producers = {i: -1 for i in self.model_inputs}
-        for stage_id, stage in self.stages.items():
-            for o in stage.outputs:
-                producers[o] = stage_id
-
-        return producers
-
-    @property
-    def consumers(self) -> Dict[str, List[int]]:
-        consumers = defaultdict(list)
-        for o in self.model_outputs:
-            consumers[o].append(-1)
-
-        for idx, stage in self.stages.items():
-            for o in stage.inputs:
-                consumers[o].append(idx)
-
-        return consumers
-
-    @property
-    def largest_stage_size(self) -> int:
-        max_stage = max(stage.n_ranks for stage in self.stages.values())
-        return max(1, max_stage)
-
     def stage_to_ranks(self) -> Dict[int, List[int]]:
         i = 0
         s_r = {-1: [-1]}
@@ -145,82 +98,6 @@ class PipelineConfig():
                 s_r[stage_id].append(i + idx)
             i += idx + 1
         return s_r
-
-    def shapes(self) -> Dict[str, torch.Size]:
-        shapes = dict()
-
-        for t, s in chain(zip(self.model_inputs, self.model_input_shapes),
-                          zip(self.model_outputs, self.model_output_shapes)):
-            shapes[t] = s
-        for stage in self.stages.values():
-            for i, s in zip(stage.inputs, stage.input_shapes):
-                shapes[i] = s
-            for o, s in zip(stage.outputs, stage.output_shapes):
-                shapes[o] = s
-
-        return shapes
-
-    def isValid(self) -> bool:
-        model_inputs = self.model_inputs
-        model_outputs = self.model_outputs
-        no_duplicates = (len(model_inputs) == len(set(model_inputs)))
-        no_duplicates &= ((len(model_outputs) ==
-                           len(set(model_outputs))))
-
-        has_in = len(model_inputs) > 0
-        has_out = len(model_outputs) > 0
-        has_in_out = has_in and has_out
-
-        disjoint = set(model_inputs).isdisjoint(set(model_outputs))
-        has_stages = len(self.stages) > 0
-        stages_valid = all(stage.isValid() for stage in self.stages.values())
-
-        all_inputs = {i for stage in self.stages.values()
-                      for i in stage.inputs}
-        all_outputs = {i for stage in self.stages.values()
-                       for i in stage.outputs}
-
-        all_inputs_used = all_inputs.issuperset(model_inputs)
-        all_inputs_used &= all_inputs.issubset(
-            set(model_inputs).union(all_outputs))
-        all_outputs_used = all_outputs.issuperset(model_outputs)
-        all_outputs_used &= all_outputs.issubset(
-            set(model_outputs).union(all_inputs))
-
-        # ensure that shapes belonging to the same scope are consistent across stages
-        shapes = self.shapes()
-        for scope, shape in chain(zip(self.model_inputs, self.model_input_shapes),
-                                  zip(self.model_outputs, self.model_output_shapes)):
-            if shape != shapes[scope]:
-                return False
-
-        for stage in self.stages.values():
-            for scope, shape in chain(zip(stage.inputs, stage.input_shapes),
-                                      zip(stage.outputs, stage.output_shapes)):
-                if shape != shapes[scope]:
-                    return False
-
-        # ensure balanced communication
-        consumers = self.consumers
-        producers = self.producers
-        for o, prodcuer in producers.items():
-            for consumer in consumers[o]:
-                if prodcuer == -1:
-                    n = 1
-                else:
-                    n = self.stages[prodcuer].n_ranks
-
-                if consumer == -1:
-                    m = 1
-                else:
-                    m = self.stages[consumer].n_ranks
-                major = max(n, m)
-                minor = min(n, m)
-                if major % minor:
-                    return False
-        if self.batch_dim < 0:
-            return False
-        return no_duplicates and has_in_out and disjoint and has_stages and stages_valid and all_inputs_used and all_outputs_used
 
     def realize(self, layers: Dict[str, Tensor], tensors: Dict[str, Tensor], batch_size: int) -> Dict[int, Tuple[int, nn.Module, torch.device, Optional[Optimizer], Optional[_LRScheduler], int]]:
         assert self.isValid()
@@ -261,33 +138,14 @@ class PipelineConfig():
         return old_config
 
     def state_dict(self) -> Dict:
-        state = dict()
-        state["batch_dim"] = self.batch_dim
-        state["depth"] = self.depth
-        state["basic_blocks"] = [serialize_python_class_or_function(block)
-                                 for block in self.basic_blocks]
-        state["model_inputs"] = self.model_inputs
-        state["model_input_shapes"] = [list(s)
-                                       for s in self.model_input_shapes]
-        state["model_outputs"] = self.model_outputs
-        state["model_output_shapes"] = [list(s)
-                                        for s in self.model_output_shapes]
+
+        state = super().state_dict()
 
         state["stages"] = {str(idx): stage.state_dict()
                            for idx, stage in self.stages.items()}
 
         return state
 
-    def toJson(self, path: Optional[str] = None) -> str:
-
-        json_str = json.dumps(self.state_dict(), indent=4)
-        if path is None:
-            return json_str
-
-        with open(path, "w") as f:
-            f.write(json_str)
-
-        return json_str
 
     @classmethod
     def fromDict(cls, state) -> "PipelineConfig":
@@ -317,34 +175,14 @@ class PipelineConfig():
         return cls.fromDict(state)
 
 
-class StageConfig():
+class StageConfig(BaseStageConfig):
     def __init__(self, batch_dim: int, stage_class: nn.Module, optimizer_cls: Optional[Optimizer], optimizer_args: Dict,
                  LR_scheduler_cls: Optional[Optimizer], lr_scheduler_args: Dict):
-        self.batch_dim = batch_dim
-        self.inputs = []
-        self.outputs = []
-        self.input_shapes = []
-        self.output_shapes = []
-        self.devices = []
-        self._stage_class = stage_class
+
+        super().__init__(batch_dim, stage_class)
+
         self._optimizer_args = (optimizer_cls, optimizer_args)
         self._lr_scheduler_args = (LR_scheduler_cls, lr_scheduler_args)
-
-    def add_input(self, input_name: str, shape: Tuple[int, ...]) -> "StageConfig":
-        self.inputs.append(input_name)
-        shape = shape[:self.batch_dim] + (1,) + shape[self.batch_dim + 1:]
-        self.input_shapes.append(torch.Size(shape))
-        return self
-
-    def add_output(self, output_name: str, shape: Tuple[int, ...]) -> "StageConfig":
-        self.outputs.append(output_name)
-        shape = shape[:self.batch_dim] + (1,) + shape[self.batch_dim + 1:]
-        self.output_shapes.append(torch.Size(shape))
-        return self
-
-    def add_devices(self, *devices: Iterable[torch.device]) -> "StageConfig":
-        self.devices.extend(list(map(torch.device, devices)))
-        return self
 
     def _create_optimizer(self, replica: nn.Module) -> Optional[Optimizer]:
         optimizer_class, optimizer_args = self._optimizer_args
@@ -373,31 +211,28 @@ class StageConfig():
         self._lr_scheduler_args = (LR_scheduler_cls, lr_scheduler_args)
         return self
 
-    @property
-    def n_ranks(self) -> int:
-        return len(self.devices)
-
     def isValid(self) -> bool:
-        no_duplicates = (len(self.inputs) == len(set(self.inputs)))
-        no_duplicates &= ((len(self.outputs) == len(set(self.outputs))))
-
-        has_in_out = (len(self.inputs) > 0) and (len(self.outputs) > 0)
-        disjoint = set(self.inputs).isdisjoint(set(self.outputs))
-        has_ranks = len(self.devices) > 0
-
+        
         if (self._lr_scheduler_args[0] != None) and self._optimizer_args[0] is None:
             return False
 
-        return no_duplicates and has_in_out and disjoint and has_ranks
-
+        return super().isValid()
+    
     def realize(self, layers: Dict[str, Tensor], tensors: Dict[str, Tensor], batch_size: int) -> Tuple[nn.Module, torch.device, Optional[Optimizer], Optional[_LRScheduler], int]:
         assert self.isValid()
         replicas = []
+        n_devices = self.devices
         for idx, device in enumerate(self.devices):
+            
+            # FIXME: deepcopy is implementation specific. in distributed program there is no reason to deepcopy.
             replica = deepcopy(self._stage_class(layers, tensors))
+            # FIXME: sharing memory is implementation specific.
             replica = replica.to(device=device).share_memory()
+            
+            # optimizer and lr_scheduler in config is not needed for other configurations, this should sit in another place.
             optimizer = self._create_optimizer(replica)
             lr_scheduler = self._create_lr_scheduler(optimizer)
+            
             split_size = batch_size // len(self.devices)
             if idx < batch_size % len(self.devices):
                 split_size += 1
@@ -419,16 +254,8 @@ class StageConfig():
                         lr_scheduler, split_size)
 
     def state_dict(self) -> Dict:
-        state = dict()
-        state['batch_dim'] = self.batch_dim
-        state['inputs'] = list(self.inputs)
-        state['outputs'] = list(self.outputs)
-        state['input_shapes'] = [list(s) for s in self.input_shapes]
-        state['output_shapes'] = [list(s) for s in self.output_shapes]
+        state = super().state_dict()
 
-        stage_module = inspect.getmodule(self._stage_class)
-        stage_name = self._stage_class.__name__
-        state['stage_cls'] = stage_module.__name__ + "." + stage_name
         optimizer_cls, optimizer_args = self._optimizer_args
         lr_sched_cls, lr_sched_args = self._lr_scheduler_args
 
@@ -441,7 +268,6 @@ class StageConfig():
         state['lr_scheduler'] = {'type': lr_sched_type,
                                  'args': lr_sched_args}
 
-        state['devices'] = [str(device) for device in self.devices]
         return state
 
     @classmethod
