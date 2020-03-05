@@ -1,5 +1,6 @@
 import importlib
 from .normal import WideResNet, Bottleneck, ResNet
+from .simple_partitioning_config import PipelineConfig
 
 _PARTITIONED_MODELS_PACKAGE = "models.partitioned"
 
@@ -101,6 +102,69 @@ def get_partitioning(cfg, model_instance=None):
     configs = createConfig(model_instance, partitions_only=False, DEBUG=ON_CPU)
 
     return configs
+
+
+def get_partitioning_v2(cfg, model_instance=None):
+    # from pytorch_Gpipe.utils import layerDict, tensorDict
+
+    GET_PARTITIONS_ON_CPU = True
+
+    generated_file_name = CFG_TO_GENERATED_FILE_NAME[cfg]
+    generated = importlib.import_module("." + generated_file_name,
+                                        package=_PARTITIONED_MODELS_PACKAGE)
+    create_pipeline_configuration = generated.create_pipeline_configuration
+    layerDict = generated.layerDict
+    tensorDict = generated.tensorDict
+
+    # Create instance of normal model
+    if model_instance:
+        # assert isinstance(model_instance, normal_model_class(cfg))
+        pass
+    else:
+        model_instance = create_normal_model_instance(cfg)
+
+    config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
+    pipe_config = PipelineConfig.fromDict(config)
+
+    depth = pipe_config.depth
+    blocks = pipe_config.basic_blocks
+    layers = layerDict(model_instance, depth=depth, basic_blocks=blocks)
+    tensors = tensorDict(model_instance)
+
+    old_config = pipe_config._to_old_format(layers, tensors)
+
+    return old_config
+
+
+def get_partitioning_v3(cfg, my_rank, batch_size, model_instance=None):
+    GET_PARTITIONS_ON_CPU = True
+
+    generated_file_name = CFG_TO_GENERATED_FILE_NAME[cfg]
+    generated = importlib.import_module("." + generated_file_name,
+                                        package=_PARTITIONED_MODELS_PACKAGE)
+    create_pipeline_configuration = generated.create_pipeline_configuration
+    layerDict = generated.layerDict
+    tensorDict = generated.tensorDict
+
+    # Create instance of normal model
+    if model_instance:
+        # assert isinstance(model_instance, normal_model_class(cfg))
+        pass
+    else:
+        model_instance = create_normal_model_instance(cfg)
+
+    config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
+    pipe_config = PipelineConfig.fromDict(config)
+
+    depth = pipe_config.depth
+    blocks = pipe_config.basic_blocks
+    layers = layerDict(model_instance, depth=depth, basic_blocks=blocks)
+    tensors = tensorDict(model_instance)
+
+    model = pipe_config.realize_stage_for_rank(layers, tensors, batch_size,
+                                               my_rank)
+
+    return pipe_config, model
 
 
 # if __name__ == "__main__":
