@@ -1,7 +1,6 @@
 import torch
 from torch import Tensor
 import torch.nn as nn
-from copy import deepcopy
 from typing import Optional, Dict, Iterable, Tuple, List
 from collections import defaultdict
 import inspect
@@ -10,6 +9,7 @@ import os
 import importlib
 from itertools import chain
 
+
 class PipelineConfig():
     """ 
     Config to handle basic partitioning.
@@ -17,7 +17,8 @@ class PipelineConfig():
 
     DEFAULT_BATCH_SIZE = 1
 
-    def __init__(self, batch_dim: int, depth: int, basic_blocks: Tuple[nn.Module, ...]):
+    def __init__(self, batch_dim: int, depth: int,
+                 basic_blocks: Tuple[nn.Module, ...]):
         self.batch_dim = batch_dim
         self.depth = depth
         self.basic_blocks = tuple(basic_blocks)
@@ -27,17 +28,21 @@ class PipelineConfig():
         self.model_output_shapes = []
         self.stages: Dict[int, StageConfig] = dict()
 
-    def add_input(self, input_name: str, shape: Tuple[int, ...]) -> "PipelineConfig":
+    def add_input(self, input_name: str,
+                  shape: Tuple[int, ...]) -> "PipelineConfig":
         self.model_inputs.append(input_name)
 
-        shape = shape[:self.batch_dim] + (self.DEFAULT_BATCH_SIZE,) + shape[self.batch_dim + 1:]
+        shape = shape[:self.batch_dim] + (
+            self.DEFAULT_BATCH_SIZE, ) + shape[self.batch_dim + 1:]
 
         self.model_input_shapes.append(torch.Size(shape))
         return self
 
-    def add_output(self, output_name: str, shape: Tuple[int, ...]) -> "PipelineConfig":
+    def add_output(self, output_name: str,
+                   shape: Tuple[int, ...]) -> "PipelineConfig":
         self.model_outputs.append(output_name)
-        shape = shape[:self.batch_dim] + (self.DEFAULT_BATCH_SIZE,) + shape[self.batch_dim + 1:]
+        shape = shape[:self.batch_dim] + (
+            self.DEFAULT_BATCH_SIZE, ) + shape[self.batch_dim + 1:]
         self.model_output_shapes.append(torch.Size(shape))
         return self
 
@@ -57,7 +62,7 @@ class PipelineConfig():
             running_cumsum += stage.n_ranks
             if rank < running_cumsum:
                 return i
-        
+
         raise ValueError(f"Invalid rank {rank}")
 
     @property
@@ -113,7 +118,7 @@ class PipelineConfig():
     def change_batch(self, batch_size):
         for shape in self.model_input_shapes:
             shape[self.batch_dim] = batch_size
-        
+
         for shape in self.model_output_shapes:
             shape[self.batch_dim] = batch_size
 
@@ -121,8 +126,7 @@ class PipelineConfig():
         model_inputs = self.model_inputs
         model_outputs = self.model_outputs
         no_duplicates = (len(model_inputs) == len(set(model_inputs)))
-        no_duplicates &= ((len(model_outputs) ==
-                           len(set(model_outputs))))
+        no_duplicates &= ((len(model_outputs) == len(set(model_outputs))))
 
         has_in = len(model_inputs) > 0
         has_out = len(model_outputs) > 0
@@ -132,10 +136,14 @@ class PipelineConfig():
         has_stages = len(self.stages) > 0
         stages_valid = all(stage.isValid() for stage in self.stages.values())
 
-        all_inputs = {i for stage in self.stages.values()
-                      for i in stage.inputs}
-        all_outputs = {i for stage in self.stages.values()
-                       for i in stage.outputs}
+        all_inputs = {
+            i
+            for stage in self.stages.values() for i in stage.inputs
+        }
+        all_outputs = {
+            i
+            for stage in self.stages.values() for i in stage.outputs
+        }
 
         all_inputs_used = all_inputs.issuperset(model_inputs)
         all_inputs_used &= all_inputs.issubset(
@@ -146,8 +154,9 @@ class PipelineConfig():
 
         # ensure that shapes belonging to the same scope are consistent across stages
         shapes = self.shapes()
-        for scope, shape in chain(zip(self.model_inputs, self.model_input_shapes),
-                                  zip(self.model_outputs, self.model_output_shapes)):
+        for scope, shape in chain(
+                zip(self.model_inputs, self.model_input_shapes),
+                zip(self.model_outputs, self.model_output_shapes)):
             if shape != shapes[scope]:
                 return False
 
@@ -177,12 +186,15 @@ class PipelineConfig():
                     return False
         if self.batch_dim < 0:
             return False
-        return no_duplicates and has_in_out and disjoint and has_stages and stages_valid and all_inputs_used and all_outputs_used
+        return (no_duplicates and has_in_out and disjoint and has_stages
+                and stages_valid and all_inputs_used and all_outputs_used)
 
-
-    def realize_stage_for_rank(self, layers: Dict[str, Tensor], tensors: Dict[str, Tensor], batch_size: int, my_rank: int):
-        stage_id = rank_to_stage_idx(my_rank)
-        return self.stages[stage_id].simple_realize(layers, tensors, batch_size)
+    def realize_stage_for_rank(self, layers: Dict[str, Tensor],
+                               tensors: Dict[str, Tensor], batch_size: int,
+                               my_rank: int):
+        stage_id = self.rank_to_stage_idx(my_rank)
+        return self.stages[stage_id].simple_realize(layers, tensors,
+                                                    batch_size)
 
     def _to_old_analysis_format(self, layers, tensors) -> Dict:
         old_config = dict()
@@ -204,17 +216,23 @@ class PipelineConfig():
         state = dict()
         state["batch_dim"] = self.batch_dim
         state["depth"] = self.depth
-        state["basic_blocks"] = [serialize_python_class_or_function(block)
-                                 for block in self.basic_blocks]
+        state["basic_blocks"] = [
+            serialize_python_class_or_function(block)
+            for block in self.basic_blocks
+        ]
         state["model_inputs"] = self.model_inputs
-        state["model_input_shapes"] = [list(s)
-                                       for s in self.model_input_shapes]
+        state["model_input_shapes"] = [
+            list(s) for s in self.model_input_shapes
+        ]
         state["model_outputs"] = self.model_outputs
-        state["model_output_shapes"] = [list(s)
-                                        for s in self.model_output_shapes]
+        state["model_output_shapes"] = [
+            list(s) for s in self.model_output_shapes
+        ]
 
-        state["stages"] = {str(idx): stage.state_dict()
-                           for idx, stage in self.stages.items()}
+        state["stages"] = {
+            str(idx): stage.state_dict()
+            for idx, stage in self.stages.items()
+        }
 
         return state
 
@@ -231,18 +249,24 @@ class PipelineConfig():
 
     @classmethod
     def fromDict(cls, state) -> "PipelineConfig":
-        stages = {int(idx): StageConfig.fromDict(s)
-                  for idx, s in state['stages'].items()}
+        stages = {
+            int(idx): StageConfig.fromDict(s)
+            for idx, s in state['stages'].items()
+        }
         depth = state['depth']
-        basic_blocks = [deserialize_python_class_or_function(p)
-                        for p in state['basic_blocks']]
+        basic_blocks = [
+            deserialize_python_class_or_function(p)
+            for p in state['basic_blocks']
+        ]
         config = cls(state['batch_dim'], depth, basic_blocks)
         config.model_inputs = state['model_inputs']
-        config.model_input_shapes = [torch.Size(s)
-                                     for s in state['model_input_shapes']]
+        config.model_input_shapes = [
+            torch.Size(s) for s in state['model_input_shapes']
+        ]
         config.model_outputs = state['model_outputs']
-        config.model_output_shapes = [torch.Size(s)
-                                      for s in state['model_output_shapes']]
+        config.model_output_shapes = [
+            torch.Size(s) for s in state['model_output_shapes']
+        ]
         config.stages = stages
         return config
 
@@ -258,9 +282,9 @@ class PipelineConfig():
 
 
 class StageConfig():
-    
+
     DEFAULT_BATCH_SIZE = 1
-    
+
     def __init__(self, batch_dim: int, stage_class: nn.Module):
         self.batch_dim = batch_dim
         self.inputs = []
@@ -270,15 +294,19 @@ class StageConfig():
         self.devices = []
         self._stage_class = stage_class
 
-    def add_input(self, input_name: str, shape: Tuple[int, ...]) -> "StageConfig":
+    def add_input(self, input_name: str,
+                  shape: Tuple[int, ...]) -> "StageConfig":
         self.inputs.append(input_name)
-        shape = shape[:self.batch_dim] + (self.DEFAULT_BATCH_SIZE,) + shape[self.batch_dim + 1:]
+        shape = shape[:self.batch_dim] + (
+            self.DEFAULT_BATCH_SIZE, ) + shape[self.batch_dim + 1:]
         self.input_shapes.append(torch.Size(shape))
         return self
 
-    def add_output(self, output_name: str, shape: Tuple[int, ...]) -> "StageConfig":
+    def add_output(self, output_name: str,
+                   shape: Tuple[int, ...]) -> "StageConfig":
         self.outputs.append(output_name)
-        shape = shape[:self.batch_dim] + (self.DEFAULT_BATCH_SIZE,) + shape[self.batch_dim + 1:]
+        shape = shape[:self.batch_dim] + (
+            self.DEFAULT_BATCH_SIZE, ) + shape[self.batch_dim + 1:]
         self.output_shapes.append(torch.Size(shape))
         return self
 
@@ -300,25 +328,26 @@ class StageConfig():
 
         return no_duplicates and has_in_out and disjoint and has_ranks
 
-    def simple_realize(self, layers: Dict[str, Tensor], tensors: Dict[str, Tensor], batch_size: int) -> nn.Module:
+    def simple_realize(self, layers: Dict[str, Tensor],
+                       tensors: Dict[str, Tensor],
+                       batch_size: int) -> nn.Module:
         assert self.isValid()
         return self._stage_class(layers, tensors)
 
     def change_batch(self, batch_size, for_replicated=True):
-        
+
         if for_replicated:
             n_devices = len(self.devices)
         else:
             n_devices = 1
-        
+
         assert batch_size % n_devices == 0
 
         for shape in self.input_shapes:
             shape[self.batch_dim] = batch_size // n_devices
-        
+
         for shape in self.output_shapes:
             shape[self.batch_dim] = batch_size // n_devices
-        
 
     def state_dict(self) -> Dict:
         state = dict()
@@ -344,7 +373,6 @@ class StageConfig():
         module_path, stage_name = stage_path.rsplit(".", 1)
         stage_module = importlib.import_module(module_path)
         stage_cls = getattr(stage_module, stage_name)
-
 
         devices = [torch.device(device) for device in state['devices']]
 
@@ -390,4 +418,4 @@ def deserialize_python_class_or_function(path: str):
 #   input_shapes should match the order of inputs
 #   outputs should match generated code
 #   output_shapes should match the order of outputs
-    #   devices list of devices
+#   devices list of devices
