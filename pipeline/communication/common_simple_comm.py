@@ -37,11 +37,12 @@ class SimpleCommBase(CommunicationHandlerBase):
         self.send_ranks = send_ranks
         self.tensor_tags = tensor_tags
         self.TOTAL_TAGS = TOTAL_TAGS
+        
+        # Optional
         self.target_tensor_names = target_tensor_names
         self.ranks_in_previous_stage = ranks_in_previous_stage
-        self.num_ranks_in_previous_stage = len(ranks_in_previous_stage)
         self.ranks_in_next_stage = ranks_in_next_stage
-        self.num_ranks_in_next_stage = len(ranks_in_next_stage)
+
         self.cpu = cpu
         self.device = device
         self.world_size = world_size
@@ -56,7 +57,7 @@ class SimpleCommBase(CommunicationHandlerBase):
                                 for i, v in self.receive_ranks.items()
                                 if not (i in target_tensor_names)]
 
-        self._register_target_tensor()
+        self._register_target_tensor()  # If needed.
 
         self.logger.debug(f"Send ranks: {self.send_ranks}")
         self.logger.debug(f"Receive ranks: {self.receive_ranks}")
@@ -81,10 +82,10 @@ class SimpleCommBase(CommunicationHandlerBase):
         # However, when using dataloaders are in different machines,
         # we need to test and assert that the loading and shuffling is done in the same order.
         for target_tensor_name in self.target_tensor_names:
-            if self.num_ranks_in_previous_stage > 0:
+            if len(self.ranks_in_previous_stage) > 0:
                 self.receive_ranks[
                     target_tensor_name] = self.ranks_in_previous_stage
-            if self.num_ranks_in_next_stage > 0:
+            if len(self.ranks_in_next_stage) > 0:
                 self.send_ranks[target_tensor_name] = self.ranks_in_next_stage
 
     def set_tensor_shapes(self, tensor_shapes):

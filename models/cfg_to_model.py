@@ -1,7 +1,11 @@
 import importlib
+
 from .normal import WideResNet, Bottleneck, ResNet
 from .simple_partitioning_config import PipelineConfig
+from inspect import signature
 
+from torch.nn import Module
+from typing import Dict, Tuple
 _PARTITIONED_MODELS_PACKAGE = "models.partitioned"
 
 # HACK: called with a ready model instance.
@@ -89,32 +93,12 @@ def get_partitioning(cfg, model_instance=None):
     createConfig = generated.createConfig if hasattr(
         generated, "createConfig") else generated.create_pipeline_configuration
 
-    # Create instance of normal model
-    if model_instance:
-        # assert isinstance(model_instance, normal_model_class(cfg))
-        pass
+    if hasattr(generated, "createConfig"):
+        partitioning_version_to_use = 0
+    elif len(signature(createConfig) == 1):
+        partitioning_version_to_use = 1
     else:
-        model_instance = create_normal_model_instance(cfg)
-
-    # Get Config
-    # Explicitly ugly
-    ON_CPU = True
-    configs = createConfig(model_instance, partitions_only=False, DEBUG=ON_CPU)
-
-    return configs
-
-
-def get_partitioning_v2(cfg, model_instance=None):
-    # from pytorch_Gpipe.utils import layerDict, tensorDict
-
-    GET_PARTITIONS_ON_CPU = True
-
-    generated_file_name = CFG_TO_GENERATED_FILE_NAME[cfg]
-    generated = importlib.import_module("." + generated_file_name,
-                                        package=_PARTITIONED_MODELS_PACKAGE)
-    create_pipeline_configuration = generated.create_pipeline_configuration
-    layerDict = generated.layerDict
-    tensorDict = generated.tensorDict
+        partitioning_version_to_use = 0  # same stuff different name
 
     # Create instance of normal model
     if model_instance:
@@ -123,20 +107,38 @@ def get_partitioning_v2(cfg, model_instance=None):
     else:
         model_instance = create_normal_model_instance(cfg)
 
-    config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
-    pipe_config = PipelineConfig.fromDict(config)
+    if partitioning_version_to_use == 0:
 
-    depth = pipe_config.depth
-    blocks = pipe_config.basic_blocks
-    layers = layerDict(model_instance, depth=depth, basic_blocks=blocks)
-    tensors = tensorDict(model_instance)
+        # Get Config
+        # Explicitly ugly
+        ON_CPU = True
+        configs = createConfig(model_instance,
+                               partitions_only=False,
+                               DEBUG=ON_CPU)
 
-    old_config = pipe_config._to_old_format(layers, tensors)
+        return configs
 
-    return old_config
+    elif partitioning_version_to_use == 1:
+        raise NotImplementedError()
+        ON_CPU = True
+
+        layerDict = generated.layerDict
+        tensorDict = generated.tensorDict
+
+        config = createConfig(DEBUG=ON_CPU)
+        pipe_config = PipelineConfig.fromDict(config)
+
+        depth = pipe_config.depth
+        blocks = pipe_config.basic_blocks
+        layers = layerDict(model_instance, depth=depth, basic_blocks=blocks)
+        tensors = tensorDict(model_instance)
+
+        old_config = pipe_config._to_old_format(layers, tensors)
+        return old_config
 
 
-def get_partitioning_v3(cfg, my_rank, batch_size, model_instance=None):
+def get_partitioning_v3(cfg, my_rank, batch_size, model_instance=None
+                        ) -> Tuple[PipelineConfig, Dict, Module]:
     GET_PARTITIONS_ON_CPU = True
 
     generated_file_name = CFG_TO_GENERATED_FILE_NAME[cfg]
@@ -164,7 +166,7 @@ def get_partitioning_v3(cfg, my_rank, batch_size, model_instance=None):
     model = pipe_config.realize_stage_for_rank(layers, tensors, batch_size,
                                                my_rank)
 
-    return pipe_config, model
+    return pipe_config, config, model
 
 
 # if __name__ == "__main__":

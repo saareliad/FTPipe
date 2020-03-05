@@ -35,6 +35,9 @@ import time
 import random
 import math
 
+from models import parse_config
+
+
 # TODO: support multiple servers,
 # TODO heterogenous servers
 # TODO: support mix precision, in the future
@@ -291,88 +294,6 @@ def create_comm_handler(args, comm_init_args,
 
     return comm_handler
 
-
-def tensor_tags_from_config(config,
-                            num_chunks,
-                            target_tensor_names=None,
-                            GRAD_UGLY_SHAMEFUL_NAME="_grad"):
-    def config_to_tuples_array(config):
-        def config_to_tuples_generator(config):
-            """ allows iterating with the tuple: (stage_id, inputs, outputs) """
-            for i, v in config.items():
-                yield i, v['inputs'], v['outputs']
-
-        return np.array(list(config_to_tuples_generator(config)))
-
-    # Note: same tags for all proccess
-
-    tensor_tags = {}
-    tensor_tag = 1
-    model = config_to_tuples_array(config)
-
-    for (_, input_tensors, output_tensors) in model:
-        for input_tensor in input_tensors:
-            if input_tensor not in tensor_tags:
-                tensor_tags[input_tensor] = tensor_tag
-                tensor_tag += num_chunks
-        for output_tensor in output_tensors:
-            if output_tensor not in tensor_tags:
-                tensor_tags[output_tensor] = tensor_tag
-                tensor_tag += num_chunks
-    # Create different tags for gradients
-    for (_, input_tensors, output_tensors) in model:
-        for input_tensor in input_tensors:
-            input_tensor += GRAD_UGLY_SHAMEFUL_NAME
-            if input_tensor not in tensor_tags:
-                tensor_tags[input_tensor] = tensor_tag
-                tensor_tag += num_chunks
-        for output_tensor in output_tensors:
-            output_tensor += GRAD_UGLY_SHAMEFUL_NAME
-            if output_tensor not in tensor_tags:
-                tensor_tags[output_tensor] = tensor_tag
-                tensor_tag += num_chunks
-
-    if target_tensor_names:
-        for target_tensor_name in sorted(target_tensor_names):
-            tensor_tags[target_tensor_name] = tensor_tag
-            tensor_tag += num_chunks
-
-    # tensor_tags["ack"] = tensor_tag
-    tensor_tag += num_chunks
-
-    return tensor_tags, tensor_tag
-
-
-def get_my_send_recv_ranks(config, stage, stage_to_rank_map=None):
-    def ranks_in_stage(given_stage):
-        if stage_to_rank_map:
-            return stage_to_rank_map[given_stage]
-        else:
-            return [given_stage]
-
-    # TODO: We assume this is same order with Alon's code/config, after poped some stuff.
-    # Alon config is outside of the project, this is dangerous programing...
-    receive_ranks = OrderedDict()
-    send_ranks = OrderedDict()
-
-    for i in range(len(config)):
-        for j in range(i + 1, len(config)):
-            # Update only for this stage...
-            if i != stage and j != stage:
-                continue
-
-            stage_i = config[i]
-            stage_j = config[j]
-            for tensor_name in stage_i['outputs']:
-                if tensor_name in stage_j['inputs']:
-                    if stage == j:
-                        receive_ranks[tensor_name] = ranks_in_stage(i)
-                    else:
-                        send_ranks[tensor_name] = ranks_in_stage(j)
-
-    return send_ranks, receive_ranks
-
-
 def infer_dtypes_and_shapes(config,
                             bs_train,
                             bs_test,
@@ -455,13 +376,13 @@ def get_comm_init_args(args,
     if target_tensor_names is None:
         target_tensor_names = set()
 
-    tensor_tags, TOTAL_TAGS = tensor_tags_from_config(
+    tensor_tags, TOTAL_TAGS = parse_config.tensor_tags_from_config(
         config,
         args.num_chunks,
         target_tensor_names,
         GRAD_UGLY_SHAMEFUL_NAME="_grad")
 
-    send_ranks, receive_ranks = get_my_send_recv_ranks(
+    send_ranks, receive_ranks = parse_config.get_my_send_recv_ranks(
         config, stage, stage_to_rank_map=stage_to_rank_map)
 
     # Create:
@@ -898,9 +819,8 @@ def main():
     if NO_DP:
         args.num_stages = len(configs)
         args.stage = args.local_rank
-        is_first_partition = args.local_rank == 0
-        is_last_partition = args.local_rank == len(configs) - 1
-        # args.num_ranks = len(configs)
+        is_first_partition = args.stage == 0
+        is_last_partition = args.stage == args.num_stages - 1
     else:
         raise NotImplementedError()
 
@@ -1016,6 +936,7 @@ def main():
                                                        just_for_stage=None)
     else:
         raise NotImplementedError("In progress")
+        # parse.
         # configs['model inputs'] = model_inputs  # We don't use thous.
         # configs['model outputs'] = model_outputs
 
@@ -1049,7 +970,7 @@ def main():
 
     partition = SinglePartitionManager(
         args.stage,
-        configs,
+        args.num_stages,
         configs[args.stage]['model'],
         comm_handler,
         work_scheduler,

@@ -131,12 +131,15 @@ class PipelineConfig():
 
         return shapes
 
-    def change_batch(self, batch_size):
+    def change_batch(self, batch_size, for_replicated=True):
         for shape in self.model_input_shapes:
             shape[self.batch_dim] = batch_size
 
         for shape in self.model_output_shapes:
             shape[self.batch_dim] = batch_size
+        
+        for stage in self.stages.values():
+            stage.change_batch(batch_size, for_replicated=for_replicated)
 
     def isValid(self) -> bool:
         model_inputs = self.model_inputs
@@ -207,26 +210,11 @@ class PipelineConfig():
 
     def realize_stage_for_rank(self, layers: Dict[str, Tensor],
                                tensors: Dict[str, Tensor], batch_size: int,
-                               my_rank: int):
+                               my_rank: int,
+                               for_replicated=True):
         stage_id = self.rank_to_stage_idx(my_rank)
         return self.stages[stage_id].simple_realize(layers, tensors,
-                                                    batch_size)
-
-    def _to_old_analysis_format(self, layers, tensors) -> Dict:
-        old_config = dict()
-
-        old_config['model inputs'] = self.model_inputs
-        old_config['model outputs'] = self.model_outputs
-
-        for idx, stage in self.stages.items():
-            stage_config = dict()
-            stage_config['inputs'] = stage.inputs
-            stage_config['outputs'] = stage.outputs
-            model = stage._stage_class(layers, tensors).to(stage.devices[0])
-            stage_config['model'] = model
-            old_config[idx] = stage_config
-
-        return old_config
+                                                    batch_size, for_replicated=for_replicated)
 
     def state_dict(self) -> Dict:
         state = dict()
@@ -346,8 +334,10 @@ class StageConfig():
 
     def simple_realize(self, layers: Dict[str, Tensor],
                        tensors: Dict[str, Tensor],
-                       batch_size: int) -> nn.Module:
+                       batch_size: int,
+                       for_replicated=True) -> nn.Module:
         assert self.isValid()
+        self.change_batch(batch_size, for_replicated=for_replicated)
         return self._stage_class(layers, tensors)
 
     def change_batch(self, batch_size, for_replicated=True):

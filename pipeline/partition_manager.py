@@ -24,7 +24,7 @@ class SinglePartitionManager:
     PROBLEMATIC_POLICY = 'SAME'
     # PROBLEMATIC_POLICY = 'SKIP'
 
-    def __init__(self, stage, configs: Dict, partition: torch.nn.Module,
+    def __init__(self, stage, num_stages, partition: torch.nn.Module,
                  comm_handler: CommunicationHandlerBase,
                  work_scheduler: WorkScheduler,
                  training_tensor_shapes, eval_tensor_shapes, training_tensor_dtypes,  # FIXME
@@ -96,7 +96,7 @@ class SinglePartitionManager:
         self.is_last_partition = is_last_partition
         self.is_first_partition = is_first_partition
         self.stage = stage
-        self.num_stages = len(configs)
+        self.num_stages = num_stages
 
         self.step_every = step_every
         self.work_scheduler = work_scheduler(step_every)
