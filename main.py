@@ -242,8 +242,8 @@ def parse_json_config(args, config=None):
         setattr(args, key, value)
 
     # Explicit replace (to get help from argparse)
-    if hasattr(output, 'optimizer'):
-        if hasattr(output['optimizer'], 'type'):
+    if output.get('optimizer', False):
+        if output['optimizer'].get('type', False):
             args.optimizer_type = output['optimizer']['type']
 
 
@@ -1034,7 +1034,6 @@ def main():
     trainer_cls = AVAILABLE_TRAINERS.get(args.trainer['type'])
     task_cls = AVAILABLE_TASKS.get(args.task)
     optimizer_cls = AVAILBALE_OPTIMIZERS.get(args.optimizer_type)
-    print(optimizer_cls.__name__)
     statistics = AVAILBALE_STATS.get(args.statistics)
     assert not (statistics is None)
     work_scheduler = AVAILABLE_WORK_SCHEDULERS.get(args.work_scheduler)
