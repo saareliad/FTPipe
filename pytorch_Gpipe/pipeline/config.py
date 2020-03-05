@@ -3,14 +3,12 @@ from torch import Tensor
 import torch.nn as nn
 from copy import deepcopy
 from typing import Optional, Dict, Iterable, Tuple, List
-from collections import defaultdict
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
 import inspect
 import json
 import os
 import importlib
-from itertools import chain
 
 from .simple_config import PipelineConfig as BasePipelineConfig
 from .simple_config import StageConfig as BaseStageConfig
@@ -21,36 +19,49 @@ class PipelineConfig(BasePipelineConfig):
     Extention to BasicPipelineConfig.
     This class handles GPipe implementation specific stuff. 
     """
-    def __init__(self, batch_dim: int, depth: int, basic_blocks: Tuple[nn.Module, ...]):
+    def __init__(self, batch_dim: int, depth: int,
+                 basic_blocks: Tuple[nn.Module, ...]):
         super().__init__(batch_dim, depth, basic_blocks)
 
     @property
     def master_stage(self) -> "StageConfig":
-        stage = StageConfig(self.batch_dim, nn.Identity,
-                            None, dict(), None, dict())
+        stage = StageConfig(self.batch_dim, nn.Identity, None, dict(), None,
+                            dict())
         stage.input_shapes = self.model_input_shapes
         stage.inputs = self.model_inputs
         stage.outputs = self.model_outputs
         stage.output_shapes = self.model_output_shapes
         stage.devices = [torch.device("cpu")]
 
-
-    def add_stage(self, stage_class: nn.Module, optimizer_cls: Optional[Optimizer] = None, optimizer_args: Dict = dict(),
-                  LR_scheduler_cls: Optional[_LRScheduler] = None, LR_scheduler_args: Dict = dict()) -> "StageConfig":
-        stage = StageConfig(self.batch_dim, stage_class,
-                            optimizer_cls=optimizer_cls, optimizer_args=optimizer_args,
-                            LR_scheduler_cls=LR_scheduler_cls, lr_scheduler_args=LR_scheduler_args)
+    def add_stage(
+        self,
+        stage_class: nn.Module,
+        optimizer_cls: Optional[Optimizer] = None,
+        optimizer_args: Dict = dict(),
+        LR_scheduler_cls: Optional[_LRScheduler] = None,
+        LR_scheduler_args: Dict = dict()
+    ) -> "StageConfig":
+        stage = StageConfig(self.batch_dim,
+                            stage_class,
+                            optimizer_cls=optimizer_cls,
+                            optimizer_args=optimizer_args,
+                            LR_scheduler_cls=LR_scheduler_cls,
+                            lr_scheduler_args=LR_scheduler_args)
         self.stages[self.n_stages] = stage
         return stage
 
-    def split(self, stage_idxs: Iterable[int]) -> Tuple["PipelineConfig", "PipelineConfig"]:
+    def split(
+        self, stage_idxs: Iterable[int]
+    ) -> Tuple["PipelineConfig", "PipelineConfig"]:
         stages_to_remove = set(stage_idxs)
         L = PipelineConfig(self.batch_dim, self.depth, self.basic_blocks)
         R = PipelineConfig(self.batch_dim, self.depth, self.basic_blocks)
 
         cut = [deepcopy(self.stages[idx]) for idx in stages_to_remove]
-        remaining = [deepcopy(self.stages[idx]) for idx in self.stages
-                     if idx not in stages_to_remove]
+        remaining = [
+            deepcopy(self.stages[idx]) for idx in self.stages
+            if idx not in stages_to_remove
+        ]
 
         new_all_outputs = {o for stage in cut for o in stage.outputs}
         new_all_inputs = {i for stage in cut for i in stage.inputs}
@@ -99,12 +110,18 @@ class PipelineConfig(BasePipelineConfig):
             i += idx + 1
         return s_r
 
-    def realize(self, layers: Dict[str, Tensor], tensors: Dict[str, Tensor], batch_size: int) -> Dict[int, Tuple[int, nn.Module, torch.device, Optional[Optimizer], Optional[_LRScheduler], int]]:
+    def realize(
+        self, layers: Dict[str, Tensor], tensors: Dict[str,
+                                                       Tensor], batch_size: int
+    ) -> Dict[int, Tuple[int, nn.Module, torch.device, Optional[Optimizer],
+                         Optional[_LRScheduler], int]]:
         assert self.isValid()
         i = 0
         rank_to_model_args = dict()
         for stage_id in range(self.n_stages):
-            for idx, (model, device, optimizer, lr_sched, split_size) in enumerate(self.stages[stage_id].realize(layers, tensors, batch_size)):
+            for idx, (model, device, optimizer, lr_sched,
+                      split_size) in enumerate(self.stages[stage_id].realize(
+                          layers, tensors, batch_size)):
                 rank = i + idx
                 rank_to_model_args[rank] = (idx, model, device, optimizer,
                                             lr_sched, split_size)
@@ -117,50 +134,42 @@ class PipelineConfig(BasePipelineConfig):
             stage = self.stages[stage_id]
             if rank < i + stage.n_ranks:
                 local_rank = rank - i
-                return stage.create_rank(layers, tensors, batch_size, local_rank)
+                return stage.create_rank(layers, tensors, batch_size,
+                                         local_rank)
             else:
                 i += stage.n_ranks
-
-    def _to_old_analysis_format(self, layers, tensors) -> Dict:
-        old_config = dict()
-
-        old_config['model inputs'] = self.model_inputs
-        old_config['model outputs'] = self.model_outputs
-
-        for idx, stage in self.stages.items():
-            stage_config = dict()
-            stage_config['inputs'] = stage.inputs
-            stage_config['outputs'] = stage.outputs
-            model = stage._stage_class(layers, tensors).to(stage.devices[0])
-            stage_config['model'] = model
-            old_config[idx] = stage_config
-
-        return old_config
 
     def state_dict(self) -> Dict:
 
         state = super().state_dict()
 
-        state["stages"] = {str(idx): stage.state_dict()
-                           for idx, stage in self.stages.items()}
+        state["stages"] = {
+            str(idx): stage.state_dict()
+            for idx, stage in self.stages.items()
+        }
 
         return state
 
-
     @classmethod
     def fromDict(cls, state) -> "PipelineConfig":
-        stages = {int(idx): StageConfig.fromDict(s)
-                  for idx, s in state['stages'].items()}
+        stages = {
+            int(idx): StageConfig.fromDict(s)
+            for idx, s in state['stages'].items()
+        }
         depth = state['depth']
-        basic_blocks = [deserialize_python_class_or_function(p)
-                        for p in state['basic_blocks']]
+        basic_blocks = [
+            deserialize_python_class_or_function(p)
+            for p in state['basic_blocks']
+        ]
         config = cls(state['batch_dim'], depth, basic_blocks)
         config.model_inputs = state['model_inputs']
-        config.model_input_shapes = [torch.Size(s)
-                                     for s in state['model_input_shapes']]
+        config.model_input_shapes = [
+            torch.Size(s) for s in state['model_input_shapes']
+        ]
         config.model_outputs = state['model_outputs']
-        config.model_output_shapes = [torch.Size(s)
-                                      for s in state['model_output_shapes']]
+        config.model_output_shapes = [
+            torch.Size(s) for s in state['model_output_shapes']
+        ]
         config.stages = stages
         return config
 
@@ -176,8 +185,10 @@ class PipelineConfig(BasePipelineConfig):
 
 
 class StageConfig(BaseStageConfig):
-    def __init__(self, batch_dim: int, stage_class: nn.Module, optimizer_cls: Optional[Optimizer], optimizer_args: Dict,
-                 LR_scheduler_cls: Optional[Optimizer], lr_scheduler_args: Dict):
+    def __init__(self, batch_dim: int, stage_class: nn.Module,
+                 optimizer_cls: Optional[Optimizer], optimizer_args: Dict,
+                 LR_scheduler_cls: Optional[Optimizer],
+                 lr_scheduler_args: Dict):
 
         super().__init__(batch_dim, stage_class)
 
@@ -193,51 +204,59 @@ class StageConfig(BaseStageConfig):
 
         return optimizer
 
-    def _create_lr_scheduler(self, optimizer: Optional[Optimizer]) -> Optional[_LRScheduler]:
+    def _create_lr_scheduler(
+            self, optimizer: Optional[Optimizer]) -> Optional[_LRScheduler]:
         LR_scheduler_cls, lr_scheduler_args = self._lr_scheduler_args
         if LR_scheduler_cls:
-            assert optimizer != None
+            assert optimizer is not None
             lr_scheduler = LR_scheduler_cls(optimizer, **lr_scheduler_args)
         else:
             lr_scheduler = None
 
         return lr_scheduler
 
-    def set_optimizer(self, optimizer_class: Optimizer, optimizer_args: Dict = dict()) -> "StageConfig":
+    def set_optimizer(
+        self, optimizer_class: Optimizer, optimizer_args: Dict = dict()
+    ) -> "StageConfig":
         self._optimizer_args = (optimizer_class, optimizer_args)
         return self
 
-    def set_lr_scheduler(self, LR_scheduler_cls: Optional[Optimizer], lr_scheduler_args: Dict = dict()) -> "StageConfig":
+    def set_lr_scheduler(
+        self,
+        LR_scheduler_cls: Optional[Optimizer],
+        lr_scheduler_args: Dict = dict()
+    ) -> "StageConfig":
         self._lr_scheduler_args = (LR_scheduler_cls, lr_scheduler_args)
         return self
 
     def isValid(self) -> bool:
-        
-        if (self._lr_scheduler_args[0] != None) and self._optimizer_args[0] is None:
+
+        if (self._lr_scheduler_args[0] is not
+                None) and self._optimizer_args[0] is None:
             return False
 
         return super().isValid()
-    
-    def realize(self, layers: Dict[str, Tensor], tensors: Dict[str, Tensor], batch_size: int) -> Tuple[nn.Module, torch.device, Optional[Optimizer], Optional[_LRScheduler], int]:
+
+    def realize(
+        self, layers: Dict[str, Tensor], tensors: Dict[str,
+                                                       Tensor], batch_size: int
+    ) -> Tuple[nn.Module, torch.device, Optional[Optimizer],
+               Optional[_LRScheduler], int]:
         assert self.isValid()
         replicas = []
-        n_devices = self.devices
         for idx, device in enumerate(self.devices):
-            
-            # FIXME: deepcopy is implementation specific. in distributed program there is no reason to deepcopy.
+
             replica = deepcopy(self._stage_class(layers, tensors))
-            # FIXME: sharing memory is implementation specific.
             replica = replica.to(device=device).share_memory()
-            
-            # optimizer and lr_scheduler in config is not needed for other configurations, this should sit in another place.
+
             optimizer = self._create_optimizer(replica)
             lr_scheduler = self._create_lr_scheduler(optimizer)
-            
+
             split_size = batch_size // len(self.devices)
             if idx < batch_size % len(self.devices):
                 split_size += 1
-            replicas.append((replica, device, optimizer,
-                             lr_scheduler, split_size))
+            replicas.append(
+                (replica, device, optimizer, lr_scheduler, split_size))
         return replicas
 
     def create_rank(self, layers, tensors, batch_size, local_rank):
@@ -250,8 +269,7 @@ class StageConfig(BaseStageConfig):
                 split_size = batch_size // len(self.devices)
                 if idx < batch_size % len(self.devices):
                     split_size += 1
-                return (replica, device, optimizer,
-                        lr_scheduler, split_size)
+                return (replica, device, optimizer, lr_scheduler, split_size)
 
     def state_dict(self) -> Dict:
         state = super().state_dict()
@@ -263,10 +281,8 @@ class StageConfig(BaseStageConfig):
 
         lr_sched_type = serialize_python_class_or_function(lr_sched_cls)
 
-        state['optimizer'] = {'type': optimizer_type,
-                              'args': optimizer_args}
-        state['lr_scheduler'] = {'type': lr_sched_type,
-                                 'args': lr_sched_args}
+        state['optimizer'] = {'type': optimizer_type, 'args': optimizer_args}
+        state['lr_scheduler'] = {'type': lr_sched_type, 'args': lr_sched_args}
 
         return state
 
@@ -280,8 +296,10 @@ class StageConfig(BaseStageConfig):
         stage_module = importlib.import_module(module_path)
         stage_cls = getattr(stage_module, stage_name)
 
-        optimizer_type, optimizer_args = state['optimizer']['type'], state['optimizer']['args']
-        lr_scheduler_type, lr_scheduler_args = state['lr_scheduler']['type'], state['lr_scheduler']['args']
+        optimizer_type, optimizer_args = state['optimizer']['type'], state[
+            'optimizer']['args']
+        lr_scheduler_type, lr_scheduler_args = state['lr_scheduler'][
+            'type'], state['lr_scheduler']['args']
 
         optimizer_cls = deserialize_python_class_or_function(optimizer_type)
         lr_scheduler_cls = deserialize_python_class_or_function(
@@ -332,11 +350,11 @@ def deserialize_python_class_or_function(path: str):
 #   input_shapes should match the order of inputs
 #   outputs should match generated code
 #   output_shapes should match the order of outputs
-    #   stage_cls
-    #   optimizer
-    #       type convention is package.path/cls
-    #       args dictionary of kwargs
-    #   LR_scheduler
-    #       type convention is package.path/cls
-    #       args dictionary of kwargs
-    #   devices list of devices
+#   stage_cls
+#   optimizer
+#       type convention is package.path/cls
+#       args dictionary of kwargs
+#   LR_scheduler
+#       type convention is package.path/cls
+#       args dictionary of kwargs
+#   devices list of devices

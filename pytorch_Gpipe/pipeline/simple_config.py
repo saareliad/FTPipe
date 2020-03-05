@@ -11,7 +11,7 @@ from itertools import chain
 
 
 class PipelineConfig():
-    """ 
+    """
     Config to handle basic partitioning.
     """
 
@@ -196,7 +196,7 @@ class PipelineConfig():
         return self.stages[stage_id].simple_realize(layers, tensors,
                                                     batch_size)
 
-    def _to_old_analysis_format(self, layers, tensors) -> Dict:
+    def _to_old_format(self, layers, tensors) -> Dict:
         old_config = dict()
 
         old_config['model inputs'] = self.model_inputs
@@ -294,16 +294,16 @@ class StageConfig():
         self.devices = []
         self._stage_class = stage_class
 
-    def add_input(self, input_name: str,
-                  shape: Tuple[int, ...]) -> "StageConfig":
+    def add_input(self, input_name: str, shape: Tuple[int,
+                                                      ...]) -> "StageConfig":
         self.inputs.append(input_name)
         shape = shape[:self.batch_dim] + (
             self.DEFAULT_BATCH_SIZE, ) + shape[self.batch_dim + 1:]
         self.input_shapes.append(torch.Size(shape))
         return self
 
-    def add_output(self, output_name: str,
-                   shape: Tuple[int, ...]) -> "StageConfig":
+    def add_output(self, output_name: str, shape: Tuple[int,
+                                                        ...]) -> "StageConfig":
         self.outputs.append(output_name)
         shape = shape[:self.batch_dim] + (
             self.DEFAULT_BATCH_SIZE, ) + shape[self.batch_dim + 1:]
@@ -328,8 +328,8 @@ class StageConfig():
 
         return no_duplicates and has_in_out and disjoint and has_ranks
 
-    def simple_realize(self, layers: Dict[str, Tensor],
-                       tensors: Dict[str, Tensor],
+    def simple_realize(self, layers: Dict[str, Tensor], tensors: Dict[str,
+                                                                      Tensor],
                        batch_size: int) -> nn.Module:
         assert self.isValid()
         return self._stage_class(layers, tensors)

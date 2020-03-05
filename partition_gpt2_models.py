@@ -182,7 +182,8 @@ def node_weight_function(node: Node):
 
 def edge_weight_function(bw_GBps):
     def f(u: Node, v: Node):
-        if u.type is NodeTypes.CONSTANT or (u.valueType() in [int, None] or u.shape == (torch.Size([]),)):
+        if u.type is NodeTypes.CONSTANT or (u.valueType() in [int, None]
+                                            or u.shape == (torch.Size([]), )):
             # no constant or scalars on boundries
             return 1000 * MULT_FACTOR
 
@@ -196,6 +197,7 @@ def edge_weight_function(bw_GBps):
         # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
         w = max(1, int(MULT_FACTOR * (volume / bw_GBps)))
         return w
+
     return f
 
 
@@ -255,8 +257,9 @@ def partition_model(args, train_dataset, model, tokenizer, lm=True):
     if not args.no_analysis:
         depth = pipe_config.depth
         blocks = pipe_config.basic_blocks
-        analysis_config = pipe_config._to_old_analysis_format(layerDict(model, depth=depth, basic_blocks=blocks),
-                                                              tensorDict(model))
+        analysis_config = pipe_config._to_old_format(
+            layerDict(model, depth=depth, basic_blocks=blocks),
+            tensorDict(model))
 
         # TODO assumes batch is first
         shape = (args.analysis_batch_size, inputs.shape[1])
@@ -303,7 +306,8 @@ def main():
     tr_params.add_argument(
         "--mlm",
         action='store_true',
-        help="Train with masked-language modeling loss instead of language modeling."
+        help=
+        "Train with masked-language modeling loss instead of language modeling."
     )
     tr_params.add_argument(
         "--mlm_probability",
@@ -314,19 +318,22 @@ def main():
         "--config_name",
         default="",
         type=str,
-        help="Optional pretrained config name or path if not the same as model_name_or_path"
+        help=
+        "Optional pretrained config name or path if not the same as model_name_or_path"
     )
     tr_params.add_argument(
         "--tokenizer_name",
         default="",
         type=str,
-        help="Optional pretrained tokenizer name or path if not the same as model_name_or_path"
+        help=
+        "Optional pretrained tokenizer name or path if not the same as model_name_or_path"
     )
     tr_params.add_argument(
         "--cache_dir",
         default="",
         type=str,
-        help="Optional directory to store the pre-trained models downloaded from s3 (instread of the default one)"
+        help=
+        "Optional directory to store the pre-trained models downloaded from s3 (instread of the default one)"
     )
     tr_params.add_argument(
         "--block_size",
@@ -358,7 +365,8 @@ def main():
         '--model_too_big',
         action='store_true',
         default=False,
-        help="if the model is too big run the whole partitioning process on CPU, and drink a cup of coffee in the meantime"
+        help=
+        "if the model is too big run the whole partitioning process on CPU, and drink a cup of coffee in the meantime"
     )
     parser.add_argument('--n_partitions', type=int, default=4)
     parser.add_argument('--output_file', default='gpt2')
@@ -370,7 +378,8 @@ def main():
         '--n_iter',
         type=int,
         default=10,
-        help="number of iteration used in order to profile the network and run analysis"
+        help=
+        "number of iteration used in order to profile the network and run analysis"
     )
     parser.add_argument(
         '--bandwidth_gps',
@@ -410,10 +419,11 @@ def main():
                         default=False,
                         action="store_true",
                         help="Partition a model with LM head")
-    parser.add_argument("--output_past",
-                        default=False,
-                        action="store_true",
-                        help="whether to return all hidden states or just the last  one")
+    parser.add_argument(
+        "--output_past",
+        default=False,
+        action="store_true",
+        help="whether to return all hidden states or just the last  one")
 
     args = parser.parse_args()
 
@@ -437,7 +447,8 @@ def main():
 
     # Load pretrained model and tokenizer
     model_class_dict_to_use = MODEL_CLASSES_LM_HEAD if args.lmhead else MODEL_CLASSES
-    config_class, model_class, tokenizer_class = model_class_dict_to_use[args.model_type]
+    config_class, model_class, tokenizer_class = model_class_dict_to_use[
+        args.model_type]
     config = config_class.from_pretrained(
         args.config_name if args.config_name else args.model_name_or_path,
         cache_dir=args.cache_dir if args.cache_dir else None)

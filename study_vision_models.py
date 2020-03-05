@@ -7,7 +7,6 @@ from misc import run_analysis, run_partitions
 from pytorch_Gpipe.utils import _extract_volume_from_sizes, layerDict, tensorDict
 from pytorch_Gpipe import PipelineConfig, pipe_model
 
-
 _RESENETS = dict(resnet50_imagenet=dict(
     block=ResNet.Bottleneck, layers=[3, 4, 6, 3], num_classes=1000))
 
@@ -105,7 +104,8 @@ def node_weight_function(node: Node):
 
 def edge_weight_function(bw_GBps):
     def f(u: Node, v: Node):
-        if u.type is NodeTypes.CONSTANT or (u.valueType() in [int, None] or u.shape == (torch.Size([]),)):
+        if u.type is NodeTypes.CONSTANT or (u.valueType() in [int, None]
+                                            or u.shape == (torch.Size([]), )):
             # no constant or scalars on boundries
             return 1000 * MULT_FACTOR
 
@@ -119,6 +119,7 @@ def edge_weight_function(bw_GBps):
         # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
         w = max(1, int(MULT_FACTOR * (volume / bw_GBps)))
         return w
+
     return f
 
 
@@ -136,7 +137,8 @@ def parse_cli():
         '--model_too_big',
         action='store_true',
         default=False,
-        help="if the model is too big run the whole partitioning process on CPU, "
+        help=
+        "if the model is too big run the whole partitioning process on CPU, "
         "and drink a cup of coffee in the meantime")
     parser.add_argument('-p', '--n_partitions', type=int, default=4)
     parser.add_argument('-o', '--output_file', default='wrn_16x4')
@@ -148,7 +150,8 @@ def parse_cli():
         '--n_iter',
         type=int,
         default=100,
-        help="number of iteration used in order to profile the network and run analysis"
+        help=
+        "number of iteration used in order to profile the network and run analysis"
     )
     parser.add_argument(
         '--bw',
@@ -211,17 +214,20 @@ def parse_cli():
     metis_opts.add_argument(
         '--metis_niter',
         type=int,
-        help="Specifies the number of iterations for the refinement algorithms at each stage of the uncoarsening process."
+        help=
+        "Specifies the number of iterations for the refinement algorithms at each stage of the uncoarsening process."
         "Default is 10.")
     metis_opts.add_argument(
         '--nseps',
         type=int,
-        help="Specifies the number of different separators that it will compute at each level of nested dissection."
+        help=
+        "Specifies the number of different separators that it will compute at each level of nested dissection."
         "The final separator that is used is the smallest one. Default is 1.")
     metis_opts.add_argument(
         "--ncuts",
         type=int,
-        help="Specifies the number of different partitionings that it will compute."
+        help=
+        "Specifies the number of different partitionings that it will compute."
         " The final partitioning is the one that achieves the best edgecut or communication volume."
         "Default is 1.")
     metis_opts.add_argument(
@@ -336,16 +342,16 @@ def single_partitioning_loop_with_override(args, METIS_opt, **override_dict):
 
     if GET_PARTITIONS_ON_CPU:
         sample = sample.to('cpu')
-    config = create_pipeline_configuration(model,
-                                           DEBUG=GET_PARTITIONS_ON_CPU)
+    config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
 
     pipe_config = PipelineConfig.fromDict(config)
 
     if not (args.no_test_run and args.no_analysis):
         depth = pipe_config.depth
         blocks = pipe_config.basic_blocks
-        analysis_config = pipe_config._to_old_analysis_format(layerDict(model, depth=depth, basic_blocks=blocks),
-                                                              tensorDict(model))
+        analysis_config = pipe_config._to_old_format(
+            layerDict(model, depth=depth, basic_blocks=blocks),
+            tensorDict(model))
 
     # Test # TODO: can do it on GPU...
     if not args.no_test_run:
