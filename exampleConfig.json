@@ -1,5 +1,6 @@
 {
   "batch_dim": 0,
+  "batch_size": 200,
   "depth": -1,
   "basic_blocks": ["torch.nn.modules.linear.Linear"],
   "model_inputs": ["input0"],
@@ -13,6 +14,7 @@
   "stages": {
     "0": {
       "batch_dim": 0,
+      "batch_size": 200,
       "inputs": ["input0"],
       "outputs": ["output2"],
       "input_shapes": [[1, 100]],
@@ -24,14 +26,11 @@
           "lr": 0.001
         }
       },
-      "lr_scheduler": {
-        "type": "",
-        "args": {}
-      },
       "devices": ["cpu"]
     },
     "1": {
       "batch_dim": 0,
+      "batch_size": 200,
       "inputs": ["input0"],
       "outputs": ["t0"],
       "input_shapes": [[1, 100]],
@@ -41,14 +40,11 @@
         "type": "torch.optim.adadelta.Adadelta",
         "args": {}
       },
-      "lr_scheduler": {
-        "type": "",
-        "args": {}
-      },
       "devices": ["cpu", "cpu"]
     },
     "2": {
       "batch_dim": 0,
+      "batch_size": 200,
       "inputs": ["t0"],
       "outputs": ["t1"],
       "input_shapes": [[1, 100]],
@@ -58,14 +54,11 @@
         "type": "torch.optim.adamax.Adamax",
         "args": {}
       },
-      "lr_scheduler": {
-        "type": "",
-        "args": {}
-      },
       "devices": ["cpu", "cpu", "cpu", "cpu"]
     },
     "3": {
       "batch_dim": 0,
+      "batch_size": 200,
       "inputs": ["t1"],
       "outputs": ["output0", "output1"],
       "input_shapes": [[1, 100]],
