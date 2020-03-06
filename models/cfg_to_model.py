@@ -83,6 +83,25 @@ def normal_model_class(cfg):
     return MODEL_CFG_TO_SAMPLE_MODEL[cfg]
 
 
+def infer_partitioning_config_version(cfg):
+
+    generated_file_name = CFG_TO_GENERATED_FILE_NAME[cfg]
+    generated = importlib.import_module("." + generated_file_name,
+                                        package=_PARTITIONED_MODELS_PACKAGE)
+
+    createConfig = generated.createConfig if hasattr(
+        generated, "createConfig") else generated.create_pipeline_configuration
+
+    if hasattr(generated, "createConfig"):
+        partitioning_version_to_use = 0
+    elif len(signature(createConfig) == 1):
+        partitioning_version_to_use = 1
+    else:
+        partitioning_version_to_use = 0  # same stuff different name
+
+    return partitioning_version_to_use
+
+
 # TODO: for transfomers, we need to also get the tokenizer.
 def get_partitioning(cfg, model_instance=None):
     # Import generated model

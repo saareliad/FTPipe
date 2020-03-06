@@ -682,29 +682,56 @@ def main():
     device = get_device(args)
     if not args.cpu:
         torch.cuda.set_device(device)
+    
+    CONFIG_VERSION = models.infer_partitioning_config_version(args.model)
+    
+    if CONFIG_VERSION == 0:
+        configs, dataset_keywords = parse_old_config.OldPartitioningConfigParser.get_configs_and_dataset_keywords(
+            args.model, args.task)
 
-    configs, dataset_keywords = parse_old_config.OldPartitioningConfigParser.get_configs_and_dataset_keywords(
-        args.model, args.task)
+        train_dl, test_dl, samplers = get_dataloaders(args, **dataset_keywords)
 
-    train_dl, test_dl, samplers = get_dataloaders(args, **dataset_keywords)
+        parsed_old_config = parse_old_config.OldPartitioningConfigParser(
+            configs,
+            args.rank,
+            args.bs_train,
+            args.bs_test,
+            args.task,  # NOTE: added...
+            train_dl,  # NOTE: added...
+            args.num_chunks,  # NOTE: added...
+        )
+        del configs
+        comm_init_args = parsed_old_config.get_comm_init_args()
+        training_tensor_dtypes = parsed_old_config.training_tensor_dtypes
+        eval_tensor_shapes = parsed_old_config.eval_tensor_shapes
+        training_tensor_shapes = parsed_old_config.training_tensor_shapes
+        args.num_stages = parsed_old_config.num_stages
+        args.stage = parsed_old_config.stage
+        model = parsed_old_config.model
+    else:
 
-    parsed_old_config = parse_old_config.OldPartitioningConfigParser(
-        configs,
-        args.rank,
-        args.bs_train,
-        args.bs_test,
-        args.task,  # NOTE: added...
-        train_dl,  # NOTE: added...
-        args.num_chunks,  # NOTE: added...
-    )
-    del configs
-    comm_init_args = parsed_old_config.get_comm_init_args()
-    training_tensor_dtypes = parsed_old_config.training_tensor_dtypes
-    eval_tensor_shapes = parsed_old_config.eval_tensor_shapes
-    training_tensor_shapes = parsed_old_config.training_tensor_shapes
-    args.num_stages = parsed_old_config.num_stages
-    args.stage = parsed_old_config.stage
-    model = parsed_old_config.model
+        parsed_cofig = parse_config.PartitioningConfigParser(
+                    args.model,
+                    args.rank,
+                    args.bs_train,
+                    args.bs_test,  # NOTE: changed name
+                    model_instance=None,  # TODO: use somehow for gpt
+                    send_target_in_pipe="_sep" in args.task)
+
+        dataset_keywords = {}  # FIXME
+        if 'cv' not in args.task:
+            raise NotImplementedError()
+
+        train_dl, test_dl, samplers = get_dataloaders(args, **dataset_keywords)
+        comm_init_args = parsed_cofig.comm_init_args()
+
+        training_tensor_dtypes = parsed_cofig.training_tensor_dtypes
+        eval_tensor_shapes = parsed_cofig.eval_tensor_shapes
+        training_tensor_shapes = parsed_cofig.training_tensor_shapes
+
+        args.num_stages = parsed_cofig.num_stages
+        args.stage = parsed_cofig.stage
+        model = parsed_cofig.model
 
     is_first_partition = args.stage == 0
     is_last_partition = args.stage == args.num_stages - 1

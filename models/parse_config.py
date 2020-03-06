@@ -1,5 +1,3 @@
-from .simple_partitioning_config import PipelineConfig, StageConfig
-from typing import Dict
 from .cfg_to_model import get_partitioning_v3
 
 from itertools import count
@@ -135,6 +133,11 @@ class PartitioningConfigParser:
             for i in self.training_tensor_shapes
         }
         self.eval_tensor_dtypes = {i: None for i in self.eval_tensor_shapes}
+
+    def comm_init_args(self):
+        return (self.receive_ranks, self.send_ranks, self.tensor_tags,
+                self.target_tensor_names, self.ranks_in_previous_stage,
+                self.ranks_in_next_stage, self.TOTAL_TAGS)
 
 
 # model
