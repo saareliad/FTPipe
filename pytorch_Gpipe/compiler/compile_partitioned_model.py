@@ -7,7 +7,7 @@ from pytorch_Gpipe.utils import traverse_model, traverse_params_buffs, layerDict
 import string
 from .partition_forward_method import generate_forward_method, variableNameGenerator
 from .partition_init_method import generate_init_method
-from .state_methods import generate_state_methods
+from .state_methods import get_state_methods, generate_partition_state_methods
 from typing import List, Tuple, Dict, Optional
 from collections import OrderedDict, deque
 import inspect
@@ -65,7 +65,7 @@ def compile_partitoned_model(graph: Graph,
         class_decl, scope_to_class_field = generate_init_method(
             class_name, layer_names, layer_classes, is_param_dict,
             buff_param_names)
-        state_methods_functions = generate_state_methods()
+        state_methods_functions = generate_partition_state_methods()
         forward_function, io = generate_forward_method(part,
                                                        graph.output_scopes,
                                                        scope_to_class_field,
@@ -156,12 +156,15 @@ def generateImports(layer_classes: Dict[str, Module]) -> List[str]:
 
 
 def generateHelpFunctions() -> str:
-    '''generates traverse_model, layerDict, traverse_params_buffs, tensorDict functions
-    to be used in the create_pipeline_configuration function
+    '''generates traverse_model, layerDict, traverse_params_buffs, tensorDict functions,
+    to be used in the create_pipeline_configuration function and
+    parameters,named_parameters,buffers,named_buffers,cpu,cuda,to,state_dict,load_state_dict
+    to be used by the partitions themselves
     '''
     lines = [
         inspect.getsource(f) for f in
-        [traverse_model, layerDict, traverse_params_buffs, tensorDict]
+        [traverse_model, layerDict, traverse_params_buffs,
+            tensorDict] + get_state_methods()
     ]
 
     return "\n\n".join(lines)
@@ -212,32 +215,8 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
         "\n"
     ]
 
-    # hard code which layers buffers and parameters belong to each partition
-    construction_args = []
-    for idx, part in partitions:
-        layer_scopes = [
-            f"'{n.scope}'" for n in part if n.type == NodeTypes.LAYER
-        ]
-        buffer_scopes = [
-            f"'{n.scope}'" for n in part if n.scope in model_buffers
-        ]
-        parameter_scopes = [
-            f"'{n.scope}'" for n in part if n.scope in model_parameteres
-        ]
-        construction_args.append(
-            (layer_scopes, buffer_scopes, parameter_scopes))
-
-    # create partition generation statements
-    for idx, (layer_scopes, buffer_scopes,
-              parameter_scopes) in zip(sorted(list(ios.keys())),
-                                       construction_args):
-        l_scopes = 'layer_scopes = [' + f",\n{dtab}".join(layer_scopes) + ']'
-        b_scopes = 'buffer_scopes = [' + f",\n{dtab}".join(buffer_scopes) + ']'
-        p_scopes = 'parameter_scopes = [' + \
-            f",\n{dtab}".join(parameter_scopes) + ']'
-        lines.extend([l_scopes, b_scopes, p_scopes, "\n"])
-
     # create and return the partition config
+
     def format_dict(d):
         items = [f'"{k}":{v}' for k, v in d.items()]
         return "{" + f",\n{dtab}".join(items) + "}"

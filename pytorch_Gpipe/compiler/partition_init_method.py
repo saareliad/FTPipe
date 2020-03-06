@@ -47,8 +47,7 @@ def generate__init__layersStatements(layer_names: List[str], full_names: List[st
     statements = [f'{dtab}# initializing partition layers']
 
     for field, full_name in zip(layer_names, full_names):
-        statements.extend([f"# {full_name}",
-                           f"{field} = layers['{full_name}']"])
+        statements.append(f"{field} = layers['{full_name}']")
         class_name = layer_classes[full_name].__name__
         error_msg = f"f'layers[{full_name}] is expected to be of type {class_name} but was of type {{type({field})}}'"
         statements.append(
@@ -73,7 +72,7 @@ def generate__init__BuffParamStatements(buffers: List[str], parameters: List[str
                       f"self.p_{idx} = tensors['{p_name}']"])
         tensor_ids[p_name] = f'self.p_{idx}'
 
-    return f'\n{dtab}'.join(lines), tensor_ids
+    return f'\n{dtab}'.join(lines) + '\n', tensor_ids
 
 
 def generateLookup(layers_to_id: Dict[str, str], tensors_to_id: Dict[str, str]) -> str:
