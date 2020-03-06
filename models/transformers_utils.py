@@ -70,6 +70,8 @@ def gpt2_lowercase():
 
 
 def gpt2_lowecase_partitioning():
+    # TODO: use the new partitioning.
+
     model, tokenizer, config = gpt2_lowercase()
     partitioning_cfg = get_partitioning('gpt2', model_instance=model)
     # NOTE: can use tokenizer.max_len_single_sentence to get maximum allowed block size.

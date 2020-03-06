@@ -19,7 +19,6 @@ import models
 
 import numpy as np
 import torch
-from collections import OrderedDict
 from datasets import (add_dataset_argument,
                       simplified_get_train_test_dl_from_args,
                       get_seperate_just_x_or_y_train_test_dl_from_args)
@@ -36,7 +35,7 @@ import random
 import math
 
 from models import parse_config
-
+from models import parse_old_config
 
 # TODO: support multiple servers,
 # TODO heterogenous servers
@@ -294,124 +293,6 @@ def create_comm_handler(args, comm_init_args,
 
     return comm_handler
 
-def infer_dtypes_and_shapes(config,
-                            bs_train,
-                            bs_test,
-                            random_input_sample,
-                            training_tensor_dtypes,
-                            training_tensor_shapes,
-                            eval_tensor_shapes,
-                            just_for_stage=None):
-    """
-    Runs a sequential forward pass to determine:
-        # training_tensor_dtypes
-        # training_tensor_shapes
-        # eval_tensor_shapes
-        # TODO: eval_tensor_dtypes
-
-    # FIXME: we don't want this pass to record statistic for batch norm!
-    # TODO: maybe write this to some file and load from it if exists,
-    # TODO: handle adjecency list
-    #  to aviod doing this pass every time
-    """
-    assert (len(training_tensor_shapes) == len(training_tensor_dtypes))
-    if not (just_for_stage is None):
-        raise NotImplementedError()
-
-    bs_train = to_tuple(bs_train)
-    bs_test = to_tuple(bs_test)
-    len_bs = len(bs_train)
-
-    for i, v in config.items():
-        partition = v['model']
-        if i == 0:
-            with torch.no_grad():
-                a = partition(random_input_sample)
-        else:
-            with torch.no_grad():
-                a = partition(*a)
-
-        if (just_for_stage is None) or just_for_stage == i:
-            # TODO: we need to actually go for i+1...
-            outputs = v['outputs']
-            dtypes = tuple(j.data.dtype for j in a)
-
-            # Concatenate shapes with expected bs_train/bs_test
-            # the batch size can be a collection (e.g (batch, seq_len) in NLP)
-            # TODO: this assume that batch is first
-            train_shapes = tuple(
-                tuple(list(bs_train) + list(j.data.size()[len_bs:]))
-                for j in a)
-            eval_shapes = tuple(
-                tuple(list(bs_test) + list(j.data.size()[len_bs:])) for j in a)
-
-            training_tensor_dtypes.update(zip(outputs, dtypes))
-            training_tensor_shapes.update(zip(outputs, train_shapes))
-            eval_tensor_shapes.update(zip(outputs, eval_shapes))
-
-        if just_for_stage == i:
-            break
-
-    return training_tensor_dtypes, training_tensor_shapes, eval_tensor_shapes
-
-
-def get_comm_init_args(args,
-                       config,
-                       stage,
-                       target_tensor_names=None,
-                       stage_to_rank_map=None):
-    """
-    Returns:
-    comm_init_args = (receive_ranks,
-                      send_ranks,
-                      tensor_tags,
-                      target_tensor_names,
-                      ranks_in_previous_stage,
-                      ranks_in_next_stage,
-                      TOTAL_TAGS)
-    TODO:
-        support weight sharing
-    """
-
-    if target_tensor_names is None:
-        target_tensor_names = set()
-
-    tensor_tags, TOTAL_TAGS = parse_config.tensor_tags_from_config(
-        config,
-        args.num_chunks,
-        target_tensor_names,
-        GRAD_UGLY_SHAMEFUL_NAME="_grad")
-
-    send_ranks, receive_ranks = parse_config.get_my_send_recv_ranks(
-        config, stage, stage_to_rank_map=stage_to_rank_map)
-
-    # Create:
-    # NOTE: currently it is used only when target is passed through pipe. (Deprecated)
-    # ranks_in_previous_stage
-    # ranks_in_next_stage
-
-    # TODO: can create these by the econfig too.
-    def ranks_in_stage(given_stage):
-        if stage_to_rank_map:
-            return stage_to_rank_map[given_stage]
-        else:
-            return [given_stage]
-
-    ranks_in_previous_stage = ranks_in_stage(stage - 1) if stage > 0 else []
-    ranks_in_next_stage = ranks_in_stage(
-        stage + 1) if stage < args.num_stages - 1 else []
-
-    # Note that we don't need shapes for the comm, just the datatypes.
-    comm_init_args = (receive_ranks, send_ranks, tensor_tags,
-                      target_tensor_names, ranks_in_previous_stage,
-                      ranks_in_next_stage, TOTAL_TAGS)
-
-    return comm_init_args
-
-
-def to_tuple(x):
-    return x if isinstance(x, tuple) else (x, )
-
 
 def get_scheduler(args, optimizer):
     if hasattr(args, "lr_scheduler"):
@@ -439,7 +320,8 @@ def get_gap_aware(args, optimizer):
     optimizer_type = getattr(args, 'optimizer')['type']
 
     # TODO: this could be implemented by using the gap...
-    if not optimizer_type == 'sgd1' and not getattr(args, 'weight_stashing', False):  # pytorch
+    if not optimizer_type == 'sgd1' and not getattr(args, 'weight_stashing',
+                                                    False):  # pytorch
         raise NotImplementedError()
 
     if 'sgd' in optimizer_type:
@@ -768,7 +650,7 @@ def get_dataloaders(args, explicit_seperated_dataset=False, **kw):
 def get_device(args):
     if hasattr(args, "stage_to_device_map"):
         stage_to_device_map = args.stage_to_device_map
-        cuda_device_id = stage_to_device_map[args.stage]
+        cuda_device_id = stage_to_device_map[args.local_rank]
         device = torch.device('cpu' if args.cpu else f"cuda:{cuda_device_id}")
     else:
         device = torch.device('cpu' if args.cpu else f"cuda:{args.local_rank}")
@@ -797,37 +679,37 @@ def main():
     if hasattr(args, "cudnn_benchmark") and args.cudnn_benchmark:
         torch.backends.cudnn.benchmark = True
 
-    dataset_keywords = dict()
-
-    if "cv" in args.task:
-        # Get partitioning config
-        configs = models.get_partitioning(args.model, model_instance=None)
-    elif "lm" in args.task:  # TODO: find some option to do this.
-        partitioning_function = models.transformers_utils.get_partitioning_tokenizer_and_config_by_name
-        # FIXME: remove hardcoded.
-        configs, tokenizer, _ = partitioning_function('gpt2_lowercase')
-        dataset_keywords['tokenizer'] = tokenizer
-    else:
-        raise NotImplementedError()
-
-    model_inputs = configs.pop('model inputs')  # We don't use thous.
-    model_outputs = configs.pop('model outputs')  # We don't use thous.
-
-    NO_DP = True
-    # TODO: make it nicer.
-    args.stage = None
-    if NO_DP:
-        args.num_stages = len(configs)
-        args.stage = args.local_rank
-        is_first_partition = args.stage == 0
-        is_last_partition = args.stage == args.num_stages - 1
-    else:
-        raise NotImplementedError()
-
-    # torch.device('cpu' if args.cpu else f"cuda:{args.local_rank}")
     device = get_device(args)
     if not args.cpu:
         torch.cuda.set_device(device)
+
+    configs, dataset_keywords = parse_old_config.OldPartitioningConfigParser.get_configs_and_dataset_keywords(
+        args.model, args.task)
+
+    train_dl, test_dl, samplers = get_dataloaders(args, **dataset_keywords)
+
+    parsed_old_config = parse_old_config.OldPartitioningConfigParser(
+        configs,
+        args.rank,
+        args.bs_train,
+        args.bs_test,
+        args.task,  # NOTE: added...
+        train_dl,  # NOTE: added...
+        args.num_chunks,  # NOTE: added...
+    )
+    del configs
+    comm_init_args = parsed_old_config.get_comm_init_args()
+    training_tensor_dtypes = parsed_old_config.training_tensor_dtypes
+    eval_tensor_shapes = parsed_old_config.eval_tensor_shapes
+    training_tensor_shapes = parsed_old_config.training_tensor_shapes
+    args.num_stages = parsed_old_config.num_stages
+    args.stage = parsed_old_config.stage
+    model = parsed_old_config.model
+
+    is_first_partition = args.stage == 0
+    is_last_partition = args.stage == args.num_stages - 1
+
+    # torch.device('cpu' if args.cpu else f"cuda:{args.local_rank}")
 
     args.step_every = getattr(args, "step_every", 1)
     # TODO: I have completly differnt plan for using it like micro batches.
@@ -857,99 +739,11 @@ def main():
     if partition_using_gap_aware:
         logger.info(f"Stage {args.stage} will use Gap Aware")
 
-    # Get dataloaders
-    train_dl, test_dl, samplers = get_dataloaders(args, **dataset_keywords)
-
-    ######################################## Start OF UGLY BLOCK ########################################
-    # TODO: do the following block generically and automatically using tasks, or alon's code.
-    if "cv" in args.task:
-        x, y = next(iter(train_dl))
-        bs_train = to_tuple(args.bs_train)
-        bs_test = to_tuple(args.bs_test)
-
-        BASE_INPUT_SHAPE = x.shape[1:]
-        BASE_TARGET_SHAPE = y.shape[1:]
-
-        # TODO formalize with function according to dataset/task
-        SEND_TARGET_IN_PIPE = not ('_sep' in args.task)
-        target_tensor_names = {}
-        training_tensor_dtypes = {"input0": x.dtype}
-        training_tensor_shapes = {"input0": (*bs_train, *BASE_INPUT_SHAPE)}
-        eval_tensor_shapes = {"input0": (*bs_test, *BASE_INPUT_SHAPE)}
-
-        if SEND_TARGET_IN_PIPE:
-            target_tensor_names = {"target"}
-            training_tensor_dtypes["target"] = y.dtype
-            training_tensor_shapes["target"] = (*bs_train, *BASE_TARGET_SHAPE)
-            eval_tensor_shapes["target"] = (*bs_test, *BASE_TARGET_SHAPE)
-
-        SAMPLE_BATCH_SIZE = 1  # Smallest batch as possible.
-        random_input_sample = torch.randn(SAMPLE_BATCH_SIZE, *BASE_INPUT_SHAPE)
-        del x
-        del y
-    elif "lm" in args.task:
-        x = next(iter(train_dl))
-        bs_train = to_tuple(args.bs_train)
-        bs_test = to_tuple(args.bs_test)
-
-        BASE_INPUT_SHAPE = x.shape[1:]
-        # BASE_TARGET_SHAPE = y.shape[1:]
-
-        # TODO formalize with function according to dataset/task
-        SEND_TARGET_IN_PIPE = not ('_sep' in args.task)
-        target_tensor_names = {}
-        training_tensor_dtypes = {"input0": x.dtype}
-        training_tensor_shapes = {"input0": (*bs_train, *BASE_INPUT_SHAPE)}
-        eval_tensor_shapes = {"input0": (*bs_test, *BASE_INPUT_SHAPE)}
-
-        if SEND_TARGET_IN_PIPE:
-            raise NotImplementedError()
-
-        # SAMPLE_BATCH_SIZE = 1  # Smallest batch as possible.
-        # TODO: we take the input inself, there was some dtype problem constructing it.
-        random_input_sample = x  # torch.randn(SAMPLE_BATCH_SIZE, *BASE_INPUT_SHAPE)
-        del x
-    else:
-        raise NotImplementedError(f"task: {args.task}")
-
-    # eval_tensor_shapes, training_tensor_shapes, target_tensor_names, random_input_sample
-
     COMM_VERSION = 1
     if COMM_VERSION == 1:
-        comm_init_args = get_comm_init_args(
-            args,
-            configs,
-            args.stage,
-            target_tensor_names=target_tensor_names,
-            stage_to_rank_map=None)
-
         comm_handler = create_comm_handler(args, comm_init_args, device)
-
-        (training_tensor_dtypes, training_tensor_shapes,
-         eval_tensor_shapes) = infer_dtypes_and_shapes(configs,
-                                                       bs_train,
-                                                       bs_test,
-                                                       random_input_sample,
-                                                       training_tensor_dtypes,
-                                                       training_tensor_shapes,
-                                                       eval_tensor_shapes,
-                                                       just_for_stage=None)
     else:
         raise NotImplementedError("In progress")
-        # parse.
-        # configs['model inputs'] = model_inputs  # We don't use thous.
-        # configs['model outputs'] = model_outputs
-
-        # (training_tensor_shapes,
-        #  training_tensor_dtypes) = json_config.find_shapes_and_dtypes(
-        #      random_input_sample, configs)
-        # eval_tensor_shapes = training_tensor_shapes
-
-        # configs['model inputs'] = model_inputs  # We don't use thous.
-        # model_outputs = configs.pop('model outputs')  # We don't use thous.
-
-    del random_input_sample
-    ######################################## END OF UGLY BLOCK ########################################
 
     trainer_cls = AVAILABLE_TRAINERS.get(args.trainer['type'])
     task_cls = AVAILABLE_TASKS.get(args.task)
@@ -967,11 +761,10 @@ def main():
                     "gap_aware_just_loss works only with recomputation on")
 
     # Init the partition manager
-
     partition = SinglePartitionManager(
         args.stage,
         args.num_stages,
-        configs[args.stage]['model'],
+        model,
         comm_handler,
         work_scheduler,
         training_tensor_shapes,
