@@ -75,6 +75,11 @@ def compile_partitoned_model(graph: Graph,
         partitions_code.append(state_methods_functions)
         ios[idx] = io
 
+    if output_file is None:
+        output_file = f'generated_{graph.model_name}{len(parts)}'
+    elif output_file.endswith(".py"):
+        output_file = output_file[:-3]
+
     lines.append(
         create_pipeline_configuration(graph, parts, model, ios, layer_classes, batch_dim, output_file))
     lines.append(
@@ -83,12 +88,7 @@ def compile_partitoned_model(graph: Graph,
     lines += partitions_code
     lines.append(generateHelpFunctions())
 
-    if output_file is None:
-        output_file = f'generated_{graph.model_name}{len(parts)}'
-
-    output_file = output_file + '.py'
-
-    path = pathlib.Path(output_file)
+    path = pathlib.Path(output_file + ".py")
     path.parent.mkdir(parents=True, exist_ok=True)
 
     if path.exists():

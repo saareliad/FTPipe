@@ -435,7 +435,8 @@ class Graph():
         path:
             the path to store the graph object file will be called path.graph
         '''
-        path += ".graph"
+        if not path.endswith(".graph"):
+            path += ".graph"
 
         pickle.dump(self.state(), open(path, "wb"))
 

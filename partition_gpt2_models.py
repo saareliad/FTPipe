@@ -241,7 +241,9 @@ def partition_model(args, train_dataset, model, tokenizer, lm=True):
         graph.save_as_pdf(args.output_file, ".")
         graph.serialize(args.output_file)
 
-    generated = importlib.import_module(args.output_file)
+    module_path = args.output_file.replace("/", ".")
+    generated = importlib.import_module(module_path)
+
     create_pipeline_configuration = generated.create_pipeline_configuration
 
     GET_PARTITIONS_ON_CPU = True
@@ -306,8 +308,7 @@ def main():
     tr_params.add_argument(
         "--mlm",
         action='store_true',
-        help=
-        "Train with masked-language modeling loss instead of language modeling."
+        help="Train with masked-language modeling loss instead of language modeling."
     )
     tr_params.add_argument(
         "--mlm_probability",
@@ -318,22 +319,19 @@ def main():
         "--config_name",
         default="",
         type=str,
-        help=
-        "Optional pretrained config name or path if not the same as model_name_or_path"
+        help="Optional pretrained config name or path if not the same as model_name_or_path"
     )
     tr_params.add_argument(
         "--tokenizer_name",
         default="",
         type=str,
-        help=
-        "Optional pretrained tokenizer name or path if not the same as model_name_or_path"
+        help="Optional pretrained tokenizer name or path if not the same as model_name_or_path"
     )
     tr_params.add_argument(
         "--cache_dir",
         default="",
         type=str,
-        help=
-        "Optional directory to store the pre-trained models downloaded from s3 (instread of the default one)"
+        help="Optional directory to store the pre-trained models downloaded from s3 (instread of the default one)"
     )
     tr_params.add_argument(
         "--block_size",
@@ -365,8 +363,7 @@ def main():
         '--model_too_big',
         action='store_true',
         default=False,
-        help=
-        "if the model is too big run the whole partitioning process on CPU, and drink a cup of coffee in the meantime"
+        help="if the model is too big run the whole partitioning process on CPU, and drink a cup of coffee in the meantime"
     )
     parser.add_argument('--n_partitions', type=int, default=4)
     parser.add_argument('--output_file', default='gpt2')
@@ -378,8 +375,7 @@ def main():
         '--n_iter',
         type=int,
         default=10,
-        help=
-        "number of iteration used in order to profile the network and run analysis"
+        help="number of iteration used in order to profile the network and run analysis"
     )
     parser.add_argument(
         '--bandwidth_gps',
@@ -429,6 +425,9 @@ def main():
 
     if args.auto_file_name:
         args.output_file = f"{args.model_type}_p{args.n_partitions}"
+
+    if args.output_file.endswith(".py"):
+        args.output_file = args.output_file[:-3]
 
     if args.model_type in ["bert", "roberta", "distilbert", "camembert"
                            ] and not args.mlm:

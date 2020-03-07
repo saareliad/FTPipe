@@ -140,8 +140,7 @@ def parse_cli():
         '--model_too_big',
         action='store_true',
         default=False,
-        help=
-        "if the model is too big run the whole partitioning process on CPU, "
+        help="if the model is too big run the whole partitioning process on CPU, "
         "and drink a cup of coffee in the meantime")
     parser.add_argument('-p', '--n_partitions', type=int, default=4)
     parser.add_argument('-o', '--output_file', default='wrn_16x4')
@@ -153,8 +152,7 @@ def parse_cli():
         '--n_iter',
         type=int,
         default=100,
-        help=
-        "number of iteration used in order to profile the network and run analysis"
+        help="number of iteration used in order to profile the network and run analysis"
     )
     parser.add_argument(
         '--bw',
@@ -217,20 +215,17 @@ def parse_cli():
     metis_opts.add_argument(
         '--metis_niter',
         type=int,
-        help=
-        "Specifies the number of iterations for the refinement algorithms at each stage of the uncoarsening process."
+        help="Specifies the number of iterations for the refinement algorithms at each stage of the uncoarsening process."
         "Default is 10.")
     metis_opts.add_argument(
         '--nseps',
         type=int,
-        help=
-        "Specifies the number of different separators that it will compute at each level of nested dissection."
+        help="Specifies the number of different separators that it will compute at each level of nested dissection."
         "The final separator that is used is the smallest one. Default is 1.")
     metis_opts.add_argument(
         "--ncuts",
         type=int,
-        help=
-        "Specifies the number of different partitionings that it will compute."
+        help="Specifies the number of different partitionings that it will compute."
         " The final partitioning is the one that achieves the best edgecut or communication volume."
         "Default is 1.")
     metis_opts.add_argument(
@@ -240,14 +235,16 @@ def parse_cli():
     metis_opts.add_argument(
         '--objtype',
         type=int,
-        help=
-        "Extra objective type to miminize (0: edgecut, 1: vol, default: edgecut)"
+        help="Extra objective type to miminize (0: edgecut, 1: vol, default: edgecut)"
     )
 
     args = parser.parse_args()
     args.auto_file_name = not args.no_auto_file_name
     if args.auto_file_name:
         args.output_file = f"{args.model}_p{args.n_partitions}"
+
+    if args.output_file.endswith(".py"):
+        args.output_file = args.output_file[:-3]
 
     # TODO: build metis options
     # We can set to None to get the default
@@ -336,8 +333,8 @@ if __name__ == "__main__":
     if args.dot:
         graph.save_as_pdf(args.output_file, ".")
         graph.serialize(args.output_file)
-
-    generated = importlib.import_module(args.output_file)
+    module_path = args.output_file.replace("/", ".")
+    generated = importlib.import_module(module_path)
     create_pipeline_configuration = generated.create_pipeline_configuration
 
     if GET_PARTITIONS_ON_CPU:
