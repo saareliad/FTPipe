@@ -3,8 +3,8 @@
   "batch_size": 32,
   "depth": -1,
   "basic_blocks": [
-    "torch.nn.modules.linear.Linear",
     "torch.nn.modules.conv.Conv2d",
+    "torch.nn.modules.linear.Linear",
     "torch.nn.modules.batchnorm.BatchNorm2d"
   ],
   "model_inputs": ["input0"],
@@ -28,7 +28,7 @@
       "inputs": ["ResNet/Sequential[layer1]/Bottleneck[1]/aten::add_3960"],
       "outputs": [
         "ResNet/Sequential[layer2]/Bottleneck[1]/aten::relu4291",
-        "ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv2]"
+        "ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv1]"
       ],
       "input_shapes": [[1, 256, 56, 56]],
       "output_shapes": [
@@ -43,11 +43,11 @@
       "batch_size": 32,
       "inputs": [
         "ResNet/Sequential[layer2]/Bottleneck[1]/aten::relu4291",
-        "ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv2]"
+        "ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv1]"
       ],
       "outputs": [
         "ResNet/Sequential[layer3]/Bottleneck[2]/aten::relu4819",
-        "ResNet/Sequential[layer3]/Bottleneck[3]/Conv2d[conv2]"
+        "ResNet/Sequential[layer3]/Bottleneck[3]/aten::relu4855"
       ],
       "input_shapes": [
         [1, 512, 28, 28],
@@ -65,7 +65,7 @@
       "batch_size": 32,
       "inputs": [
         "ResNet/Sequential[layer3]/Bottleneck[2]/aten::relu4819",
-        "ResNet/Sequential[layer3]/Bottleneck[3]/Conv2d[conv2]"
+        "ResNet/Sequential[layer3]/Bottleneck[3]/aten::relu4855"
       ],
       "outputs": ["ResNet/Linear[fc]"],
       "input_shapes": [

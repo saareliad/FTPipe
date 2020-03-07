@@ -86,6 +86,10 @@ def generateDeclaration(input_ids: List[str], scope_to_class_field: Dict[str,
                               input_args.items()):
         lines.append(f"{dtab}# {scope} <=> {field}\n")
 
+    lines.append(
+        f"\n{dtab}# moving inputs to current device no op if already on the correct device\n")
+    for input_id in input_ids:
+        lines.append(f"{dtab}{input_id} = {input_id}.to(self.device)\n")
     return ''.join(lines)
 
 
