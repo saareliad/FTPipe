@@ -32,6 +32,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset, RandomSampler
 import warnings
 import sys
+from partition_vision_models import ParseMetisOpts
 from transformers import (
     BertConfig,
     BertForMaskedLM,
@@ -201,7 +202,12 @@ def edge_weight_function(bw_GBps):
     return f
 
 
-def partition_model(args, train_dataset, model, tokenizer, lm=True):
+def partition_model(args,
+                    train_dataset,
+                    model,
+                    tokenizer,
+                    lm=True,
+                    METIS_opt=dict()):
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset,
                                   sampler=train_sampler,
@@ -236,6 +242,8 @@ def partition_model(args, train_dataset, model, tokenizer, lm=True):
                            args.bandwidth_gps),
                        use_layers_only_graph=args.partition_layer_graph,
                        output_file=args.output_file,
+                       save_memory_mode=args.save_memory_mode,
+                       METIS_opt=METIS_opt,
                        DEBUG=False)
     if args.dot:
         graph.save_as_pdf(args.output_file, ".")
@@ -308,7 +316,8 @@ def main():
     tr_params.add_argument(
         "--mlm",
         action='store_true',
-        help="Train with masked-language modeling loss instead of language modeling."
+        help=
+        "Train with masked-language modeling loss instead of language modeling."
     )
     tr_params.add_argument(
         "--mlm_probability",
@@ -319,19 +328,22 @@ def main():
         "--config_name",
         default="",
         type=str,
-        help="Optional pretrained config name or path if not the same as model_name_or_path"
+        help=
+        "Optional pretrained config name or path if not the same as model_name_or_path"
     )
     tr_params.add_argument(
         "--tokenizer_name",
         default="",
         type=str,
-        help="Optional pretrained tokenizer name or path if not the same as model_name_or_path"
+        help=
+        "Optional pretrained tokenizer name or path if not the same as model_name_or_path"
     )
     tr_params.add_argument(
         "--cache_dir",
         default="",
         type=str,
-        help="Optional directory to store the pre-trained models downloaded from s3 (instread of the default one)"
+        help=
+        "Optional directory to store the pre-trained models downloaded from s3 (instread of the default one)"
     )
     tr_params.add_argument(
         "--block_size",
@@ -354,6 +366,16 @@ def main():
                            default=42,
                            help="random seed for initialization")
 
+    tr_params.add_argument("--lmhead",
+                           default=False,
+                           action="store_true",
+                           help="Partition a model with LM head")
+    tr_params.add_argument(
+        "--output_past",
+        default=False,
+        action="store_true",
+        help="whether to return all hidden states or just the last  one")
+
     # parameters of the partitioning script
     parser.add_argument('--partitioning_batch_size',
                         type=int,
@@ -363,7 +385,8 @@ def main():
         '--model_too_big',
         action='store_true',
         default=False,
-        help="if the model is too big run the whole partitioning process on CPU, and drink a cup of coffee in the meantime"
+        help=
+        "if the model is too big run the whole partitioning process on CPU, and drink a cup of coffee in the meantime"
     )
     parser.add_argument('--n_partitions', type=int, default=4)
     parser.add_argument('--output_file', default='gpt2')
@@ -375,7 +398,8 @@ def main():
         '--n_iter',
         type=int,
         default=10,
-        help="number of iteration used in order to profile the network and run analysis"
+        help=
+        "number of iteration used in order to profile the network and run analysis"
     )
     parser.add_argument(
         '--bandwidth_gps',
@@ -411,17 +435,24 @@ def main():
                         action="store_true",
                         help="Save and plot it using graphviz")
 
-    parser.add_argument("--lmhead",
-                        default=False,
-                        action="store_true",
-                        help="Partition a model with LM head")
     parser.add_argument(
-        "--output_past",
+        "--save_memory_mode",
         default=False,
         action="store_true",
-        help="whether to return all hidden states or just the last  one")
+        help="Save memory during profiling by storing everything on cpu," +
+        " but sending each layer to GPU before the profiling.")
+
+    parser.add_argument("-a",
+                        "--async_pipeline",
+                        default=False,
+                        action="store_true",
+                        help="Do analysis for async pipeline")
+
+    ParseMetisOpts.add_metis_arguments(parser)
 
     args = parser.parse_args()
+
+    METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(parser)
 
     if args.auto_file_name:
         args.output_file = f"{args.model_type}_p{args.n_partitions}"
@@ -468,11 +499,18 @@ def main():
         from_tf=bool('.ckpt' in args.model_name_or_path),
         config=config,
         cache_dir=args.cache_dir if args.cache_dir else None)
+
+    # TODO: if not args.save_memory_mode:
     model.to(args.device)
 
     train_dataset = load_and_cache_examples(args, tokenizer)
 
-    partition_model(args, train_dataset, model, tokenizer, lm=args.lmhead)
+    partition_model(args,
+                    train_dataset,
+                    model,
+                    tokenizer,
+                    lm=args.lmhead,
+                    METIS_opt=METIS_opt)
 
 
 # download dataset from https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip
