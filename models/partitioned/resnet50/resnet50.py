@@ -6,9 +6,9 @@ from itertools import chain
 import operator
 from typing import Optional, Tuple, Iterator, Iterable, OrderedDict, Dict
 import collections
-from torch.nn.modules.conv import Conv2d
 from torch.nn.modules.linear import Linear
 from torch.nn.modules.batchnorm import BatchNorm2d
+from torch.nn.modules.conv import Conv2d
 # this is an auto generated file do not edit unless you know what you are doing
 
 
@@ -23,27 +23,27 @@ from torch.nn.modules.batchnorm import BatchNorm2d
 
 def create_pipeline_configuration(DEBUG=False):
     depth = -1
-    basic_blocks = (Conv2d,Linear,BatchNorm2d)
-    blocks_path = [ 'torch.nn.modules.conv.Conv2d',
-            'torch.nn.modules.linear.Linear',
-            'torch.nn.modules.batchnorm.BatchNorm2d']
+    basic_blocks = (Linear,BatchNorm2d,Conv2d)
+    blocks_path = [ 'torch.nn.modules.linear.Linear',
+            'torch.nn.modules.batchnorm.BatchNorm2d',
+            'torch.nn.modules.conv.Conv2d']
     module_path = 'models.partitioned.resnet50.resnet50'
     
 
     # creating configuration
     stages = {'0': {"inputs":['input0'],
-        "outputs":['ResNet/Sequential[layer1]/Bottleneck[1]/aten::add_3960'],
+        "outputs":['ResNet/Sequential[layer1]/Bottleneck[1]/aten::relu3961', 'ResNet/Sequential[layer1]/Bottleneck[2]/aten::relu3997'],
         "input_shapes":[[32, 3, 224, 224]],
-        "output_shapes":[[32, 256, 56, 56]]},
-            '1': {"inputs":['ResNet/Sequential[layer1]/Bottleneck[1]/aten::add_3960'],
-        "outputs":['ResNet/Sequential[layer2]/Bottleneck[1]/aten::relu4291', 'ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv1]'],
-        "input_shapes":[[32, 256, 56, 56]],
-        "output_shapes":[[32, 512, 28, 28], [32, 128, 28, 28]]},
-            '2': {"inputs":['ResNet/Sequential[layer2]/Bottleneck[1]/aten::relu4291', 'ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv1]'],
-        "outputs":['ResNet/Sequential[layer3]/Bottleneck[2]/aten::relu4819', 'ResNet/Sequential[layer3]/Bottleneck[3]/aten::relu4855'],
-        "input_shapes":[[32, 512, 28, 28], [32, 128, 28, 28]],
+        "output_shapes":[[32, 256, 56, 56], [32, 64, 56, 56]]},
+            '1': {"inputs":['ResNet/Sequential[layer1]/Bottleneck[1]/aten::relu3961', 'ResNet/Sequential[layer1]/Bottleneck[2]/aten::relu3997'],
+        "outputs":['ResNet/Sequential[layer2]/Bottleneck[2]/aten::add_4388'],
+        "input_shapes":[[32, 256, 56, 56], [32, 64, 56, 56]],
+        "output_shapes":[[32, 512, 28, 28]]},
+            '2': {"inputs":['ResNet/Sequential[layer2]/Bottleneck[2]/aten::add_4388'],
+        "outputs":['ResNet/Sequential[layer3]/Bottleneck[2]/aten::relu4819', 'ResNet/Sequential[layer3]/Bottleneck[3]/aten::relu4885'],
+        "input_shapes":[[32, 512, 28, 28]],
         "output_shapes":[[32, 1024, 14, 14], [32, 256, 14, 14]]},
-            '3': {"inputs":['ResNet/Sequential[layer3]/Bottleneck[2]/aten::relu4819', 'ResNet/Sequential[layer3]/Bottleneck[3]/aten::relu4855'],
+            '3': {"inputs":['ResNet/Sequential[layer3]/Bottleneck[2]/aten::relu4819', 'ResNet/Sequential[layer3]/Bottleneck[3]/aten::relu4885'],
         "outputs":['ResNet/Linear[fc]'],
         "input_shapes":[[32, 1024, 14, 14], [32, 256, 14, 14]],
         "output_shapes":[[32, 1000]]}
@@ -93,75 +93,186 @@ def create_pipeline_configuration(DEBUG=False):
 
 
 class ModelParallel(nn.Module):
-    def __init__(self,layers,tensors,CPU=False):
+    def __init__(self,layers,tensors,CPU=False,num_chunks=4):
         super(ModelParallel,self).__init__()
+        self.batch_dim = 0
+        self.num_chunks = num_chunks
+        assert self.num_chunks >= 4
+        self.cpu = CPU
+        if not CPU:
+            # partitions X chunks streams
+            self.streams = [[torch.cuda.Stream(f'cuda:{idx}') for _ in range(self.num_chunks)] for idx in range(4)]
         self.stage0 = Partition0(layers,tensors).to('cpu' if CPU else 'cuda:0')
         self.stage1 = Partition1(layers,tensors).to('cpu' if CPU else 'cuda:1')
         self.stage2 = Partition2(layers,tensors).to('cpu' if CPU else 'cuda:2')
         self.stage3 = Partition3(layers,tensors).to('cpu' if CPU else 'cuda:3')
 
+    def stream(self,device_idx,mb_idx):
+        # return the stream for the current device and micro batch
+        return torch.cuda.stream(self.streams[device_idx,mb_idx])
+
+    def wait_stream(self,device_idx,mb_idx):
+        stream = self.streams[device_idx,mb_idx]
+        # wait until the mb was cleared by previous partition
+        stream.wait_stream(self.stream(device_idx-1,mb_idx))
+        # wait until previous mb was cleared by this partition
+        stream.wait_stream(self.stream(device_idx,mb_idx-1))
+
     def forward(self,input0):
-        t_0 = self.stage0(input0)[0]
-        t_1, t_2 = self.stage1(t_0)
-        t_3, t_4 = self.stage2(t_1, t_2)
+        t_0, t_1 = self.stage0(input0)
+        t_2 = self.stage1(t_0, t_1)[0]
+        t_3, t_4 = self.stage2(t_2)
         t_5 = self.stage3(t_3, t_4)[0]
         return t_5
 
-    def pipelined_forward(self,input0,num_chunks=4):
-        assert num_chunks >= 4
-        batch_dim = 0
-        
+    def pipelined_forward(self,input0):
         # chunk inputs
-        assert input0.size(batch_dim) >= num_chunks
-        input0_chunks = iter(input0.split(input0.size(batch_dim) // num_chunks, dim=batch_dim))
+        assert input0.size(self.batch_dim) >= self.num_chunks
+        input0_chunks = iter(input0.split(input0.size(self.batch_dim) // self.num_chunks, dim=self.batch_dim))
         
         # create output chunk placeholders
         t_5_chunks = []
         
         # fill the pipeline
         input0 = next(input0_chunks)
-        t_0 = self.stage0(input0)[0]
+        t_0, t_1 = self.stage0(input0)
         
         input0 = next(input0_chunks)
-        t_1, t_2 = self.stage1(t_0)
-        t_0 = self.stage0(input0)[0]
+        t_2 = self.stage1(t_0, t_1)[0]
+        t_0, t_1 = self.stage0(input0)
         
         input0 = next(input0_chunks)
-        t_3, t_4 = self.stage2(t_1, t_2)
-        t_1, t_2 = self.stage1(t_0)
-        t_0 = self.stage0(input0)[0]
+        t_3, t_4 = self.stage2(t_2)
+        t_2 = self.stage1(t_0, t_1)[0]
+        t_0, t_1 = self.stage0(input0)
         
         input0 = next(input0_chunks)
         t_5 = self.stage3(t_3, t_4)[0]
-        t_3, t_4 = self.stage2(t_1, t_2)
-        t_1, t_2 = self.stage1(t_0)
-        t_0 = self.stage0(input0)[0]
+        t_3, t_4 = self.stage2(t_2)
+        t_2 = self.stage1(t_0, t_1)[0]
+        t_0, t_1 = self.stage0(input0)
         t_5_chunks.append(t_5)
         
         # steady phase
-        for _ in range(num_chunks - 4):
+        for idx in range(self.num_chunks - 4):
             input0 = next(input0_chunks)
             t_5 = self.stage3(t_3, t_4)[0]
-            t_3, t_4 = self.stage2(t_1, t_2)
-            t_1, t_2 = self.stage1(t_0)
-            t_0 = self.stage0(input0)[0]
+            t_3, t_4 = self.stage2(t_2)
+            t_2 = self.stage1(t_0, t_1)[0]
+            t_0, t_1 = self.stage0(input0)
             t_5_chunks.append(t_5)
         
         # empty the pipeline
         t_5 = self.stage3(t_3, t_4)[0]
-        t_3, t_4 = self.stage2(t_1, t_2)
-        t_1, t_2 = self.stage1(t_0)
+        t_3, t_4 = self.stage2(t_2)
+        t_2 = self.stage1(t_0, t_1)[0]
         t_5_chunks.append(t_5)
         
         t_5 = self.stage3(t_3, t_4)[0]
-        t_3, t_4 = self.stage2(t_1, t_2)
+        t_3, t_4 = self.stage2(t_2)
         t_5_chunks.append(t_5)
         
         t_5 = self.stage3(t_3, t_4)[0]
         t_5_chunks.append(t_5)
         
         # merge output chunks
-        t_5 = torch.cat(t_5_chunks,dim=batch_dim)
+        t_5 = torch.cat(t_5_chunks,dim=self.batch_dim)
+        
+        return t_5
+
+    def pipelined_forward_with_streams(self,input0):
+        assert not self.cpu
+        # chunk inputs
+        assert input0.size(self.batch_dim) >= self.num_chunks
+        input0_chunks = iter(input0.split(input0.size(self.batch_dim) // self.num_chunks, dim=self.batch_dim))
+        
+        # create output chunk placeholders
+        t_5_chunks = []
+        
+        # fill the pipeline
+        input0 = next(input0_chunks)
+        with self.stream(0,0):
+            self.wait_stream(0,0)
+            t_0, t_1 = self.stage0(input0)
+        
+        input0 = next(input0_chunks)
+        with self.stream(1,0):
+            self.wait_stream(1,0)
+            t_2 = self.stage1(t_0, t_1)[0]
+        with self.stream(0,1):
+            self.wait_stream(0,1)
+            t_0, t_1 = self.stage0(input0)
+        
+        input0 = next(input0_chunks)
+        with self.stream(2,0):
+            self.wait_stream(2,0)
+            t_3, t_4 = self.stage2(t_2)
+        with self.stream(1,1):
+            self.wait_stream(1,1)
+            t_2 = self.stage1(t_0, t_1)[0]
+        with self.stream(0,2):
+            self.wait_stream(0,2)
+            t_0, t_1 = self.stage0(input0)
+        
+        input0 = next(input0_chunks)
+        with self.stream(3,0):
+            self.wait_stream(3,0)
+            t_5 = self.stage3(t_3, t_4)[0]
+        with self.stream(2,1):
+            self.wait_stream(2,1)
+            t_3, t_4 = self.stage2(t_2)
+        with self.stream(1,2):
+            self.wait_stream(1,2)
+            t_2 = self.stage1(t_0, t_1)[0]
+        with self.stream(0,3):
+            self.wait_stream(0,3)
+            t_0, t_1 = self.stage0(input0)
+        t_5_chunks.append(t_5)
+        
+        # steady phase
+        for idx in range(self.num_chunks - 4):
+            input0 = next(input0_chunks)
+            with self.stream(3,idx+1):
+                self.wait_stream(3,idx+1)
+                t_5 = self.stage3(t_3, t_4)[0]
+            with self.stream(2,idx+2):
+                self.wait_stream(2,idx+2)
+                t_3, t_4 = self.stage2(t_2)
+            with self.stream(1,idx+3):
+                self.wait_stream(1,idx+3)
+                t_2 = self.stage1(t_0, t_1)[0]
+            with self.stream(0,idx+4):
+                self.wait_stream(0,idx+4)
+                t_0, t_1 = self.stage0(input0)
+            t_5_chunks.append(t_5)
+        
+        # empty the pipeline
+        with self.stream(3,-3):
+            self.wait_stream(3,-3)
+            t_5 = self.stage3(t_3, t_4)[0]
+        with self.stream(2,-2):
+            self.wait_stream(2,-2)
+            t_3, t_4 = self.stage2(t_2)
+        with self.stream(1,-1):
+            self.wait_stream(1,-1)
+            t_2 = self.stage1(t_0, t_1)[0]
+        t_5_chunks.append(t_5)
+        
+        with self.stream(3,-2):
+            self.wait_stream(3,-2)
+            t_5 = self.stage3(t_3, t_4)[0]
+        with self.stream(2,-1):
+            self.wait_stream(2,-1)
+            t_3, t_4 = self.stage2(t_2)
+        t_5_chunks.append(t_5)
+        
+        with self.stream(3,-1):
+            self.wait_stream(3,-1)
+            t_5 = self.stage3(t_3, t_4)[0]
+        t_5_chunks.append(t_5)
+        
+        # merge output chunks
+        t_5 = torch.cat(t_5_chunks,dim=self.batch_dim)
         
         return t_5
 
@@ -232,6 +343,10 @@ class Partition0(nn.Module):
         assert isinstance(self.l_14,Conv2d) ,f'layers[ResNet/Sequential[layer1]/Bottleneck[1]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_14)}'
         self.l_15 = layers['ResNet/Sequential[layer1]/Bottleneck[1]/BatchNorm2d[bn3]']
         assert isinstance(self.l_15,BatchNorm2d) ,f'layers[ResNet/Sequential[layer1]/Bottleneck[1]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_15)}'
+        self.l_16 = layers['ResNet/Sequential[layer1]/Bottleneck[2]/Conv2d[conv1]']
+        assert isinstance(self.l_16,Conv2d) ,f'layers[ResNet/Sequential[layer1]/Bottleneck[2]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_16)}'
+        self.l_17 = layers['ResNet/Sequential[layer1]/Bottleneck[2]/BatchNorm2d[bn1]']
+        assert isinstance(self.l_17,BatchNorm2d) ,f'layers[ResNet/Sequential[layer1]/Bottleneck[2]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_17)}'
 
         # initializing partition buffers
         
@@ -253,7 +368,9 @@ class Partition0(nn.Module):
                         'l_12': 'layer1.1.conv2',
                         'l_13': 'layer1.1.bn2',
                         'l_14': 'layer1.1.conv3',
-                        'l_15': 'layer1.1.bn3'}
+                        'l_15': 'layer1.1.bn3',
+                        'l_16': 'layer1.2.conv1',
+                        'l_17': 'layer1.2.bn1'}
 
     def forward(self, x0):
         # ResNet/Conv2d[conv1] <=> self.l_0
@@ -272,6 +389,8 @@ class Partition0(nn.Module):
         # ResNet/Sequential[layer1]/Bottleneck[1]/BatchNorm2d[bn2] <=> self.l_13
         # ResNet/Sequential[layer1]/Bottleneck[1]/Conv2d[conv3] <=> self.l_14
         # ResNet/Sequential[layer1]/Bottleneck[1]/BatchNorm2d[bn3] <=> self.l_15
+        # ResNet/Sequential[layer1]/Bottleneck[2]/Conv2d[conv1] <=> self.l_16
+        # ResNet/Sequential[layer1]/Bottleneck[2]/BatchNorm2d[bn1] <=> self.l_17
         # input0 <=> x0
 
         # moving inputs to current device no op if already on the correct device
@@ -288,9 +407,13 @@ class Partition0(nn.Module):
         # calling torch.relu with arguments:
         # ResNet/Sequential[layer1]/Bottleneck[0]/aten::add_3862
         t_1 = Tensor.relu(operator.iadd(self.l_7(self.l_6(Tensor.relu(self.l_5(self.l_4(Tensor.relu(self.l_3(self.l_2(t_0)))))))), self.l_9(self.l_8(t_0))))
-        # returing:
+        # calling torch.relu with arguments:
         # ResNet/Sequential[layer1]/Bottleneck[1]/aten::add_3960
-        return (operator.iadd(self.l_15(self.l_14(Tensor.relu(self.l_13(self.l_12(Tensor.relu(self.l_11(self.l_10(t_1)))))))), t_1),)
+        t_2 = Tensor.relu(operator.iadd(self.l_15(self.l_14(Tensor.relu(self.l_13(self.l_12(Tensor.relu(self.l_11(self.l_10(t_1)))))))), t_1))
+        # returing:
+        # ResNet/Sequential[layer1]/Bottleneck[1]/aten::relu3961
+        # ResNet/Sequential[layer1]/Bottleneck[2]/aten::relu3997
+        return (t_2, Tensor.relu(self.l_17(self.l_16(t_2))))
 
     def state_dict(self,device=None):
         # we return the state dict of this part as it should be in the original model
@@ -321,119 +444,129 @@ class Partition1(nn.Module):
     def __init__(self, layers, tensors):
         super(Partition1, self).__init__()
         # initializing partition layers
-        self.l_0 = layers['ResNet/Sequential[layer1]/Bottleneck[2]/Conv2d[conv1]']
-        assert isinstance(self.l_0,Conv2d) ,f'layers[ResNet/Sequential[layer1]/Bottleneck[2]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_0)}'
-        self.l_1 = layers['ResNet/Sequential[layer1]/Bottleneck[2]/BatchNorm2d[bn1]']
-        assert isinstance(self.l_1,BatchNorm2d) ,f'layers[ResNet/Sequential[layer1]/Bottleneck[2]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_1)}'
-        self.l_2 = layers['ResNet/Sequential[layer1]/Bottleneck[2]/Conv2d[conv2]']
-        assert isinstance(self.l_2,Conv2d) ,f'layers[ResNet/Sequential[layer1]/Bottleneck[2]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_2)}'
-        self.l_3 = layers['ResNet/Sequential[layer1]/Bottleneck[2]/BatchNorm2d[bn2]']
-        assert isinstance(self.l_3,BatchNorm2d) ,f'layers[ResNet/Sequential[layer1]/Bottleneck[2]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_3)}'
-        self.l_4 = layers['ResNet/Sequential[layer1]/Bottleneck[2]/Conv2d[conv3]']
-        assert isinstance(self.l_4,Conv2d) ,f'layers[ResNet/Sequential[layer1]/Bottleneck[2]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_4)}'
-        self.l_5 = layers['ResNet/Sequential[layer1]/Bottleneck[2]/BatchNorm2d[bn3]']
-        assert isinstance(self.l_5,BatchNorm2d) ,f'layers[ResNet/Sequential[layer1]/Bottleneck[2]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_5)}'
-        self.l_6 = layers['ResNet/Sequential[layer2]/Bottleneck[0]/Conv2d[conv1]']
-        assert isinstance(self.l_6,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[0]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_6)}'
-        self.l_7 = layers['ResNet/Sequential[layer2]/Bottleneck[0]/BatchNorm2d[bn1]']
-        assert isinstance(self.l_7,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[0]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_7)}'
-        self.l_8 = layers['ResNet/Sequential[layer2]/Bottleneck[0]/Conv2d[conv2]']
-        assert isinstance(self.l_8,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[0]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_8)}'
-        self.l_9 = layers['ResNet/Sequential[layer2]/Bottleneck[0]/BatchNorm2d[bn2]']
-        assert isinstance(self.l_9,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[0]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_9)}'
-        self.l_10 = layers['ResNet/Sequential[layer2]/Bottleneck[0]/Conv2d[conv3]']
-        assert isinstance(self.l_10,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[0]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_10)}'
-        self.l_11 = layers['ResNet/Sequential[layer2]/Bottleneck[0]/BatchNorm2d[bn3]']
-        assert isinstance(self.l_11,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[0]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_11)}'
-        self.l_12 = layers['ResNet/Sequential[layer2]/Bottleneck[0]/Sequential[downsample]/Conv2d[0]']
-        assert isinstance(self.l_12,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[0]/Sequential[downsample]/Conv2d[0]] is expected to be of type Conv2d but was of type {type(self.l_12)}'
-        self.l_13 = layers['ResNet/Sequential[layer2]/Bottleneck[0]/Sequential[downsample]/BatchNorm2d[1]']
-        assert isinstance(self.l_13,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[0]/Sequential[downsample]/BatchNorm2d[1]] is expected to be of type BatchNorm2d but was of type {type(self.l_13)}'
-        self.l_14 = layers['ResNet/Sequential[layer2]/Bottleneck[1]/Conv2d[conv1]']
-        assert isinstance(self.l_14,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[1]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_14)}'
-        self.l_15 = layers['ResNet/Sequential[layer2]/Bottleneck[1]/BatchNorm2d[bn1]']
-        assert isinstance(self.l_15,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[1]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_15)}'
-        self.l_16 = layers['ResNet/Sequential[layer2]/Bottleneck[1]/Conv2d[conv2]']
-        assert isinstance(self.l_16,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[1]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_16)}'
-        self.l_17 = layers['ResNet/Sequential[layer2]/Bottleneck[1]/BatchNorm2d[bn2]']
-        assert isinstance(self.l_17,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[1]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_17)}'
-        self.l_18 = layers['ResNet/Sequential[layer2]/Bottleneck[1]/Conv2d[conv3]']
-        assert isinstance(self.l_18,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[1]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_18)}'
-        self.l_19 = layers['ResNet/Sequential[layer2]/Bottleneck[1]/BatchNorm2d[bn3]']
-        assert isinstance(self.l_19,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[1]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_19)}'
-        self.l_20 = layers['ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv1]']
-        assert isinstance(self.l_20,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_20)}'
+        self.l_0 = layers['ResNet/Sequential[layer1]/Bottleneck[2]/Conv2d[conv2]']
+        assert isinstance(self.l_0,Conv2d) ,f'layers[ResNet/Sequential[layer1]/Bottleneck[2]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_0)}'
+        self.l_1 = layers['ResNet/Sequential[layer1]/Bottleneck[2]/BatchNorm2d[bn2]']
+        assert isinstance(self.l_1,BatchNorm2d) ,f'layers[ResNet/Sequential[layer1]/Bottleneck[2]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_1)}'
+        self.l_2 = layers['ResNet/Sequential[layer1]/Bottleneck[2]/Conv2d[conv3]']
+        assert isinstance(self.l_2,Conv2d) ,f'layers[ResNet/Sequential[layer1]/Bottleneck[2]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_2)}'
+        self.l_3 = layers['ResNet/Sequential[layer1]/Bottleneck[2]/BatchNorm2d[bn3]']
+        assert isinstance(self.l_3,BatchNorm2d) ,f'layers[ResNet/Sequential[layer1]/Bottleneck[2]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_3)}'
+        self.l_4 = layers['ResNet/Sequential[layer2]/Bottleneck[0]/Conv2d[conv1]']
+        assert isinstance(self.l_4,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[0]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_4)}'
+        self.l_5 = layers['ResNet/Sequential[layer2]/Bottleneck[0]/BatchNorm2d[bn1]']
+        assert isinstance(self.l_5,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[0]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_5)}'
+        self.l_6 = layers['ResNet/Sequential[layer2]/Bottleneck[0]/Conv2d[conv2]']
+        assert isinstance(self.l_6,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[0]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_6)}'
+        self.l_7 = layers['ResNet/Sequential[layer2]/Bottleneck[0]/BatchNorm2d[bn2]']
+        assert isinstance(self.l_7,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[0]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_7)}'
+        self.l_8 = layers['ResNet/Sequential[layer2]/Bottleneck[0]/Conv2d[conv3]']
+        assert isinstance(self.l_8,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[0]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_8)}'
+        self.l_9 = layers['ResNet/Sequential[layer2]/Bottleneck[0]/BatchNorm2d[bn3]']
+        assert isinstance(self.l_9,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[0]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_9)}'
+        self.l_10 = layers['ResNet/Sequential[layer2]/Bottleneck[0]/Sequential[downsample]/Conv2d[0]']
+        assert isinstance(self.l_10,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[0]/Sequential[downsample]/Conv2d[0]] is expected to be of type Conv2d but was of type {type(self.l_10)}'
+        self.l_11 = layers['ResNet/Sequential[layer2]/Bottleneck[0]/Sequential[downsample]/BatchNorm2d[1]']
+        assert isinstance(self.l_11,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[0]/Sequential[downsample]/BatchNorm2d[1]] is expected to be of type BatchNorm2d but was of type {type(self.l_11)}'
+        self.l_12 = layers['ResNet/Sequential[layer2]/Bottleneck[1]/Conv2d[conv1]']
+        assert isinstance(self.l_12,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[1]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_12)}'
+        self.l_13 = layers['ResNet/Sequential[layer2]/Bottleneck[1]/BatchNorm2d[bn1]']
+        assert isinstance(self.l_13,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[1]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_13)}'
+        self.l_14 = layers['ResNet/Sequential[layer2]/Bottleneck[1]/Conv2d[conv2]']
+        assert isinstance(self.l_14,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[1]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_14)}'
+        self.l_15 = layers['ResNet/Sequential[layer2]/Bottleneck[1]/BatchNorm2d[bn2]']
+        assert isinstance(self.l_15,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[1]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_15)}'
+        self.l_16 = layers['ResNet/Sequential[layer2]/Bottleneck[1]/Conv2d[conv3]']
+        assert isinstance(self.l_16,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[1]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_16)}'
+        self.l_17 = layers['ResNet/Sequential[layer2]/Bottleneck[1]/BatchNorm2d[bn3]']
+        assert isinstance(self.l_17,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[1]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_17)}'
+        self.l_18 = layers['ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv1]']
+        assert isinstance(self.l_18,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_18)}'
+        self.l_19 = layers['ResNet/Sequential[layer2]/Bottleneck[2]/BatchNorm2d[bn1]']
+        assert isinstance(self.l_19,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[2]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_19)}'
+        self.l_20 = layers['ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv2]']
+        assert isinstance(self.l_20,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_20)}'
+        self.l_21 = layers['ResNet/Sequential[layer2]/Bottleneck[2]/BatchNorm2d[bn2]']
+        assert isinstance(self.l_21,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[2]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_21)}'
+        self.l_22 = layers['ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv3]']
+        assert isinstance(self.l_22,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_22)}'
+        self.l_23 = layers['ResNet/Sequential[layer2]/Bottleneck[2]/BatchNorm2d[bn3]']
+        assert isinstance(self.l_23,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[2]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_23)}'
 
         # initializing partition buffers
         
         # initializing partition parameters
 
         self.device = torch.device('cuda:1')
-        self.lookup = { 'l_0': 'layer1.2.conv1',
-                        'l_1': 'layer1.2.bn1',
-                        'l_2': 'layer1.2.conv2',
-                        'l_3': 'layer1.2.bn2',
-                        'l_4': 'layer1.2.conv3',
-                        'l_5': 'layer1.2.bn3',
-                        'l_6': 'layer2.0.conv1',
-                        'l_7': 'layer2.0.bn1',
-                        'l_8': 'layer2.0.conv2',
-                        'l_9': 'layer2.0.bn2',
-                        'l_10': 'layer2.0.conv3',
-                        'l_11': 'layer2.0.bn3',
-                        'l_12': 'layer2.0.downsample.0',
-                        'l_13': 'layer2.0.downsample.1',
-                        'l_14': 'layer2.1.conv1',
-                        'l_15': 'layer2.1.bn1',
-                        'l_16': 'layer2.1.conv2',
-                        'l_17': 'layer2.1.bn2',
-                        'l_18': 'layer2.1.conv3',
-                        'l_19': 'layer2.1.bn3',
-                        'l_20': 'layer2.2.conv1'}
+        self.lookup = { 'l_0': 'layer1.2.conv2',
+                        'l_1': 'layer1.2.bn2',
+                        'l_2': 'layer1.2.conv3',
+                        'l_3': 'layer1.2.bn3',
+                        'l_4': 'layer2.0.conv1',
+                        'l_5': 'layer2.0.bn1',
+                        'l_6': 'layer2.0.conv2',
+                        'l_7': 'layer2.0.bn2',
+                        'l_8': 'layer2.0.conv3',
+                        'l_9': 'layer2.0.bn3',
+                        'l_10': 'layer2.0.downsample.0',
+                        'l_11': 'layer2.0.downsample.1',
+                        'l_12': 'layer2.1.conv1',
+                        'l_13': 'layer2.1.bn1',
+                        'l_14': 'layer2.1.conv2',
+                        'l_15': 'layer2.1.bn2',
+                        'l_16': 'layer2.1.conv3',
+                        'l_17': 'layer2.1.bn3',
+                        'l_18': 'layer2.2.conv1',
+                        'l_19': 'layer2.2.bn1',
+                        'l_20': 'layer2.2.conv2',
+                        'l_21': 'layer2.2.bn2',
+                        'l_22': 'layer2.2.conv3',
+                        'l_23': 'layer2.2.bn3'}
 
-    def forward(self, x0):
-        # ResNet/Sequential[layer1]/Bottleneck[2]/Conv2d[conv1] <=> self.l_0
-        # ResNet/Sequential[layer1]/Bottleneck[2]/BatchNorm2d[bn1] <=> self.l_1
-        # ResNet/Sequential[layer1]/Bottleneck[2]/Conv2d[conv2] <=> self.l_2
-        # ResNet/Sequential[layer1]/Bottleneck[2]/BatchNorm2d[bn2] <=> self.l_3
-        # ResNet/Sequential[layer1]/Bottleneck[2]/Conv2d[conv3] <=> self.l_4
-        # ResNet/Sequential[layer1]/Bottleneck[2]/BatchNorm2d[bn3] <=> self.l_5
-        # ResNet/Sequential[layer2]/Bottleneck[0]/Conv2d[conv1] <=> self.l_6
-        # ResNet/Sequential[layer2]/Bottleneck[0]/BatchNorm2d[bn1] <=> self.l_7
-        # ResNet/Sequential[layer2]/Bottleneck[0]/Conv2d[conv2] <=> self.l_8
-        # ResNet/Sequential[layer2]/Bottleneck[0]/BatchNorm2d[bn2] <=> self.l_9
-        # ResNet/Sequential[layer2]/Bottleneck[0]/Conv2d[conv3] <=> self.l_10
-        # ResNet/Sequential[layer2]/Bottleneck[0]/BatchNorm2d[bn3] <=> self.l_11
-        # ResNet/Sequential[layer2]/Bottleneck[0]/Sequential[downsample]/Conv2d[0] <=> self.l_12
-        # ResNet/Sequential[layer2]/Bottleneck[0]/Sequential[downsample]/BatchNorm2d[1] <=> self.l_13
-        # ResNet/Sequential[layer2]/Bottleneck[1]/Conv2d[conv1] <=> self.l_14
-        # ResNet/Sequential[layer2]/Bottleneck[1]/BatchNorm2d[bn1] <=> self.l_15
-        # ResNet/Sequential[layer2]/Bottleneck[1]/Conv2d[conv2] <=> self.l_16
-        # ResNet/Sequential[layer2]/Bottleneck[1]/BatchNorm2d[bn2] <=> self.l_17
-        # ResNet/Sequential[layer2]/Bottleneck[1]/Conv2d[conv3] <=> self.l_18
-        # ResNet/Sequential[layer2]/Bottleneck[1]/BatchNorm2d[bn3] <=> self.l_19
-        # ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv1] <=> self.l_20
-        # ResNet/Sequential[layer1]/Bottleneck[1]/aten::add_3960 <=> x0
+    def forward(self, x0, x1):
+        # ResNet/Sequential[layer1]/Bottleneck[2]/Conv2d[conv2] <=> self.l_0
+        # ResNet/Sequential[layer1]/Bottleneck[2]/BatchNorm2d[bn2] <=> self.l_1
+        # ResNet/Sequential[layer1]/Bottleneck[2]/Conv2d[conv3] <=> self.l_2
+        # ResNet/Sequential[layer1]/Bottleneck[2]/BatchNorm2d[bn3] <=> self.l_3
+        # ResNet/Sequential[layer2]/Bottleneck[0]/Conv2d[conv1] <=> self.l_4
+        # ResNet/Sequential[layer2]/Bottleneck[0]/BatchNorm2d[bn1] <=> self.l_5
+        # ResNet/Sequential[layer2]/Bottleneck[0]/Conv2d[conv2] <=> self.l_6
+        # ResNet/Sequential[layer2]/Bottleneck[0]/BatchNorm2d[bn2] <=> self.l_7
+        # ResNet/Sequential[layer2]/Bottleneck[0]/Conv2d[conv3] <=> self.l_8
+        # ResNet/Sequential[layer2]/Bottleneck[0]/BatchNorm2d[bn3] <=> self.l_9
+        # ResNet/Sequential[layer2]/Bottleneck[0]/Sequential[downsample]/Conv2d[0] <=> self.l_10
+        # ResNet/Sequential[layer2]/Bottleneck[0]/Sequential[downsample]/BatchNorm2d[1] <=> self.l_11
+        # ResNet/Sequential[layer2]/Bottleneck[1]/Conv2d[conv1] <=> self.l_12
+        # ResNet/Sequential[layer2]/Bottleneck[1]/BatchNorm2d[bn1] <=> self.l_13
+        # ResNet/Sequential[layer2]/Bottleneck[1]/Conv2d[conv2] <=> self.l_14
+        # ResNet/Sequential[layer2]/Bottleneck[1]/BatchNorm2d[bn2] <=> self.l_15
+        # ResNet/Sequential[layer2]/Bottleneck[1]/Conv2d[conv3] <=> self.l_16
+        # ResNet/Sequential[layer2]/Bottleneck[1]/BatchNorm2d[bn3] <=> self.l_17
+        # ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv1] <=> self.l_18
+        # ResNet/Sequential[layer2]/Bottleneck[2]/BatchNorm2d[bn1] <=> self.l_19
+        # ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv2] <=> self.l_20
+        # ResNet/Sequential[layer2]/Bottleneck[2]/BatchNorm2d[bn2] <=> self.l_21
+        # ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv3] <=> self.l_22
+        # ResNet/Sequential[layer2]/Bottleneck[2]/BatchNorm2d[bn3] <=> self.l_23
+        # ResNet/Sequential[layer1]/Bottleneck[1]/aten::relu3961 <=> x0
+        # ResNet/Sequential[layer1]/Bottleneck[2]/aten::relu3997 <=> x1
 
         # moving inputs to current device no op if already on the correct device
         x0 = x0.to(self.device)
+        x1 = x1.to(self.device)
 
         # calling torch.relu with arguments:
-        # ResNet/Sequential[layer1]/Bottleneck[1]/aten::add_3960
-        t_0 = Tensor.relu(x0)
-        # calling torch.relu with arguments:
         # ResNet/Sequential[layer1]/Bottleneck[2]/aten::add_4058
-        t_1 = Tensor.relu(operator.iadd(self.l_5(self.l_4(Tensor.relu(self.l_3(self.l_2(Tensor.relu(self.l_1(self.l_0(t_0)))))))), t_0))
+        t_0 = Tensor.relu(operator.iadd(self.l_3(self.l_2(Tensor.relu(self.l_1(self.l_0(x1))))), x0))
         # calling torch.relu with arguments:
         # ResNet/Sequential[layer2]/Bottleneck[0]/aten::add_4192
-        t_2 = Tensor.relu(operator.iadd(self.l_11(self.l_10(Tensor.relu(self.l_9(self.l_8(Tensor.relu(self.l_7(self.l_6(t_1)))))))), self.l_13(self.l_12(t_1))))
+        t_1 = Tensor.relu(operator.iadd(self.l_9(self.l_8(Tensor.relu(self.l_7(self.l_6(Tensor.relu(self.l_5(self.l_4(t_0)))))))), self.l_11(self.l_10(t_0))))
         # calling torch.relu with arguments:
         # ResNet/Sequential[layer2]/Bottleneck[1]/aten::add_4290
-        t_3 = Tensor.relu(operator.iadd(self.l_19(self.l_18(Tensor.relu(self.l_17(self.l_16(Tensor.relu(self.l_15(self.l_14(t_2)))))))), t_2))
+        t_2 = Tensor.relu(operator.iadd(self.l_17(self.l_16(Tensor.relu(self.l_15(self.l_14(Tensor.relu(self.l_13(self.l_12(t_1)))))))), t_1))
         # returing:
-        # ResNet/Sequential[layer2]/Bottleneck[1]/aten::relu4291
-        # ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv1]
-        return (t_3, self.l_20(t_3))
+        # ResNet/Sequential[layer2]/Bottleneck[2]/aten::add_4388
+        return (operator.iadd(self.l_23(self.l_22(Tensor.relu(self.l_21(self.l_20(Tensor.relu(self.l_19(self.l_18(t_2)))))))), t_2),)
 
     def state_dict(self,device=None):
         # we return the state dict of this part as it should be in the original model
@@ -464,172 +597,158 @@ class Partition2(nn.Module):
     def __init__(self, layers, tensors):
         super(Partition2, self).__init__()
         # initializing partition layers
-        self.l_0 = layers['ResNet/Sequential[layer2]/Bottleneck[2]/BatchNorm2d[bn1]']
-        assert isinstance(self.l_0,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[2]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_0)}'
-        self.l_1 = layers['ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv2]']
-        assert isinstance(self.l_1,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_1)}'
-        self.l_2 = layers['ResNet/Sequential[layer2]/Bottleneck[2]/BatchNorm2d[bn2]']
-        assert isinstance(self.l_2,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[2]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_2)}'
-        self.l_3 = layers['ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv3]']
-        assert isinstance(self.l_3,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_3)}'
-        self.l_4 = layers['ResNet/Sequential[layer2]/Bottleneck[2]/BatchNorm2d[bn3]']
-        assert isinstance(self.l_4,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[2]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_4)}'
-        self.l_5 = layers['ResNet/Sequential[layer2]/Bottleneck[3]/Conv2d[conv1]']
-        assert isinstance(self.l_5,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[3]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_5)}'
-        self.l_6 = layers['ResNet/Sequential[layer2]/Bottleneck[3]/BatchNorm2d[bn1]']
-        assert isinstance(self.l_6,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[3]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_6)}'
-        self.l_7 = layers['ResNet/Sequential[layer2]/Bottleneck[3]/Conv2d[conv2]']
-        assert isinstance(self.l_7,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[3]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_7)}'
-        self.l_8 = layers['ResNet/Sequential[layer2]/Bottleneck[3]/BatchNorm2d[bn2]']
-        assert isinstance(self.l_8,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[3]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_8)}'
-        self.l_9 = layers['ResNet/Sequential[layer2]/Bottleneck[3]/Conv2d[conv3]']
-        assert isinstance(self.l_9,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[3]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_9)}'
-        self.l_10 = layers['ResNet/Sequential[layer2]/Bottleneck[3]/BatchNorm2d[bn3]']
-        assert isinstance(self.l_10,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[3]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_10)}'
-        self.l_11 = layers['ResNet/Sequential[layer3]/Bottleneck[0]/Conv2d[conv1]']
-        assert isinstance(self.l_11,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[0]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_11)}'
-        self.l_12 = layers['ResNet/Sequential[layer3]/Bottleneck[0]/BatchNorm2d[bn1]']
-        assert isinstance(self.l_12,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[0]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_12)}'
-        self.l_13 = layers['ResNet/Sequential[layer3]/Bottleneck[0]/Conv2d[conv2]']
-        assert isinstance(self.l_13,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[0]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_13)}'
-        self.l_14 = layers['ResNet/Sequential[layer3]/Bottleneck[0]/BatchNorm2d[bn2]']
-        assert isinstance(self.l_14,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[0]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_14)}'
-        self.l_15 = layers['ResNet/Sequential[layer3]/Bottleneck[0]/Conv2d[conv3]']
-        assert isinstance(self.l_15,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[0]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_15)}'
-        self.l_16 = layers['ResNet/Sequential[layer3]/Bottleneck[0]/BatchNorm2d[bn3]']
-        assert isinstance(self.l_16,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[0]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_16)}'
-        self.l_17 = layers['ResNet/Sequential[layer3]/Bottleneck[0]/Sequential[downsample]/Conv2d[0]']
-        assert isinstance(self.l_17,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[0]/Sequential[downsample]/Conv2d[0]] is expected to be of type Conv2d but was of type {type(self.l_17)}'
-        self.l_18 = layers['ResNet/Sequential[layer3]/Bottleneck[0]/Sequential[downsample]/BatchNorm2d[1]']
-        assert isinstance(self.l_18,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[0]/Sequential[downsample]/BatchNorm2d[1]] is expected to be of type BatchNorm2d but was of type {type(self.l_18)}'
-        self.l_19 = layers['ResNet/Sequential[layer3]/Bottleneck[1]/Conv2d[conv1]']
-        assert isinstance(self.l_19,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[1]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_19)}'
-        self.l_20 = layers['ResNet/Sequential[layer3]/Bottleneck[1]/BatchNorm2d[bn1]']
-        assert isinstance(self.l_20,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[1]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_20)}'
-        self.l_21 = layers['ResNet/Sequential[layer3]/Bottleneck[1]/Conv2d[conv2]']
-        assert isinstance(self.l_21,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[1]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_21)}'
-        self.l_22 = layers['ResNet/Sequential[layer3]/Bottleneck[1]/BatchNorm2d[bn2]']
-        assert isinstance(self.l_22,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[1]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_22)}'
-        self.l_23 = layers['ResNet/Sequential[layer3]/Bottleneck[1]/Conv2d[conv3]']
-        assert isinstance(self.l_23,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[1]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_23)}'
-        self.l_24 = layers['ResNet/Sequential[layer3]/Bottleneck[1]/BatchNorm2d[bn3]']
-        assert isinstance(self.l_24,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[1]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_24)}'
-        self.l_25 = layers['ResNet/Sequential[layer3]/Bottleneck[2]/Conv2d[conv1]']
-        assert isinstance(self.l_25,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[2]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_25)}'
-        self.l_26 = layers['ResNet/Sequential[layer3]/Bottleneck[2]/BatchNorm2d[bn1]']
-        assert isinstance(self.l_26,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[2]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_26)}'
-        self.l_27 = layers['ResNet/Sequential[layer3]/Bottleneck[2]/Conv2d[conv2]']
-        assert isinstance(self.l_27,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[2]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_27)}'
-        self.l_28 = layers['ResNet/Sequential[layer3]/Bottleneck[2]/BatchNorm2d[bn2]']
-        assert isinstance(self.l_28,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[2]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_28)}'
-        self.l_29 = layers['ResNet/Sequential[layer3]/Bottleneck[2]/Conv2d[conv3]']
-        assert isinstance(self.l_29,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[2]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_29)}'
-        self.l_30 = layers['ResNet/Sequential[layer3]/Bottleneck[2]/BatchNorm2d[bn3]']
-        assert isinstance(self.l_30,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[2]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_30)}'
-        self.l_31 = layers['ResNet/Sequential[layer3]/Bottleneck[3]/Conv2d[conv1]']
-        assert isinstance(self.l_31,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[3]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_31)}'
-        self.l_32 = layers['ResNet/Sequential[layer3]/Bottleneck[3]/BatchNorm2d[bn1]']
-        assert isinstance(self.l_32,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[3]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_32)}'
+        self.l_0 = layers['ResNet/Sequential[layer2]/Bottleneck[3]/Conv2d[conv1]']
+        assert isinstance(self.l_0,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[3]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_0)}'
+        self.l_1 = layers['ResNet/Sequential[layer2]/Bottleneck[3]/BatchNorm2d[bn1]']
+        assert isinstance(self.l_1,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[3]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_1)}'
+        self.l_2 = layers['ResNet/Sequential[layer2]/Bottleneck[3]/Conv2d[conv2]']
+        assert isinstance(self.l_2,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[3]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_2)}'
+        self.l_3 = layers['ResNet/Sequential[layer2]/Bottleneck[3]/BatchNorm2d[bn2]']
+        assert isinstance(self.l_3,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[3]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_3)}'
+        self.l_4 = layers['ResNet/Sequential[layer2]/Bottleneck[3]/Conv2d[conv3]']
+        assert isinstance(self.l_4,Conv2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[3]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_4)}'
+        self.l_5 = layers['ResNet/Sequential[layer2]/Bottleneck[3]/BatchNorm2d[bn3]']
+        assert isinstance(self.l_5,BatchNorm2d) ,f'layers[ResNet/Sequential[layer2]/Bottleneck[3]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_5)}'
+        self.l_6 = layers['ResNet/Sequential[layer3]/Bottleneck[0]/Conv2d[conv1]']
+        assert isinstance(self.l_6,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[0]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_6)}'
+        self.l_7 = layers['ResNet/Sequential[layer3]/Bottleneck[0]/BatchNorm2d[bn1]']
+        assert isinstance(self.l_7,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[0]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_7)}'
+        self.l_8 = layers['ResNet/Sequential[layer3]/Bottleneck[0]/Conv2d[conv2]']
+        assert isinstance(self.l_8,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[0]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_8)}'
+        self.l_9 = layers['ResNet/Sequential[layer3]/Bottleneck[0]/BatchNorm2d[bn2]']
+        assert isinstance(self.l_9,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[0]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_9)}'
+        self.l_10 = layers['ResNet/Sequential[layer3]/Bottleneck[0]/Conv2d[conv3]']
+        assert isinstance(self.l_10,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[0]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_10)}'
+        self.l_11 = layers['ResNet/Sequential[layer3]/Bottleneck[0]/BatchNorm2d[bn3]']
+        assert isinstance(self.l_11,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[0]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_11)}'
+        self.l_12 = layers['ResNet/Sequential[layer3]/Bottleneck[0]/Sequential[downsample]/Conv2d[0]']
+        assert isinstance(self.l_12,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[0]/Sequential[downsample]/Conv2d[0]] is expected to be of type Conv2d but was of type {type(self.l_12)}'
+        self.l_13 = layers['ResNet/Sequential[layer3]/Bottleneck[0]/Sequential[downsample]/BatchNorm2d[1]']
+        assert isinstance(self.l_13,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[0]/Sequential[downsample]/BatchNorm2d[1]] is expected to be of type BatchNorm2d but was of type {type(self.l_13)}'
+        self.l_14 = layers['ResNet/Sequential[layer3]/Bottleneck[1]/Conv2d[conv1]']
+        assert isinstance(self.l_14,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[1]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_14)}'
+        self.l_15 = layers['ResNet/Sequential[layer3]/Bottleneck[1]/BatchNorm2d[bn1]']
+        assert isinstance(self.l_15,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[1]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_15)}'
+        self.l_16 = layers['ResNet/Sequential[layer3]/Bottleneck[1]/Conv2d[conv2]']
+        assert isinstance(self.l_16,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[1]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_16)}'
+        self.l_17 = layers['ResNet/Sequential[layer3]/Bottleneck[1]/BatchNorm2d[bn2]']
+        assert isinstance(self.l_17,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[1]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_17)}'
+        self.l_18 = layers['ResNet/Sequential[layer3]/Bottleneck[1]/Conv2d[conv3]']
+        assert isinstance(self.l_18,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[1]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_18)}'
+        self.l_19 = layers['ResNet/Sequential[layer3]/Bottleneck[1]/BatchNorm2d[bn3]']
+        assert isinstance(self.l_19,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[1]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_19)}'
+        self.l_20 = layers['ResNet/Sequential[layer3]/Bottleneck[2]/Conv2d[conv1]']
+        assert isinstance(self.l_20,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[2]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_20)}'
+        self.l_21 = layers['ResNet/Sequential[layer3]/Bottleneck[2]/BatchNorm2d[bn1]']
+        assert isinstance(self.l_21,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[2]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_21)}'
+        self.l_22 = layers['ResNet/Sequential[layer3]/Bottleneck[2]/Conv2d[conv2]']
+        assert isinstance(self.l_22,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[2]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_22)}'
+        self.l_23 = layers['ResNet/Sequential[layer3]/Bottleneck[2]/BatchNorm2d[bn2]']
+        assert isinstance(self.l_23,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[2]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_23)}'
+        self.l_24 = layers['ResNet/Sequential[layer3]/Bottleneck[2]/Conv2d[conv3]']
+        assert isinstance(self.l_24,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[2]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_24)}'
+        self.l_25 = layers['ResNet/Sequential[layer3]/Bottleneck[2]/BatchNorm2d[bn3]']
+        assert isinstance(self.l_25,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[2]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_25)}'
+        self.l_26 = layers['ResNet/Sequential[layer3]/Bottleneck[3]/Conv2d[conv1]']
+        assert isinstance(self.l_26,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[3]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_26)}'
+        self.l_27 = layers['ResNet/Sequential[layer3]/Bottleneck[3]/BatchNorm2d[bn1]']
+        assert isinstance(self.l_27,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[3]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_27)}'
+        self.l_28 = layers['ResNet/Sequential[layer3]/Bottleneck[3]/Conv2d[conv2]']
+        assert isinstance(self.l_28,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[3]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_28)}'
+        self.l_29 = layers['ResNet/Sequential[layer3]/Bottleneck[3]/BatchNorm2d[bn2]']
+        assert isinstance(self.l_29,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[3]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_29)}'
 
         # initializing partition buffers
         
         # initializing partition parameters
 
         self.device = torch.device('cuda:2')
-        self.lookup = { 'l_0': 'layer2.2.bn1',
-                        'l_1': 'layer2.2.conv2',
-                        'l_2': 'layer2.2.bn2',
-                        'l_3': 'layer2.2.conv3',
-                        'l_4': 'layer2.2.bn3',
-                        'l_5': 'layer2.3.conv1',
-                        'l_6': 'layer2.3.bn1',
-                        'l_7': 'layer2.3.conv2',
-                        'l_8': 'layer2.3.bn2',
-                        'l_9': 'layer2.3.conv3',
-                        'l_10': 'layer2.3.bn3',
-                        'l_11': 'layer3.0.conv1',
-                        'l_12': 'layer3.0.bn1',
-                        'l_13': 'layer3.0.conv2',
-                        'l_14': 'layer3.0.bn2',
-                        'l_15': 'layer3.0.conv3',
-                        'l_16': 'layer3.0.bn3',
-                        'l_17': 'layer3.0.downsample.0',
-                        'l_18': 'layer3.0.downsample.1',
-                        'l_19': 'layer3.1.conv1',
-                        'l_20': 'layer3.1.bn1',
-                        'l_21': 'layer3.1.conv2',
-                        'l_22': 'layer3.1.bn2',
-                        'l_23': 'layer3.1.conv3',
-                        'l_24': 'layer3.1.bn3',
-                        'l_25': 'layer3.2.conv1',
-                        'l_26': 'layer3.2.bn1',
-                        'l_27': 'layer3.2.conv2',
-                        'l_28': 'layer3.2.bn2',
-                        'l_29': 'layer3.2.conv3',
-                        'l_30': 'layer3.2.bn3',
-                        'l_31': 'layer3.3.conv1',
-                        'l_32': 'layer3.3.bn1'}
+        self.lookup = { 'l_0': 'layer2.3.conv1',
+                        'l_1': 'layer2.3.bn1',
+                        'l_2': 'layer2.3.conv2',
+                        'l_3': 'layer2.3.bn2',
+                        'l_4': 'layer2.3.conv3',
+                        'l_5': 'layer2.3.bn3',
+                        'l_6': 'layer3.0.conv1',
+                        'l_7': 'layer3.0.bn1',
+                        'l_8': 'layer3.0.conv2',
+                        'l_9': 'layer3.0.bn2',
+                        'l_10': 'layer3.0.conv3',
+                        'l_11': 'layer3.0.bn3',
+                        'l_12': 'layer3.0.downsample.0',
+                        'l_13': 'layer3.0.downsample.1',
+                        'l_14': 'layer3.1.conv1',
+                        'l_15': 'layer3.1.bn1',
+                        'l_16': 'layer3.1.conv2',
+                        'l_17': 'layer3.1.bn2',
+                        'l_18': 'layer3.1.conv3',
+                        'l_19': 'layer3.1.bn3',
+                        'l_20': 'layer3.2.conv1',
+                        'l_21': 'layer3.2.bn1',
+                        'l_22': 'layer3.2.conv2',
+                        'l_23': 'layer3.2.bn2',
+                        'l_24': 'layer3.2.conv3',
+                        'l_25': 'layer3.2.bn3',
+                        'l_26': 'layer3.3.conv1',
+                        'l_27': 'layer3.3.bn1',
+                        'l_28': 'layer3.3.conv2',
+                        'l_29': 'layer3.3.bn2'}
 
-    def forward(self, x0, x1):
-        # ResNet/Sequential[layer2]/Bottleneck[2]/BatchNorm2d[bn1] <=> self.l_0
-        # ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv2] <=> self.l_1
-        # ResNet/Sequential[layer2]/Bottleneck[2]/BatchNorm2d[bn2] <=> self.l_2
-        # ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv3] <=> self.l_3
-        # ResNet/Sequential[layer2]/Bottleneck[2]/BatchNorm2d[bn3] <=> self.l_4
-        # ResNet/Sequential[layer2]/Bottleneck[3]/Conv2d[conv1] <=> self.l_5
-        # ResNet/Sequential[layer2]/Bottleneck[3]/BatchNorm2d[bn1] <=> self.l_6
-        # ResNet/Sequential[layer2]/Bottleneck[3]/Conv2d[conv2] <=> self.l_7
-        # ResNet/Sequential[layer2]/Bottleneck[3]/BatchNorm2d[bn2] <=> self.l_8
-        # ResNet/Sequential[layer2]/Bottleneck[3]/Conv2d[conv3] <=> self.l_9
-        # ResNet/Sequential[layer2]/Bottleneck[3]/BatchNorm2d[bn3] <=> self.l_10
-        # ResNet/Sequential[layer3]/Bottleneck[0]/Conv2d[conv1] <=> self.l_11
-        # ResNet/Sequential[layer3]/Bottleneck[0]/BatchNorm2d[bn1] <=> self.l_12
-        # ResNet/Sequential[layer3]/Bottleneck[0]/Conv2d[conv2] <=> self.l_13
-        # ResNet/Sequential[layer3]/Bottleneck[0]/BatchNorm2d[bn2] <=> self.l_14
-        # ResNet/Sequential[layer3]/Bottleneck[0]/Conv2d[conv3] <=> self.l_15
-        # ResNet/Sequential[layer3]/Bottleneck[0]/BatchNorm2d[bn3] <=> self.l_16
-        # ResNet/Sequential[layer3]/Bottleneck[0]/Sequential[downsample]/Conv2d[0] <=> self.l_17
-        # ResNet/Sequential[layer3]/Bottleneck[0]/Sequential[downsample]/BatchNorm2d[1] <=> self.l_18
-        # ResNet/Sequential[layer3]/Bottleneck[1]/Conv2d[conv1] <=> self.l_19
-        # ResNet/Sequential[layer3]/Bottleneck[1]/BatchNorm2d[bn1] <=> self.l_20
-        # ResNet/Sequential[layer3]/Bottleneck[1]/Conv2d[conv2] <=> self.l_21
-        # ResNet/Sequential[layer3]/Bottleneck[1]/BatchNorm2d[bn2] <=> self.l_22
-        # ResNet/Sequential[layer3]/Bottleneck[1]/Conv2d[conv3] <=> self.l_23
-        # ResNet/Sequential[layer3]/Bottleneck[1]/BatchNorm2d[bn3] <=> self.l_24
-        # ResNet/Sequential[layer3]/Bottleneck[2]/Conv2d[conv1] <=> self.l_25
-        # ResNet/Sequential[layer3]/Bottleneck[2]/BatchNorm2d[bn1] <=> self.l_26
-        # ResNet/Sequential[layer3]/Bottleneck[2]/Conv2d[conv2] <=> self.l_27
-        # ResNet/Sequential[layer3]/Bottleneck[2]/BatchNorm2d[bn2] <=> self.l_28
-        # ResNet/Sequential[layer3]/Bottleneck[2]/Conv2d[conv3] <=> self.l_29
-        # ResNet/Sequential[layer3]/Bottleneck[2]/BatchNorm2d[bn3] <=> self.l_30
-        # ResNet/Sequential[layer3]/Bottleneck[3]/Conv2d[conv1] <=> self.l_31
-        # ResNet/Sequential[layer3]/Bottleneck[3]/BatchNorm2d[bn1] <=> self.l_32
-        # ResNet/Sequential[layer2]/Bottleneck[1]/aten::relu4291 <=> x0
-        # ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv1] <=> x1
+    def forward(self, x0):
+        # ResNet/Sequential[layer2]/Bottleneck[3]/Conv2d[conv1] <=> self.l_0
+        # ResNet/Sequential[layer2]/Bottleneck[3]/BatchNorm2d[bn1] <=> self.l_1
+        # ResNet/Sequential[layer2]/Bottleneck[3]/Conv2d[conv2] <=> self.l_2
+        # ResNet/Sequential[layer2]/Bottleneck[3]/BatchNorm2d[bn2] <=> self.l_3
+        # ResNet/Sequential[layer2]/Bottleneck[3]/Conv2d[conv3] <=> self.l_4
+        # ResNet/Sequential[layer2]/Bottleneck[3]/BatchNorm2d[bn3] <=> self.l_5
+        # ResNet/Sequential[layer3]/Bottleneck[0]/Conv2d[conv1] <=> self.l_6
+        # ResNet/Sequential[layer3]/Bottleneck[0]/BatchNorm2d[bn1] <=> self.l_7
+        # ResNet/Sequential[layer3]/Bottleneck[0]/Conv2d[conv2] <=> self.l_8
+        # ResNet/Sequential[layer3]/Bottleneck[0]/BatchNorm2d[bn2] <=> self.l_9
+        # ResNet/Sequential[layer3]/Bottleneck[0]/Conv2d[conv3] <=> self.l_10
+        # ResNet/Sequential[layer3]/Bottleneck[0]/BatchNorm2d[bn3] <=> self.l_11
+        # ResNet/Sequential[layer3]/Bottleneck[0]/Sequential[downsample]/Conv2d[0] <=> self.l_12
+        # ResNet/Sequential[layer3]/Bottleneck[0]/Sequential[downsample]/BatchNorm2d[1] <=> self.l_13
+        # ResNet/Sequential[layer3]/Bottleneck[1]/Conv2d[conv1] <=> self.l_14
+        # ResNet/Sequential[layer3]/Bottleneck[1]/BatchNorm2d[bn1] <=> self.l_15
+        # ResNet/Sequential[layer3]/Bottleneck[1]/Conv2d[conv2] <=> self.l_16
+        # ResNet/Sequential[layer3]/Bottleneck[1]/BatchNorm2d[bn2] <=> self.l_17
+        # ResNet/Sequential[layer3]/Bottleneck[1]/Conv2d[conv3] <=> self.l_18
+        # ResNet/Sequential[layer3]/Bottleneck[1]/BatchNorm2d[bn3] <=> self.l_19
+        # ResNet/Sequential[layer3]/Bottleneck[2]/Conv2d[conv1] <=> self.l_20
+        # ResNet/Sequential[layer3]/Bottleneck[2]/BatchNorm2d[bn1] <=> self.l_21
+        # ResNet/Sequential[layer3]/Bottleneck[2]/Conv2d[conv2] <=> self.l_22
+        # ResNet/Sequential[layer3]/Bottleneck[2]/BatchNorm2d[bn2] <=> self.l_23
+        # ResNet/Sequential[layer3]/Bottleneck[2]/Conv2d[conv3] <=> self.l_24
+        # ResNet/Sequential[layer3]/Bottleneck[2]/BatchNorm2d[bn3] <=> self.l_25
+        # ResNet/Sequential[layer3]/Bottleneck[3]/Conv2d[conv1] <=> self.l_26
+        # ResNet/Sequential[layer3]/Bottleneck[3]/BatchNorm2d[bn1] <=> self.l_27
+        # ResNet/Sequential[layer3]/Bottleneck[3]/Conv2d[conv2] <=> self.l_28
+        # ResNet/Sequential[layer3]/Bottleneck[3]/BatchNorm2d[bn2] <=> self.l_29
+        # ResNet/Sequential[layer2]/Bottleneck[2]/aten::add_4388 <=> x0
 
         # moving inputs to current device no op if already on the correct device
         x0 = x0.to(self.device)
-        x1 = x1.to(self.device)
 
         # calling torch.relu with arguments:
         # ResNet/Sequential[layer2]/Bottleneck[2]/aten::add_4388
-        t_0 = Tensor.relu(operator.iadd(self.l_4(self.l_3(Tensor.relu(self.l_2(self.l_1(Tensor.relu(self.l_0(x1))))))), x0))
+        t_0 = Tensor.relu(x0)
         # calling torch.relu with arguments:
         # ResNet/Sequential[layer2]/Bottleneck[3]/aten::add_4486
-        t_1 = Tensor.relu(operator.iadd(self.l_10(self.l_9(Tensor.relu(self.l_8(self.l_7(Tensor.relu(self.l_6(self.l_5(t_0)))))))), t_0))
+        t_1 = Tensor.relu(operator.iadd(self.l_5(self.l_4(Tensor.relu(self.l_3(self.l_2(Tensor.relu(self.l_1(self.l_0(t_0)))))))), t_0))
         # calling torch.relu with arguments:
         # ResNet/Sequential[layer3]/Bottleneck[0]/aten::add_4622
-        t_2 = Tensor.relu(operator.iadd(self.l_16(self.l_15(Tensor.relu(self.l_14(self.l_13(Tensor.relu(self.l_12(self.l_11(t_1)))))))), self.l_18(self.l_17(t_1))))
+        t_2 = Tensor.relu(operator.iadd(self.l_11(self.l_10(Tensor.relu(self.l_9(self.l_8(Tensor.relu(self.l_7(self.l_6(t_1)))))))), self.l_13(self.l_12(t_1))))
         # calling torch.relu with arguments:
         # ResNet/Sequential[layer3]/Bottleneck[1]/aten::add_4720
-        t_3 = Tensor.relu(operator.iadd(self.l_24(self.l_23(Tensor.relu(self.l_22(self.l_21(Tensor.relu(self.l_20(self.l_19(t_2)))))))), t_2))
+        t_3 = Tensor.relu(operator.iadd(self.l_19(self.l_18(Tensor.relu(self.l_17(self.l_16(Tensor.relu(self.l_15(self.l_14(t_2)))))))), t_2))
         # calling torch.relu with arguments:
         # ResNet/Sequential[layer3]/Bottleneck[2]/aten::add_4818
-        t_4 = Tensor.relu(operator.iadd(self.l_30(self.l_29(Tensor.relu(self.l_28(self.l_27(Tensor.relu(self.l_26(self.l_25(t_3)))))))), t_3))
+        t_4 = Tensor.relu(operator.iadd(self.l_25(self.l_24(Tensor.relu(self.l_23(self.l_22(Tensor.relu(self.l_21(self.l_20(t_3)))))))), t_3))
         # returing:
         # ResNet/Sequential[layer3]/Bottleneck[2]/aten::relu4819
-        # ResNet/Sequential[layer3]/Bottleneck[3]/aten::relu4855
-        return (t_4, Tensor.relu(self.l_32(self.l_31(t_4))))
+        # ResNet/Sequential[layer3]/Bottleneck[3]/aten::relu4885
+        return (t_4, Tensor.relu(self.l_29(self.l_28(Tensor.relu(self.l_27(self.l_26(t_4)))))))
 
     def state_dict(self,device=None):
         # we return the state dict of this part as it should be in the original model
@@ -660,164 +779,156 @@ class Partition3(nn.Module):
     def __init__(self, layers, tensors):
         super(Partition3, self).__init__()
         # initializing partition layers
-        self.l_0 = layers['ResNet/Sequential[layer3]/Bottleneck[3]/Conv2d[conv2]']
-        assert isinstance(self.l_0,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[3]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_0)}'
-        self.l_1 = layers['ResNet/Sequential[layer3]/Bottleneck[3]/BatchNorm2d[bn2]']
-        assert isinstance(self.l_1,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[3]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_1)}'
-        self.l_2 = layers['ResNet/Sequential[layer3]/Bottleneck[3]/Conv2d[conv3]']
-        assert isinstance(self.l_2,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[3]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_2)}'
-        self.l_3 = layers['ResNet/Sequential[layer3]/Bottleneck[3]/BatchNorm2d[bn3]']
-        assert isinstance(self.l_3,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[3]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_3)}'
-        self.l_4 = layers['ResNet/Sequential[layer3]/Bottleneck[4]/Conv2d[conv1]']
-        assert isinstance(self.l_4,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[4]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_4)}'
-        self.l_5 = layers['ResNet/Sequential[layer3]/Bottleneck[4]/BatchNorm2d[bn1]']
-        assert isinstance(self.l_5,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[4]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_5)}'
-        self.l_6 = layers['ResNet/Sequential[layer3]/Bottleneck[4]/Conv2d[conv2]']
-        assert isinstance(self.l_6,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[4]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_6)}'
-        self.l_7 = layers['ResNet/Sequential[layer3]/Bottleneck[4]/BatchNorm2d[bn2]']
-        assert isinstance(self.l_7,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[4]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_7)}'
-        self.l_8 = layers['ResNet/Sequential[layer3]/Bottleneck[4]/Conv2d[conv3]']
-        assert isinstance(self.l_8,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[4]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_8)}'
-        self.l_9 = layers['ResNet/Sequential[layer3]/Bottleneck[4]/BatchNorm2d[bn3]']
-        assert isinstance(self.l_9,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[4]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_9)}'
-        self.l_10 = layers['ResNet/Sequential[layer3]/Bottleneck[5]/Conv2d[conv1]']
-        assert isinstance(self.l_10,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[5]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_10)}'
-        self.l_11 = layers['ResNet/Sequential[layer3]/Bottleneck[5]/BatchNorm2d[bn1]']
-        assert isinstance(self.l_11,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[5]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_11)}'
-        self.l_12 = layers['ResNet/Sequential[layer3]/Bottleneck[5]/Conv2d[conv2]']
-        assert isinstance(self.l_12,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[5]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_12)}'
-        self.l_13 = layers['ResNet/Sequential[layer3]/Bottleneck[5]/BatchNorm2d[bn2]']
-        assert isinstance(self.l_13,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[5]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_13)}'
-        self.l_14 = layers['ResNet/Sequential[layer3]/Bottleneck[5]/Conv2d[conv3]']
-        assert isinstance(self.l_14,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[5]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_14)}'
-        self.l_15 = layers['ResNet/Sequential[layer3]/Bottleneck[5]/BatchNorm2d[bn3]']
-        assert isinstance(self.l_15,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[5]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_15)}'
-        self.l_16 = layers['ResNet/Sequential[layer4]/Bottleneck[0]/Conv2d[conv1]']
-        assert isinstance(self.l_16,Conv2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[0]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_16)}'
-        self.l_17 = layers['ResNet/Sequential[layer4]/Bottleneck[0]/BatchNorm2d[bn1]']
-        assert isinstance(self.l_17,BatchNorm2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[0]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_17)}'
-        self.l_18 = layers['ResNet/Sequential[layer4]/Bottleneck[0]/Conv2d[conv2]']
-        assert isinstance(self.l_18,Conv2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[0]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_18)}'
-        self.l_19 = layers['ResNet/Sequential[layer4]/Bottleneck[0]/BatchNorm2d[bn2]']
-        assert isinstance(self.l_19,BatchNorm2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[0]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_19)}'
-        self.l_20 = layers['ResNet/Sequential[layer4]/Bottleneck[0]/Conv2d[conv3]']
-        assert isinstance(self.l_20,Conv2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[0]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_20)}'
-        self.l_21 = layers['ResNet/Sequential[layer4]/Bottleneck[0]/BatchNorm2d[bn3]']
-        assert isinstance(self.l_21,BatchNorm2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[0]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_21)}'
-        self.l_22 = layers['ResNet/Sequential[layer4]/Bottleneck[0]/Sequential[downsample]/Conv2d[0]']
-        assert isinstance(self.l_22,Conv2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[0]/Sequential[downsample]/Conv2d[0]] is expected to be of type Conv2d but was of type {type(self.l_22)}'
-        self.l_23 = layers['ResNet/Sequential[layer4]/Bottleneck[0]/Sequential[downsample]/BatchNorm2d[1]']
-        assert isinstance(self.l_23,BatchNorm2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[0]/Sequential[downsample]/BatchNorm2d[1]] is expected to be of type BatchNorm2d but was of type {type(self.l_23)}'
-        self.l_24 = layers['ResNet/Sequential[layer4]/Bottleneck[1]/Conv2d[conv1]']
-        assert isinstance(self.l_24,Conv2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[1]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_24)}'
-        self.l_25 = layers['ResNet/Sequential[layer4]/Bottleneck[1]/BatchNorm2d[bn1]']
-        assert isinstance(self.l_25,BatchNorm2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[1]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_25)}'
-        self.l_26 = layers['ResNet/Sequential[layer4]/Bottleneck[1]/Conv2d[conv2]']
-        assert isinstance(self.l_26,Conv2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[1]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_26)}'
-        self.l_27 = layers['ResNet/Sequential[layer4]/Bottleneck[1]/BatchNorm2d[bn2]']
-        assert isinstance(self.l_27,BatchNorm2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[1]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_27)}'
-        self.l_28 = layers['ResNet/Sequential[layer4]/Bottleneck[1]/Conv2d[conv3]']
-        assert isinstance(self.l_28,Conv2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[1]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_28)}'
-        self.l_29 = layers['ResNet/Sequential[layer4]/Bottleneck[1]/BatchNorm2d[bn3]']
-        assert isinstance(self.l_29,BatchNorm2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[1]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_29)}'
-        self.l_30 = layers['ResNet/Sequential[layer4]/Bottleneck[2]/Conv2d[conv1]']
-        assert isinstance(self.l_30,Conv2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[2]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_30)}'
-        self.l_31 = layers['ResNet/Sequential[layer4]/Bottleneck[2]/BatchNorm2d[bn1]']
-        assert isinstance(self.l_31,BatchNorm2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[2]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_31)}'
-        self.l_32 = layers['ResNet/Sequential[layer4]/Bottleneck[2]/Conv2d[conv2]']
-        assert isinstance(self.l_32,Conv2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[2]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_32)}'
-        self.l_33 = layers['ResNet/Sequential[layer4]/Bottleneck[2]/BatchNorm2d[bn2]']
-        assert isinstance(self.l_33,BatchNorm2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[2]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_33)}'
-        self.l_34 = layers['ResNet/Sequential[layer4]/Bottleneck[2]/Conv2d[conv3]']
-        assert isinstance(self.l_34,Conv2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[2]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_34)}'
-        self.l_35 = layers['ResNet/Sequential[layer4]/Bottleneck[2]/BatchNorm2d[bn3]']
-        assert isinstance(self.l_35,BatchNorm2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[2]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_35)}'
-        self.l_36 = layers['ResNet/Linear[fc]']
-        assert isinstance(self.l_36,Linear) ,f'layers[ResNet/Linear[fc]] is expected to be of type Linear but was of type {type(self.l_36)}'
+        self.l_0 = layers['ResNet/Sequential[layer3]/Bottleneck[3]/Conv2d[conv3]']
+        assert isinstance(self.l_0,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[3]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_0)}'
+        self.l_1 = layers['ResNet/Sequential[layer3]/Bottleneck[3]/BatchNorm2d[bn3]']
+        assert isinstance(self.l_1,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[3]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_1)}'
+        self.l_2 = layers['ResNet/Sequential[layer3]/Bottleneck[4]/Conv2d[conv1]']
+        assert isinstance(self.l_2,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[4]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_2)}'
+        self.l_3 = layers['ResNet/Sequential[layer3]/Bottleneck[4]/BatchNorm2d[bn1]']
+        assert isinstance(self.l_3,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[4]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_3)}'
+        self.l_4 = layers['ResNet/Sequential[layer3]/Bottleneck[4]/Conv2d[conv2]']
+        assert isinstance(self.l_4,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[4]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_4)}'
+        self.l_5 = layers['ResNet/Sequential[layer3]/Bottleneck[4]/BatchNorm2d[bn2]']
+        assert isinstance(self.l_5,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[4]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_5)}'
+        self.l_6 = layers['ResNet/Sequential[layer3]/Bottleneck[4]/Conv2d[conv3]']
+        assert isinstance(self.l_6,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[4]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_6)}'
+        self.l_7 = layers['ResNet/Sequential[layer3]/Bottleneck[4]/BatchNorm2d[bn3]']
+        assert isinstance(self.l_7,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[4]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_7)}'
+        self.l_8 = layers['ResNet/Sequential[layer3]/Bottleneck[5]/Conv2d[conv1]']
+        assert isinstance(self.l_8,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[5]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_8)}'
+        self.l_9 = layers['ResNet/Sequential[layer3]/Bottleneck[5]/BatchNorm2d[bn1]']
+        assert isinstance(self.l_9,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[5]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_9)}'
+        self.l_10 = layers['ResNet/Sequential[layer3]/Bottleneck[5]/Conv2d[conv2]']
+        assert isinstance(self.l_10,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[5]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_10)}'
+        self.l_11 = layers['ResNet/Sequential[layer3]/Bottleneck[5]/BatchNorm2d[bn2]']
+        assert isinstance(self.l_11,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[5]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_11)}'
+        self.l_12 = layers['ResNet/Sequential[layer3]/Bottleneck[5]/Conv2d[conv3]']
+        assert isinstance(self.l_12,Conv2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[5]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_12)}'
+        self.l_13 = layers['ResNet/Sequential[layer3]/Bottleneck[5]/BatchNorm2d[bn3]']
+        assert isinstance(self.l_13,BatchNorm2d) ,f'layers[ResNet/Sequential[layer3]/Bottleneck[5]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_13)}'
+        self.l_14 = layers['ResNet/Sequential[layer4]/Bottleneck[0]/Conv2d[conv1]']
+        assert isinstance(self.l_14,Conv2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[0]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_14)}'
+        self.l_15 = layers['ResNet/Sequential[layer4]/Bottleneck[0]/BatchNorm2d[bn1]']
+        assert isinstance(self.l_15,BatchNorm2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[0]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_15)}'
+        self.l_16 = layers['ResNet/Sequential[layer4]/Bottleneck[0]/Conv2d[conv2]']
+        assert isinstance(self.l_16,Conv2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[0]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_16)}'
+        self.l_17 = layers['ResNet/Sequential[layer4]/Bottleneck[0]/BatchNorm2d[bn2]']
+        assert isinstance(self.l_17,BatchNorm2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[0]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_17)}'
+        self.l_18 = layers['ResNet/Sequential[layer4]/Bottleneck[0]/Conv2d[conv3]']
+        assert isinstance(self.l_18,Conv2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[0]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_18)}'
+        self.l_19 = layers['ResNet/Sequential[layer4]/Bottleneck[0]/BatchNorm2d[bn3]']
+        assert isinstance(self.l_19,BatchNorm2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[0]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_19)}'
+        self.l_20 = layers['ResNet/Sequential[layer4]/Bottleneck[0]/Sequential[downsample]/Conv2d[0]']
+        assert isinstance(self.l_20,Conv2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[0]/Sequential[downsample]/Conv2d[0]] is expected to be of type Conv2d but was of type {type(self.l_20)}'
+        self.l_21 = layers['ResNet/Sequential[layer4]/Bottleneck[0]/Sequential[downsample]/BatchNorm2d[1]']
+        assert isinstance(self.l_21,BatchNorm2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[0]/Sequential[downsample]/BatchNorm2d[1]] is expected to be of type BatchNorm2d but was of type {type(self.l_21)}'
+        self.l_22 = layers['ResNet/Sequential[layer4]/Bottleneck[1]/Conv2d[conv1]']
+        assert isinstance(self.l_22,Conv2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[1]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_22)}'
+        self.l_23 = layers['ResNet/Sequential[layer4]/Bottleneck[1]/BatchNorm2d[bn1]']
+        assert isinstance(self.l_23,BatchNorm2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[1]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_23)}'
+        self.l_24 = layers['ResNet/Sequential[layer4]/Bottleneck[1]/Conv2d[conv2]']
+        assert isinstance(self.l_24,Conv2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[1]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_24)}'
+        self.l_25 = layers['ResNet/Sequential[layer4]/Bottleneck[1]/BatchNorm2d[bn2]']
+        assert isinstance(self.l_25,BatchNorm2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[1]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_25)}'
+        self.l_26 = layers['ResNet/Sequential[layer4]/Bottleneck[1]/Conv2d[conv3]']
+        assert isinstance(self.l_26,Conv2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[1]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_26)}'
+        self.l_27 = layers['ResNet/Sequential[layer4]/Bottleneck[1]/BatchNorm2d[bn3]']
+        assert isinstance(self.l_27,BatchNorm2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[1]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_27)}'
+        self.l_28 = layers['ResNet/Sequential[layer4]/Bottleneck[2]/Conv2d[conv1]']
+        assert isinstance(self.l_28,Conv2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[2]/Conv2d[conv1]] is expected to be of type Conv2d but was of type {type(self.l_28)}'
+        self.l_29 = layers['ResNet/Sequential[layer4]/Bottleneck[2]/BatchNorm2d[bn1]']
+        assert isinstance(self.l_29,BatchNorm2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[2]/BatchNorm2d[bn1]] is expected to be of type BatchNorm2d but was of type {type(self.l_29)}'
+        self.l_30 = layers['ResNet/Sequential[layer4]/Bottleneck[2]/Conv2d[conv2]']
+        assert isinstance(self.l_30,Conv2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[2]/Conv2d[conv2]] is expected to be of type Conv2d but was of type {type(self.l_30)}'
+        self.l_31 = layers['ResNet/Sequential[layer4]/Bottleneck[2]/BatchNorm2d[bn2]']
+        assert isinstance(self.l_31,BatchNorm2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[2]/BatchNorm2d[bn2]] is expected to be of type BatchNorm2d but was of type {type(self.l_31)}'
+        self.l_32 = layers['ResNet/Sequential[layer4]/Bottleneck[2]/Conv2d[conv3]']
+        assert isinstance(self.l_32,Conv2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[2]/Conv2d[conv3]] is expected to be of type Conv2d but was of type {type(self.l_32)}'
+        self.l_33 = layers['ResNet/Sequential[layer4]/Bottleneck[2]/BatchNorm2d[bn3]']
+        assert isinstance(self.l_33,BatchNorm2d) ,f'layers[ResNet/Sequential[layer4]/Bottleneck[2]/BatchNorm2d[bn3]] is expected to be of type BatchNorm2d but was of type {type(self.l_33)}'
+        self.l_34 = layers['ResNet/Linear[fc]']
+        assert isinstance(self.l_34,Linear) ,f'layers[ResNet/Linear[fc]] is expected to be of type Linear but was of type {type(self.l_34)}'
 
         # initializing partition buffers
         
         # initializing partition parameters
 
         self.device = torch.device('cuda:3')
-        self.lookup = { 'l_0': 'layer3.3.conv2',
-                        'l_1': 'layer3.3.bn2',
-                        'l_2': 'layer3.3.conv3',
-                        'l_3': 'layer3.3.bn3',
-                        'l_4': 'layer3.4.conv1',
-                        'l_5': 'layer3.4.bn1',
-                        'l_6': 'layer3.4.conv2',
-                        'l_7': 'layer3.4.bn2',
-                        'l_8': 'layer3.4.conv3',
-                        'l_9': 'layer3.4.bn3',
-                        'l_10': 'layer3.5.conv1',
-                        'l_11': 'layer3.5.bn1',
-                        'l_12': 'layer3.5.conv2',
-                        'l_13': 'layer3.5.bn2',
-                        'l_14': 'layer3.5.conv3',
-                        'l_15': 'layer3.5.bn3',
-                        'l_16': 'layer4.0.conv1',
-                        'l_17': 'layer4.0.bn1',
-                        'l_18': 'layer4.0.conv2',
-                        'l_19': 'layer4.0.bn2',
-                        'l_20': 'layer4.0.conv3',
-                        'l_21': 'layer4.0.bn3',
-                        'l_22': 'layer4.0.downsample.0',
-                        'l_23': 'layer4.0.downsample.1',
-                        'l_24': 'layer4.1.conv1',
-                        'l_25': 'layer4.1.bn1',
-                        'l_26': 'layer4.1.conv2',
-                        'l_27': 'layer4.1.bn2',
-                        'l_28': 'layer4.1.conv3',
-                        'l_29': 'layer4.1.bn3',
-                        'l_30': 'layer4.2.conv1',
-                        'l_31': 'layer4.2.bn1',
-                        'l_32': 'layer4.2.conv2',
-                        'l_33': 'layer4.2.bn2',
-                        'l_34': 'layer4.2.conv3',
-                        'l_35': 'layer4.2.bn3',
-                        'l_36': 'fc'}
+        self.lookup = { 'l_0': 'layer3.3.conv3',
+                        'l_1': 'layer3.3.bn3',
+                        'l_2': 'layer3.4.conv1',
+                        'l_3': 'layer3.4.bn1',
+                        'l_4': 'layer3.4.conv2',
+                        'l_5': 'layer3.4.bn2',
+                        'l_6': 'layer3.4.conv3',
+                        'l_7': 'layer3.4.bn3',
+                        'l_8': 'layer3.5.conv1',
+                        'l_9': 'layer3.5.bn1',
+                        'l_10': 'layer3.5.conv2',
+                        'l_11': 'layer3.5.bn2',
+                        'l_12': 'layer3.5.conv3',
+                        'l_13': 'layer3.5.bn3',
+                        'l_14': 'layer4.0.conv1',
+                        'l_15': 'layer4.0.bn1',
+                        'l_16': 'layer4.0.conv2',
+                        'l_17': 'layer4.0.bn2',
+                        'l_18': 'layer4.0.conv3',
+                        'l_19': 'layer4.0.bn3',
+                        'l_20': 'layer4.0.downsample.0',
+                        'l_21': 'layer4.0.downsample.1',
+                        'l_22': 'layer4.1.conv1',
+                        'l_23': 'layer4.1.bn1',
+                        'l_24': 'layer4.1.conv2',
+                        'l_25': 'layer4.1.bn2',
+                        'l_26': 'layer4.1.conv3',
+                        'l_27': 'layer4.1.bn3',
+                        'l_28': 'layer4.2.conv1',
+                        'l_29': 'layer4.2.bn1',
+                        'l_30': 'layer4.2.conv2',
+                        'l_31': 'layer4.2.bn2',
+                        'l_32': 'layer4.2.conv3',
+                        'l_33': 'layer4.2.bn3',
+                        'l_34': 'fc'}
 
     def forward(self, x0, x1):
-        # ResNet/Sequential[layer3]/Bottleneck[3]/Conv2d[conv2] <=> self.l_0
-        # ResNet/Sequential[layer3]/Bottleneck[3]/BatchNorm2d[bn2] <=> self.l_1
-        # ResNet/Sequential[layer3]/Bottleneck[3]/Conv2d[conv3] <=> self.l_2
-        # ResNet/Sequential[layer3]/Bottleneck[3]/BatchNorm2d[bn3] <=> self.l_3
-        # ResNet/Sequential[layer3]/Bottleneck[4]/Conv2d[conv1] <=> self.l_4
-        # ResNet/Sequential[layer3]/Bottleneck[4]/BatchNorm2d[bn1] <=> self.l_5
-        # ResNet/Sequential[layer3]/Bottleneck[4]/Conv2d[conv2] <=> self.l_6
-        # ResNet/Sequential[layer3]/Bottleneck[4]/BatchNorm2d[bn2] <=> self.l_7
-        # ResNet/Sequential[layer3]/Bottleneck[4]/Conv2d[conv3] <=> self.l_8
-        # ResNet/Sequential[layer3]/Bottleneck[4]/BatchNorm2d[bn3] <=> self.l_9
-        # ResNet/Sequential[layer3]/Bottleneck[5]/Conv2d[conv1] <=> self.l_10
-        # ResNet/Sequential[layer3]/Bottleneck[5]/BatchNorm2d[bn1] <=> self.l_11
-        # ResNet/Sequential[layer3]/Bottleneck[5]/Conv2d[conv2] <=> self.l_12
-        # ResNet/Sequential[layer3]/Bottleneck[5]/BatchNorm2d[bn2] <=> self.l_13
-        # ResNet/Sequential[layer3]/Bottleneck[5]/Conv2d[conv3] <=> self.l_14
-        # ResNet/Sequential[layer3]/Bottleneck[5]/BatchNorm2d[bn3] <=> self.l_15
-        # ResNet/Sequential[layer4]/Bottleneck[0]/Conv2d[conv1] <=> self.l_16
-        # ResNet/Sequential[layer4]/Bottleneck[0]/BatchNorm2d[bn1] <=> self.l_17
-        # ResNet/Sequential[layer4]/Bottleneck[0]/Conv2d[conv2] <=> self.l_18
-        # ResNet/Sequential[layer4]/Bottleneck[0]/BatchNorm2d[bn2] <=> self.l_19
-        # ResNet/Sequential[layer4]/Bottleneck[0]/Conv2d[conv3] <=> self.l_20
-        # ResNet/Sequential[layer4]/Bottleneck[0]/BatchNorm2d[bn3] <=> self.l_21
-        # ResNet/Sequential[layer4]/Bottleneck[0]/Sequential[downsample]/Conv2d[0] <=> self.l_22
-        # ResNet/Sequential[layer4]/Bottleneck[0]/Sequential[downsample]/BatchNorm2d[1] <=> self.l_23
-        # ResNet/Sequential[layer4]/Bottleneck[1]/Conv2d[conv1] <=> self.l_24
-        # ResNet/Sequential[layer4]/Bottleneck[1]/BatchNorm2d[bn1] <=> self.l_25
-        # ResNet/Sequential[layer4]/Bottleneck[1]/Conv2d[conv2] <=> self.l_26
-        # ResNet/Sequential[layer4]/Bottleneck[1]/BatchNorm2d[bn2] <=> self.l_27
-        # ResNet/Sequential[layer4]/Bottleneck[1]/Conv2d[conv3] <=> self.l_28
-        # ResNet/Sequential[layer4]/Bottleneck[1]/BatchNorm2d[bn3] <=> self.l_29
-        # ResNet/Sequential[layer4]/Bottleneck[2]/Conv2d[conv1] <=> self.l_30
-        # ResNet/Sequential[layer4]/Bottleneck[2]/BatchNorm2d[bn1] <=> self.l_31
-        # ResNet/Sequential[layer4]/Bottleneck[2]/Conv2d[conv2] <=> self.l_32
-        # ResNet/Sequential[layer4]/Bottleneck[2]/BatchNorm2d[bn2] <=> self.l_33
-        # ResNet/Sequential[layer4]/Bottleneck[2]/Conv2d[conv3] <=> self.l_34
-        # ResNet/Sequential[layer4]/Bottleneck[2]/BatchNorm2d[bn3] <=> self.l_35
-        # ResNet/Linear[fc] <=> self.l_36
+        # ResNet/Sequential[layer3]/Bottleneck[3]/Conv2d[conv3] <=> self.l_0
+        # ResNet/Sequential[layer3]/Bottleneck[3]/BatchNorm2d[bn3] <=> self.l_1
+        # ResNet/Sequential[layer3]/Bottleneck[4]/Conv2d[conv1] <=> self.l_2
+        # ResNet/Sequential[layer3]/Bottleneck[4]/BatchNorm2d[bn1] <=> self.l_3
+        # ResNet/Sequential[layer3]/Bottleneck[4]/Conv2d[conv2] <=> self.l_4
+        # ResNet/Sequential[layer3]/Bottleneck[4]/BatchNorm2d[bn2] <=> self.l_5
+        # ResNet/Sequential[layer3]/Bottleneck[4]/Conv2d[conv3] <=> self.l_6
+        # ResNet/Sequential[layer3]/Bottleneck[4]/BatchNorm2d[bn3] <=> self.l_7
+        # ResNet/Sequential[layer3]/Bottleneck[5]/Conv2d[conv1] <=> self.l_8
+        # ResNet/Sequential[layer3]/Bottleneck[5]/BatchNorm2d[bn1] <=> self.l_9
+        # ResNet/Sequential[layer3]/Bottleneck[5]/Conv2d[conv2] <=> self.l_10
+        # ResNet/Sequential[layer3]/Bottleneck[5]/BatchNorm2d[bn2] <=> self.l_11
+        # ResNet/Sequential[layer3]/Bottleneck[5]/Conv2d[conv3] <=> self.l_12
+        # ResNet/Sequential[layer3]/Bottleneck[5]/BatchNorm2d[bn3] <=> self.l_13
+        # ResNet/Sequential[layer4]/Bottleneck[0]/Conv2d[conv1] <=> self.l_14
+        # ResNet/Sequential[layer4]/Bottleneck[0]/BatchNorm2d[bn1] <=> self.l_15
+        # ResNet/Sequential[layer4]/Bottleneck[0]/Conv2d[conv2] <=> self.l_16
+        # ResNet/Sequential[layer4]/Bottleneck[0]/BatchNorm2d[bn2] <=> self.l_17
+        # ResNet/Sequential[layer4]/Bottleneck[0]/Conv2d[conv3] <=> self.l_18
+        # ResNet/Sequential[layer4]/Bottleneck[0]/BatchNorm2d[bn3] <=> self.l_19
+        # ResNet/Sequential[layer4]/Bottleneck[0]/Sequential[downsample]/Conv2d[0] <=> self.l_20
+        # ResNet/Sequential[layer4]/Bottleneck[0]/Sequential[downsample]/BatchNorm2d[1] <=> self.l_21
+        # ResNet/Sequential[layer4]/Bottleneck[1]/Conv2d[conv1] <=> self.l_22
+        # ResNet/Sequential[layer4]/Bottleneck[1]/BatchNorm2d[bn1] <=> self.l_23
+        # ResNet/Sequential[layer4]/Bottleneck[1]/Conv2d[conv2] <=> self.l_24
+        # ResNet/Sequential[layer4]/Bottleneck[1]/BatchNorm2d[bn2] <=> self.l_25
+        # ResNet/Sequential[layer4]/Bottleneck[1]/Conv2d[conv3] <=> self.l_26
+        # ResNet/Sequential[layer4]/Bottleneck[1]/BatchNorm2d[bn3] <=> self.l_27
+        # ResNet/Sequential[layer4]/Bottleneck[2]/Conv2d[conv1] <=> self.l_28
+        # ResNet/Sequential[layer4]/Bottleneck[2]/BatchNorm2d[bn1] <=> self.l_29
+        # ResNet/Sequential[layer4]/Bottleneck[2]/Conv2d[conv2] <=> self.l_30
+        # ResNet/Sequential[layer4]/Bottleneck[2]/BatchNorm2d[bn2] <=> self.l_31
+        # ResNet/Sequential[layer4]/Bottleneck[2]/Conv2d[conv3] <=> self.l_32
+        # ResNet/Sequential[layer4]/Bottleneck[2]/BatchNorm2d[bn3] <=> self.l_33
+        # ResNet/Linear[fc] <=> self.l_34
         # ResNet/Sequential[layer3]/Bottleneck[2]/aten::relu4819 <=> x0
-        # ResNet/Sequential[layer3]/Bottleneck[3]/aten::relu4855 <=> x1
+        # ResNet/Sequential[layer3]/Bottleneck[3]/aten::relu4885 <=> x1
 
         # moving inputs to current device no op if already on the correct device
         x0 = x0.to(self.device)
@@ -825,29 +936,29 @@ class Partition3(nn.Module):
 
         # calling torch.relu with arguments:
         # ResNet/Sequential[layer3]/Bottleneck[3]/aten::add_4916
-        t_0 = Tensor.relu(operator.iadd(self.l_3(self.l_2(Tensor.relu(self.l_1(self.l_0(x1))))), x0))
+        t_0 = Tensor.relu(operator.iadd(self.l_1(self.l_0(x1)), x0))
         # calling torch.relu with arguments:
         # ResNet/Sequential[layer3]/Bottleneck[4]/aten::add_5014
-        t_1 = Tensor.relu(operator.iadd(self.l_9(self.l_8(Tensor.relu(self.l_7(self.l_6(Tensor.relu(self.l_5(self.l_4(t_0)))))))), t_0))
+        t_1 = Tensor.relu(operator.iadd(self.l_7(self.l_6(Tensor.relu(self.l_5(self.l_4(Tensor.relu(self.l_3(self.l_2(t_0)))))))), t_0))
         # calling torch.relu with arguments:
         # ResNet/Sequential[layer3]/Bottleneck[5]/aten::add_5112
-        t_2 = Tensor.relu(operator.iadd(self.l_15(self.l_14(Tensor.relu(self.l_13(self.l_12(Tensor.relu(self.l_11(self.l_10(t_1)))))))), t_1))
+        t_2 = Tensor.relu(operator.iadd(self.l_13(self.l_12(Tensor.relu(self.l_11(self.l_10(Tensor.relu(self.l_9(self.l_8(t_1)))))))), t_1))
         # calling torch.relu with arguments:
         # ResNet/Sequential[layer4]/Bottleneck[0]/aten::add_5245
-        t_3 = Tensor.relu(operator.iadd(self.l_21(self.l_20(Tensor.relu(self.l_19(self.l_18(Tensor.relu(self.l_17(self.l_16(t_2)))))))), self.l_23(self.l_22(t_2))))
+        t_3 = Tensor.relu(operator.iadd(self.l_19(self.l_18(Tensor.relu(self.l_17(self.l_16(Tensor.relu(self.l_15(self.l_14(t_2)))))))), self.l_21(self.l_20(t_2))))
         # calling torch.relu with arguments:
         # ResNet/Sequential[layer4]/Bottleneck[1]/aten::add_5343
-        t_4 = Tensor.relu(operator.iadd(self.l_29(self.l_28(Tensor.relu(self.l_27(self.l_26(Tensor.relu(self.l_25(self.l_24(t_3)))))))), t_3))
+        t_4 = Tensor.relu(operator.iadd(self.l_27(self.l_26(Tensor.relu(self.l_25(self.l_24(Tensor.relu(self.l_23(self.l_22(t_3)))))))), t_3))
         # calling torch.relu with arguments:
         # ResNet/Sequential[layer4]/Bottleneck[2]/aten::add_5441
-        t_5 = Tensor.relu(operator.iadd(self.l_35(self.l_34(Tensor.relu(self.l_33(self.l_32(Tensor.relu(self.l_31(self.l_30(t_4)))))))), t_4))
+        t_5 = Tensor.relu(operator.iadd(self.l_33(self.l_32(Tensor.relu(self.l_31(self.l_30(Tensor.relu(self.l_29(self.l_28(t_4)))))))), t_4))
         # calling F.adaptive_avg_pool2d with arguments:
         # ResNet/Sequential[layer4]/Bottleneck[2]/aten::relu5442
         # ResNet/prim::ListConstruct2973
         t_6 = F.adaptive_avg_pool2d(t_5, [1, 1])
         # returing:
         # ResNet/Linear[fc]
-        return (self.l_36(Tensor.flatten(t_6, start_dim=1, end_dim=-1)),)
+        return (self.l_34(Tensor.flatten(t_6, start_dim=1, end_dim=-1)),)
 
     def state_dict(self,device=None):
         # we return the state dict of this part as it should be in the original model
@@ -957,8 +1068,7 @@ def state_dict(partition, device=None):
 
 def load_state_dict(partition, state):
     reverse_lookup = {v: k for k, v in partition.lookup.items()}
-    ts = chain(partition.named_parameters(), partition.named_buffers())
-    device = list(ts)[0][1].device
+    device = partition.device
     keys = list(partition.state_dict(None).keys())
     new_state = dict()
     for k in keys:

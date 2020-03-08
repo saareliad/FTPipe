@@ -101,8 +101,7 @@ def state_dict(partition, device=None):
 
 def load_state_dict(partition, state):
     reverse_lookup = {v: k for k, v in partition.lookup.items()}
-    ts = chain(partition.named_parameters(), partition.named_buffers())
-    device = list(ts)[0][1].device
+    device = partition.device
     keys = list(partition.state_dict(None).keys())
     new_state = dict()
     for k in keys:

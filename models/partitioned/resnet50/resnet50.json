@@ -3,9 +3,9 @@
   "batch_size": 32,
   "depth": -1,
   "basic_blocks": [
-    "torch.nn.modules.conv.Conv2d",
     "torch.nn.modules.linear.Linear",
-    "torch.nn.modules.batchnorm.BatchNorm2d"
+    "torch.nn.modules.batchnorm.BatchNorm2d",
+    "torch.nn.modules.conv.Conv2d"
   ],
   "model_inputs": ["input0"],
   "model_input_shapes": [[1, 3, 224, 224]],
@@ -16,43 +16,43 @@
       "batch_dim": 0,
       "batch_size": 32,
       "inputs": ["input0"],
-      "outputs": ["ResNet/Sequential[layer1]/Bottleneck[1]/aten::add_3960"],
+      "outputs": [
+        "ResNet/Sequential[layer1]/Bottleneck[1]/aten::relu3961",
+        "ResNet/Sequential[layer1]/Bottleneck[2]/aten::relu3997"
+      ],
       "input_shapes": [[1, 3, 224, 224]],
-      "output_shapes": [[1, 256, 56, 56]],
+      "output_shapes": [
+        [1, 256, 56, 56],
+        [1, 64, 56, 56]
+      ],
       "stage_cls": "models.partitioned.resnet50.resnet50.Partition0",
       "devices": ["cpu"]
     },
     "1": {
       "batch_dim": 0,
       "batch_size": 32,
-      "inputs": ["ResNet/Sequential[layer1]/Bottleneck[1]/aten::add_3960"],
-      "outputs": [
-        "ResNet/Sequential[layer2]/Bottleneck[1]/aten::relu4291",
-        "ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv1]"
+      "inputs": [
+        "ResNet/Sequential[layer1]/Bottleneck[1]/aten::relu3961",
+        "ResNet/Sequential[layer1]/Bottleneck[2]/aten::relu3997"
       ],
-      "input_shapes": [[1, 256, 56, 56]],
-      "output_shapes": [
-        [1, 512, 28, 28],
-        [1, 128, 28, 28]
+      "outputs": ["ResNet/Sequential[layer2]/Bottleneck[2]/aten::add_4388"],
+      "input_shapes": [
+        [1, 256, 56, 56],
+        [1, 64, 56, 56]
       ],
+      "output_shapes": [[1, 512, 28, 28]],
       "stage_cls": "models.partitioned.resnet50.resnet50.Partition1",
       "devices": ["cpu"]
     },
     "2": {
       "batch_dim": 0,
       "batch_size": 32,
-      "inputs": [
-        "ResNet/Sequential[layer2]/Bottleneck[1]/aten::relu4291",
-        "ResNet/Sequential[layer2]/Bottleneck[2]/Conv2d[conv1]"
-      ],
+      "inputs": ["ResNet/Sequential[layer2]/Bottleneck[2]/aten::add_4388"],
       "outputs": [
         "ResNet/Sequential[layer3]/Bottleneck[2]/aten::relu4819",
-        "ResNet/Sequential[layer3]/Bottleneck[3]/aten::relu4855"
+        "ResNet/Sequential[layer3]/Bottleneck[3]/aten::relu4885"
       ],
-      "input_shapes": [
-        [1, 512, 28, 28],
-        [1, 128, 28, 28]
-      ],
+      "input_shapes": [[1, 512, 28, 28]],
       "output_shapes": [
         [1, 1024, 14, 14],
         [1, 256, 14, 14]
@@ -65,7 +65,7 @@
       "batch_size": 32,
       "inputs": [
         "ResNet/Sequential[layer3]/Bottleneck[2]/aten::relu4819",
-        "ResNet/Sequential[layer3]/Bottleneck[3]/aten::relu4855"
+        "ResNet/Sequential[layer3]/Bottleneck[3]/aten::relu4885"
       ],
       "outputs": ["ResNet/Linear[fc]"],
       "input_shapes": [
