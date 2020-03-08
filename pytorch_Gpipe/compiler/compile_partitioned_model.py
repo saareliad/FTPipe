@@ -219,21 +219,21 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
     # create and return the partition config
 
     def format_dict(d):
-        items = [f'"{k}":{v}' for k, v in d.items()]
+        items = [f'"{k}": {v}' for k, v in d.items()]
         return "{" + f",\n{dtab}".join(items) + "}"
 
     exp = f',\n{dtab}{tab}'.join(
-        [f"'{k}': {format_dict(v)}" for k, v in ios.items()])
+        [f"{k}: {format_dict(v)}" for k, v in ios.items()])
     lines.append(
         f"# creating configuration\n{tab}stages = {{{exp}\n{dtab}{tab}}}")
 
     for idx in sorted(list(ios.keys())):
         lines.extend(["\n",
-                      f"stages['{idx}']['batch_dim'] = {batch_dim}",
-                      f"stages['{idx}']['batch_size'] =stages['{idx}']['output_shapes'][0][{batch_dim}]",
-                      f"stages['{idx}']['stage_cls'] = module_path + '.Partition{idx}'",
-                      f"device = 'cpu' if DEBUG else'cuda:{idx}'",
-                      f"stages['{idx}']['devices'] = [device]",
+                      f"stages[{idx}]['batch_dim'] = {batch_dim}",
+                      f"stages[{idx}]['batch_size'] =stages[{idx}]['output_shapes'][0][{batch_dim}]",
+                      f"stages[{idx}]['stage_cls'] = module_path + '.Partition{idx}'",
+                      f"device = 'cpu' if DEBUG else 'cuda:{idx}'",
+                      f"stages[{idx}]['devices'] = [device]",
                       ])
 
     input_ids = [f"'input{idx}'" for idx in range(graph.num_inputs)]
@@ -245,7 +245,7 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
         "\n",
         "config = dict()",
         f"config['batch_dim'] = {batch_dim}",
-        f"config['batch_size'] = stages['0']['batch_size']",
+        f"config['batch_size'] = stages[0]['batch_size']",
         f"config['depth'] = depth",
         f"config['basic_blocks'] = blocks_path",
         f"config['model_inputs'] = [{', '.join(input_ids)}]",
