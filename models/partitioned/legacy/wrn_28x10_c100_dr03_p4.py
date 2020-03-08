@@ -22,7 +22,7 @@ from torch.nn.modules.conv import Conv2d
 # partition 3 {'inputs': {2}, 'outputs': {'output0'}}
 # model outputs {3}
 
-def create_pipeline_configuration(model,DEBUG=False,partitions_only=False):
+def createConfig(model,DEBUG=False,partitions_only=False):
     layer_dict = layerDict(model)
     tensor_dict = tensorDict(model)
     

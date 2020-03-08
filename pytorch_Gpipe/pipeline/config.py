@@ -304,6 +304,8 @@ class PipelineConfig():
         if path is None:
             return json_str
 
+        if not path.endswith(".json"):
+            path = path + ".json"
         with open(path, "w") as f:
             f.write(json_str)
 
@@ -332,6 +334,8 @@ class PipelineConfig():
 
     @classmethod
     def fromJson(cls, json_path: str) -> "PipelineConfig":
+        if not json_path.endswith(".json"):
+            json_path = json_path + ".json"
         if os.path.exists(json_path):
             with open(json_path, "r") as f:
                 state = json.load(f)
