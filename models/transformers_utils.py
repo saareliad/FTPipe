@@ -84,5 +84,14 @@ PARTITIONING_AND_TOKENIZER_FUNCTIONS = {
 
 
 def get_partitioning_tokenizer_and_config_by_name(name):
-    print(name)
     return PARTITIONING_AND_TOKENIZER_FUNCTIONS.get(name)()
+
+
+MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS = {
+    'gpt2': gpt2_lowercase,
+    'gpt2_lowercase': gpt2_lowercase
+}
+
+
+def get_model_tokenizer_and_config_by_name(name):
+    return MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS.get(name)()

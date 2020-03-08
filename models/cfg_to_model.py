@@ -94,7 +94,7 @@ def infer_partitioning_config_version(cfg):
 
     if hasattr(generated, "createConfig"):
         partitioning_version_to_use = 0
-    elif len(signature(createConfig) == 1):
+    elif len(signature(createConfig).parameters) == 1:
         partitioning_version_to_use = 1
     else:
         partitioning_version_to_use = 0  # same stuff different name
