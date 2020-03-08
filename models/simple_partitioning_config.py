@@ -31,19 +31,20 @@ class PipelineConfig():
     def add_input(self, input_name: str,
                   shape: Tuple[int, ...]) -> "PipelineConfig":
         self.model_inputs.append(input_name)
+        shape = list(shape)
+        shape = shape[:self.batch_dim] + [
+            self.DEFAULT_BATCH_SIZE, ] + shape[self.batch_dim + 1:]
 
-        shape = shape[:self.batch_dim] + (
-            self.DEFAULT_BATCH_SIZE, ) + shape[self.batch_dim + 1:]
-
-        self.model_input_shapes.append(torch.Size(shape))
+        self.model_input_shapes.append(shape)
         return self
 
     def add_output(self, output_name: str,
                    shape: Tuple[int, ...]) -> "PipelineConfig":
         self.model_outputs.append(output_name)
-        shape = shape[:self.batch_dim] + (
-            self.DEFAULT_BATCH_SIZE, ) + shape[self.batch_dim + 1:]
-        self.model_output_shapes.append(torch.Size(shape))
+        shape = list(shape)
+        shape = shape[:self.batch_dim] + [
+            self.DEFAULT_BATCH_SIZE, ] + shape[self.batch_dim + 1:]
+        self.model_output_shapes.append(shape)
         return self
 
     def add_stage(self, stage_class: nn.Module) -> "StageConfig":
@@ -137,7 +138,7 @@ class PipelineConfig():
 
         for shape in self.model_output_shapes:
             shape[self.batch_dim] = batch_size
-        
+
         for stage in self.stages.values():
             stage.change_batch(batch_size, for_replicated=for_replicated)
 
@@ -225,13 +226,10 @@ class PipelineConfig():
             for block in self.basic_blocks
         ]
         state["model_inputs"] = self.model_inputs
-        state["model_input_shapes"] = [
-            list(s) for s in self.model_input_shapes
-        ]
+        state["model_input_shapes"] = self.model_input_shapes
+
         state["model_outputs"] = self.model_outputs
-        state["model_output_shapes"] = [
-            list(s) for s in self.model_output_shapes
-        ]
+        state["model_output_shapes"] = self.model_output_shapes
 
         state["stages"] = {
             str(idx): stage.state_dict()
@@ -264,14 +262,11 @@ class PipelineConfig():
         ]
         config = cls(state['batch_dim'], depth, basic_blocks)
         config.model_inputs = state['model_inputs']
-        config.model_input_shapes = [
-            torch.Size(s) for s in state['model_input_shapes']
-        ]
+        config.model_input_shapes = state['model_input_shapes']
         config.model_outputs = state['model_outputs']
-        config.model_output_shapes = [
-            torch.Size(s) for s in state['model_output_shapes']
-        ]
+        config.model_output_shapes = state['model_output_shapes']
         config.stages = stages
+        assert config.isValid()
         return config
 
     @classmethod
@@ -301,17 +296,19 @@ class StageConfig():
     def add_input(self, input_name: str,
                   shape: Tuple[int, ...]) -> "StageConfig":
         self.inputs.append(input_name)
-        shape = shape[:self.batch_dim] + (
-            self.DEFAULT_BATCH_SIZE, ) + shape[self.batch_dim + 1:]
-        self.input_shapes.append(torch.Size(shape))
+        shape = list(shape)
+        shape = shape[:self.batch_dim] + [
+            self.DEFAULT_BATCH_SIZE, ] + shape[self.batch_dim + 1:]
+        self.input_shapes.append(shape)
         return self
 
     def add_output(self, output_name: str,
                    shape: Tuple[int, ...]) -> "StageConfig":
         self.outputs.append(output_name)
-        shape = shape[:self.batch_dim] + (
-            self.DEFAULT_BATCH_SIZE, ) + shape[self.batch_dim + 1:]
-        self.output_shapes.append(torch.Size(shape))
+        shape = list(shape)
+        shape = shape[:self.batch_dim] + [
+            self.DEFAULT_BATCH_SIZE, ] + shape[self.batch_dim + 1:]
+        self.output_shapes.append(shape)
         return self
 
     def add_devices(self, *devices: Iterable[torch.device]) -> "StageConfig":
@@ -360,8 +357,8 @@ class StageConfig():
         state['batch_dim'] = self.batch_dim
         state['inputs'] = list(self.inputs)
         state['outputs'] = list(self.outputs)
-        state['input_shapes'] = [list(s) for s in self.input_shapes]
-        state['output_shapes'] = [list(s) for s in self.output_shapes]
+        state['input_shapes'] = self.input_shapes
+        state['output_shapes'] = self.output_shapes
 
         stage_module = inspect.getmodule(self._stage_class)
         stage_name = self._stage_class.__name__
@@ -386,9 +383,10 @@ class StageConfig():
         config.inputs = inputs
         config.outputs = outputs
         config.devices = devices
-        config.input_shapes = [torch.Size(s) for s in state['input_shapes']]
-        config.output_shapes = [torch.Size(s) for s in state['output_shapes']]
+        config.input_shapes = state['input_shapes']
+        config.output_shapes = state['output_shapes']
 
+        assert config.isValid()
         return config
 
 
