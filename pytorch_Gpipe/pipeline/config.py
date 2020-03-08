@@ -427,7 +427,7 @@ class StageConfig():
         if (self._lr_scheduler_args[0] != None) and self._optimizer_args[0] is None:
             return False
 
-        return no_duplicates and has_in_out and disjoint and has_ranks and (self.batch_size > self.n_ranks)
+        return no_duplicates and has_in_out and disjoint and has_ranks and (self.batch_size >= self.n_ranks)
 
     def realize(self, layers: Dict[str, Tensor], tensors: Dict[str, Tensor]) -> Tuple[nn.Module, torch.device, Optional[Optimizer], Optional[_LRScheduler], int]:
         assert self.isValid()
