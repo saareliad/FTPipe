@@ -37,12 +37,12 @@ class SimpleCommBase(CommunicationHandlerBase):
         self.send_ranks = send_ranks
         self.tensor_tags = tensor_tags
         self.TOTAL_TAGS = TOTAL_TAGS
-        
+
+        self.tensors_names_with_no_grad = set()
+
         # Optional
-        target_tensor_names = target_tensor_names if target_tensor_names else set()
-        self.target_tensor_names = target_tensor_names
-        self.ranks_in_previous_stage = ranks_in_previous_stage
-        self.ranks_in_next_stage = ranks_in_next_stage
+        if target_tensor_names:
+            self.tensor_names_with_no_grad.update(target_tensor_names)
 
         self.cpu = cpu
         self.device = device
@@ -53,12 +53,15 @@ class SimpleCommBase(CommunicationHandlerBase):
         # can spare the if, intentionally ugly.
         self.grad_rcv_items = [(i + GRAD_UGLY_SHAMEFUL_NAME, v)
                                for i, v in self.send_ranks.items()
-                               if not (i in target_tensor_names)]
+                               if not (i in self.tensors_names_with_no_grad)]
         self.grad_send_items = [(i + GRAD_UGLY_SHAMEFUL_NAME, v)
                                 for i, v in self.receive_ranks.items()
-                                if not (i in target_tensor_names)]
+                                if not (i in self.tensors_names_with_no_grad)]
 
-        self._register_target_tensor()  # If needed.
+        if target_tensor_names:
+            self._register_target_tensor(target_tensor_names,
+                                         ranks_in_previous_stage,
+                                         ranks_in_next_stage)  # If needed.
 
         self.logger.debug(f"Send ranks: {self.send_ranks}")
         self.logger.debug(f"Receive ranks: {self.receive_ranks}")
@@ -77,17 +80,18 @@ class SimpleCommBase(CommunicationHandlerBase):
             f"Initialized process group; backend: {backend}, rank: {rank}, "
             f"local_rank: {local_rank}, world_size: {world_size}")
 
-    def _register_target_tensor(self):
+    def _register_target_tensor(self, target_tensor_names,
+                                ranks_in_previous_stage, ranks_in_next_stage):
         # FIXME: Its inefficient to pass the targets all the way to the end.
         # It can be replaced by propper data loaders and timing.
         # However, when using dataloaders are in different machines,
         # we need to test and assert that the loading and shuffling is done in the same order.
-        for target_tensor_name in self.target_tensor_names:
-            if len(self.ranks_in_previous_stage) > 0:
+        for target_tensor_name in target_tensor_names:
+            if len(ranks_in_previous_stage) > 0:
                 self.receive_ranks[
-                    target_tensor_name] = self.ranks_in_previous_stage
+                    target_tensor_name] = ranks_in_previous_stage
             if len(self.ranks_in_next_stage) > 0:
-                self.send_ranks[target_tensor_name] = self.ranks_in_next_stage
+                self.send_ranks[target_tensor_name] = ranks_in_next_stage
 
     def set_tensor_shapes(self, tensor_shapes):
         self.tensor_shapes = tensor_shapes
@@ -126,7 +130,7 @@ class SimpleCommBase(CommunicationHandlerBase):
         # FIXME chunks
         tensor_names = [
             i for i in self.send_ranks.keys()
-            if not (i in self.target_tensor_names)
+            if not (i in self.tensors_names_with_no_grad)
         ]
         return self._create_recv_buffers(device,
                                          tensor_names,
