@@ -3,13 +3,14 @@ from .interface import CommunicationHandlerBase
 # from .bcast import BCASTCommunicationHandler
 from .p2p import P2PCommunicationHandler
 from .replicated import P2PRankIO as ReplicatedCommunicationHandler
+from .replicated import create_worker_args
 
 # TODO: We want to support hybrid comm
 # TODO: Add alon's generic comm.
 
 __all__ = [
     "get_auto_comm_handler_cls", "CommunicationHandlerBase",
-    "P2PCommunicationHandler", "ReplicatedCommunicationHandler"
+    "P2PCommunicationHandler", "ReplicatedCommunicationHandler",
 ]
 
 from enum import Enum, auto
@@ -26,6 +27,7 @@ def to_policy(backend, cpu):
     if backend == 'mpi' or cpu:
         return CommPolicy.P2P
 
+    raise NotImplementedError("CommPolicy.BCAST")
     return CommPolicy.BCAST
 
 

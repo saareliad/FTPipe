@@ -1,6 +1,5 @@
 import torch
 import logging
-from typing import Dict
 from collections import OrderedDict
 from . import CommunicationHandlerBase
 from .partition import Partition, LastPartition, FirstPartition, PartitionWithoutRecomputation
@@ -22,16 +21,30 @@ from .true_weights_storage import TrueWeightsStorage
 
 class SinglePartitionManager:
     PROBLEMATIC_POLICY = 'SAME'
+
     # PROBLEMATIC_POLICY = 'SKIP'
 
-    def __init__(self, stage, num_stages, partition: torch.nn.Module,
-                 comm_handler: CommunicationHandlerBase,
-                 work_scheduler: WorkScheduler,
-                 training_tensor_shapes, eval_tensor_shapes, training_tensor_dtypes,  # FIXME
-                 device, is_last_partition, is_first_partition, log_frequency=100, max_buffers=2, step_every=1,
-                 keep_buffers_alive=False, use_recomputation=True,
-                 gap_aware_just_loss=False, sync_buffers=False,
-                 ):
+    def __init__(
+            self,
+            stage,
+            num_stages,
+            partition: torch.nn.Module,
+            comm_handler: CommunicationHandlerBase,
+            work_scheduler: WorkScheduler,
+            training_tensor_shapes,
+            eval_tensor_shapes,
+            training_tensor_dtypes,  # FIXME
+            device,
+            is_last_partition,
+            is_first_partition,
+            log_frequency=100,
+            max_buffers=2,
+            step_every=1,
+            keep_buffers_alive=False,
+            use_recomputation=True,
+            gap_aware_just_loss=False,
+            sync_buffers=False,
+    ):
 
         if (gap_aware_just_loss and (not use_recomputation)):
             raise NotImplementedError(
@@ -53,22 +66,28 @@ class SinglePartitionManager:
                 partition_cls = FirstPartition
             else:
                 partition_cls = Partition
-            self.partition = partition_cls(
-                partition, device, to_device=TO_DEVICE)
+            self.partition = partition_cls(partition,
+                                           device,
+                                           to_device=TO_DEVICE)
         else:
             # Partition without recomputation
             if is_last_partition:
                 partition_cls = LastPartition
-                self.partition = partition_cls(
-                    partition, device, to_device=TO_DEVICE)
+                self.partition = partition_cls(partition,
+                                               device,
+                                               to_device=TO_DEVICE)
             elif is_first_partition:
                 partition_cls = PartitionWithoutRecomputation
-                self.partition = partition_cls(
-                    partition, device, to_device=TO_DEVICE, _REQ_GRAD=False)
+                self.partition = partition_cls(partition,
+                                               device,
+                                               to_device=TO_DEVICE,
+                                               _REQ_GRAD=False)
             else:
                 partition_cls = PartitionWithoutRecomputation
-                self.partition = partition_cls(
-                    partition, device, to_device=TO_DEVICE, _REQ_GRAD=True)
+                self.partition = partition_cls(partition,
+                                               device,
+                                               to_device=TO_DEVICE,
+                                               _REQ_GRAD=True)
 
         if not TO_DEVICE:
             self.partition.to(device)
@@ -77,7 +96,7 @@ class SinglePartitionManager:
         comm_handler.init_process_group()
         self.is_replicated = False
         self.sync_buffers = sync_buffers
-        
+
         if hasattr(comm_handler, "init_ddp_context"):
             ddp = comm_handler.init_ddp_context(self.partition.layers)
             self.partition.layers = ddp
@@ -86,8 +105,8 @@ class SinglePartitionManager:
                 f"Initialized DDP stage replication for for stage {stage}.")
             self.backward_nosync_context_manager = ddp.no_sync
             if sync_buffers:
-                self.buffers_to_sync = get_buffers_for_ddp_sync(partition.layers)
-
+                self.buffers_to_sync = get_buffers_for_ddp_sync(
+                    partition.layers)
 
         self.training_tensor_shapes = training_tensor_shapes
         self.eval_tensor_shapes = eval_tensor_shapes
@@ -110,7 +129,8 @@ class SinglePartitionManager:
         self.is_problematic = is_problematic
         if is_problematic:
             print(
-                f"-V- Patching problematic batches {fwds} for stage {self.stage}")
+                f"-V- Patching problematic batches {fwds} for stage {self.stage}"
+            )
             if self.step_every > 2:
                 raise NotImplementedError("check in shcedulers.")
 
@@ -135,14 +155,16 @@ class SinglePartitionManager:
         def make_buff(is_bwd, create=False):
 
             if is_bwd:
-                b = Buffers(
-                    max_buffers, self.comm_handler.create_gradients_rcv_buffers,
-                    self.device, self.comm_handler.recv_gradients, is_grad=True)
+                b = Buffers(max_buffers,
+                            self.comm_handler.create_gradients_rcv_buffers,
+                            self.comm_handler.recv_gradients,
+                            is_grad=True)
 
             else:
-                b = Buffers(
-                    max_buffers, self.comm_handler.create_activations_recv_buffers,
-                    self.device, self.comm_handler.recv_activations, is_grad=False)
+                b = Buffers(max_buffers,
+                            self.comm_handler.create_activations_recv_buffers,
+                            self.comm_handler.recv_activations,
+                            is_grad=False)
 
             if create:
                 b.create()
@@ -169,8 +191,8 @@ class SinglePartitionManager:
             # FIXME: we set eval dtypes as training too.
             self.comm_handler.set_tensor_dtypes(self.training_tensor_dtypes)
             if not shapes_are_equal:
-                self.fwd_rcev_buffers_eval = make_buff(
-                    is_bwd=False, create=True)
+                self.fwd_rcev_buffers_eval = make_buff(is_bwd=False,
+                                                       create=True)
             else:
                 self.fwd_rcev_buffers_eval = self.fwd_rcev_buffers_train  # HACK: same buffer!
         else:
@@ -226,14 +248,14 @@ class SinglePartitionManager:
                 old_lrs, _ = self.scale_lr(factor)
                 return True, old_lrs
 
-            return (batch_idx % se) == 0,  None
+            return (batch_idx % se) == 0, None
 
         self.should_do_step = types.MethodType(should_do_step_patch, self)
 
         def get_micro_batch(self, batch_index):
             if batch_index <= se:
                 return batch_index
-            return (batch_index+1) % se
+            return (batch_index + 1) % se
 
         self.get_micro_batch = types.MethodType(get_micro_batch, self)
 
@@ -264,7 +286,7 @@ class SinglePartitionManager:
         # Returns: bool, old_lrs to restore if needed
         # TODO:
         se = self.step_every
-        do_step = (batch_idx % se) == (se-1)
+        do_step = (batch_idx % se) == (se - 1)
         return do_step, None
 
     def set_task(self, task: DLTask):
@@ -278,7 +300,8 @@ class SinglePartitionManager:
         # self.dataloader = dataloader
         self.dl_iter = iter(dataloader)
 
-    def set_weight_predictor(self, weight_predictor: WeightPredictor, nag_with_predictor: bool):
+    def set_weight_predictor(self, weight_predictor: WeightPredictor,
+                             nag_with_predictor: bool):
         self.weight_predictor = weight_predictor
         # self.nag_with_predictor = nag_with_predictor # handled inside the wp.
 
@@ -299,11 +322,11 @@ class SinglePartitionManager:
         if self.is_problematic:
             if self.PROBLEMATIC_POLICY == 'SAME':
                 if self.weight_predictor is None:
-                    weight_stasher.set_problematic(
-                        forward=True, policy='CHANGE')
+                    weight_stasher.set_problematic(forward=True,
+                                                   policy='CHANGE')
                 else:
-                    weight_stasher.set_problematic(
-                        forward=True, policy='EVERY_BATCH')
+                    weight_stasher.set_problematic(forward=True,
+                                                   policy='EVERY_BATCH')
         elif self.PROBLEMATIC_POLICY == 'SKIP':
             raise NotImplementedError()
             # weight_stasher.set_problematic(forward=False, policy='CHANGE')
@@ -338,7 +361,7 @@ class SinglePartitionManager:
         else:
             if self.fwd_rcev_buffers.is_initialized():
                 self.fwd_rcev_buffers.create()
-        
+
         if self.is_replicated and self.sync_buffers:
             self.comm_handler.sync_buffers(self.buffers_to_sync)
 
@@ -349,12 +372,13 @@ class SinglePartitionManager:
         obj_holder = self.async_fwd_objects if is_fwd else self.async_bwd_objects
 
         # Pop the item that was increaced first.
-        _, (sent_request_objects, tmp_sent_items) = obj_holder.popitem(
-            last=False)
+        _, (sent_request_objects,
+            tmp_sent_items) = obj_holder.popitem(last=False)
         for i in sent_request_objects:
-            i.wait()
-            # while(not i.is_completed()):
-            #     pass
+            # i.wait()
+            # NOTE: we remove the wait() for easier debugging: can pause the debugger and find deadlocks
+            while (not i.is_completed()):
+                pass
 
     def get_input_data_forward(self, batch_idx, num_batches):
 
@@ -385,8 +409,8 @@ class SinglePartitionManager:
         # actually, many times we clone the input anyway inside the partition (for re-computation)
         # and if so, we can use less recv buffers for forward to save memory,
         # while stil getting the same speed/parallelism.
-        if (not recved_all) and batch_idx - 1 + fwd_rcev_buffers.max_buffers < num_batches:
-            fwd_rcev_buffers.recv_next(batch_idx-1)
+        if ((not recved_all) and (batch_idx - 1 + fwd_rcev_buffers.max_buffers < num_batches)):
+            fwd_rcev_buffers.recv_next(batch_idx - 1)
 
         x, *ctx = self.task.unpack_data_for_partition(x)
 
@@ -478,8 +502,7 @@ class SinglePartitionManager:
                         # HACK: apparently, no reason to stash, so why we do it here? so we can reload.
 
                     # HACK: will set dirty ahead!
-                    weight_stasher.stash_current(
-                        batch_idx, expected_staleness)
+                    weight_stasher.stash_current(batch_idx, expected_staleness)
 
                 # HACK: will revert after send.
                 # weight_predictor.revert()
@@ -533,8 +556,10 @@ class SinglePartitionManager:
             self.true_weights_storage.restore_if_needed()  # check=False
 
             # Step
-            trainer.last_partition_step_and_statistics(
-                x, *ctx, step_and_stats_ctx, step=do_step)
+            trainer.last_partition_step_and_statistics(x,
+                                                       *ctx,
+                                                       step_and_stats_ctx,
+                                                       step=do_step)
 
             if do_step:
                 self.true_weights_storage.reset_on_step()
@@ -612,8 +637,8 @@ class SinglePartitionManager:
             request_objects = self.comm_handler.send_gradients(g, batch_idx)
 
         # Wait for next if appropriate
-        if (not recved_all) and batch_idx - 1 + bwd_rcev_buffers.max_buffers < num_batches:
-            bwd_rcev_buffers.recv_next(batch_idx-1)
+        if ((not recved_all) and (batch_idx - 1 + bwd_rcev_buffers.max_buffers < num_batches)):
+            bwd_rcev_buffers.recv_next(batch_idx - 1)
 
         if do_step:
             trainer = self.trainer
@@ -638,14 +663,17 @@ class SinglePartitionManager:
                 if self.is_problematic:
                     # Average delays
                     mb = self.get_micro_batch(batch_idx)
-                    delay = np.mean([self.delay_at_batch.pop(
-                        batch_idx-i) for i in range(0, mb + 1)])
+                    delay = np.mean([
+                        self.delay_at_batch.pop(batch_idx - i)
+                        for i in range(0, mb + 1)
+                    ])
                 else:
                     delay = self.delay_at_batch.pop(batch_idx)
 
                 # Modify gradients
-                trainer.modify_gradients(
-                    real_theta=real_theta, delay=delay, stashed_theta=stashed_theta)
+                trainer.modify_gradients(real_theta=real_theta,
+                                         delay=delay,
+                                         stashed_theta=stashed_theta)
 
             if weight_stasher:
                 # Mark previously stashed weights as dirty
@@ -681,7 +709,8 @@ class SinglePartitionManager:
         # sem = se-1
         # return sum([x % se == sem for x in range(done_bwds, done_fwds)])
         # FIXME: for step_every > roundtrip.
-        return sum([self.should_do_step(x)[0] for x in range(done_bwds, done_fwds)])
+        return sum(
+            [self.should_do_step(x)[0] for x in range(done_bwds, done_fwds)])
 
     def expected_unseen_lrs(self, fwd_batch_index):
         # TODO:
@@ -703,8 +732,7 @@ class SinglePartitionManager:
         run_batch_forward = self.run_batch_forward
 
         for done_fwds in range(num_batches):
-            sent_request_objects = run_batch_forward(
-                done_fwds, num_batches)
+            sent_request_objects = run_batch_forward(done_fwds, num_batches)
             if sent_request_objects:  # last partition returns empty list.
                 if async_fwd_objects:
                     wait_on_sent_object(is_fwd=True)
@@ -741,11 +769,12 @@ class SinglePartitionManager:
 
         while done_bwds < num_batches:
             # Act according to some policy
-            action_is_fwd = work_scheduler(stage, num_stages,
-                                           num_batches, done_fwds, done_bwds)
+            action_is_fwd = work_scheduler(stage, num_stages, num_batches,
+                                           done_fwds, done_bwds)
             if action_is_fwd:
-                sent_request_objects = run_batch_forward(
-                    done_fwds, num_batches, done_bwds=done_bwds)
+                sent_request_objects = run_batch_forward(done_fwds,
+                                                         num_batches,
+                                                         done_bwds=done_bwds)
                 # NOTE: Last partition inserts its gradints into async_fwd_objects,
                 # wait on prev send
                 if async_fwd_objects:

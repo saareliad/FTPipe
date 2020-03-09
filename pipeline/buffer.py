@@ -1,9 +1,9 @@
-import torch
-from functools import partial
 from itertools import cycle
 from collections import deque
 
 
+# HACK: (very ugly) for some reason need to zero grad for P2P cuda aware. (tested via MPI)
+# Need to experiment and check if we can drop it.
 def zero_grad_fn(g):
     for b in g:
         b.detach_().zero_()
@@ -25,9 +25,9 @@ class PreProcIter:
 
 
 class Buffers:
-    def __init__(self, max_buffers, create_fn, device, irecv_fn, is_grad=False):
+    def __init__(self, max_buffers, create_fn, irecv_fn, is_grad=False):
         self.buffers = []
-        self.create_fn = partial(create_fn, device)
+        self.create_fn = create_fn
         self.max_buffers = max_buffers
         self._is_initialized = False
         self.irecv_fn = irecv_fn
@@ -75,37 +75,18 @@ class Buffers:
         self.first_rcv_after_created = False
         assert batch_idx == 0 or self.max_buffers == 1
         num = min(num_limit_batches - batch_idx, self.max_buffers)
-        # print(f"recv_all:{num}")
         self.handlers.extend([self.irecv_fn(next(self.itr), b)
                               for b in range(batch_idx, num + batch_idx)])
 
         self.last_irecv = num + batch_idx - 1
-
-    def recv_two(self, batch_idx, num_limit_batches):
-        self.first_rcv_after_created = False
-        assert batch_idx == 0 or self.max_buffers == 1
-        num = min(num_limit_batches - batch_idx, self.max_buffers, 2)
-        self.handlers.extend([self.irecv_fn(next(self.itr), b)
-                              for b in range(batch_idx, num + batch_idx)])
-
-        self.last_irecv = num + batch_idx - 1
-
-    def recv_next_vtwo(self, batch_idx):
-        assert(self.last_irecv == batch_idx + min(self.max_buffers, 2) - 1)
-        self.handlers.append(self.irecv_fn(
-            next(self.itr), batch_idx + min(self.max_buffers, 2)))
-        self.last_irecv += 1
 
     def recv_next(self, batch_idx):
-        # print(f"recv_next {batch_idx}")
-        # if not self.handlers:
         assert(self.last_irecv == batch_idx + self.max_buffers - 1)
         self.handlers.append(self.irecv_fn(
             next(self.itr), batch_idx + self.max_buffers))
         self.last_irecv += 1
 
     def wait_first(self):
-        # print(f"waiting for {self.pointer}")
 
         request_objects = self.handlers.popleft()
         for obj in request_objects:

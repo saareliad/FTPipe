@@ -48,7 +48,7 @@ class CommunicationHandlerBase(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def create_activations_recv_buffers(self, device, requires_grad=False):
+    def create_activations_recv_buffers(self, requires_grad=False):
         """ 
         Returns
             tuple of buffers
@@ -56,7 +56,7 @@ class CommunicationHandlerBase(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def create_gradients_rcv_buffers(self, device, requires_grad=False):
+    def create_gradients_rcv_buffers(self, requires_grad=False):
         """ 
         Returns
             tuple of buffers

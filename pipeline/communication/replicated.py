@@ -257,8 +257,6 @@ class P2PRankIO(CommunicationHandlerBase):
                  in_connections: List[GeneralConnection],
                  out_connections: List[GeneralConnection],
                  device,
-                 input_shapes,
-                 output_shapes,
                  cpu=False):
 
         self.in_connections = in_connections
@@ -268,8 +266,8 @@ class P2PRankIO(CommunicationHandlerBase):
         self.stage_ddp_process_group = None
         self.num_ranks_in_stage = 1
 
-        self.input_shapes = input_shapes
-        self.output_shapes = output_shapes
+        self.tensors_names_with_no_grad = set()
+        self.num_chunks = 1
 
     def send(self,
              batch_index,
@@ -348,24 +346,7 @@ class P2PRankIO(CommunicationHandlerBase):
         return [self.receive(batch_index, x, forward=False, block=False)]
 
     def set_tensor_shapes(self, tensor_shapes):
-        pass
-
-    def create_activations_recv_buffers(self, device, requires_grad=False):
-        return [
-            torch.empty(s,
-                        dtype=torch.float32,
-                        device=device,
-                        requires_grad=requires_grad) for s in self.input_shapes
-        ]
-
-    def create_gradients_rcv_buffers(self, device, requires_grad=False):
-        return [
-            torch.empty(s,
-                        dtype=torch.float32,
-                        device=device,
-                        requires_grad=requires_grad)
-            for s in self.output_shapes
-        ]
+        self.tensor_shapes = tensor_shapes
 
     def init_proccess_groups(self, backend, ddp_backend, rank, local_rank,
                              world_size,
@@ -418,6 +399,44 @@ class P2PRankIO(CommunicationHandlerBase):
                 r = ops.popleft()
                 r.wait()
                 b /= float(self.num_ranks_in_stage)
+
+    def _create_recv_buffers(self, tensor_names, requires_grad=False):
+        # FIXME chunk
+        with torch.no_grad():
+            buffers = []
+            for tensor_name in tensor_names:
+                dtype = self.tensor_dtypes[tensor_name]
+                # TODO: also eval dtype
+                shape = self.tensor_shapes[tensor_name]
+                # rcv_buffer = torch.empty(shape, dtype=dtype, requires_grad=requires_grad)
+                rcv_buffer = torch.zeros(shape,
+                                         dtype=dtype,
+                                         device=self.device,
+                                         requires_grad=requires_grad)
+
+                buffers.append(rcv_buffer.share_memory_())
+
+                # # Alocate buffer for double buffering
+                # # Yo dawg, heard you allocate buffers so we could do double buffering with your buffers :-)
+                # for chunk in rcv_buffer.chunk(self.num_chunks):
+                #     # buffers.append(chunk.pin_memory().to(device))
+                #     buffers.append(
+                #         chunk.requires_grad_(requires_grad).share_memory_())
+
+        return buffers
+
+    def create_activations_recv_buffers(self, requires_grad=False):
+        return self._create_recv_buffers(self.receive_ranks.keys(),
+                                         requires_grad=requires_grad)
+
+    def create_gradients_rcv_buffers(self, requires_grad=False):
+        # FIXME chunks
+        tensor_names = [
+            i for i in self.send_ranks.keys()
+            if not (i in self.tensors_names_with_no_grad)
+        ]
+        return self._create_recv_buffers(tensor_names,
+                                         requires_grad=requires_grad)
 
 
 def list_chunk(l: Iterable, n: int) -> Tuple[Iterable, ...]:
@@ -490,7 +509,7 @@ def create_worker_args(worker_rank: int, config,
             tags = [total_tags + idx for idx in range(majority_size)]
             rank_groups = list_chunk(majority_ranks, minority_size)
             tag_groups = list_chunk(tags, minority_size)
-            # if a minority rank is assgined only one majority rank 
+            # if a minority rank is assgined only one majority rank
             # we use a p2pConnection to remove the split/merge overhead
             # a minority rank aggregates multiple ranks from the majority stage
             minority_connections = [
@@ -581,7 +600,7 @@ def create_worker_args(worker_rank: int, config,
                 io_out.append(P2MPBroadcastConnection([t[1] for t in group]))
 
         # assign comm handlers and set the total number of tags
-        rank_to_IO[rank] = P2PRankIO(io_in, io_out)
+        rank_to_IO[rank] = P2PRankIO(io_in, io_out)  # FIXME: device, CPU
         rank_to_IO[rank].set_total_tags(total_tags)
     # find all process groups for replicated stages
     groups = []

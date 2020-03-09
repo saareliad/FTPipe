@@ -48,7 +48,7 @@ class SimpleCommBase(CommunicationHandlerBase):
         self.device = device
         self.world_size = world_size
 
-        self.num_chunks = num_chunks  # we split the batches to chunks
+        self.num_chunks = num_chunks  # optionally split the batches to chunks
 
         # can spare the if, intentionally ugly.
         self.grad_rcv_items = [(i + GRAD_UGLY_SHAMEFUL_NAME, v)
@@ -99,8 +99,7 @@ class SimpleCommBase(CommunicationHandlerBase):
     def set_tensor_dtypes(self, tensor_dtypes):
         self.tensor_dtypes = tensor_dtypes
 
-    def _create_recv_buffers(self, device, tensor_names, requires_grad=False):
-        # FIXME chunk
+    def _create_recv_buffers(self, tensor_names, requires_grad=False):
         with torch.no_grad():
             buffers = []
             for tensor_name in tensor_names:
@@ -110,28 +109,27 @@ class SimpleCommBase(CommunicationHandlerBase):
                 # rcv_buffer = torch.empty(shape, dtype=dtype, requires_grad=requires_grad)
                 rcv_buffer = torch.zeros(shape,
                                          dtype=dtype,
-                                         device=device,
+                                         device=self.device,
                                          requires_grad=requires_grad)
 
-                # Alocate buffer for double buffering
-                # Yo dawg, heard you allocate buffers so we could do double buffering with your buffers :-)
+                # # NOTE: if we use this we need to do fix after recv, and also send in chunks
+                # TODO: generally we would like pinned + shared memory for this...  (actually depends on send/recv )
+                # Alocate for double buffering
                 for chunk in rcv_buffer.chunk(self.num_chunks):
                     # buffers.append(chunk.pin_memory().to(device))
                     buffers.append(
                         chunk.requires_grad_(requires_grad).share_memory_())
         return buffers
 
-    def create_activations_recv_buffers(self, device, requires_grad=False):
-        return self._create_recv_buffers(device,
-                                         self.receive_ranks.keys(),
+    def create_activations_recv_buffers(self, requires_grad=False):
+        return self._create_recv_buffers(self.receive_ranks.keys(),
                                          requires_grad=requires_grad)
 
-    def create_gradients_rcv_buffers(self, device, requires_grad=False):
+    def create_gradients_rcv_buffers(self, requires_grad=False):
         # FIXME chunks
         tensor_names = [
             i for i in self.send_ranks.keys()
             if not (i in self.tensors_names_with_no_grad)
         ]
-        return self._create_recv_buffers(device,
-                                         tensor_names,
+        return self._create_recv_buffers(tensor_names,
                                          requires_grad=requires_grad)
