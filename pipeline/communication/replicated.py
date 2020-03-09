@@ -1,4 +1,4 @@
-from typing import List, Optional, Union, Tuple, Iterable
+from typing import List, Optional, Union, Tuple, Iterable, Dict
 import torch
 from torch import Tensor
 import torch.distributed as dist
@@ -451,26 +451,28 @@ def list_chunk(l: Iterable, n: int) -> Tuple[Iterable, ...]:
 
 
 # TODO: : PipelineConfig typehint for config.
-def create_worker_args(worker_rank: int, config,
+def create_worker_args(worker_rank: int,
+                       config,
+                       stage_to_rank_map: Dict[int, List[int]],
                        debug=True) -> Tuple[P2PRankIO, List[List[int]]]:
     assert config.isValid()
-    master_rank = -1
+    # Master is (Alon's) abstraction for in/out.
     master_stage = -1
     stages = config.stages
     batch_dim = config.batch_dim
-    stages[master_stage] = config.master_stage
     producers, consumers = config.producers, config.consumers
-    stage_to_ranks = config.stage_to_ranks()
+
+    stage_to_ranks = stage_to_rank_map
+
     rank_to_stage = {
         r: stage
         for stage, ranks in stage_to_ranks.items() for r in ranks
     }
+
     total_tags = 0
     # create communication channels between stages
     if debug:
-        print(
-            f"creating communication channels master is stage {master_stage} rank {master_rank}"
-        )
+        print(f"creating communication channels")
     rank_to_connections = defaultdict(lambda: defaultdict(list))
     for output, producer_stage in sorted(producers.items()):
         if producer_stage == master_stage:
@@ -586,31 +588,31 @@ def create_worker_args(worker_rank: int, config,
         print(f"total number of p2p channels: {total_tags}")
 
     # create IOs
-    rank_to_IO = dict()
-    for rank, io_config in sorted(rank_to_connections.items()):
-        io_in = [t[1] for t in io_config['inputs']]
-        io_out = []
+    # for rank, io_config in sorted(rank_to_connections.items()):
+    rank, io_config = worker_rank, rank_to_connections[worker_rank]
+    in_connections = [t[1] for t in io_config['inputs']]
+    out_connections = []
 
-        # if an output needs to sent to multiple stages we will replicate it
-        for name, group in groupby(io_config['outputs'], key=lambda t: t[0]):
-            group = list(group)
-            if len(group) == 1:
-                io_out.append(group[0][1])
-            else:
-                io_out.append(P2MPBroadcastConnection([t[1] for t in group]))
+    # if an output needs to sent to multiple stages we will replicate it
+    for name, group in groupby(io_config['outputs'], key=lambda t: t[0]):
+        group = list(group)
+        if len(group) == 1:
+            out_connections.append(group[0][1])
+        else:
+            out_connections.append(
+                P2MPBroadcastConnection([t[1] for t in group]))
 
-        # assign comm handlers and set the total number of tags
-        rank_to_IO[rank] = P2PRankIO(io_in, io_out)  # FIXME: device, CPU
-        rank_to_IO[rank].set_total_tags(total_tags)
+    # assign comm handlers and set the total number of tags
+    comm_handler = P2PRankIO(
+        in_connections,
+        out_connections,
+    )  # FIXME: device, CPU
+    comm_handler.set_total_tags(total_tags)
+
     # find all process groups for replicated stages
     groups = []
     for stage_id, ranks in sorted(stage_to_ranks.items()):
         if len(ranks) > 1:
             groups.append(ranks)
 
-    rank_to_stage = {
-        r: stage
-        for stage, ranks in stage_to_ranks.items() for r in ranks
-    }
-
-    return rank_to_IO[worker_rank], groups
+    return comm_handler, groups
