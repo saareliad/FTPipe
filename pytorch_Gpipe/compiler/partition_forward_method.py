@@ -408,7 +408,6 @@ def specialCases(ready_expressions: Dict[str, str], node: Node,
         assert len(node.in_nodes) == 1, "aten::Int is a no op with 2 input"
         return ready_expressions[node.in_nodes[0].scope]
     elif func_name == 'to':
-        assert len(operand_scopes) == 7
         return f"{ready_expressions[operand_scopes[0]]}.to(device={ready_expressions[operand_scopes[3]]})"
     elif func_name == 'slice':
         operand = ready_expressions[operand_scopes[0]]
