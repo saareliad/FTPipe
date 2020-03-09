@@ -103,7 +103,7 @@ def test_p2mp_broadcast(rank):
         # p2p 0 -> 1
         comm0 = P2PConnection(dst=1, tag=0, total_tags=total_tags)
         # p2mp 0 -> 2,3
-        comm1 = P2MPScatterConnection(split_dim=0, destinations=[2, 3],
+        comm1 = P2MPScatterConnection(batch_dim=0, destinations=[2, 3],
                                       tags=[1, 2], total_tags=total_tags)
         comm = P2MPBroadcastConnection([comm0, comm1])
     elif rank == 1:

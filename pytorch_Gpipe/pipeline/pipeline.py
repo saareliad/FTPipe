@@ -35,10 +35,10 @@ class Pipeline():
         self.input_names = config.model_inputs
         self.output_names = config.model_outputs
 
-        self.split_dim = config.batch_dim
+        self.batch_dim = config.batch_dim
 
         master_IO, command_queues, groups, worker_args = create_worker_args(config, batch_size,
-                                                                            self.split_dim, layers, tensors)
+                                                                            self.batch_dim, layers, tensors)
 
         self.IO = master_IO
         self.command_queues: List[Queue] = command_queues
@@ -248,23 +248,23 @@ class Pipeline():
         return results
 
     def _gatherOutputs(self, results: List[Tensor]) -> List[Tensor]:
-        '''merges minibatch outputs to batches along split_dim
+        '''merges minibatch outputs to batches along batch_dim
         '''
         outputs = [[]for _ in results[0]]
         for minbatch in results:
             for idx, t in enumerate(minbatch):
                 outputs[idx].append(t)
 
-        batch_outs = [torch.cat(minibatches_out, dim=self.split_dim)
+        batch_outs = [torch.cat(minibatches_out, dim=self.batch_dim)
                       for minibatches_out in outputs]
         return batch_outs[0] if len(batch_outs) == 1 else batch_outs
 
     def _scatterInputs(self, xs: Tuple[Tensor, ...], num_chunks: int) -> List[Tuple[Tensor, ...]]:
         '''
-        scatters each tensor across split_dim
+        scatters each tensor across batch_dim
         returns list of chunks
         '''
-        chunked_input = [tensor_chunk(x, num_chunks, self.split_dim)
+        chunked_input = [tensor_chunk(x, num_chunks, self.batch_dim)
                          for x in xs]
 
         return list(zip(*chunked_input))
@@ -360,7 +360,8 @@ class Pipeline():
 
 
 def create_worker_args(config: PipelineConfig, batch_size: int,
-                       split_dim: int, layers, tensors, debug=True) -> Tuple[P2PRankIO, List[Queue], List[List[int]], Dict]:
+                       batch_dim: int, layers, tensors, debug=True) -> Tuple[P2PRankIO, List[Queue], List[List[int]], Dict]:
+    config.change_batch(batch_size)
     assert config.isValid()
     # this ensures all workers will have minibatch size >=1
     assert batch_size >= (config.num_minibatches * config.largest_stage_size)
@@ -412,7 +413,7 @@ def create_worker_args(config: PipelineConfig, batch_size: int,
             tag_groups = list_chunk(tags, minority_size)
             # if a minority rank is assgined only one majority rank we use a p2pConnection to remove the split/merge overhead
             # a minority rank aggregates multiple ranks from the majority stage
-            minority_connections = [P2MPScatterConnection(split_dim, rank_group, tag_groups, 0) if len(rank_group) > 1
+            minority_connections = [P2MPScatterConnection(batch_dim, rank_group, tag_groups, 0) if len(rank_group) > 1
                                     else P2PConnection(rank_group[0], tag_group[0], 0)
                                     for rank_group, tag_group in zip(rank_groups, tag_groups)]
             majority_connections = []
@@ -514,7 +515,7 @@ def create_worker_args(config: PipelineConfig, batch_size: int,
         ranks_in_stage = len(stage_to_ranks[stage_id])
         stage = stages[stage_id]
         input_shapes, output_shapes = stage.input_shapes, stage.output_shapes
-        buffer_generator = RoundRobinBufferGenerator(device, split_dim, split_size,
+        buffer_generator = RoundRobinBufferGenerator(device, batch_dim, split_size,
                                                      config.num_minibatches, input_shapes, output_shapes)
         worker_args[rank] = (stage_id, device, rank, ranks_in_stage, io, buffer_generator, command_queue,
                              state_stack, model, optimizer, lr_sched)

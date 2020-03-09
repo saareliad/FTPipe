@@ -148,13 +148,13 @@ class RequestsWrapper():
 class P2MPScatterConnection():
     '''
     a class representing a connection to a replicated stage
-    when sending tensor data will be split accros split_dim prior to being sent to destination devices
-    when receiving tensor data will be merged accros split_dim
+    when sending tensor data will be split accros batch_dim prior to being sent to destination devices
+    when receiving tensor data will be merged accros batch_dim
     '''
     # p2mp between a worker and a distibuted stage
 
-    def __init__(self, split_dim: int, destinations: List[int], tags: List[int], total_tags: int):
-        self.split_dim = split_dim
+    def __init__(self, batch_dim: int, destinations: List[int], tags: List[int], total_tags: int):
+        self.batch_dim = batch_dim
         self.destinations = destinations
         self.total_tags = total_tags
         self.tags = tags
@@ -166,7 +166,7 @@ class P2MPScatterConnection():
         n = len(self.connections)
 
         # we do not use the native torch.chunk as it's less balanced
-        chunks = tensor_chunk(tensor, n, self.split_dim)
+        chunks = tensor_chunk(tensor, n, self.batch_dim)
         reqs = []
         for q, c in zip(self.connections, chunks):
             reqs.append(q.send(c, block=False))
@@ -181,7 +181,7 @@ class P2MPScatterConnection():
     def receive(self, buffer: Tensor, block: bool = False) -> Optional[RequestsWrapper]:
         n = len(self.connections)
         reqs = [q.receive(c, block=False) for q, c in zip(
-            self.connections, tensor_chunk(buffer, n, self.split_dim))]
+            self.connections, tensor_chunk(buffer, n, self.batch_dim))]
 
         request = RequestsWrapper(reqs)
         if block:
