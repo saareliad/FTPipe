@@ -94,7 +94,7 @@ class PartitioningConfigParser:
                  bs_eval,
                  model_instance=None,
                  send_target_in_pipe=False):
-        
+
         pipe_config, config, model = get_partitioning_v3(
             cfg, rank, bs_train, model_instance=model_instance)
 

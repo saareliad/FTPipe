@@ -1,20 +1,20 @@
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Tuple, Iterable
 import torch
 from torch import Tensor
 import torch.distributed as dist
-from itertools import cycle
-from typing import Tuple
 from .interface import CommunicationHandlerBase
 from torch.nn.parallel import DistributedDataParallel
 from collections import deque
+# from .simple_partitioning_config import PipelineConfig
+from collections import defaultdict
+from itertools import chain, groupby
+import numpy as np
 
-__all__ = [
-    "P2PConnection", "RequestsWrapper", "P2MPScatterConnection",
-    "BroadcastResult", "P2MPBroadcastConnection", "P2PRankIO",
-    "RoundRobinBufferGenerator"
-]
+__all__ = ["P2PRankIO", "RequestsWrapper", "create_worker_args"]
 
 # P2PRankIO is the actuall comm handler here.
+# RequestsWrapper is just a wrapper for request with same intefrace.
+# create_worker_args is a function for creating this handler with the neccesary arguments.
 
 
 def tensor_chunk(t: Tensor, n: int, dim: int = 0) -> Tuple[Tensor, ...]:
@@ -23,87 +23,6 @@ def tensor_chunk(t: Tensor, n: int, dim: int = 0) -> Tuple[Tensor, ...]:
     sizes = torch.full((n, ), t.size(dim) // n, dtype=torch.int32)
     sizes[:t.size(dim) % n] += 1
     return torch.split(t, sizes.tolist(), dim=dim)
-
-
-class RoundRobinBufferGenerator():
-    def __init__(self, device: torch.device, batch_dim: int, batch_size: int,
-                 num_minibatches: int, input_shapes: List[List[int]],
-                 output_shapes: List[List[int]]):
-        self.num_minibatches = num_minibatches
-        self.batch_size = batch_size
-        self.batch_dim = batch_dim
-        self.device = device
-
-        sizes = self._buffer_cycle()
-
-        # we preallocate all input/gradient buffers ahead of time
-
-        self.activation_input_buffers = []
-        self.input_shapes = []
-        for size in sizes:
-            buffers = []
-            shapes = []
-            for s in input_shapes:
-                shape = s[:batch_dim] + [size] + s[batch_dim + 1:]
-                buffers.append(torch.empty(shape, device=self.device))
-                shapes.append(shape)
-            self.input_shapes.append(shapes)
-            self.activation_input_buffers.append(buffers)
-
-        self.activation_input_buffers = cycle(self.activation_input_buffers)
-
-        self.gradient_input_buffers = None
-        self.gradient_shapes = []
-        for size in sizes:
-            buffers = []
-            shapes = []
-            for s in output_shapes:
-                shape = s[:batch_dim] + [size] + s[batch_dim + 1:]
-                shapes.append(shape)
-            self.gradient_shapes.append(shapes)
-
-    def allocate_input_buffers(self) -> List[Tensor]:
-        return next(self.activation_input_buffers)
-
-    def allocate_gradient_buffer(self) -> List[Tensor]:
-        return next(self.gradient_input_buffers)
-
-    def _buffer_cycle(self):
-        sizes = [
-            self.batch_size // self.num_minibatches
-            for _ in range(self.num_minibatches)
-        ]
-
-        for idx in range(self.num_minibatches):
-            if idx < (self.batch_size % self.num_minibatches):
-                sizes[idx] += 1
-
-        return sizes
-
-    def create_gradient_input_buffers(self):
-        if self.gradient_input_buffers is None:
-            buffers = []
-            for minibatch_shapes in self.gradient_shapes:
-                buffers.append([
-                    torch.empty(s, device=self.device)
-                    for s in minibatch_shapes
-                ])
-            self.gradient_input_buffers = cycle(buffers)
-
-    def purge_gradient_buffers(self):
-        self.gradient_input_buffers = None
-
-    def __repr__(self):
-        return str(self)
-
-    def __str__(self):
-        s = [
-            f"RoundRobinBufferGenerator for device {self.device}",
-            f"activation input shapes {self.input_shapes}",
-            f"gradient input shape {self.gradient_shapes}"
-        ]
-
-        return "\n".join(s)
 
 
 class P2PConnection():
@@ -166,15 +85,15 @@ class RequestsWrapper():
 class P2MPScatterConnection():
     '''
     a class representing a connection to a replicated stage
-    when sending tensor data will be split accros split_dim prior to being sent to destination devices
-    when receiving tensor data will be merged accros split_dim
+    when sending tensor data will be split accros batch_size prior to being sent to destination devices
+    when receiving tensor data will be merged accros batch_size
     '''
 
     # p2mp between a worker and a distibuted stage
 
-    def __init__(self, split_dim: int, destinations: List[int],
+    def __init__(self, batch_dim: int, destinations: List[int],
                  tags: List[int], total_tags: int):
-        self.split_dim = split_dim
+        self.batch_dim = batch_dim
         self.destinations = destinations
         self.total_tags = total_tags
         self.tags = tags
@@ -189,7 +108,7 @@ class P2MPScatterConnection():
         n = len(self.connections)
 
         # we do not use the native torch.chunk as it's less balanced
-        chunks = tensor_chunk(tensor, n, self.split_dim)
+        chunks = tensor_chunk(tensor, n, dim=self.batch_dim)
         reqs = []
         for q, c in zip(self.connections, chunks):
             reqs.append(q.send(batch_index, c, block=False))
@@ -206,7 +125,7 @@ class P2MPScatterConnection():
         n = len(self.connections)
         reqs = [
             q.receive(batch_index, c, block=False) for q, c in zip(
-                self.connections, tensor_chunk(buffer, n, self.split_dim))
+                self.connections, tensor_chunk(buffer, n, self.batch_size))
         ]
 
         request = RequestsWrapper(reqs)
@@ -338,13 +257,19 @@ class P2PRankIO(CommunicationHandlerBase):
                  in_connections: List[GeneralConnection],
                  out_connections: List[GeneralConnection],
                  device,
+                 input_shapes,
+                 output_shapes,
                  cpu=False):
+
         self.in_connections = in_connections
         self.out_connections = out_connections
         self.device = device
         self.cpu = cpu
         self.stage_ddp_process_group = None
         self.num_ranks_in_stage = 1
+
+        self.input_shapes = input_shapes
+        self.output_shapes = output_shapes
 
     def send(self,
              batch_index,
@@ -426,10 +351,21 @@ class P2PRankIO(CommunicationHandlerBase):
         pass
 
     def create_activations_recv_buffers(self, device, requires_grad=False):
-        pass
+        return [
+            torch.empty(s,
+                        dtype=torch.float32,
+                        device=device,
+                        requires_grad=requires_grad) for s in self.input_shapes
+        ]
 
     def create_gradients_rcv_buffers(self, device, requires_grad=False):
-        pass
+        return [
+            torch.empty(s,
+                        dtype=torch.float32,
+                        device=device,
+                        requires_grad=requires_grad)
+            for s in self.output_shapes
+        ]
 
     def init_proccess_groups(self, backend, ddp_backend, rank, local_rank,
                              world_size,
@@ -482,3 +418,180 @@ class P2PRankIO(CommunicationHandlerBase):
                 r = ops.popleft()
                 r.wait()
                 b /= float(self.num_ranks_in_stage)
+
+
+def list_chunk(l: Iterable, n: int) -> Tuple[Iterable, ...]:
+    '''
+    return a list of n even chunks of l 
+    '''
+    sizes = np.full(n, len(l) // n)
+    sizes[:len(l) % n] += 1
+    ends = np.cumsum(sizes)
+
+    return tuple(l[ends[i] - sizes[i]:ends[i]] for i in range(len(sizes)))
+
+
+# TODO: : PipelineConfig typehint for config.
+def create_worker_args(worker_rank: int, config,
+                       debug=True) -> Tuple[P2PRankIO, List[List[int]]]:
+    assert config.isValid()
+    master_rank = -1
+    master_stage = -1
+    stages = config.stages
+    batch_dim = config.batch_dim
+    stages[master_stage] = config.master_stage
+    producers, consumers = config.producers, config.consumers
+    stage_to_ranks = config.stage_to_ranks()
+    rank_to_stage = {
+        r: stage
+        for stage, ranks in stage_to_ranks.items() for r in ranks
+    }
+    total_tags = 0
+    # create communication channels between stages
+    if debug:
+        print(
+            f"creating communication channels master is stage {master_stage} rank {master_rank}"
+        )
+    rank_to_connections = defaultdict(lambda: defaultdict(list))
+    for output, producer_stage in sorted(producers.items()):
+        if producer_stage == master_stage:
+            continue
+        producer_ranks = stage_to_ranks[producer_stage]
+        producer_devices = stages[producer_stage].devices
+        n_producers = len(producer_ranks)
+        for consumer_stage in consumers[output]:
+            if consumer_stage == master_stage:
+                continue
+            consumer_ranks = stage_to_ranks[consumer_stage]
+            consumer_devices = stages[consumer_stage].devices
+            n_consumers = len(consumer_ranks)
+
+            # every comunication can be generalized as many to many
+            if debug:
+                print(f"stage[{producer_stage}] -> stage[{consumer_stage}]")
+
+            if n_producers <= n_consumers:
+                majority_ranks, majority_devices = consumer_ranks, consumer_devices
+                minority_ranks, minority_devices = producer_ranks, producer_devices
+            else:
+                majority_ranks, majority_devices = producer_ranks, producer_devices
+                minority_ranks, minority_devices = consumer_ranks, consumer_devices
+
+            minority_size = len(minority_ranks)
+            majority_size = len(majority_ranks)
+
+            error = f"unbalanced communication detected between stages"
+            error += f"{producer_stage} with {n_producers} workers and {consumer_stage} with {n_consumers} workers\n"
+            error += f"the worker ratio between the stages must be a whole number for good performance"
+            error += f"but got {majority_size/minority_size}"
+
+            assert majority_size % minority_size == 0, error
+
+            tags = [total_tags + idx for idx in range(majority_size)]
+            rank_groups = list_chunk(majority_ranks, minority_size)
+            tag_groups = list_chunk(tags, minority_size)
+            # if a minority rank is assgined only one majority rank 
+            # we use a p2pConnection to remove the split/merge overhead
+            # a minority rank aggregates multiple ranks from the majority stage
+            minority_connections = [
+                P2MPScatterConnection(batch_dim, rank_group, tag_groups, 0)
+                if len(rank_group) > 1 else P2PConnection(
+                    rank_group[0], tag_group[0], 0)
+                for rank_group, tag_group in zip(rank_groups, tag_groups)
+            ]
+            majority_connections = []
+            start = 0
+            end = 0
+            for rank_group, tag_group, device, minority_rank in zip(
+                    rank_groups, tag_groups, minority_devices, minority_ranks):
+                for r, t in zip(rank_group, tag_group):
+                    end += 1
+                    connection = P2PConnection(minority_rank, r, t)
+                    majority_connections.append(connection)
+
+                if debug:
+                    if majority_ranks is consumer_ranks:
+                        print(
+                            f"rank[{minority_rank}] -> ranks{majority_ranks[start:end]}"
+                        )
+                        print(
+                            f"device[{device}] -> devices{majority_devices[start:end]}"
+                        )
+                    else:
+                        print(
+                            f"ranks{majority_ranks[start:end]} -> rank[{minority_rank}]"
+                        )
+                        print(
+                            f"devices{majority_devices[start:end]} -> device[{device}]"
+                        )
+                start = end
+            if debug:
+                print(f"activation: {output}\n")
+            total_tags += majority_size
+
+            if n_producers <= n_consumers:
+                producers_connections = minority_connections
+                consumer_connections = majority_connections
+            else:
+                producers_connections = majority_connections
+                consumer_connections = minority_connections
+
+            for rank, connection in zip(producer_ranks, producers_connections):
+                rank_to_connections[rank]['outputs'].append(
+                    (output, connection))
+
+            for rank, connection in zip(consumer_ranks, consumer_connections):
+                rank_to_connections[rank]['inputs'].append(
+                    (output, connection))
+
+    # make sure to sort according to the order in the stage config
+    stage_input_output_order = dict()
+    for stage_id, stage in stages.items():
+        stage_input_output_order[stage_id] = {
+            s: i
+            for i, s in enumerate(chain(stage.inputs, stage.outputs))
+        }
+
+    for rank in rank_to_connections:
+        order = stage_input_output_order[rank_to_stage[rank]]
+
+        inputs = rank_to_connections[rank]['inputs']
+        sorted_inputs = sorted(inputs, key=lambda t: order[t[0]])
+
+        outputs = rank_to_connections[rank]['outputs']
+        sorted_outputs = sorted(outputs, key=lambda t: order[t[0]])
+
+        rank_to_connections[rank]['inputs'] = sorted_inputs
+        rank_to_connections[rank]['outputs'] = sorted_outputs
+    if debug:
+        print(f"total number of p2p channels: {total_tags}")
+
+    # create IOs
+    rank_to_IO = dict()
+    for rank, io_config in sorted(rank_to_connections.items()):
+        io_in = [t[1] for t in io_config['inputs']]
+        io_out = []
+
+        # if an output needs to sent to multiple stages we will replicate it
+        for name, group in groupby(io_config['outputs'], key=lambda t: t[0]):
+            group = list(group)
+            if len(group) == 1:
+                io_out.append(group[0][1])
+            else:
+                io_out.append(P2MPBroadcastConnection([t[1] for t in group]))
+
+        # assign comm handlers and set the total number of tags
+        rank_to_IO[rank] = P2PRankIO(io_in, io_out)
+        rank_to_IO[rank].set_total_tags(total_tags)
+    # find all process groups for replicated stages
+    groups = []
+    for stage_id, ranks in sorted(stage_to_ranks.items()):
+        if len(ranks) > 1:
+            groups.append(ranks)
+
+    rank_to_stage = {
+        r: stage
+        for stage, ranks in stage_to_ranks.items() for r in ranks
+    }
+
+    return rank_to_IO[worker_rank], groups

@@ -70,3 +70,7 @@ class CommunicationHandlerBase(abc.ABC):
 
     def fix_after_recv(self, x):
         return x  # No-op.
+
+    @abc.abstractmethod
+    def set_tensor_dtypes(self, tensor_dtypes):
+        pass
