@@ -3,7 +3,7 @@
     "data_dir": "/home_local/saareliad/data",
     "out_dir":"results/",
     "auto_file_name": false,
-    "out_filename": "debug_28x10_100",
+    "out_filename": "debug",
     "distributed_backend": "mpi",
     "task": "lm_sep",
     "statistics": "lm_theta_dist",
@@ -15,10 +15,10 @@
             "always_calc_grad_norm": false 
         }
     },
-    "bs_train": 128,
+    "bs_train": 4,
     "train_seq_len": 64,
     "valid_seq_len": 64,
-    "bs_test": 200,
+    "bs_test": 4,
     "num_data_workers": 10,
     "optimizer": {
         "type": "adam",

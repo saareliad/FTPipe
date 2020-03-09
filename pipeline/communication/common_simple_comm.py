@@ -39,6 +39,7 @@ class SimpleCommBase(CommunicationHandlerBase):
         self.TOTAL_TAGS = TOTAL_TAGS
         
         # Optional
+        target_tensor_names = target_tensor_names if target_tensor_names else set()
         self.target_tensor_names = target_tensor_names
         self.ranks_in_previous_stage = ranks_in_previous_stage
         self.ranks_in_next_stage = ranks_in_next_stage

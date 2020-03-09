@@ -163,9 +163,12 @@ def parse_cli():
 
     parser.add_argument(
         '--debug',
-        action='store_true',
+        nargs='*',
+        type=int,
+        required=False,
+        # action='store_true',
         default=False,
-        help='Set to debug mpi applications. Will wait for attachment.')
+        help='Set to debug mpi applications. Will wait for attachment on given ranks.')
 
     parser.add_argument('--config',
                         help="Config File",
@@ -662,6 +665,18 @@ def main():
     parse_json_config(args, args.config)
     parse_env_vars(args)
     args.world_size = get_world_size(args.distributed_backend)
+    
+    if args.debug and args.rank in args.debug:
+        # TODO: by specific ranks
+        import ptvsd
+        port = 3000 + args.local_rank
+        args.num_data_workers = 0  # NOTE: it does not work without this.
+        address = ('127.0.0.1', port)
+        print(f"-I- rank {args.rank} waiting for attachment on {address}")
+        ptvsd.enable_attach(address=address)
+        ptvsd.wait_for_attach()
+    else:
+        delattr(args, "debug")
 
     # TODO: idealy we want to choose device here, but we moved it down.
 
@@ -684,6 +699,7 @@ def main():
         torch.cuda.set_device(device)
 
     CONFIG_VERSION = models.infer_partitioning_config_version(args.model)
+    print(f"Partitioning Config version is {CONFIG_VERSION}. Parsing...")
 
     if CONFIG_VERSION == 0:
         configs, dataset_keywords = parse_old_config.OldPartitioningConfigParser.get_configs_and_dataset_keywords(
@@ -723,7 +739,7 @@ def main():
             args.bs_train,
             args.bs_test,  # NOTE: changed name
             model_instance=model_instance,
-            send_target_in_pipe="_sep" in args.task)
+            send_target_in_pipe=not ("_sep" in args.task))
 
         train_dl, test_dl, samplers = get_dataloaders(args, **dataset_keywords)
         comm_init_args = parsed_cofig.comm_init_args()
@@ -748,15 +764,6 @@ def main():
                                       args.bs_train)
 
     assert_args(args)
-
-    if args.debug:
-        # TODO: by specific ranks
-        import ptvsd
-        port = 3000 + args.local_rank
-        address = ('127.0.0.1', port)
-        print(f"-I- waiting for attachment on {address}")
-        ptvsd.enable_attach(address=address)
-        ptvsd.wait_for_attach()
 
     logger = FileLogger(args.logdir,
                         global_rank=args.rank,

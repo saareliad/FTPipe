@@ -36,12 +36,15 @@ def pretrained_model_config_and_tokenizer(
         tokenizer_name: str = "",
         do_lower_case: bool = True,
         cache_dir: str = "",
+        output_past=False,
 ):
 
     config_class, model_class, tokenizer_class = MODEL_TYPES[model_type]
     config = config_class.from_pretrained(
         config_name if config_name else model_name_or_path,
         cache_dir=cache_dir if cache_dir else None)
+    
+    config.output_past = output_past
 
     tokenizer = tokenizer_class.from_pretrained(
         tokenizer_name if tokenizer_name else model_name_or_path,
@@ -62,7 +65,8 @@ def pretrained_model_config_and_tokenizer(
 def gpt2_lowercase():
     mycfg = dict(model_type='gpt2',
                  model_name_or_path='gpt2',
-                 do_lower_case=True)
+                 do_lower_case=True,
+                 output_past=False)
     model, tokenizer, config = pretrained_model_config_and_tokenizer(**mycfg)
     resize_token_embeddings(model, tokenizer)
 
