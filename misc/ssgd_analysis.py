@@ -27,12 +27,22 @@ def run_analysis(sample, model, n_workers, bw_GBps=12, verbose=True):
 
     # TODO: print something...
 
-    return expected_speedup
+    d = dict(n_workers=n_workers,
+             send_mb=send_mb,
+             single_send_time=single_send_time,
+             num_sends=num_sends,
+             total_send_time=total_send_time,
+             comp_time=comp_time,
+             utilization=utilization,
+             expected_speedup=expected_speedup)
+
+    return expected_speedup, d
 
 
 def cuda_computation_times(model, inputs):
     ''' measure forward/backward time of a partition on the GPU
     '''
+    model.cuda()
     # now we move inputs to GPU
     inputs = [i.to('cuda') for i in inputs]
     start = torch.cuda.Event(enable_timing=True)

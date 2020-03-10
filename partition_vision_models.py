@@ -430,4 +430,5 @@ if __name__ == "__main__":
                                        recomputation=recomputation,
                                        bw_GBps=bw,
                                        verbose=True,
-                                       async_pipeline=args.async_pipeline)
+                                       async_pipeline=args.async_pipeline,
+                                       sequential_model=model)
