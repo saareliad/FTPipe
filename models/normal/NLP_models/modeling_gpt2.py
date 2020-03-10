@@ -34,6 +34,7 @@ from transformers.file_utils import cached_path, WEIGHTS_NAME, TF_WEIGHTS_NAME, 
 
 logger = logging.getLogger(__name__)
 
+_DROPOUT_INPLACE = True
 GPT2_PRETRAINED_MODEL_ARCHIVE_MAP = {"gpt2": "https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-pytorch_model.bin",
                                      "gpt2-medium": "https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-medium-pytorch_model.bin",
                                      "gpt2-large": "https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-large-pytorch_model.bin",
@@ -117,8 +118,8 @@ class Attention(nn.Module):
 
         self.c_attn = Conv1D(n_state * 3, nx)
         self.c_proj = Conv1D(n_state, nx)
-        self.attn_dropout = nn.Dropout(config.attn_pdrop, inplace=False)
-        self.resid_dropout = nn.Dropout(config.resid_pdrop, inplace=False)
+        self.attn_dropout = nn.Dropout(config.attn_pdrop, inplace=_DROPOUT_INPLACE)
+        self.resid_dropout = nn.Dropout(config.resid_pdrop, inplace=_DROPOUT_INPLACE)
         self.pruned_heads = set()
 
     def prune_heads(self, heads):
@@ -222,7 +223,7 @@ class MLP(nn.Module):
         self.c_fc = Conv1D(n_state, nx)
         self.c_proj = Conv1D(nx, n_state)
         self.act = gelu
-        self.dropout = nn.Dropout(config.resid_pdrop, inplace=False)
+        self.dropout = nn.Dropout(config.resid_pdrop, inplace=_DROPOUT_INPLACE)
 
     def forward(self, x):
         h = self.act(self.c_fc(x))
@@ -604,7 +605,7 @@ class GPT2Model(GPT2PreTrainedModel):
 
         self.wte = nn.Embedding(config.vocab_size, config.n_embd)
         self.wpe = nn.Embedding(config.n_positions, config.n_embd)
-        self.drop = nn.Dropout(config.embd_pdrop, inplace=False)
+        self.drop = nn.Dropout(config.embd_pdrop, inplace=_DROPOUT_INPLACE)
         self.output_shape = (-1, config.n_positions, config.n_embd)
         # self.h = nn.ModuleList(
         #     [Block(config.n_ctx, config, scale=True) for _ in range(1)])
