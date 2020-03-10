@@ -2,6 +2,11 @@ import torch
 from collections import deque
 import time
 import numpy as np
+from .ssgd_analysis import run_analysis as ssgd_run_analysis
+from pprint import pprint
+import sys
+import io
+from contextlib import redirect_stdout
 
 
 def run_analysis(sample,
@@ -12,7 +17,8 @@ def run_analysis(sample,
                  bw_GBps=12,
                  verbose=True,
                  async_pipeline=False,
-                 add_comm_times_to_balance=True):
+                 add_comm_times_to_balance=True,
+                 sequential_model=None):
 
     # NOTE: add_comm_times_to_balance, should be true...
     # setting to false is mainly for our own debug
@@ -21,6 +27,7 @@ def run_analysis(sample,
     UTILIZATION_SLOWDOWN_SPEEDUP = True
     PRINT_THEORETICAL = False
     PRINT_VAR_STD = False
+    TRY_SSGD_ANALYSIS = True
 
     # thoeretical analysis
     sequential_f, sequential_b, parallel_f, parallel_b = theoretical_analysis(
@@ -155,6 +162,36 @@ def run_analysis(sample,
             s += f"forward {real_f_utilization}\nbackward {real_b_utilization}\n"
 
             s += f"\nExpected speedup for {n_partitions} partitions is: {expected_speedup:.3f}"
+
+        if TRY_SSGD_ANALYSIS and torch.cuda.is_available() and (
+                sequential_model is not None):
+            n_workers = n_partitions
+            model = sequential_model
+            try:
+                ssgd_expected_speedup, ssgd_stats = ssgd_run_analysis(
+                    sample, model, n_workers, bw_GBps=bw_GBps, verbose=verbose)
+                # except Exception as e:
+                if verbose:
+                    ssgd_output = None
+                    with io.StringIO() as buf, redirect_stdout(buf):
+                        print()
+                        print('Printing SSGD analysis:')
+                        print(
+                            "(naive: assuming 0 concurency between communication and computation)"
+                        )
+                        pprint(rounddict(ssgd_stats))
+                        print(
+                            f"ssgd_expected_speedup: {ssgd_expected_speedup:.3f}"
+                        )
+                        pipeline_to_ssgd_speedup = expected_speedup / ssgd_expected_speedup
+                        print(f"Pipeline/SSGD: {pipeline_to_ssgd_speedup:.3f}")
+                        ssgd_output = buf.getvalue()
+
+                    print(ssgd_output)
+
+            except:
+                print(f"SSGD analysis failed: {sys.exc_info()[0]}")
+                # raise
 
         print(s)
 
