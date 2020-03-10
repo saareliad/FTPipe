@@ -38,7 +38,7 @@ GPT2_PRETRAINED_MODEL_ARCHIVE_MAP = {"gpt2": "https://s3.amazonaws.com/models.hu
                                      "gpt2-medium": "https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-medium-pytorch_model.bin",
                                      "gpt2-large": "https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-large-pytorch_model.bin",
                                      # NOTE: gpt2-xl is the 1.5B model. Added manually, this file version is old.
-                                     "gpt2-xl": "https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-xl-pytorch_model.bin",  
+                                     "gpt2-xl": "https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-xl-pytorch_model.bin",
                                      "distilgpt2": "https://s3.amazonaws.com/models.huggingface.co/bert/distilgpt2-pytorch_model.bin", }
 
 
@@ -112,12 +112,13 @@ class Attention(nn.Module):
             torch.ones(n_ctx, n_ctx)).view(1, 1, n_ctx, n_ctx))
         self.n_head = config.n_head
         self.split_size = n_state
+        
         self.scale = scale
 
         self.c_attn = Conv1D(n_state * 3, nx)
         self.c_proj = Conv1D(n_state, nx)
-        self.attn_dropout = nn.Dropout(config.attn_pdrop)
-        self.resid_dropout = nn.Dropout(config.resid_pdrop)
+        self.attn_dropout = nn.Dropout(config.attn_pdrop, inplace=False)
+        self.resid_dropout = nn.Dropout(config.resid_pdrop, inplace=False)
         self.pruned_heads = set()
 
     def prune_heads(self, heads):
@@ -133,7 +134,7 @@ class Attention(nn.Module):
         mask = mask.view(-1).contiguous().eq(1)
         index = torch.arange(len(mask))[mask].long()
         index_attn = torch.cat(
-            [index, index + self.split_size, index + (2*self.split_size)])
+            [index, index + self.split_size, index + (2 * self.split_size)])
 
         # Prune conv1d layers
         self.c_attn = prune_conv1d_layer(self.c_attn, index_attn, dim=1)
@@ -148,11 +149,11 @@ class Attention(nn.Module):
     def _attn(self, q, k, v, attention_mask=None, head_mask=None):
         w = torch.matmul(q, k)
         if self.scale:
-            #TODO tracer warning using v.size(-1) as a value
+            # TODO tracer warning using v.size(-1) as a value
             w = w / math.sqrt(v.size(-1))
         nd, ns = w.size(-2), w.size(-1)
-        #TODO tracer warning using w.size as values
-        b = self.bias[:, :, ns-nd:ns, :ns]
+        # TODO tracer warning using w.size as values
+        b = self.bias[:, :, ns - nd:ns, :ns]
         w = w * b - 1e4 * (1 - b)
 
         if attention_mask is not None:
@@ -160,7 +161,7 @@ class Attention(nn.Module):
             w = w + attention_mask
 
         # w = nn.Softmax(dim=-1)(w)
-        w= torch.softmax(w,dim=-1)
+        w = torch.softmax(w, dim=-1)
         w = self.attn_dropout(w)
 
         # Mask heads if we want to
@@ -174,7 +175,7 @@ class Attention(nn.Module):
 
     def merge_heads(self, x):
         x = x.permute(0, 2, 1, 3).contiguous()
-        #TODO this is stupid
+        # TODO this is stupid
         new_x_shape = x.size()[:-2] + (x.size(-2) * x.size(-1),)
         return x.view(*new_x_shape)  # in Tensorflow implem: fct merge_states
 
@@ -221,7 +222,7 @@ class MLP(nn.Module):
         self.c_fc = Conv1D(n_state, nx)
         self.c_proj = Conv1D(nx, n_state)
         self.act = gelu
-        self.dropout = nn.Dropout(config.resid_pdrop)
+        self.dropout = nn.Dropout(config.resid_pdrop, inplace=False)
 
     def forward(self, x):
         h = self.act(self.c_fc(x))
@@ -513,7 +514,6 @@ class GPT2PreTrainedModel(PreTrainedModel):
                             "unexpected_keys": unexpected_keys, "error_msgs": error_msgs}
             return model, loading_info
 
-        
         return model
 
 
@@ -604,13 +604,13 @@ class GPT2Model(GPT2PreTrainedModel):
 
         self.wte = nn.Embedding(config.vocab_size, config.n_embd)
         self.wpe = nn.Embedding(config.n_positions, config.n_embd)
-        self.drop = nn.Dropout(config.embd_pdrop)
-        self.output_shape = (-1,config.n_positions,config.n_embd)
+        self.drop = nn.Dropout(config.embd_pdrop, inplace=False)
+        self.output_shape = (-1, config.n_positions, config.n_embd)
         # self.h = nn.ModuleList(
         #     [Block(config.n_ctx, config, scale=True) for _ in range(1)])
         self.num_layers = config.n_layer
         for i in range(self.num_layers):
-            self.add_module(str(i),Block(config.n_ctx, config, scale=True))
+            self.add_module(str(i), Block(config.n_ctx, config, scale=True))
 
         self.ln_f = nn.LayerNorm(config.n_embd, eps=config.layer_norm_epsilon)
 
@@ -639,7 +639,7 @@ class GPT2Model(GPT2PreTrainedModel):
         if past is None:
             past_length = 0
             # past = [None] * len(self.h)
-            past = [None]*self.num_layers
+            past = [None] * self.num_layers
         else:
             past_length = past[0][0].size(-2)
         if position_ids is None:
@@ -718,7 +718,7 @@ class GPT2Model(GPT2PreTrainedModel):
                 all_attentions.append(outputs[2])
 
         hidden_states = self.ln_f(hidden_states)
-        attention_output_shape=hidden_states.shape
+        attention_output_shape = hidden_states.shape
         # hidden_states = hidden_states.view(*output_shape)
         # Add last hidden state
         if self.output_hidden_states:
@@ -799,7 +799,7 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
         self._tie_or_clone_weights(self.lm_head,
                                    self.transformer.wte)
 
-    def forward(self, input_ids,labels=None, past=None, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None,
+    def forward(self, input_ids, labels=None, past=None, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None,
                 ):
         transformer_outputs = self.transformer(input_ids,
                                                past=past,
@@ -807,7 +807,7 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
                                                token_type_ids=token_type_ids,
                                                position_ids=position_ids,
                                                head_mask=head_mask)
-        
+
         hidden_states = transformer_outputs[0]
         # hidden_states should be torch.Size([1, 1024, 768]) after reshape
         # hidden_states=hidden_states.view(-1,self.n_positions,self.n_embed)
@@ -819,10 +819,15 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
             shift_labels = labels[..., 1:].contiguous()
             # Flatten the tokens
             # loss_fct = CrossEntropyLoss(ignore_index=-100)
-            loss_fct = lambda logits,labels: nn.functional.cross_entropy(logits,labels,ignore_index=-100)
+            def loss_fct(logits, labels): return nn.functional.cross_entropy(
+                logits, labels, ignore_index=-100)
             loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)),
                             shift_labels.view(-1))
-            outputs = (loss,) + outputs
+            
+            # HACK: changed to output just the loss, somehow this improves partitioning results,
+            # need to understand why.
+            outputs = (loss,)
+            # outputs = (loss,) + outputs
 
         # (loss), lm_logits, presents, (all hidden_states), (attentions)
         return outputs
@@ -937,7 +942,8 @@ class GPT2DoubleHeadsModel(GPT2PreTrainedModel):
             shift_logits = lm_logits[..., :-1, :].contiguous()
             shift_labels = lm_labels[..., 1:].contiguous()
             # loss_fct = CrossEntropyLoss(ignore_index=-100)
-            loss_fct = lambda logits,labels: nn.functional.cross_entropy(logits,labels,ignore_index=-100)
+            def loss_fct(logits, labels): return nn.functional.cross_entropy(
+                logits, labels, ignore_index=-100)
             loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)),
                             shift_labels.view(-1))
             outputs = (loss,) + outputs
