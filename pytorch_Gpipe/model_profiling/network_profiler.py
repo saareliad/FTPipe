@@ -67,9 +67,14 @@ def profile_network(
     # perform n_iter symbolic forward backward run
     # first one is warmup as we have seen the first time measurements are higher
     for _ in range(n_iter + 1):
-        torch.cuda.reset_max_memory_allocated()
+        if torch.cuda.is_available():
+            torch.cuda.reset_max_memory_allocated()
+
         _perform_forward_backward_pass(net, *sample_batch, **kwargs)
-        torch.cuda.max_memory_allocated()
+
+        if torch.cuda.is_available():
+            torch.cuda.max_memory_allocated()
+
     # gather forward and backward execution times
     backward_times = [
         layer.avg_time(forward=False) for layer in layers_dict.values()

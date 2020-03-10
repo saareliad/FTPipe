@@ -6,6 +6,8 @@ from pytorch_Gpipe.model_profiling import Node, NodeTypes
 import argparse
 import importlib
 from misc import run_analysis, run_partitions
+import shlex
+import sys
 
 _VGG16_BN = dict(vgg16_bn=dict())
 
@@ -80,7 +82,7 @@ def create_random_sample(args, analysis=False):
     if analysis:
         batch_size = args.analysis_batch_size
     else:
-        batch_size = args.batch_size
+        batch_size = args.partitioning_batch_size
 
     if dataset == 'cifar10' or dataset == 'cifar100':
         sample = torch.randn(batch_size, 3, 32, 32)
@@ -212,87 +214,127 @@ class ParseMetisOpts:
         #  '_dbglvl': -1,
         #  }
 
+class ParsePartitioningOpts:
+    def __init__(self):
+        pass
+    
+    def _extra(self, parser):
+        raise NotImplementedError()
 
-def parse_cli():
+    def set_defaults(self, parser):
+        pass
 
-    parser = argparse.ArgumentParser(
-        description="Partitioning models",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--model',
-                        default='wrn_16x4',
-                        choices=MODEL_CONFIGS.keys())
-    parser.add_argument('-d', '--dataset', default='cifar10', choices=DATASETS)
-    parser.add_argument('-b', '--batch_size', type=int, default=128)
-    parser.add_argument(
+    def add_partitioning_arguments(self, parser):
+        # parser = parser.add_argument_group("Partitioning options")
+        self._extra(parser)
+
+        parser.add_argument('-b', '--partitioning_batch_size', type=int, default=128)
+        parser.add_argument(
         '--model_too_big',
         action='store_true',
         default=False,
         help=
         "if the model is too big run the whole partitioning process on CPU, "
         "and drink a cup of coffee in the meantime")
-    parser.add_argument('-p', '--n_partitions', type=int, default=4)
-    parser.add_argument('-o', '--output_file', default='wrn_16x4')
-    parser.add_argument('--no_auto_file_name',
-                        action='store_true',
-                        default=False,
-                        help="do not create file name automatically")
-    parser.add_argument(
-        '--n_iter',
-        type=int,
-        default=100,
-        help=
-        "number of iteration used in order to profile the network and run analysis"
-    )
-    parser.add_argument(
-        '--bw',
-        type=float,
-        default=12,
-        help="data transfer rate between gpus in GBps (Gigabytes per second)")
-    parser.add_argument(
-        '--no_recomputation',
-        action='store_true',
-        default=False,
-        help="whether to (not) use recomputation for the backward pass")
-    parser.add_argument('--no_analysis',
-                        action='store_true',
-                        default=False,
-                        help="disable partition analysis")
-    parser.add_argument("--depth",
-                        default=-1,
-                        type=int,
-                        help="the depth in which we will partition the model")
-    parser.add_argument(
-        "--partition_layer_graph",
-        action="store_true",
-        default=False,
-        help="whether to partition a graph containing only layers")
-    parser.add_argument(
-        "--analysis_batch_size",
-        default=32,
-        type=int,
-        help="batch size to use during the post partition analysis")
-    parser.add_argument("-a",
-                        "--async_pipeline",
-                        default=False,
-                        action="store_true",
-                        help="Do analysis for async pipeline")
-    parser.add_argument("--dot",
-                        default=False,
-                        action="store_true",
-                        help="Save and plot it using graphviz")
+        parser.add_argument('-p', '--n_partitions', type=int, default=4)
+        parser.add_argument('-o', '--output_file', default='wrn_16x4')
+        parser.add_argument('--no_auto_file_name',
+                            action='store_true',
+                            default=False,
+                            help="do not create file name automatically")
+        parser.add_argument(
+            '--n_iter',
+            type=int,
+            help=
+            "number of iteration used in order to profile the network and run analysis"
+        )
+        parser.add_argument(
+            '--bw',
+            type=float,
+            default=12,
+            help="data transfer rate between gpus in GBps (Gigabytes per second)")
+        parser.add_argument(
+            '--no_recomputation',
+            action='store_true',
+            default=False,
+            help="whether to (not) use recomputation for the backward pass")
+        parser.add_argument('--no_analysis',
+                            action='store_true',
+                            default=False,
+                            help="disable partition analysis")
+        parser.add_argument("--depth",
+                            default=-1,
+                            type=int,
+                            help="the depth in which we will partition the model")
+        parser.add_argument(
+            "--partition_layer_graph",
+            action="store_true",
+            default=False,
+            help="whether to partition a graph containing only layers")
+        parser.add_argument(
+            "--analysis_batch_size",
+            default=32,
+            type=int,
+            help="batch size to use during the post partition analysis")
+        parser.add_argument("-a",
+                            "--async_pipeline",
+                            default=False,
+                            action="store_true",
+                            help="Do analysis for async pipeline")
+        parser.add_argument("--dot",
+                            default=False,
+                            action="store_true",
+                            help="Save and plot it using graphviz")
 
-    parser.add_argument("--no_test_run",
-                        default=False,
-                        action="store_true",
-                        help="Do not try to run partitions after done")
+        parser.add_argument("--no_test_run",
+                            default=False,
+                            action="store_true",
+                            help="Do not try to run partitions after done")
 
-    parser.add_argument(
-        "--save_memory_mode",
-        default=False,
-        action="store_true",
-        help="Save memory during profiling by storing everything on cpu," +
-        " but sending each layer to GPU before the profiling.")
+        parser.add_argument(
+            "--save_memory_mode",
+            default=False,
+            action="store_true",
+            help="Save memory during profiling by storing everything on cpu," +
+            " but sending each layer to GPU before the profiling.")
 
+        self.set_defaults(parser)
+
+
+
+class ParsePartitioningOptsVision(ParsePartitioningOpts):
+    def __init__(self, model_choices=MODEL_CONFIGS.keys(), dataset_choices=DATASETS):
+        super().__init__()
+        self.model_choices = model_choices
+        self.dataset_choices = dataset_choices
+
+    def _extra(self, parser):
+        parser.add_argument('--model',
+            choices=self.model_choices, default='wrn_16x4')
+        parser.add_argument('-d', '--dataset', choices=self.dataset_choices, default='cifar10')
+
+    def set_defaults(self, parser):
+        d = {
+            # "model": 'wrn_16x4',
+            "partitioning_batch_size": 128,
+            "n_iter": 100,
+            "output_file": 'wrn_16x4',
+            "n_partitions": 4,
+            "bw": 12,
+            "analysis_batch_size": 32,
+        }
+
+        parser.set_defaults(**d)
+
+
+
+def parse_cli():
+
+    parser = argparse.ArgumentParser(
+        description="Partitioning models",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    ParsePartitioningOptsVision().add_partitioning_arguments(parser)
     ParseMetisOpts.add_metis_arguments(parser)
 
     args = parser.parse_args()
@@ -308,6 +350,9 @@ def parse_cli():
 
 
 if __name__ == "__main__":
+    cmdline = " ".join(map(shlex.quote, sys.argv[1:]))
+    # TODO: add cmdline to generate output file.
+
     args, METIS_opt = parse_cli()
     VERBOSE_PARTITIONING = False
     GET_PARTITIONS_ON_CPU = True
