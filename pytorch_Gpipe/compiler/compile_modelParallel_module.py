@@ -32,15 +32,15 @@ def create_model_parallel_module(batch_dim: int, name: str, ios: Dict[int, Dict[
 
     stream = [f"def stream(self,device_idx,mb_idx):",
               "# return the stream for the current device and micro batch",
-              "return torch.cuda.stream(self.streams[device_idx,mb_idx])"]
+              "return torch.cuda.stream(self.streams[device_idx][mb_idx])"]
     stream = f"\n{dtab}".join(stream)
 
     wait_stream = [f"def wait_stream(self,device_idx,mb_idx):",
-                   "stream = self.streams[device_idx,mb_idx]",
+                   "stream = self.streams[device_idx][mb_idx]",
                    "# wait until the mb was cleared by previous partition",
-                   "stream.wait_stream(self.stream(device_idx-1,mb_idx))",
+                   "stream.wait_stream(self.streams[device_idx-1][mb_idx])",
                    "# wait until previous mb was cleared by this partition",
-                   "stream.wait_stream(self.stream(device_idx,mb_idx-1))"]
+                   "stream.wait_stream(self.streams[device_idx][mb_idx-1])"]
     wait_stream = f"\n{dtab}".join(wait_stream)
 
     states = f",\n{dtab}{dtab}".join(
