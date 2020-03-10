@@ -65,6 +65,18 @@ def generate_forward_method(
     input_shapes = [format_shape(n.shape)[0] for n in part_inputs]
     output_shapes = [format_shape(n.shape)[0] for n in outputs]
 
+    # HACK: fix outputs with size 0
+    # This is in order to support outputing correct shape for loss, which is of size 1.
+    t = []
+    for i in output_shapes:
+        if len(i) == 0:
+            t.append([1])
+            print("-W- HACK changing output shape!")
+            print([n.shape for n in outputs])
+        else:
+            t.append(i)
+    output_shapes = t
+
     io = {"inputs": list(input_scopes),
           "outputs": list(out_scopes),
           "input_shapes": input_shapes,

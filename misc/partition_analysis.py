@@ -243,6 +243,9 @@ def profile_execution(model_inputs,
 
                 del outputs
 
+                if is_last_partition:
+                    send_time = 0.0
+
                 stats = {
                     "input size": in_size_mb,  # "MB "
                     "recieve_time": recv_time,  # "ms"

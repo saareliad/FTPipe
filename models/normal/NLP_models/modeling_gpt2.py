@@ -112,6 +112,7 @@ class Attention(nn.Module):
             torch.ones(n_ctx, n_ctx)).view(1, 1, n_ctx, n_ctx))
         self.n_head = config.n_head
         self.split_size = n_state
+        
         self.scale = scale
 
         self.c_attn = Conv1D(n_state * 3, nx)
@@ -822,7 +823,11 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
                 logits, labels, ignore_index=-100)
             loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)),
                             shift_labels.view(-1))
-            outputs = (loss,) + outputs
+            
+            # HACK: changed to output just the loss, somehow this improves partitioning results,
+            # need to understand why.
+            outputs = (loss,)
+            # outputs = (loss,) + outputs
 
         # (loss), lm_logits, presents, (all hidden_states), (attentions)
         return outputs

@@ -83,9 +83,10 @@ def compile_partitoned_model(graph: Graph,
 
     lines.append(
         create_pipeline_configuration(graph, parts, model, ios, layer_classes, batch_dim, output_file))
-    lines.append(
-        create_model_parallel_module(batch_dim, graph.model_name, ios, graph.num_inputs,
-                                     graph.output_scopes))
+    # TODO: this was commented out because its has syntax error.
+    # lines.append(
+    #     create_model_parallel_module(batch_dim, graph.model_name, ios, graph.num_inputs,
+    #                                  graph.output_scopes))
     lines += partitions_code
     lines.append(generateHelpFunctions())
 
@@ -230,7 +231,9 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
     for idx in sorted(list(ios.keys())):
         lines.extend(["\n",
                       f"stages[{idx}]['batch_dim'] = {batch_dim}",
-                      f"stages[{idx}]['batch_size'] =stages[{idx}]['output_shapes'][0][{batch_dim}]",
+                      # HACK : This is in order to support outputing loss, which is of size 1.
+                      # f"stages[{idx}]['batch_size'] = stages[{idx}]['output_shapes'][0][{batch_dim}] if len(stages[{idx}]['output_shapes'][0]) > 1 else stages[{idx}]['input_shapes'][0][{batch_dim}]",
+                      f"stages[{idx}]['batch_size'] = stages[{idx}]['input_shapes'][0][{batch_dim}]",
                       f"stages[{idx}]['stage_cls'] = module_path + '.Partition{idx}'",
                       f"device = 'cpu' if DEBUG else 'cuda:{idx}'",
                       f"stages[{idx}]['devices'] = [device]",
@@ -240,6 +243,16 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
     input_shapes = [format_shape(n.shape)[0] for n in graph.inputs]
     model_outputs = graph.outputs
     output_shapes = [format_shape(n.shape)[0] for n in model_outputs]
+
+    # HACK : This is in order to support outputing correct shape for loss, which is of size 1.
+    t = []
+    for i in output_shapes:
+        if len(i) == 0:
+            t.append([1])
+            print("-W- HACK changing output shape!")
+        else:
+            t.append(i)
+    output_shapes = t
 
     lines.extend([
         "\n",

@@ -284,7 +284,8 @@ def partition_model(args,
                      analysis_config,
                      args.n_iter,
                      recomputation=recomputation,
-                     bw_GBps=bandwidth_gps)
+                     bw_GBps=bandwidth_gps,
+                     async_pipeline=args.async_pipeline)
         sys.exit()
     # model(inputs)
     # outputs = model(inputs, masked_lm_labels=labels) if args.mlm else model(
