@@ -201,6 +201,7 @@ def profile_execution(model_inputs,
 
             # For async pipeline, do no use recomputation on last partition
             is_last_partition = (len(parts) == 0)
+            is_first_partition = (idx == 0)
             partition_specific_recomputation = recomputation
             if async_pipeline and is_last_partition:
                 partition_specific_recomputation = False
@@ -242,6 +243,9 @@ def profile_execution(model_inputs,
 
                 del outputs
 
+                if is_last_partition:
+                    send_time = 0.0
+
                 stats = {
                     "input size": in_size_mb,  # "MB "
                     "recieve_time": recv_time,  # "ms"
@@ -269,8 +273,11 @@ def profile_execution(model_inputs,
                 nocommb_times[idx].append(b_time)
 
                 if add_comm_times_to_balance:
-                    f_time += send_time
-                    b_time += in_size_mb / bw_GBps  # HACK: activation input = gradient size
+                    if not is_last_partition:
+                        f_time += send_time
+                    if not is_first_partition:
+                        b_time += in_size_mb / bw_GBps  # HACK: activation input = gradient size
+
                 f_times[idx].append(f_time)
                 b_times[idx].append(b_time)
 

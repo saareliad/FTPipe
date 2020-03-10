@@ -45,7 +45,9 @@ class PipelineConfig():
     def add_output(self, output_name: str, shape: Tuple[int, ...]) -> "PipelineConfig":
         self.model_outputs.append(output_name)
         shape = list(shape)
-        shape[self.batch_dim] = 1
+        if len(shape) > 1:
+            # output is not a scalar
+            shape[self.batch_dim] = 1
         self.model_output_shapes.append(shape)
         return self
 
@@ -375,7 +377,9 @@ class StageConfig():
     def add_output(self, output_name: str, shape: Tuple[int, ...]) -> "StageConfig":
         self.outputs.append(output_name)
         shape = list(shape)
-        shape[self.batch_dim] = 1
+        if len(shape) > 1:
+            # not a scalar
+            shape[self.batch_dim] = 1
         self.output_shapes.append(shape)
         return self
 

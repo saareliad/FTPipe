@@ -90,7 +90,7 @@ def compile_partitoned_model(graph: Graph,
         create_pipeline_configuration(graph, parts, model, ios, layer_classes, batch_dim, output_file))
     if generate_model_parallel:
         lines.append(
-            create_model_parallel_module(batch_dim, graph.model_name, ios, graph.num_inputs,
+            create_model_parallel_module(graph, batch_dim, graph.model_name, ios, graph.num_inputs,
                                          graph.output_scopes))
     lines += partitions_code
     lines.append(generateHelpFunctions())
@@ -236,7 +236,7 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
     for idx in sorted(list(ios.keys())):
         lines.extend(["\n",
                       f"stages[{idx}]['batch_dim'] = {batch_dim}",
-                      f"stages[{idx}]['batch_size'] =stages[{idx}]['output_shapes'][0][{batch_dim}]",
+                      f"stages[{idx}]['batch_size'] = stages[{idx}]['input_shapes'][0][{batch_dim}]",
                       f"stages[{idx}]['stage_cls'] = module_path + '.Partition{idx}'",
                       f"device = 'cpu' if DEBUG else 'cuda:{idx}'",
                       f"stages[{idx}]['devices'] = [device]",

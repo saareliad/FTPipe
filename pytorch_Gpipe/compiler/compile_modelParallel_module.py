@@ -1,4 +1,5 @@
 from .partition_forward_method import variableNameGenerator
+from ..model_profiling import Graph
 from typing import List, Tuple, Dict
 from collections import deque, defaultdict
 
@@ -6,8 +7,8 @@ tab = '    '
 dtab = tab + tab
 
 
-def create_model_parallel_module(batch_dim: int, name: str, ios: Dict[int, Dict[str,
-                                                                                List[str]]],
+def create_model_parallel_module(graph: Graph, batch_dim: int, name: str, ios: Dict[int, Dict[str,
+                                                                                              List[str]]],
                                  num_inputs: int,
                                  model_outputs: List[str]) -> str:
     '''create a modelParallel version of the partition config
@@ -27,7 +28,7 @@ def create_model_parallel_module(batch_dim: int, name: str, ios: Dict[int, Dict[
                                 for i in ios)
     ])
     model_inputs = [f'input{idx}' for idx in range(num_inputs)]
-    forwards = model_parallel_forward(ios,
+    forwards = model_parallel_forward(graph, ios,
                                       model_inputs, model_outputs)
 
     stream = [f"def stream(self,device_idx,mb_idx):",
@@ -80,7 +81,7 @@ def create_model_parallel_module(batch_dim: int, name: str, ios: Dict[int, Dict[
     ]) + "\n\n"
 
 
-def model_parallel_forward(ios: Dict[int, Dict[str, List[str]]],
+def model_parallel_forward(graph: Graph, ios: Dict[int, Dict[str, List[str]]],
                            model_inputs: List[str],
                            model_outputs: List[str]) -> List[str]:
 
@@ -104,15 +105,15 @@ def model_parallel_forward(ios: Dict[int, Dict[str, List[str]]],
         for i in range(idx, len(body)):
             created_upto_i[i].extend(outs)
 
-    pipe_forward = pipelined_forward(model_inputs,
+    pipe_forward = pipelined_forward(graph, model_inputs,
                                      body, outputs, created_after_i, created_upto_i, use_streams=False)
-    pipe_with_streams = pipelined_forward(model_inputs,
+    pipe_with_streams = pipelined_forward(graph, model_inputs,
                                           body, outputs, created_after_i, created_upto_i, use_streams=True)
 
     return [forward, pipe_forward, pipe_with_streams]
 
 
-def pipelined_forward(model_inputs: List[str], statements: List[str], outputs: str,
+def pipelined_forward(graph: Graph, model_inputs: List[str], statements: List[str], outputs: str,
                       created_after_i: Dict[int, List[str]],
                       created_upto_i: Dict[int, List[str]],
                       use_streams: bool) -> str:
@@ -175,7 +176,7 @@ def pipelined_forward(model_inputs: List[str], statements: List[str], outputs: s
             body.append(f"{o}_chunks.append({o})")
         body.append("")
 
-    body.extend(generate_merge_mb(model_outputs))
+    body.extend(generate_merge_mb(graph, model_outputs))
 
     pipelined_forward_function = [decleration] + body + [f"return {outputs}"]
 
@@ -201,12 +202,17 @@ def generate_get_inputs_splits_and_aggeragators(model_inputs: List[str], model_o
     return get_inputs, body, collect_outputs
 
 
-def generate_merge_mb(model_outputs: List[str]) -> List[str]:
+def generate_merge_mb(graph: Graph, model_outputs: List[str]) -> List[str]:
     # cat chunks
     l = []
     l.append(f"# merge output chunks")
-    for o in model_outputs:
-        l.append(f"{o} = torch.cat({o}_chunks,dim=self.batch_dim)")
+    for n, o in zip(graph.outputs, model_outputs):
+        if len(n.shape) == 1 and len(n.shape) == 1:
+            # scalar
+            l.append(f"{o} = sum({o}_chunks)")
+        else:
+            # tensor
+            l.append(f"{o} = torch.cat({o}_chunks,dim=self.batch_dim)")
     l.append("")
     return l
 

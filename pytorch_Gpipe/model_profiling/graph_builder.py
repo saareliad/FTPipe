@@ -467,8 +467,17 @@ def shape_analysis(nodes: GraphNodes) -> GraphNodes:
     for node in nodes.values():
         if node.shape != None:
             # already has a shape
+            if len(node.shape) == 0:
+                # HACK set shape of scalars to [1] instead of 0
+                # will break if we have multiple outputs and one of them is scalar (isoteric so unhandeled)
+                node.shape = torch.Size([1])
             if type(node.shape) is torch.Size:
                 node.shape = (node.shape,)
+
+            if len(node.shape) == 1 and len(node.shape[0]) == 0:
+                 # HACK set shape of scalars to [1] instead of 0
+                # will break if we have multiple outputs and one of them is scalar (isoteric so unhandeled)
+                node.shape = (torch.Size([1]),)
             assert type(node.shape) is tuple, "shape must be a tuple"
         elif node.type is NodeTypes.CONSTANT:
             node.shape = (torch.Size([]),)
