@@ -23,6 +23,7 @@ def compile_partitoned_model(graph: Graph,
                              model: Module,
                              batch_dim: int,
                              verbose: bool = False,
+                             generate_model_parallel: bool = False,
                              output_file: Optional[str] = None):
     '''generates the code for the partitioned model.
        The partitions can be consumed using the `create_pipeline_configuration` method in the generated code
@@ -32,8 +33,12 @@ def compile_partitoned_model(graph: Graph,
         the partitoned graph of the module
     module:
         the module itself
+    batch_dim:
+        the batch dimention of the input
     verbose:
         whether to generate each statement of the forward function in a seperate line (usefull for debugging)
+    generate_model_parallel:
+        whether to generate a model parallel version of the partition in the addition to the partitions themselves
     output_file:
         optional path to the generated code. if None uses generated_{model_name}{numberOfPatitions}.py
     '''
@@ -83,9 +88,10 @@ def compile_partitoned_model(graph: Graph,
 
     lines.append(
         create_pipeline_configuration(graph, parts, model, ios, layer_classes, batch_dim, output_file))
-    lines.append(
-        create_model_parallel_module(batch_dim, graph.model_name, ios, graph.num_inputs,
-                                     graph.output_scopes))
+    if generate_model_parallel:
+        lines.append(
+            create_model_parallel_module(batch_dim, graph.model_name, ios, graph.num_inputs,
+                                         graph.output_scopes))
     lines += partitions_code
     lines.append(generateHelpFunctions())
 

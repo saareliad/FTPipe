@@ -27,6 +27,7 @@ def pipe_model(model: nn.Module,
                edge_weight_function: Optional[EdgeWeightFunction] = None,
                use_layers_only_graph: bool = False,
                output_file: str = None,
+               generate_model_parallel: bool = False,
                DEBUG=False,
                recomputation=False,
                save_memory_mode=False,
@@ -65,6 +66,8 @@ def pipe_model(model: nn.Module,
     output_file:
         the file name in which to save the partition config
         if not given defualts to generated_{modelClass}{actualNumberOfPartitions}
+     generate_model_parallel:
+        whether to generate a model parallel version of the partition in the addition to the partitions themselves
     DEBUG:
         whether to generate the debug version of the partition more comments and assertions in the generated file
     METIS_opt:
@@ -89,7 +92,8 @@ def pipe_model(model: nn.Module,
                              model,
                              batch_dim,
                              output_file=output_file,
-                             verbose=DEBUG)
+                             verbose=DEBUG,
+                             generate_model_parallel=generate_model_parallel)
 
     return graph
 

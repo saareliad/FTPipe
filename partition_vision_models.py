@@ -145,21 +145,18 @@ class ParseMetisOpts:
         metis_opts.add_argument(
             '--metis_niter',
             type=int,
-            help=
-            "Specifies the number of iterations for the refinement algorithms at each stage of the uncoarsening process."
+            help="Specifies the number of iterations for the refinement algorithms at each stage of the uncoarsening process."
             "Default is 10.")
         metis_opts.add_argument(
             '--nseps',
             type=int,
-            help=
-            "Specifies the number of different separators that it will compute at each level of nested dissection."
+            help="Specifies the number of different separators that it will compute at each level of nested dissection."
             "The final separator that is used is the smallest one. Default is 1."
         )
         metis_opts.add_argument(
             "--ncuts",
             type=int,
-            help=
-            "Specifies the number of different partitionings that it will compute."
+            help="Specifies the number of different partitionings that it will compute."
             " The final partitioning is the one that achieves the best edgecut or communication volume."
             "Default is 1.")
         metis_opts.add_argument(
@@ -169,8 +166,7 @@ class ParseMetisOpts:
         metis_opts.add_argument(
             '--objtype',
             type=int,
-            help=
-            "Extra objective type to miminize (0: edgecut, 1: vol, default: edgecut)"
+            help="Extra objective type to miminize (0: edgecut, 1: vol, default: edgecut)"
         )
 
     @staticmethod
@@ -214,10 +210,11 @@ class ParseMetisOpts:
         #  '_dbglvl': -1,
         #  }
 
+
 class ParsePartitioningOpts:
     def __init__(self):
         pass
-    
+
     def _extra(self, parser):
         raise NotImplementedError()
 
@@ -228,14 +225,14 @@ class ParsePartitioningOpts:
         # parser = parser.add_argument_group("Partitioning options")
         self._extra(parser)
 
-        parser.add_argument('-b', '--partitioning_batch_size', type=int, default=128)
         parser.add_argument(
-        '--model_too_big',
-        action='store_true',
-        default=False,
-        help=
-        "if the model is too big run the whole partitioning process on CPU, "
-        "and drink a cup of coffee in the meantime")
+            '-b', '--partitioning_batch_size', type=int, default=128)
+        parser.add_argument(
+            '--model_too_big',
+            action='store_true',
+            default=False,
+            help="if the model is too big run the whole partitioning process on CPU, "
+            "and drink a cup of coffee in the meantime")
         parser.add_argument('-p', '--n_partitions', type=int, default=4)
         parser.add_argument('-o', '--output_file', default='wrn_16x4')
         parser.add_argument('--no_auto_file_name',
@@ -245,8 +242,7 @@ class ParsePartitioningOpts:
         parser.add_argument(
             '--n_iter',
             type=int,
-            help=
-            "number of iteration used in order to profile the network and run analysis"
+            help="number of iteration used in order to profile the network and run analysis"
         )
         parser.add_argument(
             '--bw',
@@ -271,6 +267,8 @@ class ParsePartitioningOpts:
             action="store_true",
             default=False,
             help="whether to partition a graph containing only layers")
+        parser.add_argument("--generate_model_parallel", action="store_true", default=False,
+                            help="wether to generate a modelParallel version of the partitioning")
         parser.add_argument(
             "--analysis_batch_size",
             default=32,
@@ -301,7 +299,6 @@ class ParsePartitioningOpts:
         self.set_defaults(parser)
 
 
-
 class ParsePartitioningOptsVision(ParsePartitioningOpts):
     def __init__(self, model_choices=MODEL_CONFIGS.keys(), dataset_choices=DATASETS):
         super().__init__()
@@ -310,8 +307,9 @@ class ParsePartitioningOptsVision(ParsePartitioningOpts):
 
     def _extra(self, parser):
         parser.add_argument('--model',
-            choices=self.model_choices, default='wrn_16x4')
-        parser.add_argument('-d', '--dataset', choices=self.dataset_choices, default='cifar10')
+                            choices=self.model_choices, default='wrn_16x4')
+        parser.add_argument('-d', '--dataset',
+                            choices=self.dataset_choices, default='cifar10')
 
     def set_defaults(self, parser):
         d = {
@@ -325,7 +323,6 @@ class ParsePartitioningOptsVision(ParsePartitioningOpts):
         }
 
         parser.set_defaults(**d)
-
 
 
 def parse_cli():
@@ -390,6 +387,7 @@ if __name__ == "__main__":
                        nparts=n_partitions,
                        DEBUG=VERBOSE_PARTITIONING,
                        output_file=args.output_file,
+                       generate_model_parallel=args.generate_model_parallel,
                        use_layers_only_graph=args.partition_layer_graph,
                        node_weight_function=node_weight_function,
                        edge_weight_function=edge_weight_function(bw),

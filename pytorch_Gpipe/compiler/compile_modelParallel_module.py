@@ -146,22 +146,18 @@ def pipelined_forward(model_inputs: List[str], statements: List[str], outputs: s
     # create steady stage
     body.append(f"# steady phase")
     body.append(f"for idx in range(self.num_chunks - {n_parts}):")
-    steady = []
     for i in get_inputs:
-        steady.append(f"{tab}{i}")
+        body.append(f"{tab}{i}")
     for i, s in enumerate(statements):
         if use_streams:
-            steady.append(f"{dtab}with self.stream({n_parts-i-1},idx+{i+1}):")
-            steady.append(
-                f"{dtab}{tab}self.wait_stream({n_parts-i-1},idx+{i+1})")
-            steady.append(f"{dtab}{tab}{s}")
+            body.append(f"{tab}with self.stream({n_parts-i-1},idx+{i+1}):")
+            body.append(
+                f"{dtab}self.wait_stream({n_parts-i-1},idx+{i+1})")
+            body.append(f"{dtab}{s}")
         else:
-            steady.append(f"{dtab}{s}")
+            body.append(f"{tab}{s}")
     for o in collect_outputs:
-        steady.append(f"{dtab}{o}")
-
-    steady = f"\n{tab}".join(steady)
-    body.append(steady)
+        body.append(f"{tab}{o}")
 
     # create emptying stage
     body.append(f"\n{dtab}# empty the pipeline")
