@@ -63,6 +63,5 @@
     "cudnn_benchmark": true,
     "max_buffers": 1,
     "step_every": 1,
-    "keep_buffers_alive": true,
-    "base_config_path": "configs/base_dummy.json"
+    "keep_buffers_alive": true
 }
