@@ -700,6 +700,7 @@ def main():
 
     CONFIG_VERSION = models.infer_partitioning_config_version(args.model)
     print(f"Partitioning Config version is {CONFIG_VERSION}. Parsing...")
+    COMM_VERSION = 1
 
     if CONFIG_VERSION == 0:
         configs, dataset_keywords = parse_old_config.OldPartitioningConfigParser.get_configs_and_dataset_keywords(
@@ -776,10 +777,12 @@ def main():
     if partition_using_gap_aware:
         logger.info(f"Stage {args.stage} will use Gap Aware")
 
-    COMM_VERSION = 1
     if COMM_VERSION == 1:
         comm_handler = create_comm_handler(args, comm_init_args, device)
     else:
+        
+        # comm_handler = 
+
         raise NotImplementedError("In progress")
 
     trainer_cls = AVAILABLE_TRAINERS.get(args.trainer['type'])
@@ -815,7 +818,8 @@ def main():
         step_every=args.step_every,
         keep_buffers_alive=args.keep_buffers_alive,
         use_recomputation=(not args.no_recomputation),
-        gap_aware_just_loss=gap_aware_just_loss)
+        gap_aware_just_loss=gap_aware_just_loss,
+        use_prealoaded_input=getattr(args, "use_prealoaded_input", False))
 
     if hasattr(args, "ddp_sim_num_gpus") and args.ddp_sim_num_gpus > 1:
         print(

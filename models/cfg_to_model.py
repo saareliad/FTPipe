@@ -9,7 +9,7 @@ from typing import Dict, Tuple
 _PARTITIONED_MODELS_PACKAGE = "models.partitioned"
 
 # HACK: called with a ready model instance.
-_GPT2 = dict(dict(gpt2=dict()))
+_GPT2 = dict(dict(gpt2=dict(), gpt2_lm_lowercase=dict()))
 
 _RESENETS = dict(resnet50_imagenet_p8=dict(
     block=Bottleneck, layers=[3, 4, 6, 3], num_classes=1000))

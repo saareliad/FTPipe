@@ -43,7 +43,7 @@ def pretrained_model_config_and_tokenizer(
     config = config_class.from_pretrained(
         config_name if config_name else model_name_or_path,
         cache_dir=cache_dir if cache_dir else None)
-    
+
     config.output_past = output_past
 
     tokenizer = tokenizer_class.from_pretrained(
@@ -73,8 +73,19 @@ def gpt2_lowercase():
     return model, tokenizer, config
 
 
+def gpt2_lm_lowercase():
+    mycfg = dict(model_type='gpt2_lm',
+                 model_name_or_path='gpt2',
+                 do_lower_case=True,
+                 output_past=False)
+    model, tokenizer, config = pretrained_model_config_and_tokenizer(**mycfg)
+    resize_token_embeddings(model, tokenizer)
+
+    return model, tokenizer, config
+
+
 def gpt2_lowecase_partitioning():
-    # TODO: use the new partitioning.
+    # NOTE: this is for the old partitioning
 
     model, tokenizer, config = gpt2_lowercase()
     partitioning_cfg = get_partitioning('gpt2', model_instance=model)
@@ -93,7 +104,8 @@ def get_partitioning_tokenizer_and_config_by_name(name):
 
 MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS = {
     'gpt2': gpt2_lowercase,
-    'gpt2_lowercase': gpt2_lowercase
+    'gpt2_lowercase': gpt2_lowercase,
+    'gpt2_lm_lowecase': gpt2_lm_lowercase,
 }
 
 

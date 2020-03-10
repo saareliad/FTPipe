@@ -76,5 +76,6 @@
     "nesterov_set_for_last_partition": true,
     "max_buffers": 1,
     "gap_aware_just_loss": true,
-    "base_config_path": "configs/dummy_base.json"
+    "base_config_path": "configs/dummy_base.json",
+    "use_prealoaded_input": "True"
 }

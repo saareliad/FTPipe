@@ -44,8 +44,10 @@ class SinglePartitionManager:
             use_recomputation=True,
             gap_aware_just_loss=False,
             sync_buffers=False,
+            use_prealoaded_input=False,  # TODO: this is an option to support LMHeads in which the input goes to a partition. # TODO: write a trainer which can work with it.
     ):
 
+        self.use_prealoaded_input = use_prealoaded_input
         if (gap_aware_just_loss and (not use_recomputation)):
             raise NotImplementedError(
                 "gap_aware_just_loss works only with recomputation on")
@@ -416,8 +418,12 @@ class SinglePartitionManager:
 
         return x, ctx
 
-    def forward_pass_and_send(self, batch_idx, num_batches):
+    def forward_pass_and_send(self, batch_idx, num_batches, preload_input=None):
         x, ctx = self.get_input_data_forward(batch_idx, num_batches)
+
+        if (preload_input is not None) and self.is_last_partition:
+            x = tuple(*x, *preload_input)
+
         x = self.partition(x, batch_idx)
         request_objects = None
         if not self.is_last_partition:
@@ -459,10 +465,14 @@ class SinglePartitionManager:
             self.delay_at_batch[batch_idx] = expected_staleness
 
         # Get the data to run forward on, (and target)
+        preload_input = None
         if self.is_last_partition:
             preload_ctx = self.task.preload_last_partition(
                 getattr(self, "dl_iter", None), self.device)
-
+            if self.use_prealoaded_input:
+                preload_input = preload_ctx
+                preload_ctx = tuple()
+            
         # Do the forward pass with optionals
         # optional (1): Weight Prediction
         # optional (2): Weight Stashing
@@ -489,7 +499,7 @@ class SinglePartitionManager:
                         pg['lr'] = old_lr
 
                 request_objects, x, ctx = self.forward_pass_and_send(
-                    batch_idx, num_batches)
+                    batch_idx, num_batches, preload_input=preload_input)
 
                 if weight_stasher is not None:
                     # Stash parameters for later.
@@ -509,13 +519,13 @@ class SinglePartitionManager:
             else:
                 # No weight predictor
                 request_objects, x, ctx = self.forward_pass_and_send(
-                    batch_idx, num_batches)
+                    batch_idx, num_batches, preload_input=preload_input)
                 if weight_stasher is not None:
                     weight_stasher.stash_current(batch_idx, expected_staleness)
         else:
             # Not training. just go on as usual
             request_objects, x, ctx = self.forward_pass_and_send(
-                batch_idx, num_batches)
+                batch_idx, num_batches, preload_input=preload_input)
 
         if not self.is_last_partition:
             # For the last partition - we restore later.
