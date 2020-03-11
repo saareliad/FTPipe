@@ -28,7 +28,7 @@ def create_pipeline_configuration(DEBUG=False):
             'torch.nn.modules.normalization.LayerNorm',
             'torch.nn.modules.dropout.Dropout',
             'transformers.modeling_utils.Conv1D']
-    module_path = 'models.partitioned.gpt2.gpt2'
+    module_path = 'models.partitioned.gpt2.gpt2_small_4p'
     
 
     layer_scopes = ['GPT2Model/Embedding[wte]',

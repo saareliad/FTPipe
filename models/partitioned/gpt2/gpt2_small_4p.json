@@ -24,7 +24,7 @@
         [1, 1024, 3072],
         [1, 1024, 768]
       ],
-      "stage_cls": "models.partitioned.gpt2.gpt2.Partition0",
+      "stage_cls": "models.partitioned.gpt2.gpt2_small_4p.Partition0",
       "optimizer": {
         "type": "",
         "args": {}
@@ -53,7 +53,7 @@
         [1, 1024, 768],
         [1, 12, 1024, 64]
       ],
-      "stage_cls": "models.partitioned.gpt2.gpt2.Partition1",
+      "stage_cls": "models.partitioned.gpt2.gpt2_small_4p.Partition1",
       "optimizer": {
         "type": "",
         "args": {}
@@ -76,7 +76,7 @@
         [1, 12, 1024, 64]
       ],
       "output_shapes": [[1, 1024, 768]],
-      "stage_cls": "models.partitioned.gpt2.gpt2.Partition2",
+      "stage_cls": "models.partitioned.gpt2.gpt2_small_4p.Partition2",
       "optimizer": {
         "type": "",
         "args": {}
@@ -93,7 +93,7 @@
       "outputs": ["GPT2Model/LayerNorm[ln_f]"],
       "input_shapes": [[1, 1024, 768]],
       "output_shapes": [[1, 1024, 768]],
-      "stage_cls": "models.partitioned.gpt2.gpt2.Partition3",
+      "stage_cls": "models.partitioned.gpt2.gpt2_small_4p.Partition3",
       "optimizer": {
         "type": "",
         "args": {}
