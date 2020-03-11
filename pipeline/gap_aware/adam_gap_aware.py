@@ -23,10 +23,13 @@ class AdamGapAware(GapAwareBase):
         # State initialization
         for pg in self.optimizer.param_groups:
             for p in pg['params']:
-                self.optimizer.state[p]['exp_avg'] = torch.zeros_like(p.data)
-                self.optimizer.state[p]['exp_avg_sq'] = torch.zeros_like(
-                    p.data)
-                self.optimizer.state[p]['step'] = 0
+                state = self.optimizer.state[p]
+                if len(state) == 0:
+                    state['exp_avg'] = torch.zeros_like(
+                        p.data, memory_format=torch.preserve_format)
+                    state['exp_avg_sq'] = torch.zeros_like(
+                        p.data, memory_format=torch.preserve_format)
+                    state['step'] = 0
 
         #     # TODO: sched aware LR.
 
@@ -46,12 +49,14 @@ class AdamGapAware(GapAwareBase):
                 weight_decay = pg['weight_decay']
                 beta1, beta2 = pg['betas']
                 eps = pg['eps']
-                # FIXME: remove assert after this works.
-                step_count = pg['step'] + 1
-                assert step_count == self.step_count
 
                 for p, sp in zip(pg['params'], spg):
                     exp_avg_sq = opt_state[p]['exp_avg_sq']
+
+                    # FIXME: remove assert after this works.
+                    step_count = opt_state[p]['step'] + 1
+                    assert step_count == self.step_count
+
                     bias_correction2 = 1 - beta2**(step_count)
                     # if p.grad is None:
                     #     continue
@@ -100,12 +105,13 @@ class AdamGapAware(GapAwareBase):
                 weight_decay = pg['weight_decay']
                 beta1, beta2 = pg['betas']
                 eps = pg['eps']
-                # FIXME: remove assert after this works.
-                step_count = pg['step'] + 1
-                assert step_count == self.step_count
 
                 for p, rp in zip(pg['params'], rpg):
                     exp_avg_sq = opt_state[p]['exp_avg_sq']
+                    # FIXME: remove assert after this works.
+                    step_count = opt_state[p]['step'] + 1
+                    assert step_count == self.step_count
+
                     bias_correction2 = 1 - beta2**(step_count)
                     # if p.grad is None:
                     #     continue

@@ -12,9 +12,11 @@ class AdamClonedWeightPrediction(WeightPredictor):
         # State initialization
         for pg in self.optimizer.param_groups:
             for p in pg['params']:
-                self.optimizer.state[p]['exp_avg'] = torch.zeros_like(p.data)
-                self.optimizer.state[p]['exp_avg_sq'] = torch.zeros_like(p.data)
-                self.optimizer.state[p]['step'] = 0
+                state = self.optimizer.state[p]
+                if len(state) == 0:
+                    state['exp_avg'] = torch.zeros_like(p.data, memory_format=torch.preserve_format)
+                    state['exp_avg_sq'] = torch.zeros_like(p.data, memory_format=torch.preserve_format)
+                    state['step'] = 0
                 # NOTE: amsgrad is not supported.
 
     def forward(self):
