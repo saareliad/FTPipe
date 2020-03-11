@@ -265,7 +265,7 @@ class LastPartitionWithLabelInput(LastPartition):
         else:
             with torch.no_grad():
                 x = [y.data for y in x]
-                x = self.layers(*x)
+                x = self.layers(*x, label)
 
         #  Last partition outputs should be in a tensor format
         if not isinstance(x, Tensor):
