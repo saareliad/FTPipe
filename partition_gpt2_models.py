@@ -165,7 +165,7 @@ def mask_tokens(inputs, tokenizer, args):
     return inputs, labels
 
 
-MULT_FACTOR = 1000
+MULT_FACTOR = 10000
 
 
 def node_weight_function(node: Node):
