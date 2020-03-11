@@ -4,11 +4,6 @@ import torch
 from torch.nn.utils import clip_grad_norm_
 from .utils import calc_norm
 
-# class LossTrainer(abc.ABC):
-#     # TODO: for models which returns only loss...
-#     pass
-
-
 class AnyTrainer(abc.ABC):
     @abc.abstractmethod
     def backprop_last_partition(self, *args, **kw):
@@ -30,6 +25,13 @@ class AnyTrainer(abc.ABC):
         pass
 
 
+class SupervisedLossIncludedTrainer(AnyTrainer):
+    # @abc.abstractmethod
+    def backprop_last_partition(self, loss, *args, **kw):
+        loss.backward()
+        return loss
+
+
 class SupervisedTrainer(AnyTrainer):
     # added *args just to make it a true subtype.
 
@@ -49,11 +51,18 @@ class SupervisedTrainer(AnyTrainer):
 
 
 class PartitionedTrainer(AnyTrainer):
+    # def __init__(self, optimizer, statistics):
+    #     self.optimizer = optimizer
+    #     self.statistics = statistics
+
     @abc.abstractmethod
     def non_last_partition_step(self, *args, **kw):
         pass
 
     def try_record_real_gap_from_current(self, real_theta):
+        """ calculates gap between model parameters and a given set of parameters, real_theta
+            real_theta: Given set of parameters. TODO: rename
+        """
         if self.statistics.has_statistic("gap"):
             with torch.no_grad():
                 gap = sum([
@@ -70,7 +79,56 @@ class PartitionedSupervisedTrainer(PartitionedTrainer, SupervisedTrainer):
     pass
 
 
-class BaseLossTrainer(PartitionedSupervisedTrainer):
+class PartitionedSupervisedLossIncludedTrainer(PartitionedTrainer,
+                                               SupervisedLossIncludedTrainer):
+    pass
+
+
+class GradNormStepper:
+    # def __init__(
+    #         self,
+    #         model,
+    #         optimizer,
+    #         scheduler,
+    #         statistics,
+    #         max_grad_norm=None,
+    #         always_calc_grad_norm=False,
+    # ):
+    #     self.optimizer = optimizer
+    #     self.scheduler = scheduler
+    #     self.model = model
+    #     self.max_grad_norm = max_grad_norm
+    #     self.always_calc_grad_norm = always_calc_grad_norm
+    #     self.statistics = statistics
+
+    def non_last_partition_step(self):
+        max_grad_norm = self.step_on_computed_grads()
+        # Handles different classes of statistics. not so nice, should be fixed
+        if not (max_grad_norm is None):
+            self.statistics.non_last_partition_on_batch_end(max_grad_norm)
+
+    def step_on_computed_grads(self):
+        # TODO: implement gradient statistics later
+        max_grad_norm = None
+        if self.max_grad_norm:
+            with torch.no_grad():
+                max_grad_norm = clip_grad_norm_(self.model.parameters(),
+                                                self.max_grad_norm,
+                                                norm_type=2)
+        elif self.always_calc_grad_norm:
+            with torch.no_grad():
+                max_grad_norm = calc_norm(self.model.parameters(), norm_type=2)
+
+        self.optimizer.step()
+        self.optimizer.zero_grad()
+        # TODO: per step scheduler
+        # self.scheduler.step()
+
+        return max_grad_norm
+
+
+class BaseLossTrainer(GradNormStepper, PartitionedSupervisedTrainer):
+    """Trainer assuming loss is calculated *outside* the model """
     def __init__(self,
                  model,
                  optimizer,
@@ -89,7 +147,7 @@ class BaseLossTrainer(PartitionedSupervisedTrainer):
         self.scheduler = scheduler
         self.model = model
         self.max_grad_norm = max_grad_norm
-        self.ALWAYS_CALC_NORM = always_calc_grad_norm
+        self.always_calc_grad_norm = always_calc_grad_norm
 
         # Stats
         self.statistics = statistics
@@ -99,27 +157,24 @@ class BaseLossTrainer(PartitionedSupervisedTrainer):
         loss.backward()  # this does backward() only for the last partition
         return loss
 
-    def non_last_partition_step(self):
-        max_grad_norm = self.step_on_computed_grads()
-        # Handles different classes of statistics. not so nice, should be fixed
-        if not (max_grad_norm is None):
-            self.statistics.non_last_partition_on_batch_end(max_grad_norm)
 
-    def step_on_computed_grads(self):
-        # TODO: implement gradient statistics later
-        max_grad_norm = None
-        if self.max_grad_norm:
-            with torch.no_grad():
-                max_grad_norm = clip_grad_norm_(self.model.parameters(),
-                                                self.max_grad_norm,
-                                                norm_type=2)
-        elif self.ALWAYS_CALC_NORM:
-            with torch.no_grad():
-                max_grad_norm = calc_norm(self.model.parameters(), norm_type=2)
+class BaseOutPutIsLossTrainer(GradNormStepper,
+                              PartitionedSupervisedLossIncludedTrainer):
+    """Trainer assuming loss is calculated *inside* the model """
+    def __init__(self,
+                 model,
+                 optimizer,
+                 scheduler,
+                 statistics,
+                 max_grad_norm=None,
+                 always_calc_grad_norm=False):
 
-        self.optimizer.step()
-        self.optimizer.zero_grad()
-        # TODO: per step scheduler
-        # self.scheduler.step()
+        self.optimizer = optimizer
+        self.scheduler = scheduler
+        self.model = model
+        self.max_grad_norm = max_grad_norm
+        self.always_calc_grad_norm = always_calc_grad_norm
 
-        return max_grad_norm
+        # Stats
+        self.statistics = statistics
+    

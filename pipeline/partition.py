@@ -13,16 +13,22 @@ import types
 Tensors = Tuple[Tensor, ...]
 TensorOrTensors = Union[Tensor, Tensors]
 
-__all__ = ['Partition', 'LastPartition',
-           'FirstPartition', 'PartitionWithoutRecomputation', 'get_buffers_for_ddp_sync']
+__all__ = [
+    'Partition', 'FirstPartition', 'LastPartition', 'LastPartitionWithLabelInput',
+    'PartitionWithoutRecomputation', 'get_buffers_for_ddp_sync'
+]
 
-DEFAULT_CLASSES_LIST_TO_PATCH = [nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d,
-                                 nn.SyncBatchNorm, nn.InstanceNorm1d, nn.InstanceNorm2d, nn.InstanceNorm3d,
-                                 dp_sim.BatchNorm1d, dp_sim.BatchNorm2d, dp_sim.BatchNorm3d]
+DEFAULT_CLASSES_LIST_TO_PATCH = [
+    nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d, nn.SyncBatchNorm,
+    nn.InstanceNorm1d, nn.InstanceNorm2d, nn.InstanceNorm3d,
+    dp_sim.BatchNorm1d, dp_sim.BatchNorm2d, dp_sim.BatchNorm3d
+]
 
 # TODO: LayerNorm?
 
-def get_buffers_for_ddp_sync(model, classes_to_patch=DEFAULT_CLASSES_LIST_TO_PATCH):
+
+def get_buffers_for_ddp_sync(model,
+                             classes_to_patch=DEFAULT_CLASSES_LIST_TO_PATCH):
     # This function should be used once.
 
     for model_to_patch in classes_to_patch:
@@ -51,7 +57,11 @@ class Partition(nn.Module):
     _REQ_GRAD = True
     _HAS_DUMMY_FORWARD = True
 
-    def __init__(self, layers, device, to_device=True, classes_list_to_patch=DEFAULT_CLASSES_LIST_TO_PATCH):
+    def __init__(self,
+                 layers,
+                 device,
+                 to_device=True,
+                 classes_list_to_patch=DEFAULT_CLASSES_LIST_TO_PATCH):
         """
         :param layers: list of layers (or a single module)
         :param device: device of the partition
@@ -102,8 +112,10 @@ class Partition(nn.Module):
                     self.rng_stasher.stash_rng_state(micro_batch_idx)
                     x = self.layers(x)
                 else:
-                    x = [tensor.data.clone().requires_grad_(self._REQ_GRAD)
-                         for tensor in x]
+                    x = [
+                        tensor.data.clone().requires_grad_(self._REQ_GRAD)
+                        for tensor in x
+                    ]
                     self.input_buffer[micro_batch_idx] = x
                     self.rng_stasher.stash_rng_state(micro_batch_idx)
                     x = self.layers(*x)
@@ -146,7 +158,7 @@ class Partition(nn.Module):
         """ returns an iteretable of grads """
         x = self.input_buffer.pop(micro_batch_idx)
         if isinstance(x, Tensor):
-            return (x.grad.data,)
+            return (x.grad.data, )
         else:
             return [y.grad.data for y in x]
 
@@ -189,6 +201,7 @@ class FirstPartition(Partition):
 class LastPartition(Partition):
     _REQ_GRAD = True
     _HAS_DUMMY_FORWARD = False
+
     # TODO: make the inheritance true subtype.
 
     def __init__(self, *args, **kw):
@@ -214,8 +227,9 @@ class LastPartition(Partition):
             else:
                 # Option 2
                 with torch.no_grad():
-                    x = [tensor.data.detach_().requires_grad_()
-                         for tensor in x]
+                    x = [
+                        tensor.data.detach_().requires_grad_() for tensor in x
+                    ]
 
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(*x)
@@ -229,7 +243,33 @@ class LastPartition(Partition):
 
         #  Last partition outputs should be in a tensor format
         if not isinstance(x, Tensor):
-            assert(len(x) == 1)
+            assert (len(x) == 1)
+            return x[0]
+        return x
+
+
+class LastPartitionWithLabelInput(LastPartition):
+    """A assuming that given x is tuple in which last idx is the label. We don't store the label """
+    # _REQ_GRAD = True
+    # _HAS_DUMMY_FORWARD = False
+    def forward(self, x, micro_batch_idx):
+        assert not isinstance(x, Tensor)
+        label = x[-1]
+        x = x[:-1]
+        if self.training:
+            with torch.no_grad():
+                x = [tensor.data.detach_().requires_grad_() for tensor in x]
+
+            self.input_buffer[micro_batch_idx] = x
+            x = self.layers(*x, label)
+        else:
+            with torch.no_grad():
+                x = [y.data for y in x]
+                x = self.layers(*x)
+
+        #  Last partition outputs should be in a tensor format
+        if not isinstance(x, Tensor):
+            assert (len(x) == 1)
             return x[0]
         return x
 
@@ -238,7 +278,7 @@ class PartitionWithoutRecomputation(nn.Module):
     # _REQ_GRAD = True
     _HAS_DUMMY_FORWARD = False
 
-    def __init__(self,  layers, device, to_device=True, _REQ_GRAD=True):
+    def __init__(self, layers, device, to_device=True, _REQ_GRAD=True):
         """
             Intermidiate partition which does not do recomputation.
             HACK: has misleading names to be used with existing code.
@@ -264,6 +304,7 @@ class PartitionWithoutRecomputation(nn.Module):
         if _REQ_GRAD:
             self.input_buffer = {}  # For saving activations
         else:
+
             def _get_grad(self, micro_batch_idx):
                 raise NotImplementedError()
 
@@ -289,8 +330,10 @@ class PartitionWithoutRecomputation(nn.Module):
                     self.input_buffer[micro_batch_idx] = x
                 x = self.layers(x)
             else:
-                x = [tensor.data.detach().clone().requires_grad_(self._REQ_GRAD)
-                     for tensor in x]
+                x = [
+                    tensor.data.detach().clone().requires_grad_(self._REQ_GRAD)
+                    for tensor in x
+                ]
 
                 if self._REQ_GRAD:
                     self.input_buffer[micro_batch_idx] = x
@@ -325,6 +368,6 @@ class PartitionWithoutRecomputation(nn.Module):
         # NOTE: This method can be patched.
         x = self.input_buffer.pop(micro_batch_idx)
         if isinstance(x, Tensor):
-            return (x.grad.data,)
+            return (x.grad.data, )
         else:
             return [y.grad.data for y in x]

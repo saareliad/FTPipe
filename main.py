@@ -1,7 +1,6 @@
 import argparse
 from pipeline import CommunicationHandlerBase, get_auto_comm_handler_cls
 from pipeline import SinglePartitionManager
-# from pipeline import BigBatchManager
 
 from pipeline.training import AVAILABLE_TRAINERS
 from pipeline.tasks import AVAILABLE_TASKS
@@ -628,8 +627,9 @@ def get_dataloaders(args, explicit_seperated_dataset=False, **kw):
         # FIXME
         # NOTE: From the function get_wikitext2_raw_train_valid_ds
         tokenizer = kw.pop('tokenizer')
+        # model_name_or_path = kw.pop('model_name_or_path')
         overwrite_cache = kw.pop('overwrite_cache', False)
-        dataset_keywords = dict(model_name_or_path='gpt2',
+        dataset_keywords = dict(model_name_or_path=args.model_name_or_path,
                                 tokenizer=tokenizer,
                                 train_seq_len=args.train_seq_len,
                                 valid_seq_len=args.valid_seq_len,
@@ -729,10 +729,11 @@ def main():
         model_instance = None
         dataset_keywords = {}
 
-        if args.model in models.transformers_utils.MODEL_TYPES:
+        if args.model in models.transformers_utils.MODEL_TYPES.keys():
             model_instance, tokenizer, config = models.transformers_utils.get_model_tokenizer_and_config_by_name(
                 args.model)
             dataset_keywords['tokenizer'] = tokenizer
+            # dataset_keywords['model_name_or_path'] = args.model_name_or_path
 
         parsed_cofig = parse_config.PartitioningConfigParser(
             args.model,

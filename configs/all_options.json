@@ -77,5 +77,6 @@
     "max_buffers": 1,
     "gap_aware_just_loss": true,
     "base_config_path": "configs/dummy_base.json",
-    "use_prealoaded_input": "True"
+    "use_prealoaded_input": "True",
+    "model_name_or_path": "gpt"
 }

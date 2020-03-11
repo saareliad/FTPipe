@@ -35,7 +35,7 @@ def create_pipeline_configuration(DEBUG=False):
             'torch.nn.modules.normalization.LayerNorm',
             'torch.nn.modules.linear.Linear',
             'torch.nn.modules.dropout.Dropout']
-    module_path = 'models.partitioned.nlp.gpt2'
+    module_path = 'models.partitioned.gpt2_lm_lowercase'
     
 
     # creating configuration

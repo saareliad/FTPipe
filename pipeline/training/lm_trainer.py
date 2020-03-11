@@ -1,29 +1,29 @@
-import torch
-from .interface import BaseLossTrainer
+# import torch
+from .interface import BaseOutPutIsLossTrainer
 from .gap_aware_trainer import GapAwareTrainerBase
 # TODO: typehint for statistics. maybe it should actually sit under stats
 
 
-class LMTrainer(BaseLossTrainer):
+class LMTrainer(BaseOutPutIsLossTrainer):
     def __init__(self, *args, **kw):
-        super().__init__(*args, loss_fn=torch.nn.CrossEntropyLoss(), **kw)
+        super().__init__(*args, **kw)
 
-    def calc_test_stats(self, x, y):
+    def calc_test_stats(self, loss, batch_size):
         # print("Called calc_test_stats")
-        loss = self.loss_fn(x, y)
-        batch_size = len(y)
+        # loss = self.loss_fn(x, y)
+        # batch_size = len(y)
         # acc = num_correct / batch_size
         self.statistics.on_batch_end(loss.item(), batch_size)
 
-    def last_partition_step_and_statistics(self, x, y, loss, step=True):
+    def last_partition_step_and_statistics(self, x, batch_size, loss, step=True):
         """
+        x: is model output.
+        
         step
         stats
 
         step can be used later for grad accumulations
         """
-
-        batch_size = len(y)
 
         max_grad_norm = None
         if step:
@@ -45,7 +45,7 @@ class GapAwareLMTrainer(LMTrainer, GapAwareTrainerBase):
 
         self.gap_aware = gap_aware
 
-    def last_partition_step_and_statistics(self, x, y, loss, step=True):
+    def last_partition_step_and_statistics(self, x, batch_size, loss, step=True):
         """
         step
         stats
@@ -54,7 +54,7 @@ class GapAwareLMTrainer(LMTrainer, GapAwareTrainerBase):
         """
         # self.gap_aware.try_apply_wd_correction_before_step()
         super(LMTrainer, self).last_partition_step_and_statistics(x,
-                                                                  y,
+                                                                  batch_size,
                                                                   loss,
                                                                   step=step)
         # TODO: self.ga.update_max_lr() add when we have per step scheduler

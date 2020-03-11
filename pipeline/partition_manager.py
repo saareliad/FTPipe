@@ -2,7 +2,7 @@ import torch
 import logging
 from collections import OrderedDict
 from . import CommunicationHandlerBase
-from .partition import Partition, LastPartition, FirstPartition, PartitionWithoutRecomputation
+from .partition import (Partition, LastPartition, FirstPartition, PartitionWithoutRecomputation, LastPartitionWithLabelInput)
 from .partition import get_buffers_for_ddp_sync
 from .training.interface import PartitionedTrainer
 from .tasks import DLTask
@@ -46,8 +46,9 @@ class SinglePartitionManager:
             sync_buffers=False,
             use_prealoaded_input=False,  # TODO: this is an option to support LMHeads in which the input goes to a partition. # TODO: write a trainer which can work with it.
     ):
-
+        # Preloaded input for last partition
         self.use_prealoaded_input = use_prealoaded_input
+        
         if (gap_aware_just_loss and (not use_recomputation)):
             raise NotImplementedError(
                 "gap_aware_just_loss works only with recomputation on")
@@ -63,7 +64,7 @@ class SinglePartitionManager:
         # Set partition.
         if use_recomputation:
             if is_last_partition:
-                partition_cls = LastPartition
+                partition_cls = LastPartition if not use_prealoaded_input else LastPartitionWithLabelInput
             elif is_first_partition:
                 partition_cls = FirstPartition
             else:
@@ -74,7 +75,7 @@ class SinglePartitionManager:
         else:
             # Partition without recomputation
             if is_last_partition:
-                partition_cls = LastPartition
+                partition_cls = LastPartition if not use_prealoaded_input else LastPartitionWithLabelInput
                 self.partition = partition_cls(partition,
                                                device,
                                                to_device=TO_DEVICE)
@@ -422,14 +423,18 @@ class SinglePartitionManager:
         x, ctx = self.get_input_data_forward(batch_idx, num_batches)
 
         if (preload_input is not None) and self.is_last_partition:
-            x = tuple(*x, *preload_input)
+            x = (*x, *preload_input)
 
         x = self.partition(x, batch_idx)
+
         request_objects = None
+
+        # For non last partition - send forward.
         if not self.is_last_partition:
             send_ctx = self.task.pack_send_context(x, *ctx)
             request_objects = self.comm_handler.send_activations(
                 send_ctx, batch_idx)
+        
         return request_objects, x, ctx
 
     def run_batch_forward(self, batch_idx, num_batches, done_bwds=None):
@@ -556,7 +561,7 @@ class SinglePartitionManager:
                     step_and_stats_ctx = trainer.backprop_last_partition(
                         x, *ctx)
             else:
-                step_and_stats_ctx = trainer.backprop_last_partition(x, *ctx)
+                step_and_stats_ctx = trainer.backprop_last_partition(x, *ctx)  # NOTE: Usually, this is loss
 
             # Send partition border gradients
             grads = partition.get_grad(batch_idx)

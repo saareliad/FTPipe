@@ -9,6 +9,7 @@
     "use_prealoaded_input": true,
     "statistics": "lm_theta_dist",
     "model": "gpt2_lm_lowercase",
+    "model_name_or_path": "gpt2",
     "dataset": "wt2",
     "trainer": {
         "type": "lm",
@@ -17,8 +18,8 @@
         }
     },
     "bs_train": 4,
-    "train_seq_len": 64,
-    "valid_seq_len": 64,
+    "train_seq_len": 1024,
+    "valid_seq_len": 1024,
     "bs_test": 4,
     "num_data_workers": 10,
     "optimizer": {
@@ -64,4 +65,5 @@
     "max_buffers": 1,
     "step_every": 1,
     "keep_buffers_alive": true
+    
 }

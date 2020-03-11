@@ -9,6 +9,7 @@ from .normal import GPT2LMHeadModel, GPT2Model
 MODEL_TYPES = {
     'gpt2': (GPT2Config, GPT2Model, GPT2Tokenizer),
     'gpt2_lm': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
+    'gpt2_lm_lowercase': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
 }
 
 # See https://huggingface.co/models
@@ -84,7 +85,7 @@ def gpt2_lm_lowercase():
     return model, tokenizer, config
 
 
-def gpt2_lowecase_partitioning():
+def gpt2_lowercase_partitioning():
     # NOTE: this is for the old partitioning
 
     model, tokenizer, config = gpt2_lowercase()
@@ -94,7 +95,7 @@ def gpt2_lowecase_partitioning():
 
 
 PARTITIONING_AND_TOKENIZER_FUNCTIONS = {
-    'gpt2_lowercase': gpt2_lowecase_partitioning
+    'gpt2_lowercase': gpt2_lowercase_partitioning
 }
 
 
@@ -105,7 +106,7 @@ def get_partitioning_tokenizer_and_config_by_name(name):
 MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS = {
     'gpt2': gpt2_lowercase,
     'gpt2_lowercase': gpt2_lowercase,
-    'gpt2_lm_lowecase': gpt2_lm_lowercase,
+    'gpt2_lm_lowercase': gpt2_lm_lowercase,
 }
 
 

@@ -6,7 +6,7 @@ from .interface import DLTask
 import types
 
 
-# NOTE: Not much change from CV task, maybe this could just be removed
+# NOTE: Not much change from CV task, outputing the batch
 class LMTask(DLTask):
     def __init__(self, device, is_last_partition, is_first_partition):
         super().__init__()
@@ -17,7 +17,9 @@ class LMTask(DLTask):
             # Last partition
             def unpack_cls(self, x):
                 assert isinstance(x, tuple) or isinstance(x, list)
-                return x,  # Comma here is important!
+                # HACK: Also returning batch size
+                # The batch size will be used as ctx, to calc test statistics.
+                return (x, x[0].size(0))
         elif is_first_partition:
             # Fist partition
             # NOTE: in masked LM we also mask...
