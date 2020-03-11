@@ -115,7 +115,7 @@ def build_graph(model: torch.nn.Module,
                                                       check_trace=False).graph
     torch._C._jit_set_inline_everything_mode(old_value)
     if torch.cuda.is_available():
-        torch.cuda.max_memory_allocated()
+        torch.cuda.max_memory_allocated() / 1e9
     try:
         torch._C._jit_pass_inline(trace_graph, max_depth, block_scopes)
     except Exception:

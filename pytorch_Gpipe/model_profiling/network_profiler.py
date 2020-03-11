@@ -64,6 +64,11 @@ def profile_network(
                                         basic_blocks,
                                         save_memory_mode=save_memory_mode,
                                         recomputation=recomputation)
+
+    if torch.cuda.is_available():
+        torch.cuda.reset_max_memory_allocated()
+        torch.cuda.max_memory_allocated() / 1e9
+
     # perform n_iter symbolic forward backward run
     # first one is warmup as we have seen the first time measurements are higher
     for _ in range(n_iter + 1):
@@ -73,7 +78,7 @@ def profile_network(
         _perform_forward_backward_pass(net, *sample_batch, **kwargs)
 
         if torch.cuda.is_available():
-            torch.cuda.max_memory_allocated()
+            torch.cuda.max_memory_allocated() / 1e9
 
     # gather forward and backward execution times
     backward_times = [
