@@ -45,5 +45,5 @@ class LMTrainer(BaseOutPutIsLossTrainer):
 class GapAwareLMTrainer(LMTrainer, GapAwareTrainerBase):
     def __init__(self, gap_aware, scheduler=None, **kw):
         # super(GapAwareLMTrainer, self).__init__(**kw)
-        GapAwareLMTrainer.__init__(self, scheduler=scheduler, **kw)
+        LMTrainer.__init__(self, scheduler=scheduler, **kw)
         GapAwareTrainerBase.__init__(self, gap_aware, scheduler=scheduler)
