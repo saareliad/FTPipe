@@ -296,16 +296,42 @@ def create_comm_handler(args, comm_init_args,
     return comm_handler
 
 
-def get_scheduler(args, optimizer):
+def get_lr_scheduler(args, optimizer):
     if hasattr(args, "lr_scheduler"):
         # should_step = False
         # TODO: auto-calculate numbers like num_training_steps
         attr = getattr(args, 'lr_scheduler')
+
+
+        preproc_args = attr.get("preproc_args", None)
+        if preproc_args:
+            for arg_name, preproc_command in preproc_args.items():
+                if preproc_command == "epochs_to_steps":
+                    if args.steps > 0:
+                        raise NotImplementedError("Expected to be limited by number of epochs")
+
+                    # Get the given number of epochs
+                    given_epochs = attr['args'][arg_name]
+                    if given_epochs < 0:
+                        # Taking from epoch args
+                        if args.epochs < 0:
+                            raise ValueError("Expected a concrete number of epochs")
+                        given_epochs = args.epochs
+
+                    # Translate epochs to steps
+                    num_steps = args.steps_per_epoch * given_epochs
+                    attr['args'][arg_name] = num_steps
+                    print(f"preproced {arg_name} from {given_epochs} epochs to {num_steps} steps.")
+                else:
+                    raise NotImplementedError(f"Unsupported preprocess argument {preproc_command}")
+
+
         if attr['type'] in optimizers.lr_scheduler.AVAILABLE_LR_SCHEDULERS:
             scheduler_cls = getattr(optimizers.lr_scheduler, attr['type'])
             # should_step = True
         else:
             scheduler_cls = getattr(torch.optim.lr_scheduler, attr['type'])
+        
         scheduler = scheduler_cls(optimizer, **attr['args'])
         # TODO: in some optimizers version we can bendfit from lr=0 (build momentum in place)
         # while on others we dont, and better step.
@@ -754,17 +780,9 @@ def main():
         args.num_stages = parsed_cofig.num_stages
         args.stage = parsed_cofig.stage
         model = parsed_cofig.model
-
+        
     is_first_partition = args.stage == 0
     is_last_partition = args.stage == args.num_stages - 1
-
-    # torch.device('cpu' if args.cpu else f"cuda:{args.local_rank}")
-
-    args.step_every = getattr(args, "step_every", 1)
-    # TODO: I have completly differnt plan for using it like micro batches.
-    # TODO: this is currently unused.
-    args.base_lr_batch_size = getattr(args, "base_lr_batch_size",
-                                      args.bs_train)
 
     assert_args(args)
 
@@ -773,7 +791,37 @@ def main():
                         local_rank=args.local_rank,
                         name='msnag',
                         world_size=args.world_size,
-                        name_prefix=args.out_filename)  # TODO: real name
+                        name_prefix=args.out_filename)  # FIXME: real name
+
+    # TODO: instead of loading dl on every device,
+    # when not needed - can just send the length as a message
+    train_dl_len, test_dl_len = len(train_dl), len(test_dl)
+    # Try getting seperate X,Y dataloaders
+    if is_first_partition or is_last_partition:
+        if "_sep" in args.task:
+            train_dl, test_dl, samplers = get_dataloaders(
+                args, explicit_seperated_dataset=True, **dataset_keywords)
+    else:
+        train_dl, test_dl, samplers = None, None, []
+    del dataset_keywords
+
+    # TODO: I have completly differnt plan for using it like micro batches
+    #  - that is, cut the batch size automatically.
+    args.step_every = getattr(args, "step_every", 1)
+
+    # Get expected training steps:
+
+    if args.epochs > 0 and args.steps < 0:
+        steps_per_epoch = train_dl_len // args.step_every
+        if train_dl_len % args.step_every > 0:
+            steps_per_epoch += 1
+        expected_training_steps = steps_per_epoch * args.epochs
+    else:
+        raise NotImplementedError()
+
+
+    args.steps_per_epoch = steps_per_epoch
+    args.expected_training_steps = expected_training_steps
 
     partition_using_gap_aware = hack_trainer_type_to_gap_aware(args)
     if partition_using_gap_aware:
@@ -845,7 +893,7 @@ def main():
 
     # Set Scheduler
     # TODO: scheduler for sched aware prediction
-    scheduler = get_scheduler(args, optimizer)
+    scheduler = get_lr_scheduler(args, optimizer)
 
     # Set Trainer (and Gap Aware)
     trainer_extra_args = args.trainer['args']
@@ -906,16 +954,6 @@ def main():
         if is_last_partition and lp_wp_arg:
             delattr(args, 'weight_prediction')
             del lp_wp_arg
-
-    train_dl_len, test_dl_len = len(train_dl), len(test_dl)
-    # Try getting seperate X,Y dataloaders
-    if is_first_partition or is_last_partition:
-        if "_sep" in args.task:
-            train_dl, test_dl, samplers = get_dataloaders(
-                args, explicit_seperated_dataset=True, **dataset_keywords)
-    else:
-        train_dl, test_dl, samplers = None, None, []
-    del dataset_keywords
 
     # Main Training Loop
 

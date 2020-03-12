@@ -288,6 +288,8 @@ def init_DDP(args, logger):
     if args.distributed_backend == 'mpi':
         raise NotImplementedError("DDP only works with gloo and nccl backends")
     parse_env_vars(args)
+    print("WARNING - HARDCODED TO 4 and I don't want to think about this yet")
+    
     args.world_size = 4  # get_world_size(args.distributed_backend) # FIXME:
     # Initialize the distributed environment.
     dist.init_process_group(args.distributed_backend, init_method='env://')
@@ -296,12 +298,6 @@ def init_DDP(args, logger):
     logger.info(
         f"Initialized process group; backend: {args.distributed_backend}, rank: {args.rank}, "
         f"local_rank: {args.local_rank}, world_size: {args.world_size}")
-
-    # base_lr_batch_size = args.get("base_lr_batch_size", None)
-    # if base_lr_batch_size is None:
-    #     mutliplier = args.world_size
-    # else:
-    #     mutliplier = args.world_size *  args.bs_train  # TODO: combination with ddp sim.
 
     args.optimizer["args"]['lr'] *= args.world_size
     lr = args.optimizer["args"]['lr']

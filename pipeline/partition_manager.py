@@ -586,7 +586,7 @@ class SinglePartitionManager:
                 if hasattr(trainer, "scheduler"):
                     # Note: could be more than one LR, but we ignore this for simplicity.
                     lr = trainer.scheduler.get_last_lr()[0]
-                    batch_log_str += '| lr {:02.4f}'.format(lr)
+                    batch_log_str += '| lr {:02.9f}'.format(lr)
 
                 # TODO: add more stats. e.g can print here time, ' ms/batch {:5.2f} | ' ,...
                 self.logger.info(batch_log_str)
