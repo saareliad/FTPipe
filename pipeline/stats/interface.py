@@ -18,7 +18,7 @@ class Stats(abc.ABC):
     def non_last_partition_on_batch_end(self, *args, **kw):
         pass
 
-    def non_latst_partition_on_epoch_end(self):
+    def non_last_partition_on_epoch_end(self):
         pass
 
     @abc.abstractmethod

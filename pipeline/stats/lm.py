@@ -75,7 +75,7 @@ class LMStats(Stats):
         for meter in self.epoch_meters:
             meter.reset()
 
-    def non_latst_partition_on_epoch_end(self):
+    def non_last_partition_on_epoch_end(self):
         pass  # FIXME:
         # for meter in self.epoch_meters:
         #     meter.reset()
@@ -154,12 +154,12 @@ class NormLMstats(LMStats):
             self.fit_res.grad_norm.append(self.epoch_grad_norm_meter.get_avg())
         super().on_epoch_end()
 
-    def non_latst_partition_on_epoch_end(self):
+    def non_last_partition_on_epoch_end(self):
         assert (self.training)
         self.fit_res.grad_norm.append(self.epoch_grad_norm_meter.get_avg())
 
         self.epoch_grad_norm_meter.reset()
-        # super().non_latst_partition_on_epoch_end()
+        # super().non_last_partition_on_epoch_end()
 
     # Removed it, because its useless to see just for last partition...
     # def get_epoch_info_str(self, is_train):
@@ -207,11 +207,11 @@ class LMDistanceNorm(NormLMstats):
     def fit_result_init_dict(self):
         return dict(gap=[], **super().fit_result_init_dict())
 
-    def non_latst_partition_on_epoch_end(self):
+    def non_last_partition_on_epoch_end(self):
         assert (self.training)
         self.fit_res.gap.append(self.epoch_gap_meter.get_avg())
         self.epoch_gap_meter.reset()
-        super().non_latst_partition_on_epoch_end()
+        super().non_last_partition_on_epoch_end()
 
     # Removed it, because its useless to see just for last partition...
     # def get_epoch_info_str(self, is_train):
@@ -258,11 +258,11 @@ class LMDistance(LMStats):
     def fit_result_init_dict(self):
         return dict(gap=[], **super().fit_result_init_dict())
 
-    def non_latst_partition_on_epoch_end(self):
+    def non_last_partition_on_epoch_end(self):
         assert (self.training)
         self.fit_res.gap.append(self.epoch_gap_meter.get_avg())
         self.epoch_gap_meter.reset()
-        super().non_latst_partition_on_epoch_end()
+        super().non_last_partition_on_epoch_end()
 
     def get_stats(self, stage_id):
         fit_res = super().get_stats(stage_id)

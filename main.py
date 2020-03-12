@@ -299,6 +299,7 @@ def create_comm_handler(args, comm_init_args,
 def get_scheduler(args, optimizer):
     if hasattr(args, "lr_scheduler"):
         # should_step = False
+        # TODO: auto-calculate numbers like num_training_steps
         attr = getattr(args, 'lr_scheduler')
         if attr['type'] in optimizers.lr_scheduler.AVAILABLE_LR_SCHEDULERS:
             scheduler_cls = getattr(optimizers.lr_scheduler, attr['type'])
@@ -563,7 +564,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
                 if args.local_rank == args.world_size - 1:
                     statistics.on_epoch_end()
                 else:
-                    statistics.non_latst_partition_on_epoch_end()
+                    statistics.non_last_partition_on_epoch_end()
             else:  # EVAL
                 # eval_epoch_start_time = time.time()
                 # Set Dataloader
