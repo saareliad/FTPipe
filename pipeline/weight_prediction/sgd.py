@@ -12,6 +12,7 @@ class SGDRevertableLinearWeightPrediction(WeightPredictor):
 
     # FIXME: handle the error obtained from linear prediction (error < 1e-7)
     def __init__(self, *args, **kw):
+        # TODO: work in interaction with "true_weights_storage" there is some hack to be done...
         raise NotImplementedError(
             "SGDRevertableLinearWeightPrediction not yet supported for pipeline")
         super().__init__(*args, **kw)
@@ -52,6 +53,7 @@ class SGDClonedWeightPrediction(WeightPredictor):
                     p)
 
     def forward(self):
+        # TODO: maybe also skil when lr is 0.
         if not self.n_steps:
             return
 
@@ -60,10 +62,6 @@ class SGDClonedWeightPrediction(WeightPredictor):
         self.true_weights_storage.record_change_mode("pred")
         pgs = self.optimizer.param_groups
         with torch.no_grad():
-            # init theta for clone
-            # TODO: we are doing unneccery clone for batches without staleness.
-            # e.g first batch in run_until_flush()
-            # however when we NAG we predictor (current practice), the staleness is 1 instead of 0.
             buffered_fixes = [self.fix_fn(self, pg) for pg in pgs]
 
             for pg, fix_fn_item in zip(pgs, buffered_fixes):

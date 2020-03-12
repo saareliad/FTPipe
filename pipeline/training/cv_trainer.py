@@ -3,7 +3,10 @@ from .interface import BaseLossTrainer
 from .gap_aware_trainer import GapAwareTrainerBase
 # TODO: typehint for statistics. maybe it should actually sit under stats
 
+
 class CVTrainer(BaseLossTrainer):
+    PER_STEP_SCHEDULER = False
+
     def __init__(self, *args, **kw):
         super().__init__(*args, loss_fn=torch.nn.CrossEntropyLoss(), **kw)
 
@@ -44,24 +47,7 @@ class CVTrainer(BaseLossTrainer):
 
 
 class GapAwareCVTrainer(CVTrainer, GapAwareTrainerBase):
-    # FIXME
-    # HAS_GAP_AWARE = True
-    def __init__(self, gap_aware, **kw):
-        super(GapAwareCVTrainer, self).__init__(**kw)
-        GapAwareTrainerBase.__init__(self, gap_aware)
-
-        self.gap_aware = gap_aware
-
-    def last_partition_step_and_statistics(self, x, y, loss, step=True):
-        """
-        step
-        stats
-
-        step can be used later for grad accumulations
-        """
-        # self.gap_aware.try_apply_wd_correction_before_step()
-        super(CVTrainer, self).last_partition_step_and_statistics(x,
-                                                                  y,
-                                                                  loss,
-                                                                  step=step)
-        # TODO: self.ga.update_max_lr() add when we have per step scheduler
+    def __init__(self, gap_aware, scheduler=None, **kw):
+        # super(GapAwareCVTrainer, self).__init__(**kw)
+        CVTrainer.__init__(self, scheduler=scheduler, **kw)
+        GapAwareTrainerBase.__init__(self, gap_aware, scheduler=scheduler)

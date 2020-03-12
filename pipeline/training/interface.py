@@ -4,6 +4,7 @@ import torch
 from torch.nn.utils import clip_grad_norm_
 from .utils import calc_norm
 
+
 class AnyTrainer(abc.ABC):
     @abc.abstractmethod
     def backprop_last_partition(self, *args, **kw):
@@ -85,6 +86,8 @@ class PartitionedSupervisedLossIncludedTrainer(PartitionedTrainer,
 
 
 class GradNormStepper:
+    PER_STEP_SCHEDULER = False
+
     # def __init__(
     #         self,
     #         model,
@@ -100,7 +103,6 @@ class GradNormStepper:
     #     self.max_grad_norm = max_grad_norm
     #     self.always_calc_grad_norm = always_calc_grad_norm
     #     self.statistics = statistics
-
     def non_last_partition_step(self):
         max_grad_norm = self.step_on_computed_grads()
         # Handles different classes of statistics. not so nice, should be fixed
@@ -122,7 +124,9 @@ class GradNormStepper:
         self.optimizer.step()
         self.optimizer.zero_grad()
         # TODO: per step scheduler
-        # self.scheduler.step()
+
+        if self.PER_STEP_SCHEDULER:
+            self.scheduler.step()
 
         return max_grad_norm
 
@@ -177,4 +181,3 @@ class BaseOutPutIsLossTrainer(GradNormStepper,
 
         # Stats
         self.statistics = statistics
-    

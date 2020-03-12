@@ -2,6 +2,7 @@ import torch
 from itertools import chain
 from .interface import GapAwareBase
 
+
 class GapAware(GapAwareBase):
     """
     GAP aware implementation for pipeline,
@@ -12,7 +13,7 @@ class GapAware(GapAwareBase):
         2. the gap is easy (e.g the gradient)
 
     Notes:
-        It adds memory footprint. (number of parameters in optimizer)
+        It adds memory footprint. (number of parameters in optimizer for SGD)
 
     Warning:
         Will not work with gradient accumulation as it changes grad !!!
@@ -22,28 +23,20 @@ class GapAware(GapAwareBase):
 
     Usage:
 
-        After backward:
-            update_running_avg()
+        Before apply (After backward):
+            
+            # Update optimizer statistics
 
-        Before apply:
+            update_running_avg()
             inc_step_count()
 
-        # FIXME: deprecated docstring
-        # # Apply on gradients:
-        #     apply_grad_only()
-
-        #     WARNINING: MUST HAVE A CORRESPONDING CALL TO try_apply_wd_correction_before_step()
 
         # Before optimizer.step():
         #     try_apply_wd_correction_before_step()
 
-        apply()
+        apply_on_XXXX(XXXX) / apply_from_grad()
 
-        After each scheduler.step():
-            update_max_lr()
 
-    Note:
-        For non-pipline settings, just call apply() instad of two sperate calles.
 
     Example:
 
@@ -54,21 +47,28 @@ class GapAware(GapAwareBase):
 
         loss.backward()
 
+        # IF WE DO STEP
+
         ga.update_running_avg()
         ga.inc_step_count()
-        ga.apply()
+        ga.apply_on_XXXX()
 
         # Send gradients in pipeline
 
         optimizer.step()
         scheduler.step()
 
-        ga.update_max_lr()
-
     TODO:
         Support working for all layers of pipeline
         Think about implmentation with L2.
         Think about implementation with hooks. (can be tricky)
+
+
+    # FIXME: deprecated docstring, but usefull for ga hook
+    # # Apply on gradients:
+    #     apply_grad_only()
+
+    #     WARNINING: MUST HAVE A CORRESPONDING CALL TO try_apply_wd_correction_before_step()
     """
     # 3 main changes form original implementation.
     # (1) better mem trick for WD.

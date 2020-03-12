@@ -1,4 +1,6 @@
 import abc
+import types
+from functools import wraps
 
 
 class GapAwareBase(abc.ABC):
@@ -11,7 +13,7 @@ class GapAwareBase(abc.ABC):
         2. the gap is easy (e.g the gradient)
 
     Notes:
-        It adds memory footprint. (number of parameters in optimizer)
+        It adds memory footprint for SGD. (number of parameters in optimizer)
 
     Warning:
         Will not work with gradient accumulation as it changes grad !!!
@@ -20,49 +22,33 @@ class GapAwareBase(abc.ABC):
 
 
     Usage:
+        
+        call GapAwareBase.patch_scheduler(scheduler) to track max lr.
 
         After backward:
-            update_running_avg()
 
-        Before apply:
-            inc_step_count()
-
-        # FIXME: deprecated docstring
-        # # Apply on gradients:
-        #     apply_grad_only()
-
-        #     WARNINING: MUST HAVE A CORRESPONDING CALL TO try_apply_wd_correction_before_step()
-
-        # Before optimizer.step():
-        #     try_apply_wd_correction_before_step()
-
-        apply()
-
-        After each scheduler.step():
-            update_max_lr()
-
-    Note:
-        For non-pipline settings, just call apply() instad of two sperate calles.
+        update_running_stats()
+        apply()  (if delay is > 0)
 
     Example:
 
         scheduler = ...
         optimizer = ...
         ga = ...
+
+        ga.patch_scheduler(scheduler)
+
         loss = ...
 
         loss.backward()
 
-        ga.update_running_avg()
-        ga.inc_step_count()
+        ga.update_running_stats()
         ga.apply()
 
         # Send gradients in pipeline
 
         optimizer.step()
         scheduler.step()
-
-        ga.update_max_lr()
 
     TODO:
         Support working for all layers of pipeline
@@ -96,14 +82,18 @@ class GapAwareBase(abc.ABC):
         # FIXME can be of optimizer. e.g in adam its param_group['step']
         self.step_count = 0  # Need to be ahead of the optimizer by 1.
 
-    def update_max_lr(self):
-        """ should be called after scheduler step. """
-        for pg in self.optimizer.param_groups:
-            pg[GapAwareBase.MAX_LR_NAME] = max(pg[GapAwareBase.MAX_LR_NAME],
-                                               pg['lr'])
-
     def inc_step_count(self):
         self.step_count += 1
+
+    def update_running_avg(self):
+        """in case there is some running avg to update"""
+        pass
+
+    def update_running_stats(self):
+        # TODO
+        """ Basic method for updating running statistics """
+        self.update_running_avg()
+        self.inc_step_count()
 
     @abc.abstractmethod
     def apply_from_grad(self):
@@ -119,6 +109,20 @@ class GapAwareBase(abc.ABC):
     def apply_on_theta(self, real_theta):
         raise NotImplementedError()
 
-    def update_running_avg(self):
-        """in case there is some running avg to update"""
-        pass
+    @staticmethod
+    def patch_scheduler(scheduler):
+        def step_decorator(func):
+            @wraps(func)
+            def inner(self, *args, **kwargs):
+                func(self, *args, **kwargs)
+                for pg in self.optimizer.param_groups:
+                    # pg['max_lr'] = max(pg['max_lr'], pg['lr'])
+                    pg[GapAwareBase.MAX_LR_NAME] = max(
+                        pg[GapAwareBase.MAX_LR_NAME], pg['lr'])
+
+            return types.MethodType(inner, scheduler)
+
+        scheduler.step = step_decorator(scheduler.__class__.step)
+        print(
+            f"Scheduler.step() patched to also track max lr in pg[{GapAwareBase.MAX_LR_NAME}]"
+        )

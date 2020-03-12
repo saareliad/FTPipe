@@ -4,9 +4,13 @@ from .interface import PartitionedTrainer
 class GapAwareTrainerBase(PartitionedTrainer):
     HAS_GAP_AWARE = True
 
-    def __init__(self, gap_aware):
+    def __init__(self, gap_aware, scheduler=None):
         super().__init__()
         self.gap_aware = gap_aware
+
+        # Patch to update max_lr.
+        if scheduler is not None:
+            gap_aware.patch_scheduler(scheduler)
 
     def modify_gradients(self, real_theta=None, delay=None,
                          stashed_theta=None):
@@ -16,8 +20,7 @@ class GapAwareTrainerBase(PartitionedTrainer):
          """
         # TODO: we may want to save some statistics before we modify grad.
         ga = self.gap_aware
-        ga.update_running_avg()
-        ga.inc_step_count()
+        ga.update_running_stats()
         if delay:
             if real_theta:
                 ga.apply_on_theta(real_theta)
@@ -29,7 +32,3 @@ class GapAwareTrainerBase(PartitionedTrainer):
                 # This means: for the "gap_aware.json" configs !!!
                 assert delay == 1
                 ga.apply_from_grad()
-
-    # def last_partition_step_and_statistics(self, x, y, loss, step=True):
-    #     pass
-    #     # TODO: self.ga.update_max_lr() add when we have per step scheduler

@@ -7,7 +7,7 @@ from .partition import get_buffers_for_ddp_sync
 from .training.interface import PartitionedTrainer
 from .tasks import DLTask
 from .weight_prediction.interface import WeightPredictor
-from .gap_aware import GapAware  # TODO: change to interface.
+from .gap_aware import GapAwareBase  # TODO: change to interface.
 from .work_schedulers import WorkScheduler, get_fwds_between_first_and_seconds_step_for_stage
 from .weight_stashing import WeightStasher
 from .buffer import Buffers
@@ -214,7 +214,7 @@ class SinglePartitionManager:
         self.task: DLTask
         self.trainer: PartitionedTrainer
         self.weight_predictor: WeightPredictor
-        self.gap_aware: GapAware
+        self.gap_aware: GapAwareBase
         self.weight_stasher: WeightStasher
         self.true_weights_storage: TrueWeightsStorage
 
@@ -757,7 +757,7 @@ class SinglePartitionManager:
         while len(async_fwd_objects) > 0:
             wait_on_sent_object(is_fwd=True)
 
-    def run_until_flush(self, num_batches, sched_step=True):
+    def run_until_flush(self, num_batches):
         """
         Requires:
             set_dataloader() was called (if first partition)
@@ -820,7 +820,6 @@ class SinglePartitionManager:
         while len(async_bwd_objects) > 0:
             wait_on_sent_object(is_fwd=False)
 
-        if sched_step:
+        # Do a scheduler step at the end of epoch if not already doing so each step.
+        if not self.trainer.PER_STEP_SCHEDULER:
             self.lr_scheduler.step()
-            if self.gap_aware:
-                self.gap_aware.update_max_lr()

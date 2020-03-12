@@ -5,6 +5,8 @@ from .gap_aware_trainer import GapAwareTrainerBase
 
 
 class LMTrainer(BaseOutPutIsLossTrainer):
+    PER_STEP_SCHEDULER = True
+
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
 
@@ -15,7 +17,11 @@ class LMTrainer(BaseOutPutIsLossTrainer):
         # acc = num_correct / batch_size
         self.statistics.on_batch_end(loss.item(), batch_size)
 
-    def last_partition_step_and_statistics(self, x, batch_size, loss, step=True):
+    def last_partition_step_and_statistics(self,
+                                           x,
+                                           batch_size,
+                                           loss,
+                                           step=True):
         """
         x: is model output.
         
@@ -37,24 +43,7 @@ class LMTrainer(BaseOutPutIsLossTrainer):
 
 
 class GapAwareLMTrainer(LMTrainer, GapAwareTrainerBase):
-    # FIXME
-    # HAS_GAP_AWARE = True
-    def __init__(self, gap_aware, **kw):
-        super(GapAwareLMTrainer, self).__init__(**kw)
-        GapAwareTrainerBase.__init__(self, gap_aware)
-
-        self.gap_aware = gap_aware
-
-    def last_partition_step_and_statistics(self, x, batch_size, loss, step=True):
-        """
-        step
-        stats
-
-        step can be used later for grad accumulations
-        """
-        # self.gap_aware.try_apply_wd_correction_before_step()
-        super(LMTrainer, self).last_partition_step_and_statistics(x,
-                                                                  batch_size,
-                                                                  loss,
-                                                                  step=step)
-        # TODO: self.ga.update_max_lr() add when we have per step scheduler
+    def __init__(self, gap_aware, scheduler=None, **kw):
+        # super(GapAwareLMTrainer, self).__init__(**kw)
+        GapAwareLMTrainer.__init__(self, scheduler=scheduler, **kw)
+        GapAwareTrainerBase.__init__(self, gap_aware, scheduler=scheduler)
