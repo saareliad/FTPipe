@@ -23,34 +23,24 @@ class Stats(abc.ABC):
     def get_epoch_info_str(self, is_train):
         return ''
 
-    def update_statistic_after_batch(self, name, value):
-        """ Updating epoch statistics meter after batch """
-        if hasattr(self, f"epoch_{name}_meter"):
-            meter = getattr(self, f"epoch_{name}_meter")
-            if not (value is None):
-                meter.update(value)
-            else:
-                print(f"-W- NONE VALUE for {name}, val: {value}")
-        else:
-            raise NotImplementedError(name)
-
-    def update_statistic_after_batch_single(self, name, value):
+    def update_statistic_after_batch_single(self, name, value, n):
         """ NOTE: Attempt to replace the old function """
         cfg = self.stats_config[name]
         if cfg['per_epoch']:
             meter = getattr(self, f"epoch_{name}_meter")
             if not (value is None):
-                meter.update(value)
+                meter.update(value, n=n)
             else:
                 print(f"-W- NONE VALUE for {name}, val: {value}")
 
     def update_statistic_after_batch_all(self, d):
-        for name, value in d.items():
-            self.update_statistic_after_batch_single(name, value)
+        for name, (value, n) in d.items():
+            self.update_statistic_after_batch_single(name, value, n)
 
     def update_fit_res_after_batch_all(self, d):
         for name, value in d.items():
-            self.update_fit_res_after_batch_single(name, value)
+            if self.stats_config[name]['per_batch']:
+                self.update_fit_res_after_batch_single(name, value[0])
 
     def update_fit_res_after_batch_single(self, name, value):
         cfg = self.stats_config[name]
@@ -62,9 +52,9 @@ class Stats(abc.ABC):
             cfg for cfg, v in self.stats_config.items() if v['per_epoch']
         ]
         for name in list_names:
-            self.update_fit_rest_after_epoch_single(name)
+            self.update_fit_res_after_epoch_single(name)
 
-    def update_fit_rest_after_epoch_single(self, name):
+    def update_fit_res_after_epoch_single(self, name):
         cfg = self.stats_config[name]
         if cfg['per_epoch']:
             meter = getattr(self, f"epoch_{name}_meter")
@@ -97,12 +87,13 @@ class Stats(abc.ABC):
                       per_epoch=True,
                       train=True,
                       test=True):
+
         setattr(self, f"epoch_{name}_meter", meter)
 
         # setattr(self, f"record_{name}_per_batch", per_batch)
 
         if per_batch and per_epoch:
-              # TODO: because currently they have same names...
+            # TODO: because currently they have same names...
             raise NotImplementedError()
 
         fit_res_dict = set()
@@ -139,9 +130,11 @@ class Stats(abc.ABC):
     def non_last_partition_on_epoch_end(self):
         pass
 
-    @abc.abstractmethod
     def last_partition_on_epoch_end(self):
-        pass
+        if self.training:
+            self.fit_res.num_epochs += 1
+
+        self.update_fit_res_after_epoch_all()
 
     @abc.abstractmethod
     def get_stats(self, *args) -> Dict:

@@ -75,7 +75,9 @@ class PartitionedTrainer(AnyTrainer):
                         chain.from_iterable(real_theta))
                 ])
 
-            self.statistics.update_statistic_after_batch("gap", gap)
+            # FIXME:
+            self.statistics.update_statistic_after_batch_single("gap", gap, 1)
+            self.statistics.update_fit_res_after_batch_single("gap", gap)
 
 
 class PartitionedSupervisedTrainer(PartitionedTrainer, SupervisedTrainer):

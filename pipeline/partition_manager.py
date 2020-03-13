@@ -662,10 +662,13 @@ class SinglePartitionManager:
             if weight_stasher:
                 if self.gap_aware_just_loss:
                     stashed_theta = weight_stasher.pop_stashed_buff(batch_idx)
+                    # FIXME: the whole idea of recording the gap from here is not good.
                     trainer.try_record_real_gap_from_current(stashed_theta)
                     real_theta = None
                 else:
                     real_theta = self.true_weights_storage.get_true_weights()
+                    # FIXME: the whole idea of recording the gap from here is not good.
+                    # TODO: we can get the gap for free from gap aware sometimes.
                     trainer.try_record_real_gap_from_current(real_theta)
                     stashed_theta = None
             else:
@@ -686,6 +689,7 @@ class SinglePartitionManager:
                     delay = self.delay_at_batch.pop(batch_idx)
 
                 # Modify gradients
+                # TODO: return the gap.
                 trainer.modify_gradients(real_theta=real_theta,
                                          delay=delay,
                                          stashed_theta=stashed_theta)

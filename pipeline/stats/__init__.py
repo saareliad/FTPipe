@@ -37,11 +37,11 @@ LM_STATS = {
     'lm_theta_dist_grad_norm':
     LMDistanceNorm(record_loss_per_batch=False),
     'lm_theta_dist_grad_norm_loss_per_batch':
-    LMDistanceNorm(record_loss_per_batch=False),
+    LMDistanceNorm(record_loss_per_batch=True),
     'lm_theta_dist':
     LMDistance(record_loss_per_batch=False),
     'lm_theta_dist_loss_per_batch':
-    LMDistance(record_loss_per_batch=False),
+    LMDistance(record_loss_per_batch=True),
 }
 
 AVAILBALE_STATS = {**CV_STATS, **LM_STATS}

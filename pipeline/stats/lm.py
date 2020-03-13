@@ -26,13 +26,24 @@ class LMStats(Stats):
     def __init__(self, record_loss_per_batch=False):
         # Stats
         super().__init__()
-        self.epoch_loss = AverageMeter()
-        self.epoch_ppl = AverageMeter()
 
-        self.epoch_meters = [self.epoch_loss, self.epoch_ppl]
+        self.add_statistic(
+            name="loss",
+            meter=AverageMeter(),
+            per_batch=record_loss_per_batch,
+            per_epoch=not record_loss_per_batch,  # FIXME
+            train=True,
+            test=True)
+
+        self.add_statistic(
+            name="ppl",
+            meter=AverageMeter(),
+            per_batch=record_loss_per_batch,
+            per_epoch=not record_loss_per_batch,  # FIXME
+            train=True,
+            test=True)
 
         self.record_loss_per_batch = record_loss_per_batch
-
 
     def fit_result_init_dict(self):
         return dict(num_epochs=0,
@@ -42,44 +53,26 @@ class LMStats(Stats):
                     test_ppl=[])
 
     def last_partition_on_batch_end(self, loss, batch_size):
-        if self.record_loss_per_batch:
-            if self.training:
-                self.fit_res.train_loss.append(loss)
-                self.fit_res.train_ppl.append(math.exp(loss))
-            else:
-                self.fit_res.test_loss.append(loss)
-                self.fit_res.test_ppl.append(math.exp(loss))
+        # TODO: maby pass this dict so we can use inheritance
+        d = {"loss": (loss, batch_size), "ppl": (math.exp(loss), batch_size)}
 
+        self.update_fit_res_after_batch_all(d)
+        self.update_statistic_after_batch_all(d)
 
-        self.epoch_loss.update(loss, batch_size)
-        self.epoch_ppl.update(math.exp(loss), batch_size)
+    # def last_partition_on_epoch_end(self):
+    #     if self.training:
+    #         self.fit_res.num_epochs += 1
 
-    def last_partition_on_epoch_end(self):
-        if self.training:
-            if not self.record_loss_per_batch:
-                self.fit_res.train_loss.append(self.epoch_loss.get_avg())
-                self.fit_res.train_ppl.append(self.epoch_ppl.get_avg())
-            # FIXME: its only here, currently assuming test epochs are same as train epochs
-            self.fit_res.num_epochs += 1
-        else:
-            if not self.record_loss_per_batch:
-                self.fit_res.test_loss.append(self.epoch_loss.get_avg())
-                self.fit_res.test_ppl.append(self.epoch_ppl.get_avg())
+    #     self.update_fit_res_after_epoch_all()
 
-            # self.fit_res.test_ppl.append(self.epoch_ppl.get_avg())  # FIXME: also record avg for epoch
-
-        for meter in self.epoch_meters:
-            meter.reset()
-
-    def non_last_partition_on_epoch_end(self):
-        pass  # FIXME:
-        # for meter in self.epoch_meters:
-        #     meter.reset()
+    # def non_last_partition_on_epoch_end(self):
+    #     pass
 
     def get_stats(self, *args):
         return fit_res_to_dict(self.fit_res)
 
     def get_epoch_info_str(self, is_train):
+        # FIXME: in per-batch-loss it returns value for the last batch instead of for epoch!
         if is_train:
             name = "train"
             loss = self.fit_res.train_loss[-1]
@@ -113,9 +106,14 @@ class NormLMstats(LMStats):
 
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
-        self.epoch_grad_norm_meter = AverageMeter()
-        # self.epoch_meters.append(self.epoch_grad_norm_meter)
-        assert not (self.fit_res is None)
+
+        self.add_statistic(
+            name="grad_norm",
+            meter=AverageMeter(),
+            per_batch=self.record_loss_per_batch,
+            per_epoch=not self.record_loss_per_batch,  # FIXME
+            train=True,
+            test=False)
 
     def fit_result_init_dict(self):
         return dict(grad_norm=[], **super().fit_result_init_dict())
@@ -124,38 +122,17 @@ class NormLMstats(LMStats):
         # Note: This is also called for test
         super().last_partition_on_batch_end(loss, batch_size)
 
-        # TODO: not sure fi thats the best way
-        if self.training and (not (grad_norm is None)):
-            # if self.record_loss_per_batch:
-            #     self.fit_res.append(grad_norm)
+        d = {"grad_norm": (grad_norm, 1)}
 
-            self.epoch_grad_norm_meter.update(grad_norm)
+        self.update_fit_res_after_batch_all(d)
+        self.update_statistic_after_batch_all(d)
 
     def non_last_partition_on_batch_end(self, grad_norm):
-        # Called just for train
-        if self.training:
-            self.update_statistic_after_batch("grad_norm", grad_norm)
-
         # if self.training:
-        #     if not (grad_norm is None):
-        #         self.epoch_grad_norm_meter.update(grad_norm)
-        #     else:
-        #         logger = logging.getLogger("msnag")
-        #         logger.warning(
-        #             f"-W- grad norm is None for a non last partition. updating as 0")
-        #         self.epoch_grad_norm_meter.update(0)
-
-    def last_partition_on_epoch_end(self):
-        if self.training:
-            self.fit_res.grad_norm.append(self.epoch_grad_norm_meter.get_avg())
-        super().last_partition_on_epoch_end()
-
-    def non_last_partition_on_epoch_end(self):
-        assert (self.training)
-        self.fit_res.grad_norm.append(self.epoch_grad_norm_meter.get_avg())
-
-        self.epoch_grad_norm_meter.reset()
-        # super().non_last_partition_on_epoch_end()
+        super().non_last_partition_on_batch_end()
+        d = {"grad_norm": (grad_norm, 1)}
+        self.update_fit_res_after_batch_all(d)
+        self.update_statistic_after_batch_all(d)
 
     def get_stats(self, stage_id=None):
         fit_res = super().get_stats()
@@ -188,18 +165,15 @@ class LMDistanceNorm(NormLMstats):
 
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
-        self.add_statistic("gap", AverageMeter())
-        # self.epoch_gap_meter = AverageMeter()
-        assert not (self.fit_res is None)
+        self.add_statistic(name="gap",
+                           meter=AverageMeter(),
+                           per_batch=self.record_loss_per_batch,
+                           per_epoch=not self.record_loss_per_batch,
+                           train=True,
+                           test=False)
 
     def fit_result_init_dict(self):
         return dict(gap=[], **super().fit_result_init_dict())
-
-    def non_last_partition_on_epoch_end(self):
-        assert (self.training)
-        self.fit_res.gap.append(self.epoch_gap_meter.get_avg())
-        self.epoch_gap_meter.reset()
-        super().non_last_partition_on_epoch_end()
 
     def get_stats(self, stage_id):
         fit_res = super().get_stats(stage_id)
@@ -207,6 +181,10 @@ class LMDistanceNorm(NormLMstats):
         old_name = 'gap'
         fit_res[new_name] = fit_res.pop(old_name)
         return fit_res
+
+    # TODO:
+    # def non_last_partition_on_batch_end(self,):
+    # def last_partition_on_batch_end(self,):
 
 
 class FitResultWithDistance(FitResult):
@@ -231,18 +209,17 @@ class LMDistance(LMStats):
 
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
-        self.add_statistic("gap", AverageMeter())
-        # self.epoch_gap_meter = AverageMeter()
-        assert not (self.fit_res is None)
+
+        self.add_statistic(
+            name="gap",
+            meter=AverageMeter(),
+            per_batch=self.record_loss_per_batch,
+            per_epoch=not self.record_loss_per_batch,  # FIXME
+            train=True,
+            test=False)
 
     def fit_result_init_dict(self):
         return dict(gap=[], **super().fit_result_init_dict())
-
-    def non_last_partition_on_epoch_end(self):
-        assert (self.training)
-        self.fit_res.gap.append(self.epoch_gap_meter.get_avg())
-        self.epoch_gap_meter.reset()
-        super().non_last_partition_on_epoch_end()
 
     def get_stats(self, stage_id):
         fit_res = super().get_stats(stage_id)
