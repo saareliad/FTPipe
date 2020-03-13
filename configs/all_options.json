@@ -28,6 +28,9 @@
     },
     "lr_scheduler": {
         "type": "get_multi_step_lr_schedule_with_warmup",
+        "preproc_args": {
+            "num_training_steps": "epochs_to_steps"
+        },
         "args": {
             "num_warmup_steps": 5,
             "milestones": [60, 120, 160],
@@ -66,7 +69,6 @@
     "auto_file_name": true,
     "stage_to_device_map": [0, 0, 0, 0],
     "step_every": 1,
-    "base_lr_batch_size": 128,
     "log_frequency": 100,
     "ddp_sim_num_gpus": 4,
     "ddp": true,
