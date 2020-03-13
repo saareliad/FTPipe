@@ -35,6 +35,8 @@ class LMStats(Stats):
         self.record_loss_per_batch = record_loss_per_batch
         self.training = True
 
+
+
     def fit_result_init_dict(self):
         return dict(num_epochs=0,
                     train_loss=[],
@@ -48,7 +50,7 @@ class LMStats(Stats):
     def eval(self):
         self.training = False
 
-    def on_batch_end(self, loss, batch_size):
+    def last_partition_on_batch_end(self, loss, batch_size):
         if self.record_loss_per_batch:
             if self.training:
                 self.fit_res.train_loss.append(loss)
@@ -69,6 +71,7 @@ class LMStats(Stats):
         else:
             if not self.record_loss_per_batch:
                 self.fit_res.test_loss.append(self.epoch_loss.get_avg())
+                self.fit_res.test_ppl.append(self.epoch_ppl.get_avg())
 
             self.fit_res.test_ppl.append(self.epoch_ppl.get_avg())
 
@@ -124,9 +127,9 @@ class NormLMstats(LMStats):
     def fit_result_init_dict(self):
         return dict(grad_norm=[], **super().fit_result_init_dict())
 
-    def on_batch_end(self, loss, batch_size, grad_norm=None):
+    def last_partition_on_batch_end(self, loss, batch_size, grad_norm=None):
         # Note: This is also called for test
-        super().on_batch_end(loss, batch_size)
+        super().last_partition_on_batch_end(loss, batch_size)
 
         # TODO: not sure fi thats the best way
         if self.training and (not (grad_norm is None)):

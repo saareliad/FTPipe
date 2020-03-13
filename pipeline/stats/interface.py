@@ -12,7 +12,7 @@ class Stats(abc.ABC):
         self.training = False
 
     @abc.abstractmethod
-    def on_batch_end(self, *args, **kw):
+    def last_partition_on_batch_end(self, *args, **kw):
         pass
 
     def non_last_partition_on_batch_end(self, *args, **kw):

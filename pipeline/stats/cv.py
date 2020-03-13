@@ -47,7 +47,7 @@ class CVStats(Stats):
     def eval(self):
         self.training = False
 
-    def on_batch_end(self, loss, num_correct, batch_size):
+    def last_partition_on_batch_end(self, loss, num_correct, batch_size):
         if self.record_loss_per_batch:
             if self.training:
                 self.fit_res.train_loss.append(loss)
@@ -123,9 +123,9 @@ class NormCVstats(CVStats):
     def fit_result_init_dict(self):
         return dict(grad_norm=[], **super().fit_result_init_dict())
 
-    def on_batch_end(self, loss, num_correct, batch_size, grad_norm=None):
+    def last_partition_on_batch_end(self, loss, num_correct, batch_size, grad_norm=None):
         # Note: This is also called for test
-        super().on_batch_end(loss, num_correct, batch_size)
+        super().last_partition_on_batch_end(loss, num_correct, batch_size)
 
         # TODO: not sure fi thats the best way
         if self.training and (not (grad_norm is None)):
