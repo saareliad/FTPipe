@@ -64,6 +64,8 @@ class PartitionedTrainer(AnyTrainer):
         """ calculates gap between model parameters and a given set of parameters, real_theta
             real_theta: Given set of parameters. TODO: rename
         """
+        # TODO: this is very weird from here. this is certainly not the place.
+        # TODO: should pass a function to calculate this and do it in the right place.
         if self.statistics.has_statistic("gap"):
             with torch.no_grad():
                 gap = sum([
