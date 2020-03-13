@@ -40,3 +40,7 @@ class AccuracyMeter(AverageMeter):
         """ just to supoort adding num correct instead of accuracy """
         self.sum += val
         self.count += n
+
+    def get_avg(self):
+        return (self.sum / self.count) * 100
+    
