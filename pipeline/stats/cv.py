@@ -24,15 +24,14 @@ class CVStats(Stats):
 
     def __init__(self, record_loss_per_batch=False):
         # Stats
-        self.fit_res = self.FIT_RESULTS_CLASS(**self.fit_result_init_dict())
-        assert not (self.fit_res is None)
+        super().__init__()
+
         self.epoch_loss = AverageMeter()
         self.epoch_acc = AccuracyMeter()
 
         self.epoch_meters = [self.epoch_loss, self.epoch_acc]
 
         self.record_loss_per_batch = record_loss_per_batch
-        self.training = True
 
     def fit_result_init_dict(self):
         return dict(num_epochs=0,
@@ -40,12 +39,6 @@ class CVStats(Stats):
                     train_acc=[],
                     test_loss=[],
                     test_acc=[])
-
-    def train(self):
-        self.training = True
-
-    def eval(self):
-        self.training = False
 
     def last_partition_on_batch_end(self, loss, num_correct, batch_size):
         if self.record_loss_per_batch:
@@ -57,7 +50,7 @@ class CVStats(Stats):
         self.epoch_loss.update(loss, batch_size)
         self.epoch_acc.update(num_correct, batch_size)
 
-    def on_epoch_end(self):
+    def last_partition_on_epoch_end(self):
         if self.training:
             if not self.record_loss_per_batch:
                 self.fit_res.train_loss.append(self.epoch_loss.get_avg())
@@ -139,10 +132,10 @@ class NormCVstats(CVStats):
         if self.training:
             self.update_statistic_after_batch("grad_norm", grad_norm)
 
-    def on_epoch_end(self):
+    def last_partition_on_epoch_end(self):
         if self.training:
             self.fit_res.grad_norm.append(self.epoch_grad_norm_meter.get_avg())
-        super().on_epoch_end()
+        super().last_partition_on_epoch_end()
 
     def non_last_partition_on_epoch_end(self):
         assert (self.training)

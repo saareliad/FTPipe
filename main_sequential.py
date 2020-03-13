@@ -241,7 +241,7 @@ def training_loop(args, logger, train_dl, test_dl, partition, scheduler,
                 did_train = True
                 steps += TRAIN_BATCHES_TO_RUN
                 # TODO record it
-                statistics.on_epoch_end()
+                statistics.last_partition_on_epoch_end()
             else:  # EVAL
                 # Set Dataloader
                 if TEST_BATCHES_TO_RUN == 0:
@@ -257,7 +257,7 @@ def training_loop(args, logger, train_dl, test_dl, partition, scheduler,
                         min(TEST_BATCHES_TO_RUN, len(test_dl)))
 
                 did_eval = True
-                statistics.on_epoch_end()
+                statistics.last_partition_on_epoch_end()
 
                 epochs += 1
 

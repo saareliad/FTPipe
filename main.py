@@ -588,7 +588,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
 
                 did_train = True
                 if args.local_rank == args.world_size - 1:
-                    statistics.on_epoch_end()
+                    statistics.last_partition_on_epoch_end()
                 else:
                     statistics.non_last_partition_on_epoch_end()
             else:  # EVAL
@@ -610,7 +610,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
                 # eval_epochs_times_list.append(time.time() - eval_epoch_start_time)
                 did_eval = True
                 if args.local_rank == args.world_size - 1:
-                    statistics.on_epoch_end()
+                    statistics.last_partition_on_epoch_end()
 
         epochs += 1
         if did_train:
