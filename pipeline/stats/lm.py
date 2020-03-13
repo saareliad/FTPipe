@@ -1,27 +1,10 @@
-from typing import List
 from .interface import Stats
-from types import SimpleNamespace
 import math
 from .utils import fit_res_to_dict, AverageMeter
 
 
-class FitResult(SimpleNamespace):
-    """
-    Represents the result of fitting a model for multiple epochs given a
-    training and test (or validation) set.
-    The losses are for each batch (or per epoch, depends on config)
-    and the PPLS are per epoch.
-    """
-    num_epochs: int
-    train_loss: List[float]
-    train_ppl: List[float]
-    test_loss: List[float]
-    test_ppl: List[float]
-
-
 class LMStats(Stats):
     """ Class to handle statistics collection for LM Tasks """
-    FIT_RESULTS_CLASS = FitResult
 
     def __init__(self, record_loss_per_batch=False):
         # Stats
@@ -44,13 +27,6 @@ class LMStats(Stats):
             test=True)
 
         self.record_loss_per_batch = record_loss_per_batch
-
-    def fit_result_init_dict(self):
-        return dict(num_epochs=0,
-                    train_loss=[],
-                    train_ppl=[],
-                    test_loss=[],
-                    test_ppl=[])
 
     def last_partition_on_batch_end(self, loss, batch_size):
         # TODO: maby pass this dict so we can use inheritance
@@ -76,24 +52,7 @@ class LMStats(Stats):
         return ' | {} loss {:5.2f} | {} ppl {:4.2f}'.format(
             name, loss, name, ppl)
 
-
-class FitResultWithGradNorm(FitResult):
-    """
-    Represents the result of fitting a model for multiple epochs given a
-    training and test (or validation) set.
-    The losses are for each batch (or per epoch, depends on config)
-    and the ppls are per epoch.
-    """
-    num_epochs: int
-    grad_norm: List[float]
-    train_loss: List[float]
-    train_ppl: List[float]
-    test_loss: List[float]
-    test_ppl: List[float]
-
-
 class NormLMstats(LMStats):
-    FIT_RESULTS_CLASS = FitResultWithGradNorm
 
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
@@ -105,9 +64,6 @@ class NormLMstats(LMStats):
             per_epoch=not self.record_loss_per_batch,  # FIXME
             train=True,
             test=False)
-
-    def fit_result_init_dict(self):
-        return dict(grad_norm=[], **super().fit_result_init_dict())
 
     def last_partition_on_batch_end(self, loss, batch_size, grad_norm=None):
         # Note: This is also called for test
@@ -133,26 +89,8 @@ class NormLMstats(LMStats):
             fit_res[new_name] = fit_res.pop(old_name)
         return fit_res
 
-
-class FitResultWithGradNormAndDistance(FitResult):
-    """
-    Represents the result of fitting a model for multiple epochs given a
-    training and test (or validation) set.
-    The losses are for each batch (or per epoch, depends on config)
-    and the PPLs are per epoch.
-    """
-    num_epochs: int
-    grad_norm: List[float]
-    gap: List[float]
-    train_loss: List[float]
-    train_ppl: List[float]
-    test_loss: List[float]
-    test_ppl: List[float]
-
-
 class LMDistanceNorm(NormLMstats):
     # FIXME: This whole chain of classes has HORRIBLE design. just implement it simple.
-    FIT_RESULTS_CLASS = FitResultWithGradNormAndDistance
 
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
@@ -162,9 +100,6 @@ class LMDistanceNorm(NormLMstats):
                            per_epoch=not self.record_loss_per_batch,
                            train=True,
                            test=False)
-
-    def fit_result_init_dict(self):
-        return dict(gap=[], **super().fit_result_init_dict())
 
     def get_stats(self, stage_id):
         fit_res = super().get_stats(stage_id)
@@ -178,25 +113,8 @@ class LMDistanceNorm(NormLMstats):
     # def last_partition_on_batch_end(self,):
 
 
-class FitResultWithDistance(FitResult):
-    """
-    Represents the result of fitting a model for multiple epochs given a
-    training and test (or validation) set.
-    The losses are for each batch (or per epoch, depends on config)
-    and the PPLS are per epoch.
-    """
-    num_epochs: int
-    gap: List[float]
-    train_loss: List[float]
-    train_ppl: List[float]
-    test_loss: List[float]
-    test_ppl: List[float]
-
-
-# Code copy from ^
 class LMDistance(LMStats):
     # FIXME: This whole chain of classes has HORRIBLE design. just implement it simply.
-    FIT_RESULTS_CLASS = FitResultWithDistance
 
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
@@ -208,9 +126,6 @@ class LMDistance(LMStats):
             per_epoch=not self.record_loss_per_batch,  # FIXME
             train=True,
             test=False)
-
-    def fit_result_init_dict(self):
-        return dict(gap=[], **super().fit_result_init_dict())
 
     def get_stats(self, stage_id):
         fit_res = super().get_stats(stage_id)

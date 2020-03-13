@@ -12,13 +12,7 @@ class Stats(abc.ABC):
 
     def __init__(self):
         self.training = True
-        AUTOMATIC_FIT_RES = False
-        if not AUTOMATIC_FIT_RES:
-            self.fit_res = self.FIT_RESULTS_CLASS(
-                **self.fit_result_init_dict())
-        else:
-            self.fit_res = self.FIT_RESULTS_CLASS(num_epochs=0)
-
+        self.fit_res = self.FIT_RESULTS_CLASS(num_epochs=0)
         assert not (self.fit_res is None)
         self.stats_config = dict()
 
@@ -82,9 +76,6 @@ class Stats(abc.ABC):
         else:
             fit_name = name
 
-        # if cfg['per_epoch'] and cfg['per_batch']:
-        #     fit_name = f"{fit_name}_{'batch' if is_batch else 'epoch'}"
-
         fit_stat = getattr(self.fit_res, fit_name)
         fit_stat.append(value)
 
@@ -125,10 +116,6 @@ class Stats(abc.ABC):
 
         for i in fit_res_dict:
             setattr(self.fit_res, i, [])
-
-    @abc.abstractmethod
-    def fit_result_init_dict(self):
-        pass
 
     @abc.abstractmethod
     def last_partition_on_batch_end(self, *args, **kw):

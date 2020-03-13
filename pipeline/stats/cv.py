@@ -4,24 +4,8 @@ from types import SimpleNamespace
 from .utils import fit_res_to_dict, AverageMeter, AccuracyMeter
 
 
-class FitResult(SimpleNamespace):
-    """
-    Represents the result of fitting a model for multiple epochs given a
-    training and test (or validation) set.
-    The losses are for each batch (or per epoch, depends on config)
-    and the accuracies are per epoch.
-    """
-    num_epochs: int
-    train_loss: List[float]
-    train_acc: List[float]
-    test_loss: List[float]
-    test_acc: List[float]
-
-
 class CVStats(Stats):
     """ Class to handle statistics collection for CV Tasks """
-    FIT_RESULTS_CLASS = FitResult
-
     def __init__(self, record_loss_per_batch=False):
         # Stats
         super().__init__()
@@ -43,13 +27,6 @@ class CVStats(Stats):
             test=True)
 
         self.record_loss_per_batch = record_loss_per_batch
-
-    def fit_result_init_dict(self):
-        return dict(num_epochs=0,
-                    train_loss=[],
-                    train_acc=[],
-                    test_loss=[],
-                    test_acc=[])
 
     def last_partition_on_batch_end(self, loss, num_correct, batch_size):
 
@@ -76,24 +53,7 @@ class CVStats(Stats):
             name, loss, name, acc)
 
 
-class FitResultWithGradNorm(FitResult):
-    """
-    Represents the result of fitting a model for multiple epochs given a
-    training and test (or validation) set.
-    The losses are for each batch (or per epoch, depends on config)
-    and the accuracies are per epoch.
-    """
-    num_epochs: int
-    grad_norm: List[float]
-    train_loss: List[float]
-    train_acc: List[float]
-    test_loss: List[float]
-    test_acc: List[float]
-
-
 class NormCVstats(CVStats):
-    FIT_RESULTS_CLASS = FitResultWithGradNorm
-
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
 
@@ -104,9 +64,6 @@ class NormCVstats(CVStats):
             per_epoch=True,  # FIXME
             train=True,
             test=False)
-
-    def fit_result_init_dict(self):
-        return dict(grad_norm=[], **super().fit_result_init_dict())
 
     def last_partition_on_batch_end(self,
                                     loss,
@@ -136,25 +93,8 @@ class NormCVstats(CVStats):
         return fit_res
 
 
-class FitResultWithGradNormAndDistance(FitResult):
-    """
-    Represents the result of fitting a model for multiple epochs given a
-    training and test (or validation) set.
-    The losses are for each batch (or per epoch, depends on config)
-    and the accuracies are per epoch.
-    """
-    num_epochs: int
-    grad_norm: List[float]
-    gap: List[float]
-    train_loss: List[float]
-    train_acc: List[float]
-    test_loss: List[float]
-    test_acc: List[float]
-
-
 class CVDistanceNorm(NormCVstats):
     # FIXME: This whole chain of classes has HORRIBLE design. just implement it simple.
-    FIT_RESULTS_CLASS = FitResultWithGradNormAndDistance
 
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
@@ -164,9 +104,6 @@ class CVDistanceNorm(NormCVstats):
                            per_epoch=True,
                            train=True,
                            test=False)
-
-    def fit_result_init_dict(self):
-        return dict(gap=[], **super().fit_result_init_dict())
 
     def get_stats(self, stage_id):
         fit_res = super().get_stats(stage_id)
@@ -180,25 +117,9 @@ class CVDistanceNorm(NormCVstats):
     # def last_partition_on_batch_end(self,):
 
 
-class FitResultWithDistance(FitResult):
-    """
-    Represents the result of fitting a model for multiple epochs given a
-    training and test (or validation) set.
-    The losses are for each batch (or per epoch, depends on config)
-    and the accuracies are per epoch.
-    """
-    num_epochs: int
-    gap: List[float]
-    train_loss: List[float]
-    train_acc: List[float]
-    test_loss: List[float]
-    test_acc: List[float]
-
-
 # Code copy from ^
 class CVDistance(CVStats):
     # FIXME: This whole chain of classes has HORRIBLE design. just implement it simple.
-    FIT_RESULTS_CLASS = FitResultWithDistance
 
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
@@ -208,9 +129,6 @@ class CVDistance(CVStats):
                            per_epoch=not self.record_loss_per_batch,
                            train=True,
                            test=False)
-
-    def fit_result_init_dict(self):
-        return dict(gap=[], **super().fit_result_init_dict())
 
     def get_stats(self, stage_id):
         fit_res = super().get_stats(stage_id)
