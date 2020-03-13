@@ -2,6 +2,8 @@ import abc
 from typing import Dict
 from types import SimpleNamespace
 
+# TODO: support for every X batches
+
 
 class Stats(abc.ABC):
     """ Class to handle statistics collection """
@@ -10,7 +12,13 @@ class Stats(abc.ABC):
 
     def __init__(self):
         self.training = True
-        self.fit_res = self.FIT_RESULTS_CLASS(**self.fit_result_init_dict())
+        AUTOMATIC_FIT_RES = False
+        if not AUTOMATIC_FIT_RES:
+            self.fit_res = self.FIT_RESULTS_CLASS(
+                **self.fit_result_init_dict())
+        else:
+            self.fit_res = self.FIT_RESULTS_CLASS(num_epochs=0)
+
         assert not (self.fit_res is None)
         self.stats_config = dict()
 
@@ -45,7 +53,7 @@ class Stats(abc.ABC):
     def update_fit_res_after_batch_single(self, name, value):
         cfg = self.stats_config[name]
         if cfg['per_batch']:
-            self._append_value_to_fit_res_by_name(name, value)
+            self._append_value_to_fit_res_by_name(name, value, is_batch=True)
 
     def update_fit_res_after_epoch_all(self):
         list_names = [
@@ -59,10 +67,10 @@ class Stats(abc.ABC):
         if cfg['per_epoch']:
             meter = getattr(self, f"epoch_{name}_meter")
             value = meter.get_avg()
-            self._append_value_to_fit_res_by_name(name, value)
+            self._append_value_to_fit_res_by_name(name, value, is_batch=False)
             meter.reset()
 
-    def _append_value_to_fit_res_by_name(self, name, value):
+    def _append_value_to_fit_res_by_name(self, name, value, is_batch):
         cfg = self.stats_config[name]
         if (self.training and not cfg['train']) or (not self.training
                                                     and not cfg['test']):
@@ -73,6 +81,9 @@ class Stats(abc.ABC):
             fit_name = f"train_{name}" if self.training else f"test_{name}"
         else:
             fit_name = name
+
+        # if cfg['per_epoch'] and cfg['per_batch']:
+        #     fit_name = f"{fit_name}_{'batch' if is_batch else 'epoch'}"
 
         fit_stat = getattr(self.fit_res, fit_name)
         fit_stat.append(value)
@@ -88,21 +99,18 @@ class Stats(abc.ABC):
                       train=True,
                       test=True):
 
-        setattr(self, f"epoch_{name}_meter", meter)
-
-        # setattr(self, f"record_{name}_per_batch", per_batch)
-
         if per_batch and per_epoch:
-            # TODO: because currently they have same names...
-            raise NotImplementedError()
+            raise NotImplementedError(
+                "Statistics are supported for either batch or epoch.")
 
-        fit_res_dict = set()
+        setattr(self, f"epoch_{name}_meter", meter)
+        fit_res_dict = []
         if train and test:
             # TODO: List[float]
-            fit_res_dict.add(f"train_{name}")
-            fit_res_dict.add(f"test_{name}")
+            fit_res_dict.append(f"train_{name}")
+            fit_res_dict.append(f"test_{name}")
         elif (train and not test) or (test and not train):
-            fit_res_dict.add(f"{name}")
+            fit_res_dict.append(f"{name}")
         else:
             raise ValueError()
 
@@ -115,9 +123,11 @@ class Stats(abc.ABC):
             "fit_res": fit_res_dict
         }
 
+        for i in fit_res_dict:
+            setattr(self.fit_res, i, [])
+
     @abc.abstractmethod
     def fit_result_init_dict(self):
-        # TODO: do this automatically
         pass
 
     @abc.abstractmethod

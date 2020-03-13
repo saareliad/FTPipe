@@ -38,8 +38,8 @@ class LMStats(Stats):
         self.add_statistic(
             name="ppl",
             meter=AverageMeter(),
-            per_batch=record_loss_per_batch,
-            per_epoch=not record_loss_per_batch,  # FIXME
+            per_batch=False,
+            per_epoch=True,  # FIXME
             train=True,
             test=True)
 
@@ -58,15 +58,6 @@ class LMStats(Stats):
 
         self.update_fit_res_after_batch_all(d)
         self.update_statistic_after_batch_all(d)
-
-    # def last_partition_on_epoch_end(self):
-    #     if self.training:
-    #         self.fit_res.num_epochs += 1
-
-    #     self.update_fit_res_after_epoch_all()
-
-    # def non_last_partition_on_epoch_end(self):
-    #     pass
 
     def get_stats(self, *args):
         return fit_res_to_dict(self.fit_res)
