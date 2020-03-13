@@ -10,11 +10,13 @@ from collections import defaultdict
 from itertools import chain, groupby
 import numpy as np
 
-__all__ = ["P2PRankIO", "RequestsWrapper", "create_worker_args"]
+__all__ = [
+    "P2PRankIO", "RequestsWrapper", "create_replicated_comm_handler_args"
+]
 
 # P2PRankIO is the actuall comm handler here.
 # RequestsWrapper is just a wrapper for request with same intefrace.
-# create_worker_args is a function for creating this handler with the neccesary arguments.
+# create_replicated_comm_handler_args is a function for creating this handler with the neccesary arguments.
 
 
 def tensor_chunk(t: Tensor, n: int, dim: int = 0) -> Tuple[Tensor, ...]:
@@ -451,10 +453,11 @@ def list_chunk(l: Iterable, n: int) -> Tuple[Iterable, ...]:
 
 
 # TODO: : PipelineConfig typehint for config.
-def create_worker_args(worker_rank: int,
-                       config,
-                       stage_to_rank_map: Dict[int, List[int]],
-                       debug=True) -> Tuple[P2PRankIO, List[List[int]]]:
+def create_replicated_comm_handler_args(
+        worker_rank: int,
+        config,
+        stage_to_rank_map: Dict[int, List[int]],
+        debug=True) -> Tuple[P2PRankIO, List[List[int]]]:
     assert config.isValid()
     # Master is (Alon's) abstraction for in/out.
     master_stage = -1
@@ -603,10 +606,8 @@ def create_worker_args(worker_rank: int,
                 P2MPBroadcastConnection([t[1] for t in group]))
 
     # assign comm handlers and set the total number of tags
-    comm_handler = P2PRankIO(
-        in_connections,
-        out_connections,
-    )  # FIXME: device, CPU
+    comm_handler = P2PRankIO(in_connections, out_connections, my_device,
+                             cpu)  # FIXME: device, CPU
     comm_handler.set_total_tags(total_tags)
 
     # find all process groups for replicated stages

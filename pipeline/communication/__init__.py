@@ -3,7 +3,7 @@ from .interface import CommunicationHandlerBase
 # from .bcast import BCASTCommunicationHandler
 from .p2p import P2PCommunicationHandler
 from .replicated import P2PRankIO as ReplicatedCommunicationHandler
-from .replicated import create_worker_args
+from .replicated import create_replicated_comm_handler_args
 
 # TODO: We want to support hybrid comm
 # TODO: Add alon's generic comm.
