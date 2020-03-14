@@ -451,7 +451,7 @@ def main():
 
     args = parser.parse_args()
 
-    METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(parser)
+    METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
 
     if args.auto_file_name:
         args.output_file = f"{args.model_type}_p{args.n_partitions}"

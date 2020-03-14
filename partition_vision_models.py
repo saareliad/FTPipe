@@ -175,7 +175,6 @@ class ParseMetisOpts:
 
         # We can set to None to get the default
         # See : https://github.com/networkx/networkx-metis/blob/master/nxmetis/enums.py
-
         METIS_opt = {
             'seed': getattr(args, "metis_seed", None),
             'nseps': getattr(args, "nseps", None),
@@ -342,7 +341,7 @@ def parse_cli():
     if args.output_file.endswith(".py"):
         args.output_file = args.output_file[:-3]
 
-    METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(parser)
+    METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
     return args, METIS_opt
 
 
