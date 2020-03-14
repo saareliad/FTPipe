@@ -5,21 +5,36 @@ import torch.optim as optim
 from collections import deque
 import itertools
 
+__all__ = ["get_sched_predictor", "SchedulerPredictor"]
 
-def dummy_optimizer(lr, n_param_groups=1):
+def get_sched_predictor(optimizer, sched_creator_cls, **kw):
+    """ Get scher predictor from optimizer and scheduler class and kwargs """
+    n_param_groups = len(optimizer.param_groups)
+    lrs = [pg['lr'] for pg in optimizer.param_groups]
+    d = {
+        "lrs": lrs,
+        "sched_creator_cls": sched_creator_cls,
+        "n_param_groups": n_param_groups,
+    }
+    d = {**d, **kw}
+    return SchedulerPredictor(**d)
+
+
+def dummy_optimizer(lrs, n_param_groups=1):
     """ Dummy optimizer with dummy model """
+    assert len(lrs) == n_param_groups
     model = nn.Linear(1, 1, bias=False)
-    optimizer = optim.SGD(model.parameters(), lr)
+    optimizer = optim.SGD(model.parameters(), lrs[0])
 
     for i in range(1, n_param_groups):
         model = nn.Linear(1, 1, bias=False)
-        optimizer.add_param_group({'params': model.parameters()})
+        optimizer.add_param_group({'params': model.parameters(), 'lr': lrs[i]})
     return optimizer
 
 
 class SchedulerPredictor:
-    def __init__(self, lr, sched_creator_cls, *args, n_param_groups=0, **kw):
-        optimizer = dummy_optimizer(lr=lr, n_param_groups=n_param_groups)
+    def __init__(self, lrs, sched_creator_cls, *args, n_param_groups=0, **kw):
+        optimizer = dummy_optimizer(lrs=lrs, n_param_groups=n_param_groups)
         scheduler = sched_creator_cls(optimizer, *args, **kw)
         optimizer.step()  # Dummy step to supress annoying warnings...
         self.scheduler = scheduler
@@ -52,7 +67,7 @@ if __name__ == "__main__":
     )
 
     d = {
-        "lr": 0.1,
+        "lrs": [0.1],
         "sched_creator_cls": get_linear_schedule_with_warmup,
         "n_param_groups": 1,
         "num_warmup_steps": 5,

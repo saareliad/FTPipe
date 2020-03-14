@@ -5,7 +5,7 @@ from pipeline import SinglePartitionManager
 from pipeline.training import AVAILABLE_TRAINERS
 from pipeline.tasks import AVAILABLE_TASKS
 from pipeline.stats import AVAILBALE_STATS  # , Stats
-from pipeline.weight_prediction import get_sgd_weight_predictor, get_adam_weight_predictor
+from pipeline.weight_prediction import get_sgd_weight_predictor, get_adam_weight_predictor, get_sched_predictor
 from pipeline.gap_aware import get_sgd_gap_aware_cls, get_adam_gap_aware_cls
 from optimizers import AVAILBALE_OPTIMIZERS
 from pipeline.util import get_world_size
@@ -333,13 +333,17 @@ def get_lr_scheduler(args, optimizer):
             scheduler_cls = getattr(torch.optim.lr_scheduler, attr['type'])
         
         scheduler = scheduler_cls(optimizer, **attr['args'])
+
+        # TODO: also get scheduler for sched aware prediction.
+        sched_aware_stuff = (scheduler_cls, attr['args'])
+
         # TODO: in some optimizers version we can bendfit from lr=0 (build momentum in place)
         # while on others we dont, and better step.
         # For now I just leave it as is.
         # OPTIONAL: Perform a dummy step to avoid lr=0 at the start of the training.
         # if should_step:
         #     scheduler.step()
-        return scheduler
+        return scheduler, sched_aware_stuff
 
 
 def get_gap_aware(args, optimizer):
@@ -386,7 +390,8 @@ def try_replace_prediction_with_nesterov(args):
 def get_weight_predictor(args,
                          optimizer,
                          scheduler=None,
-                         true_weights_storage=None):
+                         true_weights_storage=None,
+                         sched_aware_stuff=None):
     """
         Returns:
             weight_predictor,
@@ -406,13 +411,25 @@ def get_weight_predictor(args,
     assert (pred['type'] == "msnag")
     assert ('sgd' in optimizer_type or 'adam' == optimizer_type)
 
+    sched_predictor = None
+    # If we have sched aware:
+    if pred['args'].get("sched_aware", False):
+        print("-I- using sched aware weight prediction")
+        assert scheduler is not None
+        assert sched_aware_stuff is not None
+        scheduler_class = sched_aware_stuff[0]
+        scheduler_kw = sched_aware_stuff[1]
+        sched_predictor = get_sched_predictor(optimizer, scheduler_class, **scheduler_kw)
+        assert 'adam' in optimizer_type   # Remove after we implement for sgd.
+
+
     # if pred_mem['type'] == "msnag":
     if 'sgd' in optimizer_type:
         weight_predictor = get_sgd_weight_predictor(
             optimizer_type,
             pred_mem,
             optimizer,
-            scheduler=scheduler,
+            scheduler=sched_predictor,
             nag_with_predictor=nag_with_predictor,
             true_weights_storage=true_weights_storage)
         return weight_predictor, nag_with_predictor
@@ -420,7 +437,7 @@ def get_weight_predictor(args,
         weight_predictor = get_adam_weight_predictor(
             pred_mem,
             optimizer,
-            scheduler=scheduler,
+            scheduler=sched_predictor,
             nag_with_predictor=nag_with_predictor,
             true_weights_storage=true_weights_storage)
         return weight_predictor, nag_with_predictor
@@ -893,7 +910,7 @@ def main():
 
     # Set Scheduler
     # TODO: scheduler for sched aware prediction
-    scheduler = get_lr_scheduler(args, optimizer)
+    scheduler, sched_aware_stuff = get_lr_scheduler(args, optimizer)
 
     # Set Trainer (and Gap Aware)
     trainer_extra_args = args.trainer['args']
@@ -923,7 +940,9 @@ def main():
         args,
         optimizer,
         scheduler=scheduler,
-        true_weights_storage=true_weights_storage)
+        true_weights_storage=true_weights_storage,
+        sched_aware_stuff=sched_aware_stuff,
+        )
     if weight_predictor:
         partition.set_weight_predictor(weight_predictor, nag_with_predictor)
 

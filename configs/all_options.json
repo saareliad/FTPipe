@@ -42,7 +42,8 @@
         "type": "msnag",
         "args": {
             "pred_mem": "clone",
-            "nag_with_predictor": true
+            "nag_with_predictor": true,
+            "sched_aware": false
         }
     },
     "gap_aware": {

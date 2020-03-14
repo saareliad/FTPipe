@@ -1,5 +1,7 @@
 from .sgd import get_sgd_weight_predictor
 from .adam import get_adam_weight_predictor
+# TODO: adamw
+from .sched_aware import get_sched_predictor, SchedulerPredictor
 
 # PRED_MEM_TO_CLASS = {
 #     'clone': SGDClonedWeightPrediction,
