@@ -4,6 +4,8 @@ import torch.nn.functional as F
 import torch.optim as optim
 from collections import deque
 import itertools
+import types
+from functools import wraps
 
 __all__ = ["get_sched_predictor", "SchedulerPredictor"]
 
