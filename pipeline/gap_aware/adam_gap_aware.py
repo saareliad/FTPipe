@@ -3,7 +3,7 @@ from .interface import GapAwareBase
 from itertools import chain
 
 # TODO: check that the step count is indeed OK (and ahead by 1)
-
+# TODO: record and return total gap.
 
 def opt_params_iter(optimizer):
     return chain(*[pg['params'] for pg in optimizer.param_groups])
@@ -13,9 +13,7 @@ class AdamGapAware(GapAwareBase):
     """ Gap aware for ADAM optimizer """
     def __init__(self,
                  optimizer,
-                 big_gamma=0.999,
-                 epsilon=1e-8,
-                 from_grad=True):
+                 from_grad=False):  # FIXME:?
         """ Apply Gap Aware on computed gradients """
         super().__init__(optimizer)
 
