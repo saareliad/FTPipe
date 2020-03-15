@@ -19,8 +19,9 @@ import models
 import numpy as np
 import torch
 from datasets import (add_dataset_argument,
-                      simplified_get_train_test_dl_from_args,
-                      get_seperate_just_x_or_y_train_test_dl_from_args)
+                      simplified_get_train_valid_dl_from_args,
+                      get_separate_just_x_or_y_train_valid_dl_from_args,
+                      get_separate_just_x_or_y_test_dl_from_args)
 
 from datasets import lm_collate_factory
 
@@ -658,7 +659,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
     return total_epoch_times_list, train_epochs_times_list
 
 
-def get_dataloaders(args, explicit_seperated_dataset=False, **kw):
+def get_dataloaders(args, explicit_separated_dataset=False, **kw):
     dl_kw = dict()
     if args.cpu:
         dl_kw['pin_memory'] = False
@@ -673,7 +674,7 @@ def get_dataloaders(args, explicit_seperated_dataset=False, **kw):
         # NOTE: From the function get_wikitext2_raw_train_valid_ds
         tokenizer = kw.pop('tokenizer')
         # model_name_or_path = kw.pop('model_name_or_path')
-        overwrite_cache = kw.pop('overwrite_cache', False)
+        overwrite_cache = getattr(args, 'overwrite_cache', False)
         dataset_keywords = dict(model_name_or_path=args.model_name_or_path,
                                 tokenizer=tokenizer,
                                 train_seq_len=args.train_seq_len,
@@ -684,16 +685,52 @@ def get_dataloaders(args, explicit_seperated_dataset=False, **kw):
     else:
         dataset_keywords = {}
 
-    if explicit_seperated_dataset:
-        train_dl, test_dl, samplers = get_seperate_just_x_or_y_train_test_dl_from_args(
+    if explicit_separated_dataset:
+        train_dl, test_dl, samplers = get_separate_just_x_or_y_train_valid_dl_from_args(
             args, verbose=False, dataset_keywords=dataset_keywords, **dl_kw)
     else:
         # Note: sometimes used to infer all parameters, (by all partitions).
-        train_dl, test_dl, *samplers = simplified_get_train_test_dl_from_args(
+        train_dl, test_dl, *samplers = simplified_get_train_valid_dl_from_args(
             args, verbose=False, dataset_keywords=dataset_keywords, **dl_kw)
 
     return train_dl, test_dl, samplers
 
+
+
+
+def get_just_test_dataloader(args, explicit_separated_dataset=False, **kw):
+    dl_kw = dict()
+    if args.cpu:
+        dl_kw['pin_memory'] = False
+    else:
+        dl_kw['pin_memory'] = True
+
+    dl_kw['num_workers'] = args.num_data_workers
+    dl_kw['drop_last'] = True
+
+    if "lm" in args.task:
+        # NOTE: From the function get_wikitext2_raw_test_ds
+        tokenizer = kw.pop('tokenizer')
+        overwrite_cache = getattr(args, 'overwrite_cache', False)
+        dataset_keywords = dict(model_name_or_path=args.model_name_or_path,
+                                tokenizer=tokenizer,
+                                test_seq_len=args.test_seq_len,
+                                overwrite_cache=overwrite_cache)
+        collate = lm_collate_factory(tokenizer)
+        dl_kw['collate_fn'] = collate
+    else:
+        dataset_keywords = {}
+
+    if explicit_separated_dataset:
+        test_dl, sampler = get_separate_just_x_or_y_test_dl_from_args(
+            args, verbose=False, test_dataset_keywords=dataset_keywords, **dl_kw)
+    else:
+        # Note: sometimes used to infer all parameters, (by all partitions).
+        raise NotImplementedError()
+        # test_dl, sampler = simplified_get_test_dl_from_args(
+        #     args, verbose=False, dataset_keywords=dataset_keywords, **dl_kw)
+
+    return test_dl, sampler
 
 def get_device(args):
     if hasattr(args, "stage_to_device_map"):
@@ -814,11 +851,11 @@ def main():
     # TODO: instead of loading dl on every device,
     # when not needed - can just send the length as a message
     train_dl_len, test_dl_len = len(train_dl), len(test_dl)
-    # Try getting seperate X,Y dataloaders
+    # Try getting separate X,Y dataloaders
     if is_first_partition or is_last_partition:
         if "_sep" in args.task:
             train_dl, test_dl, samplers = get_dataloaders(
-                args, explicit_seperated_dataset=True, **dataset_keywords)
+                args, explicit_separated_dataset=True, **dataset_keywords)
     else:
         train_dl, test_dl, samplers = None, None, []
     del dataset_keywords

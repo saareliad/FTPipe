@@ -16,11 +16,13 @@ from transformers import PreTrainedTokenizer
 from torch.nn.utils.rnn import pad_sequence
 from typing import List, Tuple
 
-# new_distributed_get_train_test_dl_from_args
-# simplified_get_train_test_dl_from_args
-# get_seperate_just_x_or_y_train_test_dl_from_args
+# new_distributed_get_train_valid_dl_from_args  (train, valid)
+# simplified_get_train_valid_dl_from_args  (train, valid)
+# get_separate_just_x_or_y_train_valid_dl_from_args  (train, valid)
+# get_separate_just_x_or_y_test_dl_from_args: (just the test dataloader)
 
-# Fallback to this dataset dir of no other dir is given as arument to functions.
+
+# Fallback to this dataset dir of no other dir is given as argument to functions.
 DEFAULT_DATA_DIR = os.path.expanduser('~/.pytorch-datasets')
 IMAGENET_ROOT_DIR = "/home_local/saareliad/data/imagenet/"
 DOWNLOAD = False
@@ -400,6 +402,21 @@ def get_wikitext2_raw_train_valid_ds(model_name_or_path,
     return train_ds, valid_ds
 
 
+def get_wikitext2_raw_test_ds(model_name_or_path,
+                              tokenizer,
+                              test_seq_len=512,
+                              overwrite_cache=False,
+                              DATA_DIR=DEFAULT_DATA_DIR):
+    test_ds = get_wikitext2_raw_train_valid_test_ds(
+        model_name_or_path,
+        tokenizer,
+        split='test',
+        block_size=test_seq_len,
+        overwrite_cache=overwrite_cache)
+    return test_ds
+
+
+# NOTE: these are functions which returns train and validation datasets.
 DATASET_TO_DS_FN = {
     'cifar10': get_cifar_10_train_test_ds,
     'cifar100': get_cifar_100_train_test_ds,
@@ -494,6 +511,7 @@ def get_lm_train_valid_dl(ds_train, ds_test, bs_train, bs_test,
 
 #     return train_dl, valid_dl, test_dl
 
+# NOTE: functions which returns 2 dataloaders, train and valid/test
 DATASET_TO_DL_FN = {
     'cifar10': get_cv_train_test_dl,
     'cifar100': get_cv_train_test_dl,
@@ -523,7 +541,7 @@ def get_train_test_dl(dataset, *args, **kw):
 
 
 ############################
-# Simpplified. dataset by name.
+# Simplified. dataset by name.
 ############################
 
 
@@ -579,7 +597,7 @@ def args_extractor1(args):
                 bs_test=args.bs_test)
 
 
-def simplified_get_train_test_dl_from_args(args,
+def simplified_get_train_valid_dl_from_args(args,
                                            shuffle_train=True,
                                            verbose=True,
                                            **kw):
@@ -682,7 +700,7 @@ def new_distributed_simplified_get_train_test_dl(dataset,
     return dl_train, dl_test, train_sampler
 
 
-def new_distributed_get_train_test_dl_from_args(args, **kw):
+def new_distributed_get_train_valid_dl_from_args(args, **kw):
 
     DATA_DIR = getattr(args, "data_dir", DEFAULT_DATA_DIR)
     DATA_DIR = DATA_DIR if DATA_DIR else DEFAULT_DATA_DIR
@@ -705,7 +723,7 @@ def new_distributed_get_train_test_dl_from_args(args, **kw):
 
 
 #############################################
-# get x seperate from y, both with same seed
+# get x separate from y, both with same seed
 #############################################
 # TODO: for masked/normal LM.
 
@@ -781,6 +799,7 @@ class ImageFolderJustX(DatasetFolderJustX):
         class_to_idx (dict): Dict with items (class_name, class_index).
         imgs (list): List of (image path, class_index) tuples
     """
+
     def __init__(self,
                  root,
                  transform=None,
@@ -822,6 +841,7 @@ class ImageFolderJustY(DatasetFolderJustY):
         class_to_idx (dict): Dict with items (class_name, class_index).
         imgs (list): List of (image path, class_index) tuples
     """
+
     def __init__(self,
                  root,
                  transform=None,
@@ -939,7 +959,7 @@ class CIFAR100JustY(CIFAR10JustY):
     }
 
 
-def get_cifar_100_seperate_train_test_ds(DATA_DIR=DEFAULT_DATA_DIR):
+def get_cifar_100_separate_train_test_ds(DATA_DIR=DEFAULT_DATA_DIR):
     train_transform, test_transform = cifar100_transformations()
 
     ds_train_X = CIFAR100JustX(root=DATA_DIR,
@@ -963,7 +983,7 @@ def get_cifar_100_seperate_train_test_ds(DATA_DIR=DEFAULT_DATA_DIR):
     return ds_train_X, ds_train_Y, ds_test_X, ds_test_Y
 
 
-def get_cifar_10_seperate_train_test_ds(DATA_DIR=DEFAULT_DATA_DIR):
+def get_cifar_10_separate_train_test_ds(DATA_DIR=DEFAULT_DATA_DIR):
 
     train_transform, test_transform = cifar10_transformations()
 
@@ -1061,10 +1081,51 @@ def get_cifar_10_just_x_or_y_train_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR):
 
 
 def get_wt2_just_x_or_y_train_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR, **kw):
+    # we don't use the just. its the same for all.
     return get_wikitext2_raw_train_valid_ds(DATA_DIR=DATA_DIR, **kw)
 
 
-def get_seperate_just_x_or_y_train_test_dl(dataset,
+def get_wt2_just_x_or_y_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR, **kw):
+    return get_wikitext2_raw_test_ds(DATA_DIR=DATA_DIR, **kw)
+
+
+def get_separate_just_x_or_y_test_dl(dataset, bs_test, just, verbose=True,
+                                     DATA_DIR=DEFAULT_DATA_DIR,
+                                     pin_memory=True,
+                                     test_dataset_keywords=dict(),
+                                     **kw):
+
+    experiment_manual_seed = torch.initial_seed()
+
+    DICT_DATASET_JUST_XY_FUNC = {
+        'wt2': get_wt2_just_x_or_y_test_ds
+    }
+
+    ds_test = DICT_DATASET_JUST_XY_FUNC.get(dataset)(
+        just=just, DATA_DIR=DATA_DIR, **test_dataset_keywords)
+
+    test_sampler = MyNewDistributedSampler(experiment_manual_seed,
+                                           ds_test,
+                                           num_replicas=1,
+                                           rank=0,
+                                           shuffle=False)
+
+    # get_lm_eval_dl
+
+    dl_test = torch.utils.data.DataLoader(ds_test,
+                                          bs_test,
+                                          shuffle=False,
+                                          pin_memory=pin_memory,
+                                          sampler=test_sampler,
+                                          **kw)
+
+    if verbose:
+        print(f'Test: {len(dl_test) * bs_test} samples')
+
+    return dl_test, test_sampler
+
+
+def get_separate_just_x_or_y_train_test_dl(dataset,
                                            bs_train,
                                            bs_test,
                                            just,
@@ -1122,7 +1183,7 @@ def get_seperate_just_x_or_y_train_test_dl(dataset,
     return dl_train, dl_test, [train_sampler, test_sampler]
 
 
-def get_seperate_just_x_or_y_train_test_dl_from_args(args, **kw):
+def get_separate_just_x_or_y_train_valid_dl_from_args(args, **kw):
 
     DATA_DIR = getattr(args, "data_dir", DEFAULT_DATA_DIR)
     DATA_DIR = DATA_DIR if DATA_DIR else DEFAULT_DATA_DIR
@@ -1132,9 +1193,31 @@ def get_seperate_just_x_or_y_train_test_dl_from_args(args, **kw):
     just = 'x' if args.stage == 0 else 'y'
 
     # num_replicas=None, rank=None
-    return get_seperate_just_x_or_y_train_test_dl(args.dataset,
+    return get_separate_just_x_or_y_train_test_dl(args.dataset,
                                                   args.bs_train,
+                                                  # TODO: change it to validation...
                                                   args.bs_test,
                                                   just,
                                                   DATA_DIR=DATA_DIR,
                                                   **kw)
+
+
+def get_separate_just_x_or_y_test_dl_from_args(args, **kw):
+    """ get just the test dataset.
+    kw can have
+    test_dataset_keywords=dict()
+    to help with it
+    """
+    DATA_DIR = getattr(args, "data_dir", DEFAULT_DATA_DIR)
+    DATA_DIR = DATA_DIR if DATA_DIR else DEFAULT_DATA_DIR
+
+    # Just:
+    # HACK: avoid asking "is last partition?"
+    just = 'x' if args.stage == 0 else 'y'
+
+    # num_replicas=None, rank=None
+    return get_separate_just_x_or_y_test_dl(args.dataset,
+                                            args.bs_test,
+                                            just,
+                                            DATA_DIR=DATA_DIR,
+                                            **kw)

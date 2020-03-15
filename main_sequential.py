@@ -4,14 +4,11 @@ import random
 import numpy as np
 import time
 import logging
-# TODO: fix train acc for DDP
-# parse_env_vars
-# get_dataloaders
+
 from main import parse_cli, parse_json_config, get_scheduler, parse_env_vars
-from models import create_normal_model_instance  # , get_partitioning
+from models import create_normal_model_instance
 from experiments import save_experiment
 
-# from pipeline.work_schedulers import AVAILABLE_WORK_SCHEDULERS
 from optimizers import AVAILBALE_OPTIMIZERS
 from pipeline.training import AVAILABLE_TRAINERS
 # from pipeline.tasks import AVAILABLE_TASKS
@@ -25,9 +22,14 @@ from pipeline.partition import FirstPartition
 import torch.distributed as dist
 # from pipeline.util import get_world_size
 from torch.nn.parallel import DistributedDataParallel
-from datasets import (simplified_get_train_test_dl_from_args,
-                      new_distributed_get_train_test_dl_from_args)
+from datasets import (simplified_get_train_valid_dl_from_args,
+                      new_distributed_get_train_valid_dl_from_args)
 
+# TODO: sync buffers only at validation
+# TODO: distributed validation
+# TODO: support LM
+# TODO: parse_env_vars
+# TODO: get_dataloaders
 
 class SyncCVTask(DLTask):
     def __init__(self, device):
@@ -310,16 +312,15 @@ def get_dataloaders(args):
     dl_kw = dict()
     if args.cpu:
         dl_kw['pin_memory'] = False
-    # else:
-    #     dl_kw['pin_memory'] = True  # FIXME
+    else:
+        dl_kw['pin_memory'] = True
 
     dl_kw['num_workers'] = args.num_data_workers
     dl_kw['drop_last'] = True
 
-    get_dls_fn = simplified_get_train_test_dl_from_args
+    get_dls_fn = simplified_get_train_valid_dl_from_args
     if hasattr(args, 'ddp') and args.ddp:
-        get_dls_fn = new_distributed_get_train_test_dl_from_args
-        # num_splits=None, use_split=None
+        get_dls_fn = new_distributed_get_train_valid_dl_from_args
     train_dl, test_dl, *samplers = get_dls_fn(args, verbose=False, **dl_kw)
 
     return train_dl, test_dl, samplers
@@ -329,7 +330,7 @@ def yuck_from_main():
     print(f"Using {torch.get_num_threads()} Threads")
     args = parse_cli()
     parse_json_config(args)
-    args.is_sync = True  # Marking the experiment as sequential/syhcnronized
+    args.is_sync = True  # Marking the experiment as sequential/synchronized
 
     # Basic Logger
     logging.basicConfig(filename='sequential.log', level=logging.DEBUG)
@@ -396,7 +397,7 @@ def yuck_from_main():
 
     # Set Scheduler
     # TODO: scheduler for sched aware prediction
-    scheduler = get_scheduler(args, optimizer)
+    scheduler, _ = get_scheduler(args, optimizer)
     trainer_extra_args = args.trainer['args']
     trainer = trainer_cls(model,
                           optimizer=optimizer,
@@ -420,8 +421,6 @@ def yuck_from_main():
     args.exp_total_time = exp_total_time
 
     save_sequential_experiment(statistics, args)
-    # NO_DP = True
-
 
 if __name__ == "__main__":
     yuck_from_main()

@@ -81,5 +81,9 @@
     "gap_aware_just_loss": true,
     "base_config_path": "configs/dummy_base.json",
     "use_prealoaded_input": "True",
-    "model_name_or_path": "gpt"
+    "model_name_or_path": "gpt2",
+    "overwrite_cache": false,
+    "train_seq_len": 1024,
+    "valid_seq_len": 1024,
+    "test_seq_len": 1024
 }
