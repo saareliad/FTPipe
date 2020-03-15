@@ -34,10 +34,11 @@
     "lr_scheduler": {
         "type": "get_linear_schedule_with_warmup",
         "preproc_args": {
-            "num_training_steps": "epochs_to_steps"
+            "num_training_steps": "epochs_to_steps",
+            "num_warmup_steps": "epochs_to_steps"
         },
         "args": {
-            "num_warmup_steps": 0,
+            "num_warmup_steps": 1,
             "num_training_steps":  -1,
             "last_epoch": -1
         }
@@ -70,6 +71,6 @@
     "max_buffers": 1,
     "step_every": 1,
     "keep_buffers_alive": true,
-    "train_batches_limit":10,
+    "train_batches_limit":-1,
     "log_frequency": 1
 }

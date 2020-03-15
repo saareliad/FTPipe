@@ -43,12 +43,13 @@ class SchedulerPredictor:
 
         self.q = deque()
         self.q.append(self.scheduler.get_last_lr())
+        self.scheduler.step()
 
     def get_next(self, n_next):
 
         while len(self.q) < n_next:
-            self.scheduler.step()
             self.q.append(self.scheduler.get_last_lr())
+            self.scheduler.step()
 
         res = list(itertools.islice(self.q, 0, n_next))
         return res
@@ -66,6 +67,7 @@ class SchedulerPredictor:
                 func(self, *args, **kwargs)
 
                 q.append(dummy_sched.get_last_lr())
+                dummy_sched.step()
                 q.popleft()
 
             return types.MethodType(inner, scheduler)
