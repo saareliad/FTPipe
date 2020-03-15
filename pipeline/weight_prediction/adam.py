@@ -29,17 +29,16 @@ class AdamClonedWeightPrediction(WeightPredictor):
         self.true_weights_storage.record_change_mode("pred")
         pgs = self.optimizer.param_groups
 
-        # TODO: get LRs from sched aware
+        # get LRs from scheduler (sched-aware)
         if self.scheduler is not None:
             step_lrs = self.scheduler.get_next(self.n_steps)
-            pg_step_lrs = [[slr[i] for slr in step_lrs] for i in range(len(pgs))]
+            pg_step_lrs = [[slr[i] for slr in step_lrs]
+                           for i in range(len(pgs))]
 
         else:
             pg_step_lrs = [[pg['lr']] * self.n_steps for pg in pgs]
 
         with torch.no_grad():
-            # init theta for clone
-
             for pg, step_lrs in zip(pgs, pg_step_lrs):
 
                 beta1, beta2 = pg['betas']
@@ -55,30 +54,22 @@ class AdamClonedWeightPrediction(WeightPredictor):
                     initial_step = step + 1  # HACK: add +1 so it won't be 0.
 
                     # Compute coefficient as sum of predictions.
-                    # (1): compute the part related to step size, as it is too annoying to derive manually.
-                    # (2): * Geometric series sum of beta1.
 
-                    # (1)
                     momentum_coeff = 0
+
                     for staleness, lr in zip(range(1, self.n_steps + 1),
                                              step_lrs):
-                        bias_correction1 = 1 - beta1**(step + staleness)
-                        # NOTE: bias_correction2 stays the same.
-                        bias_correction2 = 1 - beta2**(initial_step)
-                        # denom = exp_avg_sq.sqrt().div(
-                        #     (math.sqrt(bias_correction2)) + eps)  -> included
-                        # NOTE: moved lr inside to support sched aware
-                        # step_size = 1 / bias_correction1 -> included
-                        # NOTE: move exp_avg outside
-                        # (2): (beta1 ** staleness)
-                        momentum_coeff += lr * (math.sqrt(bias_correction2) /
-                                                bias_correction1) * (beta1**
-                                                                     staleness)
 
-                    denom = exp_avg_sq.sqrt().add_(eps)
-                    # NOTE: the eps is not used the exact same as normal adam. This should be negligible.
-                    # Finally, calculate theta hat.
-                    p.data.addcdiv_(-momentum_coeff, exp_avg, denom)
+                        bias_correction1 = 1 - beta1**(step + staleness)
+                        bias_correction2 = 1 - beta2**(step + staleness)
+
+                        denom = (exp_avg_sq.sqrt() /
+                                 math.sqrt(bias_correction2)).add_(eps)
+
+                        step_size = lr / bias_correction1
+
+                        p.data.addcdiv_(-step_size, exp_avg *
+                                        (beta1**staleness), denom)
 
     def revert(self):
         if not self.n_steps:
@@ -90,6 +81,7 @@ class AdamMSNAG(FixFunction):
     """ 
     ADAM msnag
     """
+
     def __call__(self, p: WeightPredictor, pg):
         raise NotImplementedError(
             "its intentionally empty, Unlike SGD I currently do the fix inline"
