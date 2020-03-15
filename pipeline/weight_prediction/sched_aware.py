@@ -42,18 +42,37 @@ class SchedulerPredictor:
         self.q = deque()
         self.q.append(self.scheduler.get_last_lr())
 
-    def get_next(self, n_next, n_pop=1):
+    def get_next(self, n_next):
 
         while len(self.q) < n_next:
             self.scheduler.step()
             self.q.append(self.scheduler.get_last_lr())
 
         res = list(itertools.islice(self.q, 0, n_next))
-
-        for _ in range(n_pop):
-            self.q.popleft()
-
         return res
+
+    # def update_on_step(self):
+    #     if len(self.q) > 0:
+    #         self.q.popleft()
+
+    def patch_scheduler(self, scheduler):
+        q = self.q
+        dummy_sched = self.scheduler
+        def step_decorator(func):
+            @wraps(func)
+            def inner(self, *args, **kwargs):
+                func(self, *args, **kwargs)
+
+                q.append(dummy_sched.get_last_lr())
+                q.popleft()
+
+            return types.MethodType(inner, scheduler)
+
+        scheduler.step = step_decorator(scheduler.step.__func__)
+        print(
+            f"-I- patched scheduler to update sched-aware predictor on step()"
+        )
+
 
 
 if __name__ == "__main__":

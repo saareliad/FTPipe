@@ -122,7 +122,7 @@ class GapAwareBase(abc.ABC):
 
             return types.MethodType(inner, scheduler)
 
-        scheduler.step = step_decorator(scheduler.__class__.step)
+        scheduler.step = step_decorator(scheduler.step.__func__)
         print(
             f"Scheduler.step() patched to also track max lr in pg[{GapAwareBase.MAX_LR_NAME}]"
         )

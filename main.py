@@ -420,6 +420,7 @@ def get_weight_predictor(args,
         scheduler_class = sched_aware_stuff[0]
         scheduler_kw = sched_aware_stuff[1]
         sched_predictor = get_sched_predictor(optimizer, scheduler_class, **scheduler_kw)
+        sched_predictor.patch_scheduler(scheduler)
         assert 'adam' in optimizer_type   # Remove after we implement for sgd.
 
 
