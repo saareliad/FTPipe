@@ -46,8 +46,8 @@ from models import parse_old_config
 def parse_cli():
     # TODO: note, some arguments are supported only through config and not argparse.
     # TODO: replace all this
-    # with a function to tell the avaialble options to the user,
-    # as we overrride the entire thing by json config anyway.
+    # with a function to tell the available options to the user,
+    # as we override the entire thing by json config anyway.
 
     parser = argparse.ArgumentParser(
         description='PyTorch partition as part of Async Pipeline')
@@ -488,8 +488,8 @@ def hack_trainer_type_to_gap_aware(args):
                 'all_except_last_two'
             }
             raise ValueError(
-                f"Uknown policy for GA {args.gap_aware['policy']}.\
-                             suported policies are {SUPPORTED_POLICIES}")
+                f"Unknown policy for GA {args.gap_aware['policy']}.\
+                             supported policies are {SUPPORTED_POLICIES}")
 
     return False
 
@@ -945,8 +945,30 @@ def main():
 
     # After the partition is on its device:
     # Set optimizer
-    optimizer = optimizer_cls(partition.partition.parameters(),
-                              **args.optimizer['args'])
+    if args.task == 'lm':
+        # No weight decay for some parameters.
+        model = partition.partition
+        opt_args = args.optimizer['args']
+        no_decay = ["bias", "LayerNorm.weight"]
+        optimizer_grouped_parameters = [
+            {
+                "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+                "weight_decay": opt_args['weight_decay'],
+            },
+            {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
+        ]
+        lengths = {
+            "no_decay" : len(optimizer_grouped_parameters[1]['params']),
+            "decay": len(optimizer_grouped_parameters[0]['params'])
+        }
+
+        print(f"-I- optimizer_grouped_parameters: {lengths}")
+
+        optimizer = optimizer_cls(optimizer_grouped_parameters, **args.optimizer['args'])
+
+    else:
+        optimizer = optimizer_cls(partition.partition.parameters(),
+                                **args.optimizer['args'])
 
     true_weights_storage = TrueWeightsStorage(optimizer)
     partition.set_true_weights_storage(true_weights_storage)
