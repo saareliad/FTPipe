@@ -688,7 +688,7 @@ def get_dataloaders(args, explicit_separated_dataset=False, **kw):
         dataset_keywords = dict(model_name_or_path=args.model_name_or_path,
                                 tokenizer=tokenizer,
                                 train_seq_len=args.train_seq_len,
-                                valid_seq_len=args.valid_seq_len,
+                                test_seq_len=args.test_seq_len,
                                 overwrite_cache=overwrite_cache)
         collate = lm_collate_factory(tokenizer)
         dl_kw['collate_fn'] = collate
