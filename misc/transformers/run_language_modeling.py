@@ -264,7 +264,8 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
         },
         {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
     ]
-    optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+    # NOTE: change to pytorch adamW
+    optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
     scheduler = get_linear_schedule_with_warmup(
         optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
     )
@@ -339,7 +340,10 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
         epochs_trained, int(args.num_train_epochs), desc="Epoch", disable=args.local_rank not in [-1, 0]
     )
     set_seed(args)  # Added here for reproducibility
-    for _ in train_iterator:
+    for epoch_num, _ in enumerate(train_iterator):
+        if getattr(args, "evaluate_every_epoch", False):
+            results = evaluate(args, model, tokenizer, prefix=f"epoch_{epoch_num}")
+
         epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
 
@@ -473,6 +477,10 @@ def evaluate(args, model: PreTrainedModel, tokenizer: PreTrainedTokenizer, prefi
     result = {"perplexity": perplexity}
 
     output_eval_file = os.path.join(eval_output_dir, prefix, "eval_results.txt")
+    
+    # make aditional dir of necessary
+    os.makedirs(os.path.dirname(output_eval_file), exist_ok=True)
+
     with open(output_eval_file, "w") as writer:
         logger.info("***** Eval results {} *****".format(prefix))
         for key in sorted(result.keys()):
@@ -558,6 +566,10 @@ def main():
     parser.add_argument("--do_eval", action="store_true", help="Whether to run eval on the dev set.")
     parser.add_argument(
         "--evaluate_during_training", action="store_true", help="Run evaluation during training at each logging step."
+    )
+    
+    parser.add_argument(
+        "--evaluate_every_epoch", action="store_true", help="Run evaluation at the beginning of every epoch"
     )
 
     parser.add_argument("--per_gpu_train_batch_size", default=4, type=int, help="Batch size per GPU/CPU for training.")

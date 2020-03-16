@@ -1,7 +1,9 @@
 export TRAIN_FILE=/home_local/saareliad/data/wikitext-2-raw/wiki.train.raw
 export TEST_FILE=/home_local/saareliad/data/wikitext-2-raw/wiki.test.raw
 
-#592 
+export CUDA_VISABLE_DEVICES="0,1,2,3"
+export OMP_NUM_THREADS=10
+
 #python run_language_modeling.py \
 python -m torch.distributed.launch --nproc_per_node 4 run_language_modeling.py \
     --output_dir=output \
@@ -13,9 +15,10 @@ python -m torch.distributed.launch --nproc_per_node 4 run_language_modeling.py \
     --num_train_epochs 3 \
     --per_gpu_train_batch_size 1 \
     --per_gpu_eval_batch_size 4 \
-    --gradient_accumulation_steps 4 \
+    --gradient_accumulation_steps 1 \
     --eval_data_file=$TEST_FILE \
     --warmup_steps 0 \
     --logging_step 592 \
     --save_steps 0 \
-    --evaluate_during_training
+    --evaluate_during_training \
+    --evaluate_every_epoch
