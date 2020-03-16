@@ -9,5 +9,5 @@
             "sched_aware": true
         }
     },
-    "weight_stashing": false
+    "weight_stashing": true
 }

@@ -1,0 +1,4 @@
+{
+    "base_config_path": "configs/lm/wt2/gpt2/ws_msnag_ga.json",
+    "gap_aware_just_loss": true
+}
