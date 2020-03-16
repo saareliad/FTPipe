@@ -129,7 +129,7 @@ class AdamClonedWeightPredictionWithWD(WeightPredictor):
                         if weight_decay !=0:
                             d_p = weight_decay * p.data
 
-                        exp_avg_hat = exp_avg * beta1 + (1-beta1) * d_p
+                        exp_avg_hat = exp_avg_hat * beta1 + (1-beta1) * d_p
                         bias_correction1 = 1 - beta1**(step + staleness)
                         bias_correction2 = 1 - beta2**(step + staleness)
 
