@@ -17,7 +17,7 @@ class AdamWGapAware(GapAwareBase):
     # Just adding the square of the weights to the loss function is *not*
     # the correct way of using L2 regularization/weight decay with Adam,
     # since that will interact with the m and v parameters in strange ways.
-    # NOTE: it will also effect our weight preiction!!
+    # NOTE: it will also effect our weight prediction!!
     # Instead we want to decay the weights in a manner that doesn't interact
     # with the m/v parameters. This is equivalent to adding the square
     # of the weights to the loss with plain (non-momentum) SGD.
@@ -25,7 +25,7 @@ class AdamWGapAware(GapAwareBase):
     
     Based on pytorch ADAMW implementation
     https://pytorch.org/docs/stable/_modules/torch/optim/adamw.html#AdamW
-    NOTE: were stright at the beggining we do
+    NOTE: were straight at the beggining we do
                # Perform stepweight decay
                 p.data.mul_(1 - group['lr'] * group['weight_decay'])
 

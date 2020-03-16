@@ -194,7 +194,7 @@ def parse_cli():
         type=int,
         default=1,
         help="Maximal Number of async recv buffers. "
-        "With 1: it actaully means the recv is sync.(default=2 for best performance)."
+        "With 1: it actually means the recv is sync.(default=2 for best performance)."
     )
 
     parser.add_argument("--keep_buffers_alive",
@@ -267,7 +267,7 @@ def parse_env_vars(args):
     if args.distributed_backend == 'mpi':
         args.rank = int(os.environ['OMPI_COMM_WORLD_RANK'])
         args.local_rank = int(os.environ['OMPI_COMM_WORLD_LOCAL_RANK'])
-        # Note this is overriden later.
+        # Note this is overridden later.
         args.world_size = int(os.environ['OMPI_COMM_WORLD_SIZE'])
 
 
@@ -325,7 +325,7 @@ def get_lr_scheduler(args, optimizer):
                     num_steps = args.steps_per_epoch * given_epochs
                     attr['args'][arg_name] = num_steps
                     print(
-                        f"preproced {arg_name} from {given_epochs} epochs to {num_steps} steps.")
+                        f"preprocessed {arg_name} from {given_epochs} epochs to {num_steps} steps.")
                 else:
                     raise NotImplementedError(
                         f"Unsupported preprocess argument {preproc_command}")
@@ -342,7 +342,7 @@ def get_lr_scheduler(args, optimizer):
         sched_aware_stuff = (scheduler_cls, attr['args'])
 
         # TODO: in some optimizers version we can bendfit from lr=0 (build momentum in place)
-        # while on others we dont, and better step.
+        # while on others we don't, and better step.
         # For now I just leave it as is.
         # OPTIONAL: Perform a dummy step to avoid lr=0 at the start of the training.
         # if should_step:
@@ -537,7 +537,7 @@ def save_distributed_experiment(statistics, args, world_size, rank, local_rank,
                 config, fit_res = load_experiment_for_update(
                     args.out_filename, args.out_dir)
 
-                # Update just the fit res (wityoyt overriding)
+                # Update just the fit res (without overriding)
                 for k, v in my_fit_res.items():
                     if k not in fit_res:
                         fit_res[k] = v
@@ -769,12 +769,12 @@ def main():
     else:
         delattr(args, "debug")
 
-    # TODO: idealy we want to choose device here, but we moved it down.
+    # TODO: ideally we want to choose device here, but we moved it down.
 
     # Set Random Seed
     if args.seed is None:
         args.seed = random.randint(0, 2**31)
-    # FIXME: I susspect there is a problem here because it does it on it on ALL VISIBLE GPUs.
+    # FIXME: I suspect there is a problem here because it does it on it on ALL VISIBLE GPUs.
     # should probably hide with CUDA VISIBLE DEVICES,
     # or do it just for a single GPU:
     # torch._C.default_generator.manual_seed(int(args.seed))
@@ -826,7 +826,7 @@ def main():
             dataset_keywords['tokenizer'] = tokenizer
             # dataset_keywords['model_name_or_path'] = args.model_name_or_path
 
-        parsed_cofig = parse_config.PartitioningConfigParser(
+        parsed_config = parse_config.PartitioningConfigParser(
             args.model,
             args.rank,
             args.bs_train,
@@ -835,15 +835,15 @@ def main():
             send_target_in_pipe=not ("_sep" in args.task))
 
         train_dl, test_dl, samplers = get_dataloaders(args, **dataset_keywords)
-        comm_init_args = parsed_cofig.comm_init_args()
+        comm_init_args = parsed_config.comm_init_args()
 
-        training_tensor_dtypes = parsed_cofig.training_tensor_dtypes
-        eval_tensor_shapes = parsed_cofig.eval_tensor_shapes
-        training_tensor_shapes = parsed_cofig.training_tensor_shapes
+        training_tensor_dtypes = parsed_config.training_tensor_dtypes
+        eval_tensor_shapes = parsed_config.eval_tensor_shapes
+        training_tensor_shapes = parsed_config.training_tensor_shapes
 
-        args.num_stages = parsed_cofig.num_stages
-        args.stage = parsed_cofig.stage
-        model = parsed_cofig.model
+        args.num_stages = parsed_config.num_stages
+        args.stage = parsed_config.stage
+        model = parsed_config.model
 
     is_first_partition = args.stage == 0
     is_last_partition = args.stage == args.num_stages - 1
@@ -869,7 +869,7 @@ def main():
         train_dl, test_dl, samplers = None, None, []
     del dataset_keywords
 
-    # TODO: I have completly differnt plan for using it like micro batches
+    # TODO: I have completely different plan for using it like micro batches
     #  - that is, cut the batch size automatically.
     args.step_every = getattr(args, "step_every", 1)
 

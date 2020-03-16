@@ -135,7 +135,7 @@ class SinglePartitionManager:
                 f"-V- Patching problematic batches {fwds} for stage {self.stage}"
             )
             if self.step_every > 2:
-                raise NotImplementedError("check in shcedulers.")
+                raise NotImplementedError("check in schedulers.")
 
             if self.PROBLEMATIC_POLICY == 'SKIP':
                 self.set_problematic_skip()
@@ -374,7 +374,7 @@ class SinglePartitionManager:
 
         obj_holder = self.async_fwd_objects if is_fwd else self.async_bwd_objects
 
-        # Pop the item that was increaced first.
+        # Pop the item that was increased first.
         _, (sent_request_objects,
             tmp_sent_items) = obj_holder.popitem(last=False)
         for i in sent_request_objects:
@@ -387,8 +387,7 @@ class SinglePartitionManager:
 
         # Get the data to do forward on
         if self.is_first_partition:
-            # data = next(self.dl_iter)
-            # TODO: handle y with separate coordinated dataloader according to trainer/tast.
+            # this also handle getting y with separate dataloader.
             x, *ctx = self.task.unpack_data_for_partition(next(self.dl_iter))
             return x, ctx
 
@@ -411,7 +410,7 @@ class SinglePartitionManager:
         # This makes sure we don't overrun the buffer.
         # actually, many times we clone the input anyway inside the partition (for re-computation)
         # and if so, we can use less recv buffers for forward to save memory,
-        # while stil getting the same speed/parallelism.
+        # while still getting the same speed/parallelism.
         if ((not recved_all) and (batch_idx - 1 + fwd_rcev_buffers.max_buffers < num_batches)):
             fwd_rcev_buffers.recv_next(batch_idx - 1)
 
@@ -440,24 +439,24 @@ class SinglePartitionManager:
     def run_batch_forward(self, batch_idx, num_batches, done_bwds=None):
         """ Handles the forward pass, for last partition also handles the backward pass.
 
-            Algorithem:
+            Algorithm:
                 - Get the data
                 - Forward pass (including: wp, ws)
-                    optional: Weight Preiction (wp)
+                    optional: Weight Prediction (wp)
                     optional: Weight Stashing (ws)
                 - Send to next partition (*if needed)
                 - If last partition: do the backward and send to previous partition
 
 
             In more detail:
-                # (1) PRELOAD (do stuff like load wieghts, NAG, etc....)
+                # (1) PRELOAD (do stuff like load weights, NAG, etc....)
                 # (2) the actual forward
                 # (3) send activation (if not last partition)
                 # (4) stash weights if needed, etc. (NOTE: last partition don't stash)
                 # (5) last partition does its thing:
                 # (5.1) recompute
                 # (5.2) send activation back
-                # (5.3) resotre, step,...
+                # (5.3) restore, step,...
 
             Feature:
                 - Pre load Y to last partition if possible
@@ -485,7 +484,7 @@ class SinglePartitionManager:
             weight_predictor = self.weight_predictor
             weight_stasher = self.weight_stasher
             if weight_predictor is not None:
-                # TODO: last partition can do bengio nesterov instead of predicting.
+                # TODO: last partition can do Bengio Nesterov instead of predicting.
                 # Requires per partition optimizer config, or some hack.
 
                 # NOTE: (1) we scale LR here just to tell weight predictor. will do it again when we step.
@@ -638,7 +637,7 @@ class SinglePartitionManager:
             do_step = True
             old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
 
-        # Compute gradeints
+        # Compute gradients
         if (not do_step) and self.is_replicated:
             with self.backward_nosync_context_manager():
                 self.partition.backward_from_recomputed(g, batch_idx)
@@ -677,7 +676,7 @@ class SinglePartitionManager:
             # ####### Preparing to step
 
             if self.gap_aware:
-                # Get delay and modify gradeints.
+                # Get delay and modify gradients.
                 if self.is_problematic:
                     # Average delays
                     mb = self.get_micro_batch(batch_idx)
@@ -698,7 +697,7 @@ class SinglePartitionManager:
                 # Mark previously stashed weights as dirty
                 weight_stasher.mark_stashed_as_dirty()
 
-            # Restore to previosly saved parameters, so we can do the step on them.
+            # Restore to previously saved parameters, so we can do the step on them.
             self.true_weights_storage.restore_if_needed()
             self.true_weights_storage.reset_on_step()
             trainer.non_last_partition_step()
@@ -710,24 +709,20 @@ class SinglePartitionManager:
                     g['lr'] = old_lr
         else:
             self.true_weights_storage.restore_if_needed()
-            # FIXME: probobly should be removed...
+            # FIXME: probably should be removed...
             if self.gap_aware_just_loss and self.weight_stasher:
                 weight_stasher.pop_stashed_buff(batch_idx)
 
         return request_objects
 
     def expected_staleness(self, done_fwds, done_bwds):
-        # TODO: add batch considuration?
         # FFFFBFBFBFBFBFBFBFBFBFBFBBBB
         # Batch | bwds   | diff | staleness
         # 0     |  0     |   0  |    0   |
 
         # TODO: just pre compute a table in the beggining of the run based on this.
-        # I don't care too much about the formula, there is probobly a nice one.
-        # se = self.step_every
-        # sem = se-1
-        # return sum([x % se == sem for x in range(done_bwds, done_fwds)])
-        # FIXME: for step_every > roundtrip.
+        # I don't care too much about the formula, there is probably a nice one.
+        # FIXME: for step_every > roundtrip. <----------------
         return sum(
             [self.should_do_step(x)[0] for x in range(done_bwds, done_fwds)])
 
@@ -794,7 +789,7 @@ class SinglePartitionManager:
                 sent_request_objects = run_batch_forward(done_fwds,
                                                          num_batches,
                                                          done_bwds=done_bwds)
-                # NOTE: Last partition inserts its gradints into async_fwd_objects,
+                # NOTE: Last partition inserts its gradients into async_fwd_objects,
                 # wait on prev send
                 if async_fwd_objects:
                     wait_on_sent_object(is_fwd=True)
