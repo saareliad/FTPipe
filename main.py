@@ -548,7 +548,7 @@ def save_distributed_experiment(statistics, args, world_size, rank, local_rank,
         torch.distributed.barrier()
 
 
-def training_loop(args, logger, train_dl, test_dl, is_first_partition,
+def training_loop(args, logger, train_dl, test_dl, is_first_partition, is_last_partition,
                   partition, statistics, train_dl_len, test_dl_len, samplers):
     epochs = 0
     steps = 0
@@ -567,6 +567,60 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
     TRAIN_BATCHES_TO_RUN = train_dl_len if TRAIN_BATCHES_TO_RUN < 0 else TRAIN_BATCHES_TO_RUN
     TEST_BATCHES_TO_RUN = test_dl_len if TEST_BATCHES_TO_RUN < 0 else TEST_BATCHES_TO_RUN
 
+
+    def run_eval(eval_batches_to_run):
+        logger.info(f"Running eval")
+        if eval_batches_to_run == 0:
+            return False
+        if test_dl:
+            partition.set_dataloader(test_dl)
+        partition.eval()
+
+        if statistics:
+            statistics.eval()
+
+        with torch.no_grad():  # TODO maybe remove this?
+            partition.run_forward_until_flush(eval_batches_to_run)
+
+        # eval_epochs_times_list.append(time.time() - eval_epoch_start_time)
+        if is_last_partition:
+            statistics.last_partition_on_epoch_end()
+        return True
+
+    def run_train(train_batches_to_run):
+        logger.info(f"Running train")
+
+        train_epoch_start_time = time.time()
+        if train_batches_to_run == 0:
+            return False
+        # Set Dataloader
+        # sets only to first (+last) partition
+        if train_dl:
+            partition.set_dataloader(train_dl)
+        # Start training
+        partition.train()
+        if statistics:
+            statistics.train()
+        # if args.flush_rate > 0:
+        #     for _ in range(0, train_batches_to_run, args.flush_rate):
+        #         partition.run_until_flush(
+        #             min(args.flush_rate, len(train_dl)))
+
+        #     reminder = len(train_dl) % args.flush_rate
+        #     if reminder > 0:
+        #         partition.run_until_flush(reminder)
+        # else:
+        partition.run_until_flush(train_batches_to_run)
+        train_epochs_times_list.append(time.time() -
+                                        train_epoch_start_time)
+
+        if is_last_partition:
+            statistics.last_partition_on_epoch_end()
+        else:
+            statistics.non_last_partition_on_epoch_end()
+        return True
+
+
     while epochs < args.epochs or args.epochs < 0:
         for s in samplers:
             s.set_epoch(epochs)
@@ -583,64 +637,10 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
                 TRAIN_BATCHES_TO_RUN -= reminder_to_drop
                 if TRAIN_BATCHES_TO_RUN <= 0:
                     break
-
-        did_train = False
-        did_eval = False
         epoch_start_time = time.time()
-        for TRAIN in [True, False]:
-            logger.info(f"Running {'train' if TRAIN else 'eval'}")
-
-            if TRAIN:
-                train_epoch_start_time = time.time()
-                if TRAIN_BATCHES_TO_RUN == 0:
-                    continue
-                # Set Dataloader
-                # sets only to first (+last) partition
-                if train_dl:
-                    partition.set_dataloader(train_dl)
-                # Start training
-                partition.train()
-                if statistics:
-                    statistics.train()
-                # if args.flush_rate > 0:
-                #     for _ in range(0, TRAIN_BATCHES_TO_RUN, args.flush_rate):
-                #         partition.run_until_flush(
-                #             min(args.flush_rate, len(train_dl)))
-
-                #     reminder = len(train_dl) % args.flush_rate
-                #     if reminder > 0:
-                #         partition.run_until_flush(reminder)
-                # else:
-                partition.run_until_flush(TRAIN_BATCHES_TO_RUN)
-                train_epochs_times_list.append(time.time() -
-                                               train_epoch_start_time)
-
-                did_train = True
-                if args.local_rank == args.world_size - 1:
-                    statistics.last_partition_on_epoch_end()
-                else:
-                    statistics.non_last_partition_on_epoch_end()
-            else:  # EVAL
-                # eval_epoch_start_time = time.time()
-                # Set Dataloader
-                # sets only to first (+last) partition
-                if TEST_BATCHES_TO_RUN == 0:
-                    continue
-                if test_dl:
-                    partition.set_dataloader(test_dl)
-                partition.eval()
-
-                if statistics:
-                    statistics.eval()
-
-                with torch.no_grad():  # TODO maybe remove this?
-                    partition.run_forward_until_flush(TEST_BATCHES_TO_RUN)
-
-                # eval_epochs_times_list.append(time.time() - eval_epoch_start_time)
-                did_eval = True
-                if args.local_rank == args.world_size - 1:
-                    statistics.last_partition_on_epoch_end()
-
+        did_train = run_train(TRAIN_BATCHES_TO_RUN)
+        did_eval = run_eval(TEST_BATCHES_TO_RUN)
+        
         epochs += 1
         if did_train:
             steps += math.ceil(TRAIN_BATCHES_TO_RUN / args.step_every)
@@ -1046,7 +1046,7 @@ def main():
 
     exp_start_time = time.time()
     total_epoch_times_list, train_epochs_times_list = training_loop(
-        args, logger, train_dl, test_dl, is_first_partition, partition,
+        args, logger, train_dl, test_dl, is_first_partition, is_last_partition, partition,
         statistics, train_dl_len, test_dl_len, samplers)
     exp_total_time = time.time() - exp_start_time
 
