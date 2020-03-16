@@ -17,6 +17,7 @@ def adam_init(optimizer):
                 state['step'] = 0
                 # NOTE: amsgrad is not supported.
 
+
 class AdamClonedWeightPrediction(WeightPredictor):
     def __init__(self, *args, **kw):
 
@@ -57,10 +58,10 @@ class AdamClonedWeightPrediction(WeightPredictor):
 
                     # Compute coefficient as sum of predictions.
 
-                    momentum_coeff = 0
-
                     for staleness, lr in zip(range(1, self.n_steps + 1),
                                              step_lrs):
+                        if lr == 0:
+                            continue
 
                         bias_correction1 = 1 - beta1**(step + staleness)
                         bias_correction2 = 1 - beta2**(step + staleness)
@@ -118,15 +119,15 @@ class AdamClonedWeightPredictionWithWD(WeightPredictor):
                     # NOTE: initial_step = step + 1
 
                     # Compute coefficient as sum of predictions.
-                    
 
                     momentum_coeff = 0
                     exp_avg_hat = exp_avg
 
                     for staleness, lr in zip(range(1, self.n_steps + 1),
                                              step_lrs):
+
                         d_p = 0
-                        if weight_decay !=0:
+                        if weight_decay != 0:
                             d_p = weight_decay * p.data
 
                         exp_avg_hat = exp_avg_hat * beta1 + (1-beta1) * d_p
@@ -151,7 +152,6 @@ def get_adam_weight_predictor(pred_mem: str,
                               scheduler=None,
                               nag_with_predictor=False,
                               true_weights_storage=None) -> WeightPredictor:
-    
 
     has_weight_decay = any(
         [pg['weight_decay'] != 0 for pg in optimizer.param_groups])
@@ -160,7 +160,6 @@ def get_adam_weight_predictor(pred_mem: str,
         pred_cls = AdamClonedWeightPredictionWithWD
     else:
         pred_cls = AdamClonedWeightPrediction
-
 
     return pred_cls(optimizer,
                     fix_fn=None,

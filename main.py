@@ -5,7 +5,8 @@ from pipeline import SinglePartitionManager
 from pipeline.training import AVAILABLE_TRAINERS
 from pipeline.tasks import AVAILABLE_TASKS
 from pipeline.stats import AVAILBALE_STATS  # , Stats
-from pipeline.weight_prediction import get_sgd_weight_predictor, get_adam_weight_predictor, get_sched_predictor
+from pipeline.weight_prediction import (
+    get_sgd_weight_predictor, get_adam_weight_predictor, get_adamw_weight_predictor, get_sched_predictor)
 from pipeline.gap_aware import get_sgd_gap_aware_cls, get_adam_gap_aware_cls
 from optimizers import AVAILBALE_OPTIMIZERS
 from pipeline.util import get_world_size
@@ -303,36 +304,38 @@ def get_lr_scheduler(args, optimizer):
         # TODO: auto-calculate numbers like num_training_steps
         attr = getattr(args, 'lr_scheduler')
 
-
         preproc_args = attr.get("preproc_args", None)
         if preproc_args:
             for arg_name, preproc_command in preproc_args.items():
                 if preproc_command == "epochs_to_steps":
                     if args.steps > 0:
-                        raise NotImplementedError("Expected to be limited by number of epochs")
+                        raise NotImplementedError(
+                            "Expected to be limited by number of epochs")
 
                     # Get the given number of epochs
                     given_epochs = attr['args'][arg_name]
                     if given_epochs < 0:
                         # Taking from epoch args
                         if args.epochs < 0:
-                            raise ValueError("Expected a concrete number of epochs")
+                            raise ValueError(
+                                "Expected a concrete number of epochs")
                         given_epochs = args.epochs
 
                     # Translate epochs to steps
                     num_steps = args.steps_per_epoch * given_epochs
                     attr['args'][arg_name] = num_steps
-                    print(f"preproced {arg_name} from {given_epochs} epochs to {num_steps} steps.")
+                    print(
+                        f"preproced {arg_name} from {given_epochs} epochs to {num_steps} steps.")
                 else:
-                    raise NotImplementedError(f"Unsupported preprocess argument {preproc_command}")
-
+                    raise NotImplementedError(
+                        f"Unsupported preprocess argument {preproc_command}")
 
         if attr['type'] in optimizers.lr_scheduler.AVAILABLE_LR_SCHEDULERS:
             scheduler_cls = getattr(optimizers.lr_scheduler, attr['type'])
             # should_step = True
         else:
             scheduler_cls = getattr(torch.optim.lr_scheduler, attr['type'])
-        
+
         scheduler = scheduler_cls(optimizer, **attr['args'])
 
         # TODO: also get scheduler for sched aware prediction.
@@ -420,12 +423,11 @@ def get_weight_predictor(args,
         assert sched_aware_stuff is not None
         scheduler_class = sched_aware_stuff[0]
         scheduler_kw = sched_aware_stuff[1]
-        sched_predictor = get_sched_predictor(optimizer, scheduler_class, **scheduler_kw)
+        sched_predictor = get_sched_predictor(
+            optimizer, scheduler_class, **scheduler_kw)
         sched_predictor.patch_scheduler(scheduler)
         assert 'adam' in optimizer_type   # Remove after we implement for sgd.
 
-
-    # if pred_mem['type'] == "msnag":
     if 'sgd' in optimizer_type:
         weight_predictor = get_sgd_weight_predictor(
             optimizer_type,
@@ -443,6 +445,14 @@ def get_weight_predictor(args,
             nag_with_predictor=nag_with_predictor,
             true_weights_storage=true_weights_storage)
         return weight_predictor, nag_with_predictor
+    elif 'adamw' == optimizer_type:
+        weight_predictor = get_adamw_weight_predictor(
+            pred_mem,
+            optimizer,
+            scheduler=sched_predictor,
+            nag_with_predictor=nag_with_predictor,
+            true_weights_storage=true_weights_storage
+        )
     else:
         raise NotImplementedError()
 
@@ -696,8 +706,6 @@ def get_dataloaders(args, explicit_separated_dataset=False, **kw):
     return train_dl, test_dl, samplers
 
 
-
-
 def get_just_test_dataloader(args, explicit_separated_dataset=False, **kw):
     dl_kw = dict()
     if args.cpu:
@@ -732,6 +740,7 @@ def get_just_test_dataloader(args, explicit_separated_dataset=False, **kw):
 
     return test_dl, sampler
 
+
 def get_device(args):
     if hasattr(args, "stage_to_device_map"):
         stage_to_device_map = args.stage_to_device_map
@@ -747,7 +756,7 @@ def main():
     parse_json_config(args, args.config)
     parse_env_vars(args)
     args.world_size = get_world_size(args.distributed_backend)
-    
+
     if args.debug and args.rank in args.debug:
         # TODO: by specific ranks
         import ptvsd
@@ -835,7 +844,7 @@ def main():
         args.num_stages = parsed_cofig.num_stages
         args.stage = parsed_cofig.stage
         model = parsed_cofig.model
-        
+
     is_first_partition = args.stage == 0
     is_last_partition = args.stage == args.num_stages - 1
 
@@ -874,7 +883,6 @@ def main():
     else:
         raise NotImplementedError()
 
-
     args.steps_per_epoch = steps_per_epoch
     args.expected_training_steps = expected_training_steps
 
@@ -885,8 +893,8 @@ def main():
     if COMM_VERSION == 1:
         comm_handler = create_comm_handler(args, comm_init_args, device)
     else:
-        
-        # comm_handler = 
+
+        # comm_handler =
 
         raise NotImplementedError("In progress")
 
@@ -980,7 +988,7 @@ def main():
         scheduler=scheduler,
         true_weights_storage=true_weights_storage,
         sched_aware_stuff=sched_aware_stuff,
-        )
+    )
     if weight_predictor:
         partition.set_weight_predictor(weight_predictor, nag_with_predictor)
 
