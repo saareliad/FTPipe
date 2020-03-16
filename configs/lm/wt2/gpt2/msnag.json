@@ -38,7 +38,7 @@
             "num_warmup_steps": "epochs_to_steps"
         },
         "args": {
-            "num_warmup_steps": 1,
+            "num_warmup_steps": 0,
             "num_training_steps":  -1,
             "last_epoch": -1
         }
@@ -51,7 +51,7 @@
             "sched_aware": true
         }
     },
-    "epochs": 4,
+    "epochs": 3,
     "steps": -1,
     "seed": 42,
     "num_chunks": 1,
