@@ -44,10 +44,10 @@ class SinglePartitionManager:
             use_recomputation=True,
             gap_aware_just_loss=False,
             sync_buffers=False,
-            use_prealoaded_input=False,  # TODO: this is an option to support LMHeads in which the input goes to a partition. # TODO: write a trainer which can work with it.
+            use_pre_loaded_input=False,  # TODO: this is an option to support LMHeads in which the input goes to a partition. # TODO: write a trainer which can work with it.
     ):
         # Preloaded input for last partition
-        self.use_prealoaded_input = use_prealoaded_input
+        self.use_pre_loaded_input = use_pre_loaded_input
         
         if (gap_aware_just_loss and (not use_recomputation)):
             raise NotImplementedError(
@@ -64,7 +64,7 @@ class SinglePartitionManager:
         # Set partition.
         if use_recomputation:
             if is_last_partition:
-                partition_cls = LastPartition if not use_prealoaded_input else LastPartitionWithLabelInput
+                partition_cls = LastPartition if not use_pre_loaded_input else LastPartitionWithLabelInput
             elif is_first_partition:
                 partition_cls = FirstPartition
             else:
@@ -75,7 +75,7 @@ class SinglePartitionManager:
         else:
             # Partition without recomputation
             if is_last_partition:
-                partition_cls = LastPartition if not use_prealoaded_input else LastPartitionWithLabelInput
+                partition_cls = LastPartition if not use_pre_loaded_input else LastPartitionWithLabelInput
                 self.partition = partition_cls(partition,
                                                device,
                                                to_device=TO_DEVICE)
@@ -474,7 +474,7 @@ class SinglePartitionManager:
         if self.is_last_partition:
             preload_ctx = self.task.preload_last_partition(
                 getattr(self, "dl_iter", None), self.device)
-            if self.use_prealoaded_input:
+            if self.use_pre_loaded_input:
                 preload_input = preload_ctx
                 preload_ctx = tuple()
             

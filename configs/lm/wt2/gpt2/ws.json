@@ -6,7 +6,7 @@
     "out_filename": "dummy",
     "distributed_backend": "mpi",
     "task": "lm_sep",
-    "use_prealoaded_input": true,
+    "use_pre_loaded_input": true,
     "statistics": "lm_theta_dist_grad_norm_loss_per_batch",
     "model": "gpt2_lm_lowercase",
     "model_name_or_path": "gpt2",

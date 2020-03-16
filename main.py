@@ -932,7 +932,7 @@ def main():
         keep_buffers_alive=args.keep_buffers_alive,
         use_recomputation=(not args.no_recomputation),
         gap_aware_just_loss=gap_aware_just_loss,
-        use_prealoaded_input=getattr(args, "use_prealoaded_input", False))
+        use_pre_loaded_input=getattr(args, "use_pre_loaded_input", False))
 
     if hasattr(args, "ddp_sim_num_gpus") and args.ddp_sim_num_gpus > 1:
         print(
