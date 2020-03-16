@@ -18,7 +18,7 @@ from typing import List, Tuple
 
 # new_distributed_get_train_valid_dl_from_args  (train, valid)
 # simplified_get_train_valid_dl_from_args  (train, valid)
-# get_separate_just_x_or_y_train_valid_dl_from_args  (train, valid)
+# get_separate_just_x_or_y_train_test_dl_from_args  (train, valid)
 # get_separate_just_x_or_y_test_dl_from_args: (just the test dataloader)
 
 
@@ -63,7 +63,7 @@ class TextDataset(Dataset):
         else:
             self.examples = []
             with open(file_path, encoding="utf-8") as f:
-                # NOTE: this makes it is sutible mostly for small datasets...
+                # NOTE: this makes it is suitable mostly for small datasets...
                 text = f.read()
 
             tokenized_text = tokenizer.convert_tokens_to_ids(
@@ -76,7 +76,7 @@ class TextDataset(Dataset):
                     tokenizer.build_inputs_with_special_tokens(
                         tokenized_text[i:i + block_size]))
             # Note that we are loosing the last truncated example here for the sake of simplicity (no padding)
-            # If your dataset is small, first you should loook for a bigger one :-) and second you
+            # If your dataset is small, first you should look for a bigger one :-) and second you
             # can change this behavior by adding (model specific) padding.
             with open(cached_features_file, 'wb') as handle:
                 pickle.dump(self.examples,
@@ -144,11 +144,11 @@ def imagenet_transformations():
     return train_transform, test_transform
 
 
-# NOTE: This is like a "transform", Should be used stright in the dataset,
+# NOTE: This is like a "transform", Should be used straight in the dataset,
 # so the dataloader will handle this.
 # NOTE: we also provide 2 more functions just for inputs/labels
 # Adapted from https://github.com/huggingface/transformers/blob/master/examples/run_language_modeling.py
-# commitid: f54a5bd37f99e3933a396836cb0be0b5a497c077
+# commit_id: f54a5bd37f99e3933a396836cb0be0b5a497c077
 def mask_tokens(inputs: torch.Tensor,
                 tokenizer: PreTrainedTokenizer,
                 mlm_probability=0.15,
@@ -380,6 +380,28 @@ def get_wikitext2_raw_train_valid_test_ds(
         raise ValueError(f"Unsupported split {split}.")
 
 
+def get_wikitext2_raw_train_test_ds(model_name_or_path,
+                                     tokenizer,
+                                     train_seq_len=512,
+                                     test_seq_len=512,
+                                     overwrite_cache=False,
+                                     DATA_DIR=DEFAULT_DATA_DIR):
+    """ Returns train and test datasets """
+
+    train_ds = get_wikitext2_raw_train_valid_test_ds(
+        model_name_or_path,
+        tokenizer,
+        split='train',
+        block_size=train_seq_len,
+        overwrite_cache=overwrite_cache)
+    test_ds = get_wikitext2_raw_train_valid_test_ds(
+        model_name_or_path,
+        tokenizer,
+        split='test',
+        block_size=test_seq_len,
+        overwrite_cache=overwrite_cache)
+    return train_ds, test_ds
+
 def get_wikitext2_raw_train_valid_ds(model_name_or_path,
                                      tokenizer,
                                      train_seq_len=512,
@@ -416,12 +438,13 @@ def get_wikitext2_raw_test_ds(model_name_or_path,
     return test_ds
 
 
-# NOTE: these are functions which returns train and validation datasets.
+# NOTE: these are functions which returns train and test/validation datasets.
 DATASET_TO_DS_FN = {
     'cifar10': get_cifar_10_train_test_ds,
     'cifar100': get_cifar_100_train_test_ds,
     'imagenet': get_imagenet_train_test_ds,
-    'wt2': get_wikitext2_raw_train_valid_ds,  # TODO
+    'wt2': get_wikitext2_raw_train_test_ds,  # TODO
+    # 'wt2': get_wikitext2_raw_train_valid_ds,  # TODO
 }
 
 ################
@@ -1080,9 +1103,17 @@ def get_cifar_10_just_x_or_y_train_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR):
         raise ValueError(f"'just' should be in x,y. Got {just} instead.")
 
 
-def get_wt2_just_x_or_y_train_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR, **kw):
+
+def get_wt2_just_x_or_y_train_valid_ds(just, DATA_DIR=DEFAULT_DATA_DIR, **kw):
     # we don't use the just. its the same for all.
     return get_wikitext2_raw_train_valid_ds(DATA_DIR=DATA_DIR, **kw)
+
+
+
+
+def get_wt2_just_x_or_y_train_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR, **kw):
+    # we don't use the just. its the same for all.
+    return get_wikitext2_raw_train_test_ds(DATA_DIR=DATA_DIR, **kw)
 
 
 def get_wt2_just_x_or_y_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR, **kw):
@@ -1143,6 +1174,7 @@ def get_separate_just_x_or_y_train_test_dl(dataset,
         'cifar100': get_cifar_100_just_x_or_y_train_test_ds,
         'imagenet': get_imagenet_just_x_or_y_train_test_ds,
         'wt2': get_wt2_just_x_or_y_train_test_ds
+        # 'wt2': get_wt2_just_x_or_y_train_valid_ds
     }
 
     ds_train, ds_test = DICT_DATASET_JUST_XY_FUNC.get(dataset)(
@@ -1183,7 +1215,7 @@ def get_separate_just_x_or_y_train_test_dl(dataset,
     return dl_train, dl_test, [train_sampler, test_sampler]
 
 
-def get_separate_just_x_or_y_train_valid_dl_from_args(args, **kw):
+def get_separate_just_x_or_y_train_test_dl_from_args(args, **kw):
 
     DATA_DIR = getattr(args, "data_dir", DEFAULT_DATA_DIR)
     DATA_DIR = DATA_DIR if DATA_DIR else DEFAULT_DATA_DIR

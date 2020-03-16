@@ -21,7 +21,7 @@ import numpy as np
 import torch
 from datasets import (add_dataset_argument,
                       simplified_get_train_valid_dl_from_args,
-                      get_separate_just_x_or_y_train_valid_dl_from_args,
+                      get_separate_just_x_or_y_train_test_dl_from_args,
                       get_separate_just_x_or_y_test_dl_from_args)
 
 from datasets import lm_collate_factory
@@ -696,7 +696,7 @@ def get_dataloaders(args, explicit_separated_dataset=False, **kw):
         dataset_keywords = {}
 
     if explicit_separated_dataset:
-        train_dl, test_dl, samplers = get_separate_just_x_or_y_train_valid_dl_from_args(
+        train_dl, test_dl, samplers = get_separate_just_x_or_y_train_test_dl_from_args(
             args, verbose=False, dataset_keywords=dataset_keywords, **dl_kw)
     else:
         # Note: sometimes used to infer all parameters, (by all partitions).
