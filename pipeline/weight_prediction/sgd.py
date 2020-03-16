@@ -1,5 +1,6 @@
 import torch
 from .interface import WeightPredictor, FixFunction
+from .sgd_wd import SGDWDClonedWeightPrediction
 import math
 
 # """
@@ -74,12 +75,6 @@ class SGDClonedWeightPrediction(WeightPredictor):
             return
         self.true_weights_storage.restore_if_needed()
 
-        # with torch.no_grad():
-        #     for pg, fix_fn_item, cloned in zip(self.optimizer.param_groups, self.buffered_fixes, self.theta_buffer):
-        #         if fix_fn_item:
-        #             for p, bp in zip(pg['params'], cloned):
-        #                 p.data = bp.data
-
 
 class SGD2MSNAG(FixFunction):
     """ 
@@ -119,11 +114,24 @@ def get_sgd_weight_predictor(sgd_type: str, pred_mem: str,
                              optimizer, scheduler=None,
                              nag_with_predictor=False,
                              true_weights_storage=None) -> WeightPredictor:
-    fix_fn_cls = SGD_TYPE_TO_MSNAG_CLASS.get(sgd_type, None)
-    fix_fn = fix_fn_cls()
-    pred_cls = PRED_MEM_TO_CLASS.get(pred_mem, None)
-    # pred_cls: WeightPredictor
-    # fix_fn: FixFunction
-    return pred_cls(optimizer, fix_fn, scheduler=scheduler,
-                    nag_with_predictor=nag_with_predictor,
-                    true_weights_storage=true_weights_storage)
+    has_weight_decay = any(
+        [pg['weight_decay'] != 0 for pg in optimizer.param_groups])
+    if has_weight_decay:
+        if sgd_type == 'sgd1':
+            if pred_mem == 'clone':
+                return SGDWDClonedWeightPrediction(optimizer, fix_fn=None, scheduler=scheduler,
+                                                   nag_with_predictor=nag_with_predictor,
+                                                   true_weights_storage=true_weights_storage)
+            else:
+                raise NotImplementedError()
+        else:
+            raise NotImplementedError()
+    else:
+        fix_fn_cls = SGD_TYPE_TO_MSNAG_CLASS.get(sgd_type, None)
+        fix_fn = fix_fn_cls()
+        pred_cls = PRED_MEM_TO_CLASS.get(pred_mem, None)
+        # pred_cls: WeightPredictor
+        # fix_fn: FixFunction
+        return pred_cls(optimizer, fix_fn=fix_fn, scheduler=scheduler,
+                        nag_with_predictor=nag_with_predictor,
+                        true_weights_storage=true_weights_storage)

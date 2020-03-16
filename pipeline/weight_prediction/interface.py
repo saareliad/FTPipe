@@ -1,10 +1,9 @@
 import abc
-from typing import Callable
 
 
 class WeightPredictor(abc.ABC):
     def __init__(self, optimizer,
-                 fix_fn: Callable, scheduler=None, nag_with_predictor=False, true_weights_storage=None):
+                 fix_fn=None, scheduler=None, nag_with_predictor=False, true_weights_storage=None):
         self.optimizer = optimizer
         self.fix_fn = fix_fn
         self.scheduler = scheduler
