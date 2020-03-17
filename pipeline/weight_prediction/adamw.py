@@ -44,8 +44,6 @@ class AdamWClonedWeightPrediction(WeightPredictor):
 
                     # Compute coefficient as sum of predictions.
 
-                    momentum_coeff = 0
-
                     for staleness, lr in zip(range(1, self.n_steps + 1),
                                              step_lrs):
                         if lr == 0:
@@ -61,8 +59,8 @@ class AdamWClonedWeightPrediction(WeightPredictor):
 
                         step_size = lr / bias_correction1
 
-                        p.data.addcdiv_(-step_size,  exp_avg *
-                                        (beta1**staleness), denom)
+                        p.data.addcdiv_(-step_size,
+                                        exp_avg * (beta1**staleness), denom)
 
     def revert(self):
         if not self.n_steps:
@@ -71,15 +69,14 @@ class AdamWClonedWeightPrediction(WeightPredictor):
 
 
 def get_adamw_weight_predictor(pred_mem: str,
-                              optimizer,
-                              scheduler=None,
-                              nag_with_predictor=False,
-                              true_weights_storage=None) -> WeightPredictor:
-    
+                               optimizer,
+                               scheduler=None,
+                               nag_with_predictor=False,
+                               true_weights_storage=None) -> WeightPredictor:
 
     has_weight_decay = any(
         [pg['weight_decay'] != 0 for pg in optimizer.param_groups])
-    
+
     assert has_weight_decay
 
     if has_weight_decay:
