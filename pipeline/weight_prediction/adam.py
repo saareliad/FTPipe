@@ -47,7 +47,6 @@ class AdamClonedWeightPrediction(WeightPredictor):
 
                 beta1, beta2 = pg['betas']
                 eps = pg['eps']
-                weight_decay = pg['weight_decay']
                 for p in pg['params']:
                     state = self.optimizer.state[p]
 
@@ -120,7 +119,6 @@ class AdamClonedWeightPredictionWithWD(WeightPredictor):
 
                     # Compute coefficient as sum of predictions.
 
-                    momentum_coeff = 0
                     exp_avg_hat = exp_avg
 
                     for staleness, lr in zip(range(1, self.n_steps + 1),

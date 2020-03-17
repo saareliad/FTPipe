@@ -3,6 +3,7 @@ from .interface import GapAwareBase
 from itertools import chain
 from .sgd_gap_aware import init_running_avg_step
 from ..weight_prediction.adam import adam_init
+import numpy as np
 
 # TODO: check that the step count is indeed OK (and ahead by 1)
 # TODO: record and return total gap.
@@ -82,6 +83,9 @@ class AdamGapAware(GapAwareBase):
 
         opt_state = self.optimizer.state
         ra = self.running_avg_step
+
+        penatly_arr = []
+
         with torch.no_grad():
             for pg, rpg in zip(self.optimizer.param_groups, real_theta):
                 max_lr = pg[GapAwareBase.MAX_LR_NAME]
@@ -108,6 +112,8 @@ class AdamGapAware(GapAwareBase):
                     # calculate the gap per-element
                     penalty = 1 + (gap / avg_steps_needed)
 
+                    penatly_arr.append(torch.mean(penalty).item())
+
                     # Apply penalty to gradient
                     p.grad.data /= penalty
                     # Apply penalty to weight decay (as it will be part of the gradient)
@@ -127,6 +133,9 @@ class AdamGapAware(GapAwareBase):
                     # NOTE: we apply the weight decay on the real parameter weight, rp.
                     p.grad.data += rp.data.mul(weight_decay *
                                                ((1 - penalty) / penalty))
+
+        print("mean_penaltly", np.mean(penatly_arr))
+
 
     def update_running_stats(self):
         """
