@@ -751,6 +751,17 @@ def get_device(args):
     return device
 
 
+def get_optimizer_cls(args, has_gap_aware):
+    optimizer_type = args.optimizer_type
+
+    # Optimizers which also record square step size.
+    if has_gap_aware and optimizer_type in {'adam', 'adamw'}:
+        optimizer_type += '_record_step'
+
+    optimizer_cls = AVAILBALE_OPTIMIZERS.get(optimizer_type)
+    return optimizer_cls
+
+
 def main():
     args = parse_cli()
     parse_json_config(args, args.config)
@@ -900,7 +911,7 @@ def main():
 
     trainer_cls = AVAILABLE_TRAINERS.get(args.trainer['type'])
     task_cls = AVAILABLE_TASKS.get(args.task)
-    optimizer_cls = AVAILBALE_OPTIMIZERS.get(args.optimizer_type)
+    optimizer_cls = get_optimizer_cls(args, partition_using_gap_aware)
     statistics = AVAILBALE_STATS.get(args.statistics)
     assert not (statistics is None)
     work_scheduler = AVAILABLE_WORK_SCHEDULERS.get(args.work_scheduler)
