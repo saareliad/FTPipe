@@ -3,6 +3,13 @@ from itertools import chain
 from .interface import GapAwareBase
 
 
+def init_running_avg_step(optimizer):
+    # Iter over optimizer parameters:
+    opt_params_iter = chain(*[pg['params'] for pg in optimizer.param_groups])
+    running_avg_step = {id(p): torch.zeros_like(p) for p in opt_params_iter}
+    return running_avg_step
+
+
 class GapAware(GapAwareBase):
     """
     GAP aware implementation for pipeline,
@@ -70,6 +77,7 @@ class GapAware(GapAwareBase):
 
     #     WARNINING: MUST HAVE A CORRESPONDING CALL TO try_apply_wd_correction_before_step()
     """
+
     # 3 main changes form original implementation.
     # (1) better mem trick for WD.
     # (2) option to shut down changing WD. => but we came to conclusion its not recomended.
@@ -84,7 +92,11 @@ class GapAware(GapAwareBase):
     #       For WD mem trick, this requires applying a WD correction later.
     #       Better used with SGD+L2 than WD.
 
-    def __init__(self, optimizer, big_gamma=0.999, epsilon=1e-8, from_grad=True):
+    def __init__(self,
+                 optimizer,
+                 big_gamma=0.999,
+                 epsilon=1e-8,
+                 from_grad=True):
         """ Apply Gap Aware on computed gradients """
         super().__init__(optimizer)
         if from_grad:
@@ -92,22 +104,16 @@ class GapAware(GapAwareBase):
 
         self.big_gamma = big_gamma  # FIXME can be of optimizer of given. e.g adam
 
-        # FIXME can be of optimizer of given. e.g adam
-        # Iter over optimizer parameters:
-        opt_params_iter = chain(*[pg['params']
-                                  for pg in optimizer.param_groups])
-        self.running_avg_step = {id(p): torch.zeros_like(p)
-                                 for p in opt_params_iter}
+        self.running_avg_step = init_running_avg_step(optimizer)
 
-        # FIXME can be of optimizer. e.g in adam its param_group['step']
-        # self.step_count = 0
         self.epsilon = epsilon  # FIXME can be of optimizer.
 
         # Ugly hack, init momentum buffer to zeros before we start
         for pg in self.optimizer.param_groups:
             for p in pg['params']:
                 if 'momentum_buffer' not in self.optimizer.state[p]:
-                    self.optimizer.state[p]['momentum_buffer'] = torch.zeros_like(p)
+                    self.optimizer.state[p][
+                        'momentum_buffer'] = torch.zeros_like(p)
 
     def update_running_avg(self):
         """
@@ -135,7 +141,7 @@ class GapAware(GapAwareBase):
         """ Calculate gap aware from gradient. Requires knowing the exact gap """
         with torch.no_grad():
             ra = self.running_avg_step
-            bias_correction = 1 - (self.big_gamma ** self.step_count)
+            bias_correction = 1 - (self.big_gamma**self.step_count)
             eps = self.epsilon
             # Calculate gap from grad
             for pg in self.optimizer.param_groups:
@@ -174,7 +180,7 @@ class GapAware(GapAwareBase):
     def apply_on_theta(self, real_theta):
         with torch.no_grad():
             ra = self.running_avg_step
-            bias_correction = 1 - (self.big_gamma ** self.step_count)
+            bias_correction = 1 - (self.big_gamma**self.step_count)
             eps = self.epsilon
             # Calculate gap from grad
             for pg, rpg in zip(self.optimizer.param_groups, real_theta):
@@ -219,7 +225,7 @@ class GapAware(GapAwareBase):
         """ True weights are loaded into the model, and given a stashed theta """
         with torch.no_grad():
             ra = self.running_avg_step
-            bias_correction = 1 - (self.big_gamma ** self.step_count)
+            bias_correction = 1 - (self.big_gamma**self.step_count)
             eps = self.epsilon
             # Calculate gap from grad
             for pg, spg in zip(self.optimizer.param_groups, stashed_theta):

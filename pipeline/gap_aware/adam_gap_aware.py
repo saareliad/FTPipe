@@ -1,9 +1,12 @@
 import torch
 from .interface import GapAwareBase
 from itertools import chain
+from .sgd_gap_aware import init_running_avg_step
+from ..weight_prediction.adam import adam_init
 
 # TODO: check that the step count is indeed OK (and ahead by 1)
 # TODO: record and return total gap.
+
 
 def opt_params_iter(optimizer):
     return chain(*[pg['params'] for pg in optimizer.param_groups])
@@ -11,23 +14,12 @@ def opt_params_iter(optimizer):
 
 class AdamGapAware(GapAwareBase):
     """ Gap aware for ADAM optimizer """
-    def __init__(self,
-                 optimizer,
-                 from_grad=False):  # FIXME:?
+    def __init__(self, optimizer, from_grad=False):  # FIXME:?
         """ Apply Gap Aware on computed gradients """
         super().__init__(optimizer)
 
-        # State initialization
-        for pg in self.optimizer.param_groups:
-            for p in pg['params']:
-                state = self.optimizer.state[p]
-                if len(state) == 0:
-                    state['exp_avg'] = torch.zeros_like(
-                        p.data, memory_format=torch.preserve_format)
-                    state['exp_avg_sq'] = torch.zeros_like(
-                        p.data, memory_format=torch.preserve_format)
-                    state['step'] = 0
-
+        self.running_avg_step = init_running_avg_step(optimizer)
+        adam_init(optimizer)
         #     # TODO: sched aware LR.
 
     def apply_from_grad(self):
@@ -37,6 +29,7 @@ class AdamGapAware(GapAwareBase):
     def apply_on_stashed(self, stashed_theta):
         """ True weights are loaded into the model, and given a stashed theta """
         opt_state = self.optimizer.state
+        ra = self.running_avg_step
 
         with torch.no_grad():
             for pg, spg in zip(self.optimizer.param_groups, stashed_theta):
@@ -48,11 +41,8 @@ class AdamGapAware(GapAwareBase):
                 eps = pg['eps']
 
                 for p, sp in zip(pg['params'], spg):
-                    exp_avg_sq = opt_state[p]['exp_avg_sq']
 
-                    # FIXME: remove assert after this works.
                     step_count = opt_state[p]['step'] + 1
-                    assert step_count == self.step_count
 
                     bias_correction2 = 1 - beta2**(step_count)
                     # if p.grad is None:
@@ -60,7 +50,7 @@ class AdamGapAware(GapAwareBase):
                     # calculate C coefficient per-element
                     # Note: can remove the "data". but whatever.
                     avg_steps_needed = max_lr * \
-                        (((exp_avg_sq.data / bias_correction2) ** 0.5) + eps)
+                        (((ra[id(p)].data / bias_correction2) ** 0.5) + eps)
 
                     gap = (p - sp).abs()
                     # pg['lr'] * p.grad.abs()
@@ -91,7 +81,7 @@ class AdamGapAware(GapAwareBase):
     def apply_on_theta(self, real_theta):
 
         opt_state = self.optimizer.state
-
+        ra = self.running_avg_step
         with torch.no_grad():
             for pg, rpg in zip(self.optimizer.param_groups, real_theta):
                 max_lr = pg[GapAwareBase.MAX_LR_NAME]
@@ -102,10 +92,7 @@ class AdamGapAware(GapAwareBase):
                 eps = pg['eps']
 
                 for p, rp in zip(pg['params'], rpg):
-                    exp_avg_sq = opt_state[p]['exp_avg_sq']
-                    # FIXME: remove assert after this works.
                     step_count = opt_state[p]['step'] + 1
-                    assert step_count == self.step_count
 
                     bias_correction2 = 1 - beta2**(step_count)
                     # if p.grad is None:
@@ -113,7 +100,7 @@ class AdamGapAware(GapAwareBase):
                     # calculate C coefficient per-element
                     # Note: can remove the "data". but whatever.
                     avg_steps_needed = max_lr * \
-                        (((exp_avg_sq.data / bias_correction2) ** 0.5) + eps)
+                        (((ra[id(p)].data / bias_correction2) ** 0.5) + eps)
 
                     gap = (p - rp).abs()
                     # pg['lr'] * p.grad.abs()
@@ -141,16 +128,27 @@ class AdamGapAware(GapAwareBase):
                     p.grad.data += rp.data.mul(weight_decay *
                                                ((1 - penalty) / penalty))
 
-    def update_running_avg(self):
-        raise NotImplementedError()
-
-    def inc_step_count(self):
-        raise NotImplementedError()
-
     def update_running_stats(self):
-        # TODO: remove after getting step from optimizer works.
-        super().inc_step_count()
-        pass
+        """
+        Update the exponential step running average
+        Requires: that we got some grad.
+        """
+        # NOTE: same as adamw_gap_aware
+        opt_s = self.optimizer.state
+        ra = self.running_avg_step
+
+        with torch.no_grad():
+            for pg in self.optimizer.param_groups:
+                beta1, beta2 = pg['betas']
+
+                if beta1 != 0:
+                    for p in pg['params']:
+                        ra[id(p)].data = beta2 * ra[id(p)].data + \
+                            (1 - beta2) * \
+                            (opt_s[p]["exp_avg"].data ** 2)
+                else:
+                    for p in pg['params']:
+                        ra[id(p)].data = opt_s[p]['exp_avg_sq'].data
 
 
 def get_adam_gap_aware_cls() -> AdamGapAware:
