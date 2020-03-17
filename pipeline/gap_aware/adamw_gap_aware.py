@@ -1,8 +1,7 @@
 import torch
 from .interface import GapAwareBase
 from itertools import chain
-from .sgd_gap_aware import init_running_avg_step
-from ..weight_prediction.adam import adam_init
+from .adam_gap_aware import gap_aware_adam_init
 # TODO: check that the step count is indeed OK (and ahead by 1)
 
 
@@ -14,7 +13,7 @@ class AdamWGapAware(GapAwareBase):
     """ Gap aware for ADAMW optimizer
     ADAMW
     https://arxiv.org/pdf/1711.05101.pdf
-    
+
     # Just adding the square of the weights to the loss function is *not*
     # the correct way of using L2 regularization/weight decay with Adam,
     # since that will interact with the m and v parameters in strange ways.
@@ -23,7 +22,7 @@ class AdamWGapAware(GapAwareBase):
     # with the m/v parameters. This is equivalent to adding the square
     # of the weights to the loss with plain (non-momentum) SGD.
 
-    
+
     Based on pytorch ADAMW implementation
     https://pytorch.org/docs/stable/_modules/torch/optim/adamw.html#AdamW
     NOTE: were straight at the beggining we do
@@ -48,8 +47,7 @@ class AdamWGapAware(GapAwareBase):
                  from_grad=True):
         """ Apply Gap Aware on computed gradients """
         super().__init__(optimizer)
-        self.running_avg_step = init_running_avg_step(optimizer)
-        adam_init(optimizer)
+        gap_aware_adam_init(optimizer)
 
         #     # TODO: sched aware LR.
 
@@ -60,7 +58,6 @@ class AdamWGapAware(GapAwareBase):
     def apply_on_stashed(self, stashed_theta):
         """ True weights are loaded into the model, and given a stashed theta """
         opt_state = self.optimizer.state
-        ra = self.running_avg_step
 
         with torch.no_grad():
             for pg, spg in zip(self.optimizer.param_groups, stashed_theta):
@@ -80,7 +77,7 @@ class AdamWGapAware(GapAwareBase):
                     # calculate C coefficient per-element
                     # NOTE: can remove the "data". but whatever.
                     avg_steps_needed = max_lr * \
-                        (((ra[id(p)].data / bias_correction2) ** 0.5) + eps)
+                        (((opt_state[p]['exp_step_avg_sq'].data / bias_correction2) ** 0.5) + eps)
 
                     gap = (p - sp).abs()
 
@@ -114,7 +111,6 @@ class AdamWGapAware(GapAwareBase):
     def apply_on_theta(self, real_theta):
 
         opt_state = self.optimizer.state
-        ra = self.running_avg_step
 
         with torch.no_grad():
             for pg, rpg in zip(self.optimizer.param_groups, real_theta):
@@ -134,7 +130,7 @@ class AdamWGapAware(GapAwareBase):
                     # calculate C coefficient per-element
                     # NOTE: can remove the "data". but whatever.
                     avg_steps_needed = max_lr * \
-                        (((ra[id(p)].data / bias_correction2) ** 0.5) + eps)
+                        (((opt_state[p]['exp_step_avg_sq'].data / bias_correction2) ** 0.5) + eps)
 
                     gap = (p - rp).abs()
                     # pg['lr'] * p.grad.abs()
@@ -166,26 +162,7 @@ class AdamWGapAware(GapAwareBase):
                                  ((1 - penalty) / penalty))
 
     def update_running_stats(self):
-        """
-        Update the exponential step running average
-        Requires: that we got some grad.
-        """
-        # NOTE: same as adam_gap_aware
-        opt_s = self.optimizer.state
-        ra = self.running_avg_step
-
-        with torch.no_grad():
-            for pg in self.optimizer.param_groups:
-                beta1, beta2 = pg['betas']
-
-                if beta1 != 0:
-                    for p in pg['params']:
-                        ra[id(p)].data = beta2 * ra[id(p)].data + \
-                            (1 - beta2) * \
-                            (opt_s[p]["exp_avg"].data ** 2)
-                else:
-                    for p in pg['params']:
-                        ra[id(p)].data = opt_s[p]['exp_avg_sq'].data
+        pass
 
 
 # TODO: add to adam...

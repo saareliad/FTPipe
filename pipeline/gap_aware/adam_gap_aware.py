@@ -1,9 +1,26 @@
 import torch
 from .interface import GapAwareBase
 from itertools import chain
-from .sgd_gap_aware import init_running_avg_step
-from ..weight_prediction.adam import adam_init
 import numpy as np
+
+
+def gap_aware_adam_init(optimizer):
+    # Ugly hack, init momentum buffer to zeros before we start
+    # State initialization
+    for pg in optimizer.param_groups:
+        for p in pg['params']:
+            state = optimizer.state[p]
+            if len(state) == 0:
+                state['exp_avg'] = torch.zeros_like(
+                    p.data, memory_format=torch.preserve_format)
+                state['exp_avg_sq'] = torch.zeros_like(
+                    p.data, memory_format=torch.preserve_format)
+                state['step'] = 0
+                # Exponential moving average of squared step values
+                state['exp_step_avg_sq'] = torch.zeros_like(
+                    p.data, memory_format=torch.preserve_format)
+                # NOTE: amsgrad is not supported.
+
 
 # TODO: check that the step count is indeed OK (and ahead by 1)
 # TODO: record and return total gap.
@@ -19,8 +36,8 @@ class AdamGapAware(GapAwareBase):
         """ Apply Gap Aware on computed gradients """
         super().__init__(optimizer)
 
-        self.running_avg_step = init_running_avg_step(optimizer)
-        adam_init(optimizer)
+        # NOTE: the goal of the running avg is to estimate the step size we take
+        gap_aware_adam_init(optimizer)
         #     # TODO: sched aware LR.
 
     def apply_from_grad(self):
@@ -30,7 +47,6 @@ class AdamGapAware(GapAwareBase):
     def apply_on_stashed(self, stashed_theta):
         """ True weights are loaded into the model, and given a stashed theta """
         opt_state = self.optimizer.state
-        ra = self.running_avg_step
 
         with torch.no_grad():
             for pg, spg in zip(self.optimizer.param_groups, stashed_theta):
@@ -51,7 +67,7 @@ class AdamGapAware(GapAwareBase):
                     # calculate C coefficient per-element
                     # Note: can remove the "data". but whatever.
                     avg_steps_needed = max_lr * \
-                        (((ra[id(p)].data / bias_correction2) ** 0.5) + eps)
+                        (((opt_state[p]['exp_step_avg_sq'].data / bias_correction2) ** 0.5) + eps)
 
                     gap = (p - sp).abs()
                     # pg['lr'] * p.grad.abs()
@@ -82,7 +98,6 @@ class AdamGapAware(GapAwareBase):
     def apply_on_theta(self, real_theta):
 
         opt_state = self.optimizer.state
-        ra = self.running_avg_step
 
         penatly_arr = []
 
@@ -104,7 +119,7 @@ class AdamGapAware(GapAwareBase):
                     # calculate C coefficient per-element
                     # Note: can remove the "data". but whatever.
                     avg_steps_needed = max_lr * \
-                        (((ra[id(p)].data / bias_correction2) ** 0.5) + eps)
+                        (((opt_state[p]['exp_step_avg_sq'].data / bias_correction2) ** 0.5) + eps)
 
                     gap = (p - rp).abs()
                     # pg['lr'] * p.grad.abs()
@@ -136,28 +151,8 @@ class AdamGapAware(GapAwareBase):
 
         print("mean_penaltly", np.mean(penatly_arr))
 
-
     def update_running_stats(self):
-        """
-        Update the exponential step running average
-        Requires: that we got some grad.
-        """
-        # NOTE: same as adamw_gap_aware
-        opt_s = self.optimizer.state
-        ra = self.running_avg_step
-
-        with torch.no_grad():
-            for pg in self.optimizer.param_groups:
-                beta1, beta2 = pg['betas']
-
-                if beta1 != 0:
-                    for p in pg['params']:
-                        ra[id(p)].data = beta2 * ra[id(p)].data + \
-                            (1 - beta2) * \
-                            (opt_s[p]["exp_avg"].data ** 2)
-                else:
-                    for p in pg['params']:
-                        ra[id(p)].data = opt_s[p]['exp_avg_sq'].data
+        pass
 
 
 def get_adam_gap_aware_cls() -> AdamGapAware:
