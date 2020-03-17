@@ -60,20 +60,23 @@ class PartitionedTrainer(AnyTrainer):
     def non_last_partition_step(self, *args, **kw):
         pass
 
-    def try_record_real_gap_from_current(self, real_theta):
+    def try_record_real_gap_from_current(self, real_theta, pre_computed_gap=None):
         """ calculates gap between model parameters and a given set of parameters, real_theta
             real_theta: Given set of parameters. TODO: rename
         """
         # TODO: this is very weird from here. this is certainly not the place.
         # TODO: should pass a function to calculate this and do it in the right place.
         if self.statistics.has_statistic("gap"):
-            with torch.no_grad():
-                gap = sum([
-                    torch.dist(a, b, p=2).item() for a, b in zip(
-                        chain.from_iterable([[p for p in pg['params']] for pg
-                                             in self.optimizer.param_groups]),
-                        chain.from_iterable(real_theta))
-                ])
+            if pre_computed_gap is not None:
+                with torch.no_grad():
+                    gap = sum([
+                        torch.dist(a, b, p=2).item() for a, b in zip(
+                            chain.from_iterable([[p for p in pg['params']] for pg
+                                                in self.optimizer.param_groups]),
+                            chain.from_iterable(real_theta))
+                    ])
+            else:
+                gap = pre_computed_gap
 
             # FIXME:
             self.statistics.update_statistic_after_batch_single("gap", gap, 1)
@@ -137,6 +140,7 @@ class GradNormStepper:
 
 class BaseLossTrainer(GradNormStepper, PartitionedSupervisedTrainer):
     """Trainer assuming loss is calculated *outside* the model """
+
     def __init__(self,
                  model,
                  optimizer,
@@ -169,6 +173,7 @@ class BaseLossTrainer(GradNormStepper, PartitionedSupervisedTrainer):
 class BaseOutPutIsLossTrainer(GradNormStepper,
                               PartitionedSupervisedLossIncludedTrainer):
     """Trainer assuming loss is calculated *inside* the model """
+
     def __init__(self,
                  model,
                  optimizer,
