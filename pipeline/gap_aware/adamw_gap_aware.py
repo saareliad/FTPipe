@@ -71,13 +71,13 @@ class AdamWGapAware(GapAwareBase):
 
                 for p, sp in zip(pg['params'], spg):
 
-                    step_count = opt_state[p]['step'] + 1
+                    # step_count = opt_state[p]['step'] + 1
+                    # bias_correction2 = 1 - beta2**(step_count)
 
-                    bias_correction2 = 1 - beta2**(step_count)
                     # calculate C coefficient per-element
                     # NOTE: can remove the "data". but whatever.
-                    avg_steps_needed = max_lr * \
-                        (((opt_state[p]['exp_step_avg_sq'].data / bias_correction2) ** 0.5) + eps)
+                    # TODO: use max_lr somwhow, instead of doing it in optimizer
+                    avg_steps_needed = (opt_state[p]['exp_step_avg_sq'].data ** 0.5) + eps
 
                     gap = (p - sp).abs()
 
@@ -123,14 +123,14 @@ class AdamWGapAware(GapAwareBase):
                 eps = pg['eps']
 
                 for p, rp in zip(pg['params'], rpg):
-                    step_count = opt_state[p]['step'] + 1
 
-                    bias_correction2 = 1 - beta2**(step_count)
+                    # step_count = opt_state[p]['step'] + 1
+                    # bias_correction2 = 1 - beta2**(step_count)
 
                     # calculate C coefficient per-element
                     # NOTE: can remove the "data". but whatever.
-                    avg_steps_needed = max_lr * \
-                        (((opt_state[p]['exp_step_avg_sq'].data / bias_correction2) ** 0.5) + eps)
+                    # TODO: use max_lr somwhow, instead of doing it in optimizer
+                    avg_steps_needed = (opt_state[p]['exp_step_avg_sq'].data ** 0.5) + eps
 
                     gap = (p - rp).abs()
                     # pg['lr'] * p.grad.abs()
