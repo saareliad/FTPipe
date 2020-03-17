@@ -91,6 +91,8 @@ class Adam(Optimizer):
                     # Exponential moving average of squared gradient values
                     state['exp_avg_sq'] = torch.zeros_like(
                         p.data, memory_format=torch.preserve_format)
+                    state['exp_step_avg_sq'] = torch.zeros_like(
+                        p.data, memory_format=torch.preserve_format)
                     if amsgrad:
                         # Maintains max of all exp. moving avg. of sq. grad. values
                         state['max_exp_avg_sq'] = torch.zeros_like(
@@ -123,6 +125,20 @@ class Adam(Optimizer):
 
                 step_size = group['lr'] / bias_correction1
 
-                p.data.addcdiv_(-step_size, exp_avg, denom)
+                # Original:
+                # p.data.addcdiv_(-step_size, exp_avg, denom)
+
+                # We will split the computation to also commute running avg with no memory overhead.
+
+                # split (Added 1 kernel to use denom later)
+                torch.div(exp_avg, denom, out=denom)
+                p.data.add_(-step_size, denom)
+
+                # Added 2 kernels compute running avg, without any memory overhead.
+                state['exp_step_avg_sq'].mul_(beta2).addcmul_(
+                    (1 - beta2) * math.pow(step_size, 2), denom, denom)
+
+                # Note: checked that numerical stability will hold:
+                # https://github.com/pytorch/pytorch/blob/29b673392fad1a47eca1c3bf92d24116e4c44213/aten/src/ATen/native/cuda/PointwiseOpsKernel.cu
 
         return loss
