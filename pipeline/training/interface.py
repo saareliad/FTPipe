@@ -60,13 +60,13 @@ class PartitionedTrainer(AnyTrainer):
     def non_last_partition_step(self, *args, **kw):
         pass
 
-    def try_record_real_gap_from_current(self, real_theta, pre_computed_gap=None):
+    def try_record_real_gap_from_current(self, real_theta, pre_computed_gap=None, gap_name="gap"):
         """ calculates gap between model parameters and a given set of parameters, real_theta
             real_theta: Given set of parameters. TODO: rename
         """
         # TODO: this is very weird from here. this is certainly not the place.
         # TODO: should pass a function to calculate this and do it in the right place.
-        if self.statistics.has_statistic("gap"):
+        if self.statistics.has_statistic(gap_name):
             if pre_computed_gap is not None:
                 with torch.no_grad():
                     gap = sum([
@@ -79,8 +79,8 @@ class PartitionedTrainer(AnyTrainer):
                 gap = pre_computed_gap
 
             # FIXME:
-            self.statistics.update_statistic_after_batch_single("gap", gap, 1)
-            self.statistics.update_fit_res_after_batch_single("gap", gap)
+            self.statistics.update_statistic_after_batch_single(gap_name, gap, 1)
+            self.statistics.update_fit_res_after_batch_single(gap_name, gap)
 
 
 class PartitionedSupervisedTrainer(PartitionedTrainer, SupervisedTrainer):
