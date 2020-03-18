@@ -67,7 +67,7 @@ class PartitionedTrainer(AnyTrainer):
         # TODO: this is very weird from here. this is certainly not the place.
         # TODO: should pass a function to calculate this and do it in the right place.
         if self.statistics.has_statistic(gap_name):
-            if pre_computed_gap is not None:
+            if pre_computed_gap is None:
                 with torch.no_grad():
                     gap = sum([
                         torch.dist(a, b, p=2).item() for a, b in zip(
