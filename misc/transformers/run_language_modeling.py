@@ -530,6 +530,11 @@ def main():
     )
 
     parser.add_argument(
+        "--do_lower_case",
+        action='store_true',
+        help="Set this flag if you are using an uncased model.")
+
+    parser.add_argument(
         "--mlm", action="store_true", help="Train with masked-language modeling loss instead of language modeling."
     )
     parser.add_argument(
@@ -716,10 +721,13 @@ def main():
     else:
         config = config_class()
 
+    config.output_past = False
+    config.torchscript = True
+
     if args.tokenizer_name:
-        tokenizer = tokenizer_class.from_pretrained(args.tokenizer_name, cache_dir=args.cache_dir)
+        tokenizer = tokenizer_class.from_pretrained(args.tokenizer_name, cache_dir=args.cache_dir, do_lower_case=args.do_lower_case)
     elif args.model_name_or_path:
-        tokenizer = tokenizer_class.from_pretrained(args.model_name_or_path, cache_dir=args.cache_dir)
+        tokenizer = tokenizer_class.from_pretrained(args.model_name_or_path, cache_dir=args.cache_dir, do_lower_case=args.do_lower_case)
     else:
         raise ValueError(
             "You are instantiating a new {} tokenizer. This is not supported, but you can do it from another script, save it,"
