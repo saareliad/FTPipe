@@ -566,11 +566,11 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
     if (args.flush_rate >= 0):
         raise NotImplementedError()
 
-    TRAIN_BATCHES_TO_RUN = getattr(args, "train_batches_limit", train_dl_len)
-    TEST_BATCHES_TO_RUN = getattr(args, "test_batches_limit", test_dl_len)
+    train_batches_limit = getattr(args, "train_batches_limit", train_dl_len)
+    test_batches_limit = getattr(args, "test_batches_limit", test_dl_len)
 
-    TRAIN_BATCHES_TO_RUN = train_dl_len if TRAIN_BATCHES_TO_RUN < 0 else TRAIN_BATCHES_TO_RUN
-    TEST_BATCHES_TO_RUN = test_dl_len if TEST_BATCHES_TO_RUN < 0 else TEST_BATCHES_TO_RUN
+    train_batches_limit = train_dl_len if train_batches_limit < 0 else train_batches_limit
+    test_batches_limit = test_dl_len if test_batches_limit < 0 else test_batches_limit
 
     def run_eval(eval_batches_to_run):
         logger.info(f"Running eval")
@@ -628,24 +628,25 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
             s.set_epoch(epochs)
 
         if args.steps > 0:
-            TRAIN_BATCHES_TO_RUN = min(TRAIN_BATCHES_TO_RUN,
+            train_batches_limit = min(train_batches_limit,
                                        args.steps - steps)
 
             # handle step every.
-            reminder_to_drop = TRAIN_BATCHES_TO_RUN % args.step_every
+            reminder_to_drop = train_batches_limit % args.step_every
             if reminder_to_drop:
                 logger.info(
                     f"Drop {reminder_to_drop} steps for each epoch>={epochs}")
-                TRAIN_BATCHES_TO_RUN -= reminder_to_drop
-                if TRAIN_BATCHES_TO_RUN <= 0:
+                train_batches_limit -= reminder_to_drop
+                if train_batches_limit <= 0:
                     break
+        
         epoch_start_time = time.time()
-        did_train = run_train(TRAIN_BATCHES_TO_RUN)
-        did_eval = run_eval(TEST_BATCHES_TO_RUN)
+        did_train = run_train(train_batches_limit)
+        did_eval = run_eval(test_batches_limit)
 
         epochs += 1
         if did_train:
-            steps += math.ceil(TRAIN_BATCHES_TO_RUN / args.step_every)
+            steps += math.ceil(train_batches_limit / args.step_every)
 
         total_epoch_time = (time.time() - epoch_start_time)
         total_epoch_times_list.append(total_epoch_time)

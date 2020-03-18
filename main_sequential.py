@@ -194,22 +194,22 @@ def training_loop(args, logger, train_dl, test_dl, partition, scheduler,
     logger.info(f"Running for {args.epochs} epochs and {args.steps} steps")
 
     if not hasattr(args, "train_batches_limit"):
-        TRAIN_BATCHES_TO_RUN = len(train_dl)
+        train_batches_limit = len(train_dl)
     else:
-        TRAIN_BATCHES_TO_RUN = getattr(args, "train_batches_limit") if getattr(
+        train_batches_limit = getattr(args, "train_batches_limit") if getattr(
             args, "train_batches_limit") >= 0 else len(train_dl)
 
     if not hasattr(args, "test_batches_limit"):
-        TEST_BATCHES_TO_RUN = len(test_dl)
+        test_batches_limit = len(test_dl)
     else:
-        TEST_BATCHES_TO_RUN = getattr(args, "test_batches_limit") if getattr(
+        test_batches_limit = getattr(args, "test_batches_limit") if getattr(
             args, "test_batches_limit") >= 0 else len(test_dl)
 
     while epochs < args.epochs or args.epochs < 0:
         for i in samplers:
             i.set_epoch(epochs)
         if args.steps > 0:
-            TRAIN_BATCHES_TO_RUN = min(TRAIN_BATCHES_TO_RUN,
+            train_batches_limit = min(train_batches_limit,
                                        args.steps - steps)
 
         did_train = False
@@ -219,12 +219,12 @@ def training_loop(args, logger, train_dl, test_dl, partition, scheduler,
         for TRAIN in [True, False]:
             logger.info(f"Running {'train' if TRAIN else 'eval'}")
 
-            # TRAIN_BATCHES_TO_RUN = 4
-            # TEST_BATCHES_TO_RUN = 30
+            # train_batches_limit = 4
+            # test_batches_limit = 30
 
             if TRAIN:
                 train_epoch_start_time = time.time()
-                if TRAIN_BATCHES_TO_RUN == 0:
+                if train_batches_limit == 0:
                     continue
                 # Set Dataloader
                 partition.set_dataloader(train_dl)
@@ -234,19 +234,19 @@ def training_loop(args, logger, train_dl, test_dl, partition, scheduler,
                     statistics.train()
 
                 partition.run_until_flush(
-                    min(TRAIN_BATCHES_TO_RUN, len(train_dl)))
+                    min(train_batches_limit, len(train_dl)))
                 train_epochs_times_list.append(time.time() -
                                                train_epoch_start_time)
 
                 # TODO: support generically stepping per batch...
                 scheduler.step()
                 did_train = True
-                steps += TRAIN_BATCHES_TO_RUN
+                steps += train_batches_limit
                 # TODO record it
                 statistics.last_partition_on_epoch_end()
             else:  # EVAL
                 # Set Dataloader
-                if TEST_BATCHES_TO_RUN == 0:
+                if test_batches_limit == 0:
                     continue
                 partition.set_dataloader(test_dl)
                 partition.eval()
@@ -256,7 +256,7 @@ def training_loop(args, logger, train_dl, test_dl, partition, scheduler,
 
                 with torch.no_grad():  # TODO maybe remove this?
                     partition.run_forward_until_flush(
-                        min(TEST_BATCHES_TO_RUN, len(test_dl)))
+                        min(test_batches_limit, len(test_dl)))
 
                 did_eval = True
                 statistics.last_partition_on_epoch_end()
