@@ -5,8 +5,10 @@ from pipeline import SinglePartitionManager
 from pipeline.training import AVAILABLE_TRAINERS
 from pipeline.tasks import AVAILABLE_TASKS
 from pipeline.stats import AVAILBALE_STATS  # , Stats
-from pipeline.weight_prediction import (
-    get_sgd_weight_predictor, get_adam_weight_predictor, get_adamw_weight_predictor, get_sched_predictor)
+from pipeline.weight_prediction import (get_sgd_weight_predictor,
+                                        get_adam_weight_predictor,
+                                        get_adamw_weight_predictor,
+                                        get_sched_predictor)
 from pipeline.gap_aware import get_sgd_gap_aware_cls, get_adam_gap_aware_cls
 from optimizers import AVAILBALE_OPTIMIZERS
 from pipeline.util import get_world_size
@@ -169,7 +171,9 @@ def parse_cli():
         required=False,
         # action='store_true',
         default=False,
-        help='Set to debug mpi applications. Will wait for attachment on given ranks.')
+        help=
+        'Set to debug mpi applications. Will wait for attachment on given ranks.'
+    )
 
     parser.add_argument('--config',
                         help="Config File",
@@ -325,7 +329,8 @@ def get_lr_scheduler(args, optimizer):
                     num_steps = args.steps_per_epoch * given_epochs
                     attr['args'][arg_name] = num_steps
                     print(
-                        f"preprocessed {arg_name} from {given_epochs} epochs to {num_steps} steps.")
+                        f"preprocessed {arg_name} from {given_epochs} epochs to {num_steps} steps."
+                    )
                 else:
                     raise NotImplementedError(
                         f"Unsupported preprocess argument {preproc_command}")
@@ -423,10 +428,10 @@ def get_weight_predictor(args,
         assert sched_aware_stuff is not None
         scheduler_class = sched_aware_stuff[0]
         scheduler_kw = sched_aware_stuff[1]
-        sched_predictor = get_sched_predictor(
-            optimizer, scheduler_class, **scheduler_kw)
+        sched_predictor = get_sched_predictor(optimizer, scheduler_class,
+                                              **scheduler_kw)
         sched_predictor.patch_scheduler(scheduler)
-        assert 'adam' in optimizer_type   # Remove after we implement for sgd.
+        assert 'adam' in optimizer_type  # Remove after we implement for sgd.
 
     if 'sgd' in optimizer_type:
         weight_predictor = get_sgd_weight_predictor(
@@ -451,8 +456,7 @@ def get_weight_predictor(args,
             optimizer,
             scheduler=sched_predictor,
             nag_with_predictor=nag_with_predictor,
-            true_weights_storage=true_weights_storage
-        )
+            true_weights_storage=true_weights_storage)
     else:
         raise NotImplementedError()
 
@@ -548,8 +552,9 @@ def save_distributed_experiment(statistics, args, world_size, rank, local_rank,
         torch.distributed.barrier()
 
 
-def training_loop(args, logger, train_dl, test_dl, is_first_partition, is_last_partition,
-                  partition, statistics, train_dl_len, test_dl_len, samplers):
+def training_loop(args, logger, train_dl, test_dl, is_first_partition,
+                  is_last_partition, partition, statistics, train_dl_len,
+                  test_dl_len, samplers):
     epochs = 0
     steps = 0
     total_epoch_times_list = []
@@ -566,7 +571,6 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, is_last_p
 
     TRAIN_BATCHES_TO_RUN = train_dl_len if TRAIN_BATCHES_TO_RUN < 0 else TRAIN_BATCHES_TO_RUN
     TEST_BATCHES_TO_RUN = test_dl_len if TEST_BATCHES_TO_RUN < 0 else TEST_BATCHES_TO_RUN
-
 
     def run_eval(eval_batches_to_run):
         logger.info(f"Running eval")
@@ -611,15 +615,13 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, is_last_p
         #         partition.run_until_flush(reminder)
         # else:
         partition.run_until_flush(train_batches_to_run)
-        train_epochs_times_list.append(time.time() -
-                                        train_epoch_start_time)
+        train_epochs_times_list.append(time.time() - train_epoch_start_time)
 
         if is_last_partition:
             statistics.last_partition_on_epoch_end()
         else:
             statistics.non_last_partition_on_epoch_end()
         return True
-
 
     while epochs < args.epochs or args.epochs < 0:
         for s in samplers:
@@ -640,7 +642,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition, is_last_p
         epoch_start_time = time.time()
         did_train = run_train(TRAIN_BATCHES_TO_RUN)
         did_eval = run_eval(TEST_BATCHES_TO_RUN)
-        
+
         epochs += 1
         if did_train:
             steps += math.ceil(TRAIN_BATCHES_TO_RUN / args.step_every)
@@ -731,7 +733,10 @@ def get_just_test_dataloader(args, explicit_separated_dataset=False, **kw):
 
     if explicit_separated_dataset:
         test_dl, sampler = get_separate_just_x_or_y_test_dl_from_args(
-            args, verbose=False, test_dataset_keywords=dataset_keywords, **dl_kw)
+            args,
+            verbose=False,
+            test_dataset_keywords=dataset_keywords,
+            **dl_kw)
     else:
         # Note: sometimes used to infer all parameters, (by all partitions).
         raise NotImplementedError()
@@ -963,23 +968,35 @@ def main():
         no_decay = ["bias", "LayerNorm.weight"]
         optimizer_grouped_parameters = [
             {
-                "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
-                "weight_decay": opt_args['weight_decay'],
+                "params": [
+                    p for n, p in model.named_parameters()
+                    if not any(nd in n for nd in no_decay)
+                ],
+                "weight_decay":
+                opt_args['weight_decay'],
             },
-            {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
+            {
+                "params": [
+                    p for n, p in model.named_parameters()
+                    if any(nd in n for nd in no_decay)
+                ],
+                "weight_decay":
+                0.0
+            },
         ]
         lengths = {
-            "no_decay" : len(optimizer_grouped_parameters[1]['params']),
+            "no_decay": len(optimizer_grouped_parameters[1]['params']),
             "decay": len(optimizer_grouped_parameters[0]['params'])
         }
 
         print(f"-I- optimizer_grouped_parameters: {lengths}")
 
-        optimizer = optimizer_cls(optimizer_grouped_parameters, **args.optimizer['args'])
+        optimizer = optimizer_cls(optimizer_grouped_parameters,
+                                  **args.optimizer['args'])
 
     else:
         optimizer = optimizer_cls(partition.partition.parameters(),
-                                **args.optimizer['args'])
+                                  **args.optimizer['args'])
 
     true_weights_storage = TrueWeightsStorage(optimizer)
     partition.set_true_weights_storage(true_weights_storage)
@@ -1057,8 +1074,8 @@ def main():
 
     exp_start_time = time.time()
     total_epoch_times_list, train_epochs_times_list = training_loop(
-        args, logger, train_dl, test_dl, is_first_partition, is_last_partition, partition,
-        statistics, train_dl_len, test_dl_len, samplers)
+        args, logger, train_dl, test_dl, is_first_partition, is_last_partition,
+        partition, statistics, train_dl_len, test_dl_len, samplers)
     exp_total_time = time.time() - exp_start_time
 
     # Save # FIXME
