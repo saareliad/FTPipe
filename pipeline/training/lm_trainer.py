@@ -15,7 +15,8 @@ class LMTrainer(BaseOutPutIsLossTrainer):
         # loss = self.loss_fn(x, y)
         # batch_size = len(y)
         # acc = num_correct / batch_size
-        self.statistics.last_partition_on_batch_end(loss.item(), batch_size)
+
+        self.statistics.update_on_batch("loss", loss.item(), batch_size)
 
     def last_partition_step_and_statistics(self,
                                            x,
@@ -35,12 +36,10 @@ class LMTrainer(BaseOutPutIsLossTrainer):
         if step:
             max_grad_norm = self.step_on_computed_grads()
 
-        if max_grad_norm:  # Handles different classes of statistics. not so nice, should be fixed
-            self.statistics.last_partition_on_batch_end(
-                loss.item(), batch_size, max_grad_norm)
-        else:
-            self.statistics.last_partition_on_batch_end(
-                loss.item(), batch_size)
+        self.statistics.update_on_batch("loss", loss.item(), batch_size)
+        
+        if max_grad_norm:
+            self.statistics.update_on_batch("grad_norm", max_grad_norm, 1)
 
 
 class GapAwareLMTrainer(LMTrainer, GapAwareTrainerBase):

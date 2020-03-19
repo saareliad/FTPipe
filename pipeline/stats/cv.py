@@ -28,10 +28,6 @@ class CVStats(Stats):
 
         self.record_loss_per_batch = record_loss_per_batch
 
-    def last_partition_on_batch_end(self, loss, num_correct, batch_size):
-        self.update_on_batch("loss", loss, batch_size)
-        self.update_on_batch("acc", num_correct, batch_size)
-
     def get_stats(self, *args):
         return fit_res_to_dict(self.fit_res)
 
@@ -60,21 +56,6 @@ class NormCVstats(CVStats):
             per_epoch=True,  # FIXME
             train=True,
             test=False)
-
-    def last_partition_on_batch_end(self,
-                                    loss,
-                                    num_correct,
-                                    batch_size,
-                                    grad_norm=None):
-        # FIXME: just let trainer do it or something.
-        # Note: This is also called for test
-        super().last_partition_on_batch_end(loss, num_correct, batch_size)
-
-        self.update_on_batch("grad_norm", grad_norm, 1)
-
-    def non_last_partition_on_batch_end(self, grad_norm):
-        super().non_last_partition_on_batch_end()
-        self.update_on_batch("grad_norm", grad_norm, 1)
 
     def get_stats(self, stage_id=None):
         fit_res = super().get_stats()

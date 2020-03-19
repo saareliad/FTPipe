@@ -116,8 +116,9 @@ class GradNormStepper:
     def non_last_partition_step(self):
         max_grad_norm = self.step_on_computed_grads()
         # Handles different classes of statistics. not so nice, should be fixed
+
         if not (max_grad_norm is None):
-            self.statistics.non_last_partition_on_batch_end(max_grad_norm)
+            self.statistics.update_on_batch("grad_norm", max_grad_norm, 1)
 
     def step_on_computed_grads(self):
         # TODO: implement gradient statistics later

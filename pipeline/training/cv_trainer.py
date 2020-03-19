@@ -16,8 +16,9 @@ class CVTrainer(BaseLossTrainer):
         batch_size = len(y)
         y_pred = torch.argmax(x, 1)
         num_correct = torch.sum(y == y_pred).item()
-        # acc = num_correct / batch_size
-        self.statistics.last_partition_on_batch_end(loss.item(), num_correct, batch_size)
+
+        self.statistics.update_on_batch("loss", loss.item(), batch_size)
+        self.statistics.update_on_batch("acc", num_correct, batch_size)
 
     def last_partition_step_and_statistics(self, x, y, loss, step=True):
         """
@@ -35,11 +36,10 @@ class CVTrainer(BaseLossTrainer):
         if step:
             max_grad_norm = self.step_on_computed_grads()
 
-        if max_grad_norm:  # Handles different classes of statistics. not so nice, should be fixed
-            self.statistics.last_partition_on_batch_end(loss.item(), num_correct, batch_size,
-                                         max_grad_norm)
-        else:
-            self.statistics.last_partition_on_batch_end(loss.item(), num_correct, batch_size)
+        self.statistics.update_on_batch("loss", loss.item(), batch_size)
+        self.statistics.update_on_batch("num_correct", num_correct, batch_size)
+        if max_grad_norm:
+            self.statistics.update_on_batch("grad_norm", max_grad_norm, 1)
 
 
 # TODO: it is also possible to do the entire thing on activation gradients,
