@@ -2,7 +2,9 @@ import torch
 import logging
 from collections import OrderedDict
 from . import CommunicationHandlerBase
-from .partition import (Partition, LastPartition, FirstPartition, PartitionWithoutRecomputation, LastPartitionWithLabelInput)
+from .partition import (Partition, LastPartition, FirstPartition,
+                        PartitionWithoutRecomputation,
+                        LastPartitionWithLabelInput)
 from .partition import get_buffers_for_ddp_sync
 from .training.interface import PartitionedTrainer
 from .tasks import DLTask
@@ -25,30 +27,30 @@ class SinglePartitionManager:
     # PROBLEMATIC_POLICY = 'SKIP'
 
     def __init__(
-            self,
-            stage,
-            num_stages,
-            partition: torch.nn.Module,
-            comm_handler: CommunicationHandlerBase,
-            work_scheduler: WorkScheduler,
-            training_tensor_shapes,
-            eval_tensor_shapes,
-            training_tensor_dtypes,  # FIXME
-            device,
-            is_last_partition,
-            is_first_partition,
-            log_frequency=100,
-            max_buffers=2,
-            step_every=1,
-            keep_buffers_alive=False,
-            use_recomputation=True,
-            gap_aware_just_loss=False,
-            sync_buffers=False,
-            use_pre_loaded_input=False,  # TODO: this is an option to support LMHeads in which the input goes to a partition. # TODO: write a trainer which can work with it.
+        self,
+        stage,
+        num_stages,
+        partition: torch.nn.Module,
+        comm_handler: CommunicationHandlerBase,
+        work_scheduler: WorkScheduler,
+        training_tensor_shapes,
+        eval_tensor_shapes,
+        training_tensor_dtypes,  # FIXME
+        device,
+        is_last_partition,
+        is_first_partition,
+        log_frequency=100,
+        max_buffers=2,
+        step_every=1,
+        keep_buffers_alive=False,
+        use_recomputation=True,
+        gap_aware_just_loss=False,
+        sync_buffers=False,
+        use_pre_loaded_input=False,  # TODO: this is an option to support LMHeads in which the input goes to a partition. # TODO: write a trainer which can work with it.
     ):
         # Preloaded input for last partition
         self.use_pre_loaded_input = use_pre_loaded_input
-        
+
         if (gap_aware_just_loss and (not use_recomputation)):
             raise NotImplementedError(
                 "gap_aware_just_loss works only with recomputation on")
@@ -411,14 +413,18 @@ class SinglePartitionManager:
         # actually, many times we clone the input anyway inside the partition (for re-computation)
         # and if so, we can use less recv buffers for forward to save memory,
         # while still getting the same speed/parallelism.
-        if ((not recved_all) and (batch_idx - 1 + fwd_rcev_buffers.max_buffers < num_batches)):
+        if ((not recved_all) and
+            (batch_idx - 1 + fwd_rcev_buffers.max_buffers < num_batches)):
             fwd_rcev_buffers.recv_next(batch_idx - 1)
 
         x, *ctx = self.task.unpack_data_for_partition(x)
 
         return x, ctx
 
-    def forward_pass_and_send(self, batch_idx, num_batches, preload_input=None):
+    def forward_pass_and_send(self,
+                              batch_idx,
+                              num_batches,
+                              preload_input=None):
         x, ctx = self.get_input_data_forward(batch_idx, num_batches)
 
         if (preload_input is not None) and self.is_last_partition:
@@ -433,7 +439,7 @@ class SinglePartitionManager:
             send_ctx = self.task.pack_send_context(x, *ctx)
             request_objects = self.comm_handler.send_activations(
                 send_ctx, batch_idx)
-        
+
         return request_objects, x, ctx
 
     def run_batch_forward(self, batch_idx, num_batches, done_bwds=None):
@@ -476,7 +482,7 @@ class SinglePartitionManager:
             if self.use_pre_loaded_input:
                 preload_input = preload_ctx
                 preload_ctx = tuple()
-            
+
         # Do the forward pass with optionals
         # optional (1): Weight Prediction
         # optional (2): Weight Stashing
@@ -495,8 +501,6 @@ class SinglePartitionManager:
 
                 weight_predictor.setup(expected_staleness)
                 weight_predictor.forward()
-                # Moved by: sum(i.norm() for i in self.true_weights_storage.true_weights[0])
-                # - sum([i.norm() for i in self.trainer.optimizer.param_groups[0]['params']])
                 if old_lrs:
                     pgs = self.trainer.optimizer.param_groups
                     for pg, old_lr in zip(pgs, old_lrs):
@@ -560,7 +564,8 @@ class SinglePartitionManager:
                     step_and_stats_ctx = trainer.backprop_last_partition(
                         x, *ctx)
             else:
-                step_and_stats_ctx = trainer.backprop_last_partition(x, *ctx)  # NOTE: Usually, this is loss
+                step_and_stats_ctx = trainer.backprop_last_partition(
+                    x, *ctx)  # NOTE: Usually, this is loss
 
             # Send partition border gradients
             grads = partition.get_grad(batch_idx)
@@ -651,7 +656,8 @@ class SinglePartitionManager:
             request_objects = self.comm_handler.send_gradients(g, batch_idx)
 
         # Wait for next if appropriate
-        if ((not recved_all) and (batch_idx - 1 + bwd_rcev_buffers.max_buffers < num_batches)):
+        if ((not recved_all) and
+            (batch_idx - 1 + bwd_rcev_buffers.max_buffers < num_batches)):
             bwd_rcev_buffers.recv_next(batch_idx - 1)
 
         if do_step:
@@ -662,7 +668,9 @@ class SinglePartitionManager:
                 if self.gap_aware_just_loss:
                     stashed_theta = weight_stasher.pop_stashed_buff(batch_idx)
                     # FIXME: the whole idea of recording the gap from here is not good.
-                    trainer.try_record_real_gap_from_current(stashed_theta)
+                    pre_computed_gap = 0 if stashed_theta is None else None
+                    trainer.try_record_real_gap_from_current(
+                        stashed_theta, pre_computed_gap=pre_computed_gap)
                     real_theta = None
                 else:
                     real_theta = self.true_weights_storage.get_true_weights()
