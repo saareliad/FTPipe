@@ -420,7 +420,7 @@ def get_weight_predictor(args,
 
     assert (pred_mem in {"clone", "calc"})
     assert (pred['type'] == "msnag")
-    assert ('sgd' in optimizer_type or 'adam' == optimizer_type)
+    assert ('sgd' in optimizer_type or 'adam' in optimizer_type)
 
     sched_predictor = None
     # If we have sched aware:
@@ -443,7 +443,6 @@ def get_weight_predictor(args,
             scheduler=sched_predictor,
             nag_with_predictor=nag_with_predictor,
             true_weights_storage=true_weights_storage)
-        return weight_predictor, nag_with_predictor
     elif 'adam' == optimizer_type:
         weight_predictor = get_adam_weight_predictor(
             pred_mem,
@@ -451,7 +450,6 @@ def get_weight_predictor(args,
             scheduler=sched_predictor,
             nag_with_predictor=nag_with_predictor,
             true_weights_storage=true_weights_storage)
-        return weight_predictor, nag_with_predictor
     elif 'adamw' == optimizer_type:
         weight_predictor = get_adamw_weight_predictor(
             pred_mem,
@@ -462,6 +460,7 @@ def get_weight_predictor(args,
     else:
         raise NotImplementedError()
 
+    return weight_predictor, nag_with_predictor
 
 def hack_trainer_type_to_gap_aware(args):
     def hack():
