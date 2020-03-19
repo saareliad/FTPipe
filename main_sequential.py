@@ -5,14 +5,14 @@ import numpy as np
 import time
 import logging
 
-from main import parse_cli, parse_json_config, get_scheduler, parse_env_vars
+from main import parse_cli, parse_json_config, get_lr_scheduler, parse_env_vars
 from models import create_normal_model_instance
 from experiments import save_experiment
 
 from optimizers import AVAILBALE_OPTIMIZERS
 from pipeline.training import AVAILABLE_TRAINERS
 # from pipeline.tasks import AVAILABLE_TASKS
-from pipeline.stats import AVAILBALE_STATS
+from pipeline.stats import get_statistics
 
 from pipeline.tasks import DLTask
 from pipeline import dp_sim
@@ -30,6 +30,7 @@ from datasets import (simplified_get_train_valid_dl_from_args,
 # TODO: support LM
 # TODO: parse_env_vars
 # TODO: get_dataloaders
+
 
 class SyncCVTask(DLTask):
     def __init__(self, device):
@@ -209,8 +210,7 @@ def training_loop(args, logger, train_dl, test_dl, partition, scheduler,
         for i in samplers:
             i.set_epoch(epochs)
         if args.steps > 0:
-            train_batches_limit = min(train_batches_limit,
-                                       args.steps - steps)
+            train_batches_limit = min(train_batches_limit, args.steps - steps)
 
         did_train = False
         did_eval = False
@@ -291,7 +291,7 @@ def init_DDP(args, logger):
         raise NotImplementedError("DDP only works with gloo and nccl backends")
     parse_env_vars(args)
     print("WARNING - HARDCODED TO 4 and I don't want to think about this yet")
-    
+
     args.world_size = 4  # get_world_size(args.distributed_backend) # FIXME:
     # Initialize the distributed environment.
     dist.init_process_group(args.distributed_backend, init_method='env://')
@@ -388,7 +388,7 @@ def yuck_from_main():
     trainer_cls = AVAILABLE_TRAINERS.get(args.trainer['type'])
     # task_cls = AVAILABLE_TASKS.get(args.task)  # TODO:
     optimizer_cls = AVAILBALE_OPTIMIZERS.get(args.optimizer_type)
-    statistics = AVAILBALE_STATS.get(args.statistics)
+    statistics = get_statistics(args.statistics)
     assert not (statistics is None)
 
     # Set optimizer
@@ -397,7 +397,7 @@ def yuck_from_main():
 
     # Set Scheduler
     # TODO: scheduler for sched aware prediction
-    scheduler, _ = get_scheduler(args, optimizer)
+    scheduler, _ = get_lr_scheduler(args, optimizer)
     trainer_extra_args = args.trainer['args']
     trainer = trainer_cls(model,
                           optimizer=optimizer,
@@ -421,6 +421,7 @@ def yuck_from_main():
     args.exp_total_time = exp_total_time
 
     save_sequential_experiment(statistics, args)
+
 
 if __name__ == "__main__":
     yuck_from_main()

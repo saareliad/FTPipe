@@ -32,15 +32,11 @@ class CVTrainer(BaseLossTrainer):
         y_pred = torch.argmax(x, 1)
         num_correct = torch.sum(y == y_pred).item()
 
-        max_grad_norm = None
         if step:
-            max_grad_norm = self.step_on_computed_grads()
+            self.step_on_computed_grads()
 
         self.statistics.update_on_batch("loss", loss.item(), batch_size)
         self.statistics.update_on_batch("num_correct", num_correct, batch_size)
-        if max_grad_norm:
-            self.statistics.update_on_batch("grad_norm", max_grad_norm, 1)
-
 
 # TODO: it is also possible to do the entire thing on activation gradients,
 #  avoiding the need to do it over all gradeints.
