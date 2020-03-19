@@ -589,6 +589,9 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
         # eval_epochs_times_list.append(time.time() - eval_epoch_start_time)
         if is_last_partition:
             statistics.last_partition_on_epoch_end()
+        # NOTE: in eval() only last partition computes statistics
+        # else:
+        #     statistics.non_last_partition_on_epoch_end()
         return True
 
     def run_train(train_batches_to_run):
