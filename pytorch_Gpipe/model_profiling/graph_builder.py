@@ -494,7 +494,7 @@ def shape_analysis(nodes: GraphNodes) -> GraphNodes:
                     assert type(n.shape) is torch.Size
                     sizes.append((n.shape,))
             node.shape = tuple(sizes)
-        elif "prim::ListConstruct" in node.scope or "prim::TupleConstruct" in node.scope:
+        elif node.valueType() in [list, tuple]:
             shape = tuple([i.shape for i in node.in_nodes])
             node.shape = shape
         elif "prim::TupleUnpack" in node.scope or "prim::ListUnpack" in node.scope:
