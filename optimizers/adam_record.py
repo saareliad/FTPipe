@@ -91,6 +91,7 @@ class Adam(Optimizer):
                     # Exponential moving average of squared gradient values
                     state['exp_avg_sq'] = torch.zeros_like(
                         p.data, memory_format=torch.preserve_format)
+                    # Exponential moving average of squared step values
                     state['exp_step_avg_sq'] = torch.zeros_like(
                         p.data, memory_format=torch.preserve_format)
                     if amsgrad:

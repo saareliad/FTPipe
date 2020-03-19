@@ -71,11 +71,14 @@ class GapAwareBase(abc.ABC):
 
     MAX_LR_NAME = "max_lr"
 
-    def __init__(self, optimizer):
+    def __init__(self, optimizer, initial_max_lr=None):
         """ Apply Gap Aware on computed gradients """
-
-        for pg in optimizer.param_groups:
-            pg[GapAwareBase.MAX_LR_NAME] = pg['lr']
+        if initial_max_lr is None:
+            for pg in optimizer.param_groups:
+                pg[GapAwareBase.MAX_LR_NAME] = pg['lr']
+        else:
+            for pg in optimizer.param_groups:
+                pg[GapAwareBase.MAX_LR_NAME] = initial_max_lr
 
         self.optimizer = optimizer
 

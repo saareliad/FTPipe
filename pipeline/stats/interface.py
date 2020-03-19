@@ -10,11 +10,12 @@ class Stats(abc.ABC):
 
     FIT_RESULTS_CLASS = SimpleNamespace
 
-    def __init__(self):
+    def __init__(self, is_last_partition=True):
         self.training = True
         self.fit_res = self.FIT_RESULTS_CLASS(num_epochs=0)
         assert not (self.fit_res is None)
         self.stats_config = dict()
+        self.is_last_partition = is_last_partition
 
     def train(self):
         self.training = True
@@ -112,13 +113,6 @@ class Stats(abc.ABC):
 
         for i in fit_res_dict:
             setattr(self.fit_res, i, [])
-
-    @abc.abstractmethod
-    def last_partition_on_batch_end(self, *args, **kw):
-        pass
-
-    def non_last_partition_on_batch_end(self, *args, **kw):
-        pass
 
     def non_last_partition_on_epoch_end(self):
         pass
