@@ -22,9 +22,6 @@ class AnyTrainer(abc.ABC):
     def calc_test_stats(self, *args, **kw):
         pass
 
-    def modify_gradients(self, *args, **kw):
-        pass
-
 
 class SupervisedLossIncludedTrainer(AnyTrainer):
     # @abc.abstractmethod
@@ -114,14 +111,18 @@ class GradNormStepper:
     #     self.always_calc_grad_norm = always_calc_grad_norm
     #     self.statistics = statistics
     def non_last_partition_step(self):
-        max_grad_norm = self.step_on_computed_grads()
-        # Handles different classes of statistics. not so nice, should be fixed
-
-        if not (max_grad_norm is None):
-            self.statistics.update_on_batch("grad_norm", max_grad_norm, 1)
+        self.step_on_computed_grads()
 
     def step_on_computed_grads(self):
-        # TODO: implement gradient statistics later
+        self.optimizer.step()
+        self.optimizer.zero_grad()
+        # TODO: per step scheduler
+
+        if self.PER_STEP_SCHEDULER:
+            self.scheduler.step()
+
+    def grad_norm(self):
+        # Grad norm
         max_grad_norm = None
         if self.max_grad_norm:
             with torch.no_grad():
@@ -132,14 +133,8 @@ class GradNormStepper:
             with torch.no_grad():
                 max_grad_norm = calc_norm(self.model.parameters(), norm_type=2)
 
-        self.optimizer.step()
-        self.optimizer.zero_grad()
-        # TODO: per step scheduler
-
-        if self.PER_STEP_SCHEDULER:
-            self.scheduler.step()
-
-        return max_grad_norm
+        if max_grad_norm:
+            self.statistics.update_on_batch("grad_norm", max_grad_norm, 1)
 
 
 class BaseLossTrainer(GradNormStepper, PartitionedSupervisedTrainer):

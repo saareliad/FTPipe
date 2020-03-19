@@ -1,6 +1,7 @@
 # import torch
 from .interface import BaseOutPutIsLossTrainer
 from .gap_aware_trainer import GapAwareTrainerBase
+import math
 # TODO: typehint for statistics. maybe it should actually sit under stats
 
 
@@ -11,12 +12,10 @@ class LMTrainer(BaseOutPutIsLossTrainer):
         super().__init__(*args, **kw)
 
     def calc_test_stats(self, loss, batch_size):
-        # print("Called calc_test_stats")
-        # loss = self.loss_fn(x, y)
-        # batch_size = len(y)
-        # acc = num_correct / batch_size
 
-        self.statistics.update_on_batch("loss", loss.item(), batch_size)
+        loss = loss.item()
+        self.statistics.update_on_batch("loss", loss, batch_size)
+        self.statistics.update_on_batch("ppl", math.exp(loss), batch_size)
 
     def last_partition_step_and_statistics(self,
                                            x,
@@ -31,15 +30,11 @@ class LMTrainer(BaseOutPutIsLossTrainer):
 
         step can be used later for grad accumulations
         """
+        self.step_on_computed_grads()
 
-        max_grad_norm = None
-        if step:
-            max_grad_norm = self.step_on_computed_grads()
-
-        self.statistics.update_on_batch("loss", loss.item(), batch_size)
-        
-        if max_grad_norm:
-            self.statistics.update_on_batch("grad_norm", max_grad_norm, 1)
+        loss = loss.item()
+        self.statistics.update_on_batch("loss", loss, batch_size)
+        self.statistics.update_on_batch("ppl", math.exp(loss), batch_size)
 
 
 class GapAwareLMTrainer(LMTrainer, GapAwareTrainerBase):

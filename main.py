@@ -4,7 +4,7 @@ from pipeline import SinglePartitionManager
 
 from pipeline.training import AVAILABLE_TRAINERS
 from pipeline.tasks import AVAILABLE_TASKS
-from pipeline.stats import AVAILBALE_STATS  # , Stats
+from pipeline.stats import AVAILBALE_STATS, get_statistics  # , Stats
 from pipeline.weight_prediction import (get_sgd_weight_predictor,
                                         get_adam_weight_predictor,
                                         get_adamw_weight_predictor,
@@ -921,7 +921,7 @@ def main():
     trainer_cls = AVAILABLE_TRAINERS.get(args.trainer['type'])
     task_cls = AVAILABLE_TASKS.get(args.task)
     optimizer_cls = get_optimizer_cls(args, partition_using_gap_aware)
-    statistics = AVAILBALE_STATS.get(args.statistics)
+    statistics = get_statistics(args.statistics, is_last_partition=is_last_partition)
     assert not (statistics is None)
     work_scheduler = AVAILABLE_WORK_SCHEDULERS.get(args.work_scheduler)
     gap_aware_just_loss = getattr(args, 'gap_aware_just_loss', False)

@@ -6,7 +6,7 @@ from .partition import (Partition, LastPartition, FirstPartition,
                         PartitionWithoutRecomputation,
                         LastPartitionWithLabelInput)
 from .partition import get_buffers_for_ddp_sync
-from .training.interface import PartitionedTrainer
+from .training.interface import PartitionedTrainer, GradNormStepper
 from .tasks import DLTask
 from .weight_prediction.interface import WeightPredictor
 from .gap_aware import GapAwareBase  # TODO: change to interface.
@@ -208,7 +208,7 @@ class SinglePartitionManager:
         self.async_fwd_objects = OrderedDict()
         self.async_bwd_objects = OrderedDict()
 
-        # self.modify_gradients_before_send = False  # TODO add as option
+        # self.apply_gap_aware_before_send = False  # TODO add as option
         self.delay_at_batch = {}
 
         # Hints,May be set later.
@@ -663,6 +663,12 @@ class SinglePartitionManager:
         if do_step:
             trainer = self.trainer
             weight_stasher = self.weight_stasher
+
+            # if isinstance(trainer, GradNormStepper):
+            if hasattr(trainer, "grad_norm"):
+                # trainer: GradNormStepper
+                trainer.grad_norm()
+
             # TODO: allow access to real theta just for statistics
             if weight_stasher:
                 if self.gap_aware_just_loss:
@@ -697,9 +703,10 @@ class SinglePartitionManager:
 
                 # Modify gradients
                 # TODO: return the gap.
-                trainer.modify_gradients(real_theta=real_theta,
-                                         delay=delay,
-                                         stashed_theta=stashed_theta)
+                # TODO: handle grad clip here instead of in step.
+                trainer.apply_gap_aware(real_theta=real_theta,
+                                        delay=delay,
+                                        stashed_theta=stashed_theta)
 
             if weight_stasher:
                 # Mark previously stashed weights as dirty

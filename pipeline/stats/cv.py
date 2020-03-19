@@ -1,14 +1,12 @@
-from typing import List
 from .interface import Stats
-from types import SimpleNamespace
 from .utils import fit_res_to_dict, AverageMeter, AccuracyMeter
 
 
 class CVStats(Stats):
     """ Class to handle statistics collection for CV Tasks """
-    def __init__(self, record_loss_per_batch=False):
+    def __init__(self, record_loss_per_batch=False, is_last_partition=True):
         # Stats
-        super().__init__()
+        super().__init__(is_last_partition=is_last_partition)
 
         self.add_statistic(
             name="loss",

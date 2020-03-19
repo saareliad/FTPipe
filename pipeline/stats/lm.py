@@ -5,9 +5,9 @@ from .utils import fit_res_to_dict, AverageMeter
 
 class LMStats(Stats):
     """ Class to handle statistics collection for LM Tasks """
-    def __init__(self, record_loss_per_batch=False):
+    def __init__(self, record_loss_per_batch=False, is_last_partition=True):
         # Stats
-        super().__init__()
+        super().__init__(is_last_partition=is_last_partition)
 
         self.add_statistic(
             name="loss",

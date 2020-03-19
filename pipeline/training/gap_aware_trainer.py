@@ -12,8 +12,7 @@ class GapAwareTrainerBase(PartitionedTrainer):
         if scheduler is not None:
             gap_aware.patch_scheduler(scheduler)
 
-    def modify_gradients(self, real_theta=None, delay=None,
-                         stashed_theta=None):
+    def apply_gap_aware(self, real_theta=None, delay=None, stashed_theta=None):
         """ NOTE: we assume that if `real_theta` is given, a stashed weight is loaded into the model
         Otherwise, if stashed theta is given, we assume that the true weights are already loaded into the model,
         and we compute the gap from the stashed weights (used in "Gap aware just for loss" algorithm.
