@@ -13,7 +13,7 @@
     "trainer": {
         "type": "lm",
         "args": {
-            "max_grad_norm": 1,
+	    "max_grad_norm": 1,
             "always_calc_grad_norm": false 
         }
     },
@@ -38,14 +38,14 @@
             "num_warmup_steps": "epochs_to_steps"
         },
         "args": {
-            "num_warmup_steps": 0,
+            "num_warmup_steps": 1,
             "num_training_steps":  -1,
             "last_epoch": -1
         }
     },
-    "epochs": 3,
+    "epochs": 4,
     "steps": -1,
-    "seed": 42,
+    "seed_from_cmd": true,
     "num_chunks": 1,
     "verbose_comm": false,
     "flush_rate": -1,
