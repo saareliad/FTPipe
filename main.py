@@ -9,7 +9,7 @@ from pipeline.weight_prediction import (get_sgd_weight_predictor,
                                         get_adam_weight_predictor,
                                         get_adamw_weight_predictor,
                                         get_sched_predictor)
-from pipeline.gap_aware import get_sgd_gap_aware_cls, get_adam_gap_aware_cls
+from pipeline.gap_aware import (get_sgd_gap_aware_cls, get_adam_gap_aware_cls, get_adamw_gap_aware_cls)
 from optimizers import AVAILBALE_OPTIMIZERS
 from pipeline.util import get_world_size
 import optimizers.lr_scheduler
@@ -370,6 +370,8 @@ def get_gap_aware(args, optimizer):
         gap_aware_cls = get_sgd_gap_aware_cls(optimizer_type)
     elif 'adam' == optimizer_type:
         gap_aware_cls = get_adam_gap_aware_cls()
+    elif 'adamw' == optimizer_type:
+        gap_aware_cls = get_adamw_gap_aware_cls()
     else:
         raise NotImplementedError
 
