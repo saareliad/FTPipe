@@ -60,7 +60,10 @@ class PartitionedTrainer(AnyTrainer):
     def non_last_partition_step(self, *args, **kw):
         pass
 
-    def try_record_real_gap_from_current(self, real_theta, pre_computed_gap=None, gap_name="gap"):
+    def try_record_real_gap_from_current(self,
+                                         real_theta,
+                                         pre_computed_gap=None,
+                                         gap_name="gap"):
         """ calculates gap between model parameters and a given set of parameters, real_theta
             real_theta: Given set of parameters. TODO: rename
         """
@@ -71,16 +74,16 @@ class PartitionedTrainer(AnyTrainer):
                 with torch.no_grad():
                     gap = sum([
                         torch.dist(a, b, p=2).item() for a, b in zip(
-                            chain.from_iterable([[p for p in pg['params']] for pg
-                                                in self.optimizer.param_groups]),
+                            chain.from_iterable([[p for p in pg['params']]
+                                                 for pg in
+                                                 self.optimizer.param_groups]),
                             chain.from_iterable(real_theta))
                     ])
             else:
                 gap = pre_computed_gap
 
             # FIXME:
-            self.statistics.update_statistic_after_batch_single(gap_name, gap, 1)
-            self.statistics.update_fit_res_after_batch_single(gap_name, gap)
+            self.statistics.update_on_batch(gap_name, gap, 1)
 
 
 class PartitionedSupervisedTrainer(PartitionedTrainer, SupervisedTrainer):
@@ -140,7 +143,6 @@ class GradNormStepper:
 
 class BaseLossTrainer(GradNormStepper, PartitionedSupervisedTrainer):
     """Trainer assuming loss is calculated *outside* the model """
-
     def __init__(self,
                  model,
                  optimizer,
@@ -173,7 +175,6 @@ class BaseLossTrainer(GradNormStepper, PartitionedSupervisedTrainer):
 class BaseOutPutIsLossTrainer(GradNormStepper,
                               PartitionedSupervisedLossIncludedTrainer):
     """Trainer assuming loss is calculated *inside* the model """
-
     def __init__(self,
                  model,
                  optimizer,

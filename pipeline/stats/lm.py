@@ -5,7 +5,6 @@ from .utils import fit_res_to_dict, AverageMeter
 
 class LMStats(Stats):
     """ Class to handle statistics collection for LM Tasks """
-
     def __init__(self, record_loss_per_batch=False):
         # Stats
         super().__init__()
@@ -29,11 +28,8 @@ class LMStats(Stats):
         self.record_loss_per_batch = record_loss_per_batch
 
     def last_partition_on_batch_end(self, loss, batch_size):
-        # TODO: maby pass this dict so we can use inheritance
-        d = {"loss": (loss, batch_size), "ppl": (math.exp(loss), batch_size)}
-
-        self.update_fit_res_after_batch_all(d)
-        self.update_statistic_after_batch_all(d)
+        self.update_on_batch("loss", loss, batch_size)
+        self.update_on_batch("ppl", math.exp(loss), batch_size)
 
     def get_stats(self, *args):
         return fit_res_to_dict(self.fit_res)
@@ -52,8 +48,8 @@ class LMStats(Stats):
         return ' | {} loss {:5.2f} | {} ppl {:4.2f}'.format(
             name, loss, name, ppl)
 
-class NormLMstats(LMStats):
 
+class NormLMstats(LMStats):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
 
@@ -69,17 +65,12 @@ class NormLMstats(LMStats):
         # Note: This is also called for test
         super().last_partition_on_batch_end(loss, batch_size)
 
-        d = {"grad_norm": (grad_norm, 1)}
-
-        self.update_fit_res_after_batch_all(d)
-        self.update_statistic_after_batch_all(d)
+        self.update_on_batch("grad_norm", grad_norm, 1)
 
     def non_last_partition_on_batch_end(self, grad_norm):
         # if self.training:
         super().non_last_partition_on_batch_end()
-        d = {"grad_norm": (grad_norm, 1)}
-        self.update_fit_res_after_batch_all(d)
-        self.update_statistic_after_batch_all(d)
+        self.update_on_batch("grad_norm", grad_norm, 1)
 
     def get_stats(self, stage_id=None):
         fit_res = super().get_stats()
@@ -88,6 +79,7 @@ class NormLMstats(LMStats):
             old_name = 'grad_norm'
             fit_res[new_name] = fit_res.pop(old_name)
         return fit_res
+
 
 class LMDistanceNorm(NormLMstats):
     # FIXME: This whole chain of classes has HORRIBLE design. just implement it simple.
@@ -107,10 +99,6 @@ class LMDistanceNorm(NormLMstats):
         old_name = 'gap'
         fit_res[new_name] = fit_res.pop(old_name)
         return fit_res
-
-    # TODO:
-    # def non_last_partition_on_batch_end(self,):
-    # def last_partition_on_batch_end(self,):
 
 
 class LMDistance(LMStats):

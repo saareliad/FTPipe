@@ -25,6 +25,11 @@ class Stats(abc.ABC):
     def get_epoch_info_str(self, is_train):
         return ''
 
+    def update_on_batch(self, name, value, n):
+        # TODO: just unify this after it works.
+        self.update_statistic_after_batch_single(name, value, n)
+        self.update_fit_res_after_batch_single(name, value)
+
     def update_statistic_after_batch_single(self, name, value, n):
         """ NOTE: Attempt to replace the old function """
         cfg = self.stats_config[name]
@@ -34,15 +39,6 @@ class Stats(abc.ABC):
                 meter.update(value, n=n)
             else:
                 print(f"-W- NONE VALUE for {name}, val: {value}")
-
-    def update_statistic_after_batch_all(self, d):
-        for name, (value, n) in d.items():
-            self.update_statistic_after_batch_single(name, value, n)
-
-    def update_fit_res_after_batch_all(self, d):
-        for name, value in d.items():
-            if self.stats_config[name]['per_batch']:
-                self.update_fit_res_after_batch_single(name, value[0])
 
     def update_fit_res_after_batch_single(self, name, value):
         cfg = self.stats_config[name]
