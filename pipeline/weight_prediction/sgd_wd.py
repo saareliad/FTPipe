@@ -1,7 +1,7 @@
 import torch
 from .interface import WeightPredictor, FixFunction
 import math
-from .sympy_pred_optimizers import auto_lambdify, WDSympySGD
+from .sym_pred_optimizers import auto_lambdify, WDSympySGD
 
 
 class SGDWDClonedWeightPrediction(WeightPredictor):
