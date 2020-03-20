@@ -1053,11 +1053,20 @@ def main():
     # Set Weight Stashing
     if getattr(args, "weight_stashing", False):
         if not is_last_partition:
+
+            has_weight_predictor = weight_predictor is not None
+            if has_weight_predictor:
+                using_clone_weight_predictor = args.weight_predictor['args']['pred_mem'] == 'clone'
+            else:
+                using_clone_weight_predictor = False
+
             weight_stasher = WeightStasher(
                 optimizer,
                 step_every=args.step_every,
-                has_weight_predictor=(weight_predictor is not None),
-                true_weights_storage=true_weights_storage)
+                has_weight_predictor=has_weight_predictor,
+                true_weights_storage=true_weights_storage,
+                using_clone_weight_predictor=using_clone_weight_predictor
+                )
             partition.set_weight_stasher(weight_stasher)
 
     if gap_aware_just_loss:

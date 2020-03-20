@@ -321,9 +321,6 @@ class SinglePartitionManager:
         if self.is_last_partition:
             raise NotImplementedError()
 
-        # if weight_stasher and self.weight_predictor and self.step_every > 1:
-        #     weight_stasher.set_problematic(forward=True, policy='EVERY_BATCH')
-
         if self.is_problematic:
             if self.PROBLEMATIC_POLICY == 'SAME':
                 if self.weight_predictor is None:
@@ -619,7 +616,7 @@ class SinglePartitionManager:
         #  Recompute before waiting to the first, so parallelize communication and computation
         if weight_stasher and (not self.gap_aware_just_loss):
             # Restore to parameters which the fwd ran on
-            weight_stasher.pop_restore_stashed(batch_idx)
+            weight_stasher.pop_and_load_stashed_params(batch_idx)
             # self.true_weights_storage.record_change_mode("stashed")
 
         # elif (self.weight_predictor and self.weight_predictor.nag_with_predictor
