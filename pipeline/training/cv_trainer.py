@@ -36,7 +36,7 @@ class CVTrainer(BaseLossTrainer):
             self.step_on_computed_grads()
 
         self.statistics.update_on_batch("loss", loss.item(), batch_size)
-        self.statistics.update_on_batch("num_correct", num_correct, batch_size)
+        self.statistics.update_on_batch("acc", num_correct, batch_size)
 
 # TODO: it is also possible to do the entire thing on activation gradients,
 #  avoiding the need to do it over all gradeints.
