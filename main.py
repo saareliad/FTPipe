@@ -9,7 +9,8 @@ from pipeline.weight_prediction import (get_sgd_weight_predictor,
                                         get_adam_weight_predictor,
                                         get_adamw_weight_predictor,
                                         get_sched_predictor)
-from pipeline.gap_aware import (get_sgd_gap_aware_cls, get_adam_gap_aware_cls, get_adamw_gap_aware_cls)
+from pipeline.gap_aware import (get_sgd_gap_aware_cls, get_adam_gap_aware_cls,
+                                get_adamw_gap_aware_cls)
 from optimizers import AVAILBALE_OPTIMIZERS
 from pipeline.util import get_world_size
 import optimizers.lr_scheduler
@@ -224,8 +225,6 @@ def parse_json_config(args, config=None):
     if config is None:
         config = args.config
 
-    assert (os.path.exists(config))
-
     with open(config, 'r') as f:
         output = json.load(f)
 
@@ -234,9 +233,12 @@ def parse_json_config(args, config=None):
         base_config_path = output.get("base_config_path")
         if isinstance(base_config_path, list):
             for i in base_config_path:
-                parse_json_config(args, config=base_config_path)
+                parse_json_config(args, config=i)
         else:
             parse_json_config(args, config=base_config_path)
+
+    if not os.path.exists(config):
+        raise ValueError(f"Config {config} does not exists")
 
     for key, value in output.items():
 
@@ -462,6 +464,7 @@ def get_weight_predictor(args,
 
     return weight_predictor, nag_with_predictor
 
+
 def hack_trainer_type_to_gap_aware(args):
     def hack():
         args.trainer['type'] += "_gap_aware"
@@ -632,8 +635,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
             s.set_epoch(epochs)
 
         if args.steps > 0:
-            train_batches_limit = min(train_batches_limit,
-                                       args.steps - steps)
+            train_batches_limit = min(train_batches_limit, args.steps - steps)
 
             # handle step every.
             reminder_to_drop = train_batches_limit % args.step_every
@@ -643,7 +645,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
                 train_batches_limit -= reminder_to_drop
                 if train_batches_limit <= 0:
                     break
-        
+
         epoch_start_time = time.time()
         did_train = run_train(train_batches_limit)
         did_eval = run_eval(test_batches_limit)
@@ -922,7 +924,8 @@ def main():
     trainer_cls = AVAILABLE_TRAINERS.get(args.trainer['type'])
     task_cls = AVAILABLE_TASKS.get(args.task)
     optimizer_cls = get_optimizer_cls(args, partition_using_gap_aware)
-    statistics = get_statistics(args.statistics, is_last_partition=is_last_partition)
+    statistics = get_statistics(args.statistics,
+                                is_last_partition=is_last_partition)
     assert not (statistics is None)
     work_scheduler = AVAILABLE_WORK_SCHEDULERS.get(args.work_scheduler)
     gap_aware_just_loss = getattr(args, 'gap_aware_just_loss', False)
