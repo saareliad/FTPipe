@@ -1,17 +1,12 @@
 import torch
 from .interface import WeightPredictor, FixFunction
 import math
+from .sympy_pred_optimizers import auto_lambdify, WDSympySGD
 
 
 class SGDWDClonedWeightPrediction(WeightPredictor):
     """ Pytorch SGD. Mentioned as eq 9 Goyal et al.
         Used msnag to predict, including weight decay.
-
-        # NOTE: when nag_with_predictor is on, 
-        # it does what I developed as "weight decay aware nesterov", 
-        # that is, using the weight decay to look forward, and not just the momentum.
-        # (which most correctly implemented optimizers do anyway)
-        # I elaborate on this on my notes.
      """
     def __init__(self, *args, **kw):
 
@@ -23,37 +18,69 @@ class SGDWDClonedWeightPrediction(WeightPredictor):
                 self.optimizer.state[p]['momentum_buffer'] = torch.zeros_like(
                     p)
 
+        MAX_ALLOWEDD_STALENESS = 8  # TODO: should be a variable but I want to keep things simple.
+
+        # Automaticallty create functions to compute coeffs given staleness
+        res, _ = auto_lambdify(MAX_ALLOWEDD_STALENESS,
+                               WDSympySGD,
+                               simplify=True)
+        self.res = res
+
+    def setup(self, n_steps):
+        # Overriding this function, we handle nag_with_predictor in forward().
+        self.n_steps = n_steps
+
     def forward(self):
+        if self.n_steps == 0 and self.nag_with_predictor:
+            self.n_steps = 1
+            # add without weight decay.
+            os_state = self.optimizer.state
+            self.true_weights_storage.create_cloned_if_needed()
+            self.true_weights_storage.record_change_mode("pred")
+            with torch.no_grad():
+                for pg in self.optimizer.param_groups:
+                    lr = pg['lr']
+                    if lr == 0:
+                        continue
+                    momentum = pg['momentum']
+                    for p in pg['params']:
+                        p.data.add_(-lr * momentum,
+                                    os_state[p]["momentum_buffer"].data)
+
         if not self.n_steps:
             return
 
+        # Extract coefficients and symbols
+        res = self.res[self.n_steps]
+        res_v = res['v']
+        res_theta = res['theta']
+        f_v = res_v['f']
+        f_theta = res_theta['f']
+        fs_v = res_v["free_symbols"]
+        fs_theta = res_theta["free_symbols"]
 
         os_state = self.optimizer.state
         self.true_weights_storage.create_cloned_if_needed()
         self.true_weights_storage.record_change_mode("pred")
         pgs = self.optimizer.param_groups
-        os_state = self.optimizer.state
         with torch.no_grad():
             for pg in pgs:
-                lr = pg['lr']
-                if lr == 0 :
-                    continue
-                momentum = pg['momentum']
-                weight_decay = pg['weight_decay']
+                # if lr == 0:
+                #    continue
+                # dict to map params to symbols
+                # TODO: can change and init to avoid creating this here...
 
+                d = {
+                    '\\eta': pg['lr'],
+                    '\\gamma': pg['momentum'],
+                    '\\lambda': pg['weight_decay']
+                }
+
+                coeff_v = f_v(*[d[a] for a in fs_v])
+                coeff_theta = f_theta(*[d[a] for a in fs_theta])
                 for p in pg['params']:
-                    buff_hat = os_state[p]["momentum_buffer"].data
-                    # NOTE: theta_hat = p.data
-                    
-                    # TODO: buff_hat requires extra memory, 
-                    # there is probably a closed form way to compute this.
-
-                    for staleness in range(1, self.n_steps + 1):
-                        d_p = 0
-                        if weight_decay != 0:
-                            d_p = weight_decay * p.data
-                            buff_hat = buff_hat * momentum + d_p
-                            p.data.add_(-lr * buff_hat)
+                    p.data.mul_(coeff_theta).add_(
+                        coeff_v, os_state[p]["momentum_buffer"].data)
 
     def revert(self):
         if not self.n_steps:
