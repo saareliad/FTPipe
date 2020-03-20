@@ -1056,7 +1056,7 @@ def main():
 
             has_weight_predictor = weight_predictor is not None
             if has_weight_predictor:
-                using_clone_weight_predictor = args.weight_predictor['args']['pred_mem'] == 'clone'
+                using_clone_weight_predictor = args.weight_prediction['args']['pred_mem'] == 'clone'
             else:
                 using_clone_weight_predictor = False
 
