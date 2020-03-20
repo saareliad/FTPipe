@@ -1,0 +1,16 @@
+
+{
+    "base_config_path": [
+        "configs/cv/cifar100/wrn28x10/common.json",
+        "configs/cv/cifar100/wrn28x10/msnag_optimizer.json"
+    ],
+    "gap_aware": {
+        "type": "sgd1",
+        "policy": "all_except_last",
+        "args": {
+            "big_gamma": 0.999,
+            "epsilon": 1e-8
+        }
+    },
+    "weight_stashing": true
+}

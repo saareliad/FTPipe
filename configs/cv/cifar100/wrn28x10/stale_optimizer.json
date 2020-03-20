@@ -1,0 +1,11 @@
+{
+    "optimizer": {
+        "type": "sgd1",
+        "args": {
+            "lr": 0.1,
+            "weight_decay": 0.0005,
+            "momentum": 0.9,
+            "nesterov": true
+        }
+    }
+}

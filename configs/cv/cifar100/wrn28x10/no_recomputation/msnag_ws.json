@@ -1,0 +1,8 @@
+{
+    "base_config_path": [
+        "configs/cv/cifar100/wrn28x10/common.json",
+        "configs/cv/cifar100/wrn28x10/msnag_optimizer.json",
+        "configs/cv/cifar100/wrn28x10/no_recomputation/norecomp.json"
+    ],
+    "weight_stashing": true
+}
