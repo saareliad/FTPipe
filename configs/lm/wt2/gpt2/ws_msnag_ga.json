@@ -10,7 +10,7 @@
         }
     },
     "gap_aware": {
-        "type": "adam",
+        "type": "adamw",
         "policy": "all_except_last",
         "args": {
         }

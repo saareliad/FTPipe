@@ -1,7 +1,7 @@
 {
     "logdir": "logs/debug/",
     "data_dir": "/home_local/saareliad/data",
-    "out_dir":"results/lm/",
+    "out_dir": "results/lm/",
     "auto_file_name": true,
     "out_filename": "dummy",
     "distributed_backend": "mpi",
@@ -13,21 +13,20 @@
     "trainer": {
         "type": "lm",
         "args": {
-	    "max_grad_norm": 1,
-            "always_calc_grad_norm": false 
+            "always_calc_grad_norm": false
         }
     },
-    "bs_train": 4,
-    "bs_test": 4,
+    "bs_train": 6,
+    "bs_test": 6,
     "train_seq_len": 1024,
     "valid_seq_len": 1024,
     "test_seq_len": 1024,
     "num_data_workers": 10,
     "optimizer": {
-        "type": "adam",
+        "type": "adamw",
         "args": {
             "lr": 5e-5,
-            "weight_decay": 0.0,
+            "weight_decay": 0.01,
             "eps": 1e-8
         }
     },
@@ -39,11 +38,11 @@
         },
         "args": {
             "num_warmup_steps": 1,
-            "num_training_steps":  -1,
+            "num_training_steps": -1,
             "last_epoch": -1
         }
     },
-    "epochs": 4,
+    "epochs": 5,
     "steps": -1,
     "seed_from_cmd": true,
     "num_chunks": 1,
@@ -54,6 +53,6 @@
     "max_buffers": 1,
     "step_every": 1,
     "keep_buffers_alive": true,
-    "train_batches_limit":-1,
+    "train_batches_limit": -1,
     "log_frequency": 20
 }

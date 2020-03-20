@@ -2,7 +2,7 @@
     "base_config_path": "configs/lm/wt2/gpt2/common.json",
     "statistics": "lm_theta_dist_grad_norm_loss_per_batch",
     "gap_aware": {
-        "type": "adam",
+        "type": "adamw",
         "policy": "all_except_last",
         "args": {
         }
