@@ -20,6 +20,7 @@ dependencies:
   - cython
   - pytest
   - tqdm
+  - sympy
   # - pybind11  # For binding c++ code to python, may be used to increace performance.
   - graphviz  # For partitioning visualization
   - python-graphviz  # For partitioning visualization
