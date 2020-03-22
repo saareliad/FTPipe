@@ -31,6 +31,11 @@ from transformers.file_utils import add_start_docstrings
 
 from transformers.file_utils import cached_path, WEIGHTS_NAME, TF_WEIGHTS_NAME, TF2_WEIGHTS_NAME
 
+from .stateless import StatelessLinear, StatelessEmbedding
+import types
+# NOTE: make sure to call
+# self.make_stateless_after_loaded_tied_and_resized()
+# after initialization is done.
 
 logger = logging.getLogger(__name__)
 
@@ -630,7 +635,24 @@ class GPT2Model(GPT2PreTrainedModel):
             # self.h[layer].attn.prune_heads(heads)
             getattr(self, str(layer)).attn.prune_heads(heads)
 
-    def forward(self, input_ids, past=None, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None):
+    def make_stateless_after_loaded_tied_and_resized(self):
+        """ Patch to create stateless layers with shared tied embedding """
+        stateless_wte = StatelessEmbedding(self.wte)
+        w_wte = stateless_wte.pop_weight()
+
+        self.stateless_wte = stateless_wte
+        # self.w_wte = w_wte
+
+        del self.wte
+
+        def _resize_token_embeddings(self, new_num_tokens):
+            raise NotImplementedError("Can't call this after creating Stateless embedding")
+        self._resize_token_embeddings = types.MethodType(_resize_token_embeddings, self)
+
+        return w_wte
+
+    def forward(self, input_ids, w_wte, past=None, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None):
+        # Meant to be used by LMhead model
         input_shape = input_ids.size()
         input_ids = input_ids.view(-1, input_shape[-1])
         if token_type_ids is not None:
@@ -686,10 +708,10 @@ class GPT2Model(GPT2PreTrainedModel):
         else:
             head_mask = [None] * self.config.n_layer
 
-        inputs_embeds = self.wte(input_ids)
+        inputs_embeds = self.stateless_wte(w_wte, input_ids)
         position_embeds = self.wpe(position_ids)
         if token_type_ids is not None:
-            token_type_embeds = self.wte(token_type_ids)
+            token_type_embeds = self.stateless_wte(w_wte, token_type_ids)
         else:
             token_type_embeds = 0
         hidden_states = inputs_embeds + position_embeds + token_type_embeds
@@ -794,6 +816,22 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
         # self.n_embed=config.n_embd
         # self.n_positions=config.n_positions
 
+    def make_stateless_after_loaded_tied_and_resized(self):
+        """ Patch to create stateless layers with shared tied embedding """
+
+        self.w_wte = self.transformer.make_stateless_after_loaded_tied_and_resized()
+
+        stateless_lm_head = StatelessLinear(self.lm_head)
+        stateless_lm_head.pop_weight()
+
+        self.stateless_lm_head = stateless_lm_head
+
+        del self.lm_head
+
+        def tie_weights(self):
+            raise NotImplementedError("Can't call this after stateless version")
+        self.tie_weights = types.MethodType(tie_weights, self)
+
     def tie_weights(self):
         """ Make sure we are sharing the input and output embeddings.
             Export to TorchScript can't handle parameter sharing so we are cloning them instead.
@@ -804,6 +842,7 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
     def forward(self, input_ids, labels=None, past=None, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None,
                 ):
         transformer_outputs = self.transformer(input_ids,
+                                               self.w_wte,
                                                past=past,
                                                attention_mask=attention_mask,
                                                token_type_ids=token_type_ids,
@@ -813,7 +852,7 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
         hidden_states = transformer_outputs[0]
         # hidden_states should be torch.Size([1, 1024, 768]) after reshape
         # hidden_states=hidden_states.view(-1,self.n_positions,self.n_embed)
-        lm_logits = self.lm_head(hidden_states)
+        lm_logits = self.stateless_lm_head(self.w_wte, hidden_states)
         outputs = (lm_logits,) + transformer_outputs[1:]
         if labels is not None:
             # Shift so that tokens < n predict n
@@ -821,8 +860,9 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
             shift_labels = labels[..., 1:].contiguous()
             # Flatten the tokens
             # loss_fct = CrossEntropyLoss(ignore_index=-100)
-            def loss_fct(logits, labels): return nn.functional.cross_entropy(
-                logits, labels, ignore_index=-100)
+
+            def loss_fct(logits, labels):
+                return nn.functional.cross_entropy(logits, labels, ignore_index=-100)
             loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)),
                             shift_labels.view(-1))
             
@@ -918,9 +958,26 @@ class GPT2DoubleHeadsModel(GPT2PreTrainedModel):
         self._tie_or_clone_weights(self.lm_head,
                                    self.transformer.wte)
 
+    def make_stateless_after_loaded_tied_and_resized(self):
+        """ Patch to create stateless layers with shared tied embedding """
+
+        self.w_wte = self.transformer.make_stateless_after_loaded_tied_and_resized()
+
+        stateless_lm_head = StatelessLinear(self.lm_head)
+        stateless_lm_head.pop_weight()
+
+        self.stateless_lm_head = stateless_lm_head
+
+        del self.lm_head
+
+        def tie_weights(self):
+            raise NotImplementedError("Can't call this after stateless version")
+        self.tie_weights = types.MethodType(tie_weights, self)
+
     def forward(self, input_ids, past=None, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None,
                 mc_token_ids=None, lm_labels=None, mc_labels=None):
         transformer_outputs = self.transformer(input_ids,
+                                               self.w_wte,
                                                past=past,
                                                attention_mask=attention_mask,
                                                token_type_ids=token_type_ids,
@@ -929,7 +986,7 @@ class GPT2DoubleHeadsModel(GPT2PreTrainedModel):
 
         hidden_states = transformer_outputs[0]
 
-        lm_logits = self.lm_head(hidden_states)
+        lm_logits = self.stateless_lm_head(self.w_wte, hidden_states)
         mc_logits = self.multiple_choice_head(
             hidden_states, mc_token_ids).squeeze(-1)
 

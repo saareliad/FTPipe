@@ -53,12 +53,15 @@ from transformers import (
 )
 
 from models.normal import GPT2LMHeadModel, GPT2Model
+from models.normal import StatelessGPT2LMHeadModel  # , StatelessGPT2Model
+
 
 from pytorch_Gpipe import pipe_model
 from misc import run_analysis  # , run_partitions
 from pytorch_Gpipe.model_profiling import Node, NodeTypes
 from pytorch_Gpipe.utils import _extract_volume_from_sizes, layerDict, tensorDict
 from pytorch_Gpipe import PipelineConfig
+
 MODEL_CLASSES_LM_HEAD = {
     'gpt2': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
     'openai-gpt': (OpenAIGPTConfig, OpenAIGPTLMHeadModel, OpenAIGPTTokenizer),
@@ -71,6 +74,10 @@ MODEL_CLASSES_LM_HEAD = {
 
 MODEL_CLASSES = {
     'gpt2': (GPT2Config, GPT2Model, GPT2Tokenizer),
+}
+
+MODEL_CLASSES_LM_HEAD_STATELESS_TIED = {
+    'gpt2': (GPT2Config, StatelessGPT2LMHeadModel, GPT2Tokenizer),  # TODO:
 }
 
 
@@ -215,6 +222,10 @@ def partition_model(args,
 
     model_to_resize = model.module if hasattr(model, 'module') else model
     model_to_resize.resize_token_embeddings(len(tokenizer))
+
+    # Tie weights artificially using statless trick
+    if args.stateless_tied:
+        model_to_resize.make_stateless_after_loaded_tied_and_resized()
 
     set_seed(
         args)  # Added here for reproducibility (even between python 2 and 3)
@@ -375,6 +386,13 @@ def main():
         action="store_true",
         help="whether to return all hidden states or just the last  one")
 
+    tr_params.add_argument(
+        "--stateless_tied",
+        default=False,
+        action="store_true",
+        help="Tie weights stateless trick. Note that shared weight may be sent in pipe"
+    )
+
     # parameters of the partitioning script
     parser.add_argument('--partitioning_batch_size',
                         type=int,
@@ -475,7 +493,15 @@ def main():
     set_seed(args)
 
     # Load pretrained model and tokenizer
-    model_class_dict_to_use = MODEL_CLASSES_LM_HEAD if args.lmhead else MODEL_CLASSES
+
+    if args.lmhead:
+        if args.stateless_tied:
+            model_class_dict_to_use = MODEL_CLASSES_LM_HEAD_STATELESS_TIED
+        else:
+            model_class_dict_to_use = MODEL_CLASSES_LM_HEAD
+    else:
+        model_class_dict_to_use = MODEL_CLASSES
+
     config_class, model_class, tokenizer_class = model_class_dict_to_use[
         args.model_type]
     config = config_class.from_pretrained(
