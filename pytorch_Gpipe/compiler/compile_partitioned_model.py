@@ -196,16 +196,34 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
                                   model_blocks: Dict[str, Module], batch_dim: int, output_file: str) -> str:
     '''generates the create_pipeline_configuration method which given a model creates his partitioned counterpart
     '''
+
+    # TODO assumption the first input is batched
+    batch_size = graph.nodes[0].shape[0][batch_dim]
+
+    stage_in_out_config = dict()
+
+    for idx, io in ios.items():
+        inputs = io['inputs']
+        outputs = io['outputs']
+        input_shapes = io['input_shapes']
+        output_shapes = io['output_shapes']
+
+        stage_inputs = dict()
+        for i, s in zip(inputs, input_shapes):
+            # TODO better logic for is_batched
+            # currently we assume that if a tensor has enough dimentions and the relevant dim size equals the batch_size
+            is_batched = (len(s) > batch_dim) and (s[batch_dim] == batch_size)
+            stage_inputs[i] = {"shape": s, "is_batched": is_batched}
+
+        stage_outputs = dict()
+        for o, s in zip(outputs, output_shapes):
+            is_batched = (len(s) > batch_dim) and (s[batch_dim] == batch_size)
+            stage_outputs[o] = {"shape": s, "is_batched": is_batched}
+
+        stage_in_out_config[idx] = {"inputs": stage_inputs,
+                                    "outputs": stage_outputs}
+
     module_path = output_file.replace("/", ".")
-    model_buffers = {
-        scope: t
-        for t, scope in traverse_params_buffs(model) if not t.requires_grad
-    }
-    model_parameteres = {
-        scope: t
-        for t, scope in traverse_params_buffs(model) if t.requires_grad
-    }
-    model_class = model.__class__.__name__
     basic_blocks = ",".join(
         map(lambda block: block.__name__, set(model_blocks.values())))
 
@@ -229,14 +247,13 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
         return "{" + f",\n{dtab}".join(items) + "}"
 
     exp = f',\n{dtab}{tab}'.join(
-        [f"{k}: {format_dict(v)}" for k, v in ios.items()])
+        [f"{k}: {format_dict(v)}" for k, v in stage_in_out_config.items()])
     lines.append(
         f"# creating configuration\n{tab}stages = {{{exp}\n{dtab}{tab}}}")
 
     for idx in sorted(list(ios.keys())):
         lines.extend(["\n",
                       f"stages[{idx}]['batch_dim'] = {batch_dim}",
-                      f"stages[{idx}]['batch_size'] = stages[{idx}]['input_shapes'][0][{batch_dim}]",
                       f"stages[{idx}]['stage_cls'] = module_path + '.Partition{idx}'",
                       f"device = 'cpu' if DEBUG else 'cuda:{idx}'",
                       f"stages[{idx}]['devices'] = [device]",
@@ -244,20 +261,33 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
 
     input_ids = [f"'input{idx}'" for idx in range(graph.num_inputs)]
     input_shapes = [format_shape(n.shape)[0] for n in graph.inputs]
-    model_outputs = graph.outputs
-    output_shapes = [format_shape(n.shape)[0] for n in model_outputs]
+
+    output_shapes = [format_shape(n.shape)[0] for n in graph.outputs]
+    output_ids = graph.output_scopes
+
+    model_inputs = dict()
+    for i, s in zip(input_ids, input_shapes):
+        is_batched = (len(s) > batch_dim) and (s[batch_dim] == batch_size)
+        model_inputs[i] = {"shape": s, "is_batched": is_batched}
+
+    model_outputs = dict()
+    for o, s in zip(output_ids, output_shapes):
+        is_batched = (len(s) > batch_dim) and (s[batch_dim] == batch_size)
+        model_outputs[o] = {"shape": s, "is_batched": is_batched}
+
+    model_inputs = f',\n{dtab}{tab}'.join([f"{k}: {format_dict(v)}"
+                                           for k, v in model_inputs.items()])
+    model_outputs = f',\n{dtab}{tab}'.join([f"'{k}': {format_dict(v)}"
+                                            for k, v in model_outputs.items()])
 
     lines.extend([
         "\n",
         "config = dict()",
         f"config['batch_dim'] = {batch_dim}",
-        f"config['batch_size'] = stages[0]['batch_size']",
         f"config['depth'] = depth",
         f"config['basic_blocks'] = blocks_path",
-        f"config['model_inputs'] = [{', '.join(input_ids)}]",
-        f"config['model_input_shapes'] = {input_shapes}",
-        f"config['model_outputs'] = {list(graph.output_scopes)}",
-        f"config['model_output_shapes'] = {output_shapes}",
+        f"config['model_inputs'] = {{{model_inputs}}}",
+        f"config['model_outputs'] = {{{model_outputs}}}",
         f"config['stages'] = stages",
         f"\n{tab}return config"
     ])
