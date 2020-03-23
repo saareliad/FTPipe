@@ -27,7 +27,7 @@ class PipelineConfig():
 
     @property
     def master_stage(self) -> "StageConfig":
-        stage = StageConfig(self.batch_dim, nn.Identity,
+        stage = StageConfig(nn.Identity,
                             None, dict(), None, dict())
         stage.input_shapes = self.model_input_shapes
         stage.inputs = self.model_inputs
@@ -51,7 +51,7 @@ class PipelineConfig():
 
     def add_stage(self, stage_class: nn.Module, optimizer_cls: Optional[Optimizer] = None, optimizer_args: Dict = dict(),
                   LR_scheduler_cls: Optional[_LRScheduler] = None, LR_scheduler_args: Dict = dict()) -> "StageConfig":
-        stage = StageConfig(self.batch_dim, stage_class,
+        stage = StageConfig(stage_class,
                             optimizer_cls=optimizer_cls, optimizer_args=optimizer_args,
                             LR_scheduler_cls=LR_scheduler_cls, lr_scheduler_args=LR_scheduler_args)
         self.stages[self.n_stages] = stage
@@ -65,7 +65,7 @@ class PipelineConfig():
                 s[self.batch_dim] = batch_size
 
         for stage in self.stages.values():
-            stage.change_batch(batch_size)
+            stage.change_batch(self.batch_dim, batch_size)
 
     @property
     def n_stages(self) -> int:
@@ -196,12 +196,6 @@ class PipelineConfig():
         has_stages = len(self.stages) > 0
         stages_valid = all(stage.isValid() for stage in self.stages.values())
 
-        same_batch_dim = all(stage.batch_dim == self.batch_dim
-                             for stage in self.stages.values())
-
-        if not same_batch_dim:
-            return False
-
         all_inputs = {i for stage in self.stages.values()
                       for i in stage.inputs}
         all_outputs = {i for stage in self.stages.values()
@@ -254,7 +248,7 @@ class PipelineConfig():
         i = 0
         rank_to_model_args = dict()
         for stage_id in range(self.n_stages):
-            for idx, (model, device, optimizer, lr_sched, split_size) in enumerate(self.stages[stage_id].realize(layers, tensors)):
+            for idx, (model, device, optimizer, lr_sched, split_size) in enumerate(self.stages[stage_id].realize(self.batch_dim, layers, tensors)):
                 rank = i + idx
                 rank_to_model_args[rank] = (idx, model, device, optimizer,
                                             lr_sched, split_size)
@@ -349,9 +343,8 @@ class PipelineConfig():
 
 
 class StageConfig():
-    def __init__(self, batch_dim: int, stage_class: nn.Module, optimizer_cls: Optional[Optimizer], optimizer_args: Dict,
+    def __init__(self, stage_class: nn.Module, optimizer_cls: Optional[Optimizer], optimizer_args: Dict,
                  LR_scheduler_cls: Optional[Optimizer], lr_scheduler_args: Dict):
-        self.batch_dim = batch_dim
         self.inputs = []
         self.outputs = []
         self.input_shapes = []
@@ -362,12 +355,12 @@ class StageConfig():
         self._optimizer_args = (optimizer_cls, optimizer_args)
         self._lr_scheduler_args = (LR_scheduler_cls, lr_scheduler_args)
 
-    def change_batch(self, batch_size: int) -> "StageConfig":
+    def change_batch(self, batch_dim: int, batch_size: int) -> "StageConfig":
         assert batch_size > 0
         assert batch_size > self.n_ranks
         for n, s in chain(zip(self.inputs, self.input_shapes), zip(self.outputs, self.output_shapes)):
             if self.is_batched[n]:
-                s[self.batch_dim] = batch_size
+                s[batch_dim] = batch_size
 
         return self
 
@@ -416,18 +409,18 @@ class StageConfig():
         self._lr_scheduler_args = (LR_scheduler_cls, lr_scheduler_args)
         return self
 
-    def rank_batch_size(self, local_rank=0) -> int:
-        batch_size = self.find_batch_size()
+    def rank_batch_size(self, batch_dim: int, local_rank=0) -> int:
+        batch_size = self.find_batch_size(batch_dim)
         split_size = batch_size // len(self.devices)
         if local_rank < batch_size % len(self.devices):
             split_size += 1
         return split_size
 
-    def find_batch_size(self):
+    def find_batch_size(self, batch_dim: int):
         assert len(self.is_batched)
         for n, s in chain(zip(self.inputs, self.input_shapes), zip(self.outputs, self.output_shapes)):
             if self.is_batched[n]:
-                return s[self.batch_dim]
+                return s[batch_dim]
 
     @property
     def n_ranks(self) -> int:
@@ -446,7 +439,7 @@ class StageConfig():
 
         return no_duplicates and has_in_out and disjoint and has_ranks
 
-    def realize(self, layers: Dict[str, Tensor], tensors: Dict[str, Tensor]) -> Tuple[nn.Module, torch.device, Optional[Optimizer], Optional[_LRScheduler], int]:
+    def realize(self, batch_dim: int, layers: Dict[str, Tensor], tensors: Dict[str, Tensor]) -> Tuple[nn.Module, torch.device, Optional[Optimizer], Optional[_LRScheduler], int]:
         assert self.isValid()
         replicas = []
         for idx, device in enumerate(self.devices):
@@ -454,14 +447,13 @@ class StageConfig():
             replica = replica.to(device=device).share_memory()
             optimizer = self._create_optimizer(replica)
             lr_scheduler = self._create_lr_scheduler(optimizer)
-            split_size = self.rank_batch_size(local_rank=idx)
+            split_size = self.rank_batch_size(batch_dim, local_rank=idx)
             replicas.append((replica, device, optimizer,
                              lr_scheduler, split_size))
         return replicas
 
     def state_dict(self) -> Dict:
         state = dict()
-        state['batch_dim'] = self.batch_dim
 
         inputs = dict()
         for i, s in zip(self.inputs, self.input_shapes):
@@ -498,7 +490,6 @@ class StageConfig():
 
     @classmethod
     def fromDict(cls, state) -> 'StageConfig':
-        batch_dim = state['batch_dim']
         stage_path = state['stage_cls']
         module_path, stage_name = stage_path.rsplit(".", 1)
         stage_module = importlib.import_module(module_path)
@@ -524,7 +515,7 @@ class StageConfig():
             lr_scheduler_type = None
             lr_scheduler_args = dict()
 
-        config = cls(batch_dim, stage_cls, optimizer_type, optimizer_args,
+        config = cls(stage_cls, optimizer_type, optimizer_args,
                      lr_scheduler_type, lr_scheduler_args)
 
         for i, d in state['inputs'].items():
@@ -571,7 +562,6 @@ def deserialize_python_class_or_function(path: str):
 
 # stages:
 #   id
-    #   batch_dim
     # model_inputs
     #   id
     #    shape
@@ -580,11 +570,11 @@ def deserialize_python_class_or_function(path: str):
     #    id
     #    shape
     #    is_batched
-    #   stage_cls convention is package.path.cls
-    #   optimizer optional
-    #       type convention is package.path.cls
-    #       args dictionary of kwargs
-    #   LR_scheduler optional
-    #       type convention is package.path.cls
-    #       args dictionary of kwargs
-    #   devices list of devices
+    # stage_cls convention is package.path.cls
+    # optimizer optional
+    #     type convention is package.path.cls
+    #     args dictionary of kwargs
+    # LR_scheduler optional
+    #     type convention is package.path.cls
+    #     args dictionary of kwargs
+    # devices list of devices

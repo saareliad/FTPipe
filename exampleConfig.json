@@ -24,7 +24,6 @@
   },
   "stages": {
     "0": {
-      "batch_dim": 0,
       "inputs": {
         "input0": {
           "shape": [1, 100],
@@ -47,7 +46,6 @@
       "devices": ["cpu"]
     },
     "1": {
-      "batch_dim": 0,
       "inputs": {
         "input0": {
           "shape": [1, 100],
@@ -68,7 +66,6 @@
       "devices": ["cpu", "cpu"]
     },
     "2": {
-      "batch_dim": 0,
       "inputs": {
         "t0": {
           "shape": [1, 100],
@@ -89,7 +86,6 @@
       "devices": ["cpu", "cpu", "cpu", "cpu"]
     },
     "3": {
-      "batch_dim": 0,
       "inputs": {
         "t1": {
           "shape": [1, 100],

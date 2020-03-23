@@ -253,7 +253,6 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
 
     for idx in sorted(list(ios.keys())):
         lines.extend(["\n",
-                      f"stages[{idx}]['batch_dim'] = {batch_dim}",
                       f"stages[{idx}]['stage_cls'] = module_path + '.Partition{idx}'",
                       f"device = 'cpu' if DEBUG else 'cuda:{idx}'",
                       f"stages[{idx}]['devices'] = [device]",
