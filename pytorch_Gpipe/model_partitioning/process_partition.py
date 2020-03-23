@@ -1,7 +1,7 @@
 from collections import defaultdict
 from typing import List, Dict, Set
-
-from ..model_profiling import Graph, NodeTypes
+from copy import copy
+from ..model_profiling import Graph, NodeTypes, Node
 
 __all__ = ["post_process_partition"]
 
@@ -18,18 +18,19 @@ def post_process_partition(graph: Graph) -> Graph:
     '''
 
     cannonize_partition_indices(graph)
-
     if has_cycles(graph):
-        graph.serialize(f"{graph.model_name}_cycle_detected")
-        graph.save_as_pdf(f"{graph.model_name}_cycle_detected",
-                          ".", show_profiles=True)
-        error = "error cycle detected mutual dependecy between partitions"
-        raise AssertionError(error)
+        break_partition_cycles(graph)
 
-    # constants_fix(graph)
-    # remove_backward_edges(graph)
-    # do_not_send_lists(graph)
-    # constants_fix(graph)
+        # possibly redundent
+        cannonize_partition_indices(graph)
+
+        # this is a sanity check
+        if has_cycles(graph):
+            graph.serialize(f"{graph.model_name}_cycle_detected")
+            graph.save_as_pdf(f"{graph.model_name}_cycle_detected",
+                              ".", show_profiles=True)
+            error = "error cycle detected mutual dependecy between partitions"
+            raise AssertionError(error)
 
     return graph
 
@@ -78,51 +79,45 @@ def has_cycles(graph: Graph) -> bool:
     return False
 
 
-def constants_fix(graph: Graph):
-    fixed = False
-    while True:
-        changed = False
-        for node in graph.nodes:
-            for n in node.in_nodes:
-                if n.part != node.part and len(n.in_nodes) == 0 and n.type is NodeTypes.CONSTANT:
-                    n.part = node.part
-                    changed = True
-                    fixed = True
-        if not changed:
-            break
-    return fixed
+def break_partition_cycles(graph: Graph):
+    parts = set()
+    roots = defaultdict(set)
+    for u in graph.nodes:
+        parts.add(u.part)
+        for v in u.out_nodes:
+            if u.part > v.part:
+                roots[v.part].add(v)
+
+    n_parts = len(parts)
+    for idx, group in roots.items():
+        # each group represents a new partition to create
+        for n in find_subtree(group):
+            n.part = n_parts
+        n_parts += 1
 
 
-def remove_backward_edges(graph: Graph):
-    # TODO biased towards the lesser idx
-    fixed = False
-    while True:
-        backward_edges = []
-        for node in graph.nodes:
-            for n in node.in_nodes:
-                if n.part > node.part:
-                    backward_edges.append((n, node))
+def find_subtree(roots: Set[Node]):
+    nodes = set()
+    open = copy(roots)
+    while len(open) > 0:
+        n = open.pop()
+        nodes.add(n)
+        for u in n.out_nodes:
+            if u.part == n.part:
+                nodes.add(u)
+                open.add(u)
 
-        for u, v in backward_edges:
-            v.part = u.part
-            fixed = True
-
-        if not backward_edges:
-            break
-    return fixed
-
-
-def do_not_send_lists(graph: Graph):
-    for node in graph.nodes:
-        if not ('ListConstruct' in node.scope) or not ('TupleConstruct' in node.scope):
+    open = copy(nodes)
+    while len(open) > 0:
+        n = open.pop()
+        if n in roots:
             continue
 
-        # nodes that have a list input such as torch.cat
-        # TODO revisit
-        for out in node.out_nodes:
-            if out.part != node.part:
-                # fix the output
-                out.part = node.part
-                # fix the output other inputs
-                for i in out.in_nodes:
-                    i.part = node.part
+        for u in n.in_nodes:
+            if u.part == n.part:
+                # TODO this is arbitrary need more fine tuned approach
+                if u.type == NodeTypes.BUFF_PARAM:
+                    continue
+                open.add(u)
+                nodes.add(u)
+    return nodes
