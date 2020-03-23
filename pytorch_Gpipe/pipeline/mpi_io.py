@@ -1,5 +1,5 @@
 
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict, Tuple
 import torch
 from torch import Tensor
 import torch.distributed as dist
@@ -11,7 +11,8 @@ __all__ = ["P2PConnection", "RequestsWrapper",
 
 
 class RoundRobinBufferGenerator():
-    def __init__(self, device: torch.device, batch_dim: int, batch_size: int, num_minibatches: int, input_shapes: List[List[int]], output_shapes: List[List[int]]):
+    def __init__(self, device: torch.device, batch_dim: int, batch_size: int, num_minibatches: int,
+                 inputs: List[Tuple[List[int], bool]], outputs: List[Tuple[List[int], bool]]):
         self.num_minibatches = num_minibatches
         self.batch_size = batch_size
         self.batch_dim = batch_dim
@@ -26,8 +27,11 @@ class RoundRobinBufferGenerator():
         for size in sizes:
             buffers = []
             shapes = []
-            for s in input_shapes:
-                shape = s[:batch_dim] + [size] + s[batch_dim + 1:]
+            for s, is_batched in inputs:
+                if is_batched:
+                    shape = s[:batch_dim] + [size] + s[batch_dim + 1:]
+                else:
+                    shape = s
                 buffers.append(torch.empty(shape, device=self.device))
                 shapes.append(shape)
             self.input_shapes.append(shapes)
@@ -40,8 +44,11 @@ class RoundRobinBufferGenerator():
         for size in sizes:
             buffers = []
             shapes = []
-            for s in output_shapes:
-                shape = s[:batch_dim] + [size] + s[batch_dim + 1:]
+            for s, is_batched in outputs:
+                if is_batched:
+                    shape = s[:batch_dim] + [size] + s[batch_dim + 1:]
+                else:
+                    shape = s
                 shapes.append(shape)
             self.gradient_shapes.append(shapes)
 
