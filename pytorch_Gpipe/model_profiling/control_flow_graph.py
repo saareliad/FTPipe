@@ -58,7 +58,7 @@ class Node():
                  weight: Union[Profile, int] = 0,
                  part: int = 0,
                  value: Optional[Any] = None,
-                 shape: Optional[List[int]] = None):
+                 shape: Optional[List[int]] = None, dtype=None):
         self.scope = scope
         self.idx = idx
         self.type = node_type
@@ -70,6 +70,7 @@ class Node():
         self.value = value
         self.value_type: Optional[Type] = None
         self.shape = shape
+        self.dtype = dtype
 
     def valueType(self) -> Type:
         if self.value_type:
@@ -461,7 +462,8 @@ class Graph():
                 "value_type": u.value_type,
                 "in_nodes": in_nodes,
                 "out_nodes": out_nodes,
-                "shape": u.shape
+                "shape": u.shape,
+                "dtype": str(u.dtype),
             }
             graph_nodes_data.append(node_data)
 
@@ -496,7 +498,8 @@ class Graph():
                               weight=weight,
                               part=part,
                               value=value,
-                              shape=shape)
+                              shape=shape,
+                              dtype=node['dtype'])
             nodes[idx].value_type = value_type
 
         # add edges

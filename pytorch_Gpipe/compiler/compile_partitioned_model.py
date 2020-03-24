@@ -202,7 +202,7 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
     # TODO better logic for is_batched
     # currently we assume that if a tensor has enough dimentions and the relevant dim size equals the batch_size
     def is_batched(s):
-        return (len(s) > batch_dim) and (s[batch_dim] == batch_size)
+        return (len(s) > (batch_dim + 1)) and (s[batch_dim] == batch_size)
 
     stage_in_out_config = dict()
 
@@ -210,19 +210,20 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
         inputs = io['inputs']
         outputs = io['outputs']
         input_shapes = io['input_shapes']
+        input_dtypes = io['input_dtypes']
+        output_dtypes = io['output_dtypes']
         output_shapes = io['output_shapes']
 
         stage_inputs = dict()
-        for i, s in zip(inputs, input_shapes):
-            # TODO better logic for dtypes
+        for i, s, d in zip(inputs, input_shapes, input_dtypes):
             stage_inputs[i] = {"shape": s,
-                               "dtype": str(torch.float32),
+                               "dtype": str(d),
                                "is_batched": is_batched(s)}
 
         stage_outputs = dict()
-        for o, s in zip(outputs, output_shapes):
+        for o, s, d in zip(outputs, output_shapes, output_dtypes):
             stage_outputs[o] = {"shape": s,
-                                "dtype": str(torch.float32),
+                                "dtype": str(d),
                                 "is_batched": is_batched(s)}
 
         stage_in_out_config[idx] = {"inputs": stage_inputs,
@@ -265,20 +266,22 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
 
     input_ids = [f"'input{idx}'" for idx in range(graph.num_inputs)]
     input_shapes = [format_shape(n.shape)[0] for n in graph.inputs]
+    input_dtypes = [n.dtype for n in graph.inputs]
 
     output_shapes = [format_shape(n.shape)[0] for n in graph.outputs]
     output_ids = graph.output_scopes
+    output_dtypes = [n.dtype for n in graph.outputs]
 
     model_inputs = dict()
-    for i, s in zip(input_ids, input_shapes):
+    for i, s, d in zip(input_ids, input_shapes, input_dtypes):
         model_inputs[i] = {"shape": s,
-                           "dtype": f"'{torch.float32}'",
+                           "dtype": f"'{d}'",
                            "is_batched": is_batched(s)}
 
     model_outputs = dict()
-    for o, s in zip(output_ids, output_shapes):
+    for o, s, d in zip(output_ids, output_shapes, output_dtypes):
         model_outputs[o] = {"shape": s,
-                            "dtype": f"'{torch.float32}'",
+                            "dtype": f"'{d}'",
                             "is_batched": is_batched(s)}
 
     model_inputs = f',\n{dtab}{tab}'.join([f"{k}: {format_dict(v)}"

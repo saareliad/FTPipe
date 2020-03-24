@@ -64,11 +64,14 @@ def generate_forward_method(
 
     input_shapes = [format_shape(n.shape)[0] for n in part_inputs]
     output_shapes = [format_shape(n.shape)[0] for n in outputs]
-
+    input_dtypes = [n.dtype for n in part_inputs]
+    output_dtypes = [n.dtype for n in outputs]
     io = {"inputs": list(input_scopes),
           "outputs": list(out_scopes),
           "input_shapes": input_shapes,
-          "output_shapes": output_shapes}
+          "output_shapes": output_shapes,
+          "input_dtypes": input_dtypes,
+          "output_dtypes": output_dtypes}
 
     return lines, io
 

@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from itertools import chain, groupby
 from torch.multiprocessing import Queue, set_start_method
 from typing import Callable, Dict, Iterator, List, Optional, Tuple, Any, Union
@@ -31,12 +31,16 @@ class Pipeline():
         # set_start_method('spawn')
 
         is_batched = config.is_batched
-        outputs = [(s, is_batched[o]) for s, o in zip(
-            config.model_output_shapes, config.model_outputs)]
+        dtypes = config.all_dtypes
+        shapes = config.shapes()
+        outputs = OrderedDict((o, (shapes[o], is_batched[o], dtypes[o]))
+                              for o in config.model_outputs)
+        dummy_buffers = OrderedDict((o, ([1], False, torch.float32))
+                                    for o in config.model_inputs)
 
         self.buffer = RoundRobinBufferGenerator('cpu', config.batch_dim, batch_size,
                                                 num_minibatches, outputs,
-                                                [[1, False] for _ in config.model_input_shapes])
+                                                dummy_buffers)
         self.input_names = config.model_inputs
         self.output_names = config.model_outputs
 
@@ -372,6 +376,7 @@ def create_worker_args(config: PipelineConfig, batch_size: int,
     # this ensures all workers will have minibatch size >=1
     assert batch_size >= (num_minibatches * config.largest_stage_size)
     is_batched = config.batched_activation_map
+    all_dtypes = config.all_dtypes
     master_rank = -1
     master_stage = -1
     stages = copy(config.stages)
@@ -533,10 +538,10 @@ def create_worker_args(config: PipelineConfig, batch_size: int,
         ranks_in_stage = len(stage_to_ranks[stage_id])
         stage = stages[stage_id]
 
-        inputs = [(s, is_batched[i])
-                  for s, i in zip(stage.input_shapes, stage.inputs)]
-        outputs = [(s, is_batched[o])
-                   for s, o in zip(stage.output_shapes, stage.outputs)]
+        inputs = OrderedDict((i, (s, is_batched[i], all_dtypes[i]))
+                             for s, i, d in zip(stage.input_shapes, stage.inputs))
+        outputs = OrderedDict((o, (s, is_batched[o], all_dtypes[o]))
+                              for s, o, d in zip(stage.output_shapes, stage.outputs))
 
         buffer_generator = RoundRobinBufferGenerator(device, batch_dim, split_size,
                                                      num_minibatches, inputs, outputs)
