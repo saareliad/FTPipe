@@ -26,6 +26,8 @@ class AnyTrainer(abc.ABC):
 class SupervisedLossIncludedTrainer(AnyTrainer):
     # @abc.abstractmethod
     def backprop_last_partition(self, loss, *args, **kw):
+        if self.step_every > 1:
+            loss /= self.step_every
         loss.backward()
         return loss
 
@@ -147,7 +149,8 @@ class BaseLossTrainer(GradNormStepper, PartitionedSupervisedTrainer):
                  max_grad_norm=None,
                  always_calc_grad_norm=False,
                  loss_fn=torch.nn.CrossEntropyLoss(),
-                 cuda=True):
+                 cuda=True,
+                 step_every=1):
 
         self.loss_fn = loss_fn
         if cuda:
@@ -158,12 +161,15 @@ class BaseLossTrainer(GradNormStepper, PartitionedSupervisedTrainer):
         self.model = model
         self.max_grad_norm = max_grad_norm
         self.always_calc_grad_norm = always_calc_grad_norm
+        self.step_every = step_every
 
         # Stats
         self.statistics = statistics
 
     def backprop_last_partition(self, x, y):
         loss = self.loss_fn(x, y)
+        if self.step_every > 1:
+            loss /= self.step_every
         loss.backward()  # this does backward() only for the last partition
         return loss
 
@@ -177,13 +183,15 @@ class BaseOutPutIsLossTrainer(GradNormStepper,
                  scheduler,
                  statistics,
                  max_grad_norm=None,
-                 always_calc_grad_norm=False):
+                 always_calc_grad_norm=False,
+                 step_every=1):
 
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.model = model
         self.max_grad_norm = max_grad_norm
         self.always_calc_grad_norm = always_calc_grad_norm
+        self.step_every = step_every
 
         # Stats
         self.statistics = statistics
