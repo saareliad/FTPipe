@@ -136,8 +136,8 @@ class SinglePartitionManager:
             print(
                 f"-V- Patching problematic batches {fwds} for stage {self.stage}"
             )
-            if self.step_every > 2:
-                raise NotImplementedError("check in schedulers.")
+            # if self.step_every > 2:
+            #     raise NotImplementedError("check in schedulers.")
 
             if self.PROBLEMATIC_POLICY == 'SKIP':
                 self.set_problematic_skip()

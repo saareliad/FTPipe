@@ -1026,6 +1026,7 @@ def main():
                               optimizer=optimizer,
                               scheduler=scheduler,
                               statistics=statistics,
+                              step_every=args.step_every,
                               **trainer_extra_args)
         partition.set_gap_aware(gap_aware)
     else:
@@ -1034,6 +1035,7 @@ def main():
                               optimizer=optimizer,
                               scheduler=scheduler,
                               statistics=statistics,
+                              step_every=args.step_every,
                               **trainer_extra_args)
 
     partition.set_trainer(trainer)
