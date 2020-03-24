@@ -23,6 +23,7 @@ class PipelineConfig():
         self.model_outputs = []
         self.model_output_shapes = []
         self.is_batched = dict()
+        self.dtypes = dict()
         self.stages: Dict[int, StageConfig] = dict()
 
     @property
@@ -35,18 +36,20 @@ class PipelineConfig():
         stage.output_shapes = self.model_output_shapes
         stage.devices = [torch.device("cpu")]
 
-    def add_input(self, input_name: str, shape: Tuple[int, ...], is_batched: bool = True) -> "PipelineConfig":
+    def add_input(self, input_name: str, shape: Tuple[int, ...], is_batched: bool = True, dtype: torch.dtype = torch.float32) -> "PipelineConfig":
         self.model_inputs.append(input_name)
         shape = list(shape)
         self.model_input_shapes.append(shape)
         self.is_batched[input_name] = is_batched
+        self.dtypes[input_name] = dtype
         return self
 
-    def add_output(self, output_name: str, shape: Tuple[int, ...], is_batched: bool = True) -> "PipelineConfig":
+    def add_output(self, output_name: str, shape: Tuple[int, ...], is_batched: bool = True, dtype: torch.dtype = torch.float32) -> "PipelineConfig":
         self.model_outputs.append(output_name)
         shape = list(shape)
         self.model_output_shapes.append(shape)
         self.is_batched[output_name] = is_batched
+        self.dtypes[output_name] = dtype
         return self
 
     def add_stage(self, stage_class: nn.Module, optimizer_cls: Optional[Optimizer] = None, optimizer_args: Dict = dict(),
@@ -95,23 +98,26 @@ class PipelineConfig():
         scope_to_shape = self.shapes()
 
         is_batched = self.batched_activation_map
+        all_dtypes = self.all_dtypes
         # set R inputs and outputs
         for o in new_all_outputs:
             if (o in self.model_outputs) or (o in old_all_inputs):
-                R.add_output(o, scope_to_shape[o], is_batched[o])
+                R.add_output(o, scope_to_shape[o],
+                             is_batched[o], all_dtypes[o])
 
         for i in new_all_inputs:
             if (i in self.model_inputs) or (i in old_all_outputs):
-                R.add_input(i, scope_to_shape[i], is_batched[i])
+                R.add_input(i, scope_to_shape[i], is_batched[i], all_dtypes[i])
 
         # set L inputs and outputs
         for i in old_all_inputs:
             if (i in self.model_inputs) or (i in R.model_outputs):
-                L.add_input(i, scope_to_shape[i], is_batched[i])
+                L.add_input(i, scope_to_shape[i], is_batched[i], all_dtypes[i])
 
         for o in old_all_outputs:
             if (o in self.model_outputs) or (o in R.model_inputs):
-                L.add_output(o, scope_to_shape[o], is_batched[o])
+                L.add_output(o, scope_to_shape[o],
+                             is_batched[o], all_dtypes[o])
 
         L.stages = dict(enumerate(remaining))
         R.stages = dict(enumerate(cut))
@@ -128,6 +134,13 @@ class PipelineConfig():
     def batched_activation_map(self):
         res = dict()
         for d in [self.is_batched] + [s.is_batched for s in self.stages.values()]:
+            res.update(d)
+        return res
+
+    @property
+    def all_dtypes(self):
+        res = dict()
+        for d in [self.dtypes] + [s.dtypes for s in self.stages.values()]:
             res.update(d)
         return res
 
@@ -208,17 +221,19 @@ class PipelineConfig():
         all_outputs_used &= all_outputs.issubset(
             set(model_outputs).union(all_inputs))
 
-        # ensure that shapes belonging to the same scope are consistent across stages
+        # ensure that shapes dtypes and is_batched are consistent across all stages
         shapes = self.shapes()
+        dtypes = self.all_dtypes
+        is_batched = self.batched_activation_map
         for scope, shape in chain(zip(self.model_inputs, self.model_input_shapes),
                                   zip(self.model_outputs, self.model_output_shapes)):
-            if shape != shapes[scope]:
+            if shape != shapes[scope] or self.is_batched[scope] != is_batched[scope] or self.dtypes[scope] != dtypes[scope]:
                 return False
 
         for stage in self.stages.values():
             for scope, shape in chain(zip(stage.inputs, stage.input_shapes),
                                       zip(stage.outputs, stage.output_shapes)):
-                if shape != shapes[scope]:
+                if shape != shapes[scope] or stage.is_batched[scope] != is_batched[scope] or stage.dtypes[scope] != dtypes[scope]:
                     return False
 
         # ensure balanced communication
@@ -281,11 +296,13 @@ class PipelineConfig():
         model_inputs = dict()
         for i, s in zip(self.model_inputs, self.model_input_shapes):
             model_inputs[i] = {"shape": list(s),
+                               "dtype": serialize_python_class_or_function(self.dtypes[i]),
                                "is_batched": self.is_batched[i]}
 
         model_outputs = dict()
         for o, s in zip(self.model_outputs, self.model_output_shapes):
             model_outputs[o] = {"shape": list(s),
+                                "dtype": serialize_python_class_or_function(self.dtypes[o]),
                                 "is_batched": self.is_batched[o]}
 
         state["model_inputs"] = model_inputs
@@ -319,10 +336,12 @@ class PipelineConfig():
         config = cls(batch_dim, depth, basic_blocks)
 
         for i, d in state['model_inputs'].items():
-            config.add_input(i, d['shape'], d['is_batched'])
+            config.add_input(i, d['shape'], d['is_batched'],
+                             deserialize_python_class_or_function(d['dtype']))
 
         for o, d in state['model_outputs'].items():
-            config.add_output(o, d['shape'], d['is_batched'])
+            config.add_output(o, d['shape'], d['is_batched'],
+                              deserialize_python_class_or_function(d['dtype']))
 
         config.stages = stages
 
@@ -350,6 +369,7 @@ class StageConfig():
         self.input_shapes = []
         self.output_shapes = []
         self.is_batched = dict()
+        self.dtypes = dict()
         self.devices = []
         self._stage_class = stage_class
         self._optimizer_args = (optimizer_cls, optimizer_args)
@@ -364,18 +384,20 @@ class StageConfig():
 
         return self
 
-    def add_input(self, input_name: str, shape: Tuple[int, ...], is_batched: bool = True) -> "StageConfig":
+    def add_input(self, input_name: str, shape: Tuple[int, ...], is_batched: bool = True, dtype: torch.dtype = torch.float32) -> "StageConfig":
         self.inputs.append(input_name)
         shape = list(shape)
         self.input_shapes.append(shape)
         self.is_batched[input_name] = is_batched
+        self.dtypes[input_name] = dtype
         return self
 
-    def add_output(self, output_name: str, shape: Tuple[int, ...], is_batched: bool = True) -> "StageConfig":
+    def add_output(self, output_name: str, shape: Tuple[int, ...], is_batched: bool = True, dtype: torch.dtype = torch.float32) -> "StageConfig":
         self.outputs.append(output_name)
         shape = list(shape)
         self.output_shapes.append(shape)
         self.is_batched[output_name] = is_batched
+        self.dtypes[output_name] = dtype
         return self
 
     def add_devices(self, *devices: Iterable[torch.device]) -> "StageConfig":
@@ -409,7 +431,7 @@ class StageConfig():
         self._lr_scheduler_args = (LR_scheduler_cls, lr_scheduler_args)
         return self
 
-    def rank_batch_size(self, batch_dim: int, local_rank=0) -> int:
+    def rank_batch_size(self, batch_dim: int, local_rank: int) -> int:
         batch_size = self.find_batch_size(batch_dim)
         split_size = batch_size // len(self.devices)
         if local_rank < batch_size % len(self.devices):
@@ -458,11 +480,13 @@ class StageConfig():
         inputs = dict()
         for i, s in zip(self.inputs, self.input_shapes):
             inputs[i] = {"shape": list(s),
+                         "dtype": serialize_python_class_or_function(self.dtypes[i]),
                          "is_batched": self.is_batched[i]}
 
         outputs = dict()
         for o, s in zip(self.outputs, self.output_shapes):
             outputs[o] = {"shape": list(s),
+                          "dtype": serialize_python_class_or_function(self.dtypes[o]),
                           "is_batched": self.is_batched[o]}
 
         state["inputs"] = inputs
@@ -519,10 +543,12 @@ class StageConfig():
                      lr_scheduler_type, lr_scheduler_args)
 
         for i, d in state['inputs'].items():
-            config.add_input(i, d['shape'], d['is_batched'])
+            config.add_input(i, d['shape'], d['is_batched'],
+                             deserialize_python_class_or_function(d['dtype']))
 
         for o, d in state['outputs'].items():
-            config.add_output(o, d['shape'], d['is_batched'])
+            config.add_output(o, d['shape'], d['is_batched'],
+                              deserialize_python_class_or_function(d['dtype']))
 
         config.add_devices(*state['devices'])
 
@@ -535,8 +561,12 @@ def serialize_python_class_or_function(class_or_function):
     if class_or_function is None:
         return ""
     module = inspect.getmodule(class_or_function)
-    class_or_function_name = class_or_function.__name__
-    return module.__name__ + "." + class_or_function_name
+    if module:
+        class_or_function_name = class_or_function.__name__
+        return module.__name__ + "." + class_or_function_name
+    else:
+        assert isinstance(class_or_function, torch.dtype)
+        return str(class_or_function)
 
 
 def deserialize_python_class_or_function(path: str):
@@ -554,10 +584,12 @@ def deserialize_python_class_or_function(path: str):
 # model_inputs
     # id
     # shape
+    #    dtype
     # is_batched
 # model_outputs
     # id
     # shape
+    #    dtype
     # is_batched
 
 # stages:
@@ -565,10 +597,12 @@ def deserialize_python_class_or_function(path: str):
     # model_inputs
     #   id
     #    shape
+    #    dtype
     #    is_batched
     # model_outputs
     #    id
     #    shape
+    #    dtype
     #    is_batched
     # stage_cls convention is package.path.cls
     # optimizer optional

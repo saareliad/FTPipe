@@ -5,20 +5,24 @@
   "model_inputs": {
     "input0": {
       "shape": [1, 100],
+      "dtype": "torch.float32",
       "is_batched": true
     }
   },
   "model_outputs": {
     "output0": {
       "shape": [1, 100],
+      "dtype": "torch.float32",
       "is_batched": true
     },
     "output1": {
       "shape": [1, 100],
+      "dtype": "torch.float32",
       "is_batched": true
     },
     "output2": {
       "shape": [1, 100],
+      "dtype": "torch.float32",
       "is_batched": true
     }
   },
@@ -27,12 +31,14 @@
       "inputs": {
         "input0": {
           "shape": [1, 100],
+          "dtype": "torch.float32",
           "is_batched": true
         }
       },
       "outputs": {
         "output2": {
           "shape": [1, 100],
+          "dtype": "torch.float32",
           "is_batched": true
         }
       },
@@ -49,12 +55,14 @@
       "inputs": {
         "input0": {
           "shape": [1, 100],
+          "dtype": "torch.float32",
           "is_batched": true
         }
       },
       "outputs": {
         "t0": {
           "shape": [1, 100],
+          "dtype": "torch.float32",
           "is_batched": true
         }
       },
@@ -69,12 +77,14 @@
       "inputs": {
         "t0": {
           "shape": [1, 100],
+          "dtype": "torch.float32",
           "is_batched": true
         }
       },
       "outputs": {
         "t1": {
           "shape": [1, 100],
+          "dtype": "torch.float32",
           "is_batched": true
         }
       },
@@ -89,16 +99,19 @@
       "inputs": {
         "t1": {
           "shape": [1, 100],
+          "dtype": "torch.float32",
           "is_batched": true
         }
       },
       "outputs": {
         "output0": {
           "shape": [1, 100],
+          "dtype": "torch.float32",
           "is_batched": true
         },
         "output1": {
           "shape": [1, 100],
+          "dtype": "torch.float32",
           "is_batched": true
         }
       },

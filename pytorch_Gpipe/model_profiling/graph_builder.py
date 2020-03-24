@@ -24,6 +24,8 @@ __all__ = ["build_graph"]
 
 # TODO there are still some problems with lstms should think if we want to tackle it
 
+# TODO add dtype info for Tensors
+
 DEBUG_MODEL_NAME = ""
 
 

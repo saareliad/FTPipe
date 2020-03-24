@@ -196,9 +196,13 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
                                   model_blocks: Dict[str, Module], batch_dim: int, output_file: str) -> str:
     '''generates the create_pipeline_configuration method which given a model creates his partitioned counterpart
     '''
-
     # TODO assumption the first input is batched
     batch_size = graph.nodes[0].shape[0][batch_dim]
+
+    # TODO better logic for is_batched
+    # currently we assume that if a tensor has enough dimentions and the relevant dim size equals the batch_size
+    def is_batched(s):
+        return (len(s) > batch_dim) and (s[batch_dim] == batch_size)
 
     stage_in_out_config = dict()
 
@@ -210,15 +214,16 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
 
         stage_inputs = dict()
         for i, s in zip(inputs, input_shapes):
-            # TODO better logic for is_batched
-            # currently we assume that if a tensor has enough dimentions and the relevant dim size equals the batch_size
-            is_batched = (len(s) > batch_dim) and (s[batch_dim] == batch_size)
-            stage_inputs[i] = {"shape": s, "is_batched": is_batched}
+            # TODO better logic for dtypes
+            stage_inputs[i] = {"shape": s,
+                               "dtype": str(torch.float32),
+                               "is_batched": is_batched(s)}
 
         stage_outputs = dict()
         for o, s in zip(outputs, output_shapes):
-            is_batched = (len(s) > batch_dim) and (s[batch_dim] == batch_size)
-            stage_outputs[o] = {"shape": s, "is_batched": is_batched}
+            stage_outputs[o] = {"shape": s,
+                                "dtype": str(torch.float32),
+                                "is_batched": is_batched(s)}
 
         stage_in_out_config[idx] = {"inputs": stage_inputs,
                                     "outputs": stage_outputs}
@@ -266,13 +271,15 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
 
     model_inputs = dict()
     for i, s in zip(input_ids, input_shapes):
-        is_batched = (len(s) > batch_dim) and (s[batch_dim] == batch_size)
-        model_inputs[i] = {"shape": s, "is_batched": is_batched}
+        model_inputs[i] = {"shape": s,
+                           "dtype": f"'{torch.float32}'",
+                           "is_batched": is_batched(s)}
 
     model_outputs = dict()
     for o, s in zip(output_ids, output_shapes):
-        is_batched = (len(s) > batch_dim) and (s[batch_dim] == batch_size)
-        model_outputs[o] = {"shape": s, "is_batched": is_batched}
+        model_outputs[o] = {"shape": s,
+                            "dtype": f"'{torch.float32}'",
+                            "is_batched": is_batched(s)}
 
     model_inputs = f',\n{dtab}{tab}'.join([f"{k}: {format_dict(v)}"
                                            for k, v in model_inputs.items()])
