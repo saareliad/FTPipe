@@ -6,6 +6,7 @@ from torch import Tensor
 from importlib import import_module
 from inspect import signature
 from models.simple_partitioning_config import PipelineConfig, serialize_python_class_or_function, deserialize_python_class_or_function
+from models.parse_config import PartitioningConfigParser
 from collections import deque
 from typing import Tuple, Set, Dict
 
@@ -212,59 +213,63 @@ def pipe_config_old_format(state, layers, tensors):
     # devices list of devices
 
 
-if __name__ == "__main__":
+def convert_vision_models():
     from models.normal.ResNet import resnet50
     from models.normal.WideResNet import WideResNet
+    wrn_16x4 = WideResNet(depth=16, num_classes=10,
+                          widen_factor=4, drop_rate=0.0)
+    wrn_16x4_c100 = WideResNet(depth=16, num_classes=100,
+                               widen_factor=4, drop_rate=0.0)
 
-    if False:
-        wrn_16x4 = WideResNet(depth=16, num_classes=10,
-                              widen_factor=4, drop_rate=0.0)
-        wrn_16x4_c100 = WideResNet(depth=16, num_classes=100,
-                                   widen_factor=4, drop_rate=0.0)
+    wrn_28x10_c100_dr03 = WideResNet(depth=28, num_classes=100,
+                                     widen_factor=10, drop_rate=0.3)
 
-        wrn_28x10_c100_dr03 = WideResNet(depth=28, num_classes=100,
-                                         widen_factor=10, drop_rate=0.3)
+    resnet = resnet50()
 
-        resnet = resnet50()
+    imagenet_sample = torch.randn(32, 3, 224, 224)
+    batch_dim = 0
+    print("resnet50_imagenet_p8")
+    resnet50_imagenet_p8 = get_latest_config_shapes_dtypes_is_batched("models/partitioned/resnet50_imagenet_p8.py",
+                                                                      resnet, imagenet_sample, batch_dim)
+    resnet50_imagenet_p8.toJson("resnet50_imagenet_p8.json")
 
-        imagenet_sample = torch.randn(32, 3, 224, 224)
-        batch_dim = 0
-        print("resnet50_imagenet_p8")
-        resnet50_imagenet_p8 = get_latest_config_shapes_dtypes_is_batched("models/partitioned/resnet50_imagenet_p8.py",
-                                                                          resnet, imagenet_sample, batch_dim)
-        resnet50_imagenet_p8.toJson("resnet50_imagenet_p8.json")
+    print("wrn_16x4_p2")
+    cifar10_sample = torch.randn(64, 3, 32, 32)
+    wrn_16x4_p2 = get_latest_config_shapes_dtypes_is_batched("models/partitioned/wrn_16x4_p2.py",
+                                                             wrn_16x4, cifar10_sample, batch_dim)
+    wrn_16x4_p2.toJson("wrn_16x4_p2.json")
 
-        print("wrn_16x4_p2")
-        cifar10_sample = torch.randn(64, 3, 32, 32)
-        wrn_16x4_p2 = get_latest_config_shapes_dtypes_is_batched("models/partitioned/wrn_16x4_p2.py",
-                                                                 wrn_16x4, cifar10_sample, batch_dim)
-        wrn_16x4_p2.toJson("wrn_16x4_p2.json")
+    print("wrn_16x4_p4")
+    wrn_16x4_p4 = get_latest_config_shapes_dtypes_is_batched("models/partitioned/wrn_16x4_p4.py",
+                                                             wrn_16x4, cifar10_sample, batch_dim)
+    wrn_16x4_p4.toJson("wrn_16x4_p4.json")
 
-        print("wrn_16x4_p4")
-        wrn_16x4_p4 = get_latest_config_shapes_dtypes_is_batched("models/partitioned/wrn_16x4_p4.py",
-                                                                 wrn_16x4, cifar10_sample, batch_dim)
-        wrn_16x4_p4.toJson("wrn_16x4_p4.json")
+    print("wrn_16x4_c100_p2")
+    cifar100_sample = torch.randn(64, 3, 32, 32)
+    wrn_16x4_c100_p2 = get_latest_config_shapes_dtypes_is_batched("models/partitioned/wrn_16x4_c100_p2.py",
+                                                                  wrn_16x4_c100, cifar100_sample, batch_dim)
+    wrn_16x4_c100_p2.toJson("wrn_16x4_c100_p2.json")
+    print("wrn_16x4_c100_p4")
+    wrn_16x4_c100_p4 = get_latest_config_shapes_dtypes_is_batched("models/partitioned/wrn_16x4_c100_p4.py",
+                                                                  wrn_16x4_c100, cifar100_sample, batch_dim)
+    wrn_16x4_c100_p4.toJson("wrn_16x4_c100_p4.json")
 
-        print("wrn_16x4_c100_p2")
-        cifar100_sample = torch.randn(64, 3, 32, 32)
-        wrn_16x4_c100_p2 = get_latest_config_shapes_dtypes_is_batched("models/partitioned/wrn_16x4_c100_p2.py",
-                                                                      wrn_16x4, cifar10_sample, batch_dim)
-        wrn_16x4_c100_p2.toJson("wrn_16x4_c100_p2.json")
-        print("wrn_16x4_c100_p4")
-        wrn_16x4_c100_p4 = get_latest_config_shapes_dtypes_is_batched("models/partitioned/wrn_16x4_c100_p4.py",
-                                                                      wrn_16x4, cifar10_sample, batch_dim)
-        wrn_16x4_c100_p4.toJson("wrn_16x4_c100_p4.json")
+    print("wrn_28x10_c100_dr03_p2")
+    cifar100_sample = torch.randn(64, 3, 32, 32)
+    wrn_28x10_c100_dr03_p2 = get_latest_config_shapes_dtypes_is_batched("models/partitioned/wrn_28x10_c100_dr03_p2.py",
+                                                                        wrn_28x10_c100_dr03, cifar100_sample, batch_dim)
+    wrn_28x10_c100_dr03_p2.toJson("wrn_28x10_c100_dr03_p2.json")
+    print("wrn_28x10_c100_dr03_p4")
+    wrn_28x10_c100_dr03_p4 = get_latest_config_shapes_dtypes_is_batched("models/partitioned/wrn_28x10_c100_dr03_p4.py",
+                                                                        wrn_28x10_c100_dr03, cifar100_sample, batch_dim)
+    wrn_28x10_c100_dr03_p4.toJson("wrn_28x10_c100_dr03_p4.json")
 
-        print("wrn_28x10_c100_dr03_p2")
-        cifar100_sample = torch.randn(64, 3, 32, 32)
-        wrn_28x10_c100_dr03_p2 = get_latest_config_shapes_dtypes_is_batched("models/partitioned/wrn_28x10_c100_dr03_p2.py",
-                                                                            wrn_28x10_c100_dr03, cifar10_sample, batch_dim)
-        wrn_28x10_c100_dr03_p2.toJson("wrn_28x10_c100_dr03_p2.json")
-        print("wrn_28x10_c100_dr03_p4")
-        wrn_28x10_c100_dr03_p4 = get_latest_config_shapes_dtypes_is_batched("models/partitioned/wrn_28x10_c100_dr03_p4.py",
-                                                                            wrn_28x10_c100_dr03, cifar10_sample, batch_dim)
-        wrn_28x10_c100_dr03_p4.toJson("wrn_28x10_c100_dr03_p4.json")
-    else:
-        from models.partitioned.gpt2_lm_lowercase import create_pipeline_configuration
-        config = create_pipeline_configuration(DEBUG=True)
-        PipelineConfig.fromDict(config).toJson("gpt2_lm_lowercase.json")
+
+def convert_gpt2_models():
+    from models.partitioned.gpt2_lm_lowercase import create_pipeline_configuration
+    config = create_pipeline_configuration(DEBUG=True)
+    PipelineConfig.fromDict(config).toJson("gpt2_lm_lowercase.json")
+
+
+if __name__ == "__main__":
+    PartitioningConfigParser("wrn_16x4_p4", 1, 10, 12)

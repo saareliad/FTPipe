@@ -131,6 +131,13 @@ class PipelineConfig():
 
         return shapes
 
+    def all_dtypes(self) -> Dict[str, torch.dtype]:
+        dtypes = dict()
+        for d in [self.dtypes] + [s.dtypes for s in self.stages.values()]:
+            dtypes.update(d)
+
+        return dtypes
+
     def change_batch(self, batch_size, for_replicated=True):
         for i, shape in zip(self.model_inputs, self.model_input_shapes):
             if self.is_batched[i]:
@@ -438,15 +445,27 @@ def deserialize_python_class_or_function(path: str):
 # depth
 # basic_blocks
 # model_inputs
-# model_input_shapes
+    # id
+    # shape
+    #    dtype
+    # is_batched
 # model_outputs
-# model_output_shapes
+    # id
+    # shape
+    #    dtype
+    # is_batched
 
 # stages:
-#   batch_dim
 #   id
-#   inputs should match generated code
-#   input_shapes should match the order of inputs
-#   outputs should match generated code
-#   output_shapes should match the order of outputs
-#   devices list of devices
+    # model_inputs
+    #   id
+    #    shape
+    #    dtype
+    #    is_batched
+    # model_outputs
+    #    id
+    #    shape
+    #    dtype
+    #    is_batched
+    # stage_cls convention is package.path.cls
+    # devices list of devices
