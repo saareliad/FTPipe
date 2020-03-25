@@ -308,7 +308,7 @@ class PipelineConfig():
         state["model_inputs"] = model_inputs
         state["model_outputs"] = model_outputs
 
-        state["stages"] = {str(idx): stage.state_dict()
+        state["stages"] = {idx: stage.state_dict()
                            for idx, stage in self.stages.items()}
 
         return state
