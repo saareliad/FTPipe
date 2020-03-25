@@ -1456,7 +1456,9 @@ class BertForQuestionAnswering(BertPreTrainedModel):
             start_positions.clamp_(0, ignored_index)
             end_positions.clamp_(0, ignored_index)
 
-            loss_fct = CrossEntropyLoss(ignore_index=ignored_index)
+            # loss_fct = CrossEntropyLoss(ignore_index=ignored_index)
+            def loss_fct(logits,targets):
+                return torch.nn.functional.cross_entropy(logits,targets,ignore_index=ignored_index)
             start_loss = loss_fct(start_logits, start_positions)
             end_loss = loss_fct(end_logits, end_positions)
             total_loss = (start_loss + end_loss) / 2

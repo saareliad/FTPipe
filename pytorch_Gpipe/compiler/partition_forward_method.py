@@ -15,6 +15,8 @@ dtab = tab + tab
 
 SupportedFunctions = parse_functions()
 
+# TODO nll_loss and softmax/log_softmax
+
 __all__ = ['generate_forward_method']
 
 
@@ -339,6 +341,7 @@ def generateConstantExpression(ready_expressions: Dict[str, str],
     elif isinstance(value, float):
         # in case of inf -inf nan
         value = f"float('{value}')"
+        node.value_type = float
     ready_expressions[node.scope] = f'{value}'
     expression_len[node.scope] = 0
 
@@ -408,7 +411,8 @@ def specialCases(ready_expressions: Dict[str, str], node: Node,
         assert len(node.in_nodes) == 1, "aten::Int is a no op with 2 input"
         return ready_expressions[node.in_nodes[0].scope]
     elif func_name == 'to':
-        return f"{ready_expressions[operand_scopes[0]]}.to(device={ready_expressions[operand_scopes[3]]})"
+        args = generateToArgs(ready_expressions, node)
+        return f"{ready_expressions[operand_scopes[0]]}.to({args})"
     elif func_name == 'slice':
         operand = ready_expressions[operand_scopes[0]]
         args = "".join(
@@ -463,8 +467,7 @@ def generateToArgs(
     '''generates args of a Tensor.to expression
     needs special handling because we need to override the device used with the partition's device
     '''
-    tensor_id = ready_expressions[node.in_nodes[0].scope]
-    args = f"{tensor_id}, "
+    args = ""
     if len(node.in_nodes) == 4:
         # type conversion
         # dtype, non_blocking, copy
@@ -474,16 +477,23 @@ def generateToArgs(
         args += f"dtype={dtype}, non_blocking={non_blocking}, copy={copy}"
     elif len(node.in_nodes) == 5:
         # device and type conversion
-        # device, dtype, non_blocking, copy
-        device = ready_expressions[node.in_nodes[1].scope]
-        dtype = dtype_lookup[ready_expressions[node.in_nodes[2].scope]]
-        non_blocking = ready_expressions[node.in_nodes[3].scope]
-        copy = ready_expressions[node.in_nodes[4].scope]
-        args += f"device={device}, dtype={dtype}, non_blocking={non_blocking}, copy={copy}"
+        if ready_expressions[node.in_nodes[2].scope] in dtype_lookup:
+            # device, dtype, non_blocking, copy
+            device = ready_expressions[node.in_nodes[1].scope]
+            dtype = dtype_lookup[ready_expressions[node.in_nodes[2].scope]]
+            non_blocking = ready_expressions[node.in_nodes[3].scope]
+            copy = ready_expressions[node.in_nodes[4].scope]
+            args += f"device=self.device, dtype={dtype}, non_blocking={non_blocking}, copy={copy}"
+        else:
+            assert ready_expressions[node.in_nodes[1].scope] in dtype_lookup
+            dtype = dtype_lookup[ready_expressions[node.in_nodes[1].scope]]
+            non_blocking = ready_expressions[node.in_nodes[2].scope]
+            copy = ready_expressions[node.in_nodes[3].scope]
+            args += f"device=self.device,dtype={dtype}, non_blocking={non_blocking},copy={copy}"
     elif len(node.in_nodes) == 7:
         # only device conversion
         # all other args are not necessary (they are just default args and junk)
-        args += f"device={ready_expressions[node.in_nodes[3].scope]}"
+        args += f"device=self.device"
     else:
         assert False, f"unsupported to Operation with {len(node.in_nodes)} operands"
 

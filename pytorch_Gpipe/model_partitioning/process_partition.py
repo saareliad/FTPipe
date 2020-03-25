@@ -19,7 +19,9 @@ def post_process_partition(graph: Graph) -> Graph:
     '''
 
     cannonize_partition_indices(graph)
-    if has_cycles(graph) and check_if_cycle_is_solvable(graph):
+    if has_cycles(graph):
+        graph.save_as_pdf(f"{graph.model_name}_before_fix",
+                          ".", show_profiles=True)
         break_partition_cycles(graph)
 
         # possibly redundent
@@ -27,9 +29,8 @@ def post_process_partition(graph: Graph) -> Graph:
 
     # this is a sanity check
     if has_cycles(graph):
-        graph.serialize(f"{graph.model_name}_cycle_detected")
-        graph.save_as_pdf(f"{graph.model_name}_cycle_detected",
-                            ".", show_profiles=True)
+        graph.save_as_pdf(f"{graph.model_name}_after_fix",
+                          ".", show_profiles=True)
         error = "error cycle detected mutual dependecy between partitions"
         raise AssertionError(error)
 
@@ -111,7 +112,6 @@ def check_if_cycle_is_solvable(graph: Graph) -> bool:
     return has_true_cycle
 
 
-
 def break_partition_cycles(graph: Graph):
     parts = set()
     roots = defaultdict(set)
@@ -125,43 +125,12 @@ def break_partition_cycles(graph: Graph):
     n_parts = len(parts)
     for idx, group in roots.items():
         # each group represents a new partition to create
-        for n in find_subtree(group):
+        for n in find_subtree(group, len(graph.nodes)):
             n.part = n_parts
         n_parts += 1
 
 
-def check_if_cycle_is_solvable(graph: Graph) -> bool:
-    """ 
-    check if a cycle detected is a solvable or not.
-    If on the same partition we have:
-    w->u and w->v but no "direct" connction u->v
-    that is, the cycle is
-    w->u->->x->v
-    s.t
-    w.part == u.part == v.part
-    and x.part < u.part
-
-    we can solve the cycle,
-    using several solutions.
-
-    For example:
-        we can split
-        w, u: new partition x.part - 1, (before x)
-        v: new partition after x.part
-
-        put both partitions on same GPU and share w.
-        (So with cuda aware there is no communication sending w to v)
-    """
-    ngx = graph.asNetworkx(directed=True)
-    has_true_cycle = True
-    try:
-        nx.find_cycle(ngx)
-    except nx.NetworkXNoCycle:
-        has_true_cycle = False
-    return has_true_cycle
-
-
-def find_subtree(roots: Set[Node]):
+def find_subtree(roots: Set[Node], graph_size: int):
     nodes = set()
     open = copy(roots)
     while len(open) > 0:
@@ -180,9 +149,11 @@ def find_subtree(roots: Set[Node]):
 
         for u in n.in_nodes:
             if u.part == n.part:
-                # TODO this is arbitrary need more fine tuned approach
-                if u.type == NodeTypes.BUFF_PARAM:
+                # TODO we need to know if u is part of the sub tree
+                # this is an reasonable estimation
+                if u.type != NodeTypes.IN and ((n.idx - u.idx) > graph_size // 2):
                     continue
+
                 open.add(u)
                 nodes.add(u)
     return nodes
