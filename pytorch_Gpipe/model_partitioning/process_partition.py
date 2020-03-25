@@ -2,6 +2,7 @@ from collections import defaultdict
 from typing import List, Dict, Set
 from copy import copy
 from ..model_profiling import Graph, NodeTypes, Node
+import networkx as nx
 
 __all__ = ["post_process_partition"]
 
@@ -18,19 +19,19 @@ def post_process_partition(graph: Graph) -> Graph:
     '''
 
     cannonize_partition_indices(graph)
-    if has_cycles(graph):
+    if has_cycles(graph) and check_if_cycle_is_solvable(graph):
         break_partition_cycles(graph)
 
         # possibly redundent
         cannonize_partition_indices(graph)
 
-        # this is a sanity check
-        if has_cycles(graph):
-            graph.serialize(f"{graph.model_name}_cycle_detected")
-            graph.save_as_pdf(f"{graph.model_name}_cycle_detected",
-                              ".", show_profiles=True)
-            error = "error cycle detected mutual dependecy between partitions"
-            raise AssertionError(error)
+    # this is a sanity check
+    if has_cycles(graph):
+        graph.serialize(f"{graph.model_name}_cycle_detected")
+        graph.save_as_pdf(f"{graph.model_name}_cycle_detected",
+                            ".", show_profiles=True)
+        error = "error cycle detected mutual dependecy between partitions"
+        raise AssertionError(error)
 
     return graph
 
@@ -79,9 +80,42 @@ def has_cycles(graph: Graph) -> bool:
     return False
 
 
+def check_if_cycle_is_solvable(graph: Graph) -> bool:
+    """ 
+    check if a cycle detected is a solvable or not.
+    If on the same partition we have:
+    w->u and w->v but no "direct" connction u->v
+    that is, the cycle is
+    w->u->->x->v
+    s.t
+    w.part == u.part == v.part
+    and x.part < u.part
+
+    we can solve the cycle,
+    using several solutions.
+
+    For example:
+        we can split
+        w, u: new partition x.part - 1, (before x)
+        v: new partition after x.part
+
+        put both partitions on same GPU and share w.
+        (So with cuda aware there is no communication sending w to v)
+    """
+    ngx = graph.asNetworkx(directed=True)
+    has_true_cycle = True
+    try:
+        nx.find_cycle(ngx)
+    except nx.NetworkXNoCycle:
+        has_true_cycle = False
+    return has_true_cycle
+
+
+
 def break_partition_cycles(graph: Graph):
     parts = set()
     roots = defaultdict(set)
+    # roots[i] = nodes in partition j s.t j<i and exists backward edge from partition i to j
     for u in graph.nodes:
         parts.add(u.part)
         for v in u.out_nodes:
@@ -94,6 +128,37 @@ def break_partition_cycles(graph: Graph):
         for n in find_subtree(group):
             n.part = n_parts
         n_parts += 1
+
+
+def check_if_cycle_is_solvable(graph: Graph) -> bool:
+    """ 
+    check if a cycle detected is a solvable or not.
+    If on the same partition we have:
+    w->u and w->v but no "direct" connction u->v
+    that is, the cycle is
+    w->u->->x->v
+    s.t
+    w.part == u.part == v.part
+    and x.part < u.part
+
+    we can solve the cycle,
+    using several solutions.
+
+    For example:
+        we can split
+        w, u: new partition x.part - 1, (before x)
+        v: new partition after x.part
+
+        put both partitions on same GPU and share w.
+        (So with cuda aware there is no communication sending w to v)
+    """
+    ngx = graph.asNetworkx(directed=True)
+    has_true_cycle = True
+    try:
+        nx.find_cycle(ngx)
+    except nx.NetworkXNoCycle:
+        has_true_cycle = False
+    return has_true_cycle
 
 
 def find_subtree(roots: Set[Node]):

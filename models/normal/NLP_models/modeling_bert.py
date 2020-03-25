@@ -1426,15 +1426,17 @@ class BertForQuestionAnswering(BertPreTrainedModel):
 
         self.init_weights()
 
-    def forward(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None,
-                start_positions=None, end_positions=None):
+    # def forward(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None,
+    #             start_positions=None, end_positions=None):
+    # NOTE: change parameters order
+    def forward(self, input_ids, attention_mask=None, token_type_ids=None,
+                start_positions=None, end_positions=None, position_ids=None, head_mask=None):
 
         outputs = self.bert(input_ids,
                             attention_mask=attention_mask,
                             token_type_ids=token_type_ids,
                             position_ids=position_ids,
                             head_mask=head_mask)
-
         sequence_output = outputs[0]
 
         logits = self.qa_outputs(sequence_output)
