@@ -28,207 +28,317 @@ from torch.nn.modules.dropout import Dropout
 # Than edited some names manually
 
 def create_pipeline_configuration(DEBUG=False):
-    depth = -1
-    basic_blocks = (Conv1D,Embedding,LayerNorm,Linear,Dropout)
-    blocks_path = [ 'transformers.modeling_utils.Conv1D',
-            'torch.nn.modules.sparse.Embedding',
-            'torch.nn.modules.normalization.LayerNorm',
-            'torch.nn.modules.linear.Linear',
-            'torch.nn.modules.dropout.Dropout']
-    module_path = 'models.partitioned.gpt2_lm_lowercase'
-    
-
-    # creating configuration
-    stages = {0: {"inputs": ['input0'],
-        "outputs": ['GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_2]', 'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/aten::add5953'],
-        "input_shapes": [[4, 1024]],
-        "output_shapes": [[4, 1024, 768], [4, 1024, 768]]},
-            1: {"inputs": ['GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_2]', 'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/aten::add5953'],
-        "outputs": ['GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/aten::add6899', 'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::matmul7059'],
-        "input_shapes": [[4, 1024, 768], [4, 1024, 768]],
-        "output_shapes": [[4, 1024, 768], [4, 12, 1024, 64]]},
-            2: {"inputs": ['GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/aten::add6899', 'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::matmul7059'],
-        "outputs": ['GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_attn]', 'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/aten::add7769'],
-        "input_shapes": [[4, 1024, 768], [4, 12, 1024, 64]],
-        "output_shapes": [[4, 1024, 2304], [4, 1024, 768]]},
-            3: {"inputs": ['GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_attn]', 'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/aten::add7769', 'input1'],
-        "outputs": ['GPT2LMHeadModel/aten::nll_loss4194'],
-        "input_shapes": [[4, 1024, 2304], [4, 1024, 768], [4, 1024]],
-        "output_shapes": [[1]]}
+    return {
+        "batch_dim": 0,
+        "depth": -1,
+        "basic_blocks": [
+            "transformers.modeling_utils.Conv1D",
+            "torch.nn.modules.sparse.Embedding",
+            "torch.nn.modules.normalization.LayerNorm",
+            "torch.nn.modules.linear.Linear",
+            "torch.nn.modules.dropout.Dropout"
+        ],
+        "model_inputs": {
+            "input0": {
+                "shape": [4, 1024],
+                "dtype": "torch.int64",
+                "is_batched": True
+            },
+            "input1": {
+                "shape": [4, 1024],
+                "dtype": "torch.int64",
+                "is_batched": True
             }
-    
+        },
+        "model_outputs": {
+            "GPT2LMHeadModel/aten::nll_loss4194": {
+                "shape": [1],
+                "dtype": "torch.float32",
+                "is_batched": False
+            }
+        },
+        "stages": {
+            "0": {
+                "inputs": {
+                    "input0": {
+                        "shape": [4, 1024],
+                        "dtype": "torch.int64",
+                        "is_batched": True
+                    }
+                },
+                "outputs": {
+                    "GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_2]": {
+                        "shape": [4, 1024, 768],
+                        "dtype": "torch.float32",
+                        "is_batched": True
+                    },
+                    "GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/aten::add5953": {
+                        "shape": [4, 1024, 768],
+                        "dtype": "torch.float32",
+                        "is_batched": True
+                    }
+                },
+                "stage_cls": "models.partitioned.gpt2_lm_lowercase.Partition0",
+                "devices": ["cpu" if DEBUG else "cuda:0"]
+            },
+            "1": {
+                "inputs": {
+                    "GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_2]": {
+                        "shape": [4, 1024, 768],
+                        "dtype": "torch.float32",
+                        "is_batched": True
+                    },
+                    "GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/aten::add5953": {
+                        "shape": [4, 1024, 768],
+                        "dtype": "torch.float32",
+                        "is_batched": True
+                    }
+                },
+                "outputs": {
+                    "GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/aten::add6899": {
+                        "shape": [4, 1024, 768],
+                        "dtype": "torch.float32",
+                        "is_batched": True
+                    },
+                    "GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::matmul7059": {
+                        "shape": [4, 12, 1024, 64],
+                        "dtype": "torch.float32",
+                        "is_batched": True
+                    }
+                },
+                "stage_cls": "models.partitioned.gpt2_lm_lowercase.Partition1",
+                "devices": ["cpu" if DEBUG else "cuda:1"]
+            },
+            "2": {
+                "inputs": {
+                    "GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/aten::add6899": {
+                        "shape": [4, 1024, 768],
+                        "dtype": "torch.float32",
+                        "is_batched": True
+                    },
+                    "GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::matmul7059": {
+                        "shape": [4, 12, 1024, 64],
+                        "dtype": "torch.float32",
+                        "is_batched": True
+                    }
+                },
+                "outputs": {
+                    "GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_attn]": {
+                        "shape": [4, 1024, 2304],
+                        "dtype": "torch.float32",
+                        "is_batched": True
+                    },
+                    "GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/aten::add7769": {
+                        "shape": [4, 1024, 768],
+                        "dtype": "torch.float32",
+                        "is_batched": True
+                    }
+                },
+                "stage_cls": "models.partitioned.gpt2_lm_lowercase.Partition2",
+                "devices": ["cpu" if DEBUG else "cuda:2"]
+            },
+            "3": {
+                "inputs": {
+                    "GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_attn]": {
+                        "shape": [4, 1024, 2304],
+                        "dtype": "torch.float32",
+                        "is_batched": True
+                    },
+                    "GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/aten::add7769": {
+                        "shape": [4, 1024, 768],
+                        "dtype": "torch.float32",
+                        "is_batched": True
+                    },
+                    "input1": {
+                        "shape": [4, 1024],
+                        "dtype": "torch.int64",
+                        "is_batched": True
+                    }
+                },
+                "outputs": {
+                    "GPT2LMHeadModel/aten::nll_loss4194": {
+                        "shape": [1],
+                        "dtype": "torch.float32",
+                        "is_batched": False
+                    }
+                },
+                "stage_cls": "models.partitioned.gpt2_lm_lowercase.Partition3",
+                "devices": ["cpu" if DEBUG else "cuda:3"]
+            }
+        }
+    }
 
-    stages[0]['batch_dim'] = 0
-    stages[0]['batch_size'] = stages[0]['input_shapes'][0][0]
-    stages[0]['stage_cls'] = module_path + '.Partition0'
-    device = 'cpu' if DEBUG else 'cuda:0'
-    stages[0]['devices'] = [device]
-    
-
-    stages[1]['batch_dim'] = 0
-    stages[1]['batch_size'] = stages[1]['input_shapes'][0][0]
-    stages[1]['stage_cls'] = module_path + '.Partition1'
-    device = 'cpu' if DEBUG else 'cuda:1'
-    stages[1]['devices'] = [device]
-    
-
-    stages[2]['batch_dim'] = 0
-    stages[2]['batch_size'] = stages[2]['input_shapes'][0][0]
-    stages[2]['stage_cls'] = module_path + '.Partition2'
-    device = 'cpu' if DEBUG else 'cuda:2'
-    stages[2]['devices'] = [device]
-    
-
-    stages[3]['batch_dim'] = 0
-    stages[3]['batch_size'] = stages[3]['input_shapes'][0][0]
-    stages[3]['stage_cls'] = module_path + '.Partition3'
-    device = 'cpu' if DEBUG else 'cuda:3'
-    stages[3]['devices'] = [device]
-    
-
-    config = dict()
-    config['batch_dim'] = 0
-    config['batch_size'] = stages[0]['batch_size']
-    config['depth'] = depth
-    config['basic_blocks'] = blocks_path
-    config['model_inputs'] = ['input0', 'input1']
-    config['model_input_shapes'] = [[4, 1024], [4, 1024]]
-    config['model_outputs'] = ['GPT2LMHeadModel/aten::nll_loss4194']
-    config['model_output_shapes'] = [[1]]
-    config['stages'] = stages
-    
-    return config
 
 class Partition0(nn.Module):
     def __init__(self, layers, tensors):
         super(Partition0, self).__init__()
         # initializing partition layers
         self.l_0 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wte]']
-        assert isinstance(self.l_0,Embedding) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wte]] is expected to be of type Embedding but was of type {type(self.l_0)}'
+        assert isinstance(
+            self.l_0, Embedding), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wte]] is expected to be of type Embedding but was of type {type(self.l_0)}'
         self.l_1 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wpe]']
-        assert isinstance(self.l_1,Embedding) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wpe]] is expected to be of type Embedding but was of type {type(self.l_1)}'
+        assert isinstance(
+            self.l_1, Embedding), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wpe]] is expected to be of type Embedding but was of type {type(self.l_1)}'
         self.l_2 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Dropout[drop]']
-        assert isinstance(self.l_2,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Dropout[drop]] is expected to be of type Dropout but was of type {type(self.l_2)}'
+        assert isinstance(
+            self.l_2, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Dropout[drop]] is expected to be of type Dropout but was of type {type(self.l_2)}'
         self.l_3 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_1]']
-        assert isinstance(self.l_3,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_3)}'
+        assert isinstance(
+            self.l_3, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_3)}'
         self.l_4 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_attn]']
-        assert isinstance(self.l_4,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_4)}'
+        assert isinstance(
+            self.l_4, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_4)}'
         self.l_5 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[attn_dropout]']
-        assert isinstance(self.l_5,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_5)}'
+        assert isinstance(
+            self.l_5, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_5)}'
         self.l_6 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_proj]']
-        assert isinstance(self.l_6,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_6)}'
+        assert isinstance(
+            self.l_6, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_6)}'
         self.l_7 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[resid_dropout]']
-        assert isinstance(self.l_7,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_7)}'
+        assert isinstance(
+            self.l_7, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_7)}'
         self.l_8 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_2]']
-        assert isinstance(self.l_8,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_8)}'
+        assert isinstance(
+            self.l_8, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_8)}'
         self.l_9 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_fc]']
-        assert isinstance(self.l_9,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_9)}'
+        assert isinstance(
+            self.l_9, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_9)}'
         self.l_10 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_proj]']
-        assert isinstance(self.l_10,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_10)}'
+        assert isinstance(
+            self.l_10, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_10)}'
         self.l_11 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Dropout[dropout]']
-        assert isinstance(self.l_11,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_11)}'
+        assert isinstance(
+            self.l_11, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_11)}'
         self.l_12 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_1]']
-        assert isinstance(self.l_12,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_12)}'
+        assert isinstance(
+            self.l_12, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_12)}'
         self.l_13 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_attn]']
-        assert isinstance(self.l_13,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_13)}'
+        assert isinstance(
+            self.l_13, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_13)}'
         self.l_14 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[attn_dropout]']
-        assert isinstance(self.l_14,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_14)}'
+        assert isinstance(
+            self.l_14, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_14)}'
         self.l_15 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_proj]']
-        assert isinstance(self.l_15,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_15)}'
+        assert isinstance(
+            self.l_15, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_15)}'
         self.l_16 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[resid_dropout]']
-        assert isinstance(self.l_16,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_16)}'
+        assert isinstance(
+            self.l_16, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_16)}'
         self.l_17 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_2]']
-        assert isinstance(self.l_17,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_17)}'
+        assert isinstance(
+            self.l_17, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_17)}'
         self.l_18 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_fc]']
-        assert isinstance(self.l_18,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_18)}'
+        assert isinstance(
+            self.l_18, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_18)}'
         self.l_19 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_proj]']
-        assert isinstance(self.l_19,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_19)}'
+        assert isinstance(
+            self.l_19, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_19)}'
         self.l_20 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Dropout[dropout]']
-        assert isinstance(self.l_20,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_20)}'
+        assert isinstance(
+            self.l_20, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_20)}'
         self.l_21 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_1]']
-        assert isinstance(self.l_21,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_21)}'
+        assert isinstance(
+            self.l_21, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_21)}'
         self.l_22 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_attn]']
-        assert isinstance(self.l_22,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_22)}'
+        assert isinstance(
+            self.l_22, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_22)}'
         self.l_23 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[attn_dropout]']
-        assert isinstance(self.l_23,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_23)}'
+        assert isinstance(
+            self.l_23, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_23)}'
         self.l_24 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_proj]']
-        assert isinstance(self.l_24,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_24)}'
+        assert isinstance(
+            self.l_24, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_24)}'
         self.l_25 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[resid_dropout]']
-        assert isinstance(self.l_25,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_25)}'
+        assert isinstance(
+            self.l_25, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_25)}'
         self.l_26 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_2]']
-        assert isinstance(self.l_26,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_26)}'
+        assert isinstance(
+            self.l_26, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_26)}'
         self.l_27 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_fc]']
-        assert isinstance(self.l_27,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_27)}'
+        assert isinstance(
+            self.l_27, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_27)}'
         self.l_28 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_proj]']
-        assert isinstance(self.l_28,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_28)}'
+        assert isinstance(
+            self.l_28, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_28)}'
         self.l_29 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Dropout[dropout]']
-        assert isinstance(self.l_29,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_29)}'
+        assert isinstance(
+            self.l_29, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_29)}'
         self.l_30 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_1]']
-        assert isinstance(self.l_30,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_30)}'
+        assert isinstance(
+            self.l_30, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_30)}'
         self.l_31 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_attn]']
-        assert isinstance(self.l_31,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_31)}'
+        assert isinstance(
+            self.l_31, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_31)}'
         self.l_32 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[attn_dropout]']
-        assert isinstance(self.l_32,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_32)}'
+        assert isinstance(
+            self.l_32, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_32)}'
         self.l_33 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_proj]']
-        assert isinstance(self.l_33,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_33)}'
+        assert isinstance(
+            self.l_33, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_33)}'
         self.l_34 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[resid_dropout]']
-        assert isinstance(self.l_34,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_34)}'
+        assert isinstance(
+            self.l_34, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_34)}'
         self.l_35 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_2]']
-        assert isinstance(self.l_35,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_35)}'
+        assert isinstance(
+            self.l_35, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_35)}'
 
         # initializing partition buffers
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Tensor[bias]
-        self.register_buffer('b_0',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Tensor[bias]'])
+        self.register_buffer(
+            'b_0', tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Tensor[bias]'])
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Tensor[bias]
-        self.register_buffer('b_1',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Tensor[bias]'])
+        self.register_buffer(
+            'b_1', tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Tensor[bias]'])
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Tensor[bias]
-        self.register_buffer('b_2',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Tensor[bias]'])
+        self.register_buffer(
+            'b_2', tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Tensor[bias]'])
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Tensor[bias]
-        self.register_buffer('b_3',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Tensor[bias]'])
-        
+        self.register_buffer(
+            'b_3', tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Tensor[bias]'])
+
         # initializing partition parameters
 
         self.device = torch.device('cuda:0')
-        self.lookup = { 'l_0': 'transformer.wte',
-                        'l_1': 'transformer.wpe',
-                        'l_2': 'transformer.drop',
-                        'l_3': 'transformer.0.ln_1',
-                        'l_4': 'transformer.0.attn.c_attn',
-                        'l_5': 'transformer.0.attn.attn_dropout',
-                        'l_6': 'transformer.0.attn.c_proj',
-                        'l_7': 'transformer.0.attn.resid_dropout',
-                        'l_8': 'transformer.0.ln_2',
-                        'l_9': 'transformer.0.mlp.c_fc',
-                        'l_10': 'transformer.0.mlp.c_proj',
-                        'l_11': 'transformer.0.mlp.dropout',
-                        'l_12': 'transformer.1.ln_1',
-                        'l_13': 'transformer.1.attn.c_attn',
-                        'l_14': 'transformer.1.attn.attn_dropout',
-                        'l_15': 'transformer.1.attn.c_proj',
-                        'l_16': 'transformer.1.attn.resid_dropout',
-                        'l_17': 'transformer.1.ln_2',
-                        'l_18': 'transformer.1.mlp.c_fc',
-                        'l_19': 'transformer.1.mlp.c_proj',
-                        'l_20': 'transformer.1.mlp.dropout',
-                        'l_21': 'transformer.2.ln_1',
-                        'l_22': 'transformer.2.attn.c_attn',
-                        'l_23': 'transformer.2.attn.attn_dropout',
-                        'l_24': 'transformer.2.attn.c_proj',
-                        'l_25': 'transformer.2.attn.resid_dropout',
-                        'l_26': 'transformer.2.ln_2',
-                        'l_27': 'transformer.2.mlp.c_fc',
-                        'l_28': 'transformer.2.mlp.c_proj',
-                        'l_29': 'transformer.2.mlp.dropout',
-                        'l_30': 'transformer.3.ln_1',
-                        'l_31': 'transformer.3.attn.c_attn',
-                        'l_32': 'transformer.3.attn.attn_dropout',
-                        'l_33': 'transformer.3.attn.c_proj',
-                        'l_34': 'transformer.3.attn.resid_dropout',
-                        'l_35': 'transformer.3.ln_2',
-                        'b_0': 'transformer.0.attn.bias',
-                        'b_1': 'transformer.1.attn.bias',
-                        'b_2': 'transformer.2.attn.bias',
-                        'b_3': 'transformer.3.attn.bias'}
+        self.lookup = {'l_0': 'transformer.wte',
+                       'l_1': 'transformer.wpe',
+                       'l_2': 'transformer.drop',
+                       'l_3': 'transformer.0.ln_1',
+                       'l_4': 'transformer.0.attn.c_attn',
+                       'l_5': 'transformer.0.attn.attn_dropout',
+                       'l_6': 'transformer.0.attn.c_proj',
+                       'l_7': 'transformer.0.attn.resid_dropout',
+                       'l_8': 'transformer.0.ln_2',
+                       'l_9': 'transformer.0.mlp.c_fc',
+                       'l_10': 'transformer.0.mlp.c_proj',
+                       'l_11': 'transformer.0.mlp.dropout',
+                       'l_12': 'transformer.1.ln_1',
+                       'l_13': 'transformer.1.attn.c_attn',
+                       'l_14': 'transformer.1.attn.attn_dropout',
+                       'l_15': 'transformer.1.attn.c_proj',
+                       'l_16': 'transformer.1.attn.resid_dropout',
+                       'l_17': 'transformer.1.ln_2',
+                       'l_18': 'transformer.1.mlp.c_fc',
+                       'l_19': 'transformer.1.mlp.c_proj',
+                       'l_20': 'transformer.1.mlp.dropout',
+                       'l_21': 'transformer.2.ln_1',
+                       'l_22': 'transformer.2.attn.c_attn',
+                       'l_23': 'transformer.2.attn.attn_dropout',
+                       'l_24': 'transformer.2.attn.c_proj',
+                       'l_25': 'transformer.2.attn.resid_dropout',
+                       'l_26': 'transformer.2.ln_2',
+                       'l_27': 'transformer.2.mlp.c_fc',
+                       'l_28': 'transformer.2.mlp.c_proj',
+                       'l_29': 'transformer.2.mlp.dropout',
+                       'l_30': 'transformer.3.ln_1',
+                       'l_31': 'transformer.3.attn.c_attn',
+                       'l_32': 'transformer.3.attn.attn_dropout',
+                       'l_33': 'transformer.3.attn.c_proj',
+                       'l_34': 'transformer.3.attn.resid_dropout',
+                       'l_35': 'transformer.3.ln_2',
+                       'b_0': 'transformer.0.attn.bias',
+                       'b_1': 'transformer.1.attn.bias',
+                       'b_2': 'transformer.2.attn.bias',
+                       'b_3': 'transformer.3.attn.bias'}
 
     def forward(self, x0):
         # GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wte] <=> self.l_0
@@ -282,7 +392,8 @@ class Partition0(nn.Module):
         t_0 = Tensor.view(x0, size=[-1, Tensor.size(x0, dim=1)])
         # calling GPT2LMHeadModel/GPT2Model[transformer]/Dropout[drop] with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/aten::add4866
-        t_1 = self.l_2(torch.add(input=torch.add(input=self.l_0(t_0), other=self.l_1(Tensor.expand_as(Tensor.unsqueeze(torch.arange(start=0, end=torch.add(input=Tensor.size(t_0, dim=-1), other=0), step=1, dtype=torch.int64, device=self.device, requires_grad=False), dim=0), other=t_0))), other=0))
+        t_1 = self.l_2(torch.add(input=torch.add(input=self.l_0(t_0), other=self.l_1(Tensor.expand_as(Tensor.unsqueeze(torch.arange(start=0, end=torch.add(
+            input=Tensor.size(t_0, dim=-1), other=0), step=1, dtype=torch.int64, device=self.device, requires_grad=False), dim=0), other=t_0))), other=0))
         # calling torch.split with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_attn]
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4909
@@ -294,7 +405,8 @@ class Partition0(nn.Module):
         # calling torch.div with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::matmul4984
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4985
-        t_6 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_3, size=[Tensor.size(t_3, dim=0), Tensor.size(t_3, dim=1), 12, torch.div(input=Tensor.size(t_3, dim=-1), other=12)]), dims=[0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_4, size=[Tensor.size(t_4, dim=0), Tensor.size(t_4, dim=1), 12, torch.div(input=Tensor.size(t_4, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
+        t_6 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_3, size=[Tensor.size(t_3, dim=0), Tensor.size(t_3, dim=1), 12, torch.div(input=Tensor.size(t_3, dim=-1), other=12)]), dims=[
+                        0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_4, size=[Tensor.size(t_4, dim=0), Tensor.size(t_4, dim=1), 12, torch.div(input=Tensor.size(t_4, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
         # calling Tensor.size with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::div4986
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4990
@@ -305,21 +417,25 @@ class Partition0(nn.Module):
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant5012
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::size4991
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant5013
-        t_8 = self.b_0[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(input=t_7, other=Tensor.size(t_6, dim=-2)):t_7:1][:, :, :, 0:t_7:1]
+        t_8 = self.b_0[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(
+            input=t_7, other=Tensor.size(t_6, dim=-2)):t_7:1][:, :, :, 0:t_7:1]
         # calling Tensor.contiguous with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::permute5035
-        t_9 = Tensor.contiguous(Tensor.permute(Tensor.matmul(self.l_5(Tensor.softmax(torch.sub(input=torch.mul(input=t_6, other=t_8), other=torch.mul(input=torch.rsub(t_8, other=1, alpha=1), other=10000.0)), dim=-1, dtype=None)), other=Tensor.permute(Tensor.view(t_5, size=[Tensor.size(t_5, dim=0), Tensor.size(t_5, dim=1), 12, torch.div(input=Tensor.size(t_5, dim=-1), other=12)]), dims=[0, 2, 1, 3])), dims=[0, 2, 1, 3]))
+        t_9 = Tensor.contiguous(Tensor.permute(Tensor.matmul(self.l_5(Tensor.softmax(torch.sub(input=torch.mul(input=t_6, other=t_8), other=torch.mul(input=torch.rsub(t_8, other=1, alpha=1), other=10000.0)), dim=-1, dtype=None)),
+                                                             other=Tensor.permute(Tensor.view(t_5, size=[Tensor.size(t_5, dim=0), Tensor.size(t_5, dim=1), 12, torch.div(input=Tensor.size(t_5, dim=-1), other=12)]), dims=[0, 2, 1, 3])), dims=[0, 2, 1, 3]))
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Dropout[drop]
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[resid_dropout]
-        t_10 = torch.add(input=t_1, other=self.l_7(self.l_6(Tensor.view(t_9, size=[Tensor.size(t_9, dim=0), Tensor.size(t_9, dim=1), torch.mul(input=Tensor.size(t_9, dim=-2), other=Tensor.size(t_9, dim=-1))]))))
+        t_10 = torch.add(input=t_1, other=self.l_7(self.l_6(Tensor.view(t_9, size=[Tensor.size(t_9, dim=0), Tensor.size(
+            t_9, dim=1), torch.mul(input=Tensor.size(t_9, dim=-2), other=Tensor.size(t_9, dim=-1))]))))
         # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_fc] with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_2]
         t_11 = self.l_9(self.l_8(t_10))
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/aten::add5083
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Dropout[dropout]
-        t_12 = torch.add(input=t_10, other=self.l_11(self.l_10(torch.mul(input=torch.mul(input=t_11, other=0.5), other=torch.add(input=Tensor.tanh(torch.mul(input=torch.add(input=t_11, other=torch.mul(input=Tensor.pow(t_11, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
+        t_12 = torch.add(input=t_10, other=self.l_11(self.l_10(torch.mul(input=torch.mul(input=t_11, other=0.5), other=torch.add(input=Tensor.tanh(
+            torch.mul(input=torch.add(input=t_11, other=torch.mul(input=Tensor.pow(t_11, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
         # calling torch.split with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_attn]
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5199
@@ -331,7 +447,8 @@ class Partition0(nn.Module):
         # calling torch.div with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::matmul5274
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5275
-        t_17 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_14, size=[Tensor.size(t_14, dim=0), Tensor.size(t_14, dim=1), 12, torch.div(input=Tensor.size(t_14, dim=-1), other=12)]), dims=[0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_15, size=[Tensor.size(t_15, dim=0), Tensor.size(t_15, dim=1), 12, torch.div(input=Tensor.size(t_15, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
+        t_17 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_14, size=[Tensor.size(t_14, dim=0), Tensor.size(t_14, dim=1), 12, torch.div(input=Tensor.size(t_14, dim=-1), other=12)]), dims=[
+                         0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_15, size=[Tensor.size(t_15, dim=0), Tensor.size(t_15, dim=1), 12, torch.div(input=Tensor.size(t_15, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
         # calling Tensor.size with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::div5276
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5280
@@ -342,21 +459,25 @@ class Partition0(nn.Module):
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5302
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::size5281
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5303
-        t_19 = self.b_1[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(input=t_18, other=Tensor.size(t_17, dim=-2)):t_18:1][:, :, :, 0:t_18:1]
+        t_19 = self.b_1[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(
+            input=t_18, other=Tensor.size(t_17, dim=-2)):t_18:1][:, :, :, 0:t_18:1]
         # calling Tensor.contiguous with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::permute5325
-        t_20 = Tensor.contiguous(Tensor.permute(Tensor.matmul(self.l_14(Tensor.softmax(torch.sub(input=torch.mul(input=t_17, other=t_19), other=torch.mul(input=torch.rsub(t_19, other=1, alpha=1), other=10000.0)), dim=-1, dtype=None)), other=Tensor.permute(Tensor.view(t_16, size=[Tensor.size(t_16, dim=0), Tensor.size(t_16, dim=1), 12, torch.div(input=Tensor.size(t_16, dim=-1), other=12)]), dims=[0, 2, 1, 3])), dims=[0, 2, 1, 3]))
+        t_20 = Tensor.contiguous(Tensor.permute(Tensor.matmul(self.l_14(Tensor.softmax(torch.sub(input=torch.mul(input=t_17, other=t_19), other=torch.mul(input=torch.rsub(t_19, other=1, alpha=1), other=10000.0)), dim=-1, dtype=None)),
+                                                              other=Tensor.permute(Tensor.view(t_16, size=[Tensor.size(t_16, dim=0), Tensor.size(t_16, dim=1), 12, torch.div(input=Tensor.size(t_16, dim=-1), other=12)]), dims=[0, 2, 1, 3])), dims=[0, 2, 1, 3]))
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/aten::add5159
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[resid_dropout]
-        t_21 = torch.add(input=t_12, other=self.l_16(self.l_15(Tensor.view(t_20, size=[Tensor.size(t_20, dim=0), Tensor.size(t_20, dim=1), torch.mul(input=Tensor.size(t_20, dim=-2), other=Tensor.size(t_20, dim=-1))]))))
+        t_21 = torch.add(input=t_12, other=self.l_16(self.l_15(Tensor.view(t_20, size=[Tensor.size(t_20, dim=0), Tensor.size(
+            t_20, dim=1), torch.mul(input=Tensor.size(t_20, dim=-2), other=Tensor.size(t_20, dim=-1))]))))
         # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_fc] with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_2]
         t_22 = self.l_18(self.l_17(t_21))
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/aten::add5373
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Dropout[dropout]
-        t_23 = torch.add(input=t_21, other=self.l_20(self.l_19(torch.mul(input=torch.mul(input=t_22, other=0.5), other=torch.add(input=Tensor.tanh(torch.mul(input=torch.add(input=t_22, other=torch.mul(input=Tensor.pow(t_22, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
+        t_23 = torch.add(input=t_21, other=self.l_20(self.l_19(torch.mul(input=torch.mul(input=t_22, other=0.5), other=torch.add(input=Tensor.tanh(
+            torch.mul(input=torch.add(input=t_22, other=torch.mul(input=Tensor.pow(t_22, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
         # calling torch.split with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_attn]
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5489
@@ -368,7 +489,8 @@ class Partition0(nn.Module):
         # calling torch.div with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::matmul5564
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5565
-        t_28 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_25, size=[Tensor.size(t_25, dim=0), Tensor.size(t_25, dim=1), 12, torch.div(input=Tensor.size(t_25, dim=-1), other=12)]), dims=[0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_26, size=[Tensor.size(t_26, dim=0), Tensor.size(t_26, dim=1), 12, torch.div(input=Tensor.size(t_26, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
+        t_28 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_25, size=[Tensor.size(t_25, dim=0), Tensor.size(t_25, dim=1), 12, torch.div(input=Tensor.size(t_25, dim=-1), other=12)]), dims=[
+                         0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_26, size=[Tensor.size(t_26, dim=0), Tensor.size(t_26, dim=1), 12, torch.div(input=Tensor.size(t_26, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
         # calling Tensor.size with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::div5566
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5570
@@ -379,21 +501,25 @@ class Partition0(nn.Module):
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5592
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::size5571
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5593
-        t_30 = self.b_2[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(input=t_29, other=Tensor.size(t_28, dim=-2)):t_29:1][:, :, :, 0:t_29:1]
+        t_30 = self.b_2[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(
+            input=t_29, other=Tensor.size(t_28, dim=-2)):t_29:1][:, :, :, 0:t_29:1]
         # calling Tensor.contiguous with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::permute5615
-        t_31 = Tensor.contiguous(Tensor.permute(Tensor.matmul(self.l_23(Tensor.softmax(torch.sub(input=torch.mul(input=t_28, other=t_30), other=torch.mul(input=torch.rsub(t_30, other=1, alpha=1), other=10000.0)), dim=-1, dtype=None)), other=Tensor.permute(Tensor.view(t_27, size=[Tensor.size(t_27, dim=0), Tensor.size(t_27, dim=1), 12, torch.div(input=Tensor.size(t_27, dim=-1), other=12)]), dims=[0, 2, 1, 3])), dims=[0, 2, 1, 3]))
+        t_31 = Tensor.contiguous(Tensor.permute(Tensor.matmul(self.l_23(Tensor.softmax(torch.sub(input=torch.mul(input=t_28, other=t_30), other=torch.mul(input=torch.rsub(t_30, other=1, alpha=1), other=10000.0)), dim=-1, dtype=None)),
+                                                              other=Tensor.permute(Tensor.view(t_27, size=[Tensor.size(t_27, dim=0), Tensor.size(t_27, dim=1), 12, torch.div(input=Tensor.size(t_27, dim=-1), other=12)]), dims=[0, 2, 1, 3])), dims=[0, 2, 1, 3]))
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/aten::add5449
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[resid_dropout]
-        t_32 = torch.add(input=t_23, other=self.l_25(self.l_24(Tensor.view(t_31, size=[Tensor.size(t_31, dim=0), Tensor.size(t_31, dim=1), torch.mul(input=Tensor.size(t_31, dim=-2), other=Tensor.size(t_31, dim=-1))]))))
+        t_32 = torch.add(input=t_23, other=self.l_25(self.l_24(Tensor.view(t_31, size=[Tensor.size(t_31, dim=0), Tensor.size(
+            t_31, dim=1), torch.mul(input=Tensor.size(t_31, dim=-2), other=Tensor.size(t_31, dim=-1))]))))
         # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_fc] with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_2]
         t_33 = self.l_27(self.l_26(t_32))
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/aten::add5663
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Dropout[dropout]
-        t_34 = torch.add(input=t_32, other=self.l_29(self.l_28(torch.mul(input=torch.mul(input=t_33, other=0.5), other=torch.add(input=Tensor.tanh(torch.mul(input=torch.add(input=t_33, other=torch.mul(input=Tensor.pow(t_33, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
+        t_34 = torch.add(input=t_32, other=self.l_29(self.l_28(torch.mul(input=torch.mul(input=t_33, other=0.5), other=torch.add(input=Tensor.tanh(
+            torch.mul(input=torch.add(input=t_33, other=torch.mul(input=Tensor.pow(t_33, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
         # calling torch.split with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_attn]
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5779
@@ -405,7 +531,8 @@ class Partition0(nn.Module):
         # calling torch.div with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::matmul5854
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5855
-        t_39 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_36, size=[Tensor.size(t_36, dim=0), Tensor.size(t_36, dim=1), 12, torch.div(input=Tensor.size(t_36, dim=-1), other=12)]), dims=[0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_37, size=[Tensor.size(t_37, dim=0), Tensor.size(t_37, dim=1), 12, torch.div(input=Tensor.size(t_37, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
+        t_39 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_36, size=[Tensor.size(t_36, dim=0), Tensor.size(t_36, dim=1), 12, torch.div(input=Tensor.size(t_36, dim=-1), other=12)]), dims=[
+                         0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_37, size=[Tensor.size(t_37, dim=0), Tensor.size(t_37, dim=1), 12, torch.div(input=Tensor.size(t_37, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
         # calling Tensor.size with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::div5856
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5860
@@ -416,42 +543,45 @@ class Partition0(nn.Module):
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5882
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::size5861
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5883
-        t_41 = self.b_3[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(input=t_40, other=Tensor.size(t_39, dim=-2)):t_40:1][:, :, :, 0:t_40:1]
+        t_41 = self.b_3[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(
+            input=t_40, other=Tensor.size(t_39, dim=-2)):t_40:1][:, :, :, 0:t_40:1]
         # calling Tensor.contiguous with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::permute5905
-        t_42 = Tensor.contiguous(Tensor.permute(Tensor.matmul(self.l_32(Tensor.softmax(torch.sub(input=torch.mul(input=t_39, other=t_41), other=torch.mul(input=torch.rsub(t_41, other=1, alpha=1), other=10000.0)), dim=-1, dtype=None)), other=Tensor.permute(Tensor.view(t_38, size=[Tensor.size(t_38, dim=0), Tensor.size(t_38, dim=1), 12, torch.div(input=Tensor.size(t_38, dim=-1), other=12)]), dims=[0, 2, 1, 3])), dims=[0, 2, 1, 3]))
+        t_42 = Tensor.contiguous(Tensor.permute(Tensor.matmul(self.l_32(Tensor.softmax(torch.sub(input=torch.mul(input=t_39, other=t_41), other=torch.mul(input=torch.rsub(t_41, other=1, alpha=1), other=10000.0)), dim=-1, dtype=None)),
+                                                              other=Tensor.permute(Tensor.view(t_38, size=[Tensor.size(t_38, dim=0), Tensor.size(t_38, dim=1), 12, torch.div(input=Tensor.size(t_38, dim=-1), other=12)]), dims=[0, 2, 1, 3])), dims=[0, 2, 1, 3]))
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/aten::add5739
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[resid_dropout]
-        t_43 = torch.add(input=t_34, other=self.l_34(self.l_33(Tensor.view(t_42, size=[Tensor.size(t_42, dim=0), Tensor.size(t_42, dim=1), torch.mul(input=Tensor.size(t_42, dim=-2), other=Tensor.size(t_42, dim=-1))]))))
+        t_43 = torch.add(input=t_34, other=self.l_34(self.l_33(Tensor.view(t_42, size=[Tensor.size(t_42, dim=0), Tensor.size(
+            t_42, dim=1), torch.mul(input=Tensor.size(t_42, dim=-2), other=Tensor.size(t_42, dim=-1))]))))
         # returing:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_2]
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/aten::add5953
         return (self.l_35(t_43), t_43)
 
-    def state_dict(self,device=None):
+    def state_dict(self, device=None):
         # we return the state dict of this part as it should be in the original model
-        return state_dict(self,device=device)
+        return state_dict(self, device=device)
 
     def load_state_dict(self, state):
-        return load_state_dict(self,state)
+        return load_state_dict(self, state)
 
-    def named_parameters(self,recurse=True):
+    def named_parameters(self, recurse=True):
         # we return the named parameters of this part as it should be in the original model
-        return named_parameters(self,recurse=recurse)
+        return named_parameters(self, recurse=recurse)
 
-    def named_buffers(self,recurse=True):
+    def named_buffers(self, recurse=True):
         # we return the named buffers of this part as it should be in the original model
-        return named_buffers(self,recurse=recurse)
+        return named_buffers(self, recurse=recurse)
 
     def cpu(self):
         return cpu(self)
 
-    def cuda(self,device=None):
-        return cuda(self,device=device)
+    def cuda(self, device=None):
+        return cuda(self, device=device)
 
     def to(self, *args, **kwargs):
-        return to(self,*args,**kwargs)
+        return to(self, *args, **kwargs)
 
 
 class Partition1(nn.Module):
@@ -459,122 +589,159 @@ class Partition1(nn.Module):
         super(Partition1, self).__init__()
         # initializing partition layers
         self.l_0 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_fc]']
-        assert isinstance(self.l_0,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_0)}'
+        assert isinstance(
+            self.l_0, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_0)}'
         self.l_1 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_proj]']
-        assert isinstance(self.l_1,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_1)}'
+        assert isinstance(
+            self.l_1, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_1)}'
         self.l_2 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Dropout[dropout]']
-        assert isinstance(self.l_2,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_2)}'
+        assert isinstance(
+            self.l_2, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_2)}'
         self.l_3 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_1]']
-        assert isinstance(self.l_3,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_3)}'
+        assert isinstance(
+            self.l_3, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_3)}'
         self.l_4 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_attn]']
-        assert isinstance(self.l_4,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_4)}'
+        assert isinstance(
+            self.l_4, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_4)}'
         self.l_5 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[attn_dropout]']
-        assert isinstance(self.l_5,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_5)}'
+        assert isinstance(
+            self.l_5, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_5)}'
         self.l_6 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_proj]']
-        assert isinstance(self.l_6,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_6)}'
+        assert isinstance(
+            self.l_6, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_6)}'
         self.l_7 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[resid_dropout]']
-        assert isinstance(self.l_7,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_7)}'
+        assert isinstance(
+            self.l_7, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_7)}'
         self.l_8 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_2]']
-        assert isinstance(self.l_8,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_8)}'
+        assert isinstance(
+            self.l_8, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_8)}'
         self.l_9 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_fc]']
-        assert isinstance(self.l_9,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_9)}'
+        assert isinstance(
+            self.l_9, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_9)}'
         self.l_10 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_proj]']
-        assert isinstance(self.l_10,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_10)}'
+        assert isinstance(
+            self.l_10, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_10)}'
         self.l_11 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Dropout[dropout]']
-        assert isinstance(self.l_11,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_11)}'
+        assert isinstance(
+            self.l_11, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_11)}'
         self.l_12 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_1]']
-        assert isinstance(self.l_12,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_12)}'
+        assert isinstance(
+            self.l_12, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_12)}'
         self.l_13 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_attn]']
-        assert isinstance(self.l_13,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_13)}'
+        assert isinstance(
+            self.l_13, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_13)}'
         self.l_14 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[attn_dropout]']
-        assert isinstance(self.l_14,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_14)}'
+        assert isinstance(
+            self.l_14, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_14)}'
         self.l_15 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_proj]']
-        assert isinstance(self.l_15,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_15)}'
+        assert isinstance(
+            self.l_15, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_15)}'
         self.l_16 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[resid_dropout]']
-        assert isinstance(self.l_16,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_16)}'
+        assert isinstance(
+            self.l_16, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_16)}'
         self.l_17 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_2]']
-        assert isinstance(self.l_17,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_17)}'
+        assert isinstance(
+            self.l_17, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_17)}'
         self.l_18 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_fc]']
-        assert isinstance(self.l_18,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_18)}'
+        assert isinstance(
+            self.l_18, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_18)}'
         self.l_19 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_proj]']
-        assert isinstance(self.l_19,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_19)}'
+        assert isinstance(
+            self.l_19, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_19)}'
         self.l_20 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Dropout[dropout]']
-        assert isinstance(self.l_20,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_20)}'
+        assert isinstance(
+            self.l_20, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_20)}'
         self.l_21 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_1]']
-        assert isinstance(self.l_21,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_21)}'
+        assert isinstance(
+            self.l_21, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_21)}'
         self.l_22 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_attn]']
-        assert isinstance(self.l_22,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_22)}'
+        assert isinstance(
+            self.l_22, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_22)}'
         self.l_23 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[attn_dropout]']
-        assert isinstance(self.l_23,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_23)}'
+        assert isinstance(
+            self.l_23, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_23)}'
         self.l_24 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_proj]']
-        assert isinstance(self.l_24,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_24)}'
+        assert isinstance(
+            self.l_24, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_24)}'
         self.l_25 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[resid_dropout]']
-        assert isinstance(self.l_25,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_25)}'
+        assert isinstance(
+            self.l_25, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_25)}'
         self.l_26 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_2]']
-        assert isinstance(self.l_26,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_26)}'
+        assert isinstance(
+            self.l_26, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_26)}'
         self.l_27 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_fc]']
-        assert isinstance(self.l_27,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_27)}'
+        assert isinstance(
+            self.l_27, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_27)}'
         self.l_28 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_proj]']
-        assert isinstance(self.l_28,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_28)}'
+        assert isinstance(
+            self.l_28, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_28)}'
         self.l_29 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Dropout[dropout]']
-        assert isinstance(self.l_29,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_29)}'
+        assert isinstance(
+            self.l_29, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_29)}'
         self.l_30 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_1]']
-        assert isinstance(self.l_30,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_30)}'
+        assert isinstance(
+            self.l_30, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_30)}'
         self.l_31 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_attn]']
-        assert isinstance(self.l_31,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_31)}'
+        assert isinstance(
+            self.l_31, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_31)}'
         self.l_32 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[attn_dropout]']
-        assert isinstance(self.l_32,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_32)}'
+        assert isinstance(
+            self.l_32, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_32)}'
 
         # initializing partition buffers
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Tensor[bias]
-        self.register_buffer('b_0',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Tensor[bias]'])
+        self.register_buffer(
+            'b_0', tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Tensor[bias]'])
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Tensor[bias]
-        self.register_buffer('b_1',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Tensor[bias]'])
+        self.register_buffer(
+            'b_1', tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Tensor[bias]'])
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Tensor[bias]
-        self.register_buffer('b_2',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Tensor[bias]'])
+        self.register_buffer(
+            'b_2', tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Tensor[bias]'])
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Tensor[bias]
-        self.register_buffer('b_3',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Tensor[bias]'])
-        
+        self.register_buffer(
+            'b_3', tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Tensor[bias]'])
+
         # initializing partition parameters
 
         self.device = torch.device('cuda:1')
-        self.lookup = { 'l_0': 'transformer.3.mlp.c_fc',
-                        'l_1': 'transformer.3.mlp.c_proj',
-                        'l_2': 'transformer.3.mlp.dropout',
-                        'l_3': 'transformer.4.ln_1',
-                        'l_4': 'transformer.4.attn.c_attn',
-                        'l_5': 'transformer.4.attn.attn_dropout',
-                        'l_6': 'transformer.4.attn.c_proj',
-                        'l_7': 'transformer.4.attn.resid_dropout',
-                        'l_8': 'transformer.4.ln_2',
-                        'l_9': 'transformer.4.mlp.c_fc',
-                        'l_10': 'transformer.4.mlp.c_proj',
-                        'l_11': 'transformer.4.mlp.dropout',
-                        'l_12': 'transformer.5.ln_1',
-                        'l_13': 'transformer.5.attn.c_attn',
-                        'l_14': 'transformer.5.attn.attn_dropout',
-                        'l_15': 'transformer.5.attn.c_proj',
-                        'l_16': 'transformer.5.attn.resid_dropout',
-                        'l_17': 'transformer.5.ln_2',
-                        'l_18': 'transformer.5.mlp.c_fc',
-                        'l_19': 'transformer.5.mlp.c_proj',
-                        'l_20': 'transformer.5.mlp.dropout',
-                        'l_21': 'transformer.6.ln_1',
-                        'l_22': 'transformer.6.attn.c_attn',
-                        'l_23': 'transformer.6.attn.attn_dropout',
-                        'l_24': 'transformer.6.attn.c_proj',
-                        'l_25': 'transformer.6.attn.resid_dropout',
-                        'l_26': 'transformer.6.ln_2',
-                        'l_27': 'transformer.6.mlp.c_fc',
-                        'l_28': 'transformer.6.mlp.c_proj',
-                        'l_29': 'transformer.6.mlp.dropout',
-                        'l_30': 'transformer.7.ln_1',
-                        'l_31': 'transformer.7.attn.c_attn',
-                        'l_32': 'transformer.7.attn.attn_dropout',
-                        'b_0': 'transformer.4.attn.bias',
-                        'b_1': 'transformer.5.attn.bias',
-                        'b_2': 'transformer.6.attn.bias',
-                        'b_3': 'transformer.7.attn.bias'}
+        self.lookup = {'l_0': 'transformer.3.mlp.c_fc',
+                       'l_1': 'transformer.3.mlp.c_proj',
+                       'l_2': 'transformer.3.mlp.dropout',
+                       'l_3': 'transformer.4.ln_1',
+                       'l_4': 'transformer.4.attn.c_attn',
+                       'l_5': 'transformer.4.attn.attn_dropout',
+                       'l_6': 'transformer.4.attn.c_proj',
+                       'l_7': 'transformer.4.attn.resid_dropout',
+                       'l_8': 'transformer.4.ln_2',
+                       'l_9': 'transformer.4.mlp.c_fc',
+                       'l_10': 'transformer.4.mlp.c_proj',
+                       'l_11': 'transformer.4.mlp.dropout',
+                       'l_12': 'transformer.5.ln_1',
+                       'l_13': 'transformer.5.attn.c_attn',
+                       'l_14': 'transformer.5.attn.attn_dropout',
+                       'l_15': 'transformer.5.attn.c_proj',
+                       'l_16': 'transformer.5.attn.resid_dropout',
+                       'l_17': 'transformer.5.ln_2',
+                       'l_18': 'transformer.5.mlp.c_fc',
+                       'l_19': 'transformer.5.mlp.c_proj',
+                       'l_20': 'transformer.5.mlp.dropout',
+                       'l_21': 'transformer.6.ln_1',
+                       'l_22': 'transformer.6.attn.c_attn',
+                       'l_23': 'transformer.6.attn.attn_dropout',
+                       'l_24': 'transformer.6.attn.c_proj',
+                       'l_25': 'transformer.6.attn.resid_dropout',
+                       'l_26': 'transformer.6.ln_2',
+                       'l_27': 'transformer.6.mlp.c_fc',
+                       'l_28': 'transformer.6.mlp.c_proj',
+                       'l_29': 'transformer.6.mlp.dropout',
+                       'l_30': 'transformer.7.ln_1',
+                       'l_31': 'transformer.7.attn.c_attn',
+                       'l_32': 'transformer.7.attn.attn_dropout',
+                       'b_0': 'transformer.4.attn.bias',
+                       'b_1': 'transformer.5.attn.bias',
+                       'b_2': 'transformer.6.attn.bias',
+                       'b_3': 'transformer.7.attn.bias'}
 
     def forward(self, x0, x1):
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_fc] <=> self.l_0
@@ -627,7 +794,8 @@ class Partition1(nn.Module):
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/aten::add5953
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Dropout[dropout]
-        t_1 = torch.add(input=x1, other=self.l_2(self.l_1(torch.mul(input=torch.mul(input=t_0, other=0.5), other=torch.add(input=Tensor.tanh(torch.mul(input=torch.add(input=t_0, other=torch.mul(input=Tensor.pow(t_0, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
+        t_1 = torch.add(input=x1, other=self.l_2(self.l_1(torch.mul(input=torch.mul(input=t_0, other=0.5), other=torch.add(input=Tensor.tanh(torch.mul(
+            input=torch.add(input=t_0, other=torch.mul(input=Tensor.pow(t_0, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
         # calling torch.split with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_attn]
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant6069
@@ -639,7 +807,8 @@ class Partition1(nn.Module):
         # calling torch.div with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::matmul6144
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant6145
-        t_6 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_3, size=[Tensor.size(t_3, dim=0), Tensor.size(t_3, dim=1), 12, torch.div(input=Tensor.size(t_3, dim=-1), other=12)]), dims=[0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_4, size=[Tensor.size(t_4, dim=0), Tensor.size(t_4, dim=1), 12, torch.div(input=Tensor.size(t_4, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
+        t_6 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_3, size=[Tensor.size(t_3, dim=0), Tensor.size(t_3, dim=1), 12, torch.div(input=Tensor.size(t_3, dim=-1), other=12)]), dims=[
+                        0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_4, size=[Tensor.size(t_4, dim=0), Tensor.size(t_4, dim=1), 12, torch.div(input=Tensor.size(t_4, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
         # calling Tensor.size with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::div6146
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant6150
@@ -650,21 +819,25 @@ class Partition1(nn.Module):
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant6172
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::size6151
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant6173
-        t_8 = self.b_0[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(input=t_7, other=Tensor.size(t_6, dim=-2)):t_7:1][:, :, :, 0:t_7:1]
+        t_8 = self.b_0[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(
+            input=t_7, other=Tensor.size(t_6, dim=-2)):t_7:1][:, :, :, 0:t_7:1]
         # calling Tensor.contiguous with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::permute6195
-        t_9 = Tensor.contiguous(Tensor.permute(Tensor.matmul(self.l_5(Tensor.softmax(torch.sub(input=torch.mul(input=t_6, other=t_8), other=torch.mul(input=torch.rsub(t_8, other=1, alpha=1), other=10000.0)), dim=-1, dtype=None)), other=Tensor.permute(Tensor.view(t_5, size=[Tensor.size(t_5, dim=0), Tensor.size(t_5, dim=1), 12, torch.div(input=Tensor.size(t_5, dim=-1), other=12)]), dims=[0, 2, 1, 3])), dims=[0, 2, 1, 3]))
+        t_9 = Tensor.contiguous(Tensor.permute(Tensor.matmul(self.l_5(Tensor.softmax(torch.sub(input=torch.mul(input=t_6, other=t_8), other=torch.mul(input=torch.rsub(t_8, other=1, alpha=1), other=10000.0)), dim=-1, dtype=None)),
+                                                             other=Tensor.permute(Tensor.view(t_5, size=[Tensor.size(t_5, dim=0), Tensor.size(t_5, dim=1), 12, torch.div(input=Tensor.size(t_5, dim=-1), other=12)]), dims=[0, 2, 1, 3])), dims=[0, 2, 1, 3]))
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/aten::add6029
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[resid_dropout]
-        t_10 = torch.add(input=t_1, other=self.l_7(self.l_6(Tensor.view(t_9, size=[Tensor.size(t_9, dim=0), Tensor.size(t_9, dim=1), torch.mul(input=Tensor.size(t_9, dim=-2), other=Tensor.size(t_9, dim=-1))]))))
+        t_10 = torch.add(input=t_1, other=self.l_7(self.l_6(Tensor.view(t_9, size=[Tensor.size(t_9, dim=0), Tensor.size(
+            t_9, dim=1), torch.mul(input=Tensor.size(t_9, dim=-2), other=Tensor.size(t_9, dim=-1))]))))
         # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_fc] with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_2]
         t_11 = self.l_9(self.l_8(t_10))
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/aten::add6243
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Dropout[dropout]
-        t_12 = torch.add(input=t_10, other=self.l_11(self.l_10(torch.mul(input=torch.mul(input=t_11, other=0.5), other=torch.add(input=Tensor.tanh(torch.mul(input=torch.add(input=t_11, other=torch.mul(input=Tensor.pow(t_11, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
+        t_12 = torch.add(input=t_10, other=self.l_11(self.l_10(torch.mul(input=torch.mul(input=t_11, other=0.5), other=torch.add(input=Tensor.tanh(
+            torch.mul(input=torch.add(input=t_11, other=torch.mul(input=Tensor.pow(t_11, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
         # calling torch.split with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_attn]
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant6359
@@ -676,7 +849,8 @@ class Partition1(nn.Module):
         # calling torch.div with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::matmul6434
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant6435
-        t_17 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_14, size=[Tensor.size(t_14, dim=0), Tensor.size(t_14, dim=1), 12, torch.div(input=Tensor.size(t_14, dim=-1), other=12)]), dims=[0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_15, size=[Tensor.size(t_15, dim=0), Tensor.size(t_15, dim=1), 12, torch.div(input=Tensor.size(t_15, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
+        t_17 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_14, size=[Tensor.size(t_14, dim=0), Tensor.size(t_14, dim=1), 12, torch.div(input=Tensor.size(t_14, dim=-1), other=12)]), dims=[
+                         0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_15, size=[Tensor.size(t_15, dim=0), Tensor.size(t_15, dim=1), 12, torch.div(input=Tensor.size(t_15, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
         # calling Tensor.size with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::div6436
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant6440
@@ -687,21 +861,25 @@ class Partition1(nn.Module):
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant6462
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::size6441
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant6463
-        t_19 = self.b_1[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(input=t_18, other=Tensor.size(t_17, dim=-2)):t_18:1][:, :, :, 0:t_18:1]
+        t_19 = self.b_1[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(
+            input=t_18, other=Tensor.size(t_17, dim=-2)):t_18:1][:, :, :, 0:t_18:1]
         # calling Tensor.contiguous with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::permute6485
-        t_20 = Tensor.contiguous(Tensor.permute(Tensor.matmul(self.l_14(Tensor.softmax(torch.sub(input=torch.mul(input=t_17, other=t_19), other=torch.mul(input=torch.rsub(t_19, other=1, alpha=1), other=10000.0)), dim=-1, dtype=None)), other=Tensor.permute(Tensor.view(t_16, size=[Tensor.size(t_16, dim=0), Tensor.size(t_16, dim=1), 12, torch.div(input=Tensor.size(t_16, dim=-1), other=12)]), dims=[0, 2, 1, 3])), dims=[0, 2, 1, 3]))
+        t_20 = Tensor.contiguous(Tensor.permute(Tensor.matmul(self.l_14(Tensor.softmax(torch.sub(input=torch.mul(input=t_17, other=t_19), other=torch.mul(input=torch.rsub(t_19, other=1, alpha=1), other=10000.0)), dim=-1, dtype=None)),
+                                                              other=Tensor.permute(Tensor.view(t_16, size=[Tensor.size(t_16, dim=0), Tensor.size(t_16, dim=1), 12, torch.div(input=Tensor.size(t_16, dim=-1), other=12)]), dims=[0, 2, 1, 3])), dims=[0, 2, 1, 3]))
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/aten::add6319
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[resid_dropout]
-        t_21 = torch.add(input=t_12, other=self.l_16(self.l_15(Tensor.view(t_20, size=[Tensor.size(t_20, dim=0), Tensor.size(t_20, dim=1), torch.mul(input=Tensor.size(t_20, dim=-2), other=Tensor.size(t_20, dim=-1))]))))
+        t_21 = torch.add(input=t_12, other=self.l_16(self.l_15(Tensor.view(t_20, size=[Tensor.size(t_20, dim=0), Tensor.size(
+            t_20, dim=1), torch.mul(input=Tensor.size(t_20, dim=-2), other=Tensor.size(t_20, dim=-1))]))))
         # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_fc] with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_2]
         t_22 = self.l_18(self.l_17(t_21))
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/aten::add6533
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Dropout[dropout]
-        t_23 = torch.add(input=t_21, other=self.l_20(self.l_19(torch.mul(input=torch.mul(input=t_22, other=0.5), other=torch.add(input=Tensor.tanh(torch.mul(input=torch.add(input=t_22, other=torch.mul(input=Tensor.pow(t_22, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
+        t_23 = torch.add(input=t_21, other=self.l_20(self.l_19(torch.mul(input=torch.mul(input=t_22, other=0.5), other=torch.add(input=Tensor.tanh(
+            torch.mul(input=torch.add(input=t_22, other=torch.mul(input=Tensor.pow(t_22, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
         # calling torch.split with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_attn]
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6649
@@ -713,7 +891,8 @@ class Partition1(nn.Module):
         # calling torch.div with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::matmul6724
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6725
-        t_28 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_25, size=[Tensor.size(t_25, dim=0), Tensor.size(t_25, dim=1), 12, torch.div(input=Tensor.size(t_25, dim=-1), other=12)]), dims=[0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_26, size=[Tensor.size(t_26, dim=0), Tensor.size(t_26, dim=1), 12, torch.div(input=Tensor.size(t_26, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
+        t_28 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_25, size=[Tensor.size(t_25, dim=0), Tensor.size(t_25, dim=1), 12, torch.div(input=Tensor.size(t_25, dim=-1), other=12)]), dims=[
+                         0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_26, size=[Tensor.size(t_26, dim=0), Tensor.size(t_26, dim=1), 12, torch.div(input=Tensor.size(t_26, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
         # calling Tensor.size with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::div6726
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6730
@@ -724,21 +903,25 @@ class Partition1(nn.Module):
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6752
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::size6731
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6753
-        t_30 = self.b_2[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(input=t_29, other=Tensor.size(t_28, dim=-2)):t_29:1][:, :, :, 0:t_29:1]
+        t_30 = self.b_2[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(
+            input=t_29, other=Tensor.size(t_28, dim=-2)):t_29:1][:, :, :, 0:t_29:1]
         # calling Tensor.contiguous with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::permute6775
-        t_31 = Tensor.contiguous(Tensor.permute(Tensor.matmul(self.l_23(Tensor.softmax(torch.sub(input=torch.mul(input=t_28, other=t_30), other=torch.mul(input=torch.rsub(t_30, other=1, alpha=1), other=10000.0)), dim=-1, dtype=None)), other=Tensor.permute(Tensor.view(t_27, size=[Tensor.size(t_27, dim=0), Tensor.size(t_27, dim=1), 12, torch.div(input=Tensor.size(t_27, dim=-1), other=12)]), dims=[0, 2, 1, 3])), dims=[0, 2, 1, 3]))
+        t_31 = Tensor.contiguous(Tensor.permute(Tensor.matmul(self.l_23(Tensor.softmax(torch.sub(input=torch.mul(input=t_28, other=t_30), other=torch.mul(input=torch.rsub(t_30, other=1, alpha=1), other=10000.0)), dim=-1, dtype=None)),
+                                                              other=Tensor.permute(Tensor.view(t_27, size=[Tensor.size(t_27, dim=0), Tensor.size(t_27, dim=1), 12, torch.div(input=Tensor.size(t_27, dim=-1), other=12)]), dims=[0, 2, 1, 3])), dims=[0, 2, 1, 3]))
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/aten::add6609
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[resid_dropout]
-        t_32 = torch.add(input=t_23, other=self.l_25(self.l_24(Tensor.view(t_31, size=[Tensor.size(t_31, dim=0), Tensor.size(t_31, dim=1), torch.mul(input=Tensor.size(t_31, dim=-2), other=Tensor.size(t_31, dim=-1))]))))
+        t_32 = torch.add(input=t_23, other=self.l_25(self.l_24(Tensor.view(t_31, size=[Tensor.size(t_31, dim=0), Tensor.size(
+            t_31, dim=1), torch.mul(input=Tensor.size(t_31, dim=-2), other=Tensor.size(t_31, dim=-1))]))))
         # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_fc] with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_2]
         t_33 = self.l_27(self.l_26(t_32))
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/aten::add6823
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Dropout[dropout]
-        t_34 = torch.add(input=t_32, other=self.l_29(self.l_28(torch.mul(input=torch.mul(input=t_33, other=0.5), other=torch.add(input=Tensor.tanh(torch.mul(input=torch.add(input=t_33, other=torch.mul(input=Tensor.pow(t_33, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
+        t_34 = torch.add(input=t_32, other=self.l_29(self.l_28(torch.mul(input=torch.mul(input=t_33, other=0.5), other=torch.add(input=Tensor.tanh(
+            torch.mul(input=torch.add(input=t_33, other=torch.mul(input=Tensor.pow(t_33, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
         # calling torch.split with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_attn]
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6939
@@ -750,7 +933,8 @@ class Partition1(nn.Module):
         # calling torch.div with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::matmul7014
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant7015
-        t_39 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_36, size=[Tensor.size(t_36, dim=0), Tensor.size(t_36, dim=1), 12, torch.div(input=Tensor.size(t_36, dim=-1), other=12)]), dims=[0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_37, size=[Tensor.size(t_37, dim=0), Tensor.size(t_37, dim=1), 12, torch.div(input=Tensor.size(t_37, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
+        t_39 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_36, size=[Tensor.size(t_36, dim=0), Tensor.size(t_36, dim=1), 12, torch.div(input=Tensor.size(t_36, dim=-1), other=12)]), dims=[
+                         0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_37, size=[Tensor.size(t_37, dim=0), Tensor.size(t_37, dim=1), 12, torch.div(input=Tensor.size(t_37, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
         # calling Tensor.size with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::div7016
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant7020
@@ -761,35 +945,36 @@ class Partition1(nn.Module):
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant7042
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::size7021
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant7043
-        t_41 = self.b_3[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(input=t_40, other=Tensor.size(t_39, dim=-2)):t_40:1][:, :, :, 0:t_40:1]
+        t_41 = self.b_3[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(
+            input=t_40, other=Tensor.size(t_39, dim=-2)):t_40:1][:, :, :, 0:t_40:1]
         # returing:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/aten::add6899
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::matmul7059
         return (t_34, Tensor.matmul(self.l_32(Tensor.softmax(torch.sub(input=torch.mul(input=t_39, other=t_41), other=torch.mul(input=torch.rsub(t_41, other=1, alpha=1), other=10000.0)), dim=-1, dtype=None)), other=Tensor.permute(Tensor.view(t_38, size=[Tensor.size(t_38, dim=0), Tensor.size(t_38, dim=1), 12, torch.div(input=Tensor.size(t_38, dim=-1), other=12)]), dims=[0, 2, 1, 3])))
 
-    def state_dict(self,device=None):
+    def state_dict(self, device=None):
         # we return the state dict of this part as it should be in the original model
-        return state_dict(self,device=device)
+        return state_dict(self, device=device)
 
     def load_state_dict(self, state):
-        return load_state_dict(self,state)
+        return load_state_dict(self, state)
 
-    def named_parameters(self,recurse=True):
+    def named_parameters(self, recurse=True):
         # we return the named parameters of this part as it should be in the original model
-        return named_parameters(self,recurse=recurse)
+        return named_parameters(self, recurse=recurse)
 
-    def named_buffers(self,recurse=True):
+    def named_buffers(self, recurse=True):
         # we return the named buffers of this part as it should be in the original model
-        return named_buffers(self,recurse=recurse)
+        return named_buffers(self, recurse=recurse)
 
     def cpu(self):
         return cpu(self)
 
-    def cuda(self,device=None):
-        return cuda(self,device=device)
+    def cuda(self, device=None):
+        return cuda(self, device=device)
 
     def to(self, *args, **kwargs):
-        return to(self,*args,**kwargs)
+        return to(self, *args, **kwargs)
 
 
 class Partition2(nn.Module):
@@ -797,95 +982,123 @@ class Partition2(nn.Module):
         super(Partition2, self).__init__()
         # initializing partition layers
         self.l_0 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_proj]']
-        assert isinstance(self.l_0,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_0)}'
+        assert isinstance(
+            self.l_0, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_0)}'
         self.l_1 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[resid_dropout]']
-        assert isinstance(self.l_1,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_1)}'
+        assert isinstance(
+            self.l_1, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_1)}'
         self.l_2 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_2]']
-        assert isinstance(self.l_2,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_2)}'
+        assert isinstance(
+            self.l_2, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_2)}'
         self.l_3 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_fc]']
-        assert isinstance(self.l_3,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_3)}'
+        assert isinstance(
+            self.l_3, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_3)}'
         self.l_4 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_proj]']
-        assert isinstance(self.l_4,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_4)}'
+        assert isinstance(
+            self.l_4, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_4)}'
         self.l_5 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Dropout[dropout]']
-        assert isinstance(self.l_5,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_5)}'
+        assert isinstance(
+            self.l_5, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_5)}'
         self.l_6 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_1]']
-        assert isinstance(self.l_6,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_6)}'
+        assert isinstance(
+            self.l_6, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_6)}'
         self.l_7 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_attn]']
-        assert isinstance(self.l_7,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_7)}'
+        assert isinstance(
+            self.l_7, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_7)}'
         self.l_8 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[attn_dropout]']
-        assert isinstance(self.l_8,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_8)}'
+        assert isinstance(
+            self.l_8, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_8)}'
         self.l_9 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_proj]']
-        assert isinstance(self.l_9,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_9)}'
+        assert isinstance(
+            self.l_9, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_9)}'
         self.l_10 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[resid_dropout]']
-        assert isinstance(self.l_10,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_10)}'
+        assert isinstance(
+            self.l_10, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_10)}'
         self.l_11 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_2]']
-        assert isinstance(self.l_11,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_11)}'
+        assert isinstance(
+            self.l_11, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_11)}'
         self.l_12 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_fc]']
-        assert isinstance(self.l_12,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_12)}'
+        assert isinstance(
+            self.l_12, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_12)}'
         self.l_13 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_proj]']
-        assert isinstance(self.l_13,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_13)}'
+        assert isinstance(
+            self.l_13, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_13)}'
         self.l_14 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Dropout[dropout]']
-        assert isinstance(self.l_14,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_14)}'
+        assert isinstance(
+            self.l_14, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_14)}'
         self.l_15 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_1]']
-        assert isinstance(self.l_15,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_15)}'
+        assert isinstance(
+            self.l_15, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_15)}'
         self.l_16 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_attn]']
-        assert isinstance(self.l_16,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_16)}'
+        assert isinstance(
+            self.l_16, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_16)}'
         self.l_17 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[attn_dropout]']
-        assert isinstance(self.l_17,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_17)}'
+        assert isinstance(
+            self.l_17, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_17)}'
         self.l_18 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_proj]']
-        assert isinstance(self.l_18,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_18)}'
+        assert isinstance(
+            self.l_18, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_18)}'
         self.l_19 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[resid_dropout]']
-        assert isinstance(self.l_19,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_19)}'
+        assert isinstance(
+            self.l_19, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_19)}'
         self.l_20 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_2]']
-        assert isinstance(self.l_20,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_20)}'
+        assert isinstance(
+            self.l_20, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_20)}'
         self.l_21 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_fc]']
-        assert isinstance(self.l_21,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_21)}'
+        assert isinstance(
+            self.l_21, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_21)}'
         self.l_22 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_proj]']
-        assert isinstance(self.l_22,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_22)}'
+        assert isinstance(
+            self.l_22, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_22)}'
         self.l_23 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Dropout[dropout]']
-        assert isinstance(self.l_23,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_23)}'
+        assert isinstance(
+            self.l_23, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_23)}'
         self.l_24 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_1]']
-        assert isinstance(self.l_24,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_24)}'
+        assert isinstance(
+            self.l_24, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_24)}'
         self.l_25 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_attn]']
-        assert isinstance(self.l_25,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_25)}'
+        assert isinstance(
+            self.l_25, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_25)}'
 
         # initializing partition buffers
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Tensor[bias]
-        self.register_buffer('b_0',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Tensor[bias]'])
+        self.register_buffer(
+            'b_0', tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Tensor[bias]'])
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Tensor[bias]
-        self.register_buffer('b_1',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Tensor[bias]'])
-        
+        self.register_buffer(
+            'b_1', tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Tensor[bias]'])
+
         # initializing partition parameters
 
         self.device = torch.device('cuda:2')
-        self.lookup = { 'l_0': 'transformer.7.attn.c_proj',
-                        'l_1': 'transformer.7.attn.resid_dropout',
-                        'l_2': 'transformer.7.ln_2',
-                        'l_3': 'transformer.7.mlp.c_fc',
-                        'l_4': 'transformer.7.mlp.c_proj',
-                        'l_5': 'transformer.7.mlp.dropout',
-                        'l_6': 'transformer.8.ln_1',
-                        'l_7': 'transformer.8.attn.c_attn',
-                        'l_8': 'transformer.8.attn.attn_dropout',
-                        'l_9': 'transformer.8.attn.c_proj',
-                        'l_10': 'transformer.8.attn.resid_dropout',
-                        'l_11': 'transformer.8.ln_2',
-                        'l_12': 'transformer.8.mlp.c_fc',
-                        'l_13': 'transformer.8.mlp.c_proj',
-                        'l_14': 'transformer.8.mlp.dropout',
-                        'l_15': 'transformer.9.ln_1',
-                        'l_16': 'transformer.9.attn.c_attn',
-                        'l_17': 'transformer.9.attn.attn_dropout',
-                        'l_18': 'transformer.9.attn.c_proj',
-                        'l_19': 'transformer.9.attn.resid_dropout',
-                        'l_20': 'transformer.9.ln_2',
-                        'l_21': 'transformer.9.mlp.c_fc',
-                        'l_22': 'transformer.9.mlp.c_proj',
-                        'l_23': 'transformer.9.mlp.dropout',
-                        'l_24': 'transformer.10.ln_1',
-                        'l_25': 'transformer.10.attn.c_attn',
-                        'b_0': 'transformer.8.attn.bias',
-                        'b_1': 'transformer.9.attn.bias'}
+        self.lookup = {'l_0': 'transformer.7.attn.c_proj',
+                       'l_1': 'transformer.7.attn.resid_dropout',
+                       'l_2': 'transformer.7.ln_2',
+                       'l_3': 'transformer.7.mlp.c_fc',
+                       'l_4': 'transformer.7.mlp.c_proj',
+                       'l_5': 'transformer.7.mlp.dropout',
+                       'l_6': 'transformer.8.ln_1',
+                       'l_7': 'transformer.8.attn.c_attn',
+                       'l_8': 'transformer.8.attn.attn_dropout',
+                       'l_9': 'transformer.8.attn.c_proj',
+                       'l_10': 'transformer.8.attn.resid_dropout',
+                       'l_11': 'transformer.8.ln_2',
+                       'l_12': 'transformer.8.mlp.c_fc',
+                       'l_13': 'transformer.8.mlp.c_proj',
+                       'l_14': 'transformer.8.mlp.dropout',
+                       'l_15': 'transformer.9.ln_1',
+                       'l_16': 'transformer.9.attn.c_attn',
+                       'l_17': 'transformer.9.attn.attn_dropout',
+                       'l_18': 'transformer.9.attn.c_proj',
+                       'l_19': 'transformer.9.attn.resid_dropout',
+                       'l_20': 'transformer.9.ln_2',
+                       'l_21': 'transformer.9.mlp.c_fc',
+                       'l_22': 'transformer.9.mlp.c_proj',
+                       'l_23': 'transformer.9.mlp.dropout',
+                       'l_24': 'transformer.10.ln_1',
+                       'l_25': 'transformer.10.attn.c_attn',
+                       'b_0': 'transformer.8.attn.bias',
+                       'b_1': 'transformer.9.attn.bias'}
 
     def forward(self, x0, x1):
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_proj] <=> self.l_0
@@ -929,14 +1142,16 @@ class Partition2(nn.Module):
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/aten::add6899
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[resid_dropout]
-        t_1 = torch.add(input=x0, other=self.l_1(self.l_0(Tensor.view(t_0, size=[Tensor.size(t_0, dim=0), Tensor.size(t_0, dim=1), torch.mul(input=Tensor.size(t_0, dim=-2), other=Tensor.size(t_0, dim=-1))]))))
+        t_1 = torch.add(input=x0, other=self.l_1(self.l_0(Tensor.view(t_0, size=[Tensor.size(t_0, dim=0), Tensor.size(
+            t_0, dim=1), torch.mul(input=Tensor.size(t_0, dim=-2), other=Tensor.size(t_0, dim=-1))]))))
         # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_fc] with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_2]
         t_2 = self.l_3(self.l_2(t_1))
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/aten::add7113
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Dropout[dropout]
-        t_3 = torch.add(input=t_1, other=self.l_5(self.l_4(torch.mul(input=torch.mul(input=t_2, other=0.5), other=torch.add(input=Tensor.tanh(torch.mul(input=torch.add(input=t_2, other=torch.mul(input=Tensor.pow(t_2, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
+        t_3 = torch.add(input=t_1, other=self.l_5(self.l_4(torch.mul(input=torch.mul(input=t_2, other=0.5), other=torch.add(input=Tensor.tanh(
+            torch.mul(input=torch.add(input=t_2, other=torch.mul(input=Tensor.pow(t_2, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
         # calling torch.split with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_attn]
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant7229
@@ -948,7 +1163,8 @@ class Partition2(nn.Module):
         # calling torch.div with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::matmul7304
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant7305
-        t_8 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_5, size=[Tensor.size(t_5, dim=0), Tensor.size(t_5, dim=1), 12, torch.div(input=Tensor.size(t_5, dim=-1), other=12)]), dims=[0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_6, size=[Tensor.size(t_6, dim=0), Tensor.size(t_6, dim=1), 12, torch.div(input=Tensor.size(t_6, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
+        t_8 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_5, size=[Tensor.size(t_5, dim=0), Tensor.size(t_5, dim=1), 12, torch.div(input=Tensor.size(t_5, dim=-1), other=12)]), dims=[
+                        0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_6, size=[Tensor.size(t_6, dim=0), Tensor.size(t_6, dim=1), 12, torch.div(input=Tensor.size(t_6, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
         # calling Tensor.size with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::div7306
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant7310
@@ -959,21 +1175,25 @@ class Partition2(nn.Module):
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant7332
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::size7311
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant7333
-        t_10 = self.b_0[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(input=t_9, other=Tensor.size(t_8, dim=-2)):t_9:1][:, :, :, 0:t_9:1]
+        t_10 = self.b_0[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(
+            input=t_9, other=Tensor.size(t_8, dim=-2)):t_9:1][:, :, :, 0:t_9:1]
         # calling Tensor.contiguous with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::permute7355
-        t_11 = Tensor.contiguous(Tensor.permute(Tensor.matmul(self.l_8(Tensor.softmax(torch.sub(input=torch.mul(input=t_8, other=t_10), other=torch.mul(input=torch.rsub(t_10, other=1, alpha=1), other=10000.0)), dim=-1, dtype=None)), other=Tensor.permute(Tensor.view(t_7, size=[Tensor.size(t_7, dim=0), Tensor.size(t_7, dim=1), 12, torch.div(input=Tensor.size(t_7, dim=-1), other=12)]), dims=[0, 2, 1, 3])), dims=[0, 2, 1, 3]))
+        t_11 = Tensor.contiguous(Tensor.permute(Tensor.matmul(self.l_8(Tensor.softmax(torch.sub(input=torch.mul(input=t_8, other=t_10), other=torch.mul(input=torch.rsub(t_10, other=1, alpha=1), other=10000.0)), dim=-1,
+                                                                                      dtype=None)), other=Tensor.permute(Tensor.view(t_7, size=[Tensor.size(t_7, dim=0), Tensor.size(t_7, dim=1), 12, torch.div(input=Tensor.size(t_7, dim=-1), other=12)]), dims=[0, 2, 1, 3])), dims=[0, 2, 1, 3]))
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/aten::add7189
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[resid_dropout]
-        t_12 = torch.add(input=t_3, other=self.l_10(self.l_9(Tensor.view(t_11, size=[Tensor.size(t_11, dim=0), Tensor.size(t_11, dim=1), torch.mul(input=Tensor.size(t_11, dim=-2), other=Tensor.size(t_11, dim=-1))]))))
+        t_12 = torch.add(input=t_3, other=self.l_10(self.l_9(Tensor.view(t_11, size=[Tensor.size(t_11, dim=0), Tensor.size(
+            t_11, dim=1), torch.mul(input=Tensor.size(t_11, dim=-2), other=Tensor.size(t_11, dim=-1))]))))
         # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_fc] with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_2]
         t_13 = self.l_12(self.l_11(t_12))
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/aten::add7403
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Dropout[dropout]
-        t_14 = torch.add(input=t_12, other=self.l_14(self.l_13(torch.mul(input=torch.mul(input=t_13, other=0.5), other=torch.add(input=Tensor.tanh(torch.mul(input=torch.add(input=t_13, other=torch.mul(input=Tensor.pow(t_13, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
+        t_14 = torch.add(input=t_12, other=self.l_14(self.l_13(torch.mul(input=torch.mul(input=t_13, other=0.5), other=torch.add(input=Tensor.tanh(
+            torch.mul(input=torch.add(input=t_13, other=torch.mul(input=Tensor.pow(t_13, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
         # calling torch.split with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_attn]
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant7519
@@ -985,7 +1205,8 @@ class Partition2(nn.Module):
         # calling torch.div with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::matmul7594
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant7595
-        t_19 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_16, size=[Tensor.size(t_16, dim=0), Tensor.size(t_16, dim=1), 12, torch.div(input=Tensor.size(t_16, dim=-1), other=12)]), dims=[0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_17, size=[Tensor.size(t_17, dim=0), Tensor.size(t_17, dim=1), 12, torch.div(input=Tensor.size(t_17, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
+        t_19 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_16, size=[Tensor.size(t_16, dim=0), Tensor.size(t_16, dim=1), 12, torch.div(input=Tensor.size(t_16, dim=-1), other=12)]), dims=[
+                         0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_17, size=[Tensor.size(t_17, dim=0), Tensor.size(t_17, dim=1), 12, torch.div(input=Tensor.size(t_17, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
         # calling Tensor.size with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::div7596
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant7600
@@ -996,49 +1217,53 @@ class Partition2(nn.Module):
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant7622
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::size7601
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant7623
-        t_21 = self.b_1[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(input=t_20, other=Tensor.size(t_19, dim=-2)):t_20:1][:, :, :, 0:t_20:1]
+        t_21 = self.b_1[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(
+            input=t_20, other=Tensor.size(t_19, dim=-2)):t_20:1][:, :, :, 0:t_20:1]
         # calling Tensor.contiguous with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::permute7645
-        t_22 = Tensor.contiguous(Tensor.permute(Tensor.matmul(self.l_17(Tensor.softmax(torch.sub(input=torch.mul(input=t_19, other=t_21), other=torch.mul(input=torch.rsub(t_21, other=1, alpha=1), other=10000.0)), dim=-1, dtype=None)), other=Tensor.permute(Tensor.view(t_18, size=[Tensor.size(t_18, dim=0), Tensor.size(t_18, dim=1), 12, torch.div(input=Tensor.size(t_18, dim=-1), other=12)]), dims=[0, 2, 1, 3])), dims=[0, 2, 1, 3]))
+        t_22 = Tensor.contiguous(Tensor.permute(Tensor.matmul(self.l_17(Tensor.softmax(torch.sub(input=torch.mul(input=t_19, other=t_21), other=torch.mul(input=torch.rsub(t_21, other=1, alpha=1), other=10000.0)), dim=-1, dtype=None)),
+                                                              other=Tensor.permute(Tensor.view(t_18, size=[Tensor.size(t_18, dim=0), Tensor.size(t_18, dim=1), 12, torch.div(input=Tensor.size(t_18, dim=-1), other=12)]), dims=[0, 2, 1, 3])), dims=[0, 2, 1, 3]))
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/aten::add7479
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[resid_dropout]
-        t_23 = torch.add(input=t_14, other=self.l_19(self.l_18(Tensor.view(t_22, size=[Tensor.size(t_22, dim=0), Tensor.size(t_22, dim=1), torch.mul(input=Tensor.size(t_22, dim=-2), other=Tensor.size(t_22, dim=-1))]))))
+        t_23 = torch.add(input=t_14, other=self.l_19(self.l_18(Tensor.view(t_22, size=[Tensor.size(t_22, dim=0), Tensor.size(
+            t_22, dim=1), torch.mul(input=Tensor.size(t_22, dim=-2), other=Tensor.size(t_22, dim=-1))]))))
         # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_fc] with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_2]
         t_24 = self.l_21(self.l_20(t_23))
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/aten::add7693
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Dropout[dropout]
-        t_25 = torch.add(input=t_23, other=self.l_23(self.l_22(torch.mul(input=torch.mul(input=t_24, other=0.5), other=torch.add(input=Tensor.tanh(torch.mul(input=torch.add(input=t_24, other=torch.mul(input=Tensor.pow(t_24, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
+        t_25 = torch.add(input=t_23, other=self.l_23(self.l_22(torch.mul(input=torch.mul(input=t_24, other=0.5), other=torch.add(input=Tensor.tanh(
+            torch.mul(input=torch.add(input=t_24, other=torch.mul(input=Tensor.pow(t_24, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
         # returing:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_attn]
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/aten::add7769
         return (self.l_25(self.l_24(t_25)), t_25)
 
-    def state_dict(self,device=None):
+    def state_dict(self, device=None):
         # we return the state dict of this part as it should be in the original model
-        return state_dict(self,device=device)
+        return state_dict(self, device=device)
 
     def load_state_dict(self, state):
-        return load_state_dict(self,state)
+        return load_state_dict(self, state)
 
-    def named_parameters(self,recurse=True):
+    def named_parameters(self, recurse=True):
         # we return the named parameters of this part as it should be in the original model
-        return named_parameters(self,recurse=recurse)
+        return named_parameters(self, recurse=recurse)
 
-    def named_buffers(self,recurse=True):
+    def named_buffers(self, recurse=True):
         # we return the named buffers of this part as it should be in the original model
-        return named_buffers(self,recurse=recurse)
+        return named_buffers(self, recurse=recurse)
 
     def cpu(self):
         return cpu(self)
 
-    def cuda(self,device=None):
-        return cuda(self,device=device)
+    def cuda(self, device=None):
+        return cuda(self, device=device)
 
     def to(self, *args, **kwargs):
-        return to(self,*args,**kwargs)
+        return to(self, *args, **kwargs)
 
 
 class Partition3(nn.Module):
@@ -1046,71 +1271,91 @@ class Partition3(nn.Module):
         super(Partition3, self).__init__()
         # initializing partition layers
         self.l_0 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[attn_dropout]']
-        assert isinstance(self.l_0,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_0)}'
+        assert isinstance(
+            self.l_0, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_0)}'
         self.l_1 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_proj]']
-        assert isinstance(self.l_1,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_1)}'
+        assert isinstance(
+            self.l_1, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_1)}'
         self.l_2 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[resid_dropout]']
-        assert isinstance(self.l_2,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_2)}'
+        assert isinstance(
+            self.l_2, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_2)}'
         self.l_3 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_2]']
-        assert isinstance(self.l_3,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_3)}'
+        assert isinstance(
+            self.l_3, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_3)}'
         self.l_4 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_fc]']
-        assert isinstance(self.l_4,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_4)}'
+        assert isinstance(
+            self.l_4, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_4)}'
         self.l_5 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_proj]']
-        assert isinstance(self.l_5,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_5)}'
+        assert isinstance(
+            self.l_5, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_5)}'
         self.l_6 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Dropout[dropout]']
-        assert isinstance(self.l_6,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_6)}'
+        assert isinstance(
+            self.l_6, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_6)}'
         self.l_7 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_1]']
-        assert isinstance(self.l_7,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_7)}'
+        assert isinstance(
+            self.l_7, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_1]] is expected to be of type LayerNorm but was of type {type(self.l_7)}'
         self.l_8 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_attn]']
-        assert isinstance(self.l_8,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_8)}'
+        assert isinstance(
+            self.l_8, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_attn]] is expected to be of type Conv1D but was of type {type(self.l_8)}'
         self.l_9 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[attn_dropout]']
-        assert isinstance(self.l_9,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_9)}'
+        assert isinstance(
+            self.l_9, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[attn_dropout]] is expected to be of type Dropout but was of type {type(self.l_9)}'
         self.l_10 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_proj]']
-        assert isinstance(self.l_10,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_10)}'
+        assert isinstance(
+            self.l_10, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_10)}'
         self.l_11 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[resid_dropout]']
-        assert isinstance(self.l_11,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_11)}'
+        assert isinstance(
+            self.l_11, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[resid_dropout]] is expected to be of type Dropout but was of type {type(self.l_11)}'
         self.l_12 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_2]']
-        assert isinstance(self.l_12,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_12)}'
+        assert isinstance(
+            self.l_12, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_2]] is expected to be of type LayerNorm but was of type {type(self.l_12)}'
         self.l_13 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_fc]']
-        assert isinstance(self.l_13,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_13)}'
+        assert isinstance(
+            self.l_13, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_fc]] is expected to be of type Conv1D but was of type {type(self.l_13)}'
         self.l_14 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_proj]']
-        assert isinstance(self.l_14,Conv1D) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_14)}'
+        assert isinstance(
+            self.l_14, Conv1D), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_proj]] is expected to be of type Conv1D but was of type {type(self.l_14)}'
         self.l_15 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Dropout[dropout]']
-        assert isinstance(self.l_15,Dropout) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_15)}'
+        assert isinstance(
+            self.l_15, Dropout), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Dropout[dropout]] is expected to be of type Dropout but was of type {type(self.l_15)}'
         self.l_16 = layers['GPT2LMHeadModel/GPT2Model[transformer]/LayerNorm[ln_f]']
-        assert isinstance(self.l_16,LayerNorm) ,f'layers[GPT2LMHeadModel/GPT2Model[transformer]/LayerNorm[ln_f]] is expected to be of type LayerNorm but was of type {type(self.l_16)}'
+        assert isinstance(
+            self.l_16, LayerNorm), f'layers[GPT2LMHeadModel/GPT2Model[transformer]/LayerNorm[ln_f]] is expected to be of type LayerNorm but was of type {type(self.l_16)}'
         self.l_17 = layers['GPT2LMHeadModel/Linear[lm_head]']
-        assert isinstance(self.l_17,Linear) ,f'layers[GPT2LMHeadModel/Linear[lm_head]] is expected to be of type Linear but was of type {type(self.l_17)}'
+        assert isinstance(
+            self.l_17, Linear), f'layers[GPT2LMHeadModel/Linear[lm_head]] is expected to be of type Linear but was of type {type(self.l_17)}'
 
         # initializing partition buffers
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Tensor[bias]
-        self.register_buffer('b_0',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Tensor[bias]'])
+        self.register_buffer(
+            'b_0', tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Tensor[bias]'])
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Tensor[bias]
-        self.register_buffer('b_1',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Tensor[bias]'])
-        
+        self.register_buffer(
+            'b_1', tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Tensor[bias]'])
+
         # initializing partition parameters
 
         self.device = torch.device('cuda:3')
-        self.lookup = { 'l_0': 'transformer.10.attn.attn_dropout',
-                        'l_1': 'transformer.10.attn.c_proj',
-                        'l_2': 'transformer.10.attn.resid_dropout',
-                        'l_3': 'transformer.10.ln_2',
-                        'l_4': 'transformer.10.mlp.c_fc',
-                        'l_5': 'transformer.10.mlp.c_proj',
-                        'l_6': 'transformer.10.mlp.dropout',
-                        'l_7': 'transformer.11.ln_1',
-                        'l_8': 'transformer.11.attn.c_attn',
-                        'l_9': 'transformer.11.attn.attn_dropout',
-                        'l_10': 'transformer.11.attn.c_proj',
-                        'l_11': 'transformer.11.attn.resid_dropout',
-                        'l_12': 'transformer.11.ln_2',
-                        'l_13': 'transformer.11.mlp.c_fc',
-                        'l_14': 'transformer.11.mlp.c_proj',
-                        'l_15': 'transformer.11.mlp.dropout',
-                        'l_16': 'transformer.ln_f',
-                        'l_17': 'lm_head',
-                        'b_0': 'transformer.10.attn.bias',
-                        'b_1': 'transformer.11.attn.bias'}
+        self.lookup = {'l_0': 'transformer.10.attn.attn_dropout',
+                       'l_1': 'transformer.10.attn.c_proj',
+                       'l_2': 'transformer.10.attn.resid_dropout',
+                       'l_3': 'transformer.10.ln_2',
+                       'l_4': 'transformer.10.mlp.c_fc',
+                       'l_5': 'transformer.10.mlp.c_proj',
+                       'l_6': 'transformer.10.mlp.dropout',
+                       'l_7': 'transformer.11.ln_1',
+                       'l_8': 'transformer.11.attn.c_attn',
+                       'l_9': 'transformer.11.attn.attn_dropout',
+                       'l_10': 'transformer.11.attn.c_proj',
+                       'l_11': 'transformer.11.attn.resid_dropout',
+                       'l_12': 'transformer.11.ln_2',
+                       'l_13': 'transformer.11.mlp.c_fc',
+                       'l_14': 'transformer.11.mlp.c_proj',
+                       'l_15': 'transformer.11.mlp.dropout',
+                       'l_16': 'transformer.ln_f',
+                       'l_17': 'lm_head',
+                       'b_0': 'transformer.10.attn.bias',
+                       'b_1': 'transformer.11.attn.bias'}
 
     def forward(self, x0, x1, x2):
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[attn_dropout] <=> self.l_0
@@ -1153,7 +1398,8 @@ class Partition3(nn.Module):
         # calling torch.div with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::matmul7884
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant7885
-        t_4 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_1, size=[Tensor.size(t_1, dim=0), Tensor.size(t_1, dim=1), 12, torch.div(input=Tensor.size(t_1, dim=-1), other=12)]), dims=[0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_2, size=[Tensor.size(t_2, dim=0), Tensor.size(t_2, dim=1), 12, torch.div(input=Tensor.size(t_2, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
+        t_4 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_1, size=[Tensor.size(t_1, dim=0), Tensor.size(t_1, dim=1), 12, torch.div(input=Tensor.size(t_1, dim=-1), other=12)]), dims=[
+                        0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_2, size=[Tensor.size(t_2, dim=0), Tensor.size(t_2, dim=1), 12, torch.div(input=Tensor.size(t_2, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
         # calling Tensor.size with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::div7886
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant7890
@@ -1164,21 +1410,25 @@ class Partition3(nn.Module):
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant7912
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::size7891
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant7913
-        t_6 = self.b_0[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(input=t_5, other=Tensor.size(t_4, dim=-2)):t_5:1][:, :, :, 0:t_5:1]
+        t_6 = self.b_0[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(
+            input=t_5, other=Tensor.size(t_4, dim=-2)):t_5:1][:, :, :, 0:t_5:1]
         # calling Tensor.contiguous with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::permute7935
-        t_7 = Tensor.contiguous(Tensor.permute(Tensor.matmul(self.l_0(Tensor.softmax(torch.sub(input=torch.mul(input=t_4, other=t_6), other=torch.mul(input=torch.rsub(t_6, other=1, alpha=1), other=10000.0)), dim=-1, dtype=None)), other=Tensor.permute(Tensor.view(t_3, size=[Tensor.size(t_3, dim=0), Tensor.size(t_3, dim=1), 12, torch.div(input=Tensor.size(t_3, dim=-1), other=12)]), dims=[0, 2, 1, 3])), dims=[0, 2, 1, 3]))
+        t_7 = Tensor.contiguous(Tensor.permute(Tensor.matmul(self.l_0(Tensor.softmax(torch.sub(input=torch.mul(input=t_4, other=t_6), other=torch.mul(input=torch.rsub(t_6, other=1, alpha=1), other=10000.0)), dim=-1, dtype=None)),
+                                                             other=Tensor.permute(Tensor.view(t_3, size=[Tensor.size(t_3, dim=0), Tensor.size(t_3, dim=1), 12, torch.div(input=Tensor.size(t_3, dim=-1), other=12)]), dims=[0, 2, 1, 3])), dims=[0, 2, 1, 3]))
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/aten::add7769
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[resid_dropout]
-        t_8 = torch.add(input=x1, other=self.l_2(self.l_1(Tensor.view(t_7, size=[Tensor.size(t_7, dim=0), Tensor.size(t_7, dim=1), torch.mul(input=Tensor.size(t_7, dim=-2), other=Tensor.size(t_7, dim=-1))]))))
+        t_8 = torch.add(input=x1, other=self.l_2(self.l_1(Tensor.view(t_7, size=[Tensor.size(t_7, dim=0), Tensor.size(
+            t_7, dim=1), torch.mul(input=Tensor.size(t_7, dim=-2), other=Tensor.size(t_7, dim=-1))]))))
         # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_fc] with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_2]
         t_9 = self.l_4(self.l_3(t_8))
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/aten::add7983
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Dropout[dropout]
-        t_10 = torch.add(input=t_8, other=self.l_6(self.l_5(torch.mul(input=torch.mul(input=t_9, other=0.5), other=torch.add(input=Tensor.tanh(torch.mul(input=torch.add(input=t_9, other=torch.mul(input=Tensor.pow(t_9, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
+        t_10 = torch.add(input=t_8, other=self.l_6(self.l_5(torch.mul(input=torch.mul(input=t_9, other=0.5), other=torch.add(input=Tensor.tanh(
+            torch.mul(input=torch.add(input=t_9, other=torch.mul(input=Tensor.pow(t_9, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
         # calling torch.split with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_attn]
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant8099
@@ -1190,7 +1440,8 @@ class Partition3(nn.Module):
         # calling torch.div with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::matmul8174
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant8175
-        t_15 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_12, size=[Tensor.size(t_12, dim=0), Tensor.size(t_12, dim=1), 12, torch.div(input=Tensor.size(t_12, dim=-1), other=12)]), dims=[0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_13, size=[Tensor.size(t_13, dim=0), Tensor.size(t_13, dim=1), 12, torch.div(input=Tensor.size(t_13, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
+        t_15 = torch.div(input=Tensor.matmul(Tensor.permute(Tensor.view(t_12, size=[Tensor.size(t_12, dim=0), Tensor.size(t_12, dim=1), 12, torch.div(input=Tensor.size(t_12, dim=-1), other=12)]), dims=[
+                         0, 2, 1, 3]), other=Tensor.permute(Tensor.view(t_13, size=[Tensor.size(t_13, dim=0), Tensor.size(t_13, dim=1), 12, torch.div(input=Tensor.size(t_13, dim=-1), other=12)]), dims=[0, 2, 3, 1])), other=8.0)
         # calling Tensor.size with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::div8176
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant8180
@@ -1201,58 +1452,64 @@ class Partition3(nn.Module):
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant8202
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::size8181
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant8203
-        t_17 = self.b_1[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(input=t_16, other=Tensor.size(t_15, dim=-2)):t_16:1][:, :, :, 0:t_16:1]
+        t_17 = self.b_1[0:9223372036854775807:1][:, 0:9223372036854775807:1][:, :, torch.sub(
+            input=t_16, other=Tensor.size(t_15, dim=-2)):t_16:1][:, :, :, 0:t_16:1]
         # calling Tensor.contiguous with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::permute8225
-        t_18 = Tensor.contiguous(Tensor.permute(Tensor.matmul(self.l_9(Tensor.softmax(torch.sub(input=torch.mul(input=t_15, other=t_17), other=torch.mul(input=torch.rsub(t_17, other=1, alpha=1), other=10000.0)), dim=-1, dtype=None)), other=Tensor.permute(Tensor.view(t_14, size=[Tensor.size(t_14, dim=0), Tensor.size(t_14, dim=1), 12, torch.div(input=Tensor.size(t_14, dim=-1), other=12)]), dims=[0, 2, 1, 3])), dims=[0, 2, 1, 3]))
+        t_18 = Tensor.contiguous(Tensor.permute(Tensor.matmul(self.l_9(Tensor.softmax(torch.sub(input=torch.mul(input=t_15, other=t_17), other=torch.mul(input=torch.rsub(t_17, other=1, alpha=1), other=10000.0)), dim=-1, dtype=None)),
+                                                              other=Tensor.permute(Tensor.view(t_14, size=[Tensor.size(t_14, dim=0), Tensor.size(t_14, dim=1), 12, torch.div(input=Tensor.size(t_14, dim=-1), other=12)]), dims=[0, 2, 1, 3])), dims=[0, 2, 1, 3]))
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/aten::add8059
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[resid_dropout]
-        t_19 = torch.add(input=t_10, other=self.l_11(self.l_10(Tensor.view(t_18, size=[Tensor.size(t_18, dim=0), Tensor.size(t_18, dim=1), torch.mul(input=Tensor.size(t_18, dim=-2), other=Tensor.size(t_18, dim=-1))]))))
+        t_19 = torch.add(input=t_10, other=self.l_11(self.l_10(Tensor.view(t_18, size=[Tensor.size(t_18, dim=0), Tensor.size(
+            t_18, dim=1), torch.mul(input=Tensor.size(t_18, dim=-2), other=Tensor.size(t_18, dim=-1))]))))
         # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_fc] with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_2]
         t_20 = self.l_13(self.l_12(t_19))
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/aten::add8273
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Dropout[dropout]
-        t_21 = torch.add(input=t_19, other=self.l_15(self.l_14(torch.mul(input=torch.mul(input=t_20, other=0.5), other=torch.add(input=Tensor.tanh(torch.mul(input=torch.add(input=t_20, other=torch.mul(input=Tensor.pow(t_20, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
+        t_21 = torch.add(input=t_19, other=self.l_15(self.l_14(torch.mul(input=torch.mul(input=t_20, other=0.5), other=torch.add(input=Tensor.tanh(
+            torch.mul(input=torch.add(input=t_20, other=torch.mul(input=Tensor.pow(t_20, exponent=3), other=0.044715)), other=0.7978845608028654)), other=1)))))
         # calling Tensor.contiguous with arguments:
         # GPT2LMHeadModel/aten::slice4161
-        t_22 = Tensor.contiguous(self.l_17(self.l_16(t_21))[:, 0:-1:1][:, :, 0:9223372036854775807:1])
+        t_22 = Tensor.contiguous(self.l_17(self.l_16(t_21))[
+                                 :, 0:-1:1][:, :, 0:9223372036854775807:1])
         # calling F.nll_loss with arguments:
         # GPT2LMHeadModel/aten::log_softmax4183
         # GPT2LMHeadModel/aten::view4180
         # GPT2LMHeadModel/prim::Constant4191
         # GPT2LMHeadModel/prim::Constant4192
         # GPT2LMHeadModel/prim::Constant4193
-        t_23 = F.nll_loss(Tensor.log_softmax(Tensor.view(t_22, size=[-1, Tensor.size(t_22, dim=-1)]), dim=1, dtype=None), Tensor.view(Tensor.contiguous(x2[:, 1:9223372036854775807:1]), size=[-1]), None, 1, -100)
+        t_23 = F.nll_loss(Tensor.log_softmax(Tensor.view(t_22, size=[-1, Tensor.size(t_22, dim=-1)]), dim=1, dtype=None), Tensor.view(
+            Tensor.contiguous(x2[:, 1:9223372036854775807:1]), size=[-1]), None, 1, -100)
         # returing:
         # GPT2LMHeadModel/aten::nll_loss4194
         return (t_23,)
 
-    def state_dict(self,device=None):
+    def state_dict(self, device=None):
         # we return the state dict of this part as it should be in the original model
-        return state_dict(self,device=device)
+        return state_dict(self, device=device)
 
     def load_state_dict(self, state):
-        return load_state_dict(self,state)
+        return load_state_dict(self, state)
 
-    def named_parameters(self,recurse=True):
+    def named_parameters(self, recurse=True):
         # we return the named parameters of this part as it should be in the original model
-        return named_parameters(self,recurse=recurse)
+        return named_parameters(self, recurse=recurse)
 
-    def named_buffers(self,recurse=True):
+    def named_buffers(self, recurse=True):
         # we return the named buffers of this part as it should be in the original model
-        return named_buffers(self,recurse=recurse)
+        return named_buffers(self, recurse=recurse)
 
     def cpu(self):
         return cpu(self)
 
-    def cuda(self,device=None):
-        return cuda(self,device=device)
+    def cuda(self, device=None):
+        return cuda(self, device=device)
 
     def to(self, *args, **kwargs):
-        return to(self,*args,**kwargs)
+        return to(self, *args, **kwargs)
 
 
 def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
