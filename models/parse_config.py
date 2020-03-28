@@ -129,6 +129,7 @@ class PartitioningConfigParser:
             self.ranks_in_previous_stage = None
             self.ranks_in_next_stage = None
 
+        pipe_config.change_batch(bs_train,for_replicated=True)
         self.training_tensor_shapes = pipe_config.shapes()
         pipe_config.change_batch(bs_eval, for_replicated=True)
         self.eval_tensor_shapes = pipe_config.shapes()

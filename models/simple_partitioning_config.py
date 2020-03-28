@@ -8,7 +8,7 @@ import json
 import os
 import importlib
 from itertools import chain
-
+from copy import deepcopy
 
 class PipelineConfig():
     """
@@ -128,8 +128,8 @@ class PipelineConfig():
                 shapes[i] = s
             for o, s in zip(stage.outputs, stage.output_shapes):
                 shapes[o] = s
-
-        return shapes
+        #we deep copy because change batch modifies the original
+        return deepcopy(shapes)
 
     def all_dtypes(self) -> Dict[str, torch.dtype]:
         dtypes = dict()
