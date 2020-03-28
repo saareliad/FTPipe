@@ -192,7 +192,8 @@ class PipelineConfig():
             for o, s in zip(stage.outputs, stage.output_shapes):
                 shapes[o] = s
 
-        return shapes
+        # deepcopy because change batch modifies the original
+        return deepcopy(shapes)
 
     def isValid(self) -> bool:
         model_inputs = self.model_inputs
