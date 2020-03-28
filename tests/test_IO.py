@@ -170,8 +170,8 @@ def test_bufferAllocator(rank):
     num_minibatches = 11
     batch_size = 10 * (rank + 2)
     batch_dim = 0
-    input_shapes = [[1, 100 * (rank + 1)]]
-    output_shapes = [[1, 3, rank + 1, rank + 1]]
+    input_shapes = [([1, 100 * (rank + 1)], True)]
+    output_shapes = [([1, 3, rank + 1, rank + 1], True)]
     buffer_allocator = RoundRobinBufferGenerator(device, batch_dim, batch_size, num_minibatches,
                                                  input_shapes, output_shapes)
     buffer_allocator.create_gradient_input_buffers()
@@ -216,11 +216,11 @@ def forward_flow(rank):
     elif rank in [1, 2]:
         # b0, b1 = torch.randn(32), torch.randn(32)
         b = RoundRobinBufferGenerator(torch.device('cpu'), 0, 64, 2,
-                                      [[1]], [[1]])
+                                      [([1], True)], [([1], True)])
     elif rank in [3, 4, 5, 6]:
         # b0, b1 = torch.randn(16), torch.randn(16)
         b = RoundRobinBufferGenerator(torch.device('cpu'), 0, 32, 2,
-                                      [[1]], [[1]])
+                                      [([1], True)], [([1], True)])
     else:
         b = torch.randn(64)
     if rank == 0:
@@ -262,11 +262,11 @@ def backward_flow(rank):
     elif rank in [1, 2]:
         # b0, b1 = torch.randn(32), torch.randn(32)
         b = RoundRobinBufferGenerator(
-            torch.device('cpu'), 0, 64, 2, [[1]], [[1]])
+            torch.device('cpu'), 0, 64, 2, [([1], True)], [([1], True)])
     elif rank in [3, 4, 5, 6]:
         # b0, b1 = torch.randn(16), torch.randn(16)
         b = RoundRobinBufferGenerator(
-            torch.device('cpu'), 0, 32, 2, [[1]], [[1]])
+            torch.device('cpu'), 0, 32, 2, [([1], True)], [([1], True)])
     else:
         b = torch.randn(64)
 

@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from itertools import chain, groupby
 from torch.multiprocessing import Queue, set_start_method
 from typing import Callable, Dict, Iterator, List, Optional, Tuple, Any, Union
@@ -21,6 +21,7 @@ from .config import PipelineConfig
 
 class Pipeline():
     def __init__(self, layers: Dict[str, nn.Module], tensors: Dict[str, Tensor], config: PipelineConfig, batch_size: int,
+                 num_minibatches: int,
                  buffer_sync: SyncBuffersMode = SyncBuffersMode.BEFORE_EVAL,
                  gradient_accumulation_steps: int = 1, backend='gloo'):
         # set this to not reinitialize CUDA context
@@ -29,15 +30,23 @@ class Pipeline():
         # or with puting it at the start of the main script
         # set_start_method('spawn')
 
+        is_batched = config.is_batched
+        dtypes = config.all_dtypes
+        shapes = config.shapes()
+        outputs = OrderedDict((o, (shapes[o], is_batched[o], dtypes[o]))
+                              for o in config.model_outputs)
+        dummy_buffers = OrderedDict((o, ([1], False, torch.float32))
+                                    for o in config.model_inputs)
+
         self.buffer = RoundRobinBufferGenerator('cpu', config.batch_dim, batch_size,
-                                                config.num_minibatches, config.model_output_shapes,
-                                                [[1] for _ in config.model_input_shapes])
+                                                num_minibatches, outputs,
+                                                dummy_buffers)
         self.input_names = config.model_inputs
         self.output_names = config.model_outputs
 
         self.batch_dim = config.batch_dim
 
-        master_IO, command_queues, groups, worker_args = create_worker_args(config, batch_size,
+        master_IO, command_queues, groups, worker_args = create_worker_args(config, batch_size, num_minibatches,
                                                                             self.batch_dim, layers, tensors)
 
         self.IO = master_IO
@@ -360,12 +369,14 @@ class Pipeline():
 
 
 def create_worker_args(config: PipelineConfig, batch_size: int,
+                       num_minibatches: int,
                        batch_dim: int, layers, tensors, debug=True) -> Tuple[P2PRankIO, List[Queue], List[List[int]], Dict]:
     config.change_batch(batch_size)
     assert config.isValid()
     # this ensures all workers will have minibatch size >=1
-    assert batch_size >= (config.num_minibatches * config.largest_stage_size)
-
+    assert batch_size >= (num_minibatches * config.largest_stage_size)
+    is_batched = config.batched_activation_map
+    all_dtypes = config.all_dtypes
     master_rank = -1
     master_stage = -1
     stages = copy(config.stages)
@@ -413,9 +424,21 @@ def create_worker_args(config: PipelineConfig, batch_size: int,
             tag_groups = list_chunk(tags, minority_size)
             # if a minority rank is assgined only one majority rank we use a p2pConnection to remove the split/merge overhead
             # a minority rank aggregates multiple ranks from the majority stage
-            minority_connections = [P2MPScatterConnection(batch_dim, rank_group, tag_groups, 0) if len(rank_group) > 1
-                                    else P2PConnection(rank_group[0], tag_group[0], 0)
-                                    for rank_group, tag_group in zip(rank_groups, tag_groups)]
+            minority_connections = []
+            for rank_group, tag_group in zip(rank_groups, tag_groups):
+                if len(rank_group) > 1 and is_batched[output]:
+                    # batched input will be scattered
+                    connection = P2MPScatterConnection(batch_dim, rank_group,
+                                                       tag_groups, 0)
+                elif len(rank_group) > 1:
+                    # non batched input will be broadcasted
+                    connection = P2MPBroadcastConnection([P2PConnection(r, t, 0)
+                                                          for r, t in zip(rank_group, tag_group)])
+                else:
+                    connection = P2PConnection(rank_group[0], tag_group[0], 0)
+
+                minority_connections.append(connection)
+
             majority_connections = []
             start = 0
             end = 0
@@ -514,9 +537,14 @@ def create_worker_args(config: PipelineConfig, batch_size: int,
         stage_id = rank_to_stage[rank]
         ranks_in_stage = len(stage_to_ranks[stage_id])
         stage = stages[stage_id]
-        input_shapes, output_shapes = stage.input_shapes, stage.output_shapes
+
+        inputs = OrderedDict((i, (s, is_batched[i], all_dtypes[i]))
+                             for s, i, d in zip(stage.input_shapes, stage.inputs))
+        outputs = OrderedDict((o, (s, is_batched[o], all_dtypes[o]))
+                              for s, o, d in zip(stage.output_shapes, stage.outputs))
+
         buffer_generator = RoundRobinBufferGenerator(device, batch_dim, split_size,
-                                                     config.num_minibatches, input_shapes, output_shapes)
+                                                     num_minibatches, inputs, outputs)
         worker_args[rank] = (stage_id, device, rank, ranks_in_stage, io, buffer_generator, command_queue,
                              state_stack, model, optimizer, lr_sched)
 

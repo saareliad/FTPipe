@@ -24,6 +24,8 @@ __all__ = ["build_graph"]
 
 # TODO there are still some problems with lstms should think if we want to tackle it
 
+# TODO add dtype info for Tensors
+
 DEBUG_MODEL_NAME = ""
 
 
@@ -160,6 +162,8 @@ def build_graph(model: torch.nn.Module,
     nodes = add_missing_types(nodes)
     nodes = shape_analysis(nodes)
 
+    set_tensor_dtypes(nodes)
+
     graph = graph_check_and_cleanup(nodes, outputs, max_depth, basic_blocks)
     os.rmdir("GPIPE_DEBUG/")
     return graph
@@ -272,12 +276,12 @@ def add_nodes(
             # if tensor node set type accordingly
             if output.isCompleteTensor():
                 new_node.value_type = torch.Tensor
+                new_node.dtype = output.type()
 
             # secondery output
             if i != 0:
                 if node_type != NodeTypes.LAYER:
                     new_node.scope += f"{i} "
-
         # add output idx for op with multiple outputs
         # uses last values of unique_id and i not best practice but ok here
         if trace_node.outputsSize() > 1 and nodes[unique_id -
@@ -308,7 +312,8 @@ def add_inputs_and_self_accessor(
                         unique_id,
                         node_type,
                         weight=size / 1e6,
-                        shape=shape)
+                        shape=shape,
+                        dtype=t.dtype)
             node.value_type = Tensor
             nodes[unique_id] = node
         else:
@@ -341,17 +346,20 @@ def add_accessor(nodes: GraphNodes, trace_node: torch._C.Node,
             size_in_mb = 0
             tensor_scope = layer_scope + "/" + accessor_name
             shape = torch.Size([])
+            dtype = None
         else:
             parent_scope = longest_prefix(partials, tensor_scope)
             t = tensors[f"{parent_scope}/[{accessor_name}]"]
             tensor_scope = f"{parent_scope}/{type(t).__name__}[{accessor_name}]"
             size_in_mb = (t.nelement() * t.element_size()) / 1e6
             shape = t.shape
+            dtype = t.dtype
         node = Node(tensor_scope,
                     idx,
                     node_type,
                     weight=size_in_mb,
-                    shape=shape)
+                    shape=shape,
+                    dtype=dtype)
         node.value_type = Tensor
         nodes[idx] = node
 
@@ -505,6 +513,15 @@ def shape_analysis(nodes: GraphNodes) -> GraphNodes:
             raise Exception(f"unsupported op in shape analysis {node.scope}")
 
     return nodes
+
+
+@DEBUG_DUMP_GRAPH
+def set_tensor_dtypes(nodes: GraphNodes):
+    # we set dtype only for tensors
+    for n in nodes.values():
+        if n.dtype is not None and type(n.dtype) is torch._C.TensorType:
+            dtype = n.dtype.scalarType()
+            n.dtype = getattr(torch, dtype.lower())
 
 
 #################################

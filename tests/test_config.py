@@ -6,7 +6,7 @@ from itertools import chain
 
 
 def get_config():
-    config = PipelineConfig(0, 200, -1, (torch.nn.Linear,)).add_input(
+    config = PipelineConfig(0, -1, (torch.nn.Linear,)).add_input(
         "input0", (1, 100)).add_output("output0", (1, 100)).add_output("output1", (1, 100)).add_output("output2", (1, 100))
     config.batch_dim = 0
     stage0 = config.add_stage(dummy.Stage0, torch.optim.Adam, {
@@ -32,7 +32,8 @@ def get_config():
 
 def test_serialize():
     config = get_config()
-    assert PipelineConfig.fromJson(config.toJson()).isValid()
+    config.toJson("exampleConfig.json")
+    assert PipelineConfig.fromJson("exampleConfig.json").isValid()
 
 
 def test_split():

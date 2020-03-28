@@ -1,5 +1,5 @@
 
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict, Tuple, OrderedDict
 import torch
 from torch import Tensor
 import torch.distributed as dist
@@ -11,39 +11,31 @@ __all__ = ["P2PConnection", "RequestsWrapper",
 
 
 class RoundRobinBufferGenerator():
-    def __init__(self, device: torch.device, batch_dim: int, batch_size: int, num_minibatches: int, input_shapes: List[List[int]], output_shapes: List[List[int]]):
+    def __init__(self, device: torch.device, batch_dim: int, batch_size: int, num_minibatches: int,
+                 inputs: OrderedDict[str, Tuple[List[int], bool, torch.dtype]], outputs: OrderedDict[str, Tuple[List[int], bool, torch.dtype]]):
         self.num_minibatches = num_minibatches
         self.batch_size = batch_size
         self.batch_dim = batch_dim
         self.device = device
+        self.input_cfg = inputs
+        self.grad_cfg = outputs
 
         sizes = self._buffer_cycle()
 
-        # we preallocate all input/gradient buffers ahead of time
-
         self.activation_input_buffers = []
-        self.input_shapes = []
+
         for size in sizes:
             buffers = []
-            shapes = []
-            for s in input_shapes:
-                shape = s[:batch_dim] + [size] + s[batch_dim + 1:]
-                buffers.append(torch.empty(shape, device=self.device))
-                shapes.append(shape)
-            self.input_shapes.append(shapes)
+            for scope, (shape, is_batched, dtype) in self.input_cfg.items():
+                if is_batched:
+                    shape = shape[:batch_dim] + [size] + shape[batch_dim + 1:]
+                buffers.append(torch.empty(shape,
+                                           device=self.device, dtype=dtype))
             self.activation_input_buffers.append(buffers)
 
         self.activation_input_buffers = cycle(self.activation_input_buffers)
 
         self.gradient_input_buffers = None
-        self.gradient_shapes = []
-        for size in sizes:
-            buffers = []
-            shapes = []
-            for s in output_shapes:
-                shape = s[:batch_dim] + [size] + s[batch_dim + 1:]
-                shapes.append(shape)
-            self.gradient_shapes.append(shapes)
 
     def allocate_input_buffers(self) -> List[Tensor]:
         return next(self.activation_input_buffers)
@@ -63,24 +55,24 @@ class RoundRobinBufferGenerator():
 
     def create_gradient_input_buffers(self):
         if self.gradient_input_buffers is None:
-            buffers = []
-            for minibatch_shapes in self.gradient_shapes:
-                buffers.append([torch.empty(s, device=self.device)
-                                for s in minibatch_shapes])
-            self.gradient_input_buffers = cycle(buffers)
+            self.gradient_input_buffers = []
+            for size in self._buffer_cycle():
+                buffers = []
+                for scope, (shape, is_batched, dtype) in self.grad_cfg.items():
+                    if is_batched:
+                        shape = shape[:self.batch_dim] + \
+                            [size] + shape[self.batch_dim + 1:]
+                    buffers.append(torch.empty(shape,
+                                               device=self.device, dtype=dtype))
+                self.gradient_input_buffers.append(buffers)
+
+            self.gradient_input_buffers = cycle(self.gradient_input_buffers)
 
     def purge_gradient_buffers(self):
         self.gradient_input_buffers = None
 
     def __repr__(self):
         return str(self)
-
-    def __str__(self):
-        s = [f"RoundRobinBufferGenerator for device {self.device}",
-             f"activation input shapes {self.input_shapes}",
-             f"gradient input shape {self.gradient_shapes}"]
-
-        return "\n".join(s)
 
 
 class P2PConnection():

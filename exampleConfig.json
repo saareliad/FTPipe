@@ -1,24 +1,47 @@
 {
   "batch_dim": 0,
-  "batch_size": 200,
   "depth": -1,
   "basic_blocks": ["torch.nn.modules.linear.Linear"],
-  "model_inputs": ["input0"],
-  "model_input_shapes": [[1, 100]],
-  "model_outputs": ["output0", "output1", "output2"],
-  "model_output_shapes": [
-    [1, 100],
-    [1, 100],
-    [1, 100]
-  ],
+  "model_inputs": {
+    "input0": {
+      "shape": [1, 100],
+      "dtype": "torch.float32",
+      "is_batched": true
+    }
+  },
+  "model_outputs": {
+    "output0": {
+      "shape": [1, 100],
+      "dtype": "torch.float32",
+      "is_batched": true
+    },
+    "output1": {
+      "shape": [1, 100],
+      "dtype": "torch.float32",
+      "is_batched": true
+    },
+    "output2": {
+      "shape": [1, 100],
+      "dtype": "torch.float32",
+      "is_batched": true
+    }
+  },
   "stages": {
     "0": {
-      "batch_dim": 0,
-      "batch_size": 200,
-      "inputs": ["input0"],
-      "outputs": ["output2"],
-      "input_shapes": [[1, 100]],
-      "output_shapes": [[1, 100]],
+      "inputs": {
+        "input0": {
+          "shape": [1, 100],
+          "dtype": "torch.float32",
+          "is_batched": true
+        }
+      },
+      "outputs": {
+        "output2": {
+          "shape": [1, 100],
+          "dtype": "torch.float32",
+          "is_batched": true
+        }
+      },
       "stage_cls": "models.normal.dummy.Stage0",
       "optimizer": {
         "type": "torch.optim.adam.Adam",
@@ -29,12 +52,20 @@
       "devices": ["cpu"]
     },
     "1": {
-      "batch_dim": 0,
-      "batch_size": 200,
-      "inputs": ["input0"],
-      "outputs": ["t0"],
-      "input_shapes": [[1, 100]],
-      "output_shapes": [[1, 100]],
+      "inputs": {
+        "input0": {
+          "shape": [1, 100],
+          "dtype": "torch.float32",
+          "is_batched": true
+        }
+      },
+      "outputs": {
+        "t0": {
+          "shape": [1, 100],
+          "dtype": "torch.float32",
+          "is_batched": true
+        }
+      },
       "stage_cls": "models.normal.dummy.Stage1",
       "optimizer": {
         "type": "torch.optim.adadelta.Adadelta",
@@ -43,12 +74,20 @@
       "devices": ["cpu", "cpu"]
     },
     "2": {
-      "batch_dim": 0,
-      "batch_size": 200,
-      "inputs": ["t0"],
-      "outputs": ["t1"],
-      "input_shapes": [[1, 100]],
-      "output_shapes": [[1, 100]],
+      "inputs": {
+        "t0": {
+          "shape": [1, 100],
+          "dtype": "torch.float32",
+          "is_batched": true
+        }
+      },
+      "outputs": {
+        "t1": {
+          "shape": [1, 100],
+          "dtype": "torch.float32",
+          "is_batched": true
+        }
+      },
       "stage_cls": "models.normal.dummy.Stage2",
       "optimizer": {
         "type": "torch.optim.adamax.Adamax",
@@ -57,15 +96,25 @@
       "devices": ["cpu", "cpu", "cpu", "cpu"]
     },
     "3": {
-      "batch_dim": 0,
-      "batch_size": 200,
-      "inputs": ["t1"],
-      "outputs": ["output0", "output1"],
-      "input_shapes": [[1, 100]],
-      "output_shapes": [
-        [1, 100],
-        [1, 100]
-      ],
+      "inputs": {
+        "t1": {
+          "shape": [1, 100],
+          "dtype": "torch.float32",
+          "is_batched": true
+        }
+      },
+      "outputs": {
+        "output0": {
+          "shape": [1, 100],
+          "dtype": "torch.float32",
+          "is_batched": true
+        },
+        "output1": {
+          "shape": [1, 100],
+          "dtype": "torch.float32",
+          "is_batched": true
+        }
+      },
       "stage_cls": "models.normal.dummy.Stage3",
       "optimizer": {
         "type": "torch.optim.adamw.AdamW",
