@@ -21,7 +21,6 @@ from typing import List, Tuple
 # get_separate_just_x_or_y_train_test_dl_from_args  (train, valid)
 # get_separate_just_x_or_y_test_dl_from_args: (just the test dataloader)
 
-
 # Fallback to this dataset dir of no other dir is given as argument to functions.
 DEFAULT_DATA_DIR = os.path.expanduser('~/.pytorch-datasets')
 IMAGENET_ROOT_DIR = "/home_local/saareliad/data/imagenet/"
@@ -381,11 +380,11 @@ def get_wikitext2_raw_train_valid_test_ds(
 
 
 def get_wikitext2_raw_train_test_ds(model_name_or_path,
-                                     tokenizer,
-                                     train_seq_len=512,
-                                     test_seq_len=512,
-                                     overwrite_cache=False,
-                                     DATA_DIR=DEFAULT_DATA_DIR):
+                                    tokenizer,
+                                    train_seq_len=512,
+                                    test_seq_len=512,
+                                    overwrite_cache=False,
+                                    DATA_DIR=DEFAULT_DATA_DIR):
     """ Returns train and test datasets """
 
     train_ds = get_wikitext2_raw_train_valid_test_ds(
@@ -401,6 +400,7 @@ def get_wikitext2_raw_train_test_ds(model_name_or_path,
         block_size=test_seq_len,
         overwrite_cache=overwrite_cache)
     return train_ds, test_ds
+
 
 def get_wikitext2_raw_train_valid_ds(model_name_or_path,
                                      tokenizer,
@@ -486,30 +486,46 @@ def lm_collate_factory(tokenizer):
     return lm_collate
 
 
-def get_lm_train_dl(ds_train, bs_train, tokenizer=None, collate_fn=None, shuffle=True, **kw):
+def get_lm_train_dl(ds_train,
+                    bs_train,
+                    tokenizer=None,
+                    collate_fn=None,
+                    shuffle=True,
+                    **kw):
     collate = collate_fn if collate_fn else lm_collate_factory(tokenizer)
     train_sampler = RandomSampler(ds_train)
     train_dl = DataLoader(ds_train,
                           shuffle=False,
                           sampler=train_sampler,
                           batch_size=bs_train,
-                          collate_fn=collate, **kw)
+                          collate_fn=collate,
+                          **kw)
     return train_dl
 
 
-def get_lm_eval_dl(ds_eval, bs_eval, tokenizer=None, shuffle=False, collate_fn=None, **kw):
+def get_lm_eval_dl(ds_eval,
+                   bs_eval,
+                   tokenizer=None,
+                   shuffle=False,
+                   collate_fn=None,
+                   **kw):
     collate = collate_fn if collate_fn else lm_collate_factory(tokenizer)
     eval_sampler = SequentialSampler(ds_eval)
     eval_dl = DataLoader(bs_eval,
                          sampler=eval_sampler,
                          batch_size=bs_eval,
                          shuffle=False,
-                         collate_fn=collate, **kw)
+                         collate_fn=collate,
+                         **kw)
     return eval_dl
 
 
-def get_lm_train_valid_dl(ds_train, ds_test, bs_train, bs_test,
-                          tokenizer=None, **kw):
+def get_lm_train_valid_dl(ds_train,
+                          ds_test,
+                          bs_train,
+                          bs_test,
+                          tokenizer=None,
+                          **kw):
     # HACK: tokenizer as kwarg.
     # HACK: parameters names are 'test' for backward compatability.
     if 'collate_fn' not in kw:
@@ -621,9 +637,9 @@ def args_extractor1(args):
 
 
 def simplified_get_train_valid_dl_from_args(args,
-                                           shuffle_train=True,
-                                           verbose=True,
-                                           **kw):
+                                            shuffle_train=True,
+                                            verbose=True,
+                                            **kw):
 
     DATA_DIR = getattr(args, "data_dir", DEFAULT_DATA_DIR)
     DATA_DIR = DATA_DIR if DATA_DIR else DEFAULT_DATA_DIR
@@ -750,6 +766,7 @@ def new_distributed_get_train_valid_dl_from_args(args, **kw):
 #############################################
 # TODO: for masked/normal LM.
 
+
 class DatasetFolderJustX(DatasetFolder):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
@@ -822,7 +839,6 @@ class ImageFolderJustX(DatasetFolderJustX):
         class_to_idx (dict): Dict with items (class_name, class_index).
         imgs (list): List of (image path, class_index) tuples
     """
-
     def __init__(self,
                  root,
                  transform=None,
@@ -864,7 +880,6 @@ class ImageFolderJustY(DatasetFolderJustY):
         class_to_idx (dict): Dict with items (class_name, class_index).
         imgs (list): List of (image path, class_index) tuples
     """
-
     def __init__(self,
                  root,
                  transform=None,
@@ -1103,12 +1118,9 @@ def get_cifar_10_just_x_or_y_train_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR):
         raise ValueError(f"'just' should be in x,y. Got {just} instead.")
 
 
-
 def get_wt2_just_x_or_y_train_valid_ds(just, DATA_DIR=DEFAULT_DATA_DIR, **kw):
     # we don't use the just. its the same for all.
     return get_wikitext2_raw_train_valid_ds(DATA_DIR=DATA_DIR, **kw)
-
-
 
 
 def get_wt2_just_x_or_y_train_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR, **kw):
@@ -1120,7 +1132,10 @@ def get_wt2_just_x_or_y_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR, **kw):
     return get_wikitext2_raw_test_ds(DATA_DIR=DATA_DIR, **kw)
 
 
-def get_separate_just_x_or_y_test_dl(dataset, bs_test, just, verbose=True,
+def get_separate_just_x_or_y_test_dl(dataset,
+                                     bs_test,
+                                     just,
+                                     verbose=True,
                                      DATA_DIR=DEFAULT_DATA_DIR,
                                      pin_memory=True,
                                      test_dataset_keywords=dict(),
@@ -1128,12 +1143,11 @@ def get_separate_just_x_or_y_test_dl(dataset, bs_test, just, verbose=True,
 
     experiment_manual_seed = torch.initial_seed()
 
-    DICT_DATASET_JUST_XY_FUNC = {
-        'wt2': get_wt2_just_x_or_y_test_ds
-    }
+    DICT_DATASET_JUST_XY_FUNC = {'wt2': get_wt2_just_x_or_y_test_ds}
 
-    ds_test = DICT_DATASET_JUST_XY_FUNC.get(dataset)(
-        just=just, DATA_DIR=DATA_DIR, **test_dataset_keywords)
+    ds_test = DICT_DATASET_JUST_XY_FUNC.get(dataset)(just=just,
+                                                     DATA_DIR=DATA_DIR,
+                                                     **test_dataset_keywords)
 
     test_sampler = MyNewDistributedSampler(experiment_manual_seed,
                                            ds_test,
@@ -1225,13 +1239,14 @@ def get_separate_just_x_or_y_train_test_dl_from_args(args, **kw):
     just = 'x' if args.stage == 0 else 'y'
 
     # num_replicas=None, rank=None
-    return get_separate_just_x_or_y_train_test_dl(args.dataset,
-                                                  args.bs_train,
-                                                  # TODO: change it to validation...
-                                                  args.bs_test,
-                                                  just,
-                                                  DATA_DIR=DATA_DIR,
-                                                  **kw)
+    return get_separate_just_x_or_y_train_test_dl(
+        args.dataset,
+        args.bs_train,
+        # TODO: change it to validation...
+        args.bs_test,
+        just,
+        DATA_DIR=DATA_DIR,
+        **kw)
 
 
 def get_separate_just_x_or_y_test_dl_from_args(args, **kw):
