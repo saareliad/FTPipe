@@ -159,7 +159,7 @@ def get_partitioning(cfg, model_instance=None):
 
 
 def get_partitioning_v3(cfg, my_rank, batch_size, model_instance=None
-                        ) -> Tuple[PipelineConfig, Dict, Module]:
+                        ) -> Tuple[PipelineConfig, Module]:
     GET_PARTITIONS_ON_CPU = True
 
     generated_file_name = CFG_TO_GENERATED_FILE_NAME[cfg]
@@ -187,7 +187,7 @@ def get_partitioning_v3(cfg, my_rank, batch_size, model_instance=None
     model = pipe_config.realize_stage_for_rank(layers, tensors, batch_size,
                                                my_rank)
 
-    return pipe_config, config, model
+    return pipe_config, model
 
 
 # if __name__ == "__main__":
