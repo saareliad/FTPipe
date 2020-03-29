@@ -12,21 +12,19 @@ def get_my_send_recv_ranks(config, stage, stage_to_rank_map=None):
         else:
             return [given_stage]
 
-    # TODO: We assume this is same order with Alon's code/config, after poped some stuff.
-    # Alon config is outside of the project, this is dangerous programing...
+    stages = config.stages
     receive_ranks = OrderedDict()
     send_ranks = OrderedDict()
 
-    for i in range(len(config)):
-        for j in range(i + 1, len(config)):
+    for i in range(len(stages)):
+        for j in range(i + 1, len(stages)):
             # Update only for this stage...
             if i != stage and j != stage:
                 continue
-
-            stage_i = config[i]
-            stage_j = config[j]
-            for tensor_name in stage_i['outputs']:
-                if tensor_name in stage_j['inputs']:
+            stage_i = stages[i]
+            stage_j = stages[j]
+            for tensor_name in stage_i.outputs:
+                if tensor_name in stage_j.inputs:
                     if stage == j:
                         receive_ranks[tensor_name] = ranks_in_stage(i)
                     else:
@@ -39,13 +37,14 @@ def tensor_tags_from_config(config,
                             num_chunks=1,
                             target_tensor_names=None,
                             GRAD_UGLY_SHAMEFUL_NAME="_grad"):
-    def config_to_tuples_array(config):
-        def config_to_tuples_generator(config):
-            """ allows iterating with the tuple: (stage_id, inputs, outputs) """
-            for i, v in config.items():
-                yield i, v['inputs'], v['outputs']
 
-        return np.array(list(config_to_tuples_generator(config)))
+    def config_to_tuples_array(config):
+        def config_to_tuples_generator(stages):
+            """ allows iterating with the tuple: (stage_id, inputs, outputs) """
+            for i, v in stages.items():
+                yield i, v.inputs, v.outputs
+
+        return np.array(list(config_to_tuples_generator(config.stages)))
 
     # Note: same tags for all proccess
 
@@ -95,45 +94,47 @@ class PartitioningConfigParser:
                  model_instance=None,
                  send_target_in_pipe=False):
 
-        pipe_config, config, model = get_partitioning_v3(
-            cfg, rank, bs_train, model_instance=model_instance)
+        pipe_config, model = get_partitioning_v3(cfg, rank,
+                                                 bs_train,
+                                                 model_instance=model_instance)
 
         self.model = model
-        self.num_stages = len(config['stages'])
+        self.num_stages = len(pipe_config.stages)
         self.stage = pipe_config.rank_to_stage_idx(rank)
 
         counter = count()
         stage_to_rank_map = {
-            i: [next(counter) for _ in stage['devices']]
-            for i, stage in config['stages'].items()
+            i: [next(counter) for _ in stage.devices]
+            for i, stage in pipe_config.stages.items()
         }
-        self.send_ranks, self.receive_ranks = get_my_send_recv_ranks(
-            config['stages'], self.stage, stage_to_rank_map=stage_to_rank_map)
+        self.send_ranks, self.receive_ranks = get_my_send_recv_ranks(pipe_config, self.stage,
+                                                                     stage_to_rank_map=stage_to_rank_map)
 
-        self.tensor_tags, self.TOTAL_TAGS = tensor_tags_from_config(
-            config['stages'])
+        tag_info = tensor_tags_from_config(pipe_config)
+        self.tensor_tags, self.TOTAL_TAGS = tag_info
 
         if send_target_in_pipe:
-            self.target_tensor_names = config['model_outputs']  # else None
-            self.ranks_in_previous_stage = stage_to_rank_map.get(
-                self.stage - 1) if self.stage > 0 else []
-            self.ranks_in_next_stage = stage_to_rank_map.get(
-                self.stage + 1) if self.stage < self.num_stages - 1 else []
+            self.target_tensor_names = pipe_config.model_outputs  # else None
+            if self.stage > 0:
+                self.ranks_in_previous_stage = stage_to_rank_map[self.stage - 1]
+            else:
+                self.ranks_in_previous_stage = []
+
+            if self.stage < self.num_stages - 1:
+                self.ranks_in_next_stage = stage_to_rank_map[self.stage + 1]
+            else:
+                self.ranks_in_next_stage = []
         else:
             self.target_tensor_names = None
             self.ranks_in_previous_stage = None
             self.ranks_in_next_stage = None
 
+        pipe_config.change_batch(bs_train,for_replicated=True)
         self.training_tensor_shapes = pipe_config.shapes()
         pipe_config.change_batch(bs_eval, for_replicated=True)
         self.eval_tensor_shapes = pipe_config.shapes()
 
-        # TODO: infer dtypes in partitioning.
-        self.training_tensor_dtypes = {
-            i: None
-            for i in self.training_tensor_shapes
-        }
-        self.eval_tensor_dtypes = {i: None for i in self.eval_tensor_shapes}
+        self.training_tensor_dtypes = self.eval_tensor_dtypes = pipe_config.all_dtypes()
 
     def comm_init_args(self):
         return (self.receive_ranks, self.send_ranks, self.tensor_tags,
