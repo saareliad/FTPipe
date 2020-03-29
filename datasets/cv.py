@@ -9,6 +9,10 @@ import os
 
 from .datasets import DEFAULT_DATA_DIR, DOWNLOAD, IMAGENET_ROOT_DIR
 
+# NOTE: CIFAR best practice:
+# https://github.com/facebookresearch/pycls/tree/master/configs/cifar
+# torch.backends.cudnn.benchmark = False
+
 ################
 # Transforms
 ################

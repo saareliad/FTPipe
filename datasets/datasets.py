@@ -1,8 +1,6 @@
 import os
-
 import torch
-
-from torch.utils.data import Dataset, DistributedSampler, RandomSampler, SequentialSampler, DataLoader
+from torch.utils.data import Dataset, DistributedSampler, DataLoader
 # import torch.distributed as dist
 
 # new_distributed_get_train_valid_dl_from_args  (train, valid)
@@ -15,19 +13,8 @@ DEFAULT_DATA_DIR = os.path.expanduser('~/.pytorch-datasets')
 IMAGENET_ROOT_DIR = "/home_local/saareliad/data/imagenet/"
 DOWNLOAD = False
 # WIKI2_DATA_DIR = DATA_DIR/wikitext-2-raw
-# torch.backends.cudnn.deterministic = True
-# torch.backends.cudnn.benchmark = False
-# CIFAR best practice:
-# https://github.com/facebookresearch/pycls/tree/master/configs/cifar
-# torch.backends.cudnn.benchmark = False
 
 AVAILABLE_DATASETS = {'cifar10', 'cifar100', 'imagenet', 'wt2'}
-
-############################
-# Forward decalted Datasets # FIXME
-############################
-
-from .lm import TextDataset
 
 ################
 # Transforms
@@ -124,8 +111,6 @@ def simplified_get_train_test_dl(dataset,
     return dl_train, dl_test
 
 
-
-
 ##########################################################
 # Distributed. (v2): Using a modified DistributedSampler
 ###########################################################
@@ -192,18 +177,18 @@ def new_distributed_simplified_get_train_test_dl(dataset,
     test_sampler = None  # FIXME:
 
     # Note: explicitly set shuffle to False, its handled by samplers.
-    dl_train = torch.utils.data.DataLoader(ds_train,
-                                           bs_train,
-                                           shuffle=False,
-                                           pin_memory=pin_memory,
-                                           sampler=train_sampler,
-                                           **kw)
-    dl_test = torch.utils.data.DataLoader(ds_test,
-                                          bs_test,
-                                          shuffle=False,
-                                          pin_memory=pin_memory,
-                                          sampler=test_sampler,
-                                          **kw)
+    dl_train = DataLoader(ds_train,
+                          bs_train,
+                          shuffle=False,
+                          pin_memory=pin_memory,
+                          sampler=train_sampler,
+                          **kw)
+    dl_test = DataLoader(ds_test,
+                         bs_test,
+                         shuffle=False,
+                         pin_memory=pin_memory,
+                         sampler=test_sampler,
+                         **kw)
 
     if verbose:
         print(f'Train: {len(dl_train) * bs_train} samples')
@@ -213,6 +198,7 @@ def new_distributed_simplified_get_train_test_dl(dataset,
 
 
 #############################################
+# Distributed. (v3)
 # get x separate from y, both with same seed
 #############################################
 from .cv import (get_cifar_10_just_x_or_y_train_test_ds,
@@ -251,14 +237,12 @@ def get_separate_just_x_or_y_test_dl(dataset,
                                            rank=0,
                                            shuffle=False)
 
-    # get_lm_eval_dl
-
-    dl_test = torch.utils.data.DataLoader(ds_test,
-                                          bs_test,
-                                          shuffle=False,
-                                          pin_memory=pin_memory,
-                                          sampler=test_sampler,
-                                          **kw)
+    dl_test = DataLoader(ds_test,
+                         bs_test,
+                         shuffle=False,
+                         pin_memory=pin_memory,
+                         sampler=test_sampler,
+                         **kw)
 
     if verbose:
         print(f'Test: {len(dl_test) * bs_test} samples')
@@ -305,127 +289,21 @@ def get_separate_just_x_or_y_train_test_dl(dataset,
                                            shuffle=False)
 
     # Note: explicitly set shuffle to False, its handled by samplers.
-    dl_train = torch.utils.data.DataLoader(ds_train,
-                                           bs_train,
-                                           shuffle=False,
-                                           pin_memory=pin_memory,
-                                           sampler=train_sampler,
-                                           **kw)
-    dl_test = torch.utils.data.DataLoader(ds_test,
-                                          bs_test,
-                                          shuffle=False,
-                                          pin_memory=pin_memory,
-                                          sampler=test_sampler,
-                                          **kw)
+    dl_train = DataLoader(ds_train,
+                          bs_train,
+                          shuffle=False,
+                          pin_memory=pin_memory,
+                          sampler=train_sampler,
+                          **kw)
+    dl_test = DataLoader(ds_test,
+                         bs_test,
+                         shuffle=False,
+                         pin_memory=pin_memory,
+                         sampler=test_sampler,
+                         **kw)
 
     if verbose:
         print(f'Train: {len(dl_train) * bs_train} samples')
         print(f'Test: {len(dl_test) * bs_test} samples')
 
     return dl_train, dl_test, [train_sampler, test_sampler]
-
-
-###################################
-# from args and key words.
-###################################
-
-def get_separate_just_x_or_y_train_test_dl_from_args(args, **kw):
-
-    DATA_DIR = getattr(args, "data_dir", DEFAULT_DATA_DIR)
-    DATA_DIR = DATA_DIR if DATA_DIR else DEFAULT_DATA_DIR
-
-    # Just:
-    # HACK: avoid asking "is last partition?"
-    just = 'x' if args.stage == 0 else 'y'
-
-    # num_replicas=None, rank=None
-    return get_separate_just_x_or_y_train_test_dl(
-        args.dataset,
-        args.bs_train,
-        # TODO: change it to validation...
-        args.bs_test,
-        just,
-        DATA_DIR=DATA_DIR,
-        **kw)
-
-
-def get_separate_just_x_or_y_test_dl_from_args(args, **kw):
-    """ get just the test dataset.
-    kw can have
-    test_dataset_keywords=dict()
-    to help with it
-    """
-    DATA_DIR = getattr(args, "data_dir", DEFAULT_DATA_DIR)
-    DATA_DIR = DATA_DIR if DATA_DIR else DEFAULT_DATA_DIR
-
-    # Just:
-    # HACK: avoid asking "is last partition?"
-    just = 'x' if args.stage == 0 else 'y'
-
-    # num_replicas=None, rank=None
-    return get_separate_just_x_or_y_test_dl(args.dataset,
-                                            args.bs_test,
-                                            just,
-                                            DATA_DIR=DATA_DIR,
-                                            **kw)
-
-
-
-
-def add_dataset_argument(parser, default='cifar10', required=False):
-    parser.add_argument('--dataset',
-                        default=default,
-                        choices=list(AVAILABLE_DATASETS),
-                        required=required)
-
-
-def args_extractor1(args):
-    """extracts:
-        args.dataset, args.bs_train, args.bs_test, args.data_dir
-    """
-    DATA_DIR = getattr(args, "data_dir", DEFAULT_DATA_DIR)
-    DATA_DIR = DATA_DIR if DATA_DIR else DEFAULT_DATA_DIR
-    return dict(DATA_DIR=DATA_DIR,
-                dataset=args.dataset,
-                bs_train=args.bs_train,
-                bs_test=args.bs_test)
-
-
-def simplified_get_train_valid_dl_from_args(args,
-                                            shuffle_train=True,
-                                            verbose=True,
-                                            **kw):
-
-    DATA_DIR = getattr(args, "data_dir", DEFAULT_DATA_DIR)
-    DATA_DIR = DATA_DIR if DATA_DIR else DEFAULT_DATA_DIR
-
-    return simplified_get_train_test_dl(args.dataset,
-                                        args.bs_train,
-                                        args.bs_test,
-                                        shuffle_train=shuffle_train,
-                                        verbose=verbose,
-                                        DATA_DIR=DATA_DIR,
-                                        **kw)
-
-
-def new_distributed_get_train_valid_dl_from_args(args, **kw):
-
-    DATA_DIR = getattr(args, "data_dir", DEFAULT_DATA_DIR)
-    DATA_DIR = DATA_DIR if DATA_DIR else DEFAULT_DATA_DIR
-
-    # HACK create collate if needed... FIXME TODO
-    # TODO: move this to the use code.
-    if 'dataset_keywords' in kw:
-        dataset_keywords = kw['dataset_keywords']
-        # FIXME: will not work for squad...
-        if 'tokenizer' in dataset_keywords:
-            tokenizer = dataset_keywords['tokenizer']
-            collate = lm_collate_factory(tokenizer)
-            kw['collate'] = collate
-
-    # num_replicas=None, rank=None
-    return new_distributed_simplified_get_train_test_dl(args.dataset,
-                                                        args.bs_train,
-                                                        args.bs_test,
-                                                        DATA_DIR=DATA_DIR,
-                                                        **kw)
