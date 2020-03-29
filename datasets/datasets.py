@@ -23,7 +23,7 @@ from .lm import (get_wt2_just_x_or_y_train_valid_ds,
 from .cv import get_cv_train_test_dl
 from .lm import get_lm_train_dl, get_lm_eval_dl, get_lm_train_valid_dl
 
-from .hardcoded_dirs import DEFAULT_DATA_DIR, IMAGENET_ROOT_DIR
+from .hardcoded_dirs import DEFAULT_DATA_DIR
 
 # new_distributed_get_train_valid_dl_from_args  (train, valid)
 # simplified_get_train_valid_dl_from_args  (train, valid)

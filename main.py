@@ -683,6 +683,8 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
 
 
 def get_dataloaders(args, explicit_separated_dataset=False, **kw):
+    # TODO: currently assuming that only 1 rank is x or y.
+    # will have to fix this for replicated.
     dl_kw = dict()
     if args.cpu:
         dl_kw['pin_memory'] = False
@@ -705,6 +707,33 @@ def get_dataloaders(args, explicit_separated_dataset=False, **kw):
                                 overwrite_cache=overwrite_cache)
         collate = lm_collate_factory(tokenizer)
         dl_kw['collate_fn'] = collate
+    if 'squad' in args.taks:
+
+        tokenizer = kw.pop('tokenizer')
+        # model_name_or_path = kw.pop('model_name_or_path')
+        overwrite_cache = getattr(args, 'overwrite_cache', False)
+        dataset_keywords = dict(
+            model_name_or_path=args.model_name_or_path,
+            tokenizer=tokenizer,
+            max_seq_length=args.max_seq_length,
+            doc_stride=args.doc_stride,
+            max_query_length=args.max_query_length,
+            threads=args.threads,
+            version_2_with_negative=args.task == 'squad2',
+            # NOTE: deleted
+            # train_seq_len=args.train_seq_len,
+            # test_seq_len=args.test_seq_len,
+            overwrite_cache=overwrite_cache)
+
+        # TODO
+        # just,
+        # DATA_DIR,
+        # save=False,  # according to Ranks
+        # TODO: according to datadir:
+        # train_file=args.train_file,
+        # predict_file=args.predict_file,
+
+
     else:
         dataset_keywords = {}
 

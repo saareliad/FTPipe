@@ -1,5 +1,5 @@
 # Based on hugginface transformers commit-id: 33ef7002e17fe42b276dc6d36c07a3c39b1f09ed
-
+import os
 from functools import partial
 from multiprocessing import Pool, cpu_count
 
@@ -9,10 +9,112 @@ import torch
 from torch.utils.data import TensorDataset
 
 from transformers.data.processors.squad import (
-    squad_convert_example_to_features_init, squad_convert_example_to_features)
+    SquadV2Processor, SquadV1Processor, squad_convert_example_to_features_init,
+    squad_convert_example_to_features)
+
+# TODO: get x or y datset.
+# just=just, DATA_DIR=DATA_DIR, **dataset_keywords
+
+
+def make_examples(DATA_DIR, train_file, predict_file, evaluate,
+                  version_2_with_negative):
+    """ In case we not loading them """
+    processor = SquadV2Processor(
+    ) if version_2_with_negative else SquadV1Processor()
+    if evaluate:
+        examples = processor.get_dev_examples(DATA_DIR, filename=predict_file)
+    else:
+        examples = processor.get_train_examples(DATA_DIR, filename=train_file)
+
+    return examples
+
+
+def load_and_cache_examples_just_x_or_y(
+        just,
+        model_name_or_path,
+        max_seq_length,
+        doc_stride,
+        max_query_length,
+        threads,
+        tokenizer,
+        DATA_DIR,
+        train_file,
+        predict_file,
+        evaluate=False,
+        output_examples=False,
+        overwrite_cache=True,
+        save=False,  # Ranks
+        version_2_with_negative=False,
+):
+
+    # Load data features from cache or dataset file
+    input_dir = DATA_DIR
+
+    # Doesnt this cause problem wehn switching from squad 1 to squad 2?
+    # NOTE: we do seperate cache for just x and just y...
+    cached_features_file = os.path.join(
+        input_dir,
+        "cached_just_{}_{}_{}_{}".format(
+            just,
+            "dev" if evaluate else "train",
+            list(filter(None, model_name_or_path.split("/"))).pop(),
+            str(max_seq_length),
+        ),
+    )
+
+    # Init features and dataset from cache if it exists
+    if os.path.exists(cached_features_file) and not overwrite_cache:
+        print("Loading features from cached file %s",
+              cached_features_file)  # was logger.info(...)
+        features_and_dataset = torch.load(cached_features_file)
+        features, dataset, examples = (
+            features_and_dataset["features"],
+            features_and_dataset["dataset"],
+            features_and_dataset["examples"],
+        )
+    else:
+        # generate them ourselves.
+        examples = make_examples(DATA_DIR, train_file, predict_file, evaluate,
+                                 version_2_with_negative)
+
+        # TODO: decide on the correct version to use.
+        # PROBLEM: this returns a dataloader, we want to delay that.
+
+        # TODO: model name or path to doall args
+        do_all_lw = dict(do_all_cls_index=False,
+                         do_all_p_mask=False,
+                         do_all_is_impossible=False)
+
+        features, dataset = squad_convert_examples_to_features_just_x_or_y(
+            just=just,
+            examples=examples,
+            tokenizer=tokenizer,
+            max_seq_length=max_seq_length,
+            doc_stride=doc_stride,
+            max_query_length=max_query_length,
+            is_training=not evaluate,
+            return_dataset="pt",
+            threads=threads,
+            **do_all_lw,
+        )
+
+    if save:
+        print("Saving features into cached file %s",
+              cached_features_file)  # was logger.info(...)
+        torch.save(
+            {
+                "features": features,
+                "dataset": dataset,
+                "examples": examples
+            }, cached_features_file)
+
+    if output_examples:
+        return dataset, examples, features
+    return dataset
 
 # TODO: can remove this to create lightweight Feature
 # start_position, end_position are 'y', but its just int.
+
 
 def squad_convert_examples_to_features_just_x_or_y(just,
                                                    examples,

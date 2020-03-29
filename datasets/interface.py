@@ -7,6 +7,9 @@ class ModelParallelDatasetInterface(abc.ABC):
     def get_dataloader_length(self):
         pass
 
+    def just_xy_ds(self):
+        pass
+
     def get_separate_just_x_or_y_train_test_dl(self, just):
         pass
 
