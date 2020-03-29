@@ -1,4 +1,3 @@
-import logging
 from functools import partial
 from multiprocessing import Pool, cpu_count
 
@@ -9,8 +8,6 @@ from torch.utils.data import TensorDataset
 
 from transformers.data.processors.squad import (
     squad_convert_example_to_features_init, squad_convert_example_to_features)
-
-logger = logging.getLogger(__name__)
 
 # TODO: can remove this to create lightweight Feature
 # start_position, end_position are 'y', but its just int.
