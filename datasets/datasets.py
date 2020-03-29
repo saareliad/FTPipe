@@ -1,36 +1,37 @@
 import os
 import torch
-from torch.utils.data import Dataset, DistributedSampler, DataLoader
-# import torch.distributed as dist
+from torch.utils.data import Dataset, DistributedSampler, DataLoader, Sampler
+from typing import List, Tuple
+
+# Datasets
+from .cv import get_cifar_100_train_test_ds, get_imagenet_train_test_ds, get_cifar_10_train_test_ds
+
+from .lm import (get_wikitext2_raw_train_valid_test_ds,
+                 get_wikitext2_raw_train_test_ds,
+                 get_wikitext2_raw_train_valid_ds, get_wikitext2_raw_test_ds)
+
+# Just x or y Datasets
+from .cv import (get_cifar_10_just_x_or_y_train_test_ds,
+                 get_imagenet_just_x_or_y_train_test_ds,
+                 get_cifar_100_just_x_or_y_train_test_ds)
+
+from .lm import (get_wt2_just_x_or_y_train_valid_ds,
+                 get_wt2_just_x_or_y_train_test_ds,
+                 get_wt2_just_x_or_y_test_ds)
+
+# Dataloaders
+from .cv import get_cv_train_test_dl
+from .lm import get_lm_train_dl, get_lm_eval_dl, get_lm_train_valid_dl
+
+from .hardcoded_dirs import DEFAULT_DATA_DIR, IMAGENET_ROOT_DIR
 
 # new_distributed_get_train_valid_dl_from_args  (train, valid)
 # simplified_get_train_valid_dl_from_args  (train, valid)
 # get_separate_just_x_or_y_train_test_dl_from_args  (train, valid)
 # get_separate_just_x_or_y_test_dl_from_args: (just the test dataloader)
 
-# Fallback to this dataset dir of no other dir is given as argument to functions.
-DEFAULT_DATA_DIR = os.path.expanduser('~/.pytorch-datasets')
-IMAGENET_ROOT_DIR = "/home_local/saareliad/data/imagenet/"
-DOWNLOAD = False
-# WIKI2_DATA_DIR = DATA_DIR/wikitext-2-raw
 
 AVAILABLE_DATASETS = {'cifar10', 'cifar100', 'imagenet', 'wt2'}
-
-################
-# Transforms
-################
-from .cv import cifar_transformations, cifar10_transformations, cifar100_transformations, imagenet_transformations
-from .lm import mask_tokens, mask_tokens_just_inputs, mask_tokens_just_labels
-
-################
-# Get DS
-################
-
-from .cv import get_cifar_100_train_test_ds, get_imagenet_train_test_ds, get_cifar_10_train_test_ds
-
-from .lm import (get_wikitext2_raw_train_valid_test_ds,
-                 get_wikitext2_raw_train_test_ds,
-                 get_wikitext2_raw_train_valid_ds, get_wikitext2_raw_test_ds)
 
 # NOTE: these are functions which returns train and test/validation datasets.
 DATASET_TO_DS_FN = {
@@ -40,14 +41,6 @@ DATASET_TO_DS_FN = {
     'wt2': get_wikitext2_raw_train_test_ds,  # TODO
     # 'wt2': get_wikitext2_raw_train_valid_ds,  # TODO
 }
-
-################
-# Get DL
-################
-
-from .cv import get_cv_train_test_dl
-
-from .lm import lm_collate_factory, get_lm_train_dl, get_lm_eval_dl, get_lm_train_valid_dl
 
 # NOTE: functions which returns 2 dataloaders, train and valid/test
 DATASET_TO_DL_FN = {
@@ -83,7 +76,7 @@ def get_train_test_dl(dataset, *args, **kw):
 ############################
 
 
-# TODO : this works just for CV
+# TODO : this works just for CV, for LM
 def simplified_get_train_test_dl(dataset,
                                  bs_train,
                                  bs_test,
@@ -201,16 +194,6 @@ def new_distributed_simplified_get_train_test_dl(dataset,
 # Distributed. (v3)
 # get x separate from y, both with same seed
 #############################################
-from .cv import (get_cifar_10_just_x_or_y_train_test_ds,
-                 get_imagenet_just_x_or_y_train_test_ds,
-                 get_cifar_100_just_x_or_y_train_test_ds,
-                 get_cifar_10_separate_train_test_ds,
-                 get_cifar_100_separate_train_test_ds, CIFAR100JustY,
-                 CIFAR10JustY, CIFAR10JustX, CIFAR100JustX, ImageFolderJustY,
-                 ImageFolderJustX, DatasetFolderJustY, DatasetFolderJustX)
-from .lm import (get_wt2_just_x_or_y_train_valid_ds,
-                 get_wt2_just_x_or_y_train_test_ds,
-                 get_wt2_just_x_or_y_test_ds)
 
 
 def get_separate_just_x_or_y_test_dl(dataset,
@@ -306,4 +289,4 @@ def get_separate_just_x_or_y_train_test_dl(dataset,
         print(f'Train: {len(dl_train) * bs_train} samples')
         print(f'Test: {len(dl_test) * bs_test} samples')
 
-    return dl_train, dl_test, [train_sampler, test_sampler]
+    return dl_train, dl_test, list(filter(None, [train_sampler, test_sampler]))

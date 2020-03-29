@@ -27,7 +27,7 @@ from datasets import (add_dataset_argument,
                       get_separate_just_x_or_y_train_test_dl_from_args,
                       get_separate_just_x_or_y_test_dl_from_args)
 
-from datasets import lm_collate_factory
+from datasets.lm import lm_collate_factory
 
 from misc.filelogger import FileLogger
 from pipeline import dp_sim

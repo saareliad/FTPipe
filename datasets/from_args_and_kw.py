@@ -7,12 +7,12 @@ from .datasets import (
     get_separate_just_x_or_y_test_dl,
 )
 
-from .lm import lm_collate_factory
-
 # new_distributed_get_train_valid_dl_from_args  (train, valid)
 # simplified_get_train_valid_dl_from_args  (train, valid)
 # get_separate_just_x_or_y_train_test_dl_from_args  (train, valid)
 # get_separate_just_x_or_y_test_dl_from_args: (just the test dataloader)
+
+# NOTE: **kw here are keywords for DataLoader.
 
 ###################################
 # From args and key words.
@@ -100,16 +100,6 @@ def new_distributed_get_train_valid_dl_from_args(args, **kw):
 
     DATA_DIR = getattr(args, "data_dir", DEFAULT_DATA_DIR)
     DATA_DIR = DATA_DIR if DATA_DIR else DEFAULT_DATA_DIR
-
-    # HACK create collate if needed... FIXME TODO
-    # TODO: move this to the use code.
-    if 'dataset_keywords' in kw:
-        dataset_keywords = kw['dataset_keywords']
-        # FIXME: will not work for squad...
-        if 'tokenizer' in dataset_keywords:
-            tokenizer = dataset_keywords['tokenizer']
-            collate = lm_collate_factory(tokenizer)
-            kw['collate'] = collate
 
     # num_replicas=None, rank=None
     return new_distributed_simplified_get_train_test_dl(args.dataset,

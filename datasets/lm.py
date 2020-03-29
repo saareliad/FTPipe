@@ -1,16 +1,13 @@
 
 import os
-
 import torch
-
 from torch.utils.data import Dataset, DistributedSampler, RandomSampler, SequentialSampler, DataLoader
 import pickle
 from transformers import PreTrainedTokenizer
-
 from torch.nn.utils.rnn import pad_sequence
 from typing import List, Tuple
+from .hardcoded_dirs import DEFAULT_DATA_DIR
 
-from .datasets import DEFAULT_DATA_DIR
 
 class TextDataset(Dataset):
     # Dataset adapted from huggingface LM example.

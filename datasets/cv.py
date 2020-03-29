@@ -7,7 +7,8 @@ from torchvision.datasets.folder import default_loader
 from PIL import Image
 import os
 
-from .datasets import DEFAULT_DATA_DIR, DOWNLOAD, IMAGENET_ROOT_DIR
+from .hardcoded_dirs import DEFAULT_DATA_DIR, IMAGENET_ROOT_DIR
+DOWNLOAD = False
 
 # NOTE: CIFAR best practice:
 # https://github.com/facebookresearch/pycls/tree/master/configs/cifar
