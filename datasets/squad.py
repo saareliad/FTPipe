@@ -1,3 +1,5 @@
+# Based on hugginface transformers commit-id: 33ef7002e17fe42b276dc6d36c07a3c39b1f09ed
+
 from functools import partial
 from multiprocessing import Pool, cpu_count
 
@@ -11,7 +13,6 @@ from transformers.data.processors.squad import (
 
 # TODO: can remove this to create lightweight Feature
 # start_position, end_position are 'y', but its just int.
-
 
 def squad_convert_examples_to_features_just_x_or_y(just,
                                                    examples,
