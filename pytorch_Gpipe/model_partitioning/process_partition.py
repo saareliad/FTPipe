@@ -2,7 +2,7 @@ from collections import defaultdict
 from typing import List, Dict, Set
 from copy import copy
 from ..model_profiling import Graph, NodeTypes, Node
-import networkx as nx
+
 
 __all__ = ["post_process_partition"]
 
@@ -79,37 +79,6 @@ def has_cycles(graph: Graph) -> bool:
                 return True
 
     return False
-
-
-def check_if_cycle_is_solvable(graph: Graph) -> bool:
-    """ 
-    check if a cycle detected is a solvable or not.
-    If on the same partition we have:
-    w->u and w->v but no "direct" connction u->v
-    that is, the cycle is
-    w->u->->x->v
-    s.t
-    w.part == u.part == v.part
-    and x.part < u.part
-
-    we can solve the cycle,
-    using several solutions.
-
-    For example:
-        we can split
-        w, u: new partition x.part - 1, (before x)
-        v: new partition after x.part
-
-        put both partitions on same GPU and share w.
-        (So with cuda aware there is no communication sending w to v)
-    """
-    ngx = graph.asNetworkx(directed=True)
-    has_true_cycle = True
-    try:
-        nx.find_cycle(ngx)
-    except nx.NetworkXNoCycle:
-        has_true_cycle = False
-    return has_true_cycle
 
 
 def break_partition_cycles(graph: Graph):
