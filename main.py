@@ -77,13 +77,13 @@ def parse_cli():
                         help="name of the file with partitioning definitions")
 
     # Training, which are also needed for communication
-    parser.add_argument('--bs-train',
+    parser.add_argument('--bs_train',
                         type=int,
                         help='Train batch size',
                         default=128,
                         metavar='B')
 
-    parser.add_argument('--bs-test',
+    parser.add_argument('--bs_test',
                         type=int,
                         help='Test batch size',
                         default=200,
@@ -158,9 +158,15 @@ def parse_cli():
                         help="Training epochs to run",
                         default=-1,
                         required=False)
+
     parser.add_argument("--steps",
                         type=int,
                         help="Training steps to run",
+                        default=-1,
+                        required=False)
+    parser.add_argument("--step_every",
+                        type=int,
+                        help="Aggregation steps",
                         default=-1,
                         required=False)
     # parser.add_argument('--linear_scaling', help="Use linear LR scaling rule", default=True)
@@ -172,9 +178,7 @@ def parse_cli():
         required=False,
         # action='store_true',
         default=False,
-        help=
-        'Set to debug mpi applications. Will wait for attachment on given ranks.'
-    )
+        help='Will wait for debugger attachment on given ranks.')
 
     parser.add_argument('--config',
                         help="Config File",
@@ -1058,7 +1062,8 @@ def main():
 
             has_weight_predictor = weight_predictor is not None
             if has_weight_predictor:
-                using_clone_weight_predictor = args.weight_prediction['args']['pred_mem'] == 'clone'
+                using_clone_weight_predictor = args.weight_prediction['args'][
+                    'pred_mem'] == 'clone'
             else:
                 using_clone_weight_predictor = False
 
@@ -1067,8 +1072,7 @@ def main():
                 step_every=args.step_every,
                 has_weight_predictor=has_weight_predictor,
                 true_weights_storage=true_weights_storage,
-                using_clone_weight_predictor=using_clone_weight_predictor
-                )
+                using_clone_weight_predictor=using_clone_weight_predictor)
             partition.set_weight_stasher(weight_stasher)
 
     if gap_aware_just_loss:
