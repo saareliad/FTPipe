@@ -570,6 +570,10 @@ class SinglePartitionManager:
 
             self.true_weights_storage.restore_if_needed()  # check=False
 
+            if hasattr(trainer, "grad_norm"):
+                # trainer: GradNormStepper
+                trainer.grad_norm()
+
             # Step
             trainer.last_partition_step_and_statistics(x,
                                                        *ctx,
