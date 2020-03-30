@@ -1,5 +1,6 @@
 from .cv import CVStats, NormCVstats, CVDistanceNorm, CVDistance
 from .lm import LMStats, NormLMstats, LMDistanceNorm, LMDistance
+from .squad import SquadStats, NormSquadstats, SquadDistanceNorm, SquadDistance
 
 from .interface import Stats
 
@@ -30,7 +31,18 @@ LM_STATS = {
     'lm_theta_dist_loss_per_batch': LMDistance,
 }
 
-AVAILBALE_STATS = {**CV_STATS, **LM_STATS}
+SQAUD_STATS = {
+    'squad': SquadStats,
+    'squad_loss_per_batch': NormSquadstats,
+    'squad_grad_norm': NormSquadstats,
+    'squad_grad_norm_loss_per_batch': NormSquadstats,
+    'squad_theta_dist_grad_norm': SquadDistanceNorm,
+    'squad_theta_dist_grad_norm_loss_per_batch': SquadDistanceNorm,
+    'squad_theta_dist': SquadDistance,
+    'squad_theta_dist_loss_per_batch': SquadDistance,
+}
+
+AVAILBALE_STATS = {**CV_STATS, **LM_STATS, **SQAUD_STATS}
 
 
 #  is_last_partition=True
