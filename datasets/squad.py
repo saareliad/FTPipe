@@ -16,6 +16,45 @@ from transformers.data.processors.squad import (
 # just=just, DATA_DIR=DATA_DIR, **dataset_keywords
 
 
+def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
+    train_ds = load_and_cache_examples_just_x_or_y(just=just,
+                                                   DATA_DIR=DATA_DIR,
+                                                   evaluate=False,
+                                                   output_examples=False,
+                                                   **kw)
+
+    dev_ds = None  # TODO:
+
+    return train_ds, dev_ds
+
+
+def get_squad_dir(DATA_DIR, version_2_with_negative: bool):
+    # See downaload_dataset.py script.
+    if version_2_with_negative:
+        res = os.path.join(DATA_DIR, "squad2")
+    else:
+        res = os.path.join(DATA_DIR, "squad1")
+    return res
+
+
+def get_train_file(squad_dir, version_2_with_negative):
+    # See downaload_dataset.py script.
+    if version_2_with_negative:
+        res = os.path.join(squad_dir, "train-v2.0.json")
+    else:
+        res = os.path.join(squad_dir, "train-v1.1.json")
+    return res
+
+
+def get_predict_file(squad_dir, version_2_with_negative):
+    # See downaload_dataset.py script.
+    if version_2_with_negative:
+        res = os.path.join(squad_dir, "dev-v2.0.json")
+    else:
+        res = os.path.join(squad_dir, "dev-v1.1.json")
+    return res
+
+
 def make_examples(DATA_DIR, train_file, predict_file, evaluate,
                   version_2_with_negative):
     """ In case we not loading them """
@@ -38,8 +77,6 @@ def load_and_cache_examples_just_x_or_y(
         threads,
         tokenizer,
         DATA_DIR,
-        train_file,
-        predict_file,
         evaluate=False,
         output_examples=False,
         overwrite_cache=True,
@@ -48,7 +85,10 @@ def load_and_cache_examples_just_x_or_y(
 ):
 
     # Load data features from cache or dataset file
-    input_dir = DATA_DIR
+    squad_dir = get_squad_dir(DATA_DIR, version_2_with_negative)
+    input_dir = squad_dir
+    train_file = get_train_file(squad_dir, version_2_with_negative)
+    predict_file = get_predict_file(squad_dir, version_2_with_negative)
 
     # Doesnt this cause problem wehn switching from squad 1 to squad 2?
     # NOTE: we do seperate cache for just x and just y...
@@ -98,19 +138,20 @@ def load_and_cache_examples_just_x_or_y(
             **do_all_lw,
         )
 
-    if save:
-        print("Saving features into cached file %s",
-              cached_features_file)  # was logger.info(...)
-        torch.save(
-            {
-                "features": features,
-                "dataset": dataset,
-                "examples": examples
-            }, cached_features_file)
+        if save:
+            print("Saving features into cached file %s",
+                  cached_features_file)  # was logger.info(...)
+            torch.save(
+                {
+                    "features": features,
+                    "dataset": dataset,
+                    "examples": examples
+                }, cached_features_file)
 
     if output_examples:
         return dataset, examples, features
     return dataset
+
 
 # TODO: can remove this to create lightweight Feature
 # start_position, end_position are 'y', but its just int.
@@ -170,9 +211,6 @@ def squad_convert_examples_to_features_just_x_or_y(just,
             (examples, etc)
     """
 
-    if not is_training:
-        raise NotImplementedError()
-
     # Defining helper methods
     features = []
     threads = min(threads, cpu_count())
@@ -228,6 +266,7 @@ def squad_convert_examples_to_features_just_x_or_y(just,
             dtype=torch.float) if do_all_is_impossible else None
 
         if not is_training:
+            raise NotImplementedError()
             # TODO:
             all_example_index = torch.arange(all_input_ids.size(0),
                                              dtype=torch.long)

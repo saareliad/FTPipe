@@ -1,19 +1,4 @@
-from .cfg_to_model import get_partitioning
-import importlib
-from transformers import (GPT2Config, GPT2Tokenizer)
-
-# FIXME: model with LM head is actually not good for pipeline,
-# as first partition does not care about lables.
-from .normal import GPT2LMHeadModel, GPT2Model
-
-MODEL_TYPES = {
-    'gpt2': (GPT2Config, GPT2Model, GPT2Tokenizer),
-    'gpt2_lm': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
-    'gpt2_lm_lowercase': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
-}
-
-# See https://huggingface.co/models
-# GPT2_NAMES_OR_PATHES = {'gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'}
+from .transformers_cfg import MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS, MODEL_TYPES
 
 
 def resize_token_embeddings(model, tokenizer):
@@ -31,9 +16,9 @@ def get_block_size(tokenizer, block_size=-1):
 
 
 def pretrained_model_config_and_tokenizer(
-        model_type: str = 'gpt2',
+        model_type: str,
+        model_name_or_path: str,
         config_name: str = "",
-        model_name_or_path: str = 'gpt2',
         tokenizer_name: str = "",
         do_lower_case: bool = True,
         cache_dir: str = "",
@@ -63,52 +48,10 @@ def pretrained_model_config_and_tokenizer(
     return model, tokenizer, config
 
 
-def gpt2_lowercase():
-    mycfg = dict(model_type='gpt2',
-                 model_name_or_path='gpt2',
-                 do_lower_case=True,
-                 output_past=False)
-    model, tokenizer, config = pretrained_model_config_and_tokenizer(**mycfg)
-    resize_token_embeddings(model, tokenizer)
-
-    return model, tokenizer, config
-
-
-def gpt2_lm_lowercase():
-    mycfg = dict(model_type='gpt2_lm',
-                 model_name_or_path='gpt2',
-                 do_lower_case=True,
-                 output_past=False)
-    model, tokenizer, config = pretrained_model_config_and_tokenizer(**mycfg)
-    resize_token_embeddings(model, tokenizer)
-
-    return model, tokenizer, config
-
-
-def gpt2_lowercase_partitioning():
-    # NOTE: this is for the old partitioning
-
-    model, tokenizer, config = gpt2_lowercase()
-    partitioning_cfg = get_partitioning('gpt2', model_instance=model)
-    # NOTE: can use tokenizer.max_len_single_sentence to get maximum allowed block size.
-    return partitioning_cfg, tokenizer, config
-
-
-PARTITIONING_AND_TOKENIZER_FUNCTIONS = {
-    'gpt2_lowercase': gpt2_lowercase_partitioning
-}
-
-
-def get_partitioning_tokenizer_and_config_by_name(name):
-    return PARTITIONING_AND_TOKENIZER_FUNCTIONS.get(name)()
-
-
-MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS = {
-    'gpt2': gpt2_lowercase,
-    'gpt2_lowercase': gpt2_lowercase,
-    'gpt2_lm_lowercase': gpt2_lm_lowercase,
-}
-
-
 def get_model_tokenizer_and_config_by_name(name):
-    return MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS.get(name)()
+    cfg = MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS.get(name)()
+
+    model, tokenizer, config = pretrained_model_config_and_tokenizer(**cfg)
+    resize_token_embeddings(model, tokenizer)
+
+    return model, tokenizer, config

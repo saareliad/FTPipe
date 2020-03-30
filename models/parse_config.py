@@ -1,4 +1,4 @@
-from .cfg_to_model import get_partitioning_v3
+from .cfg_to_model import get_partitioning
 
 from itertools import count
 from collections import OrderedDict
@@ -94,7 +94,7 @@ class PartitioningConfigParser:
                  model_instance=None,
                  send_target_in_pipe=False):
 
-        pipe_config, model = get_partitioning_v3(cfg, rank,
+        pipe_config, model = get_partitioning(cfg, rank,
                                                  bs_train,
                                                  model_instance=model_instance)
 

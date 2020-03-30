@@ -98,7 +98,6 @@ class SinglePartitionManager:
             self.partition.to(device)
 
         self.comm_handler = comm_handler
-        comm_handler.init_process_group()
         self.is_replicated = False
         self.sync_buffers = sync_buffers
 

@@ -271,14 +271,14 @@ def get_wikitext2_raw_train_test_ds(model_name_or_path,
     """ Returns train and test datasets """
 
     train_ds = get_wikitext2_raw_train_valid_test_ds(
-        model_name_or_path,
-        tokenizer,
+        model_name_or_path=model_name_or_path,
+        tokenizer=tokenizer,
         split='train',
         block_size=train_seq_len,
         overwrite_cache=overwrite_cache)
     test_ds = get_wikitext2_raw_train_valid_test_ds(
-        model_name_or_path,
-        tokenizer,
+        model_name_or_path=model_name_or_path,
+        tokenizer=tokenizer,
         split='test',
         block_size=test_seq_len,
         overwrite_cache=overwrite_cache)
@@ -293,14 +293,14 @@ def get_wikitext2_raw_train_valid_ds(model_name_or_path,
                                      DATA_DIR=DEFAULT_DATA_DIR):
 
     train_ds = get_wikitext2_raw_train_valid_test_ds(
-        model_name_or_path,
-        tokenizer,
+        model_name_or_path=model_name_or_path,
+        tokenizer=tokenizer,
         split='train',
         block_size=train_seq_len,
         overwrite_cache=overwrite_cache)
     valid_ds = get_wikitext2_raw_train_valid_test_ds(
-        model_name_or_path,
-        tokenizer,
+        model_name_or_path=model_name_or_path,
+        tokenizer=tokenizer,
         split='valid',
         block_size=valid_seq_len,
         overwrite_cache=overwrite_cache)
@@ -313,8 +313,8 @@ def get_wikitext2_raw_test_ds(model_name_or_path,
                               overwrite_cache=False,
                               DATA_DIR=DEFAULT_DATA_DIR):
     test_ds = get_wikitext2_raw_train_valid_test_ds(
-        model_name_or_path,
-        tokenizer,
+        model_name_or_path=model_name_or_path,
+        tokenizer=tokenizer,
         split='test',
         block_size=test_seq_len,
         overwrite_cache=overwrite_cache)

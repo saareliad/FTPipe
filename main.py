@@ -39,7 +39,6 @@ import random
 import math
 
 from models import parse_config
-from models import parse_old_config
 
 # TODO: support multiple servers,
 # TODO heterogenous servers
@@ -707,8 +706,7 @@ def get_dataloaders(args, explicit_separated_dataset=False, **kw):
                                 overwrite_cache=overwrite_cache)
         collate = lm_collate_factory(tokenizer)
         dl_kw['collate_fn'] = collate
-    if 'squad' in args.taks:
-
+    elif 'squad' in args.task:
         tokenizer = kw.pop('tokenizer')
         # model_name_or_path = kw.pop('model_name_or_path')
         overwrite_cache = getattr(args, 'overwrite_cache', False)
@@ -720,20 +718,11 @@ def get_dataloaders(args, explicit_separated_dataset=False, **kw):
             max_query_length=args.max_query_length,
             threads=args.threads,
             version_2_with_negative=args.task == 'squad2',
+            save=True,  # TODO: according to Ranks for stage replication
             # NOTE: deleted
             # train_seq_len=args.train_seq_len,
             # test_seq_len=args.test_seq_len,
             overwrite_cache=overwrite_cache)
-
-        # TODO
-        # just,
-        # DATA_DIR,
-        # save=False,  # according to Ranks
-        # TODO: according to datadir:
-        # train_file=args.train_file,
-        # predict_file=args.predict_file,
-
-
     else:
         dataset_keywords = {}
 
@@ -846,60 +835,37 @@ def main():
         torch.cuda.set_device(device)
 
     CONFIG_VERSION = models.infer_partitioning_config_version(args.model)
+    if CONFIG_VERSION != 1:
+        raise NotImplementedError(f"CONFIG_VERSION: {CONFIG_VERSION}")
     print(f"Partitioning Config version is {CONFIG_VERSION}. Parsing...")
+
+    # Parse partitioning config and requires args
     COMM_VERSION = 1
 
-    if CONFIG_VERSION == 0:
-        configs, dataset_keywords = parse_old_config.OldPartitioningConfigParser.get_configs_and_dataset_keywords(
-            args.model, args.task)
+    model_instance = None
+    dataset_keywords = {}
+    if args.model in models.transformers_utils.MODEL_TYPES.keys():
+        model_instance, tokenizer, config = models.transformers_utils.get_model_tokenizer_and_config_by_name(
+            args.model)
+        dataset_keywords['tokenizer'] = tokenizer
 
-        train_dl, test_dl, samplers = get_dataloaders(args, **dataset_keywords)
+    parsed_config = parse_config.PartitioningConfigParser(
+        args.model,
+        args.rank,
+        args.bs_train,
+        args.bs_test,  # NOTE: changed name
+        model_instance=model_instance,
+        send_target_in_pipe=not ("_sep" in args.task))
 
-        parsed_old_config = parse_old_config.OldPartitioningConfigParser(
-            configs,
-            args.rank,
-            args.bs_train,
-            args.bs_test,
-            args.task,  # NOTE: added...
-            train_dl,  # NOTE: added...
-            args.num_chunks,  # NOTE: added...
-        )
-        del configs
-        comm_init_args = parsed_old_config.get_comm_init_args()
-        training_tensor_dtypes = parsed_old_config.training_tensor_dtypes
-        eval_tensor_shapes = parsed_old_config.eval_tensor_shapes
-        training_tensor_shapes = parsed_old_config.training_tensor_shapes
-        args.num_stages = parsed_old_config.num_stages
-        args.stage = parsed_old_config.stage
-        model = parsed_old_config.model
-    else:
-        model_instance = None
-        dataset_keywords = {}
+    comm_init_args = parsed_config.comm_init_args()
 
-        if args.model in models.transformers_utils.MODEL_TYPES.keys():
-            model_instance, tokenizer, config = models.transformers_utils.get_model_tokenizer_and_config_by_name(
-                args.model)
-            dataset_keywords['tokenizer'] = tokenizer
-            # dataset_keywords['model_name_or_path'] = args.model_name_or_path
+    training_tensor_dtypes = parsed_config.training_tensor_dtypes
+    eval_tensor_shapes = parsed_config.eval_tensor_shapes
+    training_tensor_shapes = parsed_config.training_tensor_shapes
 
-        parsed_config = parse_config.PartitioningConfigParser(
-            args.model,
-            args.rank,
-            args.bs_train,
-            args.bs_test,  # NOTE: changed name
-            model_instance=model_instance,
-            send_target_in_pipe=not ("_sep" in args.task))
-
-        train_dl, test_dl, samplers = get_dataloaders(args, **dataset_keywords)
-        comm_init_args = parsed_config.comm_init_args()
-
-        training_tensor_dtypes = parsed_config.training_tensor_dtypes
-        eval_tensor_shapes = parsed_config.eval_tensor_shapes
-        training_tensor_shapes = parsed_config.training_tensor_shapes
-
-        args.num_stages = parsed_config.num_stages
-        args.stage = parsed_config.stage
-        model = parsed_config.model
+    args.num_stages = parsed_config.num_stages
+    args.stage = parsed_config.stage
+    model = parsed_config.model
 
     is_first_partition = args.stage == 0
     is_last_partition = args.stage == args.num_stages - 1
@@ -913,21 +879,37 @@ def main():
                         world_size=args.world_size,
                         name_prefix=args.out_filename)  # FIXME: real name
 
-    # TODO: instead of loading dl on every device,
-    # when not needed - can just send the length as a message
-    train_dl_len, test_dl_len = len(train_dl), len(test_dl)
     # Try getting separate X,Y dataloaders
     if is_first_partition or is_last_partition:
-        if "_sep" in args.task:
-            train_dl, test_dl, samplers = get_dataloaders(
-                args, explicit_separated_dataset=True, **dataset_keywords)
+        explicit_separated_dataset = "_sep" in args.task
+
+        train_dl, test_dl, samplers = get_dataloaders(
+            args,
+            explicit_separated_dataset=explicit_separated_dataset,
+            **dataset_keywords)
     else:
         train_dl, test_dl, samplers = None, None, []
     del dataset_keywords
 
-    # TODO: I have completely different plan for using it like micro batches
-    #  - that is, cut the batch size automatically.
-    args.step_every = getattr(args, "step_every", 1)
+    if COMM_VERSION == 1:
+        comm_handler = create_comm_handler(args, comm_init_args, device)
+        comm_handler.init_process_group()
+    else:
+        # comm_handler =
+        raise NotImplementedError("In progress")
+
+    # instead of loading dl on every device,
+    # when not needed - can just send the length as a message
+    if args.rank == 0:
+        assert is_first_partition
+        train_dl_len, test_dl_len = len(train_dl), len(test_dl)
+        data = torch.tensor([train_dl_len, test_dl_len], dtype=torch.long)
+    else:
+        data = torch.zeros(2, dtype=torch.long)
+
+    torch.distributed.broadcast(data, 0)
+    train_dl_len = data[0].item()
+    test_dl_len = data[1].item()
 
     # Get expected training steps:
 
@@ -945,14 +927,6 @@ def main():
     partition_using_gap_aware = hack_trainer_type_to_gap_aware(args)
     if partition_using_gap_aware:
         logger.info(f"Stage {args.stage} will use Gap Aware")
-
-    if COMM_VERSION == 1:
-        comm_handler = create_comm_handler(args, comm_init_args, device)
-    else:
-
-        # comm_handler =
-
-        raise NotImplementedError("In progress")
 
     trainer_cls = AVAILABLE_TRAINERS.get(args.trainer['type'])
     task_cls = AVAILABLE_TASKS.get(args.task)

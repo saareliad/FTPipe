@@ -19,6 +19,9 @@ from .lm import (get_wt2_just_x_or_y_train_valid_ds,
                  get_wt2_just_x_or_y_train_test_ds,
                  get_wt2_just_x_or_y_test_ds)
 
+# TODO: train and dev, currently dev is None.
+from .squad import get_just_x_or_y_train_dev_dataset
+
 # Dataloaders
 from .cv import get_cv_train_test_dl
 from .lm import get_lm_train_dl, get_lm_eval_dl, get_lm_train_valid_dl
@@ -30,8 +33,7 @@ from .hardcoded_dirs import DEFAULT_DATA_DIR
 # get_separate_just_x_or_y_train_test_dl_from_args  (train, valid)
 # get_separate_just_x_or_y_test_dl_from_args: (just the test dataloader)
 
-
-AVAILABLE_DATASETS = {'cifar10', 'cifar100', 'imagenet', 'wt2'}
+AVAILABLE_DATASETS = {'cifar10', 'cifar100', 'imagenet', 'wt2', 'squad1', 'squad2'}
 
 # NOTE: these are functions which returns train and test/validation datasets.
 DATASET_TO_DS_FN = {
@@ -250,7 +252,9 @@ def get_separate_just_x_or_y_train_test_dl(dataset,
         'cifar10': get_cifar_10_just_x_or_y_train_test_ds,
         'cifar100': get_cifar_100_just_x_or_y_train_test_ds,
         'imagenet': get_imagenet_just_x_or_y_train_test_ds,
-        'wt2': get_wt2_just_x_or_y_train_test_ds
+        'wt2': get_wt2_just_x_or_y_train_test_ds,
+        'squad1': get_just_x_or_y_train_dev_dataset,
+        'squad2': get_just_x_or_y_train_dev_dataset,
         # 'wt2': get_wt2_just_x_or_y_train_valid_ds
     }
 
@@ -265,11 +269,10 @@ def get_separate_just_x_or_y_train_test_dl(dataset,
                                             num_replicas=1,
                                             rank=0,
                                             shuffle=shuffle_train)
-    test_sampler = MyNewDistributedSampler(experiment_manual_seed,
-                                           ds_test,
-                                           num_replicas=1,
-                                           rank=0,
-                                           shuffle=False)
+
+    test_sampler = MyNewDistributedSampler(
+        experiment_manual_seed, ds_test, num_replicas=1, rank=0,
+        shuffle=False) if ds_test is not None else None
 
     # Note: explicitly set shuffle to False, its handled by samplers.
     dl_train = DataLoader(ds_train,
@@ -283,10 +286,12 @@ def get_separate_just_x_or_y_train_test_dl(dataset,
                          shuffle=False,
                          pin_memory=pin_memory,
                          sampler=test_sampler,
-                         **kw)
+                         **kw) if ds_test is not None else None
 
     if verbose:
         print(f'Train: {len(dl_train) * bs_train} samples')
-        print(f'Test: {len(dl_test) * bs_test} samples')
+        print(
+            f'Test: {len(dl_test) * bs_test  if dl_test is not None else 0} samples'
+        )
 
     return dl_train, dl_test, list(filter(None, [train_sampler, test_sampler]))
