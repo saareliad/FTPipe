@@ -166,7 +166,7 @@ def parse_cli():
     parser.add_argument("--step_every",
                         type=int,
                         help="Aggregation steps",
-                        default=-1,
+                        default=1,
                         required=False)
     # parser.add_argument('--linear_scaling', help="Use linear LR scaling rule", default=True)
 
