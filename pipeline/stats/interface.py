@@ -1,6 +1,7 @@
 import abc
 from typing import Dict
 from types import SimpleNamespace
+from .utils import fit_res_to_dict
 
 # TODO: support for every X batches
 
@@ -16,6 +17,7 @@ class Stats(abc.ABC):
         assert not (self.fit_res is None)
         self.stats_config = dict()
         self.is_last_partition = is_last_partition
+        self.pipeline_per_stage_statistics = []
 
     def train(self):
         self.training = True
@@ -123,6 +125,14 @@ class Stats(abc.ABC):
 
         self.update_fit_res_after_epoch_all()
 
-    @abc.abstractmethod
-    def get_stats(self, *args) -> Dict:
-        pass
+    def register_pipeline_per_stage_statistic(self, name):
+        self.pipeline_per_stage_statistics.append(name)
+
+    def get_stats(self, stage_id) -> Dict:
+        fit_res = fit_res_to_dict(self.fit_res)
+        for name in reversed(self.pipeline_per_stage_statistics):
+            new_name = f"p{stage_id}_{name}"
+            old_name = name
+            fit_res[new_name] = fit_res.pop(old_name)
+        return fit_res
+

@@ -1,5 +1,5 @@
 from .interface import Stats
-from .utils import fit_res_to_dict, AverageMeter, AccuracyMeter
+from .utils import AverageMeter, AccuracyMeter
 
 
 class CVStats(Stats):
@@ -25,9 +25,6 @@ class CVStats(Stats):
             test=True)
 
         self.record_loss_per_batch = record_loss_per_batch
-
-    def get_stats(self, *args):
-        return fit_res_to_dict(self.fit_res)
 
     def get_epoch_info_str(self, is_train):
         if is_train:
@@ -55,14 +52,7 @@ class NormCVstats(CVStats):
             train=True,
             test=False)
 
-    def get_stats(self, stage_id=None):
-        fit_res = super().get_stats()
-        if not (stage_id is None):
-            new_name = f"p{stage_id}_grad_norm"
-            old_name = 'grad_norm'
-            fit_res[new_name] = fit_res.pop(old_name)
-        return fit_res
-
+        self.register_pipeline_per_stage_statistic("grad_norm")
 
 class CVDistanceNorm(NormCVstats):
     # FIXME: This whole chain of classes has HORRIBLE design. just implement it simple.
@@ -75,14 +65,7 @@ class CVDistanceNorm(NormCVstats):
                            per_epoch=True,
                            train=True,
                            test=False)
-
-    def get_stats(self, stage_id):
-        fit_res = super().get_stats(stage_id)
-        new_name = f"p{stage_id}_gap"
-        old_name = 'gap'
-        fit_res[new_name] = fit_res.pop(old_name)
-        return fit_res
-
+        self.register_pipeline_per_stage_statistic("gap")
 
 # Code copy from ^
 class CVDistance(CVStats):
@@ -96,10 +79,4 @@ class CVDistance(CVStats):
                            per_epoch=not self.record_loss_per_batch,
                            train=True,
                            test=False)
-
-    def get_stats(self, stage_id):
-        fit_res = super().get_stats(stage_id)
-        new_name = f"p{stage_id}_gap"
-        old_name = 'gap'
-        fit_res[new_name] = fit_res.pop(old_name)
-        return fit_res
+        self.register_pipeline_per_stage_statistic("gap")

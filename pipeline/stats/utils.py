@@ -43,4 +43,3 @@ class AccuracyMeter(AverageMeter):
 
     def get_avg(self):
         return (self.sum / self.count) * 100
-    

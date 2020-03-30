@@ -1,6 +1,5 @@
 from .interface import Stats
-import math
-from .utils import fit_res_to_dict, AverageMeter
+from .utils import AverageMeter
 
 
 class LMStats(Stats):
@@ -26,9 +25,6 @@ class LMStats(Stats):
             test=True)
 
         self.record_loss_per_batch = record_loss_per_batch
-
-    def get_stats(self, *args):
-        return fit_res_to_dict(self.fit_res)
 
     def get_epoch_info_str(self, is_train):
         # FIXME: in per-batch-loss it returns value for the last batch instead of for epoch!
@@ -56,14 +52,7 @@ class NormLMstats(LMStats):
             per_epoch=not self.record_loss_per_batch,  # FIXME
             train=True,
             test=False)
-
-    def get_stats(self, stage_id=None):
-        fit_res = super().get_stats()
-        if not (stage_id is None):
-            new_name = f"p{stage_id}_grad_norm"
-            old_name = 'grad_norm'
-            fit_res[new_name] = fit_res.pop(old_name)
-        return fit_res
+        self.register_pipeline_per_stage_statistic("grad_norm")
 
 
 class LMDistanceNorm(NormLMstats):
@@ -77,13 +66,7 @@ class LMDistanceNorm(NormLMstats):
                            per_epoch=not self.record_loss_per_batch,
                            train=True,
                            test=False)
-
-    def get_stats(self, stage_id):
-        fit_res = super().get_stats(stage_id)
-        new_name = f"p{stage_id}_gap"
-        old_name = 'gap'
-        fit_res[new_name] = fit_res.pop(old_name)
-        return fit_res
+        self.register_pipeline_per_stage_statistic("gap")
 
 
 class LMDistance(LMStats):
@@ -99,10 +82,4 @@ class LMDistance(LMStats):
             per_epoch=not self.record_loss_per_batch,  # FIXME
             train=True,
             test=False)
-
-    def get_stats(self, stage_id):
-        fit_res = super().get_stats(stage_id)
-        new_name = f"p{stage_id}_gap"
-        old_name = 'gap'
-        fit_res[new_name] = fit_res.pop(old_name)
-        return fit_res
+        self.register_pipeline_per_stage_statistic("gap")
