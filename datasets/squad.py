@@ -12,19 +12,32 @@ from transformers.data.processors.squad import (
     SquadV2Processor, SquadV1Processor, squad_convert_example_to_features_init,
     squad_convert_example_to_features)
 
-# TODO: get x or y datset.
-# just=just, DATA_DIR=DATA_DIR, **dataset_keywords
+# NOTE: this import is in order to evluate squad with pipeline
+from transformers.data.metrics.squad_metrics import (
+    compute_predictions_log_probs,
+    compute_predictions_logits,
+    squad_evaluate,
+)
 
 
 def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
+    """ get x or y datset. """
+    # NOTE: called with just=just, DATA_DIR=DATA_DIR, **dataset_keywords
     train_ds = load_and_cache_examples_just_x_or_y(just=just,
                                                    DATA_DIR=DATA_DIR,
                                                    evaluate=False,
                                                    output_examples=False,
                                                    **kw)
 
-    dev_ds = None  # TODO:
-
+    dev_ds, examples, features = load_and_cache_examples_just_x_or_y(
+        just=just,
+        DATA_DIR=DATA_DIR,
+        evaluate=True,
+        output_examples=True,
+        **kw)
+    # TODO: find a way to also return (examples, features)
+    # withut breaking the code. they will be needed for evaluation
+    # see: evaluate(...)
     return train_ds, dev_ds
 
 
@@ -266,14 +279,42 @@ def squad_convert_examples_to_features_just_x_or_y(just,
             dtype=torch.float) if do_all_is_impossible else None
 
         if not is_training:
-            raise NotImplementedError()
-            # TODO:
-            all_example_index = torch.arange(all_input_ids.size(0),
-                                             dtype=torch.long)
-            dataset = TensorDataset(*filter(None, [
-                all_input_ids, all_attention_masks, all_token_type_ids,
-                all_example_index, all_cls_index, all_p_mask
-            ]))
+            if just == 'x':
+                # We load just the model inputs
+                # TODO: also adds lang for XLM and etc..
+                dataset = TensorDataset(*filter(
+                    None,
+                    [
+                        all_input_ids,
+                        all_attention_masks,
+                        all_token_type_ids,
+                        # all_example_index,
+                        all_cls_index,
+                        all_p_mask
+                    ]))
+            elif just == 'y':
+                #  we load just example indices.
+                # Then during eval:
+                #   (1) we accumulate all results in the last partition
+                #   (2) afterwards:
+                #       we do the full eval with compute_predictions_logits
+                # TODO: use transformers.data.processors.squad.compute_predictions_logits after eval epoch
+                # and output_examples=True in last partition
+                # see:  squad_convert_examples_to_features_just_x_or_y...
+                all_example_index = torch.arange(all_input_ids.size(0),
+                                                 dtype=torch.long)
+
+                dataset = TensorDataset(all_example_index)
+                # TODO: solve the fact that we use jit therefore the model may be differnt in train and eval..
+
+                #
+                # dataset = TensorDataset(*filter(None, [
+                #     all_input_ids, all_attention_masks, all_token_type_ids,
+                #     all_example_index, all_cls_index, all_p_mask
+                # ]))
+            else:
+                raise ValueError(f"just should be x or y, got {just}")
+
         else:
             if just == 'x':
                 dataset = TensorDataset(*filter(
@@ -305,3 +346,79 @@ def squad_convert_examples_to_features_just_x_or_y(just,
         return features, dataset
 
     return features
+
+
+#########################################
+# Script to evaluate squad with pipeline
+#########################################
+def evaluate(
+        examples,
+        features,
+        all_results,
+        args,
+        tokenizer,
+        config=None,  # TODO: its transformers.config...
+        prefix=""):
+    """ Called after we have all results
+        TODO: replace args?
+    """
+
+    # dataset, examples, features = load_and_cache_examples(args, tokenizer, evaluate=True, output_examples=True)
+
+    if not os.path.exists(args.output_dir):  # and args.local_rank in [-1, 0]:
+        os.makedirs(args.output_dir)
+
+    # Compute predictions
+    output_prediction_file = os.path.join(args.output_dir,
+                                          "predictions_{}.json".format(prefix))
+    output_nbest_file = os.path.join(
+        args.output_dir, "nbest_predictions_{}.json".format(prefix))
+
+    if args.version_2_with_negative:
+        output_null_log_odds_file = os.path.join(
+            args.output_dir, "null_odds_{}.json".format(prefix))
+    else:
+        output_null_log_odds_file = None
+
+    # XLNet and XLM use a more complex post-processing procedure
+    if args.model_type in ["xlnet", "xlm"]:
+        if config is None:
+            raise ValueError("need transformer.config to infer few args...")
+        start_n_top = config.start_n_top
+        end_n_top = config.end_n_top
+
+        predictions = compute_predictions_log_probs(
+            examples,
+            features,
+            all_results,
+            args.n_best_size,
+            args.max_answer_length,
+            output_prediction_file,
+            output_nbest_file,
+            output_null_log_odds_file,
+            start_n_top,
+            end_n_top,
+            args.version_2_with_negative,
+            tokenizer,
+            args.verbose_logging,
+        )
+    else:
+        predictions = compute_predictions_logits(
+            examples,
+            features,
+            all_results,
+            args.n_best_size,
+            args.max_answer_length,
+            args.do_lower_case,
+            output_prediction_file,
+            output_nbest_file,
+            output_null_log_odds_file,
+            args.verbose_logging,
+            args.version_2_with_negative,
+            args.null_score_diff_threshold,
+            tokenizer,
+        )
+
+    # Compute the F1 and exact scores.
+    results = squad_evaluate(examples, predictions)
+    return results

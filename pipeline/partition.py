@@ -249,7 +249,11 @@ class LastPartition(Partition):
 
 
 class LastPartitionWithLabelInput(LastPartition):
-    """A assuming that given x is tuple in which last idx is the label. We don't store the label """
+    """A assuming that given x is tuple in which last idx is the label.
+        We don't store the label, because we don't need gradient on it.
+        
+        In use for our partitoned transformers with LMhead.
+    """
     # _REQ_GRAD = True
     # _HAS_DUMMY_FORWARD = False
     def forward(self, x, micro_batch_idx):

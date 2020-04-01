@@ -1,11 +1,11 @@
 import torch
-from typing import Tuple
-from transformers import PreTrainedTokenizer
+# from typing import Tuple
 
 from .interface import DLTask
 import types
 
 
+# TODO: support different behavior for train and eval
 # NOTE: Not much change from CV task, outputing the batch
 class SquadTask(DLTask):
     def __init__(self, device, is_last_partition, is_first_partition):
@@ -24,9 +24,11 @@ class SquadTask(DLTask):
             # Fist partition
             # NOTE: in masked LM we also mask...
             def unpack_cls(self, x):
+                assert isinstance(x, tuple) or isinstance(
+                    x, list)  # TODO remvove after first use..
                 with torch.no_grad():
-                    x = x.to(device, non_blocking=True)
-                return (x, )
+                    x = tuple(t.to(device, non_blocking=True) for t in x)
+                return x
         else:
             # Mid partition
             def unpack_cls(self, x):
@@ -45,5 +47,19 @@ class SquadTask(DLTask):
 
     def preload_last_partition(self, dlitr, device):
         # TODO: support different behavior for train and eval
+
+        # Train:
+        # all_start_positions
+        # all_end_positions
+
+        # Eval:
+        # all_example_index
+        # FIXME: this is not part of the model input, unlike for train...
+        # TODO: check TensorDataset Return type...
         y = next(dlitr)
-        return (y.to(device, non_blocking=True), )
+        if isinstance(y, tuple) or isinstance(y, list):
+            # Train
+            return tuple(z.to(device, non_blocking=True) for z in y)
+        else:
+            # Eval
+            return (y.to(device, non_blocking=True), )

@@ -24,7 +24,6 @@ class AnyTrainer(abc.ABC):
 
 
 class SupervisedLossIncludedTrainer(AnyTrainer):
-    # @abc.abstractmethod
     def backprop_last_partition(self, loss, *args, **kw):
         if self.step_every > 1:
             loss /= self.step_every

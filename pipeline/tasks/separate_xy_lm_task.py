@@ -19,6 +19,7 @@ class LMTask(DLTask):
                 assert isinstance(x, tuple) or isinstance(x, list)
                 # HACK: Also returning batch size
                 # The batch size will be used as ctx, to calc test statistics.
+                # FIXME: can be problematic with the is_batched option, when sending tied weights.
                 return (x, x[0].size(0))
         elif is_first_partition:
             # Fist partition
