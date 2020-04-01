@@ -3,9 +3,11 @@ import torch
 import os
 import logging
 import importlib
+import sys
 from torch.utils.data import DataLoader, RandomSampler
 
 from models.normal import BertForQuestionAnswering
+from models.normal.NLP_models.modeling_bert import SQUAD_loss
 from partition_vision_models import ParsePartitioningOpts, ParseMetisOpts
 from heuristics import node_weight_function, edge_weight_function
 from misc import run_analysis
@@ -471,8 +473,8 @@ def main():
         # # NOTE: we explicitly add to match to the signatute
         # "position_ids": None,
         # "head_mask": None,
-        "start_positions": batch[3],
-        "end_positions": batch[4],
+        # "start_positions": batch[3],
+        # "end_positions": batch[4],
     }
 
     signature_order = [
@@ -481,8 +483,8 @@ def main():
         "token_type_ids",
         # "position_ids",
         # "head_mask",
-        "start_positions",
-        "end_positions",
+        # "start_positions",
+        # "end_positions",
     ]
 
     if args.model_type in ["xlm", "roberta", "distilbert", "camembert"]:
@@ -513,6 +515,8 @@ def main():
     n_partitions = args.n_partitions
     batch_dim = 0
     print("-I- partitioning...")
+    logits=model(*sample)
+    loss = SQUAD_loss(logits,batch[3],batch[4])
     graph = pipe_model(model,
                        batch_dim,
                        sample,
