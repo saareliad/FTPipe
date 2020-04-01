@@ -7,7 +7,7 @@ from ..model_profiling import Graph, NodeTypes, Node
 __all__ = ["post_process_partition"]
 
 
-def post_process_partition(graph: Graph) -> Graph:
+def post_process_partition(graph: Graph, verbose_on_error=True) -> Graph:
     '''
     process the partition and optimize it
     called as part of partition_graph method
@@ -16,6 +16,8 @@ def post_process_partition(graph: Graph) -> Graph:
     ----------
     graph:
         the Graph object that was partitioned
+    verbose_on_error:
+        print extra info when cycle can't be solved
     '''
 
     cannonize_partition_indices(graph)
@@ -30,9 +32,18 @@ def post_process_partition(graph: Graph) -> Graph:
     # this is a sanity check
     if has_cycles(graph):
         graph.save_as_pdf(f"{graph.model_name}_after_fix",
-                          ".", show_profiles=True)
+                        ".", show_profiles=True)
+
+        if verbose_on_error:
+            problems, info = get_problematic_partitions(graph)
+            print("-V- printing problematic partitions")
+            for p, i in zip(problems, info):
+                print(p)
+                print(i)
+
         error = "error cycle detected mutual dependecy between partitions"
         raise AssertionError(error)
+
 
     return graph
 
@@ -71,6 +82,16 @@ def _topological_sort(out_edges: Dict[int, Set[int]], v: int, visited: Dict[int,
 
     stack.insert(0, v)
 
+def get_problematic_partitions(graph):
+    """ For debug when cycle are detected """
+    problems = []
+    info = []
+    for u in graph.nodes:
+        for v in u.out_nodes:
+            if v.part < u.part:
+                problems.append([v.part, u.part])
+                info.append([v, u])
+    return problems, info
 
 def has_cycles(graph: Graph) -> bool:
     for u in graph.nodes:

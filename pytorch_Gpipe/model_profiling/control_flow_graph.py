@@ -323,7 +323,16 @@ class Graph():
             4: 'orange',
             5: 'brown',
             6: 'purple',
-            7: 'pink'
+            7: 'pink',
+            8: 'cyan',
+            9: 'gold',
+            10: 'darkolivegreen',
+            11: 'seagreen',
+            12: 'thistle',
+            13: 'plum',
+            14: 'deeppink',
+            15: 'lightyellow',
+            16: 'tan'
         }
 
         def edge_label(sizes):
