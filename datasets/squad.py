@@ -70,7 +70,7 @@ def make_examples(DATA_DIR, train_file, predict_file, evaluate,
 
 def load_and_cache_examples_just_x_or_y(
         just,
-        model_name_or_path,
+        model_name_or_path,  # NOTE: this is just for cache file name
         max_seq_length,
         doc_stride,
         max_query_length,
