@@ -515,8 +515,6 @@ def main():
     n_partitions = args.n_partitions
     batch_dim = 0
     print("-I- partitioning...")
-    logits=model(*sample)
-    loss = SQUAD_loss(logits,batch[3],batch[4])
     graph = pipe_model(model,
                        batch_dim,
                        sample,
