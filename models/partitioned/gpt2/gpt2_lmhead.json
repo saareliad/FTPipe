@@ -54,7 +54,7 @@
           "is_batched": false
         }
       },
-      "stage_cls": "'models.partitioned.gpt2.gpt2_lmhead.Partition0",
+      "stage_cls": "models.partitioned.gpt2.gpt2_lmhead.Partition0",
       "devices": ["cpu"]
     },
     "1": {
@@ -82,7 +82,7 @@
           "is_batched": true
         }
       },
-      "stage_cls": "'models.partitioned.gpt2.gpt2_lmhead.Partition1",
+      "stage_cls": "models.partitioned.gpt2.gpt2_lmhead.Partition1",
       "devices": ["cpu"]
     },
     "2": {
@@ -110,7 +110,7 @@
           "is_batched": true
         }
       },
-      "stage_cls": "'models.partitioned.gpt2.gpt2_lmhead.Partition2",
+      "stage_cls": "models.partitioned.gpt2.gpt2_lmhead.Partition2",
       "devices": ["cpu"]
     },
     "3": {
@@ -133,7 +133,7 @@
           "is_batched": true
         }
       },
-      "stage_cls": "'models.partitioned.gpt2.gpt2_lmhead.Partition3",
+      "stage_cls": "models.partitioned.gpt2.gpt2_lmhead.Partition3",
       "devices": ["cpu"]
     },
     "4": {
@@ -161,7 +161,7 @@
           "is_batched": false
         }
       },
-      "stage_cls": "'models.partitioned.gpt2.gpt2_lmhead.Partition4",
+      "stage_cls": "models.partitioned.gpt2.gpt2_lmhead.Partition4",
       "devices": ["cpu"]
     }
   }
