@@ -33,6 +33,7 @@ from torch.utils.data import DataLoader, Dataset, RandomSampler
 import warnings
 import sys
 from partition_vision_models import ParseMetisOpts
+from heuristics import edge_weight_function, node_weight_function
 from transformers import (
     BertConfig,
     BertForMaskedLM,
@@ -58,9 +59,9 @@ from models.normal import StatelessGPT2LMHeadModel  # , StatelessGPT2Model
 
 from pytorch_Gpipe import pipe_model
 from misc import run_analysis  # , run_partitions
-from pytorch_Gpipe.model_profiling import Node, NodeTypes
-from pytorch_Gpipe.utils import _extract_volume_from_sizes, layerDict, tensorDict
+from pytorch_Gpipe.utils import layerDict, tensorDict
 from pytorch_Gpipe import PipelineConfig
+
 
 MODEL_CLASSES_LM_HEAD = {
     'gpt2': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
@@ -170,43 +171,6 @@ def mask_tokens(inputs, tokenizer, args):
 
     # The rest of the time (10% of the time) we keep the masked input tokens unchanged
     return inputs, labels
-
-
-MULT_FACTOR = 10000
-
-
-def node_weight_function(node: Node):
-    # TODO: factory with recomputation.
-    if node.type is NodeTypes.LAYER:
-        return int(MULT_FACTOR *
-                   (node.weight.backward_time + node.weight.forward_time)
-                   )  # FIXME: + node.weight.forward_time to stay
-    if node.type is NodeTypes.CONSTANT:
-        return 0
-    if node.type is NodeTypes.OP:  # FIXME:
-        return 0
-    return 0
-
-
-def edge_weight_function(bw_GBps):
-    def f(u: Node, v: Node):
-        if u.type is NodeTypes.CONSTANT or (u.valueType() in [int, None]
-                                            or u.shape == (torch.Size([]), )):
-            # no constant or scalars on boundries
-            return 1000 * MULT_FACTOR
-
-        if u.valueType() in [list, tuple]:
-            # no nested iterables on boundries
-            return 1000 * MULT_FACTOR
-
-        # TODO data type not included shouldn't really matter
-        MB = 1e6
-        volume = _extract_volume_from_sizes(u.shape) / MB
-        # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
-        w = max(1, int(MULT_FACTOR * (volume / bw_GBps)))
-        return w
-
-    return f
 
 
 def partition_model(args,
