@@ -212,7 +212,7 @@ def partition_model(args,
                        depth=args.depth,
                        n_iter=args.n_iter,
                        nparts=args.n_partitions,
-                       node_weight_function=node_weight_function,
+                       node_weight_function=node_weight_function(),
                        edge_weight_function=edge_weight_function(
                            args.bandwidth_gps),
                        use_layers_only_graph=args.partition_layer_graph,
@@ -508,4 +508,12 @@ def main():
 # python partition_gpt2_models.py --train_data_file=$TRAIN_FILE --no_analysis
 # add --dot to get serialized & pdf.
 if __name__ == "__main__":
+    # For debugging inside docker.
+    # import ptvsd
+    # port = 1234
+    # address = ('0.0.0.0', port)
+    # print(f"-I- waiting for attachment on {address}")
+    # ptvsd.enable_attach(address=address)
+    # ptvsd.wait_for_attach()
+
     main()

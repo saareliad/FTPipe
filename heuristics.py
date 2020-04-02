@@ -2,23 +2,26 @@ import torch
 from pytorch_Gpipe.utils import _extract_volume_from_sizes
 from pytorch_Gpipe.model_profiling import Node, NodeTypes
 
-
 __all__ = ["node_weight_function", "edge_weight_function"]
 
 MULT_FACTOR = 10000
 
 
-def node_weight_function(node: Node):
-    # TODO: factory with recomputation.
-    if node.type is NodeTypes.LAYER:
-        return int(MULT_FACTOR *
-                   (node.weight.backward_time + node.weight.forward_time)
-                   )  # FIXME: + node.weight.forward_time to stay
-    if node.type is NodeTypes.CONSTANT:
+def node_weight_function(bwd_to_fwd_ratio=2):
+    def f(node: Node):
+        # TODO: factory with recomputation.
+        if node.type is NodeTypes.LAYER:
+            return int(MULT_FACTOR *
+                       ((bwd_to_fwd_ratio * node.weight.backward_time +
+                         node.weight.forward_time) / bwd_to_fwd_ratio +
+                        1))  # FIXME: + node.weight.forward_time to stay
+        if node.type is NodeTypes.CONSTANT:
+            return 0
+        if node.type is NodeTypes.OP:  # FIXME:
+            return 0
         return 0
-    if node.type is NodeTypes.OP:  # FIXME:
-        return 0
-    return 0
+
+    return f
 
 
 def edge_weight_function(bw_GBps):

@@ -525,7 +525,7 @@ def main():
                        output_file=args.output_file,
                        generate_model_parallel=args.generate_model_parallel,
                        use_layers_only_graph=args.partition_layer_graph,
-                       node_weight_function=node_weight_function,
+                       node_weight_function=node_weight_function(),
                        edge_weight_function=edge_weight_function(bw),
                        n_iter=n_iter,
                        recomputation=recomputation,
