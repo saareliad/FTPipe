@@ -852,7 +852,7 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
         hidden_states = transformer_outputs[0]
         # hidden_states should be torch.Size([1, 1024, 768]) after reshape
         # hidden_states=hidden_states.view(-1,self.n_positions,self.n_embed)
-        lm_logits = self.stateless_lm_head(self.w_wte, hidden_states)
+        lm_logits = self.stateless_lm_head(hidden_states, self.w_wte)
         outputs = (lm_logits,) + transformer_outputs[1:]
         if labels is not None:
             # Shift so that tokens < n predict n
@@ -986,7 +986,7 @@ class GPT2DoubleHeadsModel(GPT2PreTrainedModel):
 
         hidden_states = transformer_outputs[0]
 
-        lm_logits = self.stateless_lm_head(self.w_wte, hidden_states)
+        lm_logits = self.stateless_lm_head(hidden_states, self.w_wte)
         mc_logits = self.multiple_choice_head(
             hidden_states, mc_token_ids).squeeze(-1)
 

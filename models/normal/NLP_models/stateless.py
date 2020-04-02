@@ -64,7 +64,9 @@ class StatelessLinear(nn.Module):
         self.weight = other.weight
         self.bias = other.bias
 
-    def forward(self, weight, input):
+    def forward(self, input, weight):
+        # Reversed to solve weird bug
+        # print("weight,shape:", weight.shape)
         return F.linear(input, weight, self.bias)
 
     def extra_repr(self):
