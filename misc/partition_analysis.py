@@ -195,7 +195,7 @@ def run_analysis(sample,
 
         print(s)
 
-    return expected_speedup  # real_f_balance, real_b_balance
+    return expected_speedup,s  # real_f_balance, real_b_balance
 
 
 #################################
@@ -221,6 +221,7 @@ def profile_execution(model_inputs,
 
     communication_volume = {}
     communication_stats = {}
+    is_parameter = set()
     if not isinstance(model_inputs, tuple):
         model_inputs = (model_inputs, )
 
@@ -245,16 +246,18 @@ def profile_execution(model_inputs,
 
             if all(tensor in activations
                    for tensor in partition_config[idx]['inputs']):
-                inputs = [
-                    activations[tensor]
-                    for tensor in partition_config[idx]['inputs']
-                ]
+                inputs = []
+                for tensor in partition_config[idx]['inputs']:
+                    t = activations[tensor]
+                    #shared weights support
+                    if tensor in is_parameter:
+                        t.requires_grad_()
+                    inputs.append(t)
 
                 # input statistics
                 in_size_mb = sum([(t.nelement() * t.element_size())
                                   for t in inputs]) / 1e6
                 recv_time = in_size_mb / bw_GBps
-
                 # time measurement
                 if torch.cuda.is_available():
                     f_time, b_time, outputs = cuda_time(
@@ -272,6 +275,10 @@ def profile_execution(model_inputs,
                 send_time = 0
                 for o, t in zip(partition_config[idx]['outputs'], outputs):
                     # save activation on CPU in order to save GPU memory
+                    if isinstance(t, torch.nn.Parameter):
+                        # shared weights support
+                        is_parameter.add(o)
+
                     activations[o] = t.detach().cpu()
                     t_mb = (t.nelement() * t.element_size()) / 1e6
                     t_send = t_mb / bw_GBps
