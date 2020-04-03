@@ -9,7 +9,7 @@ from collections import OrderedDict
 from itertools import chain
 from typing import List, Tuple, Dict, Iterator
 from collections import deque
-from .utils import format_shape
+from .utils import format_shape_or_dtype
 tab = '    '
 dtab = tab + tab
 
@@ -64,10 +64,10 @@ def generate_forward_method(
                         verbose=verbose)
     lines.append(body)
 
-    input_shapes = [format_shape(n.shape)[0] for n in part_inputs]
-    output_shapes = [format_shape(n.shape)[0] for n in outputs]
-    input_dtypes = [n.dtype for n in part_inputs]
-    output_dtypes = [n.dtype for n in outputs]
+    input_shapes = [format_shape_or_dtype(n.shape)[0] for n in part_inputs]
+    output_shapes = [format_shape_or_dtype(n.shape)[0] for n in outputs]
+    input_dtypes = [format_shape_or_dtype(n.dtype)[0] for n in part_inputs]
+    output_dtypes = [format_shape_or_dtype(n.dtype)[0] for n in outputs]
     io = {"inputs": list(input_scopes),
           "outputs": list(out_scopes),
           "input_shapes": input_shapes,

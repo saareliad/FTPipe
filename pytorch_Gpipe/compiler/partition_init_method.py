@@ -69,7 +69,7 @@ def generate__init__BuffParamStatements(buffers: List[str], parameters: List[str
     lines.extend([f"\n{dtab}# initializing partition parameters"])
     for idx, p_name in enumerate(parameters):
         lines.extend([f"# {p_name}",
-                      f"self.p_{idx} = tensors['{p_name}']"])
+                      f"self.register_parameter('p_{idx}', tensors['{p_name}'])"])
         tensor_ids[p_name] = f'self.p_{idx}'
 
     return f'\n{dtab}'.join(lines) + '\n', tensor_ids

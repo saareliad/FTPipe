@@ -14,7 +14,7 @@ from collections import OrderedDict
 import inspect
 import os
 import pathlib
-from .utils import format_shape
+from .utils import format_shape_or_dtype
 tab = '    '
 dtab = tab + tab
 
@@ -265,23 +265,23 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
                       ])
 
     input_ids = [f"'input{idx}'" for idx in range(graph.num_inputs)]
-    input_shapes = [format_shape(n.shape)[0] for n in graph.inputs]
-    input_dtypes = [n.dtype for n in graph.inputs]
+    input_shapes = [format_shape_or_dtype(n.shape)[0] for n in graph.inputs]
+    input_dtypes = [format_shape_or_dtype(n.dtype)[0] for n in graph.inputs]
 
-    output_shapes = [format_shape(n.shape)[0] for n in graph.outputs]
+    output_shapes = [format_shape_or_dtype(n.shape)[0] for n in graph.outputs]
     output_ids = graph.output_scopes
-    output_dtypes = [n.dtype for n in graph.outputs]
+    output_dtypes = [format_shape_or_dtype(n.dtype)[0] for n in graph.outputs]
 
     model_inputs = dict()
     for i, s, d in zip(input_ids, input_shapes, input_dtypes):
         model_inputs[i] = {"shape": s,
-                           "dtype": f"'{d}'",
+                           "dtype":f"'{d}'",
                            "is_batched": is_batched(s)}
 
     model_outputs = dict()
     for o, s, d in zip(output_ids, output_shapes, output_dtypes):
         model_outputs[o] = {"shape": s,
-                            "dtype": f"'{d}'",
+                            "dtype":f"'{d}'",
                             "is_batched": is_batched(s)}
 
     model_inputs = f',\n{dtab}{tab}'.join([f"{k}: {format_dict(v)}"
