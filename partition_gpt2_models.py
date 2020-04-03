@@ -32,7 +32,8 @@ import torch
 from torch.utils.data import DataLoader, Dataset, RandomSampler
 import warnings
 import sys
-from partition_vision_models import ParseMetisOpts
+from partition_scripts_utils import ParseMetisOpts, ParsePartitioningOpts, record_cmdline
+from heuristics import edge_weight_function, node_weight_function
 from transformers import (
     BertConfig,
     BertForMaskedLM,
@@ -58,9 +59,9 @@ from models.normal import StatelessGPT2LMHeadModel  # , StatelessGPT2Model
 
 from pytorch_Gpipe import pipe_model
 from misc import run_analysis  # , run_partitions
-from pytorch_Gpipe.model_profiling import Node, NodeTypes
-from pytorch_Gpipe.utils import _extract_volume_from_sizes, layerDict, tensorDict
+from pytorch_Gpipe.utils import layerDict, tensorDict
 from pytorch_Gpipe import PipelineConfig
+
 
 MODEL_CLASSES_LM_HEAD = {
     'gpt2': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
@@ -172,43 +173,6 @@ def mask_tokens(inputs, tokenizer, args):
     return inputs, labels
 
 
-MULT_FACTOR = 10000
-
-
-def node_weight_function(node: Node):
-    # TODO: factory with recomputation.
-    if node.type is NodeTypes.LAYER:
-        return int(MULT_FACTOR *
-                   (node.weight.backward_time + node.weight.forward_time)
-                   )  # FIXME: + node.weight.forward_time to stay
-    if node.type is NodeTypes.CONSTANT:
-        return 0
-    if node.type is NodeTypes.OP:  # FIXME:
-        return 0
-    return 0
-
-
-def edge_weight_function(bw_GBps):
-    def f(u: Node, v: Node):
-        if u.type is NodeTypes.CONSTANT or (u.valueType() in [int, None]
-                                            or u.shape == (torch.Size([]), )):
-            # no constant or scalars on boundries
-            return 1000 * MULT_FACTOR
-
-        if u.valueType() in [list, tuple]:
-            # no nested iterables on boundries
-            return 1000 * MULT_FACTOR
-
-        # TODO data type not included shouldn't really matter
-        MB = 1e6
-        volume = _extract_volume_from_sizes(u.shape) / MB
-        # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
-        w = max(1, int(MULT_FACTOR * (volume / bw_GBps)))
-        return w
-
-    return f
-
-
 def partition_model(args,
                     train_dataset,
                     model,
@@ -248,7 +212,7 @@ def partition_model(args,
                        depth=args.depth,
                        n_iter=args.n_iter,
                        nparts=args.n_partitions,
-                       node_weight_function=node_weight_function,
+                       node_weight_function=node_weight_function(),
                        edge_weight_function=edge_weight_function(
                            args.bandwidth_gps),
                        use_layers_only_graph=args.partition_layer_graph,
@@ -261,6 +225,7 @@ def partition_model(args,
         graph.save_as_pdf(args.output_file, ".")
         graph.serialize(args.output_file)
 
+    record_cmdline(args.output_file)
     module_path = args.output_file.replace("/", ".")
     generated = importlib.import_module(module_path)
 
@@ -306,10 +271,11 @@ def partition_model(args,
     # # model outputs are always tuple in transformers (see doc)
     # loss = outputs[0]
 
-
-def main():
+def parse_cli():
+    # TODO: use default partitioning args like other partitioning scripts
+    # And add extra args spesific to this script as needed.
     parser = argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     # parameter required by the repo
     tr_params = parser.add_argument_group("Transformers parameters")
@@ -438,7 +404,7 @@ def main():
                         default=False,
                         help="disable partition analysis")
     parser.add_argument("--depth",
-                        default=100,
+                        default=10000,
                         type=int,
                         help="the depth in which we will partition the model")
     parser.add_argument(
@@ -468,14 +434,22 @@ def main():
     ParseMetisOpts.add_metis_arguments(parser)
 
     args = parser.parse_args()
-
-    METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
-
+    
     if args.auto_file_name:
         args.output_file = f"{args.model_type}_p{args.n_partitions}"
 
     if args.output_file.endswith(".py"):
         args.output_file = args.output_file[:-3]
+
+
+    return args
+
+
+def main():
+
+    args = parse_cli()
+    METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
+
 
     if args.model_type in ["bert", "roberta", "distilbert", "camembert"
                            ] and not args.mlm:
@@ -544,4 +518,12 @@ def main():
 # python partition_gpt2_models.py --train_data_file=$TRAIN_FILE --no_analysis
 # add --dot to get serialized & pdf.
 if __name__ == "__main__":
+    # For debugging inside docker.
+    # import ptvsd
+    # port = 1234
+    # address = ('0.0.0.0', port)
+    # print(f"-I- waiting for attachment on {address}")
+    # ptvsd.enable_attach(address=address)
+    # ptvsd.wait_for_attach()
+
     main()

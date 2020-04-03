@@ -1,18 +1,22 @@
 import torch
 from models.normal import WideResNet, amoebanetd, ResNet, vgg16_bn
-from pytorch_Gpipe.utils import _extract_volume_from_sizes, layerDict, tensorDict
+from pytorch_Gpipe.utils import layerDict, tensorDict
 from pytorch_Gpipe import PipelineConfig, pipe_model
-from pytorch_Gpipe.model_profiling import Node, NodeTypes
 import argparse
 import importlib
 from misc import run_analysis, run_partitions
-import shlex
 import sys
+from heuristics import edge_weight_function, node_weight_function
+from partition_scripts_utils import ParseMetisOpts, ParsePartitioningOpts, record_cmdline
 
 _VGG16_BN = dict(vgg16_bn=dict())
 
-_RESENETS = dict(resnet50_imagenet=dict(
-    block=ResNet.Bottleneck, layers=[3, 4, 6, 3], num_classes=1000))
+_RESENETS = dict(resnet50_imagenet=dict(block=ResNet.Bottleneck,
+                                        layers=[3, 4, 6, 3],
+                                        num_classes=1000),
+                 resnet101_imagenet=dict(block=ResNet.Bottleneck,
+                                         layers=[3, 4, 23, 3],
+                                         num_classes=1000))
 
 _WIDE_RESNETS = dict(
     wrn_16x4=dict(depth=16, num_classes=10, widen_factor=4,
@@ -92,223 +96,22 @@ def create_random_sample(args, analysis=False):
     return sample
 
 
-MULT_FACTOR = 1000
-
-
-def node_weight_function(node: Node):
-    # TODO: factory with recomputation.
-    if node.type is NodeTypes.LAYER:
-        return int(MULT_FACTOR *
-                   (node.weight.backward_time))  # + node.weight.forward_time
-    if node.type is NodeTypes.CONSTANT:
-        return 0
-    if node.type is NodeTypes.OP:  # FIXME:
-        return 0
-    return 0
-
-
-def edge_weight_function(bw_GBps):
-    def f(u: Node, v: Node):
-        if u.type is NodeTypes.CONSTANT or (u.valueType() in [int, None]
-                                            or u.shape == (torch.Size([]), )):
-            # no constant or scalars on boundries
-            return 1000 * MULT_FACTOR
-
-        if u.valueType() in [list, tuple]:
-            # no nested iterables on boundries
-            return 1000 * MULT_FACTOR
-
-        # TODO data type not included shouldn't really matter
-        MB = 1e6
-        volume = _extract_volume_from_sizes(u.shape) / MB
-        # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
-        w = max(1, int(MULT_FACTOR * (volume / bw_GBps)))
-        return w
-
-    return f
-
-
-class ParseMetisOpts:
-    def __init__(self):
-        pass
-
-    @staticmethod
-    def add_metis_arguments(parser):
-        metis_opts = parser.add_argument_group("METIS options")
-        metis_opts.add_argument("--metis_seed",
-                                required=False,
-                                type=int,
-                                help="Random seed for Metis algorithm")
-        metis_opts.add_argument(
-            '--compress', default=False, action='store_true',
-            help="Compress")  # NOTE: this is differnt from default!
-        metis_opts.add_argument(
-            '--metis_niter',
-            type=int,
-            help="Specifies the number of iterations for the refinement algorithms at each stage of the uncoarsening process."
-            "Default is 10.")
-        metis_opts.add_argument(
-            '--nseps',
-            type=int,
-            help="Specifies the number of different separators that it will compute at each level of nested dissection."
-            "The final separator that is used is the smallest one. Default is 1."
-        )
-        metis_opts.add_argument(
-            "--ncuts",
-            type=int,
-            help="Specifies the number of different partitionings that it will compute."
-            " The final partitioning is the one that achieves the best edgecut or communication volume."
-            "Default is 1.")
-        metis_opts.add_argument(
-            '--metis_dbglvl',
-            type=int,
-            help="Metis debug level. Refer to the docs for explanation")
-        metis_opts.add_argument(
-            '--objtype',
-            type=int,
-            help="Extra objective type to miminize (0: edgecut, 1: vol, default: edgecut)"
-        )
-
-    @staticmethod
-    def metis_opts_dict_from_parsed_args(args):
-        """ build metis options """
-
-        # We can set to None to get the default
-        # See : https://github.com/networkx/networkx-metis/blob/master/nxmetis/enums.py
-        METIS_opt = {
-            'seed': getattr(args, "metis_seed", None),
-            'nseps': getattr(args, "nseps", None),
-            'niter': getattr(args, "metis_niter", None),
-            'compress': False,  # NOTE: this is differnt from default!
-            'ncuts': getattr(args, "ncuts", None),
-            # 0, edgecut, 1 Vol minimization! # NOTE: this is differnt from default edgecut.
-            'objtype': getattr(args, 'objtype', None),
-            # NOTE: default is -1, # TODO: add getattr getattr(args, "metis_dbglvl", None),
-            '_dbglvl': 1  # TODO: can't make it print...
-        }
-
-        return METIS_opt
-
-        #     {'ptype': -1,
-        #  'objtype': -1,
-        #  'ctype': -1,
-        #  'iptype': -1,
-        #  'rtype': -1,
-        #  'ncuts': -1,
-        #  'nseps': -1,
-        #  'numbering': -1,
-        #  'niter': -1, # default is 10
-        #  'seed': -1,
-        #  'minconn': True,
-        #  'no2hop': True,
-        #  'contig': True,
-        #  'compress': True,
-        #  'ccorder': True,
-        #  'pfactor': -1,
-        #  'ufactor': -1,
-        #  '_dbglvl': -1,
-        #  }
-
-
-class ParsePartitioningOpts:
-    def __init__(self):
-        pass
-
-    def _extra(self, parser):
-        raise NotImplementedError()
-
-    def set_defaults(self, parser):
-        pass
-
-    def add_partitioning_arguments(self, parser):
-        # parser = parser.add_argument_group("Partitioning options")
-        self._extra(parser)
-
-        parser.add_argument(
-            '-b', '--partitioning_batch_size', type=int, default=128)
-        parser.add_argument(
-            '--model_too_big',
-            action='store_true',
-            default=False,
-            help="if the model is too big run the whole partitioning process on CPU, "
-            "and drink a cup of coffee in the meantime")
-        parser.add_argument('-p', '--n_partitions', type=int, default=4)
-        parser.add_argument('-o', '--output_file', default='wrn_16x4')
-        parser.add_argument('--no_auto_file_name',
-                            action='store_true',
-                            default=False,
-                            help="do not create file name automatically")
-        parser.add_argument(
-            '--n_iter',
-            type=int,
-            help="number of iteration used in order to profile the network and run analysis"
-        )
-        parser.add_argument(
-            '--bw',
-            type=float,
-            default=12,
-            help="data transfer rate between gpus in GBps (Gigabytes per second)")
-        parser.add_argument(
-            '--no_recomputation',
-            action='store_true',
-            default=False,
-            help="whether to (not) use recomputation for the backward pass")
-        parser.add_argument('--no_analysis',
-                            action='store_true',
-                            default=False,
-                            help="disable partition analysis")
-        parser.add_argument("--depth",
-                            default=100,
-                            type=int,
-                            help="the depth in which we will partition the model")
-        parser.add_argument(
-            "--partition_layer_graph",
-            action="store_true",
-            default=False,
-            help="whether to partition a graph containing only layers")
-        parser.add_argument("--generate_model_parallel", action="store_true", default=False,
-                            help="wether to generate a modelParallel version of the partitioning")
-        parser.add_argument(
-            "--analysis_batch_size",
-            default=32,
-            type=int,
-            help="batch size to use during the post partition analysis")
-        parser.add_argument("-a",
-                            "--async_pipeline",
-                            default=False,
-                            action="store_true",
-                            help="Do analysis for async pipeline")
-        parser.add_argument("--dot",
-                            default=False,
-                            action="store_true",
-                            help="Save and plot it using graphviz")
-
-        parser.add_argument("--no_test_run",
-                            default=False,
-                            action="store_true",
-                            help="Do not try to run partitions after done")
-
-        parser.add_argument(
-            "--save_memory_mode",
-            default=False,
-            action="store_true",
-            help="Save memory during profiling by storing everything on cpu," +
-            " but sending each layer to GPU before the profiling.")
-
-        self.set_defaults(parser)
-
-
 class ParsePartitioningOptsVision(ParsePartitioningOpts):
-    def __init__(self, model_choices=MODEL_CONFIGS.keys(), dataset_choices=DATASETS):
+    def __init__(self,
+                 model_choices=MODEL_CONFIGS.keys(),
+                 dataset_choices=DATASETS):
         super().__init__()
         self.model_choices = model_choices
         self.dataset_choices = dataset_choices
 
     def _extra(self, parser):
         parser.add_argument('--model',
-                            choices=self.model_choices, default='wrn_16x4')
-        parser.add_argument('-d', '--dataset',
-                            choices=self.dataset_choices, default='cifar10')
+                            choices=self.model_choices,
+                            default='wrn_16x4')
+        parser.add_argument('-d',
+                            '--dataset',
+                            choices=self.dataset_choices,
+                            default='cifar10')
 
     def set_defaults(self, parser):
         d = {
@@ -344,10 +147,7 @@ def parse_cli():
     METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
     return args, METIS_opt
 
-
 if __name__ == "__main__":
-    cmdline = " ".join(map(shlex.quote, sys.argv[1:]))
-    # TODO: add cmdline to generate output file.
 
     args, METIS_opt = parse_cli()
     VERBOSE_PARTITIONING = False
@@ -388,7 +188,7 @@ if __name__ == "__main__":
                        output_file=args.output_file,
                        generate_model_parallel=args.generate_model_parallel,
                        use_layers_only_graph=args.partition_layer_graph,
-                       node_weight_function=node_weight_function,
+                       node_weight_function=node_weight_function(),
                        edge_weight_function=edge_weight_function(bw),
                        n_iter=n_iter,
                        recomputation=recomputation,
@@ -398,6 +198,10 @@ if __name__ == "__main__":
     if args.dot:
         graph.save_as_pdf(args.output_file, ".")
         graph.serialize(args.output_file)
+
+    # Add cmdline to generate output file.
+    record_cmdline(args.output_file)
+
     module_path = args.output_file.replace("/", ".")
     generated = importlib.import_module(module_path)
     create_pipeline_configuration = generated.create_pipeline_configuration
