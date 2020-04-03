@@ -438,7 +438,7 @@ def main():
                         default=False,
                         help="disable partition analysis")
     parser.add_argument("--depth",
-                        default=-1,
+                        default=100,
                         type=int,
                         help="the depth in which we will partition the model")
     parser.add_argument(
