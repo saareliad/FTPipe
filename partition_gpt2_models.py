@@ -32,7 +32,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset, RandomSampler
 import warnings
 import sys
-from partition_vision_models import ParseMetisOpts
+from partition_scripts_utils import ParseMetisOpts, ParsePartitioningOpts, record_cmdline
 from heuristics import edge_weight_function, node_weight_function
 from transformers import (
     BertConfig,
@@ -225,6 +225,7 @@ def partition_model(args,
         graph.save_as_pdf(args.output_file, ".")
         graph.serialize(args.output_file)
 
+    record_cmdline(args.output_file)
     module_path = args.output_file.replace("/", ".")
     generated = importlib.import_module(module_path)
 
@@ -270,10 +271,11 @@ def partition_model(args,
     # # model outputs are always tuple in transformers (see doc)
     # loss = outputs[0]
 
-
-def main():
+def parse_cli():
+    # TODO: use default partitioning args like other partitioning scripts
+    # And add extra args spesific to this script as needed.
     parser = argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     # parameter required by the repo
     tr_params = parser.add_argument_group("Transformers parameters")
@@ -402,7 +404,7 @@ def main():
                         default=False,
                         help="disable partition analysis")
     parser.add_argument("--depth",
-                        default=-1,
+                        default=10000,
                         type=int,
                         help="the depth in which we will partition the model")
     parser.add_argument(
@@ -432,14 +434,22 @@ def main():
     ParseMetisOpts.add_metis_arguments(parser)
 
     args = parser.parse_args()
-
-    METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
-
+    
     if args.auto_file_name:
         args.output_file = f"{args.model_type}_p{args.n_partitions}"
 
     if args.output_file.endswith(".py"):
         args.output_file = args.output_file[:-3]
+
+
+    return args
+
+
+def main():
+
+    args = parse_cli()
+    METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
+
 
     if args.model_type in ["bert", "roberta", "distilbert", "camembert"
                            ] and not args.mlm:

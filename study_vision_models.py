@@ -6,6 +6,7 @@ import importlib
 from misc import run_analysis, run_partitions
 from pytorch_Gpipe.utils import _extract_volume_from_sizes, layerDict, tensorDict
 from pytorch_Gpipe import PipelineConfig, pipe_model
+# TODO: instea of code copy, do repeated calls to exisitng functions...
 
 _RESENETS = dict(resnet50_imagenet=dict(
     block=ResNet.Bottleneck, layers=[3, 4, 6, 3], num_classes=1000))
@@ -168,7 +169,7 @@ def parse_cli():
                         default=False,
                         help="disable partition analysis")
     parser.add_argument("--depth",
-                        default=-1,
+                        default=10000,
                         type=int,
                         help="the depth in which we will partition the model")
     parser.add_argument(

@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader, RandomSampler
 
 from models.normal import BertForQuestionAnswering
 from models.normal.NLP_models.modeling_bert import SQUAD_loss
-from partition_vision_models import ParsePartitioningOpts, ParseMetisOpts
+from partition_scripts_utils import ParsePartitioningOpts, ParseMetisOpts, record_cmdline
 from heuristics import node_weight_function, edge_weight_function
 from misc import run_analysis
 from pytorch_Gpipe import PipelineConfig, pipe_model
@@ -410,6 +410,10 @@ def parse_cli():
     ParseMetisOpts.add_metis_arguments(parser)
 
     args = parser.parse_args()
+
+    if args.output_file.endswith(".py"):
+        args.output_file = args.output_file[:-3]
+
     return args
 
 
@@ -418,6 +422,9 @@ def main():
     METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
 
     args.model_type = args.model_type.lower()
+    
+    if args.auto_file_name:
+        args.output_file = f"{args.model_type}_p{args.n_partitions}"
 
     #####
     device = torch.device("cuda" if torch.cuda.is_available()
@@ -535,6 +542,8 @@ def main():
     if args.dot:
         graph.save_as_pdf(args.output_file, ".")
         graph.serialize(args.output_file)
+
+    record_cmdline(args.output_file)
     module_path = args.output_file.replace("/", ".")
     generated = importlib.import_module(module_path)
     create_pipeline_configuration = generated.create_pipeline_configuration
