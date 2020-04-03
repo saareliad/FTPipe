@@ -5,13 +5,13 @@ from itertools import chain
 import torch
 import torch.nn as nn
 
-from ..utils import Tensors, _detach_inputs, _get_size, get_device, traverse_model, flatten
+from ..utils import Tensors, _detach_inputs, _get_size_and_shape, get_device, traverse_model, flatten,_get_dtypes
 
 __all__ = ['profile_network', 'Profile']
 
 Profile = namedtuple(
     'Profile',
-    'forward_time backward_time cuda_memory_forward cuda_memory_backward layer_size input_size output_size input_shape output_shape'
+    'forward_time backward_time cuda_memory_forward cuda_memory_backward layer_size input_size output_size input_shape output_shape input_dtype output_dtype'
 )
 
 
@@ -65,20 +65,10 @@ def profile_network(
                                         save_memory_mode=save_memory_mode,
                                         recomputation=recomputation)
 
-    if torch.cuda.is_available():
-        torch.cuda.reset_max_memory_allocated()
-        torch.cuda.max_memory_allocated() / 1e9
-
     # perform n_iter symbolic forward backward run
     # first one is warmup as we have seen the first time measurements are higher
     for _ in range(n_iter + 1):
-        if torch.cuda.is_available():
-            torch.cuda.reset_max_memory_allocated()
-
         _perform_forward_backward_pass(net, *sample_batch, **kwargs)
-
-        if torch.cuda.is_available():
-            torch.cuda.max_memory_allocated() / 1e9
 
     # gather forward and backward execution times
     backward_times = [
@@ -104,15 +94,19 @@ def profile_network(
     input_shapes = [layer.input_shape for layer in layers_dict.values()]
     output_shapes = [layer.output_shape for layer in layers_dict.values()]
 
+    #gather input/output dtypes
+    input_dtypes = [layer.input_dtype for layer in layers_dict.values()]
+    output_dtypes = [layer.output_dtype for layer in layers_dict.values()]
+
     # prepare profiling results
     layers_profile = {
         name: Profile(forward, backward, *cuda_mem, param_size + buffer_size,
-                      in_size, out_size, in_shape, out_shape)
+                      in_size, out_size, in_shape, out_shape,input_dtype,output_dtype)
         for name, forward, backward, param_size, buffer_size,
-        in_size, out_size, cuda_mem, in_shape, out_shape in zip(
+        in_size, out_size, cuda_mem, in_shape, out_shape,input_dtype,output_dtype in zip(
             layers_dict.keys(), forward_times, backward_times, param_sizes,
             buffer_sizes, layer_input_sizes, layer_output_sizes, cuda_memory,
-            input_shapes, output_shapes)
+            input_shapes, output_shapes,input_dtypes,output_dtypes)
     }
 
     _unwrap_layers(net)
@@ -211,6 +205,8 @@ class Wrapper(nn.Module):
         self.backward_cuda_mem = 0
         self.input_shape = []
         self.output_shape = []
+        self.input_dtype=[]
+        self.output_dtype=[]
         self.scope = scope
         self.save_memory_mode = save_memory_mode
         self.recomputation = recomputation  # TODO
@@ -299,13 +295,21 @@ class Wrapper(nn.Module):
         self.backward_time.append(backward_time)
 
         # input and output size
-        self.input_size, self.input_shape = _get_size(inputs)
-        self.output_size, self.output_shape = _get_size(outputs)
+        self.input_size, self.input_shape = _get_size_and_shape(inputs)
+        self.output_size, self.output_shape = _get_size_and_shape(outputs)
+
+        self.input_dtype = _get_dtypes(inputs)
+        self.output_dtype = _get_dtypes(outputs)
 
         if isinstance(self.input_shape, torch.Size):
             self.input_shape = (self.input_shape, )
         if isinstance(self.output_shape, torch.Size):
             self.output_shape = (self.output_shape, )
+        
+        if isinstance(self.input_dtype, torch.dtype):
+            self.input_dtype = (self.input_dtype, )
+        if isinstance(self.output_dtype, torch.dtype):
+            self.output_dtype = (self.output_dtype, )
 
         # size in MegaBytes
         self.backward_cuda_mem /= 1e6

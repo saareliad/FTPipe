@@ -7,7 +7,7 @@ from torch import Tensor
 from functools import reduce
 
 __all__ = ["traverse_model", "traverse_params_buffs",
-           "get_device", "_detach_inputs", "_get_size",
+           "get_device", "_detach_inputs", "_get_size_and_shape","_get_dtypes",
            "Tensors", "TensorsShape", "Devices", "OrderedSet", "layerDict", "tensorDict"]
 
 # the officially supported input types
@@ -117,7 +117,7 @@ def _detach_inputs(*inputs: Tensors):
     return detached[0] if len(detached) == 1 else tuple(detached)
 
 
-def _get_size(x: Tensors) -> Tuple[int, Tuple[int]]:
+def _get_size_and_shape(x: Tensors):
     size = 0
     shapes = []
 
@@ -127,13 +127,25 @@ def _get_size(x: Tensors) -> Tuple[int, Tuple[int]]:
         return 1, torch.Size([])
     elif isinstance(x, (list, tuple)):
         for a in x:
-            a_size, a_shape = _get_size(a)
+            a_size, a_shape = _get_size_and_shape(a)
             size += a_size
             shapes.append(a_shape)
         return size, tuple(shapes)
     else:
         raise ValueError(INCORRECT_INPUT_TYPE + f"{type(x)} ")
 
+def _get_dtypes(x:Tensors):
+    dtypes = []
+
+    if isinstance(x, torch.Tensor):
+        return x.dtype
+    elif isinstance(x, (list, tuple)):
+        for a in x:
+            a_dtype = _get_dtypes(a)
+            dtypes.append(a_dtype)
+        return tuple(dtypes)
+    else:
+        raise ValueError(INCORRECT_INPUT_TYPE + f"{type(x)} ")
 
 def flatten(x: Tensors):
     if isinstance(x, Tensor) or x is None:
