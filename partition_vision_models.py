@@ -226,7 +226,7 @@ if __name__ == "__main__":
 
     if not args.no_analysis:
         sample = create_random_sample(args, analysis=True)
-        analysis_result = run_analysis(sample,
+        analysis_result,summary = run_analysis(sample,
                                        graph,
                                        analysis_config,
                                        n_iter,
@@ -235,3 +235,6 @@ if __name__ == "__main__":
                                        verbose=True,
                                        async_pipeline=args.async_pipeline,
                                        sequential_model=model)
+        with open(f"{args.output_file}.py","a") as f:
+            f.write("\n")
+            f.write('"""analysis summary\n'+summary+"\n"+'"""')

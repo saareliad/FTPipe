@@ -360,7 +360,7 @@ def single_partitioning_loop_with_override(args, METIS_opt, **override_dict):
 
     if not args.no_analysis:
         sample = create_random_sample(args, analysis=True)
-        expected_speedup = run_analysis(sample,
+        expected_speedup,_ = run_analysis(sample,
                                         graph,
                                         analysis_config,
                                         n_iter,

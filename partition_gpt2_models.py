@@ -256,7 +256,7 @@ def partition_model(args,
 
         analysis_sample = (expanded_inputs, expanded_labels)
 
-        run_analysis(analysis_sample,
+        _,summary=run_analysis(analysis_sample,
                      graph,
                      analysis_config,
                      args.n_iter,
@@ -264,6 +264,9 @@ def partition_model(args,
                      bw_GBps=bandwidth_gps,
                      async_pipeline=args.async_pipeline,
                      sequential_model=model)
+        with open(f"{args.output_file}.py","a") as f:
+            f.write("\n")
+            f.write('"""analysis summary\n'+summary+"\n"+'"""')      
         sys.exit()
     # model(inputs)
     # outputs = model(inputs, masked_lm_labels=labels) if args.mlm else model(
