@@ -23,6 +23,7 @@ def pretrained_model_config_and_tokenizer(
         do_lower_case: bool = True,
         cache_dir: str = "",
         output_past=False,
+        stateless_tied=False,
 ):
 
     config_class, model_class, tokenizer_class = MODEL_TYPES[model_type]
@@ -45,6 +46,10 @@ def pretrained_model_config_and_tokenizer(
 
     resize_token_embeddings(model, tokenizer)
 
+    if stateless_tied:
+        model_to_resize = model.module if hasattr(model, 'module') else model
+        model_to_resize.make_stateless_after_loaded_tied_and_resized()
+
     return model, tokenizer, config
 
 
@@ -52,6 +57,5 @@ def get_model_tokenizer_and_config_by_name(name):
     cfg = MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS.get(name)()
 
     model, tokenizer, config = pretrained_model_config_and_tokenizer(**cfg)
-    resize_token_embeddings(model, tokenizer)
 
     return model, tokenizer, config

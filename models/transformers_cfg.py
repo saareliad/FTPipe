@@ -1,6 +1,5 @@
 # See https://huggingface.co/models
 # GPT2_NAMES_OR_PATHES = {'gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'}
-
 # TODO: replace with auto config & tokenizers
 from transformers import (GPT2Config, GPT2Tokenizer)
 from .normal import GPT2LMHeadModel, GPT2Model, StatelessGPT2LMHeadModel
@@ -12,6 +11,8 @@ MODEL_TYPES = {
     'gpt2_lm_stateless': (GPT2Config, StatelessGPT2LMHeadModel, GPT2Tokenizer),
 }
 
+# NOTE: some of these configs are just for this repo, see
+# `models.transformers_utils.pretrained_model_config_and_tokenizer`
 
 def gpt2_lowercase():
     return dict(model_type='gpt2',
@@ -41,7 +42,8 @@ def gpt2_lmhead_lowercase_5p():
     return dict(model_type='gpt2_lm_stateless',
                 model_name_or_path='gpt2',
                 do_lower_case=True,
-                output_past=False)
+                output_past=False,
+                stateless_tied=True)
 
 
 MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS = {
