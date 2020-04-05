@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from pytorch_Gpipe.model_profiling.control_flow_graph import Node, NodeTypes
 from pytorch_Gpipe.utils import OrderedSet
-from .parse_declarations import parse_functions, dtype_lookup, layout_lookup
+from .supported_pytorch_functions import parse_supported_functions, dtype_lookup, layout_lookup
 from collections import OrderedDict
 from itertools import chain
 from typing import List, Tuple, Dict, Iterator
@@ -13,7 +13,7 @@ from .utils import format_shape_or_dtype
 tab = '    '
 dtab = tab + tab
 
-SupportedFunctions = parse_functions()
+SupportedFunctions = parse_supported_functions()
 
 # TODO nll_loss and softmax/log_softmax
 
@@ -368,7 +368,6 @@ def generateFunctionCallExpression(ready_expressions: Dict[str, str],
     operand_scopes = [n.scope for n in node.in_nodes]
     types = [n.valueType() for n in node.in_nodes]
     values = [ready_expressions[s] for s in operand_scopes]
-
     try:
         specialCase = False
         expression = SupportedFunctions.findMatch(func_name, types, values)
