@@ -75,7 +75,7 @@ def create_pipeline_configuration(DEBUG=False):
     
 
     stages[4]['stage_cls'] = module_path + '.Partition4'
-    device = 'cpu' if DEBUG else 'cuda:4'
+    device = 'cpu' if DEBUG else 'cuda:0'
     stages[4]['devices'] = [device]
     
 
@@ -1245,7 +1245,7 @@ class Partition4(nn.Module):
         
         # initializing partition parameters
 
-        self.device = torch.device('cuda:4')
+        self.device = torch.device('cuda:0')
         self.lookup = { 'l_0': 'stateless_lm_head'}
 
     def forward(self, x0, x1, x2):
