@@ -794,6 +794,28 @@ def get_optimizer_cls(args, has_gap_aware):
     return optimizer_cls
 
 
+def get_optimizer(args, optimizer_cls, parameters):
+    if len(parameters) == 0:
+        if not getattr(args, "allow_stateless"):
+            raise ValueError(f"Got stateless partition {args.stage}")
+
+        print(f"-I- Using dummy optimizer for stage {args.stage}")
+
+        class DummyOpt(optimizer_cls):
+            def __init__(self, parameters, *args, **kw):
+                super().__init__(torch.nn.Parameter(torch.randn(1)), *args,
+                                 **kw)
+
+            def step():
+                pass
+
+        optimizer_cls = DummyOpt
+
+    optimizer = optimizer_cls(parameters, **args.optimizer['args'])
+
+    return optimizer
+
+
 def main():
     args = parse_cli()
     parse_json_config(args, args.config)
@@ -842,7 +864,8 @@ def main():
 
     model_instance = None
     dataset_keywords = {}
-    if args.model in models.transformers_cfg.MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS.keys():
+    if args.model in models.transformers_cfg.MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS.keys(
+    ):
         model_instance, tokenizer, config = models.transformers_utils.get_model_tokenizer_and_config_by_name(
             args.model)
         dataset_keywords['tokenizer'] = tokenizer
@@ -961,7 +984,9 @@ def main():
         keep_buffers_alive=args.keep_buffers_alive,
         use_recomputation=(not args.no_recomputation),
         gap_aware_just_loss=gap_aware_just_loss,
-        use_pre_loaded_input=getattr(args, "use_pre_loaded_input", False))
+        use_pre_loaded_input=getattr(args, "use_pre_loaded_input", False),
+        weight_stashing_just_for_stats=False,
+        )
 
     if hasattr(args, "ddp_sim_num_gpus") and args.ddp_sim_num_gpus > 1:
         print(
@@ -974,7 +999,8 @@ def main():
 
     # After the partition is on its device:
     # Set optimizer
-    if args.task == 'lm':
+    # If is transformer, use grouped parameters.
+    if 'lm' in args.task or 'squad' in args.task:
         # No weight decay for some parameters.
         model = partition.partition
         opt_args = args.optimizer['args']
@@ -1001,16 +1027,17 @@ def main():
             "no_decay": len(optimizer_grouped_parameters[1]['params']),
             "decay": len(optimizer_grouped_parameters[0]['params'])
         }
-
+        total_length = lengths['decay'] + lengths['no_decay']
         print(f"-I- optimizer_grouped_parameters: {lengths}")
 
-        optimizer = optimizer_cls(optimizer_grouped_parameters,
-                                  **args.optimizer['args'])
-
+        # optimizer = optimizer_cls(optimizer_grouped_parameters,
+        #                           **args.optimizer['args'])
     else:
-        optimizer = optimizer_cls(partition.partition.parameters(),
-                                  **args.optimizer['args'])
+        optimizer_grouped_parameters = partition.partition.parameters()
+        # optimizer = optimizer_cls(partition.partition.parameters(),
+        #                           **args.optimizer['args'])
 
+    optimizer = get_optimizer(args, optimizer_cls, optimizer_grouped_parameters)
     true_weights_storage = TrueWeightsStorage(optimizer)
     partition.set_true_weights_storage(true_weights_storage)
 
@@ -1106,7 +1133,6 @@ def main():
     args.total_epoch_times = total_epoch_times_list
     args.train_epochs_times = train_epochs_times_list
     args.exp_total_time = exp_total_time
-
 
     # TODO: option to run test at end of training
 

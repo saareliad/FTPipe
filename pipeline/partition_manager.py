@@ -47,6 +47,7 @@ class SinglePartitionManager:
         gap_aware_just_loss=False,
         sync_buffers=False,
         use_pre_loaded_input=False,  # TODO: this is an option to support LMHeads in which the input goes to a partition. # TODO: write a trainer which can work with it.
+        weight_stashing_just_for_stats=False
     ):
         # Preloaded input for last partition
         self.use_pre_loaded_input = use_pre_loaded_input
@@ -59,7 +60,7 @@ class SinglePartitionManager:
 
         self.gap_aware_just_loss = gap_aware_just_loss
         # TODO: work in progress, need to support exp name too, etc.
-        self.weight_stashing_just_for_stats = False
+        self.weight_stashing_just_for_stats = weight_stashing_just_for_stats
 
         TO_DEVICE = False
 
