@@ -99,6 +99,8 @@ def generateTypes():
     for s in ['int', 'bool', 'float', 'str', 'slice']:
         types[f"_{s}"] = BasicType(getattr(builtins, s))
         types[f"Optional[_{s}]"] = OptionalType(types[f"_{s}"])
+        types[f"{s}"] = BasicType(getattr(builtins, s))
+        types[f"Optional[{s}]"] = OptionalType(types[f"{s}"])
 
     types["List"] = BasicType(list)
     types["Tuple"] = BasicType(tuple)
@@ -111,6 +113,8 @@ def generateTypes():
     for s in ['Tensor', 'qscheme', 'Generator', "Storage", 'memory_format', "device", "Size"]:
         types[f'_{s}'] = BasicType(getattr(torch, s))
         types[f"Optional[_{s}]"] = OptionalType(types[f"_{s}"])
+        types[f'{s}'] = BasicType(getattr(torch, s))
+        types[f"Optional[{s}]"] = OptionalType(types[f"{s}"])
 
     types['_dtype'] = lambda x: isinstance(
         x, torch.dtype) or (x is int)
@@ -138,5 +142,7 @@ def generateTypes():
         types['Union[Tuple,List]'])
     types['Optional[Union[_int,_slice,_Tensor,List,Tuple]]'] = OptionalType(UnionType(*[types[s] for s in
                                                                                         ['_int', '_slice', '_Tensor', 'List', 'Tuple']]))
+
+    types['Optional[Any]'] = OptionalType(types['Any'])
 
     return types

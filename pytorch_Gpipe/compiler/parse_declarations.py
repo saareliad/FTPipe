@@ -1,11 +1,12 @@
 import inspect
 import torch
 from torch import Tensor
+import torch.nn.functional as F
 import os
 import re
 from enum import Enum
 import operator
-from .supported_types import generateTypes, AnyType
+from pytorch_Gpipe.compiler.supported_types import generateTypes, AnyType
 
 dtype_lookup = {'11': torch.bool,
                 '4': torch.int64,
@@ -29,6 +30,7 @@ class FunctionTypes(Enum):
     TENSOR = 'Tensor'
     TORCH = 'torch'
     OPERATOR = 'operator'
+    FUNCTIONAL = 'torch.nn.functional'
     UUSUPPORTED = 'unsupported'
 
     def __repr__(self):
@@ -220,21 +222,34 @@ def parse_function(line, types):
     return func_name, Function(parsed_args)
 
 
-def parse_functions(file_path=None):
+def parse_supported_functions(torch_tensor_path=None, torch_nn_functional_path=None):
+    supported_types = generateTypes()
+
+    supported_functions = parse_torch_and_Tensor_functions(supported_types,
+                                                           file_path=torch_tensor_path)
+    torch_nn_functional_functions = parse_torch_nn_functional_functions(supported_types,
+                                                                        file_path=torch_nn_functional_path)
+
+    supported_functions.FUNCTIONAL = torch_nn_functional_functions.FUNCTIONAL
+
+    print(len(supported_functions.FUNCTIONAL))
+    return supported_functions
+
+
+def parse_torch_and_Tensor_functions(supported_types, file_path=None):
     if file_path is None:
         file_path = os.path.dirname(os.path.realpath(__file__))\
-            + "/declarations.txt"
-
-    assert os.path.exists(file_path), "can't find declarations file"
-    types = generateTypes()
+            + "/torch_and_Tensor_declarations.txt"
+    assert os.path.exists(
+        file_path), "can't find torch_and_Tensor_declarations file"
     supported_functions = PytorchFunctions()
     is_torch = True
-
     with open(file_path, "r") as f:
         for line in getLines(f.readlines()):
             if line.startswith('def'):
                 # function decl
-                func_name, function = parse_function(line, types)
+                func_name, function = parse_function(line, supported_types)
+                # marker for start of torch functions
                 if func_name.startswith("T_"):
                     is_torch = not is_torch
                     func_name = func_name[1:]
@@ -243,6 +258,7 @@ def parse_functions(file_path=None):
                     f_type = FunctionTypes.OPERATOR
                     func_name = func_name[2:-2:]
                     if not hasattr(operator, func_name):
+                        print(f"could not resolve operator.{func_name}")
                         continue
                     else:
                         args = []
@@ -252,17 +268,30 @@ def parse_functions(file_path=None):
                 elif is_torch:
                     f_type = FunctionTypes.TORCH
                     if not hasattr(torch, func_name):
-                        pass
-                        # print(f"could not resolve torch.{func_name}")
+                        # pass
+                        print(f"could not resolve torch.{func_name}")
                 else:
                     f_type = FunctionTypes.TENSOR
                     if not hasattr(Tensor, func_name):
-                        pass
-                        # print(f"could not resolve Tensor.{func_name}")
+                        # pass
+                        print(f"could not resolve Tensor.{func_name}")
                 supported_functions.addFunction(func_name, function, f_type)
-        return supported_functions
+    return supported_functions
 
 
-# function + args in order  => positional/keyword
-if __name__ == "__main__":
-    functions = parse_functions()
+def parse_torch_nn_functional_functions(supported_types, file_path=None):
+    if file_path is None:
+        file_path = os.path.dirname(os.path.realpath(__file__))\
+            + "/torch_nn_functional.txt"
+    assert os.path.exists(
+        file_path), "can't find torch_nn_functional declarations file"
+    supported_functions = PytorchFunctions()
+    with open(file_path, "r") as f:
+        for line in getLines(f.readlines()):
+            if line.startswith('def'):
+                # function decl
+                func_name, function = parse_function(line, supported_types)
+                assert hasattr(F, func_name)
+                supported_functions.addFunction(func_name, function,
+                                                FunctionTypes.FUNCTIONAL)
+    return supported_functions
