@@ -3,12 +3,13 @@
 
 # TODO: replace with auto config & tokenizers
 from transformers import (GPT2Config, GPT2Tokenizer)
-from .normal import GPT2LMHeadModel, GPT2Model
+from .normal import GPT2LMHeadModel, GPT2Model, StatelessGPT2LMHeadModel
 
+# We use this to get cfg_class, model_class, and tokenizer_class
 MODEL_TYPES = {
     'gpt2': (GPT2Config, GPT2Model, GPT2Tokenizer),
     'gpt2_lm': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
-    'gpt2_lm_lowercase': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
+    'gpt2_lm_stateless': (GPT2Config, StatelessGPT2LMHeadModel, GPT2Tokenizer),
 }
 
 
@@ -33,9 +34,19 @@ def gpt2xl_lm_lowercase():
                 output_past=False)
 
 
-# TODO: can get name automatically from args.task
+def gpt2_lmhead_lowercase_5p():
+    """ Stateless version, were partitions 4 and 0 are on same GPU but different ranks
+        Used for the tied weights trick.
+     """
+    return dict(model_type='gpt2_lm_stateless',
+                model_name_or_path='gpt2',
+                do_lower_case=True,
+                output_past=False)
+
+
 MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS = {
     'gpt2': gpt2_lowercase,
     'gpt2_lowercase': gpt2_lowercase,
     'gpt2_lm_lowercase': gpt2_lm_lowercase,
+    'gpt2_lmhead_lowercase_5p': gpt2_lmhead_lowercase_5p,
 }

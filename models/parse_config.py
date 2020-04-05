@@ -37,7 +37,6 @@ def tensor_tags_from_config(config,
                             num_chunks=1,
                             target_tensor_names=None,
                             GRAD_UGLY_SHAMEFUL_NAME="_grad"):
-
     def config_to_tuples_array(config):
         def config_to_tuples_generator(stages):
             """ allows iterating with the tuple: (stage_id, inputs, outputs) """
@@ -94,9 +93,10 @@ class PartitioningConfigParser:
                  model_instance=None,
                  send_target_in_pipe=False):
 
-        pipe_config, model = get_partitioning(cfg, rank,
-                                                 bs_train,
-                                                 model_instance=model_instance)
+        pipe_config, model = get_partitioning(cfg,
+                                              rank,
+                                              bs_train,
+                                              model_instance=model_instance)
 
         self.model = model
         self.num_stages = len(pipe_config.stages)
@@ -107,8 +107,8 @@ class PartitioningConfigParser:
             i: [next(counter) for _ in stage.devices]
             for i, stage in pipe_config.stages.items()
         }
-        self.send_ranks, self.receive_ranks = get_my_send_recv_ranks(pipe_config, self.stage,
-                                                                     stage_to_rank_map=stage_to_rank_map)
+        self.send_ranks, self.receive_ranks = get_my_send_recv_ranks(
+            pipe_config, self.stage, stage_to_rank_map=stage_to_rank_map)
 
         tag_info = tensor_tags_from_config(pipe_config)
         self.tensor_tags, self.TOTAL_TAGS = tag_info
@@ -116,7 +116,8 @@ class PartitioningConfigParser:
         if send_target_in_pipe:
             self.target_tensor_names = pipe_config.model_outputs  # else None
             if self.stage > 0:
-                self.ranks_in_previous_stage = stage_to_rank_map[self.stage - 1]
+                self.ranks_in_previous_stage = stage_to_rank_map[self.stage -
+                                                                 1]
             else:
                 self.ranks_in_previous_stage = []
 
@@ -129,12 +130,13 @@ class PartitioningConfigParser:
             self.ranks_in_previous_stage = None
             self.ranks_in_next_stage = None
 
-        pipe_config.change_batch(bs_train,for_replicated=True)
+        pipe_config.change_batch(bs_train, for_replicated=True)
         self.training_tensor_shapes = pipe_config.shapes()
         pipe_config.change_batch(bs_eval, for_replicated=True)
         self.eval_tensor_shapes = pipe_config.shapes()
 
-        self.training_tensor_dtypes = self.eval_tensor_dtypes = pipe_config.all_dtypes()
+        self.training_tensor_dtypes = self.eval_tensor_dtypes = pipe_config.all_dtypes(
+        )
 
     def comm_init_args(self):
         return (self.receive_ranks, self.send_ranks, self.tensor_tags,

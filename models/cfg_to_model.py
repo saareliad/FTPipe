@@ -8,10 +8,13 @@ from torch.nn import Module
 from typing import Tuple
 _PARTITIONED_MODELS_PACKAGE = "models.partitioned"
 
+# TODO: do this automatically...
 # HACK: called with a ready model instance.
 _GPT2 = dict(
     gpt2=dict(),
-    gpt2_lm_lowercase=dict())
+    gpt2_lm_lowercase=dict(),
+    gpt2_lmhead_lowercase_5p=dict(),
+    )
 
 _RESENETS = dict(resnet50_imagenet_p8=dict(
     block=Bottleneck, layers=[3, 4, 6, 3], num_classes=1000))

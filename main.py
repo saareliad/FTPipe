@@ -697,7 +697,6 @@ def get_dataloaders(args, explicit_separated_dataset=False, **kw):
         # FIXME
         # NOTE: From the function get_wikitext2_raw_train_valid_ds
         tokenizer = kw.pop('tokenizer')
-        # model_name_or_path = kw.pop('model_name_or_path')
         overwrite_cache = getattr(args, 'overwrite_cache', False)
         dataset_keywords = dict(model_name_or_path=args.model_name_or_path,
                                 tokenizer=tokenizer,
@@ -708,7 +707,6 @@ def get_dataloaders(args, explicit_separated_dataset=False, **kw):
         dl_kw['collate_fn'] = collate
     elif 'squad' in args.task:
         tokenizer = kw.pop('tokenizer')
-        # model_name_or_path = kw.pop('model_name_or_path')
         overwrite_cache = getattr(args, 'overwrite_cache', False)
         dataset_keywords = dict(
             model_name_or_path=args.model_name_or_path,
@@ -844,7 +842,7 @@ def main():
 
     model_instance = None
     dataset_keywords = {}
-    if args.model in models.transformers_utils.MODEL_TYPES.keys():
+    if args.model in models.transformers_cfg.MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS.keys():
         model_instance, tokenizer, config = models.transformers_utils.get_model_tokenizer_and_config_by_name(
             args.model)
         dataset_keywords['tokenizer'] = tokenizer
@@ -1108,6 +1106,9 @@ def main():
     args.total_epoch_times = total_epoch_times_list
     args.train_epochs_times = train_epochs_times_list
     args.exp_total_time = exp_total_time
+
+
+    # TODO: option to run test at end of training
 
     # Synchronize and save statistics from all partitions
     save_distributed_experiment(statistics, args, args.world_size, args.rank,
