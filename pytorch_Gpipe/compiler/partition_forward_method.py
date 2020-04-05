@@ -373,7 +373,7 @@ def generateFunctionCallExpression(ready_expressions: Dict[str, str],
         expression = SupportedFunctions.findMatch(func_name, types, values)
     except Exception:
         expression = specialCases(ready_expressions, node, operand_scopes,
-                                  namespace, func_name, types, values)
+                                  namespace, func_name, types)
         specialCase = expression.startswith("F.")
     if not specialCase:
         exp_len = 1 + max(expression_len[s] for s in operand_scopes)
@@ -399,7 +399,7 @@ def generateFunctionCallExpression(ready_expressions: Dict[str, str],
 
 def specialCases(ready_expressions: Dict[str, str], node: Node,
                  operand_scopes: List[str], namespace: str, func_name: str,
-                 types: List, values: List):
+                 types: List):
     '''
     handle special cases that the trace/standard code generation can't manage
     '''
