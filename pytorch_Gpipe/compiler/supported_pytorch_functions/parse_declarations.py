@@ -6,7 +6,7 @@ import os
 import re
 from enum import Enum
 import operator
-from pytorch_Gpipe.compiler.supported_types import generateTypes, AnyType
+from .supported_types import generateTypes, AnyType
 
 dtype_lookup = {'11': torch.bool,
                 '4': torch.int64,
@@ -27,10 +27,10 @@ class FunctionTypes(Enum):
     '''
     Enum representing the possible Function Types
     '''
+    FUNCTIONAL = 'F'
     TENSOR = 'Tensor'
     TORCH = 'torch'
     OPERATOR = 'operator'
-    FUNCTIONAL = 'torch.nn.functional'
     UUSUPPORTED = 'unsupported'
 
     def __repr__(self):
@@ -231,8 +231,6 @@ def parse_supported_functions(torch_tensor_path=None, torch_nn_functional_path=N
                                                                         file_path=torch_nn_functional_path)
 
     supported_functions.FUNCTIONAL = torch_nn_functional_functions.FUNCTIONAL
-
-    print(len(supported_functions.FUNCTIONAL))
     return supported_functions
 
 
@@ -258,7 +256,6 @@ def parse_torch_and_Tensor_functions(supported_types, file_path=None):
                     f_type = FunctionTypes.OPERATOR
                     func_name = func_name[2:-2:]
                     if not hasattr(operator, func_name):
-                        print(f"could not resolve operator.{func_name}")
                         continue
                     else:
                         args = []
@@ -268,13 +265,11 @@ def parse_torch_and_Tensor_functions(supported_types, file_path=None):
                 elif is_torch:
                     f_type = FunctionTypes.TORCH
                     if not hasattr(torch, func_name):
-                        # pass
-                        print(f"could not resolve torch.{func_name}")
+                        pass
                 else:
                     f_type = FunctionTypes.TENSOR
                     if not hasattr(Tensor, func_name):
-                        # pass
-                        print(f"could not resolve Tensor.{func_name}")
+                        pass
                 supported_functions.addFunction(func_name, function, f_type)
     return supported_functions
 
