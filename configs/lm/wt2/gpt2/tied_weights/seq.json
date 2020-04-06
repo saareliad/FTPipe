@@ -1,0 +1,8 @@
+{
+    "base_config_path": "configs/lm/wt2/gpt2/tied_weights/common.json",
+    "statistics": "lm_grad_norm_loss_per_batch",
+    "weight_stashing": false,
+    "work_scheduler": "SEQ",
+    "no_recomputation": false,
+    "out_filename": "seq_tied"
+}
