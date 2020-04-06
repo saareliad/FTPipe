@@ -30,6 +30,10 @@ def get_my_send_recv_ranks(config, stage, stage_to_rank_map=None):
                     else:
                         send_ranks[tensor_name] = ranks_in_stage(j)
 
+    # Enusure the sort order is like config.
+    send_ranks = OrderedDict((k, send_ranks[k]) for k in stages[stage].outputs if k in send_ranks)
+    receive_ranks = OrderedDict((k, receive_ranks[k]) for k in stages[stage].inputs if k in receive_ranks)
+
     return send_ranks, receive_ranks
 
 

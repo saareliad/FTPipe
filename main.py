@@ -985,8 +985,7 @@ def main():
         use_recomputation=(not args.no_recomputation),
         gap_aware_just_loss=gap_aware_just_loss,
         use_pre_loaded_input=getattr(args, "use_pre_loaded_input", False),
-        weight_stashing_just_for_stats=False,
-        )
+        weight_stashing_just_for_stats=False)
 
     if hasattr(args, "ddp_sim_num_gpus") and args.ddp_sim_num_gpus > 1:
         print(
@@ -1003,6 +1002,7 @@ def main():
     if 'lm' in args.task or 'squad' in args.task:
         # No weight decay for some parameters.
         model = partition.partition
+        # NOTE: it works even if len(model.paramerters()) == 0
         opt_args = args.optimizer['args']
         no_decay = ["bias", "LayerNorm.weight"]
         optimizer_grouped_parameters = [
@@ -1029,13 +1029,8 @@ def main():
         }
         total_length = lengths['decay'] + lengths['no_decay']
         print(f"-I- optimizer_grouped_parameters: {lengths}")
-
-        # optimizer = optimizer_cls(optimizer_grouped_parameters,
-        #                           **args.optimizer['args'])
     else:
         optimizer_grouped_parameters = partition.partition.parameters()
-        # optimizer = optimizer_cls(partition.partition.parameters(),
-        #                           **args.optimizer['args'])
 
     optimizer = get_optimizer(args, optimizer_cls, optimizer_grouped_parameters)
     true_weights_storage = TrueWeightsStorage(optimizer)

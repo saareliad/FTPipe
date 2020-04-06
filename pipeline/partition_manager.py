@@ -6,10 +6,10 @@ from .partition import (Partition, LastPartition, FirstPartition,
                         PartitionWithoutRecomputation,
                         LastPartitionWithLabelInput)
 from .partition import get_buffers_for_ddp_sync
-from .training.interface import PartitionedTrainer, GradNormStepper
+from .training.interface import PartitionedTrainer  # , GradNormStepper
 from .tasks import DLTask
 from .weight_prediction.interface import WeightPredictor
-from .gap_aware import GapAwareBase  # TODO: change to interface.
+from .gap_aware import GapAwareBase
 from .work_schedulers import WorkScheduler, get_fwds_between_first_and_seconds_step_for_stage
 from .weight_stashing import WeightStasher
 from .buffer import Buffers
@@ -27,28 +27,29 @@ class SinglePartitionManager:
     # PROBLEMATIC_POLICY = 'SKIP'
 
     def __init__(
-        self,
-        stage,
-        num_stages,
-        partition: torch.nn.Module,
-        comm_handler: CommunicationHandlerBase,
-        work_scheduler: WorkScheduler,
-        training_tensor_shapes,
-        eval_tensor_shapes,
-        training_tensor_dtypes,  # FIXME
-        device,
-        is_last_partition,
-        is_first_partition,
-        log_frequency=100,
-        max_buffers=2,
-        step_every=1,
-        keep_buffers_alive=False,
-        use_recomputation=True,
-        gap_aware_just_loss=False,
-        sync_buffers=False,
-        use_pre_loaded_input=False,  # TODO: this is an option to support LMHeads in which the input goes to a partition. # TODO: write a trainer which can work with it.
-        weight_stashing_just_for_stats=False
-    ):
+            self,
+            stage,
+            num_stages,
+            partition: torch.nn.Module,
+            comm_handler: CommunicationHandlerBase,
+            work_scheduler: WorkScheduler,
+            training_tensor_shapes,
+            eval_tensor_shapes,
+            training_tensor_dtypes,  # FIXME
+            device,
+            is_last_partition,
+            is_first_partition,
+            log_frequency=100,
+            max_buffers=2,
+            step_every=1,
+            keep_buffers_alive=False,
+            use_recomputation=True,
+            gap_aware_just_loss=False,
+            sync_buffers=False,
+            use_pre_loaded_input=False,  # TODO: this is an option to support LMHeads in which the input goes to a partition. # TODO: write a trainer which can work with it.
+            weight_stashing_just_for_stats=False):
+        # FIXME: this is ugly solution for freeing send buffers in tied weights trick
+        self.sent_obejct_patience = 4
         # Preloaded input for last partition
         self.use_pre_loaded_input = use_pre_loaded_input
 
@@ -367,11 +368,13 @@ class SinglePartitionManager:
         if self.is_replicated and self.sync_buffers:
             self.comm_handler.sync_buffers(self.buffers_to_sync)
 
-    def wait_on_sent_object(self, is_fwd):
+    def wait_on_sent_object(self, is_fwd, fin=False):
         # TODO: can write the entire thing MUCH more nicely
         # if we just save asside and insert the new objects at the end.
 
         obj_holder = self.async_fwd_objects if is_fwd else self.async_bwd_objects
+        if not fin and (len(obj_holder) <= self.sent_obejct_patience):
+            return
 
         # Pop the item that was increased first.
         _, (sent_request_objects,
@@ -379,6 +382,8 @@ class SinglePartitionManager:
         for i in sent_request_objects:
             # i.wait()
             # NOTE: we remove the wait() for easier debugging: can pause the debugger and find deadlocks
+            # TODO: we wait here for something sent for proc 4. with `patience` of 1
+            # so need to increace patience somehow.
             while (not i.is_completed()):
                 pass
 
@@ -418,9 +423,7 @@ class SinglePartitionManager:
 
         return x, ctx
 
-    def forward_pass_and_send(self,
-                              batch_idx,
-                              num_batches,
+    def forward_pass_and_send(self, batch_idx, num_batches,
                               preload_input=None):
         x, ctx = self.get_input_data_forward(batch_idx, num_batches)
 
@@ -770,7 +773,7 @@ class SinglePartitionManager:
 
         # Also clear in the end, just in case...
         while len(async_fwd_objects) > 0:
-            wait_on_sent_object(is_fwd=True)
+            wait_on_sent_object(is_fwd=True, fin=True)
 
     def run_until_flush(self, num_batches):
         """
@@ -830,10 +833,10 @@ class SinglePartitionManager:
                     done_bwds += 1
 
         while len(async_fwd_objects) > 0:
-            wait_on_sent_object(is_fwd=True)
+            wait_on_sent_object(is_fwd=True, fin=True)
 
         while len(async_bwd_objects) > 0:
-            wait_on_sent_object(is_fwd=False)
+            wait_on_sent_object(is_fwd=False, fin=True)
 
         # Do a scheduler step at the end of epoch if not already doing so each step.
         if not self.trainer.PER_STEP_SCHEDULER:

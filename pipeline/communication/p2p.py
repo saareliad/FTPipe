@@ -45,7 +45,7 @@ class P2PCommunicationHandler(SimpleCommBase):
     def _send_tensors_p2p(self, x, batch_idx, ranks_dict_items, is_grad):
         with torch.no_grad():
             request_objects = []
-            sent_items = []  # Used to save them somewere.
+            distances = []  # Used to save them somewere.
 
             for tensor, (tensor_name, send_ranks) in zip(x, ranks_dict_items):
                 # tag for minibatch idx too
@@ -77,8 +77,9 @@ class P2PCommunicationHandler(SimpleCommBase):
                                                  send_rank,
                                                  tag=chunk_tag)
                         request_objects.append(request_obj)
-                        sent_items.append(None)  # FIXME: stop saving this.
-        return request_objects, sent_items
+                        distance = abs(send_rank - self.local_rank)
+                        distances.append(distance)  # FIXME: stop saving this.
+        return request_objects, distances
 
     def send_activations(self, x, batch_idx):
         return self._send_tensors_p2p(x, batch_idx, self.send_ranks.items(),
