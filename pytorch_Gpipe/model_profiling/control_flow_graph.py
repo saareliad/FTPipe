@@ -336,10 +336,12 @@ class Graph():
         }
 
         def edge_label(sizes):
+            if sizes is None:
+                return None
             if isinstance(sizes, torch.Size):
                 return list(sizes)
             else:
-                l = [edge_label(s) for s in sizes if len(s) > 0]
+                l = [edge_label(s) for s in sizes if s]
                 l = list(filter(len, l))
                 if len(l) == 1 and isinstance(l[0], list):
                     return l[0]

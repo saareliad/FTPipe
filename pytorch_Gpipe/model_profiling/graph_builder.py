@@ -2,7 +2,7 @@ import torch
 from torch import Tensor
 import functools
 import os
-from ..utils import tensorDict, layerDict, OrderedSet, Tensors, _get_size_and_shape,_get_dtypes
+from ..utils import tensorDict, layerDict, OrderedSet, Tensors, _get_size_and_shape, _get_dtypes
 from .control_flow_graph import NodeTypes, Node, Graph, GraphNodes
 from .network_profiler import profile_network, Profile
 
@@ -107,7 +107,7 @@ def build_graph(model: torch.nn.Module,
     # perform the trace
     global DEBUG_MODEL_NAME
     DEBUG_MODEL_NAME = model.__class__.__name__
-    
+
     if not os.path.exists("GPIPE_DEBUG/"):
         os.mkdir("GPIPE_DEBUG/")
     old_value = torch._C._jit_get_inline_everything_mode()
@@ -115,7 +115,7 @@ def build_graph(model: torch.nn.Module,
     with torch.no_grad():
         trace_graph: torch._C.Graph = torch.jit.trace(model, sample_batch,
                                                       check_trace=False).graph
-        with open(f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_DEBUG_base_trace.txt","w") as f:
+        with open(f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_DEBUG_base_trace.txt", "w") as f:
             f.write(str(trace_graph))
     try:
         torch._C._jit_pass_inline(trace_graph, max_depth, block_scopes)
@@ -127,7 +127,7 @@ def build_graph(model: torch.nn.Module,
             "Falling back to regular trace which is less accurate and might not work\n."
             "Please build it.")
         torch._C._jit_pass_inline(trace_graph)
-    
+
     torch._C._jit_set_inline_everything_mode(old_value)
 
     with open(f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_DEBUG_inlined_trace.txt", "w") as f:
@@ -161,7 +161,6 @@ def build_graph(model: torch.nn.Module,
 
     nodes = add_missing_types(nodes)
     nodes = shape_and_dtype_analysis(nodes)
-
 
     graph = graph_check_and_cleanup(nodes, outputs, max_depth, basic_blocks)
     os.rmdir("GPIPE_DEBUG/")
@@ -351,7 +350,7 @@ def add_accessor(nodes: GraphNodes, trace_node: torch._C.Node,
             parent_scope = longest_prefix(partials, tensor_scope)
             t = tensors[f"{parent_scope}/[{accessor_name}]"]
             tensor_scope = f"{parent_scope}/{type(t).__name__}[{accessor_name}]"
-            size,shape = _get_size_and_shape(t)
+            size, shape = _get_size_and_shape(t)
             dtype = _get_dtypes(t)
             size_in_mb = size / 1e6
 
@@ -479,8 +478,11 @@ def shape_and_dtype_analysis(nodes: GraphNodes) -> GraphNodes:
 
     return nodes
 
-def shape_analysis(node:Node):
-    if node.shape != None:
+
+def shape_analysis(node: Node):
+    if node.valueType() in [int, float, bool, str]:
+        return
+    elif node.shape != None:
         # already has a shape
         if len(node.shape) == 0:
             # HACK set shape of scalars to [1] instead of 0
@@ -494,9 +496,7 @@ def shape_analysis(node:Node):
             # will break if we have multiple outputs and one of them is scalar (isoteric so unhandeled)
             node.shape = (torch.Size([1]),)
         assert type(node.shape) is tuple, "shape must be a tuple"
-    elif node.type is NodeTypes.CONSTANT:
-        node.shape = (torch.Size([]),)
-    elif "aten::size" in node.scope:
+    elif node.type is NodeTypes.CONSTANT and node.valueType() is Tensor:
         node.shape = (torch.Size([]),)
     elif "aten::split" in node.scope or "aten::chunk" in node.scope:
         warning = "using torch.split or torch.chunk can lead to unexpected results if the target dimention will be differ than what was recorded here"
@@ -516,14 +516,13 @@ def shape_analysis(node:Node):
         father = node.in_nodes[0]
         idx = father.out_nodes.indexOf(node)
         node.shape = father.shape[idx]
-    else:
-        raise Exception(f"unsupported op in shape analysis {node.scope}")
+
 
 def dtype_analysis(node: Node):
     # we set dtype only for tensors
-    if node.valueType() in [type(None),int,bool,str,float,torch.device] or isinstance(node.dtype,tuple):
-        return    
-    if isinstance(node.dtype,torch.dtype):
+    if node.valueType() in [type(None), int, bool, str, float, torch.device] or isinstance(node.dtype, tuple):
+        return
+    if isinstance(node.dtype, torch.dtype):
         node.dtype = (node.dtype,)
     elif node.dtype is not None and type(node.dtype) is torch._C.TensorType:
         dtype = node.dtype.scalarType()
@@ -536,7 +535,8 @@ def dtype_analysis(node: Node):
         idx = father.out_nodes.indexOf(node)
         node.dtype = father.dtype[idx]
     else:
-        raise Exception(f"unsupported op in dtype analysis {node.scope} {node.valueType()}")
+        raise Exception(
+            f"unsupported op in dtype analysis {node.scope} {node.valueType()}")
 
 
 #################################
@@ -988,6 +988,8 @@ def graph_check_and_cleanup(nodes, outputs, max_depth, basic_blocks) -> Graph:
 
     os.remove(f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_DEBUG_base_trace.txt")
     os.remove(f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_DEBUG_inlined_trace.txt")
+    if os.path.exists(f'GPIPE_DEBUG/{DEBUG_MODEL_NAME}_log.out'):
+        os.remove(f'GPIPE_DEBUG/{DEBUG_MODEL_NAME}_log.out')
     return graph
 
 

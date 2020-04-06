@@ -27,9 +27,9 @@ class FunctionTypes(Enum):
     '''
     Enum representing the possible Function Types
     '''
-    FUNCTIONAL = 'F'
     TENSOR = 'Tensor'
     TORCH = 'torch'
+    FUNCTIONAL = 'F'
     OPERATOR = 'operator'
     UUSUPPORTED = 'unsupported'
 
