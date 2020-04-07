@@ -372,10 +372,11 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
 
             tr_loss += loss.item()
             if (step + 1) % args.gradient_accumulation_steps == 0:
-                if args.fp16:
-                    torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
-                else:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                if args.max_grad_norm > 0:
+                    if args.fp16:
+                        torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
+                    else:
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
                 optimizer.step()
                 scheduler.step()  # Update learning rate schedule
                 model.zero_grad()
@@ -576,6 +577,7 @@ def main():
     parser.add_argument(
         "--evaluate_every_epoch", action="store_true", help="Run evaluation at the beginning of every epoch"
     )
+    parser.add_argument("--untied", action="store_true", help="Don't use tied weights: (using torchscript flag)")
 
     parser.add_argument("--per_gpu_train_batch_size", default=4, type=int, help="Batch size per GPU/CPU for training.")
     parser.add_argument(
@@ -722,7 +724,9 @@ def main():
         config = config_class()
 
     config.output_past = False
-    config.torchscript = True
+    
+    if args.untied:
+        config.torchscript = True
 
     if args.tokenizer_name:
         tokenizer = tokenizer_class.from_pretrained(args.tokenizer_name, cache_dir=args.cache_dir, do_lower_case=args.do_lower_case)
