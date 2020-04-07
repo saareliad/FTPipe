@@ -22,6 +22,10 @@ dtype_lookup = {'11': torch.bool,
 layout_lookup = {'0': torch.strided,
                  '1': torch.sparse_coo}
 
+reduction_lookup = {'0': "none",
+                    '1': "mean",
+                    '2': "sum"}
+
 
 class FunctionTypes(Enum):
     '''
@@ -52,6 +56,8 @@ class Arg():
             return f"{self.name}={layout_lookup[value]}"
         elif self.name == 'dtype' and value != 'None':
             return f"{self.name}={dtype_lookup[value]}"
+        elif self.name == 'reduction':
+            return f"{self.name} = '{reduction_lookup[value]}'"
 
         return f"{self.name}={value}"
 
@@ -60,7 +66,9 @@ class Arg():
 
 
 class Function():
-    def __init__(self, args):
+    def __init__(self, namespace, function, args):
+        self.namespace = namespace
+        self.function = function
         self.args = args
 
     def match(self, types):
@@ -219,7 +227,7 @@ def parse_function(line, types):
         if arg_name != 'out':
             parsed_args.append(Arg(arg_name, types[arg_type]))
 
-    return func_name, Function(parsed_args)
+    return func_name, parsed_args
 
 
 def parse_supported_functions(torch_tensor_path=None, torch_nn_functional_path=None):
@@ -246,7 +254,7 @@ def parse_torch_and_Tensor_functions(supported_types, file_path=None):
         for line in getLines(f.readlines()):
             if line.startswith('def'):
                 # function decl
-                func_name, function = parse_function(line, supported_types)
+                func_name, parsed_args = parse_function(line, supported_types)
                 # marker for start of torch functions
                 if func_name.startswith("T_"):
                     is_torch = not is_torch
@@ -254,6 +262,7 @@ def parse_torch_and_Tensor_functions(supported_types, file_path=None):
 
                 if re.match("__[a-zA-Z]+__", func_name):
                     f_type = FunctionTypes.OPERATOR
+                    namespace = operator
                     func_name = func_name[2:-2:]
                     if not hasattr(operator, func_name):
                         continue
@@ -261,13 +270,17 @@ def parse_torch_and_Tensor_functions(supported_types, file_path=None):
                         args = []
                         for p in inspect.signature(getattr(operator, func_name)).parameters:
                             args.append(Arg(p, AnyType()))
-                        function = Function(args)
+                        function = Function(operator, func_name, args)
                 elif is_torch:
+                    namespace = torch
                     f_type = FunctionTypes.TORCH
+                    function = Function(namespace, func_name, parsed_args)
                     if not hasattr(torch, func_name):
                         pass
                 else:
+                    namespace = Tensor
                     f_type = FunctionTypes.TENSOR
+                    function = Function(namespace, func_name, parsed_args)
                     if not hasattr(Tensor, func_name):
                         pass
                 supported_functions.addFunction(func_name, function, f_type)
@@ -285,8 +298,8 @@ def parse_torch_nn_functional_functions(supported_types, file_path=None):
         for line in getLines(f.readlines()):
             if line.startswith('def'):
                 # function decl
-                func_name, function = parse_function(line, supported_types)
+                func_name, parsed_args = parse_function(line, supported_types)
                 assert hasattr(F, func_name)
-                supported_functions.addFunction(func_name, function,
+                supported_functions.addFunction(func_name, Function(F, func_name, parsed_args),
                                                 FunctionTypes.FUNCTIONAL)
     return supported_functions
