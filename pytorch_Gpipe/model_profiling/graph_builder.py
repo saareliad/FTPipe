@@ -24,7 +24,6 @@ __all__ = ["build_graph"]
 
 # TODO there are still some problems with lstms should think if we want to tackle it
 
-# TODO add dtype info for Tensors
 
 DEBUG_MODEL_NAME = ""
 
@@ -67,8 +66,7 @@ def build_graph(model: torch.nn.Module,
                 save_memory_mode=False) -> Graph:
     if kwargs is None:
         kwargs = dict()
-        # TODO tracing not tested with kwargs
-    assert len(kwargs) == 0, "kwargs not supported yet"
+    assert len(kwargs) == 0, "kwargs not supported by tracing"
 
     if not isinstance(sample_batch, tuple):
         sample_batch = (sample_batch, )
@@ -218,7 +216,6 @@ def add_nodes(
             value_type = Tensor
         else:
             # unprofiled op
-            # TODO maybe instead set the value_type according to the declaration file?
             if trace_node.scopeName() == "":
                 # unporfiled op to level
                 node_scope = partials["__module"]
@@ -537,7 +534,8 @@ def dtype_analysis(node: Node):
     else:
         raise Exception(
             f"unsupported op in dtype analysis {node.scope} {node.valueType()}")
-
+    if isinstance(node.dtype, torch.dtype):
+        node.dtype = (node.dtype,)
 
 #################################
 # cleanup methods

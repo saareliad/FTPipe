@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from pytorch_Gpipe.model_profiling.control_flow_graph import Node, NodeTypes
 from pytorch_Gpipe.utils import OrderedSet
-from .supported_pytorch_functions import parse_supported_functions, dtype_lookup, layout_lookup
+from .supported_pytorch_functions import parse_supported_functions, dtype_lookup, layout_lookup, FunctionTypes
 from collections import OrderedDict
 from itertools import chain
 from typing import List, Tuple, Dict, Iterator
@@ -15,7 +15,6 @@ dtab = tab + tab
 
 SupportedFunctions = parse_supported_functions()
 
-# TODO nll_loss and softmax/log_softmax
 
 __all__ = ['generate_forward_method']
 
