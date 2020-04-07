@@ -8,6 +8,9 @@ from enum import Enum
 import operator
 from .supported_types import generateTypes, AnyType
 
+
+# TODO add method invocation capabilities
+
 dtype_lookup = {'11': torch.bool,
                 '4': torch.int64,
                 '3': torch.int32,
@@ -216,7 +219,7 @@ def parse_function(line, types):
         elif '*' in arg:
             # *args
             arg_name = arg.split(":")[0][1:]
-            arg_type = "Tuple"
+            arg_type = 'Union[Tuple, List]'
             keyword = True
         else:
             # a:cls

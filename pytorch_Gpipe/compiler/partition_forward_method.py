@@ -344,6 +344,8 @@ def generateConstantExpression(ready_expressions: Dict[str, str],
         # in case of inf -inf nan
         value = f"float('{value}')"
         node.value_type = float
+    elif isinstance(value, str):
+        value = f"'{value}'"
     ready_expressions[node.scope] = f'{value}'
     expression_len[node.scope] = 0
 
@@ -422,6 +424,10 @@ def specialCases(ready_expressions: Dict[str, str], node: Node,
             [str(ready_expressions[a]) for a in operand_scopes[2:]])
         expression = f"{operand}[{args}]"
         return expression
+    elif func_name == 'einsum':
+        equation = ready_expressions[operand_scopes[0]]
+        operands = ready_expressions[operand_scopes[1]]
+        return f"{namespace}.{func_name}({equation}, {operands})"
     else:
         args = ", ".join(
             [ready_expressions[scope] for scope in operand_scopes])
