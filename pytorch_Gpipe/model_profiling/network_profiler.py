@@ -5,7 +5,7 @@ from itertools import chain
 import torch
 import torch.nn as nn
 
-from ..utils import Tensors, _detach_inputs, _get_size_and_shape, get_device, traverse_model, flatten,_get_dtypes
+from ..utils import Tensors, _detach_inputs, _get_size_and_shape, get_device, traverse_model, flatten, _get_dtypes
 
 __all__ = ['profile_network', 'Profile']
 
@@ -94,19 +94,19 @@ def profile_network(
     input_shapes = [layer.input_shape for layer in layers_dict.values()]
     output_shapes = [layer.output_shape for layer in layers_dict.values()]
 
-    #gather input/output dtypes
+    # gather input/output dtypes
     input_dtypes = [layer.input_dtype for layer in layers_dict.values()]
     output_dtypes = [layer.output_dtype for layer in layers_dict.values()]
 
     # prepare profiling results
     layers_profile = {
         name: Profile(forward, backward, *cuda_mem, param_size + buffer_size,
-                      in_size, out_size, in_shape, out_shape,input_dtype,output_dtype)
+                      in_size, out_size, in_shape, out_shape, input_dtype, output_dtype)
         for name, forward, backward, param_size, buffer_size,
-        in_size, out_size, cuda_mem, in_shape, out_shape,input_dtype,output_dtype in zip(
+        in_size, out_size, cuda_mem, in_shape, out_shape, input_dtype, output_dtype in zip(
             layers_dict.keys(), forward_times, backward_times, param_sizes,
             buffer_sizes, layer_input_sizes, layer_output_sizes, cuda_memory,
-            input_shapes, output_shapes,input_dtypes,output_dtypes)
+            input_shapes, output_shapes, input_dtypes, output_dtypes)
     }
 
     _unwrap_layers(net)
@@ -205,8 +205,8 @@ class Wrapper(nn.Module):
         self.backward_cuda_mem = 0
         self.input_shape = []
         self.output_shape = []
-        self.input_dtype=[]
-        self.output_dtype=[]
+        self.input_dtype = []
+        self.output_dtype = []
         self.scope = scope
         self.save_memory_mode = save_memory_mode
         self.recomputation = recomputation  # TODO
@@ -257,8 +257,8 @@ class Wrapper(nn.Module):
 
         with torch.set_grad_enabled(not self.recomputation):
             # if recomputation: its a dummy forward
-            forward_time, outputs, self.forward_cuda_mem = self._time_op(
-                self.layer, *detached_inputs, **kwargs)
+            forward_time, outputs, self.forward_cuda_mem = time_op(self.device,
+                                                                   self.layer, *detached_inputs, **kwargs)
 
         self.forward_time.append(forward_time)
         # reduce outputs to calculate dummy loss
@@ -267,8 +267,8 @@ class Wrapper(nn.Module):
         if self.recomputation:
             # Then, we do fwd+bwd
             # FIXME: self.forward_cuda_mem...
-            forward_time, outputs, self.forward_cuda_mem = self._time_op(
-                self.layer, *detached_inputs, **kwargs)
+            forward_time, outputs, self.forward_cuda_mem = time_op(self.device,
+                                                                   self.layer, *detached_inputs, **kwargs)
 
         for out in flatten(outputs):
             if isinstance(out, torch.Tensor):
@@ -277,8 +277,8 @@ class Wrapper(nn.Module):
         # measure backward execution time
 
         if loss.grad_fn is not None or loss.requires_grad:
-            backward_time, _, self.backward_cuda_mem = self._time_op(
-                torch.autograd.backward, loss)
+            backward_time, _, self.backward_cuda_mem = time_op(self.device,
+                                                               torch.autograd.backward, loss)
 
             # TODO: also create option to check gradient accumulation,
             #  in case this is the domminant case
@@ -305,7 +305,7 @@ class Wrapper(nn.Module):
             self.input_shape = (self.input_shape, )
         if isinstance(self.output_shape, torch.Size):
             self.output_shape = (self.output_shape, )
-        
+
         if isinstance(self.input_dtype, torch.dtype):
             self.input_dtype = (self.input_dtype, )
         if isinstance(self.output_dtype, torch.dtype):
@@ -324,45 +324,11 @@ class Wrapper(nn.Module):
 
         return outputs
 
-    def _time_op(self, func, *inputs: Tensors, **kwargs: Dict):
-        exec_time = 0
-        cuda_mem = 0
-        device = self.device
-        if (device.type == 'cuda'):
-            torch.cuda.reset_max_memory_allocated(device=device)
-            base_mem = torch.cuda.max_memory_allocated(device=device)
-
-            # measure execution time
-            torch.cuda.synchronize(device=device)
-            start = torch.cuda.Event(enable_timing=True)
-            end = torch.cuda.Event(enable_timing=True)
-            start.record()
-            out = func(*inputs, **kwargs)
-            end.record()
-            torch.cuda.synchronize(device=device)
-            exec_time = (start.elapsed_time(end))
-
-            # record memory usage
-            peak_usage = torch.cuda.max_memory_allocated(device=device)
-            cuda_mem = peak_usage - base_mem
-        else:
-            # convert seconds to milliseconds
-            start = time.time()
-            out = func(*inputs, **kwargs)
-            end = time.time()
-            exec_time = 1000 * (end - start)
-
-        return exec_time, out, cuda_mem
-
     def avg_time(self, forward=False):
         if forward:
-            forward_times = self.forward_time
+            return avg_time(self.forward_time)
         else:
-            forward_times = self.backward_time
-        max_v = max(forward_times)
-
-        return sum([t for t in forward_times if t < max_v
-                    ]) / (len(forward_times) - 1)
+            return avg_time(self.backward_time)
 
     # just in case those operations are required we pass them to the profiled layer
 
@@ -393,3 +359,40 @@ class Wrapper(nn.Module):
     def on_unwrap(self):
         if self.save_memory_mode:
             self.layer.to('cuda')  # HACK, assuming its called only at cuda.
+
+
+def time_op(device, func, *inputs: Tensors, **kwargs: Dict):
+    exec_time = 0
+    cuda_mem = 0
+    if (device.type == 'cuda'):
+        torch.cuda.reset_max_memory_allocated(device=device)
+        base_mem = torch.cuda.max_memory_allocated(device=device)
+
+        # measure execution time
+        torch.cuda.synchronize(device=device)
+        start = torch.cuda.Event(enable_timing=True)
+        end = torch.cuda.Event(enable_timing=True)
+        start.record()
+        out = func(*inputs, **kwargs)
+        end.record()
+        torch.cuda.synchronize(device=device)
+        exec_time = (start.elapsed_time(end))
+
+        # record memory usage
+        peak_usage = torch.cuda.max_memory_allocated(device=device)
+        cuda_mem = peak_usage - base_mem
+    else:
+        # convert seconds to milliseconds
+        start = time.time()
+        out = func(*inputs, **kwargs)
+        end = time.time()
+        exec_time = 1000 * (end - start)
+
+    return exec_time, out, cuda_mem
+
+
+def avg_time(times):
+    max_v = max(times)
+
+    return sum([t for t in times if t < max_v
+                ]) / (len(times) - 1)
