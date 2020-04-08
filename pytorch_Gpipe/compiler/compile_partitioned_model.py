@@ -1,15 +1,12 @@
 import torch
-from torch import Tensor
 from torch.nn import Module
-import torch.nn.functional as F
 from pytorch_Gpipe.model_profiling.control_flow_graph import Node, NodeTypes, Graph
 from pytorch_Gpipe.utils import traverse_model, traverse_params_buffs, layerDict, tensorDict
-import string
 from .partition_forward_method import generate_forward_method
 from .partition_init_method import generate_init_method
 from .state_methods import get_state_methods, generate_partition_state_methods
 from .compile_modelParallel_module import create_model_parallel_module
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional, Callable
 from collections import OrderedDict
 import inspect
 import os
@@ -87,7 +84,7 @@ def compile_partitoned_model(graph: Graph,
         output_file = output_file[:-3]
 
     lines.append(
-        create_pipeline_configuration(graph, parts, model, ios, layer_classes, batch_dim, output_file))
+        create_pipeline_configuration(graph, ios, layer_classes, batch_dim, output_file))
     if generate_model_parallel:
         lines.append(
             create_model_parallel_module(graph, batch_dim, graph.model_name, ios, graph.num_inputs,
@@ -105,40 +102,15 @@ def compile_partitoned_model(graph: Graph,
 
 
 def groupByPartition(nodes: List[Node]) -> List[Tuple[int, List[Node]]]:
-    '''groups nodes to their respective partitions for OP Nodes ensure we recognize thier namespace
+    '''groups nodes to their respective partitions
     '''
-    # groups layers and their respective nodes according to their partition
     idxs = {n.part for n in nodes}
     parts = OrderedDict()
     for i in sorted(idxs):
         parts[i] = []
 
     for n in nodes:
-        if n.type == NodeTypes.IN:
-            continue
-        elif n.type == NodeTypes.BUFF_PARAM:
-            parts[n.part].append(n)
-        elif n.type == NodeTypes.LAYER:
-            parts[n.part].append(n)
-        elif n.type == NodeTypes.OP:
-            scope = n.scope
-            # we handle torch,Tensor and torch.nn.functional nameSpaces
-            func_name = getFunctionName(scope)
-            if hasattr(torch, func_name) or hasattr(F, func_name) or hasattr(
-                    Tensor, func_name):
-                parts[n.part].append(n)
-            elif 'aten::slice' in scope or 'aten::Int' in scope:
-                parts[n.part].append(n)
-            else:
-                assert False, f'could not find nameSpace for {scope}'
-        elif n.type == NodeTypes.PYTHON_PRIMITIVE:
-            scope = n.scope
-            assert 'prim::' in scope, f'primitive does not have prim:: prefix {scope}'
-            parts[n.part].append(n)
-        else:
-            assert n.type == NodeTypes.CONSTANT, f'got type {n.type}'
-            parts[n.part].append(n)
-
+        parts[n.part].append(n)
     return parts.items()
 
 
@@ -177,23 +149,13 @@ def generateHelpFunctions() -> str:
     return "\n\n".join(lines)
 
 
-def getFunctionName(scope: str) -> str:
-    '''returns the name of a function belonging to the aten/prim namespaces
-    '''
-    if 'aten::' in scope:
-        sep = 'aten::'
-    else:
-        assert 'prim::' in scope, f"attempting to find function name but got {scope}"
-        sep = 'prim::'
-
-    return scope.split(sep)[1].rstrip(string.digits)
-
-
-def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
-                                  model: Module, ios: Dict[int,
-                                                           Dict[str,
-                                                                List[str]]],
-                                  model_blocks: Dict[str, Module], batch_dim: int, output_file: str) -> str:
+def create_pipeline_configuration(graph: Graph,
+                                  ios: Dict[int,
+                                            Dict[str,
+                                                 List[str]]],
+                                  model_blocks: Dict[str, Module],
+                                  batch_dim: int,
+                                  output_file: str) -> str:
     '''generates the create_pipeline_configuration method which given a model creates his partitioned counterpart
     '''
     # TODO assumption the first input is batched
@@ -203,31 +165,6 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
     # currently we assume that if a tensor has enough dimentions and the relevant dim size equals the batch_size
     def is_batched(s):
         return (len(s) > (batch_dim + 1)) and (s[batch_dim] == batch_size)
-
-    stage_in_out_config = dict()
-
-    for idx, io in ios.items():
-        inputs = io['inputs']
-        outputs = io['outputs']
-        input_shapes = io['input_shapes']
-        input_dtypes = io['input_dtypes']
-        output_dtypes = io['output_dtypes']
-        output_shapes = io['output_shapes']
-
-        stage_inputs = dict()
-        for i, s, d in zip(inputs, input_shapes, input_dtypes):
-            stage_inputs[i] = {"shape": s,
-                               "dtype": str(d),
-                               "is_batched": is_batched(s)}
-
-        stage_outputs = dict()
-        for o, s, d in zip(outputs, output_shapes, output_dtypes):
-            stage_outputs[o] = {"shape": s,
-                                "dtype": str(d),
-                                "is_batched": is_batched(s)}
-
-        stage_in_out_config[idx] = {"inputs": stage_inputs,
-                                    "outputs": stage_outputs}
 
     module_path = output_file.replace("/", ".")
     basic_blocks = ",".join(
@@ -253,7 +190,7 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
         return "{" + f",\n{dtab}".join(items) + "}"
 
     exp = f',\n{dtab}{tab}'.join(
-        [f"{k}: {format_dict(v)}" for k, v in stage_in_out_config.items()])
+        [f"{k}: {format_dict(v)}" for k, v in stages_in_out_config(ios, is_batched).items()])
     lines.append(
         f"# creating configuration\n{tab}stages = {{{exp}\n{dtab}{tab}}}")
 
@@ -264,25 +201,7 @@ def create_pipeline_configuration(graph: Graph, partitions: List[List[Node]],
                       f"stages[{idx}]['devices'] = [device]",
                       ])
 
-    input_ids = [f"'input{idx}'" for idx in range(graph.num_inputs)]
-    input_shapes = [format_shape_or_dtype(n.shape)[0] for n in graph.inputs]
-    input_dtypes = [format_shape_or_dtype(n.dtype)[0] for n in graph.inputs]
-
-    output_shapes = [format_shape_or_dtype(n.shape)[0] for n in graph.outputs]
-    output_ids = graph.output_scopes
-    output_dtypes = [format_shape_or_dtype(n.dtype)[0] for n in graph.outputs]
-
-    model_inputs = dict()
-    for i, s, d in zip(input_ids, input_shapes, input_dtypes):
-        model_inputs[i] = {"shape": s,
-                           "dtype":f"'{d}'",
-                           "is_batched": is_batched(s)}
-
-    model_outputs = dict()
-    for o, s, d in zip(output_ids, output_shapes, output_dtypes):
-        model_outputs[o] = {"shape": s,
-                            "dtype":f"'{d}'",
-                            "is_batched": is_batched(s)}
+    model_inputs, model_outputs = create_model_in_out_config(graph, is_batched)
 
     model_inputs = f',\n{dtab}{tab}'.join([f"{k}: {format_dict(v)}"
                                            for k, v in model_inputs.items()])
@@ -335,3 +254,81 @@ def connections(graph: Graph) -> str:
     lines.append(
         f"# model outputs {adj_matrix[num_partitions + 1]['inputs']}")
     return '\n'.join(lines) + '\n'
+
+
+def stages_in_out_config(ios: Dict, is_batched: Callable[[torch.Size], bool]) -> Dict:
+    '''generates the stages portion of the config
+     stages:
+       id
+            model_inputs
+                id
+                shape
+                dtype
+                is_batched
+            model_outputs
+                id
+                shape
+                dtype
+                is_batched
+    '''
+    config = dict()
+
+    for idx, io in ios.items():
+        inputs = io['inputs']
+        outputs = io['outputs']
+        input_shapes = io['input_shapes']
+        input_dtypes = io['input_dtypes']
+        output_dtypes = io['output_dtypes']
+        output_shapes = io['output_shapes']
+
+        stage_inputs = dict()
+        for i, s, d in zip(inputs, input_shapes, input_dtypes):
+            stage_inputs[i] = {"shape": s,
+                               "dtype": str(d),
+                               "is_batched": is_batched(s)}
+
+        stage_outputs = dict()
+        for o, s, d in zip(outputs, output_shapes, output_dtypes):
+            stage_outputs[o] = {"shape": s,
+                                "dtype": str(d),
+                                "is_batched": is_batched(s)}
+
+        config[idx] = {"inputs": stage_inputs,
+                       "outputs": stage_outputs}
+    return config
+
+
+def create_model_in_out_config(graph: Graph, is_batched: Callable[[torch.Size], bool]) -> Tuple[Dict, Dict]:
+    """create the config of model inputs and outputs
+        model_inputs
+            id
+                shape
+                dtype
+                is_batched
+        model_outputs
+            id
+                shape
+                dtype
+                is_batched
+    """
+    input_ids = [f"'input{idx}'" for idx in range(graph.num_inputs)]
+    input_shapes = [format_shape_or_dtype(n.shape)[0] for n in graph.inputs]
+    input_dtypes = [format_shape_or_dtype(n.dtype)[0] for n in graph.inputs]
+
+    output_shapes = [format_shape_or_dtype(n.shape)[0] for n in graph.outputs]
+    output_ids = graph.output_scopes
+    output_dtypes = [format_shape_or_dtype(n.dtype)[0] for n in graph.outputs]
+
+    model_inputs = dict()
+    for i, s, d in zip(input_ids, input_shapes, input_dtypes):
+        model_inputs[i] = {"shape": s,
+                           "dtype": f"'{d}'",
+                           "is_batched": is_batched(s)}
+
+    model_outputs = dict()
+    for o, s, d in zip(output_ids, output_shapes, output_dtypes):
+        model_outputs[o] = {"shape": s,
+                            "dtype": f"'{d}'",
+                            "is_batched": is_batched(s)}
+
+    return model_inputs, model_outputs
