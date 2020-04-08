@@ -8,7 +8,6 @@ from .supported_pytorch_functions import parse_supported_functions, dtype_lookup
 from collections import OrderedDict
 from itertools import chain
 from typing import List, Tuple, Dict, Iterator
-from collections import deque
 from .utils import format_shape_or_dtype
 tab = '    '
 dtab = tab + tab
@@ -122,38 +121,9 @@ def generateStatements(partition: List[Node],
         when possible avoids allocating temporary variables
     '''
     expression_len = {e: 0 for e in ready_expressions.keys()}
-    open_nodes = deque(sortNodes(partition))
-    close_nodes = set()
     arg_gen = variableNameGenerator()
     statements = []
-    i = 0
-    while len(open_nodes) > 0:
-        node = open_nodes.popleft()
-        if node.idx in close_nodes:
-            continue
-        if inputsNotReady(node, ready_expressions):
-            # inputs are not ready yet so we will attempt to generate this later
-            open_nodes.append(node)
-            continue
-        i += 1
-        if i > (2 * len(partition)):
-            # cycle detection
-            error = [
-                f"we've detected that the code generation performed {(2*len(partition))} iterations",
-                f"while the partition has only {(len(partition))} statements",
-                "we suspect that there is a loop in the control flow graph"
-                "it is possible that you you the same layer twice? for eg.",
-                "relu=nn.ReLU()",
-                "identity=x",
-                "x=layer(x)",
-                "x+=identity",
-                "x=relu(x)",
-                "we suggest to avoid using layers for stateless operations",
-                "for eg. F.relu() is preffered to nn.ReLU",
-            ]
-            error = "\n".join(error)
-            assert False, error
-
+    for node in sorted(partition, key=lambda n: n.idx):
         # actual code generation
         if node.type == NodeTypes.LAYER:
             statements.append(
@@ -180,7 +150,6 @@ def generateStatements(partition: List[Node],
                                                arg_gen,
                                                verbose=verbose))
 
-        close_nodes.add(node.idx)
     statements = filter(lambda s: s != '', statements)
     statements = dtab + f'\n{dtab}'.join(statements)
 
@@ -507,13 +476,6 @@ def generateToArgs(
     return args
 
 
-def inputsNotReady(node: Node, ready_expressions: Dict[str, str]) -> bool:
-    '''a predicate to check whether we have not generated code for any of this nodes dependencies
-    '''
-    return any(operand.scope not in ready_expressions
-               for operand in node.in_nodes)
-
-
 def canEmbedInUseSite(node: Node) -> bool:
     ''' a predicate that returns True if an expression has only one use
     '''
@@ -562,10 +524,3 @@ def sortedPartitionOutputs(partition: List[Node],
     outputs = {n for n in partition if isOutput(n)}
 
     return sorted(outputs, key=lambda n: n.scope)
-
-
-def sortNodes(nodes: List[Node]) -> List[Node]:
-    '''sorts Node by idx in ascending order
-    '''
-    nodes = list(sorted(nodes, key=lambda node: node.idx))
-    return nodes
