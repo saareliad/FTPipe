@@ -219,8 +219,7 @@ def partition_model(args,
                        output_file=args.output_file,
                        generate_model_parallel=args.generate_model_parallel,
                        save_memory_mode=args.save_memory_mode,
-                       METIS_opt=METIS_opt,
-                       DEBUG=False)
+                       METIS_opt=METIS_opt)
     if args.dot:
         graph.save_as_pdf(args.output_file, ".")
         graph.serialize(args.output_file)
@@ -256,17 +255,17 @@ def partition_model(args,
 
         analysis_sample = (expanded_inputs, expanded_labels)
 
-        _,summary=run_analysis(analysis_sample,
-                     graph,
-                     analysis_config,
-                     args.n_iter,
-                     recomputation=recomputation,
-                     bw_GBps=bandwidth_gps,
-                     async_pipeline=args.async_pipeline,
-                     sequential_model=model)
-        with open(f"{args.output_file}.py","a") as f:
+        _, summary = run_analysis(analysis_sample,
+                                  graph,
+                                  analysis_config,
+                                  args.n_iter,
+                                  recomputation=recomputation,
+                                  bw_GBps=bandwidth_gps,
+                                  async_pipeline=args.async_pipeline,
+                                  sequential_model=model)
+        with open(f"{args.output_file}.py", "a") as f:
             f.write("\n")
-            f.write('"""analysis summary\n'+summary+"\n"+'"""')      
+            f.write('"""analysis summary\n' + summary + "\n" + '"""')
         sys.exit()
     # model(inputs)
     # outputs = model(inputs, masked_lm_labels=labels) if args.mlm else model(
@@ -274,11 +273,12 @@ def partition_model(args,
     # # model outputs are always tuple in transformers (see doc)
     # loss = outputs[0]
 
+
 def parse_cli():
     # TODO: use default partitioning args like other partitioning scripts
     # And add extra args spesific to this script as needed.
     parser = argparse.ArgumentParser(
-            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     # parameter required by the repo
     tr_params = parser.add_argument_group("Transformers parameters")
@@ -437,13 +437,12 @@ def parse_cli():
     ParseMetisOpts.add_metis_arguments(parser)
 
     args = parser.parse_args()
-    
+
     if args.auto_file_name:
         args.output_file = f"{args.model_type}_p{args.n_partitions}"
 
     if args.output_file.endswith(".py"):
         args.output_file = args.output_file[:-3]
-
 
     return args
 
@@ -452,7 +451,6 @@ def main():
 
     args = parse_cli()
     METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
-
 
     if args.model_type in ["bert", "roberta", "distilbert", "camembert"
                            ] and not args.mlm:

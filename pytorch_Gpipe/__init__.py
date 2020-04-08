@@ -28,7 +28,6 @@ def pipe_model(model: nn.Module,
                use_layers_only_graph: bool = False,
                output_file: str = None,
                generate_model_parallel: bool = False,
-               DEBUG=False,
                recomputation=False,
                save_memory_mode=False,
                METIS_opt=dict()) -> Graph:
@@ -68,8 +67,6 @@ def pipe_model(model: nn.Module,
         if not given defualts to generated_{modelClass}{actualNumberOfPartitions}
      generate_model_parallel:
         whether to generate a model parallel version of the partition in the addition to the partitions themselves
-    DEBUG:
-        whether to generate the debug version of the partition more comments and assertions in the generated file
     METIS_opt:
         dict of additional kwargs to pass to the METIS partitioning algorithm
     '''
@@ -92,7 +89,6 @@ def pipe_model(model: nn.Module,
                              model,
                              batch_dim,
                              output_file=output_file,
-                             verbose=DEBUG,
                              generate_model_parallel=generate_model_parallel)
 
     return graph

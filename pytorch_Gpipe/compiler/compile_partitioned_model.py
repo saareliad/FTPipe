@@ -19,7 +19,6 @@ dtab = tab + tab
 def compile_partitoned_model(graph: Graph,
                              model: Module,
                              batch_dim: int,
-                             verbose: bool = False,
                              generate_model_parallel: bool = False,
                              output_file: Optional[str] = None):
     '''generates the code for the partitioned model.
@@ -32,8 +31,6 @@ def compile_partitoned_model(graph: Graph,
         the module itself
     batch_dim:
         the batch dimention of the input
-    verbose:
-        whether to generate each statement of the forward function in a seperate line (usefull for debugging)
     generate_model_parallel:
         whether to generate a model parallel version of the partition in the addition to the partitions themselves
     output_file:
@@ -71,8 +68,7 @@ def compile_partitoned_model(graph: Graph,
         state_methods_functions = generate_partition_state_methods()
         forward_function, io = generate_forward_method(part,
                                                        graph.output_scopes,
-                                                       scope_to_class_field,
-                                                       verbose=verbose)
+                                                       scope_to_class_field)
         partitions_code.append(class_decl)
         partitions_code.extend(forward_function)
         partitions_code.append(state_methods_functions)

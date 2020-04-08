@@ -80,7 +80,7 @@ def build_graph(model, sample_batch, kwargs, max_depth, basic_blocks, n_iter)
 this function builds a graph representing the model
 
 ```python
-def compile_partitoned_model(graph, model, verbose, output_file):
+def compile_partitoned_model(graph, model, output_file):
 ```
 
 this function takes the graph and compiles it emitting python code
@@ -203,11 +203,8 @@ this module is the gateway to generating partitioned code.
 it's responsible to generate helper methods to be used by the generated code.
 
 ```python
-def compile_partitoned_model(graph, model, verbose, output_file):
+def compile_partitoned_model(graph, model, output_file):
 ```
-
-the verbose argument makes the code generator to emit each statement in forward method in a new line(useful for debuging)
-
 the partitions can be consumed later by calling the generated method:
 
 ```python
@@ -248,7 +245,7 @@ code is generated according to topological sorting of the partition
 
 ```python
 def generate_forward_method(partition, model_outputs,
-                            scope_to_class_field, verbose):
+                            scope_to_class_field):
 ```
 
 ### State Methods

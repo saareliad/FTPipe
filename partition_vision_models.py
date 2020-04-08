@@ -147,10 +147,10 @@ def parse_cli():
     METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
     return args, METIS_opt
 
+
 if __name__ == "__main__":
 
     args, METIS_opt = parse_cli()
-    VERBOSE_PARTITIONING = False
     GET_PARTITIONS_ON_CPU = True
 
     # if the model is too big run the whole partitioning process on CPU
@@ -172,7 +172,6 @@ if __name__ == "__main__":
     # partition the model using our profiler
     # if the model need multiple inputs pass a tuple
     # if the model needs kwargs pass a dictionary
-    # DEBUG switches between verbose generated code and compressed code
     n_iter = args.n_iter
     recomputation = not args.no_recomputation
     bw = args.bw
@@ -184,7 +183,6 @@ if __name__ == "__main__":
                        depth=args.depth,
                        kwargs=None,
                        nparts=n_partitions,
-                       DEBUG=VERBOSE_PARTITIONING,
                        output_file=args.output_file,
                        generate_model_parallel=args.generate_model_parallel,
                        use_layers_only_graph=args.partition_layer_graph,
@@ -226,15 +224,15 @@ if __name__ == "__main__":
 
     if not args.no_analysis:
         sample = create_random_sample(args, analysis=True)
-        analysis_result,summary = run_analysis(sample,
-                                       graph,
-                                       analysis_config,
-                                       n_iter,
-                                       recomputation=recomputation,
-                                       bw_GBps=bw,
-                                       verbose=True,
-                                       async_pipeline=args.async_pipeline,
-                                       sequential_model=model)
-        with open(f"{args.output_file}.py","a") as f:
+        analysis_result, summary = run_analysis(sample,
+                                                graph,
+                                                analysis_config,
+                                                n_iter,
+                                                recomputation=recomputation,
+                                                bw_GBps=bw,
+                                                verbose=True,
+                                                async_pipeline=args.async_pipeline,
+                                                sequential_model=model)
+        with open(f"{args.output_file}.py", "a") as f:
             f.write("\n")
-            f.write('"""analysis summary\n'+summary+"\n"+'"""')
+            f.write('"""analysis summary\n' + summary + "\n" + '"""')

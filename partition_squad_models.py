@@ -422,7 +422,7 @@ def main():
     METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
 
     args.model_type = args.model_type.lower()
-    
+
     if args.auto_file_name:
         args.output_file = f"{args.model_type}_p{args.n_partitions}"
 
@@ -513,7 +513,6 @@ def main():
 
     # Partition the model
     # partition_model(args, train_dataset, model, tokenizer, METIS_opt=METIS_opt)
-    VERBOSE_PARTITIONING = False
     GET_PARTITIONS_ON_CPU = True
 
     n_iter = args.n_iter
@@ -528,7 +527,6 @@ def main():
                        depth=args.depth,
                        kwargs=None,
                        nparts=n_partitions,
-                       DEBUG=VERBOSE_PARTITIONING,
                        output_file=args.output_file,
                        generate_model_parallel=args.generate_model_parallel,
                        use_layers_only_graph=args.partition_layer_graph,
@@ -568,18 +566,18 @@ def main():
 
     if not args.no_analysis:
         # sample = create_random_sample(args, analysis=True)
-        analysis_result,summary = run_analysis(sample,
-                                       graph,
-                                       analysis_config,
-                                       n_iter,
-                                       recomputation=recomputation,
-                                       bw_GBps=bw,
-                                       verbose=True,
-                                       async_pipeline=args.async_pipeline,
-                                       sequential_model=model)
-        with open(f"{args.output_file}.py","a") as f:
+        analysis_result, summary = run_analysis(sample,
+                                                graph,
+                                                analysis_config,
+                                                n_iter,
+                                                recomputation=recomputation,
+                                                bw_GBps=bw,
+                                                verbose=True,
+                                                async_pipeline=args.async_pipeline,
+                                                sequential_model=model)
+        with open(f"{args.output_file}.py", "a") as f:
             f.write("\n")
-            f.write('"""analysis summary\n'+summary+"\n"+'"""')
+            f.write('"""analysis summary\n' + summary + "\n" + '"""')
 
 
 if __name__ == "__main__":

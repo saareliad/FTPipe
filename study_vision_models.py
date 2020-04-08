@@ -138,8 +138,7 @@ def parse_cli():
         '--model_too_big',
         action='store_true',
         default=False,
-        help=
-        "if the model is too big run the whole partitioning process on CPU, "
+        help="if the model is too big run the whole partitioning process on CPU, "
         "and drink a cup of coffee in the meantime")
     parser.add_argument('-p', '--n_partitions', type=int, default=4)
     parser.add_argument('-o', '--output_file', default='wrn_16x4')
@@ -151,8 +150,7 @@ def parse_cli():
         '--n_iter',
         type=int,
         default=100,
-        help=
-        "number of iteration used in order to profile the network and run analysis"
+        help="number of iteration used in order to profile the network and run analysis"
     )
     parser.add_argument(
         '--bw',
@@ -215,20 +213,17 @@ def parse_cli():
     metis_opts.add_argument(
         '--metis_niter',
         type=int,
-        help=
-        "Specifies the number of iterations for the refinement algorithms at each stage of the uncoarsening process."
+        help="Specifies the number of iterations for the refinement algorithms at each stage of the uncoarsening process."
         "Default is 10.")
     metis_opts.add_argument(
         '--nseps',
         type=int,
-        help=
-        "Specifies the number of different separators that it will compute at each level of nested dissection."
+        help="Specifies the number of different separators that it will compute at each level of nested dissection."
         "The final separator that is used is the smallest one. Default is 1.")
     metis_opts.add_argument(
         "--ncuts",
         type=int,
-        help=
-        "Specifies the number of different partitionings that it will compute."
+        help="Specifies the number of different partitionings that it will compute."
         " The final partitioning is the one that achieves the best edgecut or communication volume."
         "Default is 1.")
     metis_opts.add_argument(
@@ -292,7 +287,6 @@ def single_partitioning_loop_with_override(args, METIS_opt, **override_dict):
     n_partitions = override_dict.get('n_partitions',
                                      getattr(args, 'n_partitions'))
 
-    VERBOSE_PARTITIONING = False
     GET_PARTITIONS_ON_CPU = True
 
     # if the model is too big run the whole partitioning process on CPU
@@ -324,7 +318,6 @@ def single_partitioning_loop_with_override(args, METIS_opt, **override_dict):
                        depth=args.depth,
                        kwargs=None,
                        nparts=n_partitions,
-                       DEBUG=VERBOSE_PARTITIONING,
                        output_file=args.output_file,
                        use_layers_only_graph=args.partition_layer_graph,
                        node_weight_function=node_weight_function,
@@ -360,14 +353,14 @@ def single_partitioning_loop_with_override(args, METIS_opt, **override_dict):
 
     if not args.no_analysis:
         sample = create_random_sample(args, analysis=True)
-        expected_speedup,_ = run_analysis(sample,
-                                        graph,
-                                        analysis_config,
-                                        n_iter,
-                                        recomputation=recomputation,
-                                        bw_GBps=bw,
-                                        verbose=True,
-                                        async_pipeline=args.async_pipeline)
+        expected_speedup, _ = run_analysis(sample,
+                                           graph,
+                                           analysis_config,
+                                           n_iter,
+                                           recomputation=recomputation,
+                                           bw_GBps=bw,
+                                           verbose=True,
+                                           async_pipeline=args.async_pipeline)
     return expected_speedup
 
 

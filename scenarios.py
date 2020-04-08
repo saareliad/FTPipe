@@ -502,7 +502,7 @@ def generate_graph(model, sample, name, kwargs=None, depth=10000, basic_blocks=N
     graph.save_as_pdf(name, f"playground_out/graphs/{name}",
                       show_buffs_params=True, show_weights=False)
     if generate_code:
-        compile_partitoned_model(graph, model, verbose=False,
+        compile_partitoned_model(graph, model,
                                  output_file=f"playground_out/generated/{name}")
 
 
