@@ -1,5 +1,6 @@
 import torch
-from models.normal import WideResNet, amoebanetd, ResNet
+from models.normal import WideResNet, amoebanetd
+from models.normal.vision_models import ResNet
 from pytorch_Gpipe.model_profiling import Node, NodeTypes
 import argparse
 import importlib
