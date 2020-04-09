@@ -37,7 +37,7 @@ def create_pipeline_configuration(DEBUG=False):
             'models.normal.nlp.stateless.StatelessLinear',
             'torch.nn.modules.dropout.Dropout',
             'models.normal.nlp.stateless.StatelessEmbedding']
-    module_path = 'gpt2_tied_lm_5p'
+    module_path = 'models.partitioned.gpt2_tied_lm_5p'
     
 
     # creating configuration
