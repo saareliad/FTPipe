@@ -6,15 +6,12 @@ from inspect import signature
 
 from torch.nn import Module
 from typing import Tuple
+from .transformers_cfg import MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS
 _PARTITIONED_MODELS_PACKAGE = "models.partitioned"
 
 # TODO: do this automatically...
 # HACK: called with a ready model instance.
-_GPT2 = dict(
-    gpt2=dict(),
-    gpt2_lm_lowercase=dict(),
-    gpt2_lmhead_lowercase_5p=dict(),
-    )
+_TRANSFORMERS = {k: dict() for k in MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS}
 
 _RESENETS = dict(resnet50_imagenet_p8=dict(
     block=Bottleneck, layers=[3, 4, 6, 3], num_classes=1000))
@@ -76,7 +73,7 @@ def _register_model(dict_params, model_cls):
 _register_model(_WIDE_RESNETS, WideResNet)
 _register_model(_RESENETS, ResNet)
 # HACK: called with a ready model instance.
-_register_model(_GPT2, None)
+_register_model(_TRANSFORMERS, None)
 
 
 def create_normal_model_instance(cfg):
@@ -88,27 +85,8 @@ def normal_model_class(cfg):
     return MODEL_CFG_TO_SAMPLE_MODEL[cfg]
 
 
-def infer_partitioning_config_version(cfg):
-
-    generated_file_name = CFG_TO_GENERATED_FILE_NAME[cfg]
-    generated = importlib.import_module("." + generated_file_name,
-                                        package=_PARTITIONED_MODELS_PACKAGE)
-
-    createConfig = generated.createConfig if hasattr(
-        generated, "createConfig") else generated.create_pipeline_configuration
-
-    if hasattr(generated, "createConfig"):
-        partitioning_version_to_use = 0
-    elif len(signature(createConfig).parameters) == 1:
-        partitioning_version_to_use = 1
-    else:
-        partitioning_version_to_use = 0  # same stuff different name
-
-    return partitioning_version_to_use
-
-
-def get_partitioning(cfg, my_rank, batch_size, model_instance=None
-                        ) -> Tuple[PipelineConfig, Module]:
+def get_partitioning(cfg, my_rank, batch_size,
+                     model_instance=None) -> Tuple[PipelineConfig, Module]:
     GET_PARTITIONS_ON_CPU = True
 
     generated_file_name = CFG_TO_GENERATED_FILE_NAME[cfg]

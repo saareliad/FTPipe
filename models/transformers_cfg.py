@@ -45,10 +45,16 @@ def gpt2_lmhead_lowercase_5p():
                 output_past=False,
                 stateless_tied=True)
 
+def gpt2_tied_lm_5p():
+    return dict(model_type='gpt2_lm_stateless',
+                model_name_or_path='gpt2',
+                do_lower_case=False,
+                output_past=False,
+                stateless_tied=True)
 
 MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS = {
-    'gpt2': gpt2_lowercase,
     'gpt2_lowercase': gpt2_lowercase,
     'gpt2_lm_lowercase': gpt2_lm_lowercase,
     'gpt2_lmhead_lowercase_5p': gpt2_lmhead_lowercase_5p,
+    'gpt2_tied_lm_5p': gpt2_tied_lm_5p,
 }
