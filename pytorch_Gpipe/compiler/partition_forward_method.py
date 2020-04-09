@@ -14,6 +14,16 @@ dtab = tab + tab
 
 SupportedFunctions = parse_supported_functions()
 
+inplace_arithmetic_ops = {"iadd": "+=",
+                          "isub": "-=",
+                          "imul": "*=",
+                          "itruediv": "/=",
+                          "iand": "&=",
+                          "ior": "|=",
+                          "ixor": "^=",
+                          "ilshift": "<<=",
+                          "irshift": ">>=",
+                          }
 
 __all__ = ['generate_forward_method']
 
@@ -314,6 +324,12 @@ def generateFunctionCallExpression(ready_expressions: Dict[str, str],
     comment = f'# calling {namespace}.{func_name} with arguments:\n{dtab}# {scope_comment}'
 
     ready_expressions[scope] = variable_name
+    # handle basic inplace arithmetic
+    # torchscript does not allow calling methods from the operator namespace
+    # the most common case of using the operator namespace is inplace arithmetic functions
+    # TODO maybe this should be elsewhere
+    if func_name in inplace_arithmetic_ops and "operator." in expression:
+        return comment + f'\n{dtab}{values[0]} {inplace_arithmetic_ops[func_name]} {values[1]}\n{dtab}{variable_name} = {values[0]}'
 
     return comment + f'\n{dtab}{variable_name} = {expression}'
 
