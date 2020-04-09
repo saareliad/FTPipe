@@ -1,5 +1,6 @@
 import torch
-from models.normal import WideResNet, amoebanetd, ResNet, vgg16_bn
+from models.normal import WideResNet, amoebanetd, vgg16_bn
+from models.normal.vision_models import ResNet
 from pytorch_Gpipe.utils import layerDict, tensorDict
 from pytorch_Gpipe import PipelineConfig, pipe_model
 import argparse
