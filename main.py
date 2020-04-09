@@ -231,14 +231,23 @@ def parse_json_config(args, config=None):
     with open(config, 'r') as f:
         output = json.load(f)
 
+    def fix_base_cfg_path(base_config_path, is_relative):
+        if is_relative:
+            return os.path.join(os.path.dirname(config), base_config_path)
+        return base_config_path
+
     # option to load a base config, reducing code duplication.
     if "base_config_path" in output:
         base_config_path = output.get("base_config_path")
+        is_relative = output.get("base_config_path_is_relative", False)
         if isinstance(base_config_path, list):
             for i in base_config_path:
-                parse_json_config(args, config=i)
+                parse_json_config(args,
+                                  config=fix_base_cfg_path(i, is_relative))
         else:
-            parse_json_config(args, config=base_config_path)
+            parse_json_config(args,
+                              config=fix_base_cfg_path(base_config_path,
+                                                       is_relative))
 
     if not os.path.exists(config):
         raise ValueError(f"Config {config} does not exists")
@@ -854,13 +863,9 @@ def main():
     if not args.cpu:
         torch.cuda.set_device(device)
 
-    CONFIG_VERSION = models.infer_partitioning_config_version(args.model)
-    if CONFIG_VERSION != 1:
-        raise NotImplementedError(f"CONFIG_VERSION: {CONFIG_VERSION}")
-    print(f"Partitioning Config version is {CONFIG_VERSION}. Parsing...")
+    print(f"Loading partitioned model and dataset...")
 
     # Parse partitioning config and requires args
-    COMM_VERSION = 1
 
     model_instance = None
     dataset_keywords = {}
@@ -900,6 +905,15 @@ def main():
                         world_size=args.world_size,
                         name_prefix=args.out_filename)  # FIXME: real name
 
+    # Comm handler
+    COMM_VERSION = 1
+    if COMM_VERSION == 1:
+        comm_handler = create_comm_handler(args, comm_init_args, device)
+        comm_handler.init_process_group()
+    else:
+        # comm_handler =
+        raise NotImplementedError("In progress")
+
     # Try getting separate X,Y dataloaders
     if is_first_partition or is_last_partition:
         explicit_separated_dataset = "_sep" in args.task
@@ -911,13 +925,6 @@ def main():
     else:
         train_dl, test_dl, samplers = None, None, []
     del dataset_keywords
-
-    if COMM_VERSION == 1:
-        comm_handler = create_comm_handler(args, comm_init_args, device)
-        comm_handler.init_process_group()
-    else:
-        # comm_handler =
-        raise NotImplementedError("In progress")
 
     # instead of loading dl on every device,
     # when not needed - can just send the length as a message
@@ -1032,7 +1039,8 @@ def main():
     else:
         optimizer_grouped_parameters = partition.partition.parameters()
 
-    optimizer = get_optimizer(args, optimizer_cls, optimizer_grouped_parameters)
+    optimizer = get_optimizer(args, optimizer_cls,
+                              optimizer_grouped_parameters)
     true_weights_storage = TrueWeightsStorage(optimizer)
     partition.set_true_weights_storage(true_weights_storage)
 
