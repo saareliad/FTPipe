@@ -967,7 +967,8 @@ class Partition0(nn.Module):
         # calling Tensor.permute with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::matmul5351
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListConstruct5356
-        t_11 = t_7.permute(dims=t_11)
+        # NOTE: fixed this manually
+        t_11 = t_7.permute(dims=t_11).contiguous()
         # returing:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/aten::add5221
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::permute5357
