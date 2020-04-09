@@ -47,6 +47,19 @@ Not supported. To be removed.
 python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_node 2 main.py --cpu --distributed_backend gloo
 ```
 
+## Adding a model
+
+### Example for a transformer model
+may change in the future.
+
+1. partition the model
+2. add the model under `modles.partitioned.FN`
+3. (can skip this part) create a function name `FN()` in `models.transformers_cfg` defining the config.
+4. add that function to `models.transformers_cfg.MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS` 
+5. register it with `models.cfg_to_model._register_model` by passing a dummy dict:
+ ```python
+ _register_model(dict(FN=dict()), None)
+ ```
 ## Known problems
 
 * gpu bcast not working yet. (some deadlock)
