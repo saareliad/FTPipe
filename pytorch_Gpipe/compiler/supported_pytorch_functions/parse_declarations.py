@@ -118,9 +118,15 @@ class PytorchFunctions():
             functions = d[name]
             for f in functions:
                 if f.match(types):
-                    return f"{namespace}.{name}{f(types,values)}"
+                    # for torch/F/operator we do namespace.func(args)
+                    if namespace != "Tensor":
+                        return f"{namespace}.{name}{f(types,values)}"
+                    # for Tensor we do args[0].func(args[1:])
+                    args = f(types, values).split(",", maxsplit=1)
+                    if len(args) > 1:
+                        return f"{args[0][1:]}.{name}({args[1][1:-1]})"
+                    return f"{args[0][1:-1]}.{name}()"
         except Exception as e:
-
             pass
         return ''
 
