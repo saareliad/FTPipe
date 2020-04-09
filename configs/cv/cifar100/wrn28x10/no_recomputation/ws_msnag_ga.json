@@ -1,10 +1,11 @@
 
 {
     "base_config_path": [
-        "configs/cv/cifar100/wrn28x10/common.json",
-        "configs/cv/cifar100/wrn28x10/msnag_optimizer.json",
-        "configs/cv/cifar100/wrn28x10/no_recomputation/norecomp.json"
+        "../common.json",
+        "../msnag_optimizer.json",
+        "norecomp.json"
     ],
+    "base_config_path_is_relative": true,
     "gap_aware": {
         "type": "sgd1",
         "policy": "all_except_last",
