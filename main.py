@@ -992,7 +992,9 @@ def main():
         use_recomputation=(not args.no_recomputation),
         gap_aware_just_loss=gap_aware_just_loss,
         use_pre_loaded_input=getattr(args, "use_pre_loaded_input", False),
-        weight_stashing_just_for_stats=False)
+        weight_stashing_just_for_stats=getattr(args, "weight_stashing_just_for_stats", False),
+        stateless_tied=getattr(args, "stateless_tied", False)
+        )
 
     if hasattr(args, "ddp_sim_num_gpus") and args.ddp_sim_num_gpus > 1:
         print(

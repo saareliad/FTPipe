@@ -47,9 +47,20 @@ class SinglePartitionManager:
             gap_aware_just_loss=False,
             sync_buffers=False,
             use_pre_loaded_input=False,  # TODO: this is an option to support LMHeads in which the input goes to a partition. # TODO: write a trainer which can work with it.
-            weight_stashing_just_for_stats=False):
+            weight_stashing_just_for_stats=False,
+            # sent_object_patience=1,
+            stateless_tied=True  # FIXME
+            ):
         # FIXME: this is ugly solution for freeing send buffers in tied weights trick
-        self.sent_obejct_patience = 4
+       
+        if stateless_tied and (is_first_partition or is_last_partition):
+            self.sent_obejct_patience = num_stages - 2
+        else:
+            self.sent_obejct_patience = 1 
+
+
+
+
         # Preloaded input for last partition
         self.use_pre_loaded_input = use_pre_loaded_input
 
@@ -380,12 +391,12 @@ class SinglePartitionManager:
         _, (sent_request_objects,
             tmp_sent_items) = obj_holder.popitem(last=False)
         for i in sent_request_objects:
-            # i.wait()
+            i.wait()
             # NOTE: we remove the wait() for easier debugging: can pause the debugger and find deadlocks
             # TODO: we wait here for something sent for proc 4. with `patience` of 1
             # so need to increace patience somehow.
-            while (not i.is_completed()):
-                pass
+            # while (not i.is_completed()):
+            #     pass
 
     def get_input_data_forward(self, batch_idx, num_batches):
 

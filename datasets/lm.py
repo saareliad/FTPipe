@@ -26,6 +26,7 @@ class TextDataset(Dataset):
             '_' + filename)
 
         if os.path.exists(cached_features_file) and not overwrite_cache:
+            print(f"Loading from cahced feature file: {cached_features_file}")
             with open(cached_features_file, 'rb') as handle:
                 self.examples = pickle.load(handle)
 

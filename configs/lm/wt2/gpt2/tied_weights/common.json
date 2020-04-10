@@ -14,11 +14,11 @@
     "trainer": {
         "type": "lm",
         "args": {
-            "always_calc_grad_norm": true
+            "always_calc_grad_norm": false
         }
     },
-    "bs_train": 3,
-    "bs_test": 3,
+    "bs_train": 4,
+    "bs_test": 4,
     "train_seq_len": 1024,
     "valid_seq_len": 1024,
     "test_seq_len": 1024,
@@ -55,5 +55,7 @@
     "step_every": 1,
     "keep_buffers_alive": true,
     "train_batches_limit": -1,
-    "log_frequency": 20
+    "log_frequency": 20,
+    "overwrite_cache": true,
+    "stateless_tied": true
 }
