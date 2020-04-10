@@ -13,7 +13,7 @@ def run_function(func, cfg, q):
 
 
 def run_function_on_several_gpus(required_gpus, func, cfg, q):
-    gpus = [q.get() for _ in range(required_gpus)]
+    gpus = [str(q.get()) for _ in range(required_gpus)]
     os.environ['CUDA_VISIBLE_DEVICES'] = ",".join(gpus)
     print(f"GPUs:{gpus}")
     func(**cfg)

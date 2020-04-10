@@ -49,8 +49,8 @@ def run_grid_on_multi_gpu_per_run(COMMAND, param_grid, gpu_list, gpus_per_config
 
     # Assumes required gpu per run is 1
     configs = ParameterGrid(param_grid)
-    func = partial(subproccess_func, COMMAND)
-    # func = partial(call_function, COMMAND)
+    # func = partial(subproccess_func, COMMAND)
+    func = partial(call_function, COMMAND)
     map_to_several_limited_gpus(func, configs, gpus_per_config, len(gpu_list),
                                 CUDA_VISIBLE_DEVICES=gpu_list)
 
