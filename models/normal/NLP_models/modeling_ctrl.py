@@ -68,7 +68,7 @@ class PositionalEncoding(nn.Module):
 
 
 class ScaledDotProductAttention(nn.Module):
-    def forward(self, q, k, v, mask, attention_mask=None, head_mask=None):
+    def forward(self, q, k, v, mask=None, attention_mask=None, head_mask=None):
         # calculate attention
         matmul_qk = torch.matmul(q, k.permute(0, 1, 3, 2))
 
@@ -90,9 +90,9 @@ class ScaledDotProductAttention(nn.Module):
         if head_mask is not None:
             attention_weights = attention_weights * head_mask
 
-        output = torch.matmul(attention_weights, v)
-
-        return output, attention_weights
+        # output = torch.matmul(attention_weights, v)
+        # return output, attention_weights
+        return v, attention_weights
 
 
 class MultiHeadAttention(torch.nn.Module):
@@ -131,12 +131,18 @@ class MultiHeadAttention(torch.nn.Module):
             v = torch.cat((past_value, v), dim=-2)
         present = torch.stack((k, v))
 
-        output = self.scaled_dot_product_attention(q, k, v,
-                                                   mask,
-                                                   attention_mask,
-                                                   head_mask)
-        scaled_attention = output[0].permute([0, 2, 1, 3])
-        attn = output[1]
+        # output = self.scaled_dot_product_attention(q, k, v,
+        #                                            mask,
+        #                                            attention_mask,
+        #                                            head_mask)
+
+        v, attn = self.scaled_dot_product_attention(q, k, v,
+                                                    mask,
+                                                    attention_mask,
+                                                    head_mask)
+
+        scaled_attention = torch.matmul(attn, v).permute([0, 2, 1, 3])
+        # attn = output[1]
         original_size_attention = scaled_attention.reshape(batch_size, -1,
                                                            self.d_model_size)
         output = self.dense(original_size_attention)
@@ -595,7 +601,7 @@ class CTRLModel(CTRLPreTrainedModel):
 
         if past is None:
             past_length = 0
-            past = [None] * len(self.h)
+            past = [None] * self.num_layers
         else:
             past_length = past[0][0].size(-2)
         if position_ids is None:
@@ -737,13 +743,13 @@ class CTRLLMHeadModel(CTRLPreTrainedModel):
     def forward(
         self,
         input_ids=None,
+        labels=None,
         past=None,
         attention_mask=None,
         token_type_ids=None,
         position_ids=None,
         head_mask=None,
         inputs_embeds=None,
-        labels=None,
     ):
         r"""
         labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size, sequence_length)`, `optional`, defaults to :obj:`None`):

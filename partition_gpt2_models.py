@@ -50,12 +50,17 @@ from transformers import (
     DistilBertConfig,
     DistilBertForMaskedLM,
     DistilBertTokenizer,
+    CTRLConfig,
+    CTRLTokenizer,
+    T5Config,
+    T5Tokenizer
     #   CamembertConfig, CamembertForMaskedLM, CamembertTokenizer
 )
 
 from models.normal import GPT2LMHeadModel, GPT2Model
 from models.normal import StatelessGPT2LMHeadModel  # , StatelessGPT2Model
-
+from models.normal.NLP_models.modeling_ctrl import CTRLLMHeadModel, CTRLModel
+from models.normal.NLP_models.modeling_t5 import T5Model, T5ForConditionalGeneration
 
 from pytorch_Gpipe import pipe_model
 from misc import run_analysis  # , run_partitions
@@ -70,11 +75,15 @@ MODEL_CLASSES_LM_HEAD = {
     'roberta': (RobertaConfig, RobertaForMaskedLM, RobertaTokenizer),
     'distilbert':
     (DistilBertConfig, DistilBertForMaskedLM, DistilBertTokenizer),
+    'ctrl': (CTRLConfig, CTRLLMHeadModel, CTRLTokenizer),
+    't5': (T5Config, T5ForConditionalGeneration, T5Tokenizer)
     # 'camembert': (CamembertConfig, CamembertForMaskedLM, CamembertTokenizer)
 }
 
 MODEL_CLASSES = {
     'gpt2': (GPT2Config, GPT2Model, GPT2Tokenizer),
+    'ctrl': (CTRLConfig, CTRLModel, CTRLTokenizer),
+    't5': (T5Config, T5Model, T5Tokenizer)
 }
 
 MODEL_CLASSES_LM_HEAD_STATELESS_TIED = {

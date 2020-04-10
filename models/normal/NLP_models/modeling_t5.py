@@ -1192,11 +1192,11 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
     def forward(
         self,
         input_ids=None,
+        lm_labels=None,
         attention_mask=None,
         encoder_outputs=None,
         decoder_input_ids=None,
         decoder_attention_mask=None,
-        lm_labels=None,
         inputs_embeds=None,
         decoder_inputs_embeds=None,
         head_mask=None,
@@ -1271,6 +1271,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         if lm_labels is not None:
             loss = self.lm_loss(
                 lm_logits.view(-1, lm_logits.size(-1)), lm_labels.view(-1))
+            return (loss,)
             decoder_outputs = (
                 loss,
             ) + decoder_outputs  # TODO(thom): Add z_loss https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/layers.py#L666
