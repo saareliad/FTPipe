@@ -29,9 +29,6 @@ def post_process_partition(graph: Graph, verbose_on_error=True) -> Graph:
 
     # this is a sanity check
     if has_cycles(graph):
-        graph.save_as_pdf(f"{graph.model_name}_after_fix",
-                        ".", show_profiles=True)
-
         if verbose_on_error:
             problems, info = get_problematic_partitions(graph)
             print("-V- printing problematic partitions")
