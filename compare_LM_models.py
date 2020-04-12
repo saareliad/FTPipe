@@ -176,7 +176,6 @@ def compare_models(args,
     print(f"partitioned model: {partitioned_path}")
     print(f"huggingface reference: {huggingface_path}")
     print(f"tokenizer: {tokenizer_path}")
-    print()
  
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset,
@@ -184,12 +183,8 @@ def compare_models(args,
                                   batch_size=args.comparison_batch_size)
 
     # prepare models
-    huggingface_model = huggingface_model.module if hasattr(huggingface_model,
-                                                            'module') else huggingface_model
     huggingface_model.resize_token_embeddings(len(tokenizer))
 
-    our_baseline_model = our_baseline_model.module if hasattr(our_baseline_model,
-                                                        'module') else our_baseline_model
     our_baseline_model.resize_token_embeddings(len(tokenizer))
     our_baseline_model.make_stateless_after_loaded_tied_and_resized()
 
@@ -213,7 +208,7 @@ def compare_models(args,
     config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
 
     pipe_config = PipelineConfig.fromDict(config)
-
+    print()
     print("comparing our model to partitioned")
     depth = pipe_config.depth
     blocks = pipe_config.basic_blocks
@@ -228,6 +223,7 @@ def compare_models(args,
         torch.backends.cudnn.benchmark = False
         np.random.seed(0)
         expected = our_baseline_model(*sample)[0]
+        our_baseline_model.cpu()
 
         torch.manual_seed(0)
         torch.backends.cudnn.deterministic = True
@@ -235,11 +231,9 @@ def compare_models(args,
         np.random.seed(0)
         actual = run_partitions(sample, analysis_config)[0]
         assert torch.allclose(expected, actual),"partitioned != baseline"
+    print("our model is identical to our partitioned during training")
 
     print("comparing eval")
-    analysis_config = pipe_config._to_old_format(
-        layerDict(our_baseline_model, depth=depth, basic_blocks=blocks),
-        tensorDict(our_baseline_model))
     with torch.no_grad():
         our_baseline_model = our_baseline_model.cuda().eval()
         torch.manual_seed(0)
@@ -247,6 +241,7 @@ def compare_models(args,
         torch.backends.cudnn.benchmark = False
         np.random.seed(0)
         expected = our_baseline_model(*sample)[0]
+        our_baseline_model=our_baseline_model.cpu()
 
         torch.manual_seed(0)
         torch.backends.cudnn.deterministic = True
@@ -254,6 +249,9 @@ def compare_models(args,
         np.random.seed(0)
         actual = run_partitions(sample, analysis_config)[0]
         assert torch.allclose(expected, actual),"partitioned != baseline"
+    print("our model is identical to our partitioned during evaluation")
+    our_baseline_model=our_baseline_model.cpu()
+
     print()
     print("comparing huggingface to our model")
     print("comparing train")
@@ -264,6 +262,7 @@ def compare_models(args,
         torch.backends.cudnn.benchmark = False
         np.random.seed(0)
         expected = huggingface_model(*sample)[0]
+        huggingface_model=huggingface_model.cpu()
 
         our_baseline_model = our_baseline_model.cuda().train()
         torch.manual_seed(0)
@@ -272,7 +271,9 @@ def compare_models(args,
         np.random.seed(0)
         actual = our_baseline_model(*sample)[0]
         assert torch.allclose(expected, actual),"our model != huggingface"
-
+        our_baseline_model=our_baseline_model.cpu()
+    
+    print("our model is identical to huggingface reference during training")
     print("comparing eval")
     with torch.no_grad():
         huggingface_model = huggingface_model.cuda().eval()
@@ -281,6 +282,7 @@ def compare_models(args,
         torch.backends.cudnn.benchmark = False
         np.random.seed(0)
         expected = huggingface_model(*sample)[0]
+        huggingface_model=huggingface_model.cpu()
 
         our_baseline_model = our_baseline_model.cuda().eval()
         torch.manual_seed(0)
@@ -289,7 +291,7 @@ def compare_models(args,
         np.random.seed(0)
         actual = our_baseline_model(*sample)[0]
         assert torch.allclose(expected, actual),"our model != huggingface"
-
+    print("our model is identical to huggingface reference during evaluation")
 
 def parse_cli():
     # And add extra args spesific to this script as needed.
@@ -413,7 +415,7 @@ def get_model(args, stateless):
         args.model_name_or_path,
         from_tf=bool('.ckpt' in args.model_name_or_path),
         config=config,
-        cache_dir=args.cache_dir if args.cache_dir else None)
+        cache_dir=args.cache_dir if args.cache_dir else None).cpu()
 
     return model
 
@@ -450,7 +452,6 @@ def main():
 
     # Setup CUDA, GPU
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    args.n_gpu = torch.cuda.device_count()
     args.device = device
 
     tokenizer = get_tokenizer(args,args.stateless_tied)
