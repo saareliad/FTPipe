@@ -209,7 +209,10 @@ def compare_models(args,
 
     pipe_config = PipelineConfig.fromDict(config)
     print()
+
+    ######################
     print("comparing our model to partitioned")
+    # ####################
     depth = pipe_config.depth
     blocks = pipe_config.basic_blocks
     analysis_config = pipe_config._to_old_format(
@@ -253,7 +256,10 @@ def compare_models(args,
     our_baseline_model=our_baseline_model.cpu()
 
     print()
+
+    ######################
     print("comparing huggingface to our model")
+    # ####################
     print("comparing train")
     with torch.no_grad():
         huggingface_model = huggingface_model.cuda().train()
@@ -294,16 +300,17 @@ def compare_models(args,
         our_baseline_model = our_baseline_model.cpu()
     print("our model is identical to huggingface reference during evaluation")
 
+
+    ######################
+    print("\ncomparing gradient huggingface to our model")
+    # ####################
+
     huggingface_ps = {n for n,p in huggingface_model.named_parameters()}
-
     our_ps = {n for n,p in our_baseline_model.named_parameters()}
-
     #names are not shared so we cannot compare in general
     ignored_ps =huggingface_ps.symmetric_difference(our_ps)
+    print(f"the following gradients are ignored:\n{ignored_ps}")    
 
-
-    print("comparing gradient huggingface to our model")
-    print(f"the following gradients are ignored:\n{ignored_ps}")
     huggingface_model = huggingface_model.cuda().train()
     torch.manual_seed(0)
     torch.backends.cudnn.deterministic = True
@@ -337,6 +344,45 @@ def compare_models(args,
     #reset grads
     for p in itertools.chain(huggingface_model.parameters(),our_baseline_model.parameters()):
         p.grad=None
+
+
+    ######################
+    print("\ncomparing gradient huggingface to our partitioned")
+    print(f"the following gradients are ignored:\n{ignored_ps}")  
+    # ####################
+    huggingface_model = huggingface_model.cuda().train()
+    torch.manual_seed(0)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    np.random.seed(0)
+    huggingface_model(*sample)[0].backward()
+    huggingface_model = huggingface_model.cpu()
+
+    torch.manual_seed(0)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    np.random.seed(0)
+    run_partitions(sample, analysis_config)[0].backward()
+    our_baseline_model = our_baseline_model.cpu()
+    actual_ps = {n:p for n,p in our_baseline_model.named_parameters()}
+
+    for n,p in huggingface_model.named_parameters():
+        if n in ignored_ps:
+            continue
+        assert torch.allclose(p.grad,actual_ps[n].grad),f"grad {n} is not the same"
+    
+    #TODO hardcoded for gpt2 tied weights
+    assert hasattr(our_baseline_model,"w_wte")
+    print("explicitly comparing w_wte to transformer.wte.weight")
+    huggingface_wte=huggingface_model.transformer.wte.weight
+    our_wte = our_baseline_model.w_wte
+    assert torch.allclose(huggingface_wte.grad,our_wte.grad),"the shared weight grad is not the same"
+    print("gradients are the same")
+    
+    #reset grads
+    for p in itertools.chain(huggingface_model.parameters(),our_baseline_model.parameters()):
+        p.grad=None
+
     
 
 
