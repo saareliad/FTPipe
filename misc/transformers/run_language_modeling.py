@@ -341,6 +341,10 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
     )
     set_seed(args)  # Added here for reproducibility
     for epoch_num, _ in enumerate(train_iterator):
+
+        if isinstance(train_sampler, DistributedSampler):
+            train_sampler.set_epoch(epoch_num)
+
         if getattr(args, "evaluate_every_epoch", False):
             results = evaluate(args, model, tokenizer, prefix=f"epoch_{epoch_num}")
 
