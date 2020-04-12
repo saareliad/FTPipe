@@ -26,14 +26,12 @@ import os
 import pickle
 import random
 import importlib
-
+import inspect
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset, RandomSampler
 import warnings
 import sys
-from partition_scripts_utils import ParseMetisOpts, ParsePartitioningOpts, record_cmdline
-from heuristics import edge_weight_function, node_weight_function
 from transformers import (
     BertConfig,
     BertForMaskedLM,
@@ -52,14 +50,12 @@ from transformers import (
     DistilBertTokenizer,
     #   CamembertConfig, CamembertForMaskedLM, CamembertTokenizer
 )
-
+import itertools
 from models.normal import GPT2LMHeadModel, GPT2Model
 from models.normal import StatelessGPT2LMHeadModel  # , StatelessGPT2Model
 
 
-from pytorch_Gpipe import pipe_model
-from misc import run_analysis  # , run_partitions
-from pytorch_Gpipe.utils import layerDict, tensorDict
+from misc import run_analysis, run_partitions
 from pytorch_Gpipe import PipelineConfig
 
 
@@ -131,13 +127,6 @@ def load_and_cache_examples(args, tokenizer):
     return dataset
 
 
-def set_seed(args):
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    if args.n_gpu > 0:
-        torch.cuda.manual_seed_all(args.seed)
-
 
 def mask_tokens(inputs, tokenizer, args):
     """ Prepare masked tokens inputs/labels for masked language modeling: 80% MASK, 10% random, 10% original. """
@@ -175,40 +164,49 @@ def mask_tokens(inputs, tokenizer, args):
 
 def compare_models(args,
                    train_dataset,
-                   stateless_model,
+                   our_baseline_model,
                    huggingface_model,
                    tokenizer):
-
-    assert type(stateless_model) is StatelessGPT2LMHeadModel
-    assert type(huggingface_model) is GPT2LMHeadModel
-
+    ourbase_path=inspect.getmodule(our_baseline_model).__name__+"."+type(our_baseline_model).__name__
+    huggingface_path =inspect.getmodule(huggingface_model).__name__+"."+type(huggingface_model).__name__
+    tokenizer_path=inspect.getmodule(tokenizer).__name__+"."+type(tokenizer).__name__
+    partitioned_path = args.partitioned_model_path
+    print(f"comparing NLP models")
+    print(f"our model: {ourbase_path}")
+    print(f"partitioned model: {partitioned_path}")
+    print(f"huggingface reference: {huggingface_path}")
+    print(f"tokenizer: {tokenizer_path}")
+    print()
+ 
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset,
                                   sampler=train_sampler,
-                                  batch_size=args.partitioning_batch_size)
+                                  batch_size=args.comparison_batch_size)
 
     # prepare models
     huggingface_model = huggingface_model.module if hasattr(huggingface_model,
                                                             'module') else huggingface_model
     huggingface_model.resize_token_embeddings(len(tokenizer))
 
-    stateless_model = stateless_model.module if hasattr(stateless_model,
-                                                        'module') else stateless_model
-    stateless_model.resize_token_embeddings(len(tokenizer))
-    stateless_model.make_stateless_after_loaded_tied_and_resized()
+    our_baseline_model = our_baseline_model.module if hasattr(our_baseline_model,
+                                                        'module') else our_baseline_model
+    our_baseline_model.resize_token_embeddings(len(tokenizer))
+    our_baseline_model.make_stateless_after_loaded_tied_and_resized()
 
-    set_seed(args)  # Added here for reproducibility (even between python 2 and 3)
-    batch = next(iter(train_dataloader))
+    #select a random batch
+    batch_idx = np.random.randint(0,high=len(train_dataloader),size=1)[0]
+    print("selected batch index:",batch_idx)
+    batch=next(itertools.islice(train_dataloader, batch_idx, None))
+
     inputs, labels = mask_tokens(batch, tokenizer,
                                  args) if args.mlm else (batch, batch)
     inputs = inputs.to(args.device)
     labels = labels.to(args.device)
     sample = (inputs, labels)
 
-    from misc.partition_analysis import run_partitions
-    generated = importlib.import_module(
-        "models.partitioned.gpt2.gpt2_lmhead_5p")
-
+    generated = importlib.import_module(args.partitioned_model_path)
+    layerDict = generated.layerDict
+    tensorDict=generated.tensorDict
     create_pipeline_configuration = generated.create_pipeline_configuration
 
     GET_PARTITIONS_ON_CPU = True
@@ -216,50 +214,48 @@ def compare_models(args,
 
     pipe_config = PipelineConfig.fromDict(config)
 
-    print("comparing our stateless to our partitioned")
+    print("comparing our model to partitioned")
     depth = pipe_config.depth
     blocks = pipe_config.basic_blocks
     analysis_config = pipe_config._to_old_format(
-        layerDict(stateless_model, depth=depth, basic_blocks=blocks),
-        tensorDict(stateless_model))
+        layerDict(our_baseline_model, depth=depth, basic_blocks=blocks),
+        tensorDict(our_baseline_model))
     print("comparing train")
     with torch.no_grad():
-        stateless_model = stateless_model.cuda().train()
+        our_baseline_model = our_baseline_model.cuda().train()
         torch.manual_seed(0)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
         np.random.seed(0)
-        expected = stateless_model(*sample)[0]
+        expected = our_baseline_model(*sample)[0]
 
         torch.manual_seed(0)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
         np.random.seed(0)
         actual = run_partitions(sample, analysis_config)[0]
-        assert torch.allclose(expected, actual)
-        print(expected - actual, expected)
+        assert torch.allclose(expected, actual),"partitioned != baseline"
 
     print("comparing eval")
     analysis_config = pipe_config._to_old_format(
-        layerDict(stateless_model, depth=depth, basic_blocks=blocks),
-        tensorDict(stateless_model))
+        layerDict(our_baseline_model, depth=depth, basic_blocks=blocks),
+        tensorDict(our_baseline_model))
     with torch.no_grad():
-        stateless_model = stateless_model.cuda().eval()
+        our_baseline_model = our_baseline_model.cuda().eval()
         torch.manual_seed(0)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
         np.random.seed(0)
-        expected = stateless_model(*sample)[0]
+        expected = our_baseline_model(*sample)[0]
 
         torch.manual_seed(0)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
         np.random.seed(0)
         actual = run_partitions(sample, analysis_config)[0]
-        assert torch.allclose(expected, actual)
-        print(expected - actual, expected)
-
-    print("comparing hugginface to our stateless")
+        assert torch.allclose(expected, actual),"partitioned != baseline"
+    print()
+    print("comparing huggingface to our model")
     print("comparing train")
     with torch.no_grad():
         huggingface_model = huggingface_model.cuda().train()
@@ -269,14 +265,13 @@ def compare_models(args,
         np.random.seed(0)
         expected = huggingface_model(*sample)[0]
 
-        stateless_model = stateless_model.cuda().train()
+        our_baseline_model = our_baseline_model.cuda().train()
         torch.manual_seed(0)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
         np.random.seed(0)
-        actual = stateless_model(*sample)[0]
-        assert torch.allclose(expected, actual)
-        print(expected - actual, expected)
+        actual = our_baseline_model(*sample)[0]
+        assert torch.allclose(expected, actual),"our model != huggingface"
 
     print("comparing eval")
     with torch.no_grad():
@@ -287,18 +282,16 @@ def compare_models(args,
         np.random.seed(0)
         expected = huggingface_model(*sample)[0]
 
-        stateless_model = stateless_model.cuda().eval()
+        our_baseline_model = our_baseline_model.cuda().eval()
         torch.manual_seed(0)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
         np.random.seed(0)
-        actual = stateless_model(*sample)[0]
-        assert torch.allclose(expected, actual)
-        print(expected - actual, expected)
+        actual = our_baseline_model(*sample)[0]
+        assert torch.allclose(expected, actual),"our model != huggingface"
 
 
 def parse_cli():
-    # TODO: use default partitioning args like other partitioning scripts
     # And add extra args spesific to this script as needed.
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -385,87 +378,19 @@ def parse_cli():
         help="Tie weights stateless trick. Note that shared weight may be sent in pipe"
     )
 
+    comp_params = parser.add_argument_group("comparison parameters")
+    comp_params.add_argument("--partitioned_model_path",
+    required=True,
+    type=str,
+    default='gpt2')
+
     # parameters of the partitioning script
-    parser.add_argument('--partitioning_batch_size',
+    comp_params.add_argument('--comparison_batch_size',
                         type=int,
-                        default=1,
+                        required=True,
                         help="batch size to use when partitioning the model")
-    parser.add_argument(
-        '--model_too_big',
-        action='store_true',
-        default=False,
-        help="if the model is too big run the whole partitioning process on CPU, and drink a cup of coffee in the meantime"
-    )
-    parser.add_argument('--n_partitions', type=int, default=4)
-    parser.add_argument('--output_file', default='gpt2')
-    parser.add_argument("--generate_model_parallel", action="store_true", default=False,
-                        help="wether to generate a modelParallel version of the partitioning")
-    parser.add_argument('--auto_file_name',
-                        action='store_true',
-                        default=False,
-                        help="create file name automatically")
-    parser.add_argument(
-        '--n_iter',
-        type=int,
-        default=10,
-        help="number of iteration used in order to profile the network and run analysis"
-    )
-    parser.add_argument(
-        '--bandwidth_gps',
-        type=float,
-        default=12,
-        help="data transfer rate between gpus in gigabaytes per second")
-    parser.add_argument(
-        '--no_recomputation',
-        action='store_true',
-        default=False,
-        help="whether to use recomputation for the backward pass")
-    parser.add_argument(
-        '--analysis_batch_size',
-        type=int,
-        default=1,
-        help="batch size to use when analysing the generated partititon")
-    parser.add_argument('--no_analysis',
-                        action='store_true',
-                        default=False,
-                        help="disable partition analysis")
-    parser.add_argument("--depth",
-                        default=10000,
-                        type=int,
-                        help="the depth in which we will partition the model")
-    parser.add_argument(
-        "--partition_layer_graph",
-        action="store_true",
-        default=False,
-        help="whether to partition a graph containing only layers")
-
-    parser.add_argument("--dot",
-                        default=False,
-                        action="store_true",
-                        help="Save and plot it using graphviz")
-
-    parser.add_argument(
-        "--save_memory_mode",
-        default=False,
-        action="store_true",
-        help="Save memory during profiling by storing everything on cpu," +
-        " but sending each layer to GPU before the profiling.")
-
-    parser.add_argument("-a",
-                        "--async_pipeline",
-                        default=False,
-                        action="store_true",
-                        help="Do analysis for async pipeline")
-
-    ParseMetisOpts.add_metis_arguments(parser)
 
     args = parser.parse_args()
-
-    if args.auto_file_name:
-        args.output_file = f"{args.model_type}_p{args.n_partitions}"
-
-    if args.output_file.endswith(".py"):
-        args.output_file = args.output_file[:-3]
 
     return args
 
@@ -493,10 +418,29 @@ def get_model(args, stateless):
     return model
 
 
+def get_tokenizer(args,stateless):
+    if stateless:
+        model_class_dict_to_use = MODEL_CLASSES_LM_HEAD_STATELESS_TIED
+    else:
+        model_class_dict_to_use = MODEL_CLASSES_LM_HEAD
+
+    config_class, model_class, tokenizer_class = model_class_dict_to_use[
+        args.model_type]
+    
+    tokenizer = tokenizer_class.from_pretrained(
+        args.tokenizer_name if args.tokenizer_name else args.model_name_or_path,
+        do_lower_case=args.do_lower_case,
+        cache_dir=args.cache_dir if args.cache_dir else None)
+    if args.block_size <= 0:
+        # Our input block size will be the max possible for the model
+        args.block_size = tokenizer.max_len_single_sentence
+    args.block_size = min(args.block_size, tokenizer.max_len_single_sentence)
+
+    return tokenizer
+
 def main():
 
     args = parse_cli()
-    METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
 
     if args.model_type in ["bert", "roberta", "distilbert", "camembert"
                            ] and not args.mlm:
@@ -505,47 +449,22 @@ def main():
             "flag (masked language modeling).")
 
     # Setup CUDA, GPU
-    device = torch.device("cuda" if torch.cuda.is_available()
-                          and not args.model_too_big else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args.n_gpu = torch.cuda.device_count()
     args.device = device
 
-    # Set seed
-    set_seed(args)
-
-    # Load pretrained model and tokenizer
-    tokenizer = GPT2Tokenizer.from_pretrained(
-        args.tokenizer_name
-        if args.tokenizer_name else args.model_name_or_path,
-        do_lower_case=args.do_lower_case,
-        cache_dir=args.cache_dir if args.cache_dir else None)
-    if args.block_size <= 0:
-        # Our input block size will be the max possible for the model
-        args.block_size = tokenizer.max_len_single_sentence
-    args.block_size = min(args.block_size, tokenizer.max_len_single_sentence)
+    tokenizer = get_tokenizer(args,args.stateless_tied)
 
     train_dataset = load_and_cache_examples(args, tokenizer)
 
     compare_models(args,
                    train_dataset,
-                   get_model(args, True),
+                   get_model(args, args.stateless_tied),
                    get_model(args, False),
                    tokenizer,
                    )
 
 
-# download dataset from https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip
-
-# export TRAIN_FILE=wikitext-2-raw/wiki.train.raw
-# python partition_gpt2_models.py --train_data_file=$TRAIN_FILE --no_analysis
-# add --dot to get serialized & pdf.
 if __name__ == "__main__":
-    # For debugging inside docker.
-    # import ptvsd
-    # port = 1234
-    # address = ('0.0.0.0', port)
-    # print(f"-I- waiting for attachment on {address}")
-    # ptvsd.enable_attach(address=address)
-    # ptvsd.wait_for_attach()
 
     main()
