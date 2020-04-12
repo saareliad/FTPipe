@@ -291,7 +291,54 @@ def compare_models(args,
         np.random.seed(0)
         actual = our_baseline_model(*sample)[0]
         assert torch.allclose(expected, actual),"our model != huggingface"
+        our_baseline_model = our_baseline_model.cpu()
     print("our model is identical to huggingface reference during evaluation")
+
+    huggingface_ps = {n for n,p in huggingface_model.named_parameters()}
+
+    our_ps = {n for n,p in our_baseline_model.named_parameters()}
+
+    #names are not shared so we cannot compare in general
+    ignored_ps =huggingface_ps.symmetric_difference(our_ps)
+
+
+    print("comparing gradient huggingface to our model")
+    print(f"the following gradients are ignored:\n{ignored_ps}")
+    huggingface_model = huggingface_model.cuda().train()
+    torch.manual_seed(0)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    np.random.seed(0)
+    huggingface_model(*sample)[0].backward()
+    huggingface_model = huggingface_model.cpu()
+
+    our_baseline_model = our_baseline_model.cuda().train()
+    torch.manual_seed(0)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    np.random.seed(0)
+    our_baseline_model(*sample)[0].backward()
+    our_baseline_model = our_baseline_model.cpu()
+    actual_ps = {n:p for n,p in our_baseline_model.named_parameters()}
+
+    for n,p in huggingface_model.named_parameters():
+        if n in ignored_ps:
+            continue
+        assert torch.allclose(p.grad,actual_ps[n].grad),f"grad {n} is not the same"
+    
+    #TODO hardcoded for gpt2 tied weights
+    assert hasattr(our_baseline_model,"w_wte")
+    print("explicitly comparing w_wte to transformer.wte.weight")
+    huggingface_wte=huggingface_model.transformer.wte.weight
+    our_wte = our_baseline_model.w_wte
+    assert torch.allclose(huggingface_wte.grad,our_wte.grad),"the shared weight grad is not the same"
+    print("gradients are the same")
+    
+    #reset grads
+    for p in itertools.chain(huggingface_model.parameters(),our_baseline_model.parameters()):
+        p.grad=None
+    
+
 
 def parse_cli():
     # And add extra args spesific to this script as needed.
