@@ -21,6 +21,35 @@ from .true_weights_storage import TrueWeightsStorage
 # import time
 
 
+def make_buff(comm_handler,
+              is_bwd,
+              shapes,
+              dtypes=None,
+              max_buffers=1,
+              create=False):
+    """Create recv buffer.
+        TODO: This should be moved to comm handler
+    """
+    comm_handler.set_tensor_shapes(shapes)
+    comm_handler.set_tensor_dtypes(dtypes)
+
+    if is_bwd:
+        b = Buffers(max_buffers,
+                    comm_handler.create_gradients_rcv_buffers,
+                    comm_handler.recv_gradients,
+                    is_grad=True)
+
+    else:
+        b = Buffers(max_buffers,
+                    comm_handler.create_activations_recv_buffers,
+                    comm_handler.recv_activations,
+                    is_grad=False)
+
+    if create:
+        b.create()
+    return b
+
+
 class SinglePartitionManager:
     PROBLEMATIC_POLICY = 'SAME'
 
@@ -48,18 +77,14 @@ class SinglePartitionManager:
             sync_buffers=False,
             use_pre_loaded_input=False,  # TODO: this is an option to support LMHeads in which the input goes to a partition. # TODO: write a trainer which can work with it.
             weight_stashing_just_for_stats=False,
-            # sent_object_patience=1,
-            stateless_tied=True  # FIXME
-            ):
+            stateless_tied=False,  # FIXME
+            last_batch_train_shapes=None,
+            last_batch_test_shapes=None):
         # FIXME: this is ugly solution for freeing send buffers in tied weights trick
-       
         if stateless_tied and (is_first_partition or is_last_partition):
-            self.sent_obejct_patience = num_stages - 2
+            self.sent_obejct_patience = num_stages - 2  # NOTE: 1 stage is dummy
         else:
-            self.sent_obejct_patience = 1 
-
-
-
+            self.sent_obejct_patience = 1
 
         # Preloaded input for last partition
         self.use_pre_loaded_input = use_pre_loaded_input
@@ -125,9 +150,6 @@ class SinglePartitionManager:
                 self.buffers_to_sync = get_buffers_for_ddp_sync(
                     partition.layers)
 
-        self.training_tensor_shapes = training_tensor_shapes
-        self.eval_tensor_shapes = eval_tensor_shapes
-        self.training_tensor_dtypes = training_tensor_dtypes
         self.device = device
         self.is_last_partition = is_last_partition
         self.is_first_partition = is_first_partition
@@ -136,8 +158,6 @@ class SinglePartitionManager:
 
         self.step_every = step_every
         self.work_scheduler = work_scheduler(step_every)
-
-        # self.needs_own_post_restore = dict()
 
         # HACK:
         # FIXME: num batches just have to be high enough for the calculation.
@@ -154,6 +174,18 @@ class SinglePartitionManager:
             if self.PROBLEMATIC_POLICY == 'SKIP':
                 self.set_problematic_skip()
 
+        # Initialize buffers
+        self._init_buffers(
+            last_batch_test_shapes=last_batch_test_shapes,
+            last_batch_train_shapes=last_batch_train_shapes,
+            max_buffers=max_buffers,
+            keep_buffers_alive=keep_buffers_alive,
+            training_tensor_shapes=training_tensor_shapes,
+            eval_tensor_shapes=eval_tensor_shapes,
+            training_tensor_dtypes=training_tensor_dtypes,
+            eval_tensor_dtypes=training_tensor_dtypes  # FIXME
+        )
+
         self.weight_predictor = None
         self.gap_aware = None
         self.weight_stasher = None
@@ -165,62 +197,10 @@ class SinglePartitionManager:
         # State for saving current relevant weight.
         self.true_weights_storage = None
 
-        # State for recv buffers
-        if max_buffers > 2:  # FIXME
-            raise NotImplementedError()
-
-        def make_buff(is_bwd, create=False):
-
-            if is_bwd:
-                b = Buffers(max_buffers,
-                            self.comm_handler.create_gradients_rcv_buffers,
-                            self.comm_handler.recv_gradients,
-                            is_grad=True)
-
-            else:
-                b = Buffers(max_buffers,
-                            self.comm_handler.create_activations_recv_buffers,
-                            self.comm_handler.recv_activations,
-                            is_grad=False)
-
-            if create:
-                b.create()
-            return b
-
-        shapes_are_equal = eval_tensor_shapes == training_tensor_shapes
-        if shapes_are_equal:  # FIXME: also for eval dtypes.
-            keep_buffers_alive = True  # HACK: if same shapes and datatypes, the buffers can remain!
-
-        self.keep_buffers_alive = keep_buffers_alive
-
-        if keep_buffers_alive:
-            # Create once.
-
-            # itertools.product(['fwd', 'bwd'], ['train', 'eval'])
-
-            self.comm_handler.set_tensor_shapes(self.training_tensor_shapes)
-            self.comm_handler.set_tensor_dtypes(self.training_tensor_dtypes)
-
-            self.fwd_rcev_buffers_train = make_buff(is_bwd=False, create=True)
-            self.bwd_rcev_buffers = make_buff(is_bwd=True, create=False)
-
-            self.comm_handler.set_tensor_shapes(self.eval_tensor_shapes)
-            # FIXME: we set eval dtypes as training too.
-            self.comm_handler.set_tensor_dtypes(self.training_tensor_dtypes)
-            if not shapes_are_equal:
-                self.fwd_rcev_buffers_eval = make_buff(is_bwd=False,
-                                                       create=True)
-            else:
-                self.fwd_rcev_buffers_eval = self.fwd_rcev_buffers_train  # HACK: same buffer!
-        else:
-            self.fwd_rcev_buffers = make_buff(is_bwd=False)
-            self.bwd_rcev_buffers = make_buff(is_bwd=True)
-
         # Holds Async handle objects (for isends)
         self.async_fwd_objects = OrderedDict()
         self.async_bwd_objects = OrderedDict()
 
-        # self.apply_gap_aware_before_send = False  # TODO add as option
         self.delay_at_batch = {}
 
         # Hints,May be set later.
@@ -231,6 +211,77 @@ class SinglePartitionManager:
         self.gap_aware: GapAwareBase
         self.weight_stasher: WeightStasher
         self.true_weights_storage: TrueWeightsStorage
+
+    def _init_buffers(self, last_batch_test_shapes, last_batch_train_shapes,
+                      max_buffers, keep_buffers_alive, training_tensor_shapes,
+                      eval_tensor_shapes, training_tensor_dtypes,
+                      eval_tensor_dtypes):
+
+        self.last_batch_train_shapes = last_batch_train_shapes
+        self.last_batch_test_shapes = last_batch_test_shapes
+        self.changed_shapes_last_batch_fwd = False
+        self.changed_shapes_last_batch_bwd = False
+        self.max_buffers = max_buffers
+
+        self.training_tensor_shapes = training_tensor_shapes
+        self.eval_tensor_shapes = eval_tensor_shapes
+        self.training_tensor_dtypes = training_tensor_dtypes
+        self.eval_tensor_dtypes = eval_tensor_dtypes  # FIXME
+
+        shapes_are_equal = eval_tensor_shapes == training_tensor_shapes
+        dtypes_are_equal = eval_tensor_dtypes == training_tensor_dtypes
+        dtypes_and_shapes_are_equal = shapes_are_equal and dtypes_are_equal
+        if dtypes_and_shapes_are_equal and (
+                last_batch_train_shapes is None) and (last_batch_test_shapes is
+                                                      None):
+            # HACK: if same shapes and datatypes, the buffers can remain!
+            keep_buffers_alive = True
+
+        self.keep_buffers_alive = keep_buffers_alive
+
+        # NOTE: we don't create the fwd buffers, they are created on the fly.
+
+
+        fwd_recv_buffers_train = self._fwd_recv_buffers_train(create=False)
+        bwd_recv_buffers = self._bwd_recv_buffers()
+
+        if keep_buffers_alive:
+            # Create once.
+            self.fwd_recv_buffers_train = fwd_recv_buffers_train
+            self.bwd_recv_buffers = bwd_recv_buffers
+
+            if not dtypes_and_shapes_are_equal:
+                self.fwd_recv_buffers_eval = _fwd_recv_buffers_eval(create=False)
+            else:
+                # HACK: use same buffer!
+                self.fwd_recv_buffers_eval = self.fwd_recv_buffers_train
+        else:
+            self.fwd_recv_buffers = fwd_recv_buffers_train
+            self.bwd_recv_buffers = bwd_recv_buffers
+
+    def _fwd_recv_buffers_train(self, create=False):
+        return make_buff(self.comm_handler,
+                         dtypes=self.training_tensor_dtypes,
+                         max_buffers=self.max_buffers,
+                         shapes=self.training_tensor_shapes,
+                         is_bwd=False,
+                         create=create)
+
+    def _fwd_recv_buffers_eval(self, create=False):
+        return make_buff(self.comm_handler,
+                         dtypes=self.eval_tensor_dtypes,
+                         max_buffers=self.max_buffers,
+                         shapes=self.eval_tensor_shapes,
+                         is_bwd=False,
+                         create=create)
+
+    def _bwd_recv_buffers(self):
+        return make_buff(self.comm_handler,
+                         dtypes=self.training_tensor_dtypes,
+                         max_buffers=self.max_buffers,
+                         shapes=self.training_tensor_shapes,
+                         is_bwd=True,
+                         create=True)
 
     def set_true_weights_storage(self, true_weights_storage):
         self.true_weights_storage = true_weights_storage
@@ -348,36 +399,58 @@ class SinglePartitionManager:
         self.weight_stasher = weight_stasher
 
     def train(self):
+        """Sets training mode.
+            Also Handles the transition : eval -> train 
+        """
+        # TODO: create() should get them as parameter, instead of this set_...
         self.comm_handler.set_tensor_shapes(self.training_tensor_shapes)
         self.comm_handler.set_tensor_dtypes(self.training_tensor_dtypes)
 
         self.partition.train()
 
-        # Handles the transition : eval -> train
         if self.keep_buffers_alive:
-            self.fwd_rcev_buffers = self.fwd_rcev_buffers_train.reset_state()
-            self.bwd_rcev_buffers.reset_state()
+            self.fwd_recv_buffers = self.fwd_recv_buffers_train.reset_state()
+            self.bwd_recv_buffers.reset_state()
         else:
-            if self.fwd_rcev_buffers.is_initialized():
-                self.fwd_rcev_buffers.create()
-            self.bwd_rcev_buffers.reset_state()
+            # Forward buffers:
+            # re-create if needed.
+            if self.changed_shapes_last_batch_fwd:
+                self.changed_shapes_last_batch_fwd = False
+                self.fwd_recv_buffers = self._fwd_recv_buffers_train(
+                    create=True)
+            elif self.fwd_recv_buffers.is_initialized():
+                self.fwd_recv_buffers.create()
+
+            # Backward buffers:
+            if self.changed_shapes_last_batch_bwd:
+                self.changed_shapes_last_batch_fwd = False
+                self.bwd_recv_buffers = self._bwd_recv_buffers()  # create=True
+            else:
+                self.bwd_recv_buffers.reset_state()
 
     def eval(self):
+        """Sets evaluation mode.
+            Also handles the transition : train -> eval
+            Also handles buffer sync in case stage is replicated
+        """
+        # TODO: create() should get them as parameter, instead of this set_...
         self.comm_handler.set_tensor_shapes(self.eval_tensor_shapes)
-        # FIXME: we set eval dtypes as training too.
-        self.comm_handler.set_tensor_dtypes(self.training_tensor_dtypes)
+        self.comm_handler.set_tensor_dtypes(self.eval_tensor_dtypes)
 
         self.partition.eval()
 
-        # Handles the transition : train -> eval
-        if self.keep_buffers_alive:
-            self.fwd_rcev_buffers = self.fwd_rcev_buffers_eval.reset_state()
-        else:
-            if self.fwd_rcev_buffers.is_initialized():
-                self.fwd_rcev_buffers.create()
-
         if self.is_replicated and self.sync_buffers:
             self.comm_handler.sync_buffers(self.buffers_to_sync)
+
+        if self.keep_buffers_alive:
+            self.fwd_recv_buffers = self.fwd_recv_buffers_eval.reset_state()
+        else:
+            if self.changed_shapes_last_batch_fwd:
+                self.changed_shapes_last_batch_fwd = False
+                self.fwd_recv_buffers = self._fwd_recv_buffers_eval(
+                    create=True)
+            elif self.fwd_recv_buffers.is_initialized():
+                self.fwd_recv_buffers.create()
 
     def wait_on_sent_object(self, is_fwd, fin=False):
         # TODO: can write the entire thing MUCH more nicely
@@ -399,6 +472,7 @@ class SinglePartitionManager:
             #     pass
 
     def get_input_data_forward(self, batch_idx, num_batches):
+        # TODO: this entire thing should be part of the comm handler.
 
         # Get the data to do forward on
         if self.is_first_partition:
@@ -406,17 +480,41 @@ class SinglePartitionManager:
             x, *ctx = self.task.unpack_data_for_partition(next(self.dl_iter))
             return x, ctx
 
-        fwd_rcev_buffers = self.fwd_rcev_buffers
+        # Special case: Last batch with differnt size
+        if batch_idx + 1 == num_batches and (
+            (self.partition.training and self.last_batch_train_shapes) or
+            (not self.partition.training and self.last_batch_test_shapes)):
+            # Delete previous buffers
+            print(
+                f"stage: {self.stage} replacing buffers for last batch, forward"
+            )
+            self.changed_shapes_last_batch_fwd = True
+            del self.fwd_recv_buffers
 
-        if not fwd_rcev_buffers.is_initialized():
-            fwd_rcev_buffers.create()
+            # Create a new buffer with the new size
+            shapes = self.last_batch_train_shapes if self.partition.training else self.last_batch_test_shapes
+            self.comm_handler.set_tensor_shapes(shapes)
+
+            fwd_recv_buffers = Buffers(
+                1,  # max buffers is 1
+                self.comm_handler.create_activations_recv_buffers,
+                self.comm_handler.recv_activations,
+                is_grad=False)
+
+            # Overrride
+            self.fwd_recv_buffers = fwd_recv_buffers
+        else:
+            fwd_recv_buffers = self.fwd_recv_buffers
+
+        if not fwd_recv_buffers.is_initialized():
+            fwd_recv_buffers.create()
 
         recved_all = False
-        if fwd_rcev_buffers.first_rcv_after_created or fwd_rcev_buffers.max_buffers == 1:
-            fwd_rcev_buffers.recv_all(batch_idx, num_batches)
+        if fwd_recv_buffers.first_rcv_after_created or fwd_recv_buffers.max_buffers == 1:
+            fwd_recv_buffers.recv_all(batch_idx, num_batches)
             recved_all = True
 
-        x = fwd_rcev_buffers.wait_first()
+        x = fwd_recv_buffers.wait_first()
         x = self.comm_handler.fix_after_recv(x)
 
         # pre-Start the next fwd Irecv:
@@ -427,8 +525,8 @@ class SinglePartitionManager:
         # and if so, we can use less recv buffers for forward to save memory,
         # while still getting the same speed/parallelism.
         if ((not recved_all) and
-            (batch_idx - 1 + fwd_rcev_buffers.max_buffers < num_batches)):
-            fwd_rcev_buffers.recv_next(batch_idx - 1)
+            (batch_idx - 1 + fwd_recv_buffers.max_buffers < num_batches)):
+            fwd_recv_buffers.recv_next(batch_idx - 1)
 
         x, *ctx = self.task.unpack_data_for_partition(x)
 
@@ -621,13 +719,36 @@ class SinglePartitionManager:
     def run_batch_backward(self, batch_idx, num_batches):
         """ Runs the backwards pass + step for all except the last partition """
 
-        bwd_rcev_buffers = self.bwd_rcev_buffers
-        if not bwd_rcev_buffers.is_initialized():
-            bwd_rcev_buffers.create()
+        # Special case: Last batch with differnt size
+        if batch_idx + 1 == num_batches and self.last_batch_train_shapes:
+            # Delete previous buffers
+            print(
+                f"stage: {self.stage} replacing buffers for last batch, backward"
+            )
+            self.changed_shapes_last_batch_bwd = True
+            del self.bwd_recv_buffers
+
+            # Create a new buffer with the new size
+            shapes = self.last_batch_train_shapes
+            self.comm_handler.set_tensor_shapes(shapes)
+
+            bwd_recv_buffers = Buffers(
+                1,  # max buffers is 1
+                self.comm_handler.create_gradients_rcv_buffers,
+                self.comm_handler.recv_gradients,
+                is_grad=True)
+
+            # Overrride
+            self.bwd_recv_buffers = bwd_recv_buffers
+        else:
+            bwd_recv_buffers = self.bwd_recv_buffers
+
+        if not bwd_recv_buffers.is_initialized():
+            bwd_recv_buffers.create()
 
         recved_all = False
-        if bwd_rcev_buffers.first_rcv_after_created or bwd_rcev_buffers.max_buffers == 1:
-            bwd_rcev_buffers.recv_all(batch_idx, num_batches)
+        if bwd_recv_buffers.first_rcv_after_created or bwd_recv_buffers.max_buffers == 1:
+            bwd_recv_buffers.recv_all(batch_idx, num_batches)
             recved_all = True
 
         weight_stasher = self.weight_stasher
@@ -646,7 +767,7 @@ class SinglePartitionManager:
 
         self.partition.recompute(batch_idx)
 
-        g = bwd_rcev_buffers.wait_first()
+        g = bwd_recv_buffers.wait_first()
         g = self.comm_handler.fix_after_recv(g)
 
         # Allow skiping steps (Gradient aggregation)
@@ -672,8 +793,8 @@ class SinglePartitionManager:
 
         # Wait for next if appropriate
         if ((not recved_all) and
-            (batch_idx - 1 + bwd_rcev_buffers.max_buffers < num_batches)):
-            bwd_rcev_buffers.recv_next(batch_idx - 1)
+            (batch_idx - 1 + bwd_recv_buffers.max_buffers < num_batches)):
+            bwd_recv_buffers.recv_next(batch_idx - 1)
 
         if do_step:
             trainer = self.trainer

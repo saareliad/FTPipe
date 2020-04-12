@@ -702,6 +702,9 @@ def get_dataloaders(args, explicit_separated_dataset=False, **kw):
     dl_kw['num_workers'] = args.num_data_workers
     dl_kw['drop_last'] = True
 
+    if getattr(args, "dont_drop_last", False):
+        dl_kw['drop_last'] = False
+
     if "lm" in args.task:
         # FIXME
         # NOTE: From the function get_wikitext2_raw_train_valid_ds
@@ -753,6 +756,8 @@ def get_just_test_dataloader(args, explicit_separated_dataset=False, **kw):
 
     dl_kw['num_workers'] = args.num_data_workers
     dl_kw['drop_last'] = True
+    if getattr(args, "dont_drop_last", False):
+        dl_kw['drop_last'] = False
 
     if "lm" in args.task:
         # NOTE: From the function get_wikitext2_raw_test_ds
@@ -764,6 +769,8 @@ def get_just_test_dataloader(args, explicit_separated_dataset=False, **kw):
                                 overwrite_cache=overwrite_cache)
         collate = lm_collate_factory(tokenizer)
         dl_kw['collate_fn'] = collate
+    elif 'squad' in args.task:
+        raise NotImplementedError()
     else:
         dataset_keywords = {}
 
@@ -931,13 +938,42 @@ def main():
     if args.rank == 0:
         assert is_first_partition
         train_dl_len, test_dl_len = len(train_dl), len(test_dl)
-        data = torch.tensor([train_dl_len, test_dl_len], dtype=torch.long)
+        logger.info(f"train_dl_len {train_dl_len}")
+        logger.info(f"test_dl_len {test_dl_len}")
+
+        train_dataset_len, test_dataset_len = len(train_dl.dataset), len(
+            test_dl.dataset)
+        logger.info(f"train_dataset_len {train_dataset_len}")
+        logger.info(f"test_dataset_len {test_dataset_len}")
+
+        # TODO: also support replicated
+        last_batch_diff_train = train_dataset_len % args.bs_train if not train_dl.drop_last else 0
+        last_batch_diff_test = test_dataset_len % args.bs_test if not test_dl.drop_last else 0
+
+        data = torch.tensor([
+            train_dl_len, test_dl_len, last_batch_diff_train,
+            last_batch_diff_test
+        ],
+                            dtype=torch.long)
     else:
-        data = torch.zeros(2, dtype=torch.long)
+        data = torch.zeros(4, dtype=torch.long)
 
     torch.distributed.broadcast(data, 0)
     train_dl_len = data[0].item()
     test_dl_len = data[1].item()
+    last_batch_diff_train = data[2].item()
+    last_batch_diff_test = data[3].item()
+
+    if last_batch_diff_train > 0:
+        last_batch_train_shapes = parsed_config.get_shapes(
+            last_batch_diff_train)
+    else:
+        last_batch_train_shapes = None
+
+    if last_batch_diff_train > 0:
+        last_batch_test_shapes = parsed_config.get_shapes(last_batch_diff_test)
+    else:
+        last_batch_test_shapes = None
 
     # Get expected training steps:
 
@@ -992,9 +1028,11 @@ def main():
         use_recomputation=(not args.no_recomputation),
         gap_aware_just_loss=gap_aware_just_loss,
         use_pre_loaded_input=getattr(args, "use_pre_loaded_input", False),
-        weight_stashing_just_for_stats=getattr(args, "weight_stashing_just_for_stats", False),
-        stateless_tied=getattr(args, "stateless_tied", False)
-        )
+        weight_stashing_just_for_stats=getattr(
+            args, "weight_stashing_just_for_stats", False),
+        stateless_tied=getattr(args, "stateless_tied", False),
+        last_batch_train_shapes=last_batch_train_shapes,
+        last_batch_test_shapes=last_batch_test_shapes)
 
     if hasattr(args, "ddp_sim_num_gpus") and args.ddp_sim_num_gpus > 1:
         print(

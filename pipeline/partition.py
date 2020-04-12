@@ -131,7 +131,6 @@ class Partition(nn.Module):
                 if isinstance(x, Tensor):
                     x = self.layers(x)
                 else:
-                    x = [y for y in x]
                     x = self.layers(*x)
                 return x
 
@@ -355,7 +354,6 @@ class PartitionWithoutRecomputation(nn.Module):
                 if isinstance(x, Tensor):
                     x = self.layers(x)
                 else:
-                    x = [y for y in x]
                     x = self.layers(*x)
                 return x
 

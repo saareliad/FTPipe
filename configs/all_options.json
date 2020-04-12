@@ -86,5 +86,6 @@
     "overwrite_cache": false,
     "train_seq_len": 1024,
     "valid_seq_len": 1024,
-    "test_seq_len": 1024
+    "test_seq_len": 1024,
+    "dont_drop_last": true
 }

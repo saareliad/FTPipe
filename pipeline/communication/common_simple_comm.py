@@ -118,7 +118,7 @@ class SimpleCommBase(CommunicationHandlerBase):
                 for chunk in rcv_buffer.chunk(self.num_chunks):
                     # buffers.append(chunk.pin_memory().to(device))
                     buffers.append(
-                        chunk.requires_grad_(requires_grad).share_memory_())
+                        chunk.requires_grad_(requires_grad))
         return buffers
 
     def create_activations_recv_buffers(self, requires_grad=False):

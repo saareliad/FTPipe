@@ -54,24 +54,11 @@ class Buffers:
         return self
         # assert len(self.handlers) == 0
 
-    def get_one(self):
-        # self.pointer = (self.pointer + 1) % self.max_buffers
-        return next(self.itr)
-
-    def get_some(self, num):
-        if num > self.max_buffers:
-            raise ValueError()
-        # self.pointer = (self.pointer + num) % self.max_buffers
-        return tuple(next(self.itr) for _ in range(num))
-
-    def get_all(self):
-        # pointer sayes in place.
-        return tuple(next(self.itr) for _ in range(self.max_buffers))
-
     def is_initialized(self):
         return self._is_initialized
 
     def recv_all(self, batch_idx, num_limit_batches):
+        """ Do Irecv_fn on all buffers """
         self.first_rcv_after_created = False
         assert batch_idx == 0 or self.max_buffers == 1
         num = min(num_limit_batches - batch_idx, self.max_buffers)
@@ -81,18 +68,19 @@ class Buffers:
         self.last_irecv = num + batch_idx - 1
 
     def recv_next(self, batch_idx):
+        """ Do Irecv_fn on next buffer """
         assert(self.last_irecv == batch_idx + self.max_buffers - 1)
         self.handlers.append(self.irecv_fn(
             next(self.itr), batch_idx + self.max_buffers))
         self.last_irecv += 1
 
     def wait_first(self):
-
+        """ Wait for the first Irecv_fn to finish """
         request_objects = self.handlers.popleft()
         for obj in request_objects:
-            obj.wait()
-            # while(not obj.is_completed()):
-            #     pass
+            # obj.wait()
+            while(not obj.is_completed()):
+                pass
 
         res = self.buffers[self.pointer]
         self.pointer = (self.pointer + 1) % self.max_buffers

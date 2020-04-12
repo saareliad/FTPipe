@@ -3,6 +3,8 @@ from .find_modules import find_modules
 
 
 def convert_child_by_dict(model, dict_id_b4_to_after):
+    if not dict_id_b4_to_after:
+        return
     for child_name, child in model.named_children():
         if id(child) in dict_id_b4_to_after:
             # print(f"Converted {child_name} to {dict_id_b4_to_after[id(child)]}")

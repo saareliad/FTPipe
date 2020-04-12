@@ -101,6 +101,9 @@ class PartitioningConfigParser:
                                               rank,
                                               bs_train,
                                               model_instance=model_instance)
+        
+        # Also save config
+        self.pipe_config = pipe_config 
 
         self.model = model
         self.num_stages = len(pipe_config.stages)
@@ -134,10 +137,8 @@ class PartitioningConfigParser:
             self.ranks_in_previous_stage = None
             self.ranks_in_next_stage = None
 
-        pipe_config.change_batch(bs_train, for_replicated=True)
-        self.training_tensor_shapes = pipe_config.shapes()
-        pipe_config.change_batch(bs_eval, for_replicated=True)
-        self.eval_tensor_shapes = pipe_config.shapes()
+        self.training_tensor_shapes = self.get_shapes(bs_train)
+        self.eval_tensor_shapes = self.get_shapes(bs_eval)
 
         self.training_tensor_dtypes = self.eval_tensor_dtypes = pipe_config.all_dtypes(
         )
@@ -146,6 +147,11 @@ class PartitioningConfigParser:
         return (self.receive_ranks, self.send_ranks, self.tensor_tags,
                 self.target_tensor_names, self.ranks_in_previous_stage,
                 self.ranks_in_next_stage, self.TOTAL_TAGS)
+    
+    def get_shapes(self, batch_size):
+        pipe_config = self.pipe_config
+        pipe_config.change_batch(batch_size, for_replicated=True)
+        return pipe_config.shapes()
 
 
 # model
