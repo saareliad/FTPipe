@@ -340,18 +340,16 @@ def specialCases(ready_expressions: Dict[str, str], node: Node,
     '''
     handle special cases that the trace/standard code generation can't manage
     '''
-    if hasattr(F, func_name):
-        # if function is in torch.nn.functional
-        # note we cannot generate keywords so we pass everything by position
-        args = ", ".join(
-            [ready_expressions[scope] for scope in operand_scopes])
-        return f"F.{func_name}({args})"
-    elif func_name == 'Int':
+    if func_name == 'Int':
         assert len(node.in_nodes) == 1, "aten::Int is a no op with 2 input"
-        return ready_expressions[node.in_nodes[0].scope]
+        expression = ready_expressions[node.in_nodes[0].scope]
     elif func_name == 'to':
         args = generateToArgs(ready_expressions, node)
-        return f"{ready_expressions[operand_scopes[0]]}.to({args})"
+        expression = f"{ready_expressions[operand_scopes[0]]}.to({args})"
+    elif func_name == 'index':
+        operand = ready_expressions[operand_scopes[0]]
+        assert len(operand_scopes) == 2, "aten::index expectes 2 operands"
+        expression = f"{operand}[{ready_expressions[operand_scopes[1]]}]"
     elif func_name == 'slice':
         operand = ready_expressions[operand_scopes[0]]
         args = "".join(
@@ -359,11 +357,10 @@ def specialCases(ready_expressions: Dict[str, str], node: Node,
         args += ":".join(
             [str(ready_expressions[a]) for a in operand_scopes[2:]])
         expression = f"{operand}[{args}]"
-        return expression
     elif func_name == 'einsum':
         equation = ready_expressions[operand_scopes[0]]
         operands = ready_expressions[operand_scopes[1]]
-        return f"{namespace}.{func_name}({equation}, {operands})"
+        expression = f"{namespace}.{func_name}({equation}, {operands})"
     else:
         args = ", ".join(
             [ready_expressions[scope] for scope in operand_scopes])
@@ -373,7 +370,9 @@ def specialCases(ready_expressions: Dict[str, str], node: Node,
         print(
             f"falling back to default case generating {namespace}.{func_name}({args})"
         )
-        return f"{namespace}.{func_name}({args})"
+        expression = f"{namespace}.{func_name}({args})"
+
+    return expression
 
 
 def getAtenFunctionNameAndScope(scope: str) -> Tuple[str, str]:
@@ -387,7 +386,7 @@ def getAtenFunctionNameAndScope(scope: str) -> Tuple[str, str]:
         namespace = 'F'
     elif hasattr(Tensor, func_name):
         namespace = 'Tensor'
-    elif 'slice' == func_name:
+    elif func_name in ['slice', 'index']:
         namespace = 'Tensor'
     elif 'Int' == func_name:
         namespace = 'torch'
@@ -433,7 +432,7 @@ def generateToArgs(
             non_blocking = ready_expressions[node.in_nodes[2].scope]
             copy = ready_expressions[node.in_nodes[3].scope]
             args += f"device=self.device,dtype={dtype}, non_blocking={non_blocking},copy={copy}"
-    elif len(node.in_nodes) == 7:
+    elif len(node.in_nodes) in[7, 8]:
         # only device conversion
         # all other args are not necessary (they are just default args and junk)
         args += f"device=self.device"
