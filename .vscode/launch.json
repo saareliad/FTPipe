@@ -43,25 +43,6 @@
             "justMyCode": true,
             "subProcess": true
         },
-//     ]
-// }
-
-        // {
-        //     "name": "Python launch",
-        //     "type": "python",
-        //     "request": "launch",
-        //     "stopOnEntry": true,
-        //     "pythonPath": "/usr/bin/python3",
-        //     "program": "${workspaceRoot}/main.py",
-        //     // "cwd": "",
-        //     "console": "externalTerminal",
-        //     // "env": {},
-        //     // "envFile": "${workspaceRoot}/.env",
-        //     "debugOptions": [
-        //         "WaitOnAbnormalExit",
-        //         "WaitOnNormalExit"
-        //     ]
-        // },
         {
             "name": "Python Attach (local) proc 0",
             "type": "python",
