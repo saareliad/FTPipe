@@ -30,6 +30,7 @@ import pickle
 import random
 import re
 import shutil
+import math
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -41,7 +42,7 @@ from tqdm import tqdm, trange
 
 from transformers import (
     WEIGHTS_NAME,
-    AdamW,
+    # AdamW,
     BertConfig,
     BertForMaskedLM,
     BertTokenizer,
@@ -431,6 +432,26 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
     return global_step, tr_loss / global_step
 
 
+
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+        # self.record = []
+
+    def update(self, val, n=1):
+        self.sum += val * n
+        self.count += n
+
+    def get_avg(self):
+        return self.sum / self.count
+
+
 def evaluate(args, model: PreTrainedModel, tokenizer: PreTrainedTokenizer, prefix="") -> Dict:
     # Loop to handle MNLI double evaluation (matched, mis-matched)
     eval_output_dir = args.output_dir
@@ -463,6 +484,7 @@ def evaluate(args, model: PreTrainedModel, tokenizer: PreTrainedTokenizer, prefi
     logger.info("  Batch size = %d", args.eval_batch_size)
     eval_loss = 0.0
     nb_eval_steps = 0
+    eval_loss_meter = AverageMeter()
     model.eval()
 
     for batch in tqdm(eval_dataloader, desc="Evaluating"):
@@ -473,16 +495,24 @@ def evaluate(args, model: PreTrainedModel, tokenizer: PreTrainedTokenizer, prefi
         with torch.no_grad():
             outputs = model(inputs, masked_lm_labels=labels) if args.mlm else model(inputs, labels=labels)
             lm_loss = outputs[0]
-            eval_loss += lm_loss.mean().item()
+            # NOTE: mean is used for dataparallel.
+            current_loss = lm_loss.mean().item()
+            current_batch_size = labels.size(0)
+
+            eval_loss_meter.update(current_loss, current_batch_size)
+            eval_loss += current_loss
         nb_eval_steps += 1
 
     eval_loss = eval_loss / nb_eval_steps
     perplexity = torch.exp(torch.tensor(eval_loss))
 
-    result = {"perplexity": perplexity}
+    from_meter_eval_loss = eval_loss_meter.get_avg()
+    from_meter_perplexity = torch.exp(torch.tensor(from_meter_eval_loss))
+    from_meter_perplexity_math = math.exp(from_meter_eval_loss)
+    result = {"perplexity_old": perplexity, "perplexity": from_meter_perplexity, "math_ppl": from_meter_perplexity_math}
 
     output_eval_file = os.path.join(eval_output_dir, prefix, "eval_results.txt")
-    
+
     # make aditional dir of necessary
     os.makedirs(os.path.dirname(output_eval_file), exist_ok=True)
 
@@ -577,7 +607,7 @@ def main():
     parser.add_argument(
         "--evaluate_during_training", action="store_true", help="Run evaluation during training at each logging step."
     )
-    
+
     parser.add_argument(
         "--evaluate_every_epoch", action="store_true", help="Run evaluation at the beginning of every epoch"
     )
