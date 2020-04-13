@@ -195,7 +195,7 @@ def run_analysis(sample,
 
         print(s)
 
-    return expected_speedup,s  # real_f_balance, real_b_balance
+    return expected_speedup, s  # real_f_balance, real_b_balance
 
 
 #################################
@@ -243,6 +243,9 @@ def profile_execution(model_inputs,
             partition_specific_recomputation = recomputation
             if async_pipeline and is_last_partition:
                 partition_specific_recomputation = False
+            
+            # partition_specific_inputs_requires_grad
+            inputs_requires_grad = not is_first_partition
 
             if all(tensor in activations
                    for tensor in partition_config[idx]['inputs']):
@@ -263,12 +266,14 @@ def profile_execution(model_inputs,
                     f_time, b_time, outputs = cuda_time(
                         partition_config[idx]['model'],
                         inputs,
-                        recomputation=partition_specific_recomputation)
+                        recomputation=partition_specific_recomputation,
+                        inputs_requires_grad=inputs_requires_grad)
                 else:
                     f_time, b_time, outputs = cpu_time(
                         partition_config[idx]['model'],
                         inputs,
-                        recomputation=partition_specific_recomputation)
+                        recomputation=partition_specific_recomputation,
+                        inputs_requires_grad=inputs_requires_grad)
 
                 # output statistics
                 out_size_mb = 0
@@ -348,7 +353,7 @@ def mean_var(times):
     return means, variances, avg_deviations
 
 
-def cuda_time(partition, inputs, recomputation=True):
+def cuda_time(partition, inputs, recomputation=True, input_requires_grad=True):
     # now we move partition to GPU
     partition = partition.to('cuda')
     partition.device = 'cuda'
@@ -366,11 +371,11 @@ def cuda_time(partition, inputs, recomputation=True):
     return f_time, b_time, outputs
 
 
-def cuda_backward(partition, inputs, recomputation=True):
+def cuda_backward(partition, inputs, recomputation=True, input_requires_grad=True):
     ''' measure forward/backward time of a partition on the GPU
     '''
     # now we move inputs to GPU
-    inputs = [i.to('cuda') for i in inputs]
+    inputs = [i.to('cuda').requires_grad_(input_requires_grad) for i in inputs]
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
     if recomputation:
@@ -379,7 +384,6 @@ def cuda_backward(partition, inputs, recomputation=True):
         outputs = partition(*inputs)
     else:
         outputs = partition(*inputs)
-        start = torch.cuda.Event(enable_timing=True)
         torch.cuda.synchronize(device='cuda')
         start.record()
     loss = sum(o.norm() for o in outputs)  # FIXME: just use real loss.
@@ -406,12 +410,12 @@ def cuda_forward(partition, inputs, recomputation=True):
     return f_time, outputs
 
 
-def cpu_time(partition, inputs, recomputation=True):
+def cpu_time(partition, inputs, recomputation=True, inputs_requires_grad=True):
     ''' measure forward/backward time of a partition on the CPU
     '''
     partition = partition.to('cpu')
     partition.device = 'cpu'
-    b_time = cpu_backward(partition, inputs, recomputation=recomputation)
+    b_time = cpu_backward(partition, inputs, recomputation=recomputation, inputs_requires_grad=inputs_requires_grad)
     f_time, outputs = cpu_forward(partition,
                                   inputs,
                                   recomputation=recomputation)
@@ -430,8 +434,8 @@ def cpu_forward(partition, inputs, recomputation=True):
     return f_time, outputs
 
 
-def cpu_backward(partition, inputs, recomputation=True):
-    inputs = [i.cpu() for i in inputs]
+def cpu_backward(partition, inputs, recomputation=True, inputs_requires_grad=True):
+    inputs = [i.cpu().requires_grad_(inputs_requires_grad) for i in inputs]
     start = time.time()
     outputs = partition(*inputs)
     if not recomputation:
