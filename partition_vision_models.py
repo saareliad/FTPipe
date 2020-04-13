@@ -178,6 +178,7 @@ if __name__ == "__main__":
     bw = args.bw
     n_partitions = args.n_partitions
     batch_dim = 0
+    bwd_to_fwd_ratio = 2
     graph = pipe_model(model,
                        batch_dim,
                        sample,
@@ -187,7 +188,7 @@ if __name__ == "__main__":
                        output_file=args.output_file,
                        generate_model_parallel=args.generate_model_parallel,
                        use_layers_only_graph=args.partition_layer_graph,
-                       node_weight_function=node_weight_function(),
+                       node_weight_function=node_weight_function(bwd_to_fwd_ratio=bwd_to_fwd_ratio),
                        edge_weight_function=edge_weight_function(bw),
                        n_iter=n_iter,
                        recomputation=recomputation,

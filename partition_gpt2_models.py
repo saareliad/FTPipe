@@ -205,6 +205,7 @@ def partition_model(args,
         sample = inputs
     model.train()
     batch_dim = 0
+    bwd_to_fwd_ratio = 2
     # TODO assumes batch_dim is 0
     graph = pipe_model(model,
                        batch_dim,
@@ -212,7 +213,7 @@ def partition_model(args,
                        depth=args.depth,
                        n_iter=args.n_iter,
                        nparts=args.n_partitions,
-                       node_weight_function=node_weight_function(),
+                       node_weight_function=node_weight_function(bwd_to_fwd_ratio=bwd_to_fwd_ratio),
                        edge_weight_function=edge_weight_function(
                            args.bandwidth_gps),
                        use_layers_only_graph=args.partition_layer_graph,
