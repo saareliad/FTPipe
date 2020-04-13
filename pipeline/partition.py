@@ -157,9 +157,9 @@ class Partition(nn.Module):
         """ returns an iteretable of grads """
         x = self.input_buffer.pop(micro_batch_idx)
         if isinstance(x, Tensor):
-            return (x.grad.data, )
+            return (x.grad, )
         else:
-            return [y.grad.data for y in x]
+            return [y.grad for y in x]
 
     def backward(self, g, **kw):
         raise NotImplementedError()
@@ -174,6 +174,52 @@ class FirstPartition(Partition):
 
     def __init__(self, *args, **kw):
         super(FirstPartition, self).__init__(*args, **kw)
+
+
+    def forward(self, x: TensorOrTensors, micro_batch_idx):
+
+        if self.training:  # Dummy fwd to save input and pass output to next layer
+            # do the dummy forward
+            # stash rng state
+            # save input for later (recomputation)
+            if self.dummy_forward_monkey_patcher:
+                self.dummy_forward_monkey_patcher.sync()
+                self.dummy_forward_monkey_patcher.replace_for_dummy()
+
+            with torch.no_grad():
+                # EXPLICITLY DO CLONE
+                if isinstance(x, Tensor):
+                    # Note - we clone here because we don't want the tensor to get overriden.
+                    # TODO: it could be done better if we use multiple input buffers instead of allocating
+                    # (when #buffers==#max(len(input_buffer)))
+                    # In pytorch it can happen auto matically with THCCashingAlocator.
+                    # x = x.data.clone().requires_grad_(self._REQ_GRAD)
+                    self.input_buffer[micro_batch_idx] = x
+                    self.rng_stasher.stash_rng_state(micro_batch_idx)
+                    x = self.layers(x)
+                else:
+                    # x = [
+                    #     tensor.data.clone().requires_grad_(self._REQ_GRAD)
+                    #     for tensor in x
+                    # ]
+                    self.input_buffer[micro_batch_idx] = x
+                    self.rng_stasher.stash_rng_state(micro_batch_idx)
+                    x = self.layers(*x)
+
+                if self.dummy_forward_monkey_patcher:
+                    self.dummy_forward_monkey_patcher.replace_for_forward()
+            return x
+
+        else:
+            with torch.no_grad():
+                if self.dummy_forward_monkey_patcher:
+                    self.dummy_forward_monkey_patcher.replace_for_forward()
+                if isinstance(x, Tensor):
+                    x = self.layers(x)
+                else:
+                    x = self.layers(*x)
+                return x
+
 
     def recompute(self, micro_batch_idx):
         # Unlike normal partition, here we pop the activations after we read from buffer
@@ -220,14 +266,14 @@ class LastPartition(Partition):
             if isinstance(x, Tensor):
                 # # See note on option 1 below.
                 with torch.no_grad():
-                    x = x.data.detach_().requires_grad_()
+                    x = x.requires_grad_()
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(x)
             else:
                 # Option 2
                 with torch.no_grad():
                     x = [
-                        tensor.data.detach_().requires_grad_() for tensor in x
+                        tensor.requires_grad_() for tensor in x
                     ]
 
                 self.input_buffer[micro_batch_idx] = x
@@ -260,14 +306,11 @@ class LastPartitionWithLabelInput(LastPartition):
         label = x[-1]
         x = x[:-1]
         if self.training:
-            with torch.no_grad():
-                x = [tensor.data.detach_().requires_grad_() for tensor in x]
-
+            x = [tensor.requires_grad_() for tensor in x]
             self.input_buffer[micro_batch_idx] = x
             x = self.layers(*x, label)
         else:
             with torch.no_grad():
-                x = [y.data for y in x]
                 x = self.layers(*x, label)
 
         #  Last partition outputs should be in a tensor format
@@ -327,25 +370,24 @@ class PartitionWithoutRecomputation(nn.Module):
                 # TODO: it could be done better if we use multiple input buffers instead of allocating
                 # (when #buffers==#max(len(input_buffer)))
                 # In pytorch it can happen automatically with THCCashingAlocator.
-                x = x.data.detach().clone().requires_grad_(self._REQ_GRAD)
                 # Save activation only if gradient is needed.
                 if self._REQ_GRAD:
+                    with torch.no_grad():
+                        x = x.data.clone().requires_grad_(self._REQ_GRAD)
                     self.input_buffer[micro_batch_idx] = x
                 x = self.layers(x)
             else:
-                x = [
-                    tensor.data.detach().clone().requires_grad_(self._REQ_GRAD)
-                    for tensor in x
-                ]
-
                 if self._REQ_GRAD:
-                    self.input_buffer[micro_batch_idx] = x
+                    with torch.no_grad():
+                        x = [
+                            tensor.data.clone().requires_grad_(self._REQ_GRAD)
+                            for tensor in x
+                        ]
+                        self.input_buffer[micro_batch_idx] = x
+
                 x = self.layers(*x)
 
             # save the head.
-            # for z in x:
-            #     assert(z.grad_fn is not None)
-
             self.bwd_graph_head_buffer[micro_batch_idx] = x
             return x
 
@@ -370,6 +412,6 @@ class PartitionWithoutRecomputation(nn.Module):
         # NOTE: This method can be patched.
         x = self.input_buffer.pop(micro_batch_idx)
         if isinstance(x, Tensor):
-            return (x.grad.data, )
+            return (x.grad, )
         else:
-            return [y.grad.data for y in x]
+            return [y.grad for y in x]
