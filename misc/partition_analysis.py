@@ -29,24 +29,30 @@ def run_analysis(sample,
     PRINT_VAR_STD = False
     TRY_SSGD_ANALYSIS = True
 
-    # thoeretical analysis
-    sequential_f, sequential_b, parallel_f, parallel_b = theoretical_analysis(
-        graph,
-        config,
-        recomputation=recomputation,
-        async_pipeline=async_pipeline)
-    edges = edge_cut(graph)
-    # theoretical analysis based on the graph assuming the computation is sequential
-    theoretical_sequential_b_balance = worst_balance(sequential_b)
-    theoretical_sequential_f_balance = worst_balance(sequential_f)
-    (topology_aware_sequential_f_balance,
-     topology_aware_sequential_b_balance) = topology_aware_balance(
-         sequential_f, sequential_b, edges)
-    # theoretical anaysis based on the graph assuming the computation is fully parallel
-    theoretical_parallel_b_balance = worst_balance(parallel_b)
-    theoretical_parallel_f_balance = worst_balance(parallel_f)
-    topology_aware_parallel_f_balance, topology_aware_parallel_b_balance = topology_aware_balance(
-        parallel_f, parallel_b, edges)
+    if graph is not None:
+        # thoeretical analysis
+        sequential_f, sequential_b, parallel_f, parallel_b = theoretical_analysis(
+            graph,
+            config,
+            recomputation=recomputation,
+            async_pipeline=async_pipeline)
+        edges = edge_cut(graph)
+        # theoretical analysis based on the graph assuming the computation is sequential
+        theoretical_sequential_b_balance = worst_balance(sequential_b)
+        theoretical_sequential_f_balance = worst_balance(sequential_f)
+        (topology_aware_sequential_f_balance,
+         topology_aware_sequential_b_balance) = topology_aware_balance(
+             sequential_f, sequential_b, edges)
+        # theoretical anaysis based on the graph assuming the computation is fully parallel
+        theoretical_parallel_b_balance = worst_balance(parallel_b)
+        theoretical_parallel_f_balance = worst_balance(parallel_f)
+        topology_aware_parallel_f_balance, topology_aware_parallel_b_balance = topology_aware_balance(
+            parallel_f, parallel_b, edges)
+    else:
+        edges = None
+        TOPO_AWARE = False
+        PRINT_THEORETICAL = False
+
     # real statistics based on generated partitions
     ((real_f_times, f_vars, f_deviance), (real_b_times, b_vars, b_deviance),
      comm_volume_str, comm_volume_stats, nocomm_real_f_times,
@@ -102,8 +108,10 @@ def run_analysis(sample,
     # where we could analyze it later, compare between partitions, etc.
     if verbose:
         s = "-I- Printing Report\n"
-        s += "cutting edges are edges between partitions\n"
-        s += f"number of cutting edges: {len(edges)}\n\n"
+
+        if edges is not None:
+            s += "cutting edges are edges between partitions\n"
+            s += f"number of cutting edges: {len(edges)}\n\n"
 
         s += f"backward times {'do not ' if not recomputation else ''}include recomputation\n"
         if async_pipeline and recomputation:
@@ -243,7 +251,7 @@ def profile_execution(model_inputs,
             partition_specific_recomputation = recomputation
             if async_pipeline and is_last_partition:
                 partition_specific_recomputation = False
-            
+
             # partition_specific_inputs_requires_grad
             inputs_requires_grad = not is_first_partition
 
@@ -252,7 +260,7 @@ def profile_execution(model_inputs,
                 inputs = []
                 for tensor in partition_config[idx]['inputs']:
                     t = activations[tensor]
-                    #shared weights support
+                    # shared weights support
                     if tensor in is_parameter:
                         t.requires_grad_()
                     inputs.append(t)
@@ -332,7 +340,7 @@ def profile_execution(model_inputs,
 
             else:
                 parts.append(idx)
-
+ 
     # calculate mean and variance
     return mean_var(f_times), mean_var(
         b_times), communication_volume, communication_stats, mean_var(
@@ -353,11 +361,17 @@ def mean_var(times):
     return means, variances, avg_deviations
 
 
-def cuda_time(partition, inputs, recomputation=True, inputs_requires_grad=True):
+def cuda_time(partition,
+              inputs,
+              recomputation=True,
+              inputs_requires_grad=False):
     # now we move partition to GPU
     partition = partition.to('cuda')
     partition.device = 'cuda'
-    b_time = cuda_backward(partition, inputs, recomputation=recomputation)
+    b_time = cuda_backward(partition,
+                           inputs,
+                           recomputation=recomputation,
+                           inputs_requires_grad=inputs_requires_grad)
 
     # Delete gradeinets to save space
     for p in partition.parameters():
@@ -371,11 +385,17 @@ def cuda_time(partition, inputs, recomputation=True, inputs_requires_grad=True):
     return f_time, b_time, outputs
 
 
-def cuda_backward(partition, inputs, recomputation=True, inputs_requires_grad=True):
+def cuda_backward(partition,
+                  inputs,
+                  recomputation=True,
+                  inputs_requires_grad=False):
     ''' measure forward/backward time of a partition on the GPU
     '''
     # now we move inputs to GPU
-    inputs = [i.to('cuda').requires_grad_(inputs_requires_grad) for i in inputs]
+    inputs = [
+        i.to('cuda').requires_grad_(inputs_requires_grad
+                                    and i.is_floating_point()) for i in inputs
+    ]
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
     if recomputation:
@@ -410,12 +430,18 @@ def cuda_forward(partition, inputs, recomputation=True):
     return f_time, outputs
 
 
-def cpu_time(partition, inputs, recomputation=True, inputs_requires_grad=True):
+def cpu_time(partition,
+             inputs,
+             recomputation=True,
+             inputs_requires_grad=False):
     ''' measure forward/backward time of a partition on the CPU
     '''
     partition = partition.to('cpu')
     partition.device = 'cpu'
-    b_time = cpu_backward(partition, inputs, recomputation=recomputation, inputs_requires_grad=inputs_requires_grad)
+    b_time = cpu_backward(partition,
+                          inputs,
+                          recomputation=recomputation,
+                          inputs_requires_grad=inputs_requires_grad)
     f_time, outputs = cpu_forward(partition,
                                   inputs,
                                   recomputation=recomputation)
@@ -434,8 +460,14 @@ def cpu_forward(partition, inputs, recomputation=True):
     return f_time, outputs
 
 
-def cpu_backward(partition, inputs, recomputation=True, inputs_requires_grad=True):
-    inputs = [i.cpu().requires_grad_(inputs_requires_grad) for i in inputs]
+def cpu_backward(partition,
+                 inputs,
+                 recomputation=True,
+                 inputs_requires_grad=False):
+    inputs = [
+        i.cpu().requires_grad_(inputs_requires_grad and i.is_floating_point())
+        for i in inputs
+    ]
     start = time.time()
     outputs = partition(*inputs)
     if not recomputation:
