@@ -56,12 +56,10 @@ from transformers import (
 from models.normal import GPT2LMHeadModel, GPT2Model
 from models.normal import StatelessGPT2LMHeadModel  # , StatelessGPT2Model
 
-
 from pytorch_Gpipe import pipe_model
 from misc import run_analysis  # , run_partitions
 from pytorch_Gpipe.utils import layerDict, tensorDict
 from pytorch_Gpipe import PipelineConfig
-
 
 MODEL_CLASSES_LM_HEAD = {
     'gpt2': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
@@ -205,7 +203,7 @@ def partition_model(args,
         sample = inputs
     model.train()
     batch_dim = 0
-    bwd_to_fwd_ratio = 2
+    bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
     # TODO assumes batch_dim is 0
     graph = pipe_model(model,
                        batch_dim,
@@ -213,9 +211,11 @@ def partition_model(args,
                        depth=args.depth,
                        n_iter=args.n_iter,
                        nparts=args.n_partitions,
-                       node_weight_function=node_weight_function(bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+                       node_weight_function=node_weight_function(
+                           bwd_to_fwd_ratio=bwd_to_fwd_ratio),
                        edge_weight_function=edge_weight_function(
-                           args.bandwidth_gps),
+                           args.bandwidth_gps,
+                           bwd_to_fwd_ratio=bwd_to_fwd_ratio),
                        use_layers_only_graph=args.partition_layer_graph,
                        output_file=args.output_file,
                        generate_model_parallel=args.generate_model_parallel,
@@ -223,7 +223,8 @@ def partition_model(args,
                        METIS_opt=METIS_opt)
     if args.dot:
         graph.save_as_pdf(args.output_file, ".")
-        graph.serialize(args.output_file)
+
+    graph.serialize(args.output_file)
 
     record_cmdline(args.output_file)
     module_path = args.output_file.replace("/", ".")
@@ -281,6 +282,10 @@ def parse_cli():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
+    parser.add_argument("--bwd_to_fwd_ratio",
+                        type=int,
+                        default=-1,
+                        help="bwd to fwd ratio for heuristics")
     # parameter required by the repo
     tr_params = parser.add_argument_group("Transformers parameters")
     tr_params.add_argument("--train_data_file",
@@ -300,7 +305,8 @@ def parse_cli():
     tr_params.add_argument(
         "--mlm",
         action='store_true',
-        help="Train with masked-language modeling loss instead of language modeling."
+        help=
+        "Train with masked-language modeling loss instead of language modeling."
     )
     tr_params.add_argument(
         "--mlm_probability",
@@ -311,19 +317,22 @@ def parse_cli():
         "--config_name",
         default="",
         type=str,
-        help="Optional pretrained config name or path if not the same as model_name_or_path"
+        help=
+        "Optional pretrained config name or path if not the same as model_name_or_path"
     )
     tr_params.add_argument(
         "--tokenizer_name",
         default="",
         type=str,
-        help="Optional pretrained tokenizer name or path if not the same as model_name_or_path"
+        help=
+        "Optional pretrained tokenizer name or path if not the same as model_name_or_path"
     )
     tr_params.add_argument(
         "--cache_dir",
         default="",
         type=str,
-        help="Optional directory to store the pre-trained models downloaded from s3 (instread of the default one)"
+        help=
+        "Optional directory to store the pre-trained models downloaded from s3 (instread of the default one)"
     )
     tr_params.add_argument(
         "--block_size",
@@ -360,7 +369,8 @@ def parse_cli():
         "--stateless_tied",
         default=False,
         action="store_true",
-        help="Tie weights stateless trick. Note that shared weight may be sent in pipe"
+        help=
+        "Tie weights stateless trick. Note that shared weight may be sent in pipe"
     )
 
     # parameters of the partitioning script
@@ -372,12 +382,16 @@ def parse_cli():
         '--model_too_big',
         action='store_true',
         default=False,
-        help="if the model is too big run the whole partitioning process on CPU, and drink a cup of coffee in the meantime"
+        help=
+        "if the model is too big run the whole partitioning process on CPU, and drink a cup of coffee in the meantime"
     )
     parser.add_argument('--n_partitions', type=int, default=4)
     parser.add_argument('--output_file', default='gpt2')
-    parser.add_argument("--generate_model_parallel", action="store_true", default=False,
-                        help="wether to generate a modelParallel version of the partitioning")
+    parser.add_argument(
+        "--generate_model_parallel",
+        action="store_true",
+        default=False,
+        help="wether to generate a modelParallel version of the partitioning")
     parser.add_argument('--auto_file_name',
                         action='store_true',
                         default=False,
@@ -386,7 +400,8 @@ def parse_cli():
         '--n_iter',
         type=int,
         default=10,
-        help="number of iteration used in order to profile the network and run analysis"
+        help=
+        "number of iteration used in order to profile the network and run analysis"
     )
     parser.add_argument(
         '--bandwidth_gps',

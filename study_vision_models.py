@@ -7,6 +7,7 @@ import importlib
 from misc import run_analysis, run_partitions
 from pytorch_Gpipe.utils import _extract_volume_from_sizes, layerDict, tensorDict
 from pytorch_Gpipe import PipelineConfig, pipe_model
+from heuristics import node_weight_function, edge_weight_function
 # TODO: instea of code copy, do repeated calls to exisitng functions...
 
 _RESENETS = dict(resnet50_imagenet=dict(
@@ -89,42 +90,6 @@ def create_random_sample(args, analysis=False):
     return sample
 
 
-MULT_FACTOR = 1000
-
-
-def node_weight_function(node: Node):
-    # TODO: factory with recomputation.
-    if node.type is NodeTypes.LAYER:
-        return int(MULT_FACTOR *
-                   (node.weight.backward_time))  # + node.weight.forward_time
-    if node.type is NodeTypes.CONSTANT:
-        return 0
-    if node.type is NodeTypes.OP:  # FIXME:
-        return 0
-    return 0
-
-
-def edge_weight_function(bw_GBps):
-    def f(u: Node, v: Node):
-        if u.type is NodeTypes.CONSTANT or (u.valueType() in [int, None]
-                                            or u.shape == (torch.Size([]), )):
-            # no constant or scalars on boundries
-            return 1000 * MULT_FACTOR
-
-        if u.valueType() in [list, tuple]:
-            # no nested iterables on boundries
-            return 1000 * MULT_FACTOR
-
-        # TODO data type not included shouldn't really matter
-        MB = 1e6
-        volume = _extract_volume_from_sizes(u.shape) / MB
-        # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
-        w = max(1, int(MULT_FACTOR * (volume / bw_GBps)))
-        return w
-
-    return f
-
-
 def parse_cli():
 
     parser = argparse.ArgumentParser(
@@ -139,7 +104,8 @@ def parse_cli():
         '--model_too_big',
         action='store_true',
         default=False,
-        help="if the model is too big run the whole partitioning process on CPU, "
+        help=
+        "if the model is too big run the whole partitioning process on CPU, "
         "and drink a cup of coffee in the meantime")
     parser.add_argument('-p', '--n_partitions', type=int, default=4)
     parser.add_argument('-o', '--output_file', default='wrn_16x4')
@@ -151,7 +117,8 @@ def parse_cli():
         '--n_iter',
         type=int,
         default=100,
-        help="number of iteration used in order to profile the network and run analysis"
+        help=
+        "number of iteration used in order to profile the network and run analysis"
     )
     parser.add_argument(
         '--bw',
@@ -214,17 +181,20 @@ def parse_cli():
     metis_opts.add_argument(
         '--metis_niter',
         type=int,
-        help="Specifies the number of iterations for the refinement algorithms at each stage of the uncoarsening process."
+        help=
+        "Specifies the number of iterations for the refinement algorithms at each stage of the uncoarsening process."
         "Default is 10.")
     metis_opts.add_argument(
         '--nseps',
         type=int,
-        help="Specifies the number of different separators that it will compute at each level of nested dissection."
+        help=
+        "Specifies the number of different separators that it will compute at each level of nested dissection."
         "The final separator that is used is the smallest one. Default is 1.")
     metis_opts.add_argument(
         "--ncuts",
         type=int,
-        help="Specifies the number of different partitionings that it will compute."
+        help=
+        "Specifies the number of different partitionings that it will compute."
         " The final partitioning is the one that achieves the best edgecut or communication volume."
         "Default is 1.")
     metis_opts.add_argument(
@@ -313,6 +283,7 @@ def single_partitioning_loop_with_override(args, METIS_opt, **override_dict):
     n_iter = args.n_iter
     recomputation = not args.no_recomputation
     batch_dim = 0
+    bwd_to_fwd_ratio = -1
     graph = pipe_model(model,
                        batch_dim,
                        sample,
@@ -321,8 +292,10 @@ def single_partitioning_loop_with_override(args, METIS_opt, **override_dict):
                        nparts=n_partitions,
                        output_file=args.output_file,
                        use_layers_only_graph=args.partition_layer_graph,
-                       node_weight_function=node_weight_function,
-                       edge_weight_function=edge_weight_function(bw),
+                       node_weight_function=node_weight_function(
+                           bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+                       edge_weight_function=edge_weight_function(
+                           bw, bwd_to_fwd_ratio=bwd_to_fwd_ratio),
                        n_iter=n_iter,
                        recomputation=recomputation,
                        save_memory_mode=args.save_memory_mode,
@@ -375,6 +348,7 @@ if __name__ == "__main__":
     # for bw in BW_RANGE:
     while i < len(BW_RANGE):
         try:
+            bw = BW_RANGE[i]
             es = single_partitioning_loop_with_override(args, METIS_opt, bw=bw)
             expected_speedup.append(es)
             i += 1
