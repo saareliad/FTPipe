@@ -353,7 +353,7 @@ def mean_var(times):
     return means, variances, avg_deviations
 
 
-def cuda_time(partition, inputs, recomputation=True, input_requires_grad=True):
+def cuda_time(partition, inputs, recomputation=True, inputs_requires_grad=True):
     # now we move partition to GPU
     partition = partition.to('cuda')
     partition.device = 'cuda'
@@ -371,11 +371,11 @@ def cuda_time(partition, inputs, recomputation=True, input_requires_grad=True):
     return f_time, b_time, outputs
 
 
-def cuda_backward(partition, inputs, recomputation=True, input_requires_grad=True):
+def cuda_backward(partition, inputs, recomputation=True, inputs_requires_grad=True):
     ''' measure forward/backward time of a partition on the GPU
     '''
     # now we move inputs to GPU
-    inputs = [i.to('cuda').requires_grad_(input_requires_grad) for i in inputs]
+    inputs = [i.to('cuda').requires_grad_(inputs_requires_grad) for i in inputs]
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
     if recomputation:
