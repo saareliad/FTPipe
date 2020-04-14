@@ -180,7 +180,7 @@ def generateReturnStatement(output_scopes: OrderedSet[str],
     ''' generate the return statement and descriptive comment
     '''
     scope_comment = f'\n{dtab}# '.join(output_scopes)
-    comment = f'# returing:\n{dtab}# {scope_comment}'
+    comment = f'# returning:\n{dtab}# {scope_comment}'
     scopes = [ready_expressions[scope] for scope in output_scopes]
     if len(scopes) > 1:
         result_tuple = ", ".join(scopes)
