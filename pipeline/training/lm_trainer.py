@@ -35,7 +35,8 @@ class LMTrainer(BaseOutPutIsLossTrainer):
 
         loss = loss.item()
         self.statistics.update_on_batch("loss", loss, batch_size)
-        self.statistics.update_on_batch("ppl", math.exp(loss), batch_size)
+        # Same as loos, we just get the statisitc differently...
+        self.statistics.update_on_batch("ppl", loss, batch_size)
 
 
 class GapAwareLMTrainer(LMTrainer, GapAwareTrainerBase):

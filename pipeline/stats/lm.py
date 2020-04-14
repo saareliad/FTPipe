@@ -1,6 +1,14 @@
 from .interface import Stats
 from .utils import AverageMeter
+import math
 
+class PPLMeter(AverageMeter):
+    """ Update like loss, get_avg() gets the PPL """
+    def get_avg(self):
+        # avg_loss = super().get_avg()
+        avg_loss = self.sum / self.count
+        # ppl = math.exp(avg_loss)
+        return math.exp(avg_loss)
 
 class LMStats(Stats):
     """ Class to handle statistics collection for LM Tasks """
@@ -18,7 +26,7 @@ class LMStats(Stats):
 
         self.add_statistic(
             name="ppl",
-            meter=AverageMeter(),
+            meter=PPLMeter(),
             per_batch=False,
             per_epoch=True,  # FIXME
             train=True,
@@ -37,7 +45,7 @@ class LMStats(Stats):
             loss = self.fit_res.test_loss[-1]
             ppl = self.fit_res.test_ppl[-1]
 
-        return ' | {} loss {:5.2f} | {} ppl {:4.2f}'.format(
+        return ' | {} loss {:5.2f} | {} ppl {:4.3f}'.format(
             name, loss, name, ppl)
 
 
