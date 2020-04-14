@@ -1,7 +1,6 @@
 # import torch
 from .interface import BaseOutPutIsLossTrainer
 from .gap_aware_trainer import GapAwareTrainerBase
-import math
 # TODO: typehint for statistics. maybe it should actually sit under stats
 
 
@@ -15,7 +14,7 @@ class LMTrainer(BaseOutPutIsLossTrainer):
 
         loss = loss.item()
         self.statistics.update_on_batch("loss", loss, batch_size)
-        self.statistics.update_on_batch("ppl", math.exp(loss), batch_size)
+        self.statistics.update_on_batch("ppl", loss, batch_size)
 
     def last_partition_step_and_statistics(self,
                                            x,
