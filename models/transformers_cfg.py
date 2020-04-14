@@ -28,13 +28,6 @@ def gpt2_lm_lowercase():
                 output_past=False)
 
 
-def gpt2xl_lm_lowercase():
-    return dict(model_type='gpt2_lm',
-                model_name_or_path='gpt2-xl',
-                do_lower_case=True,
-                output_past=False)
-
-
 def gpt2_lmhead_lowercase_5p():
     """ Stateless version, were partitions 4 and 0 are on same GPU but different ranks
         Used for the tied weights trick.
@@ -52,9 +45,19 @@ def gpt2_tied_lm_5p():
                 output_past=False,
                 stateless_tied=True)
 
+
+def gpt2xl_8p_untied():
+    return dict(model_type='gpt2_lm_stateless',
+                model_name_or_path='gpt2-xl',
+                do_lower_case=False,
+                output_past=False,
+                stateless_tied=False)
+    
+
 MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS = {
     'gpt2_lowercase': gpt2_lowercase,
     'gpt2_lm_lowercase': gpt2_lm_lowercase,
     'gpt2_lmhead_lowercase_5p': gpt2_lmhead_lowercase_5p,
     'gpt2_tied_lm_5p': gpt2_tied_lm_5p,
+    'gpt2xl_8p_untied': gpt2xl_8p_untied,
 }
