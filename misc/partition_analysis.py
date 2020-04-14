@@ -7,6 +7,7 @@ from pprint import pprint
 import sys
 import io
 from contextlib import redirect_stdout
+import warnings
 
 
 def run_analysis(sample,
@@ -56,7 +57,7 @@ def run_analysis(sample,
     # real statistics based on generated partitions
     ((real_f_times, f_vars, f_deviance), (real_b_times, b_vars, b_deviance),
      comm_volume_str, comm_volume_stats, nocomm_real_f_times,
-     nocomm_real_b_times) = profile_execution(
+     nocomm_real_b_times, warnings_list) = profile_execution(
          sample,
          config,
          n_iter + 1,
@@ -108,6 +109,8 @@ def run_analysis(sample,
     # where we could analyze it later, compare between partitions, etc.
     if verbose:
         s = "-I- Printing Report\n"
+        if warnings_list:
+            s += "warnings:\n" + "\n".join(warnings_list)
 
         if edges is not None:
             s += "cutting edges are edges between partitions\n"
@@ -213,7 +216,7 @@ def run_analysis(sample,
 
 def profile_execution(model_inputs,
                       partition_config,
-                      n,
+                      n_iters,
                       recomputation=True,
                       bw_GBps=12,
                       async_pipeline=False,
@@ -233,7 +236,10 @@ def profile_execution(model_inputs,
     if not isinstance(model_inputs, tuple):
         model_inputs = (model_inputs, )
 
-    for _ in range(n):
+    # Return warnings so we can print
+    warnings_list = []
+
+    for current_iteration_num in range(n_iters):
         parts = deque(range(n_partitions))
         activations = {}
         for i, t in zip(partition_config['model inputs'], model_inputs):
@@ -287,6 +293,13 @@ def profile_execution(model_inputs,
                 out_size_mb = 0
                 send_time = 0
                 for o, t in zip(partition_config[idx]['outputs'], outputs):
+                    # Check if contations
+                    if current_iteration_num == 0:
+                        if not t.is_contiguous():
+                            warnining = f"Partition{idx} output:{o} is not contiguous!"
+                            warnings.warn(warnining)
+                            warnings_list.append(warnining)
+
                     # save activation on CPU in order to save GPU memory
                     if isinstance(t, torch.nn.Parameter):
                         # shared weights support
@@ -340,11 +353,11 @@ def profile_execution(model_inputs,
 
             else:
                 parts.append(idx)
- 
+
     # calculate mean and variance
     return mean_var(f_times), mean_var(
         b_times), communication_volume, communication_stats, mean_var(
-            nocommf_times)[0], mean_var(nocommb_times)[0]
+            nocommf_times)[0], mean_var(nocommb_times)[0], warnings_list
 
 
 def mean_var(times):
