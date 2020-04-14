@@ -13,8 +13,8 @@ def node_weight_function(bwd_to_fwd_ratio=2):
         if node.type is NodeTypes.LAYER:
             return int(MULT_FACTOR *
                        ((bwd_to_fwd_ratio * node.weight.backward_time +
-                         node.weight.forward_time) / bwd_to_fwd_ratio +
-                        1))  # FIXME: + node.weight.forward_time to stay
+                         node.weight.forward_time) / (bwd_to_fwd_ratio + 1))
+                       )  # FIXME: + node.weight.forward_time to stay
         if node.type is NodeTypes.CONSTANT:
             return 0
         if node.type is NodeTypes.OP:  # FIXME:
