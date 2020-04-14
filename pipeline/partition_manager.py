@@ -756,14 +756,6 @@ class SinglePartitionManager:
         if weight_stasher and (not self.gap_aware_just_loss):
             # Restore to parameters which the fwd ran on
             weight_stasher.pop_and_load_stashed_params(batch_idx)
-            # self.true_weights_storage.record_change_mode("stashed")
-
-        # elif (self.weight_predictor and self.weight_predictor.nag_with_predictor
-        #       and (self.delay_at_batch.get(batch_idx) == 0)):
-        #     # HACK: feature: do nag in for the backward pass.
-        #     self.weight_predictor.setup(0)
-        #     self.weight_predictor.forward()
-        #     # self.true_weights_storage.record_change_mode("pred")
 
         self.partition.recompute(batch_idx)
 
@@ -790,6 +782,8 @@ class SinglePartitionManager:
         if not (self.is_first_partition):
             g = self.partition.get_grad(batch_idx)
             request_objects = self.comm_handler.send_gradients(g, batch_idx)
+        
+        del g
 
         # Wait for next if appropriate
         if ((not recved_all) and
