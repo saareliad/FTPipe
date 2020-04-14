@@ -48,10 +48,6 @@ def generate__init__layersStatements(layer_names: List[str], full_names: List[st
 
     for field, full_name in zip(layer_names, full_names):
         statements.append(f"{field} = layers['{full_name}']")
-        class_name = layer_classes[full_name].__name__
-        error_msg = f"f'layers[{full_name}] is expected to be of type {class_name} but was of type {{type({field})}}'"
-        statements.append(
-            f"assert isinstance({field},{class_name}) ,{error_msg}")
     return f'\n{dtab}'.join(statements)
 
 
@@ -60,17 +56,19 @@ def generate__init__BuffParamStatements(buffers: List[str], parameters: List[str
         free floating means tat those tensors are not part of any layer in this partition
     '''
     tensor_ids = {}
-    lines = [f"\n{dtab}# initializing partition buffers"]
-    for idx, b_name in enumerate(buffers):
-        lines.extend([f"# {b_name}",
-                      f"self.register_buffer('b_{idx}',tensors['{b_name}'])"])
-        tensor_ids[b_name] = f'self.b_{idx}'
-
-    lines.extend([f"\n{dtab}# initializing partition parameters"])
-    for idx, p_name in enumerate(parameters):
-        lines.extend([f"# {p_name}",
-                      f"self.register_parameter('p_{idx}', tensors['{p_name}'])"])
-        tensor_ids[p_name] = f'self.p_{idx}'
+    lines = []
+    if buffers:
+        lines.append(f"\n{dtab}# initializing partition buffers")
+        for idx, b_name in enumerate(buffers):
+            lines.append(
+                f"self.register_buffer('b_{idx}',tensors['{b_name}'])")
+            tensor_ids[b_name] = f'self.b_{idx}'
+    if parameters:
+        lines.append(f"\n{dtab}# initializing partition parameters")
+        for idx, p_name in enumerate(parameters):
+            lines.append(
+                f"self.register_parameter('p_{idx}', tensors['{p_name}'])")
+            tensor_ids[p_name] = f'self.p_{idx}'
 
     return f'\n{dtab}'.join(lines) + '\n', tensor_ids
 
