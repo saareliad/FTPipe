@@ -275,6 +275,23 @@ def partition_model(args,
     # # model outputs are always tuple in transformers (see doc)
     # loss = outputs[0]
 
+def auto_file_name(args):
+    s = [] 
+    s.append(args.output_file)
+    model_name = args.model_name_or_path.replace("-", "_")
+    s.append(model_name)
+    s.append(f"p{args.n_partitions}")
+    if args.lmhead:
+        s.append("lm")
+        tied = "tied" if args.stateless_tied else "untied"
+        s.append(tied)
+    
+    if args.bwd_to_fwd_ratio > 0:
+        s.append(f"r{args.bwd_to_fwd_ratio}")
+    s = "_".join(s)
+    return s
+
+
 
 def parse_cli():
     # TODO: use default partitioning args like other partitioning scripts
@@ -283,7 +300,7 @@ def parse_cli():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument("--bwd_to_fwd_ratio",
-                        type=int,
+                        type=float,
                         default=-1,
                         help="bwd to fwd ratio for heuristics")
     # parameter required by the repo
@@ -455,7 +472,7 @@ def parse_cli():
     args = parser.parse_args()
 
     if args.auto_file_name:
-        args.output_file = f"{args.model_type}_p{args.n_partitions}"
+        args.output_file = auto_file_name(args)
 
     if args.output_file.endswith(".py"):
         args.output_file = args.output_file[:-3]

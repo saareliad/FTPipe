@@ -13,6 +13,8 @@ from typing import Callable, List, Dict, OrderedDict as OrderedDictType, Optiona
 import warnings
 import logging
 import sys
+import shutil
+
 
 __all__ = ["build_graph"]
 
@@ -24,8 +26,16 @@ __all__ = ["build_graph"]
 
 # TODO there are still some problems with lstms should think if we want to tackle it
 
-
+# set False to disable debuging on failure
+DEBUG_ON_FAILURE=True
 DEBUG_MODEL_NAME = ""
+
+def remove_if_exists(path):
+    if os.path.exists(path):
+        try:
+            os.remove(path)
+        except:
+            pass  # Race condition removing same file when running in parallel.
 
 
 def DEBUG_DUMP_GRAPH(func):
@@ -34,6 +44,10 @@ def DEBUG_DUMP_GRAPH(func):
     """
     @functools.wraps(func)
     def wrapper_dump(*args, **kwargs):
+        # FIXME: temporarly disabled.
+        if not DEBUG_ON_FAILURE:
+            return func(*args, **kwargs)
+
         assert len(args) >= 1
         nodes = args[0]
         assert isinstance(nodes, OrderedDict)
@@ -41,7 +55,7 @@ def DEBUG_DUMP_GRAPH(func):
         Graph(nodes).serialize(graph_path)
         try:
             value = func(*args, **kwargs)
-            os.remove(f"{graph_path}.graph")
+            remove_if_exists(f"{graph_path}.graph")
             return value
         except Exception as e:
             LOG_FILENAME = f'GPIPE_DEBUG/{DEBUG_MODEL_NAME}_log.out'
@@ -161,7 +175,8 @@ def build_graph(model: torch.nn.Module,
     nodes = shape_and_dtype_analysis(nodes)
 
     graph = graph_check_and_cleanup(nodes, outputs, max_depth, basic_blocks)
-    os.rmdir("GPIPE_DEBUG/")
+    shutil.rmtree("GPIPE_DEBUG/", ignore_errors=True)
+    # os.rmdir("GPIPE_DEBUG/")
     return graph
 
 
@@ -983,11 +998,11 @@ def graph_check_and_cleanup(nodes, outputs, max_depth, basic_blocks) -> Graph:
     output_scopes = OrderedSet(map(lambda n: n.scope, outputs))
     nodes = set_indices(nodes)
     graph = Graph._check(Graph(nodes, output_scopes, max_depth, basic_blocks))
-
-    os.remove(f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_DEBUG_base_trace.txt")
-    os.remove(f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_DEBUG_inlined_trace.txt")
-    if os.path.exists(f'GPIPE_DEBUG/{DEBUG_MODEL_NAME}_log.out'):
-        os.remove(f'GPIPE_DEBUG/{DEBUG_MODEL_NAME}_log.out')
+    
+    for path in [f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_DEBUG_base_trace.txt",
+                 f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_DEBUG_inlined_trace.txt",
+                 f'GPIPE_DEBUG/{DEBUG_MODEL_NAME}_log.out']:
+        remove_if_exists(path)
     return graph
 
 
