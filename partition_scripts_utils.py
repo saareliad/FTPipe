@@ -1,6 +1,7 @@
 import shlex
 import sys
 
+
 class ParsePartitioningOpts:
     def __init__(self):
         pass
@@ -10,7 +11,21 @@ class ParsePartitioningOpts:
 
     def set_defaults(self, parser):
         pass
-    
+
+    def _add_analysis_arguments(self, parser):
+        # NOTE: also --async_pipeline, but I plan to use this in partitioning too.
+        parser.add_argument(
+            "--analysis_batch_size",
+            default=32,
+            type=int,
+            help="batch size to use during the post partition analysis")
+
+    def _add_heurisitc_arguments(self, parser):
+        parser.add_argument("--bwd_to_fwd_ratio",
+                            type=float,
+                            default=-1,
+                            help="bwd to fwd ratio for heuristics")
+
     def add_partitioning_arguments(self, parser):
         # parser = parser.add_argument_group("Partitioning options")
         self._extra(parser)
@@ -69,11 +84,7 @@ class ParsePartitioningOpts:
             default=False,
             help=
             "wether to generate a modelParallel version of the partitioning")
-        parser.add_argument(
-            "--analysis_batch_size",
-            default=32,
-            type=int,
-            help="batch size to use during the post partition analysis")
+
         parser.add_argument("-a",
                             "--async_pipeline",
                             default=False,
@@ -96,6 +107,8 @@ class ParsePartitioningOpts:
             help="Save memory during profiling by storing everything on cpu," +
             " but sending each layer to GPU before the profiling.")
 
+        self._add_heurisitc_arguments(parser)
+        self._add_analysis_arguments(parser)
         self.set_defaults(parser)
 
 
@@ -185,12 +198,12 @@ class ParseMetisOpts:
         #  }
 
 
-
 def prepend_line(filename, line):
     with open(filename, 'r+') as f:
         content = f.read()
         f.seek(0, 0)
         f.write(line.rstrip('\r\n') + '\n' + content)
+
 
 def record_cmdline(output_file):
     """Add cmdline to generated python output file."""

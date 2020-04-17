@@ -178,7 +178,7 @@ if __name__ == "__main__":
     bw = args.bw
     n_partitions = args.n_partitions
     batch_dim = 0
-    bwd_to_fwd_ratio = -1
+    bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
     graph = pipe_model(model,
                        batch_dim,
                        sample,

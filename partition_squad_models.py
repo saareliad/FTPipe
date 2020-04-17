@@ -520,7 +520,7 @@ def main():
     bw = args.bw
     n_partitions = args.n_partitions
     batch_dim = 0
-    bwd_to_fwd_ratio = -1
+    bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
     print("-I- partitioning...")
     graph = pipe_model(model,
                        batch_dim,
