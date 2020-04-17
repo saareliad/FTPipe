@@ -115,7 +115,7 @@ def generateBody(outputs: List[Node],
     for e in ready_expressions:
         uses[e] = 100000
 
-    body = generateStatements(partition,
+    statements = generateStatements(partition,
                               scope_to_class_field,
                               ready_expressions,
                               uses)
@@ -123,13 +123,16 @@ def generateBody(outputs: List[Node],
     return_statement = generateReturnStatement(output_scopes,
                                                ready_expressions)
 
-    return body + return_statement
+    statements.append(return_statement)
+
+
+    return f"\n{dtab}".join(statements)
 
 
 def generateStatements(partition: List[Node],
                        scope_to_class_field: Dict[str, str],
                        ready_expressions: Dict[str, str],
-                       uses: Dict[str, int]) -> str:
+                       uses: Dict[str, int]) -> List[str]:
     ''' generate statements starting from the root in bfs order\n
         when possible avoids allocating temporary variables
     '''
@@ -151,7 +154,7 @@ def generateStatements(partition: List[Node],
 
         # actual code generation
         if node.type == NodeTypes.LAYER:
-            statements.append(
+            statements.extend(
                 generateLayerActivationExpression(scope_to_class_field,
                                                   ready_expressions,
                                                   node,
@@ -164,15 +167,16 @@ def generateStatements(partition: List[Node],
         elif node.type == NodeTypes.CONSTANT:
             generateConstantExpression(ready_expressions, node)
         elif node.type == NodeTypes.OP:
-            statements.append(
+            statements.extend(
                 generateFunctionCallExpression(ready_expressions,
                                                node,
                                                variable_name))
 
-    statements = filter(lambda s: s != '', statements)
-    statements = dtab + f'\n{dtab}'.join(statements)
+    statements = list(filter(lambda s: s != '', statements))
+    statements[0]=f"{dtab}{statements[0]}"
+    statements.append(dtab)
 
-    return statements + '\n'
+    return statements
 
 
 def generateReturnStatement(output_scopes: OrderedSet[str],
@@ -187,16 +191,16 @@ def generateReturnStatement(output_scopes: OrderedSet[str],
     elif "TupleConstruct" in output_scopes[
             0] or "ListConstruct" in output_scopes[0]:
         # if we already return an iterable no need to wrap it again
-        return f'{dtab}{comment}\n{dtab}return {scopes[0]}\n'
+        return f'{comment}\n{dtab}return {scopes[0]}\n'
     else:
         result_tuple = scopes[0] + ','
-    return f'{dtab}{comment}\n{dtab}return ({result_tuple})\n'
+    return f'{comment}\n{dtab}return ({result_tuple})\n'
 
 
 def generateLayerActivationExpression(scope_to_class_field: Dict[str, str],
                                       ready_expressions: Dict[str, str],
                                       node: Node,
-                                      variable_name: str) -> str:
+                                      variable_name: str) -> Tuple[str,...]:
     '''generate a layer activation expression\n
        if expression has only one use then it's embedded in call site\n
        otherwise stores the result in a temporary variable
@@ -216,7 +220,7 @@ def generateLayerActivationExpression(scope_to_class_field: Dict[str, str],
 
     ready_expressions[node.scope] = variable_name
 
-    return comment + f"\n{dtab}{variable_name} = {call}"
+    return comment,f"{variable_name} = {call}"
 
 
 def generatePrimitiveExpression(ready_expressions: Dict[str, str],
@@ -298,7 +302,7 @@ def generateConstantExpression(ready_expressions: Dict[str, str],
 
 def generateFunctionCallExpression(ready_expressions: Dict[str, str],
                                    node: Node,
-                                   variable_name: str) -> str:
+                                   variable_name: str) -> Tuple[str,str]:
     ''' generate a function call belonging to one of the nameSpaces:\n
         torch,torch.nn.functional, torch.Tensor\n
         we check those nameSpaces in order, and the first match is called\n
@@ -329,9 +333,9 @@ def generateFunctionCallExpression(ready_expressions: Dict[str, str],
     # the most common case of using the operator namespace is inplace arithmetic functions
     # TODO maybe this should be elsewhere
     if func_name in inplace_arithmetic_ops and "operator." in expression:
-        return comment + f'\n{dtab}{values[0]} {inplace_arithmetic_ops[func_name]} {values[1]}\n{dtab}{variable_name} = {values[0]}'
+        return comment,f'{values[0]} {inplace_arithmetic_ops[func_name]} {values[1]}',f'{variable_name} = {values[0]}'
 
-    return comment + f'\n{dtab}{variable_name} = {expression}'
+    return comment,f'{variable_name} = {expression}'
 
 
 def specialCases(ready_expressions: Dict[str, str], node: Node,
