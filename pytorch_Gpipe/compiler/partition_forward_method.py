@@ -8,6 +8,7 @@ from .supported_pytorch_functions import parse_supported_functions, dtype_lookup
 from collections import OrderedDict, defaultdict, deque
 from itertools import chain
 from typing import List, Tuple, Dict, Iterator
+import re
 from .utils import format_shape_or_dtype
 tab = '    '
 dtab = tab + tab
@@ -122,9 +123,10 @@ def generateBody(outputs: List[Node],
     output_scopes = OrderedSet([n.scope for n in outputs])
     return_statement = generateReturnStatement(output_scopes,
                                                ready_expressions)
-
+    
     statements.append(return_statement)
 
+    statements = add_del_statements(statements)
 
     return f"\n{dtab}".join(statements)
 
@@ -195,6 +197,49 @@ def generateReturnStatement(output_scopes: OrderedSet[str],
     else:
         result_tuple = scopes[0] + ','
     return f'{comment}\n{dtab}return ({result_tuple})\n'
+
+
+def add_del_statements(statements: List[str]) -> Iterator[str]:
+    """
+    perform liveness analysis and insert delete variables when they are no longer used
+    """
+    # t1 = 10
+    # t2 = t1+10
+    # here we can delete t1 as it's next use is reassignment which is not dependent on current value
+    # t3 = 10
+    # t1 = t3+t2
+    # here we can delete t2
+    # t3=t1+2
+    # here we can delete t1
+    # return t3
+    new_statements = [statements[-1]]
+    variable_name_matcher = re.compile(r"t_[0-9]+|x[0-9]+")
+    alive = set(variable_name_matcher.findall(statements[-1]))
+    for s in reversed(statements[:-1]):
+        if "#" in s:
+            new_statements.append(s)
+        else:
+            variables = variable_name_matcher.findall(s)
+            if not variables:
+                new_statements.append(s)
+                continue
+            for v in variables[1:]:
+
+                # this is the last statement that requires v so we can safetly delete it
+                # we mark v is alive as we cannot delete it before this statement
+                if v not in alive:
+                    new_statements.append(f"del {v}")
+                    alive.add(v)
+            
+            # variable[0] was assigned a value in this expression here
+            # if the expression does not have variable[0] as an operand
+            # it kills the old value of variable[0]
+            if variables[0] not in variables[1:]:
+                alive.discard(variables[0])
+            new_statements.append(s)
+
+    return reversed(new_statements)
+
 
 
 def generateLayerActivationExpression(scope_to_class_field: Dict[str, str],
