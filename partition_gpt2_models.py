@@ -205,6 +205,7 @@ def partition_model(args,
     batch_dim = 0
     bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
     # TODO assumes batch_dim is 0
+    recomputation = not args.no_recomputation
     graph = pipe_model(model,
                        batch_dim,
                        sample,
@@ -220,6 +221,7 @@ def partition_model(args,
                        output_file=args.output_file,
                        generate_model_parallel=args.generate_model_parallel,
                        save_memory_mode=args.save_memory_mode,
+                       recomputation=recomputation,
                        METIS_opt=METIS_opt)
     if args.dot:
         graph.save_as_pdf(args.output_file, ".")
@@ -240,7 +242,6 @@ def partition_model(args,
     pipe_config.toJson(f"{args.output_file}.json")
 
     bandwidth_gps = args.bandwidth_gps
-    recomputation = not args.no_recomputation
 
     if not args.no_analysis:
         depth = pipe_config.depth
