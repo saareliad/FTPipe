@@ -30,7 +30,8 @@ def pipe_model(model: nn.Module,
                generate_model_parallel: bool = False,
                recomputation=False,
                save_memory_mode=False,
-               METIS_opt=dict()) -> Graph:
+               METIS_opt=dict(),
+               force_no_recomp_scopes=set()) -> Graph:
     '''attemps to partition a model to given number of parts using our profiler
        this will produce a python file with the partition config
 
@@ -69,6 +70,8 @@ def pipe_model(model: nn.Module,
         whether to generate a model parallel version of the partition in the addition to the partitions themselves
     METIS_opt:
         dict of additional kwargs to pass to the METIS partitioning algorithm
+    force_no_recomp_scopes:
+        scopes to force not using recomputations for, when profiling the model.
     '''
 
     graph = partition_model(model,
@@ -83,7 +86,9 @@ def pipe_model(model: nn.Module,
                             use_layers_only_graph=use_layers_only_graph,
                             recomputation=recomputation,
                             save_memory_mode=save_memory_mode,
-                            METIS_opt=METIS_opt)
+                            METIS_opt=METIS_opt,
+                            force_no_recomp_scopes=force_no_recomp_scopes,
+                            )
 
     compile_partitoned_model(graph,
                              model,
@@ -106,7 +111,8 @@ def partition_model(model: nn.Module,
                     use_layers_only_graph: bool = False,
                     recomputation: bool = False,
                     save_memory_mode: bool = False,
-                    METIS_opt=dict()) -> Graph:
+                    METIS_opt=dict(),
+                    force_no_recomp_scopes=set()) -> Graph:
     '''
     profiles the network and return a graph representing the partition
 
@@ -143,7 +149,8 @@ def partition_model(model: nn.Module,
                         basic_blocks=basic_blocks,
                         n_iter=n_iter,
                         recomputation=recomputation,
-                        save_memory_mode=save_memory_mode)
+                        save_memory_mode=save_memory_mode,
+                        force_no_recomp_scopes=force_no_recomp_scopes)
 
     graph = METIS_partition(graph,
                             nparts,

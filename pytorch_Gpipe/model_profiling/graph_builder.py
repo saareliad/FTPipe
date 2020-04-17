@@ -26,8 +26,8 @@ __all__ = ["build_graph"]
 # TODO there are still some problems with lstms should think if we want to tackle it
 
 # set False to disable debuging on failure
-DEBUG_ON_FAILURE = True
-WRITE_TRACE_GRAPHS = True
+DEBUG_ON_FAILURE = False
+WRITE_TRACE_GRAPHS = False
 DEBUG_MODEL_NAME = ""
 
 
@@ -78,7 +78,8 @@ def build_graph(model: torch.nn.Module,
                 basic_blocks: Optional[Tuple[torch.nn.Module, ...]] = None,
                 n_iter: int = 10,
                 recomputation=False,
-                save_memory_mode=False) -> Graph:
+                save_memory_mode=False,
+                force_no_recomp_scopes={}) -> Graph:
     if kwargs is None:
         kwargs = dict()
     assert len(kwargs) == 0, "kwargs not supported by tracing"
@@ -98,7 +99,8 @@ def build_graph(model: torch.nn.Module,
                                      max_depth=max_depth,
                                      basic_blocks=basic_blocks,
                                      recomputation=recomputation,
-                                     save_memory_mode=save_memory_mode)
+                                     save_memory_mode=save_memory_mode,
+                                     force_no_recomp_scopes=force_no_recomp_scopes)
 
     tensors = tensorDict(model)
     profiled_layers = layerDict(model,

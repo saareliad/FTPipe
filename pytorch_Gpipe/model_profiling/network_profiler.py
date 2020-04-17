@@ -24,6 +24,7 @@ def profile_network(
         n_iter=10,
         save_memory_mode=False,
         recomputation=False,
+        force_no_recomp_scopes={},
 ) -> Dict[str, Profile]:
     '''
     profiles a network's computation time(forward/backward) and memory consumption
@@ -63,7 +64,8 @@ def profile_network(
                                         max_depth,
                                         basic_blocks,
                                         save_memory_mode=save_memory_mode,
-                                        recomputation=recomputation)
+                                        recomputation=recomputation,
+                                        force_no_recomp_scopes=force_no_recomp_scopes)
 
     # perform n_iter symbolic forward backward run
     # first one is warmup as we have seen the first time measurements are higher
@@ -143,17 +145,21 @@ def _wrap_profiled_layers(module: nn.Module,
                           depth,
                           basic_blocks: List[nn.Module],
                           save_memory_mode=False,
-                          recomputation=False):
+                          recomputation=False,
+                          force_no_recomp_scopes={}
+                          ):
     layers_dict = {}
-
+    force_no_recomp_scopes = set(force_no_recomp_scopes)
     for sub_layer, scope, parent in traverse_model(module,
                                                    depth,
                                                    basic_blocks=basic_blocks):
         name = scope[scope.rfind('[') + 1:-1]
+        scope_specific_recomp = False if name in force_no_recomp_scopes else recomputation
+
         wrapper = Wrapper(sub_layer,
                           scope,
                           save_memory_mode=save_memory_mode,
-                          recomputation=recomputation)
+                          recomputation=scope_specific_recomp)
         parent.add_module(name, wrapper)
         layers_dict[scope] = wrapper
 
