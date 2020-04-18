@@ -43,7 +43,7 @@ def edge_weight_function(bw_GBps, bwd_to_fwd_ratio=-1):
         MB = 1e6
         volume = _extract_volume_from_sizes(u.shape) / MB
         # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
-        w = max(1, int(MULT_FACTOR * (volume / bw_GBps)))
+        w = max(1, (MULT_FACTOR * (volume / bw_GBps)))
 
         # NOTE (1): we traverse every edge twice,
         # NOTE (2): If we have bwd to fwd ratio, than have to normalize by it.
@@ -52,7 +52,7 @@ def edge_weight_function(bw_GBps, bwd_to_fwd_ratio=-1):
             # Just backward
             mult_factor = 1
         else:
-            mult_factor = (bwd_to_fwd_ratio + 1)
-        return mult_factor * w
+            mult_factor = bwd_to_fwd_ratio + 1
+        return int(mult_factor * w)
 
     return f
