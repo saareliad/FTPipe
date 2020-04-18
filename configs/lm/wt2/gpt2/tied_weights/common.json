@@ -1,7 +1,7 @@
 {
     "logdir": "logs/debug/",
     "data_dir": "/home_local/saareliad/data",
-    "out_dir": "results/lm_nolowercase/tied",
+    "out_dir": "results/lm/gpt2/tied",
     "auto_file_name": true,
     "out_filename": "tied",
     "distributed_backend": "mpi",
@@ -24,7 +24,7 @@
     "test_seq_len": 1024,
     "num_data_workers": 10,
     "optimizer": {
-        "type": "adam",
+        "type": "adamw",
         "args": {
             "lr": 5e-5,
             "weight_decay": 0,
