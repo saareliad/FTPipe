@@ -31,7 +31,7 @@ def pipe_model(model: nn.Module,
                recomputation=False,
                save_memory_mode=False,
                METIS_opt=dict(),
-               force_no_recomp_scopes=None) -> Graph:
+               force_no_recomp_scopes=lambda s: False) -> Graph:
     '''attemps to partition a model to given number of parts using our profiler
        this will produce a python file with the partition config
 
@@ -114,7 +114,7 @@ def partition_model(model: nn.Module,
                     recomputation: bool = False,
                     save_memory_mode: bool = False,
                     METIS_opt=dict(),
-                    force_no_recomp_scopes=None) -> Graph:
+                    force_no_recomp_scopes=lambda s: False) -> Graph:
     '''
     profiles the network and return a graph representing the partition
 
