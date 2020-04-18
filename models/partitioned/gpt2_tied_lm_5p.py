@@ -994,10 +994,14 @@ class Partition0(nn.Module):
         return cpu(self)
 
     def cuda(self,device=None):
-        return cuda(self,device=device)
+        ret = cuda(self, device=device)
+        self.p_0.share_memory_()
+        return ret
 
     def to(self, *args, **kwargs):
-        return to(self,*args,**kwargs)
+        ret = to(self, *args, **kwargs)
+        self.p_0.share_memory_()
+        return ret
 
 
 class Partition1(nn.Module):
