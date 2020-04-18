@@ -21,8 +21,6 @@ def run_function_on_several_gpus(required_gpus, func, cfg, q):
     for gpu in gpus:
         q.put(gpu)
 
-# TODO: this is not working yet...
-
 
 def map_to_several_limited_gpus(func, configs, gpus_per_config, NUM_AVAIALBLE_GPUS, CUDA_VISIBLE_DEVICES=None):
     with Manager() as manager:
