@@ -1,7 +1,7 @@
 {
     "logdir": "logs/debug/",
     "data_dir": "/home_local/saareliad/data",
-    "out_dir": "results/lm/gpt2/tied",
+    "out_dir": "results/lm/gpt2/tied/",
     "auto_file_name": true,
     "out_filename": "tied",
     "distributed_backend": "mpi",
@@ -11,6 +11,7 @@
     "stage_to_device_map": [0, 1, 2, 3, 0],
     "model_name_or_path": "gpt2",
     "dataset": "wt2",
+    "statistics": "lm_loss_per_batch",
     "trainer": {
         "type": "lm",
         "args": {
