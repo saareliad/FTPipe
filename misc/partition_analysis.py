@@ -21,9 +21,25 @@ def run_analysis(sample,
                  async_pipeline=False,
                  add_comm_times_to_balance=True,
                  sequential_model=None,
-                 stages_on_same_gpu=List[Set[int]]):
+                 stages_on_same_gpu: List[Set[int]] = list(),
+                 analyze_traced_model=False):
 
-    # given: stages_on_same_gpu = [{0, 4}]
+    # NOTE: setting add_comm_times_to_balance, is for only debug porpuses
+
+    TOPO_AWARE = False
+    UTILIZATION_SLOWDOWN_SPEEDUP = True
+    PRINT_THEORETICAL = False
+    PRINT_VAR_STD = False
+    TRY_SSGD_ANALYSIS = True
+
+    if analyze_traced_model:
+        for k in config:
+            if not isinstance(k, int):
+                continue
+            config[k] = torch.jit.trace(config[k], sample)
+
+    # given:
+    # stages_on_same_gpu = [{0, 4}]
     # internal represntation:
     # stages_on_same_gpu[0] = {0, 4}
     # stages_on_same_gpu[4] = {0, 4}
@@ -39,15 +55,6 @@ def run_analysis(sample,
         assert len(i) >= 1
 
     num_dummy_stages = sum([(len(i) - 1) for i in unique_stages_on_same_gpu])
-
-    # NOTE: add_comm_times_to_balance, should be true...
-    # setting to false is mainly for our own debug
-
-    TOPO_AWARE = False
-    UTILIZATION_SLOWDOWN_SPEEDUP = True
-    PRINT_THEORETICAL = False
-    PRINT_VAR_STD = False
-    TRY_SSGD_ANALYSIS = True
 
     if graph is not None:
         # thoeretical analysis
