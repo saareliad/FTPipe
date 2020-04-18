@@ -56,6 +56,34 @@ def get_innnermost_first_layer_and_name(partition, name=''):
     return get_innnermost_first_layer_and_name(last_layer, name)
 
 
+
+def get_outermost_last_layer_and_name(partition, name=''):
+    """ 
+    Args:
+        partition: a torch.nn.Module
+        name: is the name for the partition in the calling context
+
+    Returns:
+        the outermost layer and its name 
+        outermost: defined last.
+
+    Example:
+        >>> import torch
+        >>> m = torch.nn.TransformerDecoderLayer(d_model=10, nhead=2)
+        >>> layer, name = get_outermost_last_layer_and_name(m, 'm')
+        >>> print(layer, name)
+
+        Dropout(p=0.1, inplace=False) dropout3
+        # NOTE: this is not accurate, the last thing is actually norm()
+    """
+    list_children = list(partition.named_children())
+    if not list_children:
+        return partition, name
+
+    name, last_layer = list_children[-1]
+    del list_children
+    return get_outermost_last_layer_and_name(last_layer, name)
+
 if __name__ == "__main__":
     import torch
     assert (replace_inplace_for_first_innermost_layer_(torch.nn.ReLU(True)))
