@@ -117,13 +117,13 @@ def generateBody(outputs: List[Node],
         uses[e] = 100000
 
     statements = generateStatements(partition,
-                              scope_to_class_field,
-                              ready_expressions,
-                              uses)
+                                    scope_to_class_field,
+                                    ready_expressions,
+                                    uses)
     output_scopes = OrderedSet([n.scope for n in outputs])
     return_statement = generateReturnStatement(output_scopes,
                                                ready_expressions)
-    
+
     statements.append(return_statement)
 
     statements = add_del_statements(statements)
@@ -175,7 +175,7 @@ def generateStatements(partition: List[Node],
                                                variable_name))
 
     statements = list(filter(lambda s: s != '', statements))
-    statements[0]=f"{dtab}{statements[0]}"
+    statements[0] = f"{dtab}{statements[0]}"
     statements.append(dtab)
 
     return statements
@@ -209,11 +209,14 @@ def add_del_statements(statements: List[str]) -> Iterator[str]:
     # t3 = 10
     # t1 = t3+t2
     # here we can delete t2
-    # t3=t1+2
+    # t3 = t1+2
+    # cannot delete t3 next use is inplace
+    # t3 += t1
     # here we can delete t1
     # return t3
     new_statements = [statements[-1]]
     variable_name_matcher = re.compile(r"t_[0-9]+|x[0-9]+")
+    inplace_arithmetic_matcher = re.compile(r"\d \S=")
     alive = set(variable_name_matcher.findall(statements[-1]))
     for s in reversed(statements[:-1]):
         if "#" in s:
@@ -230,22 +233,21 @@ def add_del_statements(statements: List[str]) -> Iterator[str]:
                 if v not in alive:
                     new_statements.append(f"del {v}")
                     alive.add(v)
-            
+
             # variable[0] was assigned a value in this expression here
             # if the expression does not have variable[0] as an operand
             # it kills the old value of variable[0]
-            if variables[0] not in variables[1:]:
+            if not (inplace_arithmetic_matcher.findall(s)) and (variables[0] not in variables[1:]):
                 alive.discard(variables[0])
             new_statements.append(s)
 
     return reversed(new_statements)
 
 
-
 def generateLayerActivationExpression(scope_to_class_field: Dict[str, str],
                                       ready_expressions: Dict[str, str],
                                       node: Node,
-                                      variable_name: str) -> Tuple[str,...]:
+                                      variable_name: str) -> Tuple[str, ...]:
     '''generate a layer activation expression\n
        if expression has only one use then it's embedded in call site\n
        otherwise stores the result in a temporary variable
@@ -265,7 +267,7 @@ def generateLayerActivationExpression(scope_to_class_field: Dict[str, str],
 
     ready_expressions[node.scope] = variable_name
 
-    return comment,f"{variable_name} = {call}"
+    return comment, f"{variable_name} = {call}"
 
 
 def generatePrimitiveExpression(ready_expressions: Dict[str, str],
@@ -347,7 +349,7 @@ def generateConstantExpression(ready_expressions: Dict[str, str],
 
 def generateFunctionCallExpression(ready_expressions: Dict[str, str],
                                    node: Node,
-                                   variable_name: str) -> Tuple[str,str]:
+                                   variable_name: str) -> Tuple[str, str]:
     ''' generate a function call belonging to one of the nameSpaces:\n
         torch,torch.nn.functional, torch.Tensor\n
         we check those nameSpaces in order, and the first match is called\n
@@ -378,9 +380,9 @@ def generateFunctionCallExpression(ready_expressions: Dict[str, str],
     # the most common case of using the operator namespace is inplace arithmetic functions
     # TODO maybe this should be elsewhere
     if func_name in inplace_arithmetic_ops and "operator." in expression:
-        return comment,f'{values[0]} {inplace_arithmetic_ops[func_name]} {values[1]}',f'{variable_name} = {values[0]}'
+        return comment, f'{values[0]} {inplace_arithmetic_ops[func_name]} {values[1]}', f'{variable_name} = {values[0]}'
 
-    return comment,f'{variable_name} = {expression}'
+    return comment, f'{variable_name} = {expression}'
 
 
 def specialCases(ready_expressions: Dict[str, str], node: Node,
