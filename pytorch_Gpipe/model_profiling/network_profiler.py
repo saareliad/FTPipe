@@ -156,7 +156,7 @@ def _wrap_profiled_layers(module: nn.Module,
 
         scope_specific_recomp = recomputation
         if force_no_recomp_scopes(scope):
-            recomputation = False
+            scope_specific_recomp = False
 
         wrapper = Wrapper(sub_layer,
                           scope,
@@ -203,6 +203,7 @@ class Wrapper(nn.Module):
                  save_memory_mode=False,
                  recomputation=False):
         super(Wrapper, self).__init__()
+        assert isinstance(recomputation, bool)
         self.layer = sub_module
         self.forward_time = []
         self.backward_time = []
