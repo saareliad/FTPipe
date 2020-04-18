@@ -2,7 +2,7 @@ import torch
 from .interface import WeightPredictor
 import math
 from .adam import adam_init, AdamClonedWeightPrediction
-
+import warnings
 
 class AdamWClonedWeightPrediction(WeightPredictor):
     def __init__(self, *args, **kw):
@@ -77,13 +77,14 @@ def get_adamw_weight_predictor(pred_mem: str,
     has_weight_decay = any(
         [pg['weight_decay'] != 0 for pg in optimizer.param_groups])
 
-    assert has_weight_decay
 
     if has_weight_decay:
         pred_cls = AdamWClonedWeightPrediction
     else:
-        pred_cls = AdamClonedWeightPrediction  # Revert to normal adam.
-
+        # use normal adam weight prediction.
+        #  its the exact same
+        pred_cls = AdamClonedWeightPrediction
+        warnings.warn("using Adam weight prediciton instad of AdamW becuse weight decay is 0")
     return pred_cls(optimizer,
                     fix_fn=None,
                     scheduler=scheduler,
