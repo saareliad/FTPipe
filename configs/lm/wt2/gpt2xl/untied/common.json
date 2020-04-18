@@ -1,9 +1,9 @@
 {
     "logdir": "logs/debug/",
     "data_dir": "/home_local/saareliad/data",
-    "out_dir": "results/lm/gpt2xl/untied",
+    "out_dir": "results/lm/gpt2xl/untied/wd",
     "auto_file_name": true,
-    "out_filename": "gpt2xl",
+    "out_filename": "wd",
     "distributed_backend": "mpi",
     "task": "lm_sep",
     "model": "gpt2xl_8p_untied",
@@ -25,7 +25,7 @@
         "type": "adamw",
         "args": {
             "lr": 5e-5,
-            "weight_decay": 0,
+            "weight_decay": 0.01,
             "eps": 1e-8
         }
     },
