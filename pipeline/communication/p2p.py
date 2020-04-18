@@ -73,7 +73,7 @@ class P2PCommunicationHandler(SimpleCommBase):
                     # TODO: if self.num_chunks > 1:
                     for i, chunk in enumerate(tensor):
                         chunk_tag = tensor_tag + i
-                        request_obj = dist.isend(chunk,
+                        request_obj = dist.isend(chunk.contiguous(),
                                                  send_rank,
                                                  tag=chunk_tag)
                         request_objects.append(request_obj)
