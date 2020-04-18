@@ -540,6 +540,18 @@ def cuda_time(partition,
     return f_time, b_time, outputs
 
 
+# def flatten(x):
+#     if isinstance(x, Tensor) or x is None:
+#         return[x]
+#     elif isinstance(x, (list, tuple)):
+#         ts = []
+#         for t in x:
+#             ts.extend(flatten(t))
+#         return ts
+#     else:
+#         raise ValueError(INCORRECT_INPUT_TYPE + f"{type(x)} ")
+
+
 def cuda_backward(partition,
                   inputs,
                   recomputation=True,
@@ -553,6 +565,8 @@ def cuda_backward(partition,
     ]
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
+    # ignore = torch.cuda.Event(enable_timing=True)
+
     if recomputation:
         torch.cuda.synchronize(device='cuda')
         start.record()
@@ -561,6 +575,20 @@ def cuda_backward(partition,
         outputs = partition(*inputs)
         torch.cuda.synchronize(device='cuda')
         start.record()
+
+    # TODO: problem with this its after the record...
+    # flattened_outputs = flatten(outputs)
+    # grad_tensors = []
+    # has_grad_fn = False
+    # for out in flattened_outputs:
+    #     if isinstance(out, torch.Tensor):
+    #         grad_tensors.append(torch.randn_like(out))
+    #         if (out.grad_fn is not None) or out.requires_grad:
+    #             has_grad_fn = True
+    #     else:
+    #         grad_tensors.append(None)
+    # torch.autograd.backward(tensors=flattened_outputs, grad_tensors=grad_tensors)
+
     loss = sum(o.norm() for o in outputs)  # FIXME: just use real loss.
     loss.backward()
     end.record()

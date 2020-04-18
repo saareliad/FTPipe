@@ -270,24 +270,42 @@ class Wrapper(nn.Module):
                                                                    self.layer, *detached_inputs, **kwargs)
 
         self.forward_time.append(forward_time)
-        # reduce outputs to calculate dummy loss
-        loss = torch.zeros(1, requires_grad=False, device=device)
+
 
         if self.recomputation:
             # Then, we do fwd+bwd
             # FIXME: self.forward_cuda_mem...
             forward_time, outputs, self.forward_cuda_mem = time_op(self.device,
                                                                    self.layer, *detached_inputs, **kwargs)
+        
+        # NOTE: the commented code is less accurate, but it can be usefull for memory problems
+        # reduce outputs to calculate dummy loss
+        # loss = torch.zeros(1, requires_grad=False, device=device)
+        # for out in flatten(outputs):
+        #     if isinstance(out, torch.Tensor):
+        #         loss = loss + out.sum()
+        # Loss makes sense only for the last layer...
 
+        # calculate dummy loss
+        flattened_outputs = flatten(outputs)
+        grad_tensors = []
+        has_grad_fn = False
         for out in flatten(outputs):
             if isinstance(out, torch.Tensor):
-                loss = loss + out.sum()
-
+                grad_tensors.append(torch.randn_like(out))
+                if (out.grad_fn is not None) or out.requires_grad:
+                    has_grad_fn = True
+            else:
+                grad_tensors.append(None)
+        
         # measure backward execution time
 
-        if loss.grad_fn is not None or loss.requires_grad:
+        # if loss.grad_fn is not None or loss.requires_grad:
+        if has_grad_fn:
             backward_time, _, self.backward_cuda_mem = time_op(self.device,
-                                                               torch.autograd.backward, loss)
+                                                               torch.autograd.backward,
+                                                               tensors=flattened_outputs,
+                                                               grad_tensors=grad_tensors)
 
             # TODO: also create option to check gradient accumulation,
             #  in case this is the domminant case
