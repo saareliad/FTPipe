@@ -206,6 +206,13 @@ def partition_model(args,
     bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
     # TODO assumes batch_dim is 0
     recomputation = not args.no_recomputation
+
+    def force_no_recomputation_fn(scope):
+        if "stateless_lm_head" in scope:
+            return True
+        else:
+            return recomputation
+
     graph = pipe_model(model,
                        batch_dim,
                        sample,
@@ -222,7 +229,8 @@ def partition_model(args,
                        generate_model_parallel=args.generate_model_parallel,
                        save_memory_mode=args.save_memory_mode,
                        recomputation=recomputation,
-                       METIS_opt=METIS_opt)
+                       METIS_opt=METIS_opt,
+                       force_no_recomp_scopes=force_no_recomputation_fn)
     if args.dot:
         graph.save_as_pdf(args.output_file, ".")
 
@@ -258,6 +266,11 @@ def partition_model(args,
 
         analysis_sample = (expanded_inputs, expanded_labels)
 
+        stages_on_same_gpu = set()
+        if args.lmhead and args.stateless_tied and len(
+                pipe_config.stages) == args.n_partitions + 1:
+            stages_on_same_gpu = [{0, args.n_partitions}]
+
         _, summary = run_analysis(analysis_sample,
                                   graph,
                                   analysis_config,
@@ -265,7 +278,8 @@ def partition_model(args,
                                   recomputation=recomputation,
                                   bw_GBps=bandwidth_gps,
                                   async_pipeline=args.async_pipeline,
-                                  sequential_model=model)
+                                  sequential_model=model,
+                                  stages_on_same_gpu=stages_on_same_gpu)
         with open(f"{args.output_file}.py", "a") as f:
             f.write("\n")
             f.write('"""analysis summary\n' + summary + "\n" + '"""')
@@ -276,8 +290,9 @@ def partition_model(args,
     # # model outputs are always tuple in transformers (see doc)
     # loss = outputs[0]
 
+
 def auto_file_name(args):
-    s = [] 
+    s = []
     s.append(args.output_file)
     model_name = args.model_name_or_path.replace("-", "_")
     s.append(model_name)
@@ -286,12 +301,15 @@ def auto_file_name(args):
         s.append("lm")
         tied = "tied" if args.stateless_tied else "untied"
         s.append(tied)
-    
+
     if args.bwd_to_fwd_ratio > 0:
-        s.append(f"r{args.bwd_to_fwd_ratio}")
+        bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
+        if (int(bwd_to_fwd_ratio)) == bwd_to_fwd_ratio:
+            bwd_to_fwd_ratio = int(bwd_to_fwd_ratio)
+        bwd_to_fwd_ratio = str(bwd_to_fwd_ratio).replace(".", "d")
+        s.append(f"r{bwd_to_fwd_ratio}")
     s = "_".join(s)
     return s
-
 
 
 def parse_cli():

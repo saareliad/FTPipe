@@ -24,7 +24,7 @@ def profile_network(
         n_iter=10,
         save_memory_mode=False,
         recomputation=False,
-        force_no_recomp_scopes={},
+        force_no_recomp_scopes=None,
 ) -> Dict[str, Profile]:
     '''
     profiles a network's computation time(forward/backward) and memory consumption
@@ -146,15 +146,16 @@ def _wrap_profiled_layers(module: nn.Module,
                           basic_blocks: List[nn.Module],
                           save_memory_mode=False,
                           recomputation=False,
-                          force_no_recomp_scopes={}
+                          force_no_recomp_scopes=None
                           ):
     layers_dict = {}
-    force_no_recomp_scopes = set(force_no_recomp_scopes)
     for sub_layer, scope, parent in traverse_model(module,
                                                    depth,
                                                    basic_blocks=basic_blocks):
         name = scope[scope.rfind('[') + 1:-1]
-        scope_specific_recomp = False if name in force_no_recomp_scopes else recomputation
+        if force_no_recomp_scopes:
+            scope_specific_recomp = False if force_no_recomp_scopes(scope) else recomputation
+
 
         wrapper = Wrapper(sub_layer,
                           scope,
@@ -291,6 +292,9 @@ class Wrapper(nn.Module):
 
             # delete gradients to save memory after backward.
             for p in self.parameters():
+                p.grad = None
+            # TODO: can also clean inputs grad
+            for p in detached_inputs:
                 p.grad = None
         else:
             backward_time, self.backward_cuda_mem = 0.0, 0.0
