@@ -33,6 +33,20 @@ def download_wiki2():
     print("-I- Done")
 
 
+def download_wiki103():
+    # FIXME: raw or not? in my other dir I used without the raw.
+    # "https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-103-v1.zip"
+    # raw dir has tokens
+    URL = "https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-103-raw-v1.zip"
+
+    path_to_zip_file = download_file(URL)
+    print(f"-I- Donwloaded wikitext2 to {path_to_zip_file}. Extracting...")
+    with zipfile.ZipFile(path_to_zip_file, 'r') as zip_ref:
+        zip_ref.extractall(DATA_DIR)
+    # NOTE: The data will be in DATA_DIR/wikitext-103-raw
+    print("-I- Done")
+
+
 def download_squad():
     """ Download Squad datasets """
 
@@ -69,4 +83,5 @@ if __name__ == "__main__":
     CIFAR10(root=DATA_DIR, download=True, train=False)
 
     download_wiki2()
+    # download_wiki103() TODO: update this when we have experiment.
     download_squad()
