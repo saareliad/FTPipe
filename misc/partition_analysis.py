@@ -32,11 +32,13 @@ def run_analysis(sample,
     PRINT_VAR_STD = False
     TRY_SSGD_ANALYSIS = True
 
+    # TODO:
     if analyze_traced_model:
         for k in config:
             if not isinstance(k, int):
                 continue
-            config[k] = torch.jit.trace(config[k], sample)
+            config[k]['model'] = torch.jit.trace_module(
+                config[k]['model'], {'forward': sample})
 
     # given:
     # stages_on_same_gpu = [{0, 4}]
