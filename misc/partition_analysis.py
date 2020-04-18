@@ -32,13 +32,40 @@ def run_analysis(sample,
     PRINT_VAR_STD = False
     TRY_SSGD_ANALYSIS = True
 
-    # TODO:
+    # TODO: will work for seq module only.
+    # TODO: move to something more general like "run partitions..."
+    # NOTE: due to current generated model implementation,
+    # tracing will work on the same device the tracing was done on only
+    # that is, we can't switch devices.
     if analyze_traced_model:
+        # HACK: just for analysis.
+        if torch.cuda.is_available():
+            sample.cuda()
+            for k in config:
+                if not isinstance(k, int):
+                    continue
+                config[k]['model'].cuda()
+
         for k in config:
             if not isinstance(k, int):
                 continue
+
+            # if k > 0:
+            m = config[k]['model']
+            if k == 0:
+                activations = (sample.to(m.device),)
+
+            # We clone them again, becase we want to pass it to next partition.
+            activations_cloned = tuple(i.clone().to(m.device) for i in activations)
+
             config[k]['model'] = torch.jit.trace_module(
-                config[k]['model'], {'forward': sample})
+                m, {'forward': activations_cloned}, check_trace=False)
+            del activations_cloned
+            with torch.no_grad():
+                activations = config[k]['model'](*activations)
+        
+        del activations
+            
 
     # given:
     # stages_on_same_gpu = [{0, 4}]
