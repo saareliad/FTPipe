@@ -208,7 +208,7 @@ def partition_model(args,
     recomputation = not args.no_recomputation
 
     def force_no_recomputation_fn(scope):
-        if "stateless_lm_head" in scope:
+        if "stateless_lm_head" in scope or "lm_head" in scope:
             return True
         else:
             return recomputation
