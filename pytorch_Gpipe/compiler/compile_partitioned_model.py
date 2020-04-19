@@ -118,7 +118,8 @@ def generateImports(layer_classes: Dict[str, Module]) -> List[str]:
     imports += 'from itertools import chain\n'
     imports += 'import operator\n'
     imports += 'from typing import Optional, Tuple, Iterator, Iterable, OrderedDict, Dict\n'
-    imports += 'import collections'
+    imports += 'import collections\n'
+    imports += 'import os'
     imports += '\n'
     unique_classes = set(layer_classes.values())
 
@@ -162,7 +163,7 @@ def create_pipeline_configuration(graph: Graph,
     def is_batched(s):
         return (len(s) > (batch_dim + 1)) and (s[batch_dim] == batch_size)
 
-    module_path = output_file.replace("/", ".")
+    module_path = 'os.path.relpath(__file__).replace("/",".")[:-3]'
     basic_blocks = ",".join(
         map(lambda block: block.__name__, set(model_blocks.values())))
 
