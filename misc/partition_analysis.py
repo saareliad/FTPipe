@@ -9,6 +9,7 @@ import io
 from contextlib import redirect_stdout
 import warnings
 from typing import List, Set
+from functools import wraps
 
 
 def run_analysis(sample,
@@ -513,16 +514,57 @@ def cuda_time(partition,
     return f_time, b_time, outputs
 
 
-# def flatten(x):
-#     if isinstance(x, Tensor) or x is None:
-#         return[x]
-#     elif isinstance(x, (list, tuple)):
-#         ts = []
-#         for t in x:
-#             ts.extend(flatten(t))
-#         return ts
-#     else:
-#         raise ValueError(INCORRECT_INPUT_TYPE + f"{type(x)} ")
+def flatten(x):
+    if isinstance(x, torch.Tensor) or x is None:
+        return [x]
+    elif isinstance(x, (list, tuple)):
+        ts = []
+        for t in x:
+            ts.extend(flatten(t))
+        return ts
+    else:
+        raise ValueError("INCORRECT_INPUT_TYPE" + f"{type(x)} ")
+
+
+def get_grad_tensors(flattened_outputs):
+    """Infer grad_tensors to be used with:
+            torch.autograd.backward(tensors=flattened_outputs, grad_tensors=grad_tensors)
+    """
+    grad_tensors = []
+    # has_grad_fn = False
+    for out in flattened_outputs:
+        if isinstance(out, torch.Tensor):
+            grad_tensors.append(torch.randn_like(out))
+            # if (out.grad_fn is not None) or out.requires_grad:
+            #     has_grad_fn = True
+        else:
+            grad_tensors.append(None)
+
+    return grad_tensors
+
+
+def first_arg_cache(function):
+    # can be used to accelerate analysis.
+    memo = {}
+
+    @wraps(function)
+    def wrapper(*args):
+        try:
+            return memo[id(args[0])]
+        except KeyError:
+            rv = function(*args)
+            memo[id(args[0])] = rv
+            return rv
+
+    return wrapper
+
+
+# @first_arg_cache
+def infer_grad_tensors_for_partition(partition, inputs):
+    outputs = partition(*inputs)
+    flattened_outputs = flatten(outputs)
+    grad_tensors = get_grad_tensors(flattened_outputs)
+    return grad_tensors
 
 
 def cuda_backward(partition,
@@ -536,34 +578,26 @@ def cuda_backward(partition,
         i.to('cuda').requires_grad_(inputs_requires_grad
                                     and i.is_floating_point()) for i in inputs
     ]
+    # Pre infer, so it won't get stuck in the the record.
+    grad_tensors = infer_grad_tensors_for_partition(partition, inputs)
+    # TODO: maybe clear GPU cache here?
+    # However in re-computation it may be in cash alreay.
+
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
-    # ignore = torch.cuda.Event(enable_timing=True)
 
     if recomputation:
         torch.cuda.synchronize(device='cuda')
         start.record()
         outputs = partition(*inputs)
+        flattened_outputs = flatten(outputs)
     else:
         outputs = partition(*inputs)
+        flattened_outputs = flatten(outputs)
         torch.cuda.synchronize(device='cuda')
         start.record()
+    torch.autograd.backward(tensors=flattened_outputs, grad_tensors=grad_tensors)
 
-    # TODO: problem with this its after the record...
-    # flattened_outputs = flatten(outputs)
-    # grad_tensors = []
-    # has_grad_fn = False
-    # for out in flattened_outputs:
-    #     if isinstance(out, torch.Tensor):
-    #         grad_tensors.append(torch.randn_like(out))
-    #         if (out.grad_fn is not None) or out.requires_grad:
-    #             has_grad_fn = True
-    #     else:
-    #         grad_tensors.append(None)
-    # torch.autograd.backward(tensors=flattened_outputs, grad_tensors=grad_tensors)
-
-    loss = sum(o.norm() for o in outputs)  # FIXME: just use real loss.
-    loss.backward()
     end.record()
     torch.cuda.synchronize(device='cuda')
     b_time = (start.elapsed_time(end))
@@ -624,12 +658,15 @@ def cpu_backward(partition,
         i.cpu().requires_grad_(inputs_requires_grad and i.is_floating_point())
         for i in inputs
     ]
+    grad_tensors = infer_grad_tensors_for_partition(partition, inputs)
+
     start = time.time()
     outputs = partition(*inputs)
+    flattened_outputs = flatten(outputs)
     if not recomputation:
         start = time.time()
-    loss = sum(o.norm() for o in outputs)
-    loss.backward()
+    
+    torch.autograd.backward(tensors=flattened_outputs, grad_tensors=grad_tensors)
     end = time.time()
     b_time = 1000 * (end - start)
 
