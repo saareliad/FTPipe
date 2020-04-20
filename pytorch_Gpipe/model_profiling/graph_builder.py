@@ -79,7 +79,7 @@ def build_graph(model: torch.nn.Module,
                 n_iter: int = 10,
                 recomputation=False,
                 save_memory_mode=False,
-                force_no_recomp_scopes=None) -> Graph:
+                force_no_recomp_scopes=lambda s: False) -> Graph:
     if kwargs is None:
         kwargs = dict()
     assert len(kwargs) == 0, "kwargs not supported by tracing"
