@@ -308,7 +308,7 @@ class BertAttention(nn.Module):
         self.pruned_heads = self.pruned_heads.union(heads)
 
     def forward(self, input_tensor, attention_mask=None, head_mask=None):
-        self_outputs = self.self(input_tensor, attention_mask, head_mask)
+        self_outputs = self.self(input_tensor, attention_mask=attention_mask, head_mask=head_mask)
         attention_output = self.output(self_outputs, input_tensor)
         return attention_output
 
@@ -352,8 +352,8 @@ class BertLayer(nn.Module):
 
     def forward(self, hidden_states, attention_mask=None, head_mask=None):
         attention_output = self.attention(hidden_states,
-                                            attention_mask,
-                                            head_mask)
+                                            attention_mask=attention_mask,
+                                            head_mask=head_mask)
         intermediate_output = self.intermediate(attention_output)
         layer_output = self.output(intermediate_output, attention_output)
         return layer_output
@@ -372,8 +372,8 @@ class BertEncoder(nn.Module):
         for i in range(self.num_layers):
             layer_module = getattr(self, str(i))
             hidden_states = layer_module(hidden_states,
-                                            attention_mask, 
-                                            head_mask[i])
+                                            attention_mask=attention_mask, 
+                                            head_mask=head_mask[i])
         return hidden_states
 
 
@@ -888,7 +888,7 @@ class BertModel(BertPreTrainedModel):
         embedding_output = self.embeddings(
             input_ids, position_ids=position_ids, token_type_ids=token_type_ids)
         sequence_output = self.encoder(embedding_output,
-                                       extended_attention_mask,
+                                       attention_mask=extended_attention_mask,
                                        head_mask=head_mask)
         pooled_output = self.pooler(sequence_output)
 

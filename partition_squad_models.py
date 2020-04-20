@@ -286,7 +286,7 @@ def main():
     args.model_type = args.model_type.lower()
 
     if args.auto_file_name:
-        args.output_file = f"{args.model_type}_p{args.n_partitions}"
+        args.output_file = f"{args.model_type}_{args.n_partitions}p"
 
     #####
     device = torch.device("cuda" if torch.cuda.is_available()
