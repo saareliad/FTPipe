@@ -49,10 +49,6 @@ def load_and_cache_examples(args,
                             tokenizer,
                             evaluate=False,
                             output_examples=False):
-    if args.local_rank not in [-1, 0] and not evaluate:
-        # Make sure only the first process in distributed training process the dataset, and the others will use the cache
-        torch.distributed.barrier()
-
     # Load data features from cache or dataset file
     input_dir = args.data_dir if args.data_dir else "."
     cached_features_file = os.path.join(
@@ -114,20 +110,15 @@ def load_and_cache_examples(args,
             threads=args.threads,
         )
 
-        if args.local_rank in [-1, 0]:
-            logger.info("Saving features into cached file %s",
-                        cached_features_file)
-            torch.save(
-                {
-                    "features": features,
-                    "dataset": dataset,
-                    "examples": examples
-                }, cached_features_file)
-
-    if args.local_rank == 0 and not evaluate:
-        # Make sure only the first process in distributed training process the dataset,
-        #  and the others will use the cache
-        torch.distributed.barrier()
+    
+        logger.info("Saving features into cached file %s",
+                    cached_features_file)
+        torch.save(
+            {
+                "features": features,
+                "dataset": dataset,
+                "examples": examples
+            }, cached_features_file)
 
     if output_examples:
         return dataset, examples, features
@@ -252,6 +243,11 @@ class ParsePartitioningOptsSquad(ParsePartitioningOpts):
             type=int,
             default=1,
             help="multiple threads for converting example to features")
+
+        parser.add_argument('--auto_file_name',
+                        action='store_true',
+                        default=False,
+                        help="create file name automatically")
 
     def set_defaults(self, parser):
         d = {
