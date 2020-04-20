@@ -530,16 +530,12 @@ def get_grad_tensors(flattened_outputs):
     """Infer grad_tensors to be used with:
             torch.autograd.backward(tensors=flattened_outputs, grad_tensors=grad_tensors)
     """
+    #input_gradient only if the output requires grad
+    #for ex. bert passes a mask which does not require grad
     grad_tensors = []
-    # has_grad_fn = False
     for out in flattened_outputs:
-        if isinstance(out, torch.Tensor):
+        if isinstance(out, torch.Tensor) and out.requires_grad:
             grad_tensors.append(torch.randn_like(out))
-            # if (out.grad_fn is not None) or out.requires_grad:
-            #     has_grad_fn = True
-        else:
-            grad_tensors.append(None)
-
     return grad_tensors
 
 
@@ -596,6 +592,10 @@ def cuda_backward(partition,
         flattened_outputs = flatten(outputs)
         torch.cuda.synchronize(device='cuda')
         start.record()
+
+    #compute gradient only for outputs that require grad
+    flattened_outputs = filter(lambda t: t.requires_grad,flattened_outputs)
+
     torch.autograd.backward(tensors=flattened_outputs, grad_tensors=grad_tensors)
 
     end.record()
@@ -665,7 +665,10 @@ def cpu_backward(partition,
     flattened_outputs = flatten(outputs)
     if not recomputation:
         start = time.time()
-    
+
+    #compute gradient only for outputs that require grad
+    flattened_outputs = filter(lambda t: t.requires_grad,flattened_outputs)
+
     torch.autograd.backward(tensors=flattened_outputs, grad_tensors=grad_tensors)
     end = time.time()
     b_time = 1000 * (end - start)

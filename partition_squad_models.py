@@ -49,10 +49,6 @@ def load_and_cache_examples(args,
                             tokenizer,
                             evaluate=False,
                             output_examples=False):
-    if args.local_rank not in [-1, 0] and not evaluate:
-        # Make sure only the first process in distributed training process the dataset, and the others will use the cache
-        torch.distributed.barrier()
-
     # Load data features from cache or dataset file
     input_dir = args.data_dir if args.data_dir else "."
     cached_features_file = os.path.join(
@@ -114,20 +110,15 @@ def load_and_cache_examples(args,
             threads=args.threads,
         )
 
-        if args.local_rank in [-1, 0]:
-            logger.info("Saving features into cached file %s",
-                        cached_features_file)
-            torch.save(
-                {
-                    "features": features,
-                    "dataset": dataset,
-                    "examples": examples
-                }, cached_features_file)
-
-    if args.local_rank == 0 and not evaluate:
-        # Make sure only the first process in distributed training process the dataset,
-        #  and the others will use the cache
-        torch.distributed.barrier()
+    
+        logger.info("Saving features into cached file %s",
+                    cached_features_file)
+        torch.save(
+            {
+                "features": features,
+                "dataset": dataset,
+                "examples": examples
+            }, cached_features_file)
 
     if output_examples:
         return dataset, examples, features
@@ -156,13 +147,6 @@ class ParsePartitioningOptsSquad(ParsePartitioningOpts):
             required=True,
             help="Path to pre-trained model or shortcut name selected in the list: "
             + ", ".join(ALL_MODELS),
-        )
-        parser.add_argument(
-            "--output_dir",
-            default=None,
-            type=str,
-            required=True,
-            help="The output directory where the model checkpoints and predictions will be written.",
         )
 
         # Other parameters
@@ -215,13 +199,6 @@ class ParsePartitioningOptsSquad(ParsePartitioningOpts):
             help="If true, the SQuAD examples contain some that do not have an answer.",
         )
         parser.add_argument(
-            "--null_score_diff_threshold",
-            type=float,
-            default=0.0,
-            help="If null_score - best_non_null is greater than the threshold predict null.",
-        )
-
-        parser.add_argument(
             "--max_seq_length",
             default=384,
             type=int,
@@ -241,111 +218,17 @@ class ParsePartitioningOptsSquad(ParsePartitioningOpts):
             help="The maximum number of tokens for the question. Questions longer than this will "
             "be truncated to this length.",
         )
-        parser.add_argument("--do_train",
-                            action="store_true",
-                            help="Whether to run training.")
-        parser.add_argument("--do_eval",
-                            action="store_true",
-                            help="Whether to run eval on the dev set.")
-        parser.add_argument(
-            "--evaluate_during_training",
-            action="store_true",
-            help="Run evaluation during training at each logging step.")
         parser.add_argument(
             "--do_lower_case",
             action="store_true",
             help="Set this flag if you are using an uncased model.")
 
-        parser.add_argument("--per_gpu_train_batch_size",
-                            default=8,
-                            type=int,
-                            help="Batch size per GPU/CPU for training.")
-        parser.add_argument("--per_gpu_eval_batch_size",
-                            default=8,
-                            type=int,
-                            help="Batch size per GPU/CPU for evaluation.")
-        parser.add_argument("--learning_rate",
-                            default=5e-5,
-                            type=float,
-                            help="The initial learning rate for Adam.")
-        parser.add_argument(
-            "--gradient_accumulation_steps",
-            type=int,
-            default=1,
-            help="Number of updates steps to accumulate before performing a backward/update pass.",
-        )
-        parser.add_argument("--weight_decay",
-                            default=0.0,
-                            type=float,
-                            help="Weight decay if we apply some.")
-        parser.add_argument("--adam_epsilon",
-                            default=1e-8,
-                            type=float,
-                            help="Epsilon for Adam optimizer.")
-        parser.add_argument("--max_grad_norm",
-                            default=1.0,
-                            type=float,
-                            help="Max gradient norm.")
-        parser.add_argument("--num_train_epochs",
-                            default=3.0,
-                            type=float,
-                            help="Total number of training epochs to perform.")
-        parser.add_argument(
-            "--max_steps",
-            default=-1,
-            type=int,
-            help="If > 0: set total number of training steps to perform. Override num_train_epochs.",
-        )
-        parser.add_argument("--warmup_steps",
-                            default=0,
-                            type=int,
-                            help="Linear warmup over warmup_steps.")
-        parser.add_argument(
-            "--n_best_size",
-            default=20,
-            type=int,
-            help="The total number of n-best predictions to generate in the nbest_predictions.json output file.",
-        )
-        parser.add_argument(
-            "--max_answer_length",
-            default=30,
-            type=int,
-            help="The maximum length of an answer that can be generated. This is needed because the start "
-            "and end predictions are not conditioned on one another.",
-        )
-        parser.add_argument(
-            "--verbose_logging",
-            action="store_true",
-            help="If true, all of the warnings related to data processing will be printed. "
-            "A number of warnings are expected for a normal SQuAD evaluation.",
-        )
         parser.add_argument(
             "--lang_id",
             default=0,
             type=int,
             help="language id of input for language-specific xlm models (see tokenization_xlm.PRETRAINED_INIT_CONFIGURATION)",
         )
-
-        parser.add_argument("--logging_steps",
-                            type=int,
-                            default=500,
-                            help="Log every X updates steps.")
-        parser.add_argument("--save_steps",
-                            type=int,
-                            default=500,
-                            help="Save checkpoint every X updates steps.")
-        parser.add_argument(
-            "--eval_all_checkpoints",
-            action="store_true",
-            help="Evaluate all checkpoints starting with the same prefix as model_name ending and ending with step number",
-        )
-        parser.add_argument("--no_cuda",
-                            action="store_true",
-                            help="Whether not to use CUDA when available")
-        parser.add_argument(
-            "--overwrite_output_dir",
-            action="store_true",
-            help="Overwrite the content of the output directory")
         parser.add_argument(
             "--overwrite_cache",
             action="store_true",
@@ -355,40 +238,19 @@ class ParsePartitioningOptsSquad(ParsePartitioningOpts):
                             default=42,
                             help="random seed for initialization")
 
-        parser.add_argument("--local_rank",
-                            type=int,
-                            default=-1,
-                            help="local_rank for distributed training on gpus")
-        parser.add_argument(
-            "--fp16",
-            action="store_true",
-            help="Whether to use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit",
-        )
-        parser.add_argument(
-            "--fp16_opt_level",
-            type=str,
-            default="O1",
-            help="For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', and 'O3']."
-            "See details at https://nvidia.github.io/apex/amp.html",
-        )
-        parser.add_argument("--server_ip",
-                            type=str,
-                            default="",
-                            help="Can be used for distant debugging.")
-        parser.add_argument("--server_port",
-                            type=str,
-                            default="",
-                            help="Can be used for distant debugging.")
-
         parser.add_argument(
             "--threads",
             type=int,
             default=1,
             help="multiple threads for converting example to features")
 
+        parser.add_argument('--auto_file_name',
+                        action='store_true',
+                        default=False,
+                        help="create file name automatically")
+
     def set_defaults(self, parser):
         d = {
-            # "model": 'wrn_16x4',
             # "threads": 20,
             "partitioning_batch_size": 1,
             "n_iter": 1,
@@ -424,7 +286,7 @@ def main():
     args.model_type = args.model_type.lower()
 
     if args.auto_file_name:
-        args.output_file = f"{args.model_type}_p{args.n_partitions}"
+        args.output_file = f"{args.model_type}_{args.n_partitions}p"
 
     #####
     device = torch.device("cuda" if torch.cuda.is_available()
@@ -531,8 +393,10 @@ def main():
                        output_file=args.output_file,
                        generate_model_parallel=args.generate_model_parallel,
                        use_layers_only_graph=args.partition_layer_graph,
-                       node_weight_function=node_weight_function(bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-                       edge_weight_function=edge_weight_function(bw, bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+                       node_weight_function=node_weight_function(
+                           bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+                       edge_weight_function=edge_weight_function(
+                           bw, bwd_to_fwd_ratio=bwd_to_fwd_ratio),
                        n_iter=n_iter,
                        recomputation=recomputation,
                        save_memory_mode=args.save_memory_mode,
