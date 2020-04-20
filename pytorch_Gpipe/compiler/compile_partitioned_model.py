@@ -176,7 +176,7 @@ def create_pipeline_configuration(graph: Graph,
         f"depth = {graph.depth}",
         f"basic_blocks = ({basic_blocks})",
         f"blocks_path = [ {serialized_basic_blocks}]",
-        f"module_path = '{module_path}'",
+        f"module_path = {module_path}",
         "\n"
     ]
 
