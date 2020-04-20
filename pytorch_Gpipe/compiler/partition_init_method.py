@@ -42,12 +42,14 @@ def generate_init_method(class_name: str, full_names: List[str], layer_classes: 
 
 def generate__init__layersStatements(layer_names: List[str], full_names: List[str], layer_classes: Dict[str, Module]) -> str:
     ''' generates partition field initialization statements\n
-        and comments to describe which scope is allocated to which field
+        and save the layer scopes in the self.scopes field
     '''
-    statements = [f'{dtab}# initializing partition layers']
+    statements = [f'{dtab}# initializing partition layers',
+                  "self.scopes=[]"]
 
     for field, full_name in zip(layer_names, full_names):
-        statements.append(f"{field} = layers['{full_name}']")
+        statements.extend([f"{field} = layers['{full_name}']",
+                           f"self.scopes.append('{full_name}')"])
     return f'\n{dtab}'.join(statements)
 
 
