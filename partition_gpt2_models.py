@@ -67,7 +67,6 @@ from misc import run_analysis  # , run_partitions
 from pytorch_Gpipe.utils import layerDict, tensorDict
 from pytorch_Gpipe import PipelineConfig
 
-
 MODEL_CLASSES_LM_HEAD = {
     'gpt2': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
     'openai-gpt': (OpenAIGPTConfig, OpenAIGPTLMHeadModel, OpenAIGPTTokenizer),
@@ -214,24 +213,38 @@ def partition_model(args,
         sample = inputs
     model.train()
     batch_dim = 0
+    bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
     # TODO assumes batch_dim is 0
+    recomputation = not args.no_recomputation
+
+    def force_no_recomputation_fn(scope):
+        if "stateless_lm_head" in scope or "lm_head" in scope:
+            return True
+        else:
+            return recomputation
+
     graph = pipe_model(model,
                        batch_dim,
                        sample,
                        depth=args.depth,
                        n_iter=args.n_iter,
                        nparts=args.n_partitions,
-                       node_weight_function=node_weight_function(),
+                       node_weight_function=node_weight_function(
+                           bwd_to_fwd_ratio=bwd_to_fwd_ratio),
                        edge_weight_function=edge_weight_function(
-                           args.bandwidth_gps),
+                           args.bandwidth_gps,
+                           bwd_to_fwd_ratio=bwd_to_fwd_ratio),
                        use_layers_only_graph=args.partition_layer_graph,
                        output_file=args.output_file,
                        generate_model_parallel=args.generate_model_parallel,
                        save_memory_mode=args.save_memory_mode,
-                       METIS_opt=METIS_opt)
+                       recomputation=recomputation,
+                       METIS_opt=METIS_opt,
+                       force_no_recomp_scopes=force_no_recomputation_fn)
     if args.dot:
         graph.save_as_pdf(args.output_file, ".")
-        graph.serialize(args.output_file)
+
+    graph.serialize(args.output_file)
 
     record_cmdline(args.output_file)
     module_path = args.output_file.replace("/", ".")
@@ -247,7 +260,6 @@ def partition_model(args,
     pipe_config.toJson(f"{args.output_file}.json")
 
     bandwidth_gps = args.bandwidth_gps
-    recomputation = not args.no_recomputation
 
     if not args.no_analysis:
         depth = pipe_config.depth
@@ -264,6 +276,11 @@ def partition_model(args,
 
         analysis_sample = (expanded_inputs, expanded_labels)
 
+        stages_on_same_gpu = set()
+        if args.lmhead and args.stateless_tied and len(
+                pipe_config.stages) == args.n_partitions + 1:
+            stages_on_same_gpu = [{0, args.n_partitions}]
+
         _, summary = run_analysis(analysis_sample,
                                   graph,
                                   analysis_config,
@@ -271,7 +288,8 @@ def partition_model(args,
                                   recomputation=recomputation,
                                   bw_GBps=bandwidth_gps,
                                   async_pipeline=args.async_pipeline,
-                                  sequential_model=model)
+                                  sequential_model=model,
+                                  stages_on_same_gpu=stages_on_same_gpu)
         with open(f"{args.output_file}.py", "a") as f:
             f.write("\n")
             f.write('"""analysis summary\n' + summary + "\n" + '"""')
@@ -283,12 +301,37 @@ def partition_model(args,
     # loss = outputs[0]
 
 
+def auto_file_name(args):
+    s = []
+    s.append(args.output_file)
+    model_name = args.model_name_or_path.replace("-", "_")
+    s.append(model_name)
+    s.append(f"p{args.n_partitions}")
+    if args.lmhead:
+        s.append("lm")
+        tied = "tied" if args.stateless_tied else "untied"
+        s.append(tied)
+
+    if args.bwd_to_fwd_ratio > 0:
+        bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
+        if (int(bwd_to_fwd_ratio)) == bwd_to_fwd_ratio:
+            bwd_to_fwd_ratio = int(bwd_to_fwd_ratio)
+        bwd_to_fwd_ratio = str(bwd_to_fwd_ratio).replace(".", "d")
+        s.append(f"r{bwd_to_fwd_ratio}")
+    s = "_".join(s)
+    return s
+
+
 def parse_cli():
     # TODO: use default partitioning args like other partitioning scripts
     # And add extra args spesific to this script as needed.
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
+    parser.add_argument("--bwd_to_fwd_ratio",
+                        type=float,
+                        default=-1,
+                        help="bwd to fwd ratio for heuristics")
     # parameter required by the repo
     tr_params = parser.add_argument_group("Transformers parameters")
     tr_params.add_argument("--train_data_file",
@@ -384,8 +427,11 @@ def parse_cli():
     )
     parser.add_argument('--n_partitions', type=int, default=4)
     parser.add_argument('--output_file', default='gpt2')
-    parser.add_argument("--generate_model_parallel", action="store_true", default=False,
-                        help="wether to generate a modelParallel version of the partitioning")
+    parser.add_argument(
+        "--generate_model_parallel",
+        action="store_true",
+        default=False,
+        help="wether to generate a modelParallel version of the partitioning")
     parser.add_argument('--auto_file_name',
                         action='store_true',
                         default=False,
@@ -448,7 +494,7 @@ def parse_cli():
     args = parser.parse_args()
 
     if args.auto_file_name:
-        args.output_file = f"{args.model_type}_p{args.n_partitions}"
+        args.output_file = auto_file_name(args)
 
     if args.output_file.endswith(".py"):
         args.output_file = args.output_file[:-3]

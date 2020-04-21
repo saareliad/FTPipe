@@ -22,6 +22,8 @@ def post_process_partition(graph: Graph, verbose_on_error=True) -> Graph:
 
     cannonize_partition_indices(graph)
     if has_cycles(graph):
+        graph.save_as_pdf(f"{graph.model_name}_before_fix",
+                            ".", show_profiles=True)
         break_partition_cycles(graph)
 
         # possibly redundent
@@ -39,6 +41,9 @@ def post_process_partition(graph: Graph, verbose_on_error=True) -> Graph:
         error = "error cycle detected mutual dependecy between partitions"
         raise AssertionError(error)
 
+    
+    is_valid,error=is_valid_partitioning(graph)
+    assert is_valid,error
 
     return graph
 
@@ -142,3 +147,17 @@ def find_subtree(roots: Set[Node], graph_size: int):
                 open.add(u)
                 nodes.add(u)
     return nodes
+
+def is_valid_partitioning(graph:Graph):
+    """
+    check if we only send tensors between partitions
+    """
+    for n in graph.nodes:
+        if n.valueType() in {type(None),list,tuple,int,bool,float,str}:
+            for o in n.out_nodes:
+                if n.part != o.part:
+                    msg=f"invalid output type at partition boundary {n.part}=>{o.part}"
+                    msg+=f"\noutput is {n.scope} of type {n.valueType()}"
+                    return False,msg
+    
+    return True,""

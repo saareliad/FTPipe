@@ -261,7 +261,8 @@ class Graph():
 
     def build_dot(self,
                   show_buffs_params: bool = True,
-                  show_profiles: bool = True):
+                  show_profiles: bool = True,
+                  edge_weight_function=None):
         '''
         return a graphviz representation of the graph
         Parameters
@@ -270,8 +271,11 @@ class Graph():
             whether to display also buffers and parameters which are not encased in the graph scopes
         show_profiles:
             whether to display the nodes weight
+        edge_weight_function:
+            function to get edge weights
         '''
-
+        if edge_weight_function is None:
+            edge_weight_function = edge_weight
         theme = {
             "background_color": "#FFFFFF",
             "fill_color": "#E8E8E8",
@@ -382,7 +386,7 @@ class Graph():
                     shape = node.shape
                 # TODO for DEBUG shape may be None or undefined
                 label = edge_label(shape)
-                label = f"{label}\nweight: {edge_weight(node,out_node)}"
+                label = f"{label}\nweight: {edge_weight_function(node,out_node)}"
 
                 dot.edge(str(node.idx), str(out_node.idx),
                          label=label)
@@ -391,7 +395,8 @@ class Graph():
 
     def display(self,
                 show_buffs_params: bool = True,
-                show_profiles: bool = True):
+                show_profiles: bool = True,
+                edge_weight_function=None):
         '''
         display the graph in Jupyter
 
@@ -401,11 +406,14 @@ class Graph():
             whether to display also buffers and parameters which are not encased in the graph scopes
         show_profiles:
             whether to display the nodes weight
+        edge_weight_function:
+            edge weight function to use
         '''
         try:
             from IPython.core.display import display_svg
             display_svg(self.build_dot(show_buffs_params,
-                                       show_profiles=show_profiles),
+                                       show_profiles=show_profiles,
+                                       edge_weight_function=edge_weight_function),
                         raw=False)
         except ImportError:
             print("only works in ipython notebooks")
@@ -414,7 +422,8 @@ class Graph():
                     file_name: str,
                     directory: str,
                     show_buffs_params: bool = True,
-                    show_profiles: bool = True):
+                    show_profiles: bool = True,
+                    edge_weight_function=None):
         '''
         save the rendered graph to a pdf file
 
@@ -429,7 +438,7 @@ class Graph():
         show_profiles:
             whether to display the nodes weight
         '''
-        dot = self.build_dot(show_buffs_params, show_profiles=show_profiles)
+        dot = self.build_dot(show_buffs_params, show_profiles=show_profiles, edge_weight_function=edge_weight_function)
         dot.format = "pdf"
         import os
         if os.path.exists(f"{directory}/{file_name}.pdf"):

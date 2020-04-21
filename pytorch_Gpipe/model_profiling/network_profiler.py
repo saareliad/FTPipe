@@ -24,6 +24,7 @@ def profile_network(
         n_iter=10,
         save_memory_mode=False,
         recomputation=False,
+        force_no_recomp_scopes=lambda s: False,
 ) -> Dict[str, Profile]:
     '''
     profiles a network's computation time(forward/backward) and memory consumption
@@ -63,7 +64,8 @@ def profile_network(
                                         max_depth,
                                         basic_blocks,
                                         save_memory_mode=save_memory_mode,
-                                        recomputation=recomputation)
+                                        recomputation=recomputation,
+                                        force_no_recomp_scopes=force_no_recomp_scopes)
 
     # perform n_iter symbolic forward backward run
     # first one is warmup as we have seen the first time measurements are higher
@@ -143,17 +145,23 @@ def _wrap_profiled_layers(module: nn.Module,
                           depth,
                           basic_blocks: List[nn.Module],
                           save_memory_mode=False,
-                          recomputation=False):
+                          recomputation=False,
+                          force_no_recomp_scopes=lambda s: False
+                          ):
     layers_dict = {}
-
     for sub_layer, scope, parent in traverse_model(module,
                                                    depth,
                                                    basic_blocks=basic_blocks):
         name = scope[scope.rfind('[') + 1:-1]
+
+        scope_specific_recomp = recomputation
+        if force_no_recomp_scopes(scope):
+            scope_specific_recomp = False
+
         wrapper = Wrapper(sub_layer,
                           scope,
                           save_memory_mode=save_memory_mode,
-                          recomputation=recomputation)
+                          recomputation=scope_specific_recomp)
         parent.add_module(name, wrapper)
         layers_dict[scope] = wrapper
 
@@ -195,6 +203,7 @@ class Wrapper(nn.Module):
                  save_memory_mode=False,
                  recomputation=False):
         super(Wrapper, self).__init__()
+        assert isinstance(recomputation, bool)
         self.layer = sub_module
         self.forward_time = []
         self.backward_time = []
@@ -261,30 +270,51 @@ class Wrapper(nn.Module):
                                                                    self.layer, *detached_inputs, **kwargs)
 
         self.forward_time.append(forward_time)
-        # reduce outputs to calculate dummy loss
-        loss = torch.zeros(1, requires_grad=False, device=device)
+
 
         if self.recomputation:
             # Then, we do fwd+bwd
             # FIXME: self.forward_cuda_mem...
             forward_time, outputs, self.forward_cuda_mem = time_op(self.device,
                                                                    self.layer, *detached_inputs, **kwargs)
+        
+        # NOTE: the commented code is less accurate, but it can be usefull for memory problems
+        # reduce outputs to calculate dummy loss
+        # loss = torch.zeros(1, requires_grad=False, device=device)
+        # for out in flatten(outputs):
+        #     if isinstance(out, torch.Tensor):
+        #         loss = loss + out.sum()
+        # Loss makes sense only for the last layer...
 
+        # calculate dummy loss
+        flattened_outputs = flatten(outputs)
+        grad_tensors = []
+        has_grad_fn = False
         for out in flatten(outputs):
             if isinstance(out, torch.Tensor):
-                loss = loss + out.sum()
-
+                grad_tensors.append(torch.randn_like(out))
+                if (out.grad_fn is not None) or out.requires_grad:
+                    has_grad_fn = True
+            else:
+                grad_tensors.append(None)
+        
         # measure backward execution time
 
-        if loss.grad_fn is not None or loss.requires_grad:
+        # if loss.grad_fn is not None or loss.requires_grad:
+        if has_grad_fn:
             backward_time, _, self.backward_cuda_mem = time_op(self.device,
-                                                               torch.autograd.backward, loss)
+                                                               torch.autograd.backward,
+                                                               tensors=flattened_outputs,
+                                                               grad_tensors=grad_tensors)
 
             # TODO: also create option to check gradient accumulation,
             #  in case this is the domminant case
 
             # delete gradients to save memory after backward.
             for p in self.parameters():
+                p.grad = None
+            # TODO: can also clean inputs grad
+            for p in detached_inputs:
                 p.grad = None
         else:
             backward_time, self.backward_cuda_mem = 0.0, 0.0

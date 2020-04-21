@@ -1,5 +1,5 @@
 import torch
-from collections import deque
+from collections import deque, defaultdict
 import time
 import numpy as np
 from .ssgd_analysis import run_analysis as ssgd_run_analysis
@@ -7,6 +7,9 @@ from pprint import pprint
 import sys
 import io
 from contextlib import redirect_stdout
+import warnings
+from typing import List, Set
+from functools import wraps
 
 
 def run_analysis(sample,
@@ -18,10 +21,11 @@ def run_analysis(sample,
                  verbose=True,
                  async_pipeline=False,
                  add_comm_times_to_balance=True,
-                 sequential_model=None):
+                 sequential_model=None,
+                 stages_on_same_gpu: List[Set[int]] = list(),
+                 analyze_traced_model=False):
 
-    # NOTE: add_comm_times_to_balance, should be true...
-    # setting to false is mainly for our own debug
+    # NOTE: setting add_comm_times_to_balance, is for only debug porpuses
 
     TOPO_AWARE = False
     UTILIZATION_SLOWDOWN_SPEEDUP = True
@@ -29,36 +33,113 @@ def run_analysis(sample,
     PRINT_VAR_STD = False
     TRY_SSGD_ANALYSIS = True
 
-    # thoeretical analysis
-    sequential_f, sequential_b, parallel_f, parallel_b = theoretical_analysis(
-        graph,
-        config,
-        recomputation=recomputation,
-        async_pipeline=async_pipeline)
-    edges = edge_cut(graph)
-    # theoretical analysis based on the graph assuming the computation is sequential
-    theoretical_sequential_b_balance = worst_balance(sequential_b)
-    theoretical_sequential_f_balance = worst_balance(sequential_f)
-    (topology_aware_sequential_f_balance,
-     topology_aware_sequential_b_balance) = topology_aware_balance(
-         sequential_f, sequential_b, edges)
-    # theoretical anaysis based on the graph assuming the computation is fully parallel
-    theoretical_parallel_b_balance = worst_balance(parallel_b)
-    theoretical_parallel_f_balance = worst_balance(parallel_f)
-    topology_aware_parallel_f_balance, topology_aware_parallel_b_balance = topology_aware_balance(
-        parallel_f, parallel_b, edges)
+    # NOTE tracing ignores our generated state_methods
+    # cpu,cuda,to,state_dict etc.
+    # NOTE tracing ignores the device and lookup attributes of the partition
+    # can run traced partition only on the same device it was profiled and traced on
+    # NOTE scritping does not support the del keyword
+    if analyze_traced_model:
+        config = trace_partitions(sample, config)
+
+    # given:
+    # stages_on_same_gpu = [{0, 4}]
+    # internal represntation:
+    # stages_on_same_gpu[0] = {0, 4}
+    # stages_on_same_gpu[4] = {0, 4}
+
+    unique_stages_on_same_gpu = stages_on_same_gpu
+    stages_on_same_gpu = defaultdict(set)
+
+    for i in unique_stages_on_same_gpu:
+        for j in i:
+            stages_on_same_gpu[j] = i
+
+    for i in unique_stages_on_same_gpu:
+        assert len(i) >= 1
+
+    num_dummy_stages = sum([(len(i) - 1) for i in unique_stages_on_same_gpu])
+
+    if graph is not None:
+        # thoeretical analysis
+        sequential_f, sequential_b, parallel_f, parallel_b = theoretical_analysis(
+            graph,
+            config,
+            recomputation=recomputation,
+            async_pipeline=async_pipeline)
+        edges = edge_cut(graph)
+        # theoretical analysis based on the graph assuming the computation is sequential
+        theoretical_sequential_b_balance = worst_balance(sequential_b)
+        theoretical_sequential_f_balance = worst_balance(sequential_f)
+        (topology_aware_sequential_f_balance,
+         topology_aware_sequential_b_balance) = topology_aware_balance(
+             sequential_f, sequential_b, edges)
+        # theoretical anaysis based on the graph assuming the computation is fully parallel
+        theoretical_parallel_b_balance = worst_balance(parallel_b)
+        theoretical_parallel_f_balance = worst_balance(parallel_f)
+        topology_aware_parallel_f_balance, topology_aware_parallel_b_balance = topology_aware_balance(
+            parallel_f, parallel_b, edges)
+    else:
+        edges = None
+        TOPO_AWARE = False
+        PRINT_THEORETICAL = False
+
     # real statistics based on generated partitions
     ((real_f_times, f_vars, f_deviance), (real_b_times, b_vars, b_deviance),
-     comm_volume_str, comm_volume_stats, nocomm_real_f_times,
-     nocomm_real_b_times) = profile_execution(
+     comm_volume_stats, nocomm_real_f_times, nocomm_real_b_times,
+     warnings_list) = profile_execution(
          sample,
          config,
          n_iter + 1,
          recomputation=recomputation,
          bw_GBps=bw_GBps,
          async_pipeline=async_pipeline,
-         add_comm_times_to_balance=add_comm_times_to_balance)
+         add_comm_times_to_balance=add_comm_times_to_balance,
+         stages_on_same_gpu=stages_on_same_gpu)
 
+    def get_comm_vol_str(comm_volume_stats):
+        communication_volume = dict()
+        for idx, stats in comm_volume_stats.items():
+
+            units = {
+                "input size": "MB",
+                "recieve_time": "ms",
+                "out": "MB",
+                "send time": "ms",
+            }
+            newd = {k: f"{stats[k]:.2f} {units[k]}" for k in stats}
+            communication_volume[idx] = ', '.join("{!s}:{!r}".format(key, val)
+                                                  for (key,
+                                                       val) in newd.items())
+        return communication_volume
+
+    n_partitions = sum([1 for k in config if isinstance(k, int)])
+    num_real_stages = n_partitions - num_dummy_stages
+
+    if n_partitions != num_real_stages:
+        # TODO: shrink everything
+        for i in unique_stages_on_same_gpu:
+            j = min(i)
+            for k in i:
+                if k == j:
+                    continue
+                for means_list in [
+                        real_f_times, real_b_times, nocomm_real_f_times,
+                        nocomm_real_b_times, comm_volume_stats
+                ]:
+                    if isinstance(means_list[j], dict):
+
+                        d1 = means_list[j]
+                        d2 = means_list[k]
+
+                        for key in d1:
+                            d1[key] += d2[key]
+
+                    else:
+                        means_list[j] += means_list[k]
+
+                    del means_list[k]
+
+    comm_volume_str = get_comm_vol_str(comm_volume_stats)
     real_b_balance = worst_balance(real_b_times)
     real_f_balance = worst_balance(real_f_times)
 
@@ -85,7 +166,6 @@ def run_analysis(sample,
     real_f_utilization = utilization(real_f_times, comp_comm_ratio_f)
     real_b_utilization = utilization(real_b_times, comp_comm_ratio_b)
 
-    n_partitions = sum([1 for k in config if isinstance(k, int)])
     expected_speedup = expected_speedup_after_partitioning(
         real_f_times, real_b_times, nocomm_real_f_times, nocomm_real_b_times)
 
@@ -100,10 +180,21 @@ def run_analysis(sample,
 
     # TODO: save this into some data structure
     # where we could analyze it later, compare between partitions, etc.
+    # TODO: change the printing to lines.append(), than join with \n.
     if verbose:
         s = "-I- Printing Report\n"
-        s += "cutting edges are edges between partitions\n"
-        s += f"number of cutting edges: {len(edges)}\n\n"
+        if warnings_list:
+            s += "warnings:\n" + "\n".join(warnings_list) + "\n"
+
+        s += f"Number of stages: {num_real_stages}\n"
+        if num_dummy_stages:
+            s += f"n_partitions:{n_partitions}, num_dummy_stages:{num_dummy_stages}\n"
+            s += f"unique_stages_on_same_gpu: {unique_stages_on_same_gpu}\n"
+
+        if edges is not None:
+            s += "cutting edges are edges between partitions\n"
+            s += f"number of cutting edges: {len(edges)}\n\n"
+            # TODO: for partitions on differnt devices...
 
         s += f"backward times {'do not ' if not recomputation else ''}include recomputation\n"
         if async_pipeline and recomputation:
@@ -161,11 +252,11 @@ def run_analysis(sample,
             s += "\nExpected utilization by partition\n"
             s += f"forward {real_f_utilization}\nbackward {real_b_utilization}\n"
 
-            s += f"\nExpected speedup for {n_partitions} partitions is: {expected_speedup:.3f}"
+            s += f"\nExpected speedup for {num_real_stages} partitions is: {expected_speedup:.3f}"
 
         if TRY_SSGD_ANALYSIS and torch.cuda.is_available() and (
                 sequential_model is not None):
-            n_workers = n_partitions
+            n_workers = num_real_stages
             model = sequential_model
             try:
                 ssgd_expected_speedup, ssgd_stats = ssgd_run_analysis(
@@ -189,13 +280,13 @@ def run_analysis(sample,
 
                     print(ssgd_output)
 
-            except:
-                print(f"SSGD analysis failed: {sys.exc_info()[0]}")
+            except Exception as e:
+                print(f"SSGD analysis failed: {sys.exc_info()[0]}", str(e))
                 # raise
 
         print(s)
 
-    return expected_speedup,s  # real_f_balance, real_b_balance
+    return expected_speedup, s  # real_f_balance, real_b_balance
 
 
 #################################
@@ -205,11 +296,12 @@ def run_analysis(sample,
 
 def profile_execution(model_inputs,
                       partition_config,
-                      n,
+                      n_iters,
                       recomputation=True,
                       bw_GBps=12,
                       async_pipeline=False,
-                      add_comm_times_to_balance=True):
+                      add_comm_times_to_balance=True,
+                      stages_on_same_gpu=[]):
     '''perfrom forward/backward passes and measure execution times accross n batches
     '''
     n_partitions = sum([1 for k in partition_config if isinstance(k, int)])
@@ -219,13 +311,16 @@ def profile_execution(model_inputs,
     nocommf_times = {i: [] for i in range(n_partitions)}
     nocommb_times = {i: [] for i in range(n_partitions)}
 
-    communication_volume = {}
     communication_stats = {}
     is_parameter = set()
     if not isinstance(model_inputs, tuple):
         model_inputs = (model_inputs, )
 
-    for _ in range(n):
+    # Return warnings so we can print
+    warnings_list = []
+
+    # TODO: tqdm?
+    for current_iteration_num in range(n_iters):
         parts = deque(range(n_partitions))
         activations = {}
         for i, t in zip(partition_config['model inputs'], model_inputs):
@@ -236,6 +331,14 @@ def profile_execution(model_inputs,
         # perform one run of the partitions
         while len(parts) > 0:
             idx = parts.popleft()
+            if stages_on_same_gpu:
+                my_gpu_set = stages_on_same_gpu[idx]
+                if my_gpu_set:
+                    pass
+                    # TODO: use it do zero communication,
+                    # TODO: finally add all statistics for this gpu
+            else:
+                my_gpu_set = {}
 
             # For async pipeline, do no use recomputation on last partition
             is_last_partition = (len(parts) == 0)
@@ -244,46 +347,97 @@ def profile_execution(model_inputs,
             if async_pipeline and is_last_partition:
                 partition_specific_recomputation = False
 
+            # partition_specific_inputs_requires_grad
+            inputs_requires_grad = not is_first_partition
+
             if all(tensor in activations
                    for tensor in partition_config[idx]['inputs']):
                 inputs = []
+                in_size_mb = 0
                 for tensor in partition_config[idx]['inputs']:
+                    recv_from = []
+                    # cehck if same config
+                    for ii in partition_config:
+                        if not isinstance(ii, int):
+                            continue
+                        if tensor in partition_config[ii]['outputs']:
+                            recv_from.append(ii)
+                            break
+                    if not recv_from:
+                        assert tensor in partition_config['model inputs']
+                        is_same_gpu = False
+                    else:
+                        is_same_gpu = recv_from[0] in my_gpu_set
+
                     t = activations[tensor]
-                    #shared weights support
+                    # shared weights support
                     if tensor in is_parameter:
                         t.requires_grad_()
                     inputs.append(t)
 
+                    if not is_same_gpu:
+                        in_size_mb += t.nelement() * t.element_size()
+
                 # input statistics
-                in_size_mb = sum([(t.nelement() * t.element_size())
-                                  for t in inputs]) / 1e6
+                in_size_mb /= 1e6
                 recv_time = in_size_mb / bw_GBps
+
                 # time measurement
                 if torch.cuda.is_available():
                     f_time, b_time, outputs = cuda_time(
                         partition_config[idx]['model'],
                         inputs,
-                        recomputation=partition_specific_recomputation)
+                        recomputation=partition_specific_recomputation,
+                        inputs_requires_grad=inputs_requires_grad)
                 else:
                     f_time, b_time, outputs = cpu_time(
                         partition_config[idx]['model'],
                         inputs,
-                        recomputation=partition_specific_recomputation)
+                        recomputation=partition_specific_recomputation,
+                        inputs_requires_grad=inputs_requires_grad)
 
                 # output statistics
                 out_size_mb = 0
                 send_time = 0
                 for o, t in zip(partition_config[idx]['outputs'], outputs):
+                    # TODO: figure out where this is sent too.
+                    sent_to = []
+                    for ii in partition_config:
+                        if not isinstance(ii, int):
+                            continue
+                        if o in partition_config[ii]['inputs']:
+                            sent_to.append(ii)
+                    if len(sent_to) > 1:
+                        if current_iteration_num == 0:
+                            warning = f"tensor {o} set to more than 1 target. Inaccurate analysis"
+                            warnings_list.append(warning)
+                            warnings.warn(warning)
+
+                    sent_to_same_gpu = False
+                    for ii in sent_to:
+                        # Multiple sends?
+                        if ii in my_gpu_set:
+                            sent_to_same_gpu = True
+
+                    # Check and warn if contiguous
+                    if current_iteration_num == 0:
+                        if not t.is_contiguous():
+                            warnining = f"Partition{idx} output:{o} is not contiguous!"
+                            warnings.warn(warnining)
+                            warnings_list.append(warnining)
+
                     # save activation on CPU in order to save GPU memory
                     if isinstance(t, torch.nn.Parameter):
                         # shared weights support
                         is_parameter.add(o)
 
                     activations[o] = t.detach().cpu()
+                    # TODO: figure out where this is sent too.
                     t_mb = (t.nelement() * t.element_size()) / 1e6
                     t_send = t_mb / bw_GBps
-                    out_size_mb += t_mb
-                    send_time += t_send
+                    if not sent_to_same_gpu:
+                        out_size_mb += t_mb  # This is relevant for buffer, maybe
+                        send_time += t_send
 
                 del outputs
 
@@ -296,17 +450,6 @@ def profile_execution(model_inputs,
                     "out": out_size_mb,  # "MB"
                     "send time": send_time,  # ms"
                 }
-
-                units = {
-                    "input size": "MB",
-                    "recieve_time": "ms",
-                    "out": "MB",
-                    "send time": "ms",
-                }
-                newd = {k: f"{stats[k]:.2f} {units[k]}" for k in stats}
-                communication_volume[idx] = ', '.join(
-                    "{!s}:{!r}".format(key, val)
-                    for (key, val) in newd.items())
 
                 communication_stats[idx] = stats
 
@@ -329,9 +472,8 @@ def profile_execution(model_inputs,
                 parts.append(idx)
 
     # calculate mean and variance
-    return mean_var(f_times), mean_var(
-        b_times), communication_volume, communication_stats, mean_var(
-            nocommf_times)[0], mean_var(nocommb_times)[0]
+    return mean_var(f_times), mean_var(b_times), communication_stats, mean_var(
+        nocommf_times)[0], mean_var(nocommb_times)[0], warnings_list
 
 
 def mean_var(times):
@@ -348,11 +490,17 @@ def mean_var(times):
     return means, variances, avg_deviations
 
 
-def cuda_time(partition, inputs, recomputation=True):
+def cuda_time(partition,
+              inputs,
+              recomputation=True,
+              inputs_requires_grad=False):
     # now we move partition to GPU
     partition = partition.to('cuda')
     partition.device = 'cuda'
-    b_time = cuda_backward(partition, inputs, recomputation=recomputation)
+    b_time = cuda_backward(partition,
+                           inputs,
+                           recomputation=recomputation,
+                           inputs_requires_grad=inputs_requires_grad)
 
     # Delete gradeinets to save space
     for p in partition.parameters():
@@ -366,24 +514,90 @@ def cuda_time(partition, inputs, recomputation=True):
     return f_time, b_time, outputs
 
 
-def cuda_backward(partition, inputs, recomputation=True):
+def flatten(x):
+    if isinstance(x, torch.Tensor) or x is None:
+        return [x]
+    elif isinstance(x, (list, tuple)):
+        ts = []
+        for t in x:
+            ts.extend(flatten(t))
+        return ts
+    else:
+        raise ValueError("INCORRECT_INPUT_TYPE" + f"{type(x)} ")
+
+
+def get_grad_tensors(flattened_outputs):
+    """Infer grad_tensors to be used with:
+            torch.autograd.backward(tensors=flattened_outputs, grad_tensors=grad_tensors)
+    """
+    #input_gradient only if the output requires grad
+    #for ex. bert passes a mask which does not require grad
+    grad_tensors = []
+    for out in flattened_outputs:
+        if isinstance(out, torch.Tensor) and out.requires_grad:
+            grad_tensors.append(torch.randn_like(out))
+    return grad_tensors
+
+
+def first_arg_cache(function):
+    # can be used to accelerate analysis.
+    memo = {}
+
+    @wraps(function)
+    def wrapper(*args):
+        try:
+            return memo[id(args[0])]
+        except KeyError:
+            rv = function(*args)
+            memo[id(args[0])] = rv
+            return rv
+
+    return wrapper
+
+
+# @first_arg_cache
+def infer_grad_tensors_for_partition(partition, inputs):
+    outputs = partition(*inputs)
+    flattened_outputs = flatten(outputs)
+    grad_tensors = get_grad_tensors(flattened_outputs)
+    return grad_tensors
+
+
+def cuda_backward(partition,
+                  inputs,
+                  recomputation=True,
+                  inputs_requires_grad=False):
     ''' measure forward/backward time of a partition on the GPU
     '''
     # now we move inputs to GPU
-    inputs = [i.to('cuda') for i in inputs]
+    inputs = [
+        i.to('cuda').requires_grad_(inputs_requires_grad
+                                    and i.is_floating_point()) for i in inputs
+    ]
+    # Pre infer, so it won't get stuck in the the record.
+    grad_tensors = infer_grad_tensors_for_partition(partition, inputs)
+    # TODO: maybe clear GPU cache here?
+    # However in re-computation it may be in cash alreay.
+
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
+
     if recomputation:
         torch.cuda.synchronize(device='cuda')
         start.record()
         outputs = partition(*inputs)
+        flattened_outputs = flatten(outputs)
     else:
         outputs = partition(*inputs)
-        start = torch.cuda.Event(enable_timing=True)
+        flattened_outputs = flatten(outputs)
         torch.cuda.synchronize(device='cuda')
         start.record()
-    loss = sum(o.norm() for o in outputs)  # FIXME: just use real loss.
-    loss.backward()
+
+    #compute gradient only for outputs that require grad
+    flattened_outputs = filter(lambda t: t.requires_grad,flattened_outputs)
+
+    torch.autograd.backward(tensors=flattened_outputs, grad_tensors=grad_tensors)
+
     end.record()
     torch.cuda.synchronize(device='cuda')
     b_time = (start.elapsed_time(end))
@@ -406,12 +620,18 @@ def cuda_forward(partition, inputs, recomputation=True):
     return f_time, outputs
 
 
-def cpu_time(partition, inputs, recomputation=True):
+def cpu_time(partition,
+             inputs,
+             recomputation=True,
+             inputs_requires_grad=False):
     ''' measure forward/backward time of a partition on the CPU
     '''
     partition = partition.to('cpu')
     partition.device = 'cpu'
-    b_time = cpu_backward(partition, inputs, recomputation=recomputation)
+    b_time = cpu_backward(partition,
+                          inputs,
+                          recomputation=recomputation,
+                          inputs_requires_grad=inputs_requires_grad)
     f_time, outputs = cpu_forward(partition,
                                   inputs,
                                   recomputation=recomputation)
@@ -430,14 +650,26 @@ def cpu_forward(partition, inputs, recomputation=True):
     return f_time, outputs
 
 
-def cpu_backward(partition, inputs, recomputation=True):
-    inputs = [i.cpu() for i in inputs]
+def cpu_backward(partition,
+                 inputs,
+                 recomputation=True,
+                 inputs_requires_grad=False):
+    inputs = [
+        i.cpu().requires_grad_(inputs_requires_grad and i.is_floating_point())
+        for i in inputs
+    ]
+    grad_tensors = infer_grad_tensors_for_partition(partition, inputs)
+
     start = time.time()
     outputs = partition(*inputs)
+    flattened_outputs = flatten(outputs)
     if not recomputation:
         start = time.time()
-    loss = sum(o.norm() for o in outputs)
-    loss.backward()
+
+    #compute gradient only for outputs that require grad
+    flattened_outputs = filter(lambda t: t.requires_grad,flattened_outputs)
+
+    torch.autograd.backward(tensors=flattened_outputs, grad_tensors=grad_tensors)
     end = time.time()
     b_time = 1000 * (end - start)
 
@@ -656,9 +888,6 @@ def topology_aware_balance(f_times, b_times, cutting_edges):
     return f_balance, b_balance
 
 
-######################
-# unused code
-# ####################
 def run_partitions(model_inputs, partition_config):
     n_partitions = sum([1 for k in partition_config if isinstance(k, int)])
 
@@ -695,3 +924,51 @@ def run_partitions(model_inputs, partition_config):
             parts.append(idx)
 
     return [activations[o] for o in partition_config['model outputs']]
+
+
+def trace_partitions(model_inputs, partition_config):
+    # NOTE tracing ignores our generated state_methods
+    # cpu,cuda,to,state_dict etc.
+    # NOTE tracing ignores the device and lookup attributes of the partition
+    # can run traced partition only on the same device it was profiled and traced on
+    # NOTE scritping does not support the del keyword
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = torch.device(device)
+
+    n_partitions = sum([1 for k in partition_config if isinstance(k, int)])
+
+    if not isinstance(model_inputs, tuple):
+        model_inputs = (model_inputs, )
+
+    activations = dict()
+
+    for i in range(n_partitions):
+        partition_config[i]['model'] = partition_config[i]['model'].cpu()
+
+    for i, t in zip(partition_config['model inputs'], model_inputs):
+        activations[i] = t.cpu()
+
+    parts = deque(range(n_partitions))
+
+    while len(parts) > 0:
+        idx = parts.popleft()
+
+        # if all inputs are ready run partition
+        if all(tensor in activations
+               for tensor in partition_config[idx]['inputs']):
+            inputs = [
+                activations[tensor].to(device)
+                for tensor in partition_config[idx]['inputs']
+            ]
+            partition = partition_config[idx]['model'].to(device)
+            with torch.no_grad():
+                outs = partition(*inputs)
+                for o, t in zip(partition_config[idx]['outputs'], outs):
+                    activations[o] = t.cpu()
+
+                partition = torch.jit.trace(partition, inputs).cpu()
+                partition_config[idx]['model'] = partition
+        else:
+            parts.append(idx)
+
+    return partition_config
