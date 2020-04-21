@@ -14,8 +14,18 @@ Tensors = Tuple[Tensor, ...]
 TensorOrTensors = Union[Tensor, Tensors]
 
 __all__ = [
-    'Partition', 'FirstPartition', 'LastPartition', 'LastPartitionWithLabelInput',
-    'PartitionWithoutRecomputation', 'get_buffers_for_ddp_sync'
+    # Async pipe
+    'Partition',
+    'FirstPartition',
+    'LastPartition',
+    'LastPartitionWithLabelInput',
+    'PartitionWithoutRecomputation',
+    'get_buffers_for_ddp_sync',
+    # GPipe:
+    'GPipePartition',
+    'GPipeFirstPartition',
+    'GPipeLastPartition',
+    'GPipeLastPartitionWithLabelInput'
 ]
 
 DEFAULT_CLASSES_LIST_TO_PATCH = [
@@ -86,9 +96,9 @@ class Partition(nn.Module):
         if to_device:
             self.to(self.device)
 
-    def on_new_batch(self, num_micro_batches):
-        # Create placeholder for micro batches input and rng states.
-        self.input_buffer = {idx: None for idx in range(num_micro_batches)}
+    # def on_new_batch(self, num_micro_batches):
+    #     # Create placeholder for micro batches input and rng states.
+    #     self.input_buffer = {idx: None for idx in range(num_micro_batches)}
 
     def forward(self, x: TensorOrTensors, micro_batch_idx):
 
@@ -175,7 +185,6 @@ class FirstPartition(Partition):
     def __init__(self, *args, **kw):
         super(FirstPartition, self).__init__(*args, **kw)
 
-
     def forward(self, x: TensorOrTensors, micro_batch_idx):
 
         if self.training:  # Dummy fwd to save input and pass output to next layer
@@ -219,7 +228,6 @@ class FirstPartition(Partition):
                 else:
                     x = self.layers(*x)
                 return x
-
 
     def recompute(self, micro_batch_idx):
         # Unlike normal partition, here we pop the activations after we read from buffer
@@ -272,9 +280,7 @@ class LastPartition(Partition):
             else:
                 # Option 2
                 with torch.no_grad():
-                    x = [
-                        tensor.requires_grad_() for tensor in x
-                    ]
+                    x = [tensor.requires_grad_() for tensor in x]
 
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(*x)
@@ -299,6 +305,7 @@ class LastPartitionWithLabelInput(LastPartition):
         
         In use for our partitoned transformers with LMhead.
     """
+
     # _REQ_GRAD = True
     # _HAS_DUMMY_FORWARD = False
     def forward(self, x, micro_batch_idx):
@@ -332,7 +339,7 @@ class PartitionWithoutRecomputation(nn.Module):
             NOTE:
                 (1) This partition should (ideally) be accompanied by weight stashing for async pipeline, 
                 but it also works without it.
-                (2) use _REQ_GRAD=True for first partition
+                (2) use _REQ_GRAD=False for first partition
         """
         super().__init__()
 
@@ -415,3 +422,131 @@ class PartitionWithoutRecomputation(nn.Module):
             return (x.grad, )
         else:
             return [y.grad for y in x]
+
+
+##################
+# GPipe
+# TODO: we can easly avoid clones() and just use the same buffer.
+# it will save buffer memory, but its minor.
+##################
+
+
+class GPipePartition(nn.Module):
+    """ Do not do recomputation on the last micro batch
+        we have to know if we are last micro batch at all functions.
+     """
+    RECOMP_PARTITION_CLS = Partition
+    NO_RECOMP_PARTITION_CLS = PartitionWithoutRecomputation
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.is_last_micro_batch = False
+
+        self.recomputation_partition = self.RECOMP_PARTITION_CLS(*args, **kw)
+        self.no_recomputation_partition = self.NO_RECOMP_PARTITION_CLS(
+            *args, **kw)
+
+    def recompute(self, micro_batch_idx):
+        if not self.is_last_micro_batch:
+            self.recomputation_partition.recompute(micro_batch_idx)
+
+    def backward_from_recomputed(self, g, micro_batch_idx):
+        if self.is_last_micro_batch:
+            self.no_recomputation_partition.backward_from_recomputed(
+                g, micro_batch_idx)
+        else:
+            self.recomputation_partition.backward_from_recomputed(
+                g, micro_batch_idx)
+
+    def get_grad(self, micro_batch_idx):
+        """ returns an iteretable of grads """
+        if self.is_last_micro_batch:
+            return self.no_recomputation_partition.get_grad(micro_batch_idx)
+        else:
+            return self.recomputation_partition.get_grad(micro_batch_idx)
+
+
+class GPipeFirstPartition(GPipePartition):
+    """ Do not do recomputation on the last micro batch """
+    RECOMP_PARTITION_CLS = FirstPartition
+    NO_RECOMP_PARTITION_CLS = PartitionWithoutRecomputation
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+
+
+# class GPipeRecomputingLastPartition(Partition):
+#     _REQ_GRAD = True
+#     _HAS_DUMMY_FORWARD = True  # NOTE: The only difference
+
+#     def __init__(self, *args, **kw):
+#         super(GPipeRecomputingLastPartition, self).__init__(*args, **kw)
+
+#     def forward(self, x, micro_batch_idx):
+#     # will be called at using partition
+#     x = super().forward(x, micro_batch_idx)
+#     #  Last partition outputs should be in a tensor format
+#     if not isinstance(x, Tensor):
+#         assert (len(x) == 1)
+#         return x[0]
+#     return x
+
+# class GPipeRecomputingLastPartitionWithLabelInput(Partition):
+#     """A assuming that given x is tuple in which last idx is the label.
+#         We don't store the label, because we don't need gradient on it.
+
+#         In use for our partitoned transformers with LMhead.
+#     """
+#     _REQ_GRAD = True
+#     _HAS_DUMMY_FORWARD = True
+
+#     def forward(self, x, micro_batch_idx):
+#         assert not isinstance(x, Tensor)
+#         label = x[-1]
+#         x = x[:-1]
+#         with torch.no_grad():
+#             if self.training:
+#                 x = [tensor.data.clone().requires_grad_() for tensor in x]
+#                 self.input_buffer[micro_batch_idx] = x
+#                 x = self.layers(*x, label)
+#             else:
+#                 x = self.layers(*x, label)
+
+#  Last partition outputs should be in a tensor format
+# will be called at using partition
+# if not isinstance(x, Tensor):
+#     assert (len(x) == 1)
+#     return x[0]
+# return x
+
+
+class GPipeLastPartition(GPipePartition):
+    RECOMP_PARTITION_CLS = Partition
+    NO_RECOMP_PARTITION_CLS = LastPartition
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+
+    def forward(self, x, micro_batch_idx):
+        x = super().forward(x, micro_batch_idx)
+        if not isinstance(x, Tensor):
+            assert (len(x) == 1)
+            return x[0]
+        return x
+
+
+class GPipeLastPartitionWithLabelInput(GPipeLastPartition):
+    RECOMP_PARTITION_CLS = Partition
+    NO_RECOMP_PARTITION_CLS = LastPartitionWithLabelInput
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+
+
+
+# Exactly like normal last partition, but its worth the comment.
+# class GPipeLastPartitionWithLabelInput(GPipeLastPartition):
+#     """ unlike async pipeline, here we don't drop and the first bwd """
+#     # TODO: it is very stupied that we calculate loss for all micro batches in the dummy forward, but its very anoying to fix this.
+#     RECOMP_PARTITION_CLS = Partition
+#     NO_RECOMP_PARTITION_CLS = PartitionWithoutRecomputation  # NOTE: its a

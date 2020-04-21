@@ -1,5 +1,6 @@
 import math
 import time
+import torch
 
 def training_loop(args, logger, train_dl, test_dl, is_first_partition,
                   is_last_partition, partition, statistics, train_dl_len,

@@ -5,6 +5,10 @@ from . import CommunicationHandlerBase
 from .partition import (Partition, LastPartition, FirstPartition,
                         PartitionWithoutRecomputation,
                         LastPartitionWithLabelInput)
+
+from .partition import (GPipePartition, GPipeFirstPartition,
+                        GPipeLastPartition, GPipeLastPartitionWithLabelInput)
+
 from .partition import get_buffers_for_ddp_sync
 from .training.interface import PartitionedTrainer  # , GradNormStepper
 from .tasks import DLTask
@@ -99,46 +103,20 @@ class SinglePartitionManager:
         # TODO: work in progress, need to support exp name too, etc.
         self.weight_stashing_just_for_stats = weight_stashing_just_for_stats
 
-        TO_DEVICE = False
-
-        # Set partition.
-        if use_recomputation:
-            if is_last_partition:
-                partition_cls = LastPartition if not use_pre_loaded_input else LastPartitionWithLabelInput
-            elif is_first_partition:
-                partition_cls = FirstPartition
-            else:
-                partition_cls = Partition
-            self.partition = partition_cls(partition,
-                                           device,
-                                           to_device=TO_DEVICE)
-        else:
-            # Partition without recomputation
-            if is_last_partition:
-                partition_cls = LastPartition if not use_pre_loaded_input else LastPartitionWithLabelInput
-                self.partition = partition_cls(partition,
-                                               device,
-                                               to_device=TO_DEVICE)
-            elif is_first_partition:
-                partition_cls = PartitionWithoutRecomputation
-                self.partition = partition_cls(partition,
-                                               device,
-                                               to_device=TO_DEVICE,
-                                               _REQ_GRAD=False)
-            else:
-                partition_cls = PartitionWithoutRecomputation
-                self.partition = partition_cls(partition,
-                                               device,
-                                               to_device=TO_DEVICE,
-                                               _REQ_GRAD=True)
-
-        if not TO_DEVICE:
-            self.partition.to(device)
-
         self.comm_handler = comm_handler
         self.is_replicated = False
         self.sync_buffers = sync_buffers
 
+        self.device = device
+        self.is_last_partition = is_last_partition
+        self.is_first_partition = is_first_partition
+        self.stage = stage
+        self.num_stages = num_stages
+
+        self.step_every = step_every
+        self.work_scheduler = work_scheduler(step_every)
+
+        self._init_partition(partition, use_recomputation)
         if hasattr(comm_handler, "init_ddp_context"):
             ddp = comm_handler.init_ddp_context(self.partition.layers)
             self.partition.layers = ddp
@@ -149,15 +127,6 @@ class SinglePartitionManager:
             if sync_buffers:
                 self.buffers_to_sync = get_buffers_for_ddp_sync(
                     partition.layers)
-
-        self.device = device
-        self.is_last_partition = is_last_partition
-        self.is_first_partition = is_first_partition
-        self.stage = stage
-        self.num_stages = num_stages
-
-        self.step_every = step_every
-        self.work_scheduler = work_scheduler(step_every)
 
         # HACK:
         # FIXME: num batches just have to be high enough for the calculation.
@@ -212,6 +181,47 @@ class SinglePartitionManager:
         self.weight_stasher: WeightStasher
         self.true_weights_storage: TrueWeightsStorage
 
+    def _init_partition(self, partition, use_recomputation):
+        TO_DEVICE = False
+        is_last_partition = self.is_last_partition
+        is_first_partition = self.is_first_partition
+        use_pre_loaded_input = self.use_pre_loaded_input
+        device = self.device
+
+        # Set partition.
+        if use_recomputation:
+            if is_last_partition:
+                partition_cls = LastPartition if not use_pre_loaded_input else LastPartitionWithLabelInput
+            elif is_first_partition:
+                partition_cls = FirstPartition
+            else:
+                partition_cls = Partition
+            self.partition = partition_cls(partition,
+                                           device,
+                                           to_device=TO_DEVICE)
+        else:
+            # Partition without recomputation
+            if is_last_partition:
+                partition_cls = LastPartition if not use_pre_loaded_input else LastPartitionWithLabelInput
+                self.partition = partition_cls(partition,
+                                               device,
+                                               to_device=TO_DEVICE)
+            elif is_first_partition:
+                partition_cls = PartitionWithoutRecomputation
+                self.partition = partition_cls(partition,
+                                               device,
+                                               to_device=TO_DEVICE,
+                                               _REQ_GRAD=False)
+            else:
+                partition_cls = PartitionWithoutRecomputation
+                self.partition = partition_cls(partition,
+                                               device,
+                                               to_device=TO_DEVICE,
+                                               _REQ_GRAD=True)
+
+        if not TO_DEVICE:
+            self.partition.to(device)
+
     def _init_buffers(self, last_batch_test_shapes, last_batch_train_shapes,
                       max_buffers, keep_buffers_alive, training_tensor_shapes,
                       eval_tensor_shapes, training_tensor_dtypes,
@@ -231,16 +241,15 @@ class SinglePartitionManager:
         shapes_are_equal = eval_tensor_shapes == training_tensor_shapes
         dtypes_are_equal = eval_tensor_dtypes == training_tensor_dtypes
         dtypes_and_shapes_are_equal = shapes_are_equal and dtypes_are_equal
-        if dtypes_and_shapes_are_equal and (
-                last_batch_train_shapes is None) and (last_batch_test_shapes is
-                                                      None):
+        if dtypes_and_shapes_are_equal and (last_batch_train_shapes is
+                                            None) and (last_batch_test_shapes
+                                                       is None):
             # HACK: if same shapes and datatypes, the buffers can remain!
             keep_buffers_alive = True
 
         self.keep_buffers_alive = keep_buffers_alive
 
         # NOTE: we don't create the fwd buffers, they are created on the fly.
-
 
         fwd_recv_buffers_train = self._fwd_recv_buffers_train(create=False)
         bwd_recv_buffers = self._bwd_recv_buffers()
@@ -251,7 +260,8 @@ class SinglePartitionManager:
             self.bwd_recv_buffers = bwd_recv_buffers
 
             if not dtypes_and_shapes_are_equal:
-                self.fwd_recv_buffers_eval = _fwd_recv_buffers_eval(create=False)
+                self.fwd_recv_buffers_eval = _fwd_recv_buffers_eval(
+                    create=False)
             else:
                 # HACK: use same buffer!
                 self.fwd_recv_buffers_eval = self.fwd_recv_buffers_train
@@ -782,7 +792,7 @@ class SinglePartitionManager:
         if not (self.is_first_partition):
             g = self.partition.get_grad(batch_idx)
             request_objects = self.comm_handler.send_gradients(g, batch_idx)
-        
+
         del g
 
         # Wait for next if appropriate
@@ -957,6 +967,326 @@ class SinglePartitionManager:
                     done_fwds += 1
                 else:
                     done_bwds += 1
+
+        while len(async_fwd_objects) > 0:
+            wait_on_sent_object(is_fwd=True, fin=True)
+
+        while len(async_bwd_objects) > 0:
+            wait_on_sent_object(is_fwd=False, fin=True)
+
+        # Do a scheduler step at the end of epoch if not already doing so each step.
+        if not self.trainer.PER_STEP_SCHEDULER:
+            self.lr_scheduler.step()
+
+
+class GPipePartitionManager(SinglePartitionManager):
+    PROBLEMATIC_POLICY = "None"
+
+    def __init__(self, *args, **kw):
+        # NOTE: we changed partition type choice
+        super().__init__(*args, **kw)
+
+        self.saved_for_backward = dict()
+        # assert "GPIPE" in self.work_scheduler
+        # step_every
+
+    def _init_partition(self, partition, use_recomputation):
+        # NOTE: it will be called from super().__init__
+        TO_DEVICE = False
+        is_last_partition = self.is_last_partition
+        is_first_partition = self.is_first_partition
+        use_pre_loaded_input = self.use_pre_loaded_input
+        device = self.device
+
+        # Set partition.
+        if use_recomputation:
+            if is_last_partition:
+                if use_pre_loaded_input:
+                    partition_cls = GPipeLastPartitionWithLabelInput
+                else:
+                    partition_cls = GPipeLastPartition
+            elif is_first_partition:
+                partition_cls = GPipeFirstPartition
+            else:
+                partition_cls = GPipePartition
+            self.partition = partition_cls(partition,
+                                           device,
+                                           to_device=TO_DEVICE)
+        else:
+            # Partition without recomputation
+            # NOTE: its pretty stupied to use GPIPE in this case.
+            # TODO: but I have plan doing so. "per-stage recomputation"
+            raise NotImplementedError()
+
+        if not TO_DEVICE:
+            self.partition.to(device)
+
+    def run_batch_forward(self, batch_idx, num_batches, done_bwds=None):
+        """ Handles the forward pass, for last partition also handles the backward pass.
+
+            Algorithm:
+                - Get the data
+                - Forward pass
+                - Send to next partition
+                - for last micro batch - behave differently.
+
+            In more detail:
+                # (1) PRELOAD
+                # (2) the actual forward
+                # (3) send activation (if not last partition)
+
+            Feature:
+                - Pre load Y to last partition if possible
+        """
+        partition = self.partition
+        is_training = partition.training
+
+        is_last_micro_batch = (
+            ((batch_idx + 1) %
+             self.step_every) == 0) or batch_idx == num_batches - 1
+        partition.is_last_micro_batch = is_last_micro_batch
+
+        # Get the data to run forward on, (and target)
+        preload_input = None
+        if self.is_last_partition:
+            preload_ctx = self.task.preload_last_partition(
+                getattr(self, "dl_iter", None), self.device)
+            if self.use_pre_loaded_input:
+                preload_input = preload_ctx
+                preload_ctx = tuple()
+
+        request_objects, x, ctx = self.forward_pass_and_send(
+            batch_idx, num_batches, preload_input=preload_input)
+
+        if not self.is_last_partition:
+            return request_objects
+
+        else:
+            # Last partition - also do backward.
+            ctx = (*preload_ctx, *ctx)
+            if not is_training:
+                # In Eval: Just calculate statistics.
+                self.trainer.calc_test_stats(x, *ctx)
+                return []
+            else:
+                # TODO: save the out for later. it may needed. (e.g for CV)
+                # TODO: can ask trainer what exactly is neccesary, but its very minor.
+                self.saved_for_backward[batch_idx] = (x, *ctx)
+
+    def last_partition_batch_backward(self, batch_idx, num_batches):
+        # NOTE: Partition already knows if its the last micro batch, from backward
+        ##############################
+        # Last partition backward
+        ##############################
+
+        last_due_step_every = ((batch_idx + 1) % self.step_every) == 0
+        last_due_end = batch_idx == (num_batches - 1)
+        is_last_micro_batch = last_due_step_every or last_due_end
+        partition.is_last_micro_batch = is_last_micro_batch
+        partition = self.partition
+        trainer = self.trainer
+        old_lrs = None
+
+        (x, *ctx) = self.saved_for_backward.pop(batch_idx)
+
+        # NOTE: for last partition- batch idx is the same as num backwards.
+        do_step == is_last_micro_batch
+        # Backprop
+        # For the last batch, we must scale down the learning rate, and then restore.
+        if last_due_end and (not last_due_step_every):
+            # do_step = True
+            old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
+
+        # NOTE: Usually, this is loss.backward()
+        if (not do_step) and self.is_replicated:
+            with self.backward_nosync_context_manager():
+                step_and_stats_ctx = trainer.backprop_last_partition(x, *ctx)
+        else:
+            step_and_stats_ctx = trainer.backprop_last_partition(x, *ctx)
+
+        # Send partition border gradients
+        grads = partition.get_grad(batch_idx)
+        request_objects = self.comm_handler.send_gradients(grads, batch_idx)
+
+        if hasattr(trainer, "grad_norm"):
+            # trainer: GradNormStepper
+            trainer.grad_norm()
+
+        # Step
+        trainer.last_partition_step_and_statistics(x,
+                                                   *ctx,
+                                                   step_and_stats_ctx,
+                                                   step=do_step)
+
+        # Print training statistics.
+        self.batches += 1
+        if self.batches % self.log_frequency == 0:
+            batch_log_str = ''
+            if hasattr(trainer, "scheduler"):
+                # Note: could be more than one LR, but we ignore this for simplicity.
+                lr = trainer.scheduler.get_last_lr()[0]
+                batch_log_str += '| lr {:02.9f}'.format(lr)
+
+            # TODO: add more stats. e.g can print here time, ' ms/batch {:5.2f} | ' ,...
+            self.logger.info(batch_log_str)
+
+        if old_lrs:
+            # return to previous LRs.
+            pgs = trainer.optimizer.param_groups
+            for g, old_lr in zip(pgs, old_lrs):
+                g['lr'] = old_lr
+
+        return request_objects
+
+    def run_batch_backward(self, batch_idx, num_batches):
+        """ Runs the backwards pass + step for all except the last partition """
+
+        partition = self.partition
+
+        last_due_step_every = ((batch_idx + 1) % self.step_every) == 0
+        last_due_end = batch_idx == (num_batches - 1)
+        is_last_micro_batch = last_due_step_every or last_due_end
+        partition.is_last_micro_batch = is_last_micro_batch
+        old_lrs = None
+
+        # Special case: Last batch with differnt size
+        if last_due_end and self.last_batch_train_shapes:
+            # Delete previous buffers
+            print(
+                f"stage: {self.stage} replacing buffers for last batch, backward"
+            )
+            self.changed_shapes_last_batch_bwd = True
+            del self.bwd_recv_buffers
+
+            # Create a new buffer with the new size
+            shapes = self.last_batch_train_shapes
+            self.comm_handler.set_tensor_shapes(shapes)
+
+            bwd_recv_buffers = Buffers(
+                1,  # max buffers is 1
+                self.comm_handler.create_gradients_rcv_buffers,
+                self.comm_handler.recv_gradients,
+                is_grad=True)
+
+            # Overrride
+            self.bwd_recv_buffers = bwd_recv_buffers
+        else:
+            bwd_recv_buffers = self.bwd_recv_buffers
+
+        if not bwd_recv_buffers.is_initialized():
+            bwd_recv_buffers.create()
+
+        recved_all = False
+        if bwd_recv_buffers.first_rcv_after_created or bwd_recv_buffers.max_buffers == 1:
+            bwd_recv_buffers.recv_all(batch_idx, num_batches)
+            recved_all = True
+
+        if not is_last_micro_batch:
+            self.partition.recompute(batch_idx)
+
+        g = bwd_recv_buffers.wait_first()
+        g = self.comm_handler.fix_after_recv(g)
+
+        # Allow skiping steps (Gradient aggregation)
+        do_step = is_last_micro_batch
+
+        # also do step for the last. (but with smaller LR)
+        if last_due_end and (not last_due_step_every):
+            # do_step = True
+            old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
+
+        # Compute gradients
+        if (not do_step) and self.is_replicated:
+            with self.backward_nosync_context_manager():
+                partition.backward_from_recomputed(g, batch_idx)
+        else:
+            partition.backward_from_recomputed(g, batch_idx)
+
+        # recompute and send backward
+        request_objects = None
+        if not (self.is_first_partition):
+            g = partition.get_grad(batch_idx)
+            request_objects = self.comm_handler.send_gradients(g, batch_idx)
+
+        del g
+
+        # Wait for next if appropriate
+        if ((not recved_all) and
+            (batch_idx - 1 + bwd_recv_buffers.max_buffers < num_batches)):
+            bwd_recv_buffers.recv_next(batch_idx - 1)
+
+        if do_step:
+            trainer = self.trainer
+
+            # if isinstance(trainer, GradNormStepper):
+            if hasattr(trainer, "grad_norm"):
+                # trainer: GradNormStepper
+                trainer.grad_norm()
+
+            # ####### Preparing to step
+            if old_lrs:
+                # Note that sometimes its not defined locally.
+                pgs = trainer.optimizer.param_groups
+                for g, old_lr in zip(pgs, old_lrs):
+                    g['lr'] = old_lr
+
+        return request_objects
+
+    def run_until_flush(self, num_batches):
+        """
+        Requires:
+            set_dataloader() was called (if first partition)
+            train() was called
+
+        # NOTE: its different from async pipeline
+        """
+        done_bwds = 0
+        done_fwds = 0
+
+        reminder = num_batches % self.step_every
+        # HACK: batch_idx always less than num batches
+        self.first_effected_batch = num_batches - reminder
+        self.reminder_scaler_lr_factor = reminder / self.step_every
+
+        stage = self.stage
+        num_stages = self.num_stages
+        work_scheduler = self.work_scheduler
+        is_first_partition = self.is_first_partition
+        is_last_partition = self.is_last_partition
+        run_batch_backward = self.run_batch_backward if not is_last_partition else self.last_partition_batch_backward
+        run_batch_forward = self.run_batch_forward
+        async_bwd_objects = self.async_bwd_objects
+        async_fwd_objects = self.async_fwd_objects
+        wait_on_sent_object = self.wait_on_sent_object
+
+        while done_bwds < num_batches:
+            # Act according to some policy
+            action_is_fwd = work_scheduler(stage, num_stages, num_batches,
+                                           done_fwds, done_bwds)
+            if action_is_fwd:
+                sent_request_objects = run_batch_forward(done_fwds,
+                                                         num_batches,
+                                                         done_bwds=done_bwds)
+                # wait on prev send
+                if async_fwd_objects:
+                    wait_on_sent_object(is_fwd=True)
+                async_fwd_objects[done_fwds] = sent_request_objects
+            else:
+
+                sent_request_objects = run_batch_backward(
+                    done_bwds, num_batches)
+
+                if not (is_first_partition):
+                    # wait on prev send
+                    if async_bwd_objects:
+                        wait_on_sent_object(is_fwd=False)
+                    async_bwd_objects[done_bwds] = sent_request_objects
+
+            # Increase counters
+            if action_is_fwd:
+                done_fwds += 1
+            else:
+                done_bwds += 1
 
         while len(async_fwd_objects) > 0:
             wait_on_sent_object(is_fwd=True, fin=True)
