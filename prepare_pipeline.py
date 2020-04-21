@@ -2,11 +2,9 @@ import torch
 
 from misc.filelogger import FileLogger
 from pipeline import dp_sim
-from datasets import (
-    simplified_get_train_valid_dl_from_args,
-    get_separate_just_x_or_y_train_test_dl_from_args,
-    get_separate_just_x_or_y_test_dl_from_args
-)
+from datasets import (simplified_get_train_valid_dl_from_args,
+                      get_separate_just_x_or_y_train_test_dl_from_args,
+                      get_separate_just_x_or_y_test_dl_from_args)
 
 import optimizers.lr_scheduler
 from pipeline.work_schedulers import AVAILABLE_WORK_SCHEDULERS
@@ -20,10 +18,10 @@ from pipeline import SinglePartitionManager
 from pipeline.training import AVAILABLE_TRAINERS
 from pipeline.tasks import AVAILABLE_TASKS
 from pipeline.stats import get_statistics  # , Stats
-from pipeline.weight_prediction import (get_sgd_weight_predictor,
-                                        get_adam_weight_predictor,
-                                        get_adamw_weight_predictor,
-                                        get_sched_predictor)
+from pipeline.weight_prediction import get_sched_predictor
+
+from pipeline.weight_prediction import get_weight_predictor as get_weight_predictor_partial
+
 from pipeline.gap_aware import (get_sgd_gap_aware_cls, get_adam_gap_aware_cls,
                                 get_adamw_gap_aware_cls)
 from optimizers import AVAILBALE_OPTIMIZERS
@@ -202,30 +200,14 @@ def get_weight_predictor(args,
         sched_predictor.patch_scheduler(scheduler)
         assert 'adam' in optimizer_type  # Remove after we implement for sgd.
 
-    if 'sgd' in optimizer_type:
-        weight_predictor = get_sgd_weight_predictor(
-            optimizer_type,
-            pred_mem,
-            optimizer,
-            scheduler=sched_predictor,
-            nag_with_predictor=nag_with_predictor,
-            true_weights_storage=true_weights_storage)
-    elif 'adam' == optimizer_type:
-        weight_predictor = get_adam_weight_predictor(
-            pred_mem,
-            optimizer,
-            scheduler=sched_predictor,
-            nag_with_predictor=nag_with_predictor,
-            true_weights_storage=true_weights_storage)
-    elif 'adamw' == optimizer_type:
-        weight_predictor = get_adamw_weight_predictor(
-            pred_mem,
-            optimizer,
-            scheduler=sched_predictor,
-            nag_with_predictor=nag_with_predictor,
-            true_weights_storage=true_weights_storage)
-    else:
-        raise NotImplementedError()
+    weight_predictor = get_weight_predictor_partial(
+        optimizer_type,
+        pred_mem,
+        optimizer,
+        scheduler=sched_predictor,
+        nag_with_predictor=nag_with_predictor,
+        true_weights_storage=true_weights_storage,
+        sched_predictor=sched_predictor)
 
     return weight_predictor, nag_with_predictor
 
@@ -287,7 +269,6 @@ def get_dataloaders(args, explicit_separated_dataset=False, **kw):
     return train_dl, test_dl, samplers
 
 
-
 def get_just_test_dataloader(args, explicit_separated_dataset=False, **kw):
     dl_kw = dict()
     if args.cpu:
@@ -328,6 +309,7 @@ def get_just_test_dataloader(args, explicit_separated_dataset=False, **kw):
         #     args, verbose=False, dataset_keywords=dataset_keywords, **dl_kw)
 
     return test_dl, sampler
+
 
 def get_device(args):
     if hasattr(args, "stage_to_device_map"):
@@ -705,8 +687,8 @@ def prepare_pipeline(args):
             delattr(args, 'weight_prediction')
             del lp_wp_arg
 
-    return(logger, train_dl, test_dl, is_first_partition, is_last_partition,
-           partition, statistics, train_dl_len, test_dl_len, samplers)
+    return (logger, train_dl, test_dl, is_first_partition, is_last_partition,
+            partition, statistics, train_dl_len, test_dl_len, samplers)
 
 
 if __name__ == "__main__":
