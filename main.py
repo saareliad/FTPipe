@@ -124,8 +124,7 @@ def parse_cli():
                         '-s',
                         type=int,
                         help='Random seed',
-                        default=None,
-                        required=False)
+                        default=42)
 
     parser.add_argument('--logdir',
                         type=str,
@@ -851,38 +850,7 @@ def get_optimizer(args, optimizer_cls, parameters):
     return optimizer
 
 
-def main():
-    args = parse_cli()
-    parse_json_config(args, args.config, first=True)
-    parse_env_vars(args)
-    args.world_size = get_world_size(args.distributed_backend)
-
-    if args.debug and ((args.rank in args.debug) or (-1 in args.debug)):
-        import ptvsd
-        port = 3000 + args.local_rank
-        args.num_data_workers = 0  # NOTE: it does not work without this.
-        address = ('127.0.0.1', port)
-        print(f"-I- rank {args.rank} waiting for attachment on {address}")
-        ptvsd.enable_attach(address=address)
-        ptvsd.wait_for_attach()
-    else:
-        delattr(args, "debug")
-
-    # TODO: ideally we want to choose device here, but we moved it down.
-
-    # Set Random Seed
-    if args.seed is None:
-        args.seed = random.randint(0, 2**31)
-    # FIXME: I suspect there is a problem here because it does it on it on ALL VISIBLE GPUs.
-    # should probably hide with CUDA VISIBLE DEVICES,
-    # or do it just for a single GPU:
-    # torch._C.default_generator.manual_seed(int(args.seed))
-    # torch.cuda.manual_seed(int(args.seed))
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
-
-    if hasattr(args, "cudnn_benchmark") and args.cudnn_benchmark:
-        torch.backends.cudnn.benchmark = True
+def prepare_pipeline(args):
 
     device = get_device(args)
     if not args.cpu:
@@ -1177,17 +1145,63 @@ def main():
             delattr(args, 'weight_prediction')
             del lp_wp_arg
 
+    retrun(logger, train_dl, test_dl, is_first_partition, is_last_partition,
+           partition, statistics, train_dl_len, test_dl_len, samplers)
+
+
+def main():
+    args = parse_cli()
+    parse_json_config(args, args.config, first=True)
+    parse_env_vars(args)
+    args.world_size = get_world_size(args.distributed_backend)
+
+    if args.debug and ((args.rank in args.debug) or (-1 in args.debug)):
+        import ptvsd
+        port = 3000 + args.local_rank
+        args.num_data_workers = 0  # NOTE: it does not work without this.
+        address = ('127.0.0.1', port)
+        print(f"-I- rank {args.rank} waiting for attachment on {address}")
+        ptvsd.enable_attach(address=address)
+        ptvsd.wait_for_attach()
+    else:
+        delattr(args, "debug")
+
+    # TODO: ideally we want to choose device here, but we moved it down.
+
+    # Set Random Seed
+    # FIXME: I suspect there is a problem here because it does it on it on ALL VISIBLE GPUs.
+    # should probably hide with CUDA VISIBLE DEVICES,
+    # or do it just for a single GPU:
+    # torch._C.default_generator.manual_seed(int(args.seed))
+    # torch.cuda.manual_seed(int(args.seed))
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
+
+    # Default: use cudnn _benchmark.
+    if getattr(args, "cudnn_benchmark", "True"):
+        torch.backends.cudnn.benchmark = True
+
+    ###############################
+    # Prepare for pipeline
+    ###############################
+    (logger, train_dl, test_dl, is_first_partition, is_last_partition,
+     partition, statistics, train_dl_len, test_dl_len,
+     samplers) = prepare_pipeline(args)
+
     # Main Training Loop
 
     exp_start_time = time.time()
-    total_epoch_times_list, train_epochs_times_list = training_loop(
+
+    times_res = training_loop(
         args, logger, train_dl, test_dl, is_first_partition, is_last_partition,
         partition, statistics, train_dl_len, test_dl_len, samplers)
+    
     exp_total_time = time.time() - exp_start_time
 
-    # Save # FIXME
-    args.total_epoch_times = total_epoch_times_list
-    args.train_epochs_times = train_epochs_times_list
+    # Save
+    # TODO: save nicer, to statistics
+    args.total_epoch_times = times_res[0]  # total_epoch_times_list
+    args.train_epochs_times = times_res[1]  # train_epochs_times_list
     args.exp_total_time = exp_total_time
 
     # TODO: option to run test at end of training
