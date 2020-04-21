@@ -160,11 +160,6 @@ def parse_cli():
                         help='Number of workers to use for dataloading',
                         default=0)
 
-    parser.add_argument('--optimizer_type',
-                        help='Optimizer type to use',
-                        choices=AVAILABLE_TASKS.keys(),
-                        default='sgd1')
-
     parser.add_argument("--epochs",
                         type=int,
                         help="Training epochs to run",
@@ -281,12 +276,6 @@ def parse_json_config(args, config=None, first=False):
 
         # Replace
         setattr(args, key, value)
-
-    # Explicit replace (to get help from argparse)
-    if output.get('optimizer', False):
-        if output['optimizer'].get('type', False):
-            args.optimizer_type = output['optimizer']['type']
-
 
 def parse_env_vars(args):
     """
@@ -818,7 +807,8 @@ def get_device(args):
 
 
 def get_optimizer_cls(args, has_gap_aware):
-    optimizer_type = args.optimizer_type
+    optimizer_type = args.optimizer['type']
+    
 
     # Optimizers which also record square step size.
     if has_gap_aware and optimizer_type in {'adam', 'adamw'}:
@@ -1184,6 +1174,11 @@ def main():
     ###############################
     # Prepare for pipeline
     ###############################
+    # As for advanced features everything is coupled
+    # (datasets length, training task, 
+    # optimizer, scheduler, weight predictior, gap aware,...)
+    # we have to prepare everything together, this is somewhat
+    # "spaghetti code" and can't really escape it.
     (logger, train_dl, test_dl, is_first_partition, is_last_partition,
      partition, statistics, train_dl_len, test_dl_len,
      samplers) = prepare_pipeline(args)
