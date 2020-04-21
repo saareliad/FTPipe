@@ -68,37 +68,27 @@ class PositionalEncoding(nn.Module):
 
 
 class ScaledDotProductAttention(nn.Module):
-    def forward(self, q, k, v, mask=None, attention_mask=None, head_mask=None):
+    def forward(self, q, k, v, mask):
         # calculate attention
         matmul_qk = torch.matmul(q, k.permute(0, 1, 3, 2))
 
         dk = k.shape[-1]
         scaled_attention_logits = matmul_qk / np.sqrt(dk)
 
-        if mask is not None:
-            nd = scaled_attention_logits.size(-2)
-            ns = scaled_attention_logits.size(-1)
-            scaled_attention_logits += mask[ns - nd: ns, :ns] * -1e4
-
-        if attention_mask is not None:
-            # Apply the attention mask
-            scaled_attention_logits = scaled_attention_logits + attention_mask
+        # apply mask
+        nd = scaled_attention_logits.size(-2)
+        ns = scaled_attention_logits.size(-1)
+        scaled_attention_logits += mask[ns - nd: ns, :ns] * -1e4
 
         attention_weights = torch.softmax(scaled_attention_logits, dim=-1)
+        scaled_attention = torch.matmul(attention_weights, v)
 
-        # Mask heads if we want to
-        if head_mask is not None:
-            attention_weights = attention_weights * head_mask
-
-        # output = torch.matmul(attention_weights, v)
-        # return output, attention_weights
-        return v, attention_weights
+        return scaled_attention
 
 
 class MultiHeadAttention(torch.nn.Module):
-    def __init__(self, d_model_size, num_heads, output_attentions=False):
+    def __init__(self, d_model_size, num_heads):
         super().__init__()
-        self.output_attentions = output_attentions
         self.num_heads = num_heads
         self.d_model_size = d_model_size
 
@@ -115,42 +105,25 @@ class MultiHeadAttention(torch.nn.Module):
         x = x.reshape(batch_size, -1, self.num_heads, self.depth)
         return x.permute([0, 2, 1, 3])
 
-    def forward(self, v, k, q, mask, layer_past=None, attention_mask=None, head_mask=None):
-        batch_size = q.size(0)
+    def forward(self, hidden_state, mask):
+        batch_size = hidden_state.size(0)
 
-        q = self.Wq(q)
-        k = self.Wk(k)
-        v = self.Wv(v)
+        q = self.Wq(hidden_state)
+        k = self.Wk(hidden_state)
+        v = self.Wv(hidden_state)
 
         q = self.split_into_heads(q, batch_size)
         k = self.split_into_heads(k, batch_size)
         v = self.split_into_heads(v, batch_size)
-        if layer_past is not None:
-            past_key, past_value = layer_past[0], layer_past[1]
-            k = torch.cat((past_key, k), dim=-2)
-            v = torch.cat((past_value, v), dim=-2)
-        present = torch.stack((k, v))
 
-        # output = self.scaled_dot_product_attention(q, k, v,
-        #                                            mask,
-        #                                            attention_mask,
-        #                                            head_mask)
+        scaled_attention = self.scaled_dot_product_attention(q, k, v,
+                                                             mask)
 
-        v, attn = self.scaled_dot_product_attention(q, k, v,
-                                                    mask,
-                                                    attention_mask,
-                                                    head_mask)
-
-        scaled_attention = torch.matmul(attn, v).permute([0, 2, 1, 3])
-        # attn = output[1]
+        scaled_attention = scaled_attention.permute([0, 2, 1, 3])
         original_size_attention = scaled_attention.reshape(batch_size, -1,
                                                            self.d_model_size)
         output = self.dense(original_size_attention)
-
-        outputs = (output, present)
-        if self.output_attentions:
-            outputs = outputs + (attn,)
-        return outputs
+        return output
 
 
 def point_wise_feed_forward_network(d_model_size, dff):
@@ -158,12 +131,11 @@ def point_wise_feed_forward_network(d_model_size, dff):
 
 
 class EncoderLayer(torch.nn.Module):
-    def __init__(self, d_model_size, num_heads, dff, rate=0.1, output_attentions=False):
+    def __init__(self, d_model_size, num_heads, dff, rate=0.1):
         super().__init__()
 
         self.multi_head_attention = MultiHeadAttention(d_model_size,
-                                                       num_heads,
-                                                       output_attentions)
+                                                       num_heads)
         self.ffn = point_wise_feed_forward_network(d_model_size, dff)
 
         self.layernorm1 = torch.nn.LayerNorm(d_model_size, eps=1e-6)
@@ -172,13 +144,10 @@ class EncoderLayer(torch.nn.Module):
         self.dropout1 = torch.nn.Dropout(rate)
         self.dropout2 = torch.nn.Dropout(rate)
 
-    def forward(self, x, mask, layer_past=None, attention_mask=None, head_mask=None):
+    def forward(self, x, mask):
         normed = self.layernorm1(x)
-        attn_outputs = self.multi_head_attention(normed, normed, normed, mask,
-                                                 layer_past=layer_past,
-                                                 attention_mask=attention_mask,
-                                                 head_mask=head_mask)
-        attn_output = attn_outputs[0]
+        attn_output = self.multi_head_attention(normed,
+                                                mask)
         attn_output = self.dropout1(attn_output)
         out1 = x + attn_output
 
@@ -187,8 +156,7 @@ class EncoderLayer(torch.nn.Module):
         ffn_output = self.dropout2(ffn_output)
         out2 = out1 + ffn_output
 
-        outputs = (out2,) + attn_outputs[1:]
-        return outputs
+        return out2
 
 
 class CTRLPreTrainedModel(PreTrainedModel):
@@ -502,9 +470,7 @@ CTRL_INPUTS_DOCSTRING = r"""
 class CTRLModel(CTRLPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
-        self.output_hidden_states = config.output_hidden_states
         self.output_attentions = config.output_attentions
-        self.output_past = config.output_past
 
         self.d_model_size = config.n_embd
         self.num_layers = config.n_layer
@@ -516,18 +482,11 @@ class CTRLModel(CTRLPreTrainedModel):
         self.w = nn.Embedding(config.vocab_size, config.n_embd)
 
         self.dropout = nn.Dropout(config.embd_pdrop)
-        # self.h = nn.ModuleList(
-        #     [
-        #         EncoderLayer(config.n_embd, config.n_head, config.dff,
-        #                      config.resid_pdrop, config.output_attentions)
-        #         for _ in range(config.n_layer)
-        #     ]
-        # )
+
         self.num_layers = config.n_layer
         for i in range(self.num_layers):
             self.add_module(str(i), EncoderLayer(config.n_embd, config.n_head, config.dff,
-                                                 config.resid_pdrop, config.output_attentions)
-                            )
+                                                 config.resid_pdrop))
 
         self.layernorm = nn.LayerNorm(config.n_embd,
                                       eps=config.layer_norm_epsilon)
@@ -550,13 +509,7 @@ class CTRLModel(CTRLPreTrainedModel):
     @add_start_docstrings_to_callable(CTRL_INPUTS_DOCSTRING)
     def forward(
         self,
-        input_ids=None,
-        past=None,
-        attention_mask=None,
-        token_type_ids=None,
-        position_ids=None,
-        head_mask=None,
-        inputs_embeds=None,
+        input_ids,
     ):
         r"""
     Return:
@@ -585,134 +538,41 @@ class CTRLModel(CTRLPreTrainedModel):
         outputs = model(input_ids)
         last_hidden_states = outputs[0]  # The last hidden-state is the first element of the output tuple
         """
-        if input_ids is not None and inputs_embeds is not None:
-            raise ValueError(
-                "You cannot specify both input_ids and inputs_embeds at the same time")
-        elif input_ids is not None:
-            input_shape = input_ids.size()
-            input_ids = input_ids.view(-1, input_shape[-1])
-            batch_size = input_ids.shape[0]
-        elif inputs_embeds is not None:
-            input_shape = inputs_embeds.size()[:-1]
-            batch_size = inputs_embeds.shape[0]
-        else:
-            raise ValueError(
-                "You have to specify either input_ids or inputs_embeds")
 
-        if past is None:
-            past_length = 0
-            past = [None] * self.num_layers
-        else:
-            past_length = past[0][0].size(-2)
-        if position_ids is None:
-            device = input_ids.device if input_ids is not None else inputs_embeds.device
-            position_ids = torch.arange(
-                past_length, input_shape[-1] + past_length, dtype=torch.long, device=device)
-            position_ids = position_ids.unsqueeze(0).view(-1, input_shape[-1])
+        input_shape = input_ids.size()
+        input_ids = input_ids.view(-1, input_shape[-1])
 
-        # Attention mask.
-        if attention_mask is not None:
-            assert batch_size > 0, "batch_size has to be defined and > 0"
-            attention_mask = attention_mask.view(batch_size, -1)
-            # We create a 3D attention mask from a 2D tensor mask.
-            # Sizes are [batch_size, 1, 1, to_seq_length]
-            # So we can broadcast to [batch_size, num_heads, from_seq_length, to_seq_length]
-            # this attention mask is more simple than the triangular masking of causal attention
-            # used in OpenAI GPT, we just need to prepare the broadcast dimension here.
-            attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
-
-            # Since attention_mask is 1.0 for positions we want to attend and 0.0 for
-            # masked positions, this operation will create a tensor which is 0.0 for
-            # positions we want to attend and -10000.0 for masked positions.
-            # Since we are adding it to the raw scores before the softmax, this is
-            # effectively the same as removing these entirely.
-            attention_mask = attention_mask.to(dtype=next(
-                self.parameters()).dtype)  # fp16 compatibility
-            attention_mask = (1.0 - attention_mask) * -10000.0
-
-        # Prepare head mask if needed
-        # 1.0 in head_mask indicate we keep the head
-        # attention_probs has shape bsz x n_heads x N x N
-        # head_mask has shape n_layer x batch x n_heads x N x N
-        if head_mask is not None:
-            if head_mask.dim() == 1:
-                head_mask = head_mask.unsqueeze(0).unsqueeze(
-                    0).unsqueeze(-1).unsqueeze(-1)
-                head_mask = head_mask.expand(self.config.n_layer,
-                                             -1, -1, -1, -1)
-            elif head_mask.dim() == 2:
-                head_mask = (
-                    head_mask.unsqueeze(1).unsqueeze(-1).unsqueeze(-1)
-                )  # We can specify head_mask for each layer
-            head_mask = head_mask.to(
-                dtype=next(self.parameters()).dtype
-            )  # switch to fload if need + fp16 compatibility
-        else:
-            head_mask = [None] * self.config.n_layer
-
-        if token_type_ids is not None:
-            token_type_ids = token_type_ids.view(-1, input_shape[-1])
-            token_type_embeds = self.w(token_type_ids)
-            token_type_embeds *= np.sqrt(self.d_model_size)
-        else:
-            token_type_embeds = 0
+        # create position ids
+        device = input_ids.device
+        position_ids = torch.arange(self.num_layers,
+                                    input_shape[-1] + self.num_layers,
+                                    dtype=torch.long,
+                                    device=device).unsqueeze(0).view(-1, input_shape[-1])
+        token_type_embeds = 0
         position_ids = position_ids.view(-1, input_shape[-1])
 
-        if inputs_embeds is None:
-            inputs_embeds = self.w(input_ids)
-        # inputs_embeds = embedded.unsqueeze(0) if len(input_ids.shape)<2 else embedded
+        inputs_embeds = self.w(input_ids)
         seq_len = input_shape[-1]
-        mask = torch.triu(torch.ones(seq_len + past_length,
-                                     seq_len + past_length), 1).to(inputs_embeds.device)
+        mask = torch.triu(torch.ones(seq_len + self.num_layers,
+                                     seq_len + self.num_layers), 1).to(inputs_embeds.device)
 
         inputs_embeds *= np.sqrt(self.d_model_size)
 
-        pos_embeds = self.pos_encoding()[position_ids, :].to(
-            inputs_embeds.device)
-
+        pos_embeds = self.pos_encoding()
+        pos_embeds = pos_embeds[position_ids, :]
+        pos_embeds = pos_embeds.to(inputs_embeds.device)
         hidden_states = inputs_embeds + pos_embeds + token_type_embeds
 
         hidden_states = self.dropout(hidden_states)
 
         output_shape = input_shape + (inputs_embeds.size(-1),)
-        presents = ()
-        all_hidden_states = ()
-        all_attentions = []
-        # for i, (h, layer_past) in enumerate(zip(self.h, past)):
-        for i, layer_past in enumerate(past):
+        for i in range(self.num_layers):
             h = getattr(self, str(i))
-            if self.output_hidden_states:
-                all_hidden_states = all_hidden_states + \
-                    (hidden_states.view(*output_shape),)
-            outputs = h(
-                hidden_states, mask, layer_past=layer_past, attention_mask=attention_mask, head_mask=head_mask[
-                    i]
-            )
-            hidden_states, present = outputs[:2]
-            if self.output_past:
-                presents = presents + (present,)
-
-            if self.output_attentions:
-                all_attentions.append(outputs[2])
+            hidden_states = h(hidden_states, mask)
 
         hidden_states = self.layernorm(hidden_states)
         hidden_states = hidden_states.view(*output_shape)
-        if self.output_hidden_states:
-            all_hidden_states = all_hidden_states + (hidden_states,)
-
-        outputs = (hidden_states,)
-        if self.output_past:
-            outputs = outputs + (presents,)
-        if self.output_hidden_states:
-            outputs = outputs + (all_hidden_states,)
-        if self.output_attentions:
-            # let the number of heads free (-1) so we can extract attention even after head pruning
-            attention_output_shape = input_shape[:-1] + \
-                (-1,) + all_attentions[0].shape[-2:]
-            all_attentions = tuple(t.view(*attention_output_shape)
-                                   for t in all_attentions)
-            outputs = outputs + (all_attentions,)
-        return outputs
+        return (hidden_states,)
 
 
 @add_start_docstrings(
@@ -742,14 +602,8 @@ class CTRLLMHeadModel(CTRLPreTrainedModel):
     @add_start_docstrings_to_callable(CTRL_INPUTS_DOCSTRING)
     def forward(
         self,
-        input_ids=None,
+        input_ids,
         labels=None,
-        past=None,
-        attention_mask=None,
-        token_type_ids=None,
-        position_ids=None,
-        head_mask=None,
-        inputs_embeds=None,
     ):
         r"""
         labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size, sequence_length)`, `optional`, defaults to :obj:`None`):
@@ -786,20 +640,11 @@ class CTRLLMHeadModel(CTRLPreTrainedModel):
         outputs = model(input_ids, labels=input_ids)
         loss, logits = outputs[:2]
         """
-        transformer_outputs = self.transformer(input_ids,
-                                               past=past,
-                                               attention_mask=attention_mask,
-                                               token_type_ids=token_type_ids,
-                                               position_ids=position_ids,
-                                               head_mask=head_mask,
-                                               inputs_embeds=inputs_embeds,
-                                               )
-
-        hidden_states = transformer_outputs[0]
+        hidden_states = self.transformer(input_ids)[0]
 
         lm_logits = self.lm_head(hidden_states)
 
-        outputs = (lm_logits,) + transformer_outputs[1:]
+        outputs = (lm_logits,)
 
         if labels is not None:
             # Shift so that tokens < n predict n
@@ -808,7 +653,7 @@ class CTRLLMHeadModel(CTRLPreTrainedModel):
             # Flatten the tokens
             loss = self.lm_loss(shift_logits.view(-1, shift_logits.size(-1)),
                                 shift_labels.view(-1))
-            outputs = (loss,)  # + outputs
+            outputs = (loss,)
 
-        # (loss), lm_logits, presents, (all hidden_states), (attentions)
+        #loss, lm_logits
         return outputs
