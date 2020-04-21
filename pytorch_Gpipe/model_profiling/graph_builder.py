@@ -13,6 +13,7 @@ from typing import Callable, List, Dict, OrderedDict as OrderedDictType, Optiona
 import warnings
 import logging
 import sys
+import shutil
 
 __all__ = ["build_graph"]
 
@@ -24,8 +25,18 @@ __all__ = ["build_graph"]
 
 # TODO there are still some problems with lstms should think if we want to tackle it
 
-
+# set False to disable debuging on failure
+DEBUG_ON_FAILURE = False
+WRITE_TRACE_GRAPHS = False
 DEBUG_MODEL_NAME = ""
+
+
+def remove_if_exists(path):
+    if os.path.exists(path):
+        try:
+            os.remove(path)
+        except:
+            pass  # Race condition removing same file when running in parallel.
 
 
 def DEBUG_DUMP_GRAPH(func):
@@ -34,6 +45,10 @@ def DEBUG_DUMP_GRAPH(func):
     """
     @functools.wraps(func)
     def wrapper_dump(*args, **kwargs):
+        # FIXME: temporarly disabled.
+        if not DEBUG_ON_FAILURE:
+            return func(*args, **kwargs)
+
         assert len(args) >= 1
         nodes = args[0]
         assert isinstance(nodes, OrderedDict)
@@ -41,7 +56,7 @@ def DEBUG_DUMP_GRAPH(func):
         Graph(nodes).serialize(graph_path)
         try:
             value = func(*args, **kwargs)
-            os.remove(f"{graph_path}.graph")
+            remove_if_exists(f"{graph_path}.graph")
             return value
         except Exception as e:
             LOG_FILENAME = f'GPIPE_DEBUG/{DEBUG_MODEL_NAME}_log.out'
@@ -63,7 +78,8 @@ def build_graph(model: torch.nn.Module,
                 basic_blocks: Optional[Tuple[torch.nn.Module, ...]] = None,
                 n_iter: int = 10,
                 recomputation=False,
-                save_memory_mode=False) -> Graph:
+                save_memory_mode=False,
+                force_no_recomp_scopes=lambda s: False) -> Graph:
     if kwargs is None:
         kwargs = dict()
     assert len(kwargs) == 0, "kwargs not supported by tracing"
@@ -83,7 +99,8 @@ def build_graph(model: torch.nn.Module,
                                      max_depth=max_depth,
                                      basic_blocks=basic_blocks,
                                      recomputation=recomputation,
-                                     save_memory_mode=save_memory_mode)
+                                     save_memory_mode=save_memory_mode,
+                                     force_no_recomp_scopes=force_no_recomp_scopes)
 
     tensors = tensorDict(model)
     profiled_layers = layerDict(model,
@@ -111,10 +128,13 @@ def build_graph(model: torch.nn.Module,
     old_value = torch._C._jit_get_inline_everything_mode()
     torch._C._jit_set_inline_everything_mode(False)
     with torch.no_grad():
-        trace_graph: torch._C.Graph = torch.jit.trace(model, sample_batch,
+        trace_graph: torch._C.Graph = torch.jit.trace(model,
+                                                      sample_batch,
                                                       check_trace=False).graph
-        with open(f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_DEBUG_base_trace.txt", "w") as f:
-            f.write(str(trace_graph))
+        if WRITE_TRACE_GRAPHS:
+            with open(f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_DEBUG_base_trace.txt",
+                      "w") as f:
+                f.write(str(trace_graph))
     try:
         torch._C._jit_pass_inline(trace_graph, max_depth, block_scopes)
     except Exception:
@@ -128,8 +148,10 @@ def build_graph(model: torch.nn.Module,
 
     torch._C._jit_set_inline_everything_mode(old_value)
 
-    with open(f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_DEBUG_inlined_trace.txt", "w") as f:
-        f.write(str(trace_graph))
+    if WRITE_TRACE_GRAPHS:
+        with open(f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_DEBUG_inlined_trace.txt",
+                  "w") as f:
+            f.write(str(trace_graph))
 
     # build the graph from trace
     nodes, unpack_fix = add_nodes(trace_graph, new_to_old, partials, tensors)
@@ -161,7 +183,8 @@ def build_graph(model: torch.nn.Module,
     nodes = shape_and_dtype_analysis(nodes)
 
     graph = graph_check_and_cleanup(nodes, outputs, max_depth, basic_blocks)
-    os.rmdir("GPIPE_DEBUG/")
+    shutil.rmtree("GPIPE_DEBUG/", ignore_errors=True)
+    # os.rmdir("GPIPE_DEBUG/")
     return graph
 
 
@@ -365,14 +388,15 @@ def add_accessor(nodes: GraphNodes, trace_node: torch._C.Node,
 # fit initial graph to profile
 ##################################
 @DEBUG_DUMP_GRAPH
-def optimize_graph(nodes: GraphNodes, layer_scopes: List[str], outputs: OrderedSet[str]) -> GraphNodes:
+def optimize_graph(nodes: GraphNodes, layer_scopes: List[str],
+                   outputs: OrderedSet[str]) -> GraphNodes:
     '''
     this module takes the raw Graph and removes/merges nodes in order to get the requested graph.
     this method is called as part of graph_builder method
     '''
     nodes = _combine_OP_nodes_under_the_same_scope(nodes)
-    nodes = _combine_params_and_buffers_into_OP_nodes(
-        nodes, layer_scopes, outputs)
+    nodes = _combine_params_and_buffers_into_OP_nodes(nodes, layer_scopes,
+                                                      outputs)
     return nodes
 
 
@@ -418,7 +442,8 @@ def _combine_OP_nodes_under_the_same_scope(nodes: GraphNodes) -> GraphNodes:
 
 @DEBUG_DUMP_GRAPH
 def _combine_params_and_buffers_into_OP_nodes(
-        nodes: GraphNodes, layer_scopes: List[str], outputs: OrderedSet[str]) -> GraphNodes:
+        nodes: GraphNodes, layer_scopes: List[str],
+        outputs: OrderedSet[str]) -> GraphNodes:
     def is_buffer_or_param(n):
         return n.type == NodeTypes.BUFF_PARAM and any(
             n.scope.startswith(layer_scope) for layer_scope in layer_scopes)
@@ -430,6 +455,7 @@ def output_nodes(nodes: GraphNodes,
                  trace_graph: torch._C.Graph) -> OrderedSet[Node]:
     return OrderedSet(nodes[output.unique()]
                       for output in trace_graph.outputs())
+
 
 ##################################
 # types and shapes analysis
@@ -486,15 +512,15 @@ def shape_analysis(node: Node):
             # will break if we have multiple outputs and one of them is scalar (isoteric so unhandeled)
             node.shape = torch.Size([1])
         if type(node.shape) is torch.Size:
-            node.shape = (node.shape,)
+            node.shape = (node.shape, )
 
         if len(node.shape) == 1 and len(node.shape[0]) == 0:
             # HACK set shape of scalars to [1] instead of 0
             # will break if we have multiple outputs and one of them is scalar (isoteric so unhandeled)
-            node.shape = (torch.Size([1]),)
+            node.shape = (torch.Size([1]), )
         assert type(node.shape) is tuple, "shape must be a tuple"
     elif node.type is NodeTypes.CONSTANT and node.valueType() is Tensor:
-        node.shape = (torch.Size([]),)
+        node.shape = (torch.Size([]), )
     elif "aten::split" in node.scope or "aten::chunk" in node.scope:
         warning = "using torch.split or torch.chunk can lead to unexpected results if the target dimention will be differ than what was recorded here"
         warnings.warn(warning)
@@ -504,7 +530,7 @@ def shape_analysis(node: Node):
                 sizes.append(n.shape)
             else:
                 assert type(n.shape) is torch.Size
-                sizes.append((n.shape,))
+                sizes.append((n.shape, ))
         node.shape = tuple(sizes)
     elif node.valueType() in [list, tuple]:
         shape = tuple([i.shape for i in node.in_nodes])
@@ -517,13 +543,14 @@ def shape_analysis(node: Node):
 
 def dtype_analysis(node: Node):
     # we set dtype only for tensors
-    if node.valueType() in [type(None), int, bool, str, float, torch.device] or isinstance(node.dtype, tuple):
+    if node.valueType() in [type(None), int, bool, str, float, torch.device
+                            ] or isinstance(node.dtype, tuple):
         return
     if isinstance(node.dtype, torch.dtype):
-        node.dtype = (node.dtype,)
+        node.dtype = (node.dtype, )
     elif node.dtype is not None and type(node.dtype) is torch._C.TensorType:
         dtype = node.dtype.scalarType()
-        node.dtype = (getattr(torch, dtype.lower()),)
+        node.dtype = (getattr(torch, dtype.lower()), )
     elif node.valueType() in [list, tuple]:
         dtype = tuple([i.dtype for i in node.in_nodes])
         node.dtype = dtype
@@ -533,9 +560,11 @@ def dtype_analysis(node: Node):
         node.dtype = father.dtype[idx]
     else:
         raise Exception(
-            f"unsupported op in dtype analysis {node.scope} {node.valueType()}")
+            f"unsupported op in dtype analysis {node.scope} {node.valueType()}"
+        )
     if isinstance(node.dtype, torch.dtype):
-        node.dtype = (node.dtype,)
+        node.dtype = (node.dtype, )
+
 
 #################################
 # cleanup methods
@@ -555,7 +584,8 @@ def remove_tensor_int_tensor(nodes, outputs: OrderedSet[str]) -> GraphNodes:
 
 
 @DEBUG_DUMP_GRAPH
-def remove_useless_clone(nodes: GraphNodes, outputs: OrderedSet[str]) -> GraphNodes:
+def remove_useless_clone(nodes: GraphNodes,
+                         outputs: OrderedSet[str]) -> GraphNodes:
     def predicate(n: Node):
         return ('aten::clone' in n.scope) and (len(n.out_nodes) == 0)
 
@@ -563,13 +593,15 @@ def remove_useless_clone(nodes: GraphNodes, outputs: OrderedSet[str]) -> GraphNo
 
 
 @DEBUG_DUMP_GRAPH
-def remove_layer_to_list(nodes: GraphNodes, outputs: OrderedSet[str]) -> GraphNodes:
+def remove_layer_to_list(nodes: GraphNodes,
+                         outputs: OrderedSet[str]) -> GraphNodes:
     '''can happen when not using our trace feature as result of merging nodes
         this indicates that a merged scope returns a list/tuple so we remove it
     '''
     def predicate(n: Node):
         if "prim::ListConstruct" in n.scope or "prim::TupleConstruct" in n.scope:
-            return (len(n.in_nodes) == 1) and (n.in_nodes[0].type is NodeTypes.LAYER)
+            return (len(
+                n.in_nodes) == 1) and (n.in_nodes[0].type is NodeTypes.LAYER)
         else:
             return False
 
@@ -577,7 +609,8 @@ def remove_layer_to_list(nodes: GraphNodes, outputs: OrderedSet[str]) -> GraphNo
 
 
 @DEBUG_DUMP_GRAPH
-def remove_empty_view(nodes: GraphNodes, outputs: OrderedSet[str]) -> GraphNodes:
+def remove_empty_view(nodes: GraphNodes,
+                      outputs: OrderedSet[str]) -> GraphNodes:
     def predicate(n: Node):
         if ('aten::view' in n.scope):
             if len(n.in_nodes) < 2:
@@ -591,7 +624,8 @@ def remove_empty_view(nodes: GraphNodes, outputs: OrderedSet[str]) -> GraphNodes
 
 
 @DEBUG_DUMP_GRAPH
-def remove_useless_node_inputs(nodes: GraphNodes, outputs: OrderedSet[str]) -> GraphNodes:
+def remove_useless_node_inputs(nodes: GraphNodes,
+                               outputs: OrderedSet[str]) -> GraphNodes:
     # stupid fix where for some odd reason arithmetic ops have a third input with value 1
     # and Tensor.contiguous has a second input with value 0
     # and torch.arange having a zero input
@@ -641,8 +675,8 @@ def _remove_nodes_that_go_nowhere(nodes: GraphNodes,
     return _remove_nodes(nodes, going_nowhere, outputs)
 
 
-def _remove_nodes(nodes: GraphNodes, condition: Callable[[Node],
-                                                         bool], outputs: OrderedSet[str]) -> GraphNodes:
+def _remove_nodes(nodes: GraphNodes, condition: Callable[[Node], bool],
+                  outputs: OrderedSet[str]) -> GraphNodes:
     while True:
         changed = False
         optimized_graph = OrderedDict()
@@ -984,10 +1018,12 @@ def graph_check_and_cleanup(nodes, outputs, max_depth, basic_blocks) -> Graph:
     nodes = set_indices(nodes)
     graph = Graph._check(Graph(nodes, output_scopes, max_depth, basic_blocks))
 
-    os.remove(f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_DEBUG_base_trace.txt")
-    os.remove(f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_DEBUG_inlined_trace.txt")
-    if os.path.exists(f'GPIPE_DEBUG/{DEBUG_MODEL_NAME}_log.out'):
-        os.remove(f'GPIPE_DEBUG/{DEBUG_MODEL_NAME}_log.out')
+    for path in [
+            f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_DEBUG_base_trace.txt",
+            f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_DEBUG_inlined_trace.txt",
+            f'GPIPE_DEBUG/{DEBUG_MODEL_NAME}_log.out'
+    ]:
+        remove_if_exists(path)
     return graph
 
 
@@ -1002,7 +1038,8 @@ def set_indices(nodes: GraphNodes):
     return nodes
 
 
-def reset_outputs(nodes: GraphNodes, outputs: OrderedSet[Node]) -> OrderedSet[Node]:
+def reset_outputs(nodes: GraphNodes,
+                  outputs: OrderedSet[Node]) -> OrderedSet[Node]:
     '''if the graph has multiple outputs it will still only have one output node\n
        here we discard this node because we wish to have a single node for each output
     '''

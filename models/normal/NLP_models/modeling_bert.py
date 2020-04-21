@@ -18,22 +18,16 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 
-import json
 from transformers.file_utils import cached_path, WEIGHTS_NAME, TF_WEIGHTS_NAME, TF2_WEIGHTS_NAME
-from transformers.configuration_utils import PretrainedConfig
-from torch.nn import functional as F
-from torch.nn import CrossEntropyLoss
-import six
-import copy
+
+
 import logging
 import math
 import os
 import sys
-from io import open
 
 import torch
 from torch import nn
-from torch.nn import CrossEntropyLoss, MSELoss
 
 from transformers.modeling_utils import PreTrainedModel, prune_linear_layer
 from transformers.configuration_bert import BertConfig
@@ -128,29 +122,34 @@ def load_tf_weights_in_bert(model, config, tf_checkpoint_path):
     return model
 
 
-def gelu(x):
+class Gelu(nn.Module):
     """ Original Implementation of the gelu activation function in Google Bert repo when initially created.
         For information: OpenAI GPT's gelu is slightly different (and gives slightly different results):
         0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi)
                    * (x + 0.044715 * torch.pow(x, 3))))
         Also see https://arxiv.org/abs/1606.08415
     """
-    return x * 0.5 * (1.0 + torch.erf(x / math.sqrt(2.0)))
+
+    def forward(self, x):
+        return x * 0.5 * (1.0 + torch.erf(x / math.sqrt(2.0)))
 
 
-def gelu_new(x):
+class GeluNew(nn.Module):
     """ Implementation of the gelu activation function currently in Google Bert repo (identical to OpenAI GPT).
         Also see https://arxiv.org/abs/1606.08415
     """
-    return 0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
+
+    def forward(self, x):
+        return 0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
 
 
-def swish(x):
-    return x * torch.sigmoid(x)
+class Swish(nn.Module):
+    def forward(self, x):
+        return x * torch.sigmoid(x)
 
 
-ACT2FN = {"gelu": gelu, "relu": torch.nn.functional.relu,
-          "swish": swish, "gelu_new": gelu_new}
+ACT2FN = {"gelu": Gelu, "relu": nn.ReLU,
+          "swish": Swish, "gelu_new": GeluNew}
 
 
 BertLayerNorm = torch.nn.LayerNorm
@@ -162,17 +161,18 @@ class BertEmbeddings(nn.Module):
 
     def __init__(self, config):
         super(BertEmbeddings, self).__init__()
-        self.word_embeddings = nn.Embedding(
-            config.vocab_size, config.hidden_size, padding_idx=0)
-        self.position_embeddings = nn.Embedding(
-            config.max_position_embeddings, config.hidden_size)
-        self.token_type_embeddings = nn.Embedding(
-            config.type_vocab_size, config.hidden_size)
+        self.word_embeddings = nn.Embedding(config.vocab_size,
+                                            config.hidden_size,
+                                            padding_idx=0)
+        self.position_embeddings = nn.Embedding(config.max_position_embeddings,
+                                                config.hidden_size)
+        self.token_type_embeddings = nn.Embedding(config.type_vocab_size,
+                                                  config.hidden_size)
 
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
         # any TensorFlow checkpoint file
-        self.LayerNorm = BertLayerNorm(
-            config.hidden_size, eps=config.layer_norm_eps)
+        self.LayerNorm = BertLayerNorm(config.hidden_size,
+                                       eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def forward(self, input_ids, token_type_ids=None, position_ids=None):
@@ -201,8 +201,6 @@ class BertSelfAttention(nn.Module):
             raise ValueError(
                 "The hidden size (%d) is not a multiple of the number of attention "
                 "heads (%d)" % (config.hidden_size, config.num_attention_heads))
-        self.output_attentions = config.output_attentions
-
         self.num_attention_heads = config.num_attention_heads
         self.attention_head_size = int(
             config.hidden_size / config.num_attention_heads)
@@ -213,6 +211,7 @@ class BertSelfAttention(nn.Module):
         self.value = nn.Linear(config.hidden_size, self.all_head_size)
 
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
+        self.softmax = nn.Softmax(dim=-1)
 
     def transpose_for_scores(self, x):
         new_x_shape = x.size()[
@@ -239,7 +238,7 @@ class BertSelfAttention(nn.Module):
             attention_scores = attention_scores + attention_mask
 
         # Normalize the attention scores to probabilities.
-        attention_probs = nn.Softmax(dim=-1)(attention_scores)
+        attention_probs = self.softmax(attention_scores)
 
         # This is actually dropping out entire tokens to attend to, which might
         # seem a bit unusual, but is taken from the original Transformer paper.
@@ -256,9 +255,7 @@ class BertSelfAttention(nn.Module):
             :-2] + (self.all_head_size,)
         context_layer = context_layer.view(*new_context_layer_shape)
 
-        outputs = (context_layer, attention_probs) if self.output_attentions else (
-            context_layer,)
-        return outputs
+        return context_layer
 
 
 class BertSelfOutput(nn.Module):
@@ -311,11 +308,9 @@ class BertAttention(nn.Module):
         self.pruned_heads = self.pruned_heads.union(heads)
 
     def forward(self, input_tensor, attention_mask=None, head_mask=None):
-        self_outputs = self.self(input_tensor, attention_mask, head_mask)
-        attention_output = self.output(self_outputs[0], input_tensor)
-        # add attentions if we output them
-        outputs = (attention_output,) + self_outputs[1:]
-        return outputs
+        self_outputs = self.self(input_tensor, attention_mask=attention_mask, head_mask=head_mask)
+        attention_output = self.output(self_outputs, input_tensor)
+        return attention_output
 
 
 class BertIntermediate(nn.Module):
@@ -323,7 +318,7 @@ class BertIntermediate(nn.Module):
         super(BertIntermediate, self).__init__()
         self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
         if isinstance(config.hidden_act, str) or (sys.version_info[0] == 2 and isinstance(config.hidden_act, unicode)):
-            self.intermediate_act_fn = ACT2FN[config.hidden_act]
+            self.intermediate_act_fn = ACT2FN[config.hidden_act]()
         else:
             self.intermediate_act_fn = config.hidden_act
 
@@ -356,14 +351,12 @@ class BertLayer(nn.Module):
         self.output = BertOutput(config)
 
     def forward(self, hidden_states, attention_mask=None, head_mask=None):
-        attention_outputs = self.attention(
-            hidden_states, attention_mask, head_mask)
-        attention_output = attention_outputs[0]
+        attention_output = self.attention(hidden_states,
+                                            attention_mask=attention_mask,
+                                            head_mask=head_mask)
         intermediate_output = self.intermediate(attention_output)
         layer_output = self.output(intermediate_output, attention_output)
-        # add attentions if we output them
-        outputs = (layer_output,) + attention_outputs[1:]
-        return outputs
+        return layer_output
 
 
 class BertEncoder(nn.Module):
@@ -372,37 +365,16 @@ class BertEncoder(nn.Module):
         self.output_attentions = config.output_attentions
         self.output_hidden_states = config.output_hidden_states
         self.num_layers = config.num_hidden_layers
-        # self.layer = nn.ModuleList([BertLayer(config) for _ in config.num_hidden_layers])
         for i in range(self.num_layers):
             self.add_module(str(i), BertLayer(config))
 
     def forward(self, hidden_states, attention_mask=None, head_mask=None):
-        all_hidden_states = ()
-        all_attentions = ()
-        # for i, layer_module in enumerate(self.layer):
         for i in range(self.num_layers):
             layer_module = getattr(self, str(i))
-            if self.output_hidden_states:
-                all_hidden_states = all_hidden_states + (hidden_states,)
-
-            layer_outputs = layer_module(
-                hidden_states, attention_mask, head_mask[i])
-            hidden_states = layer_outputs[0]
-
-            if self.output_attentions:
-                all_attentions = all_attentions + (layer_outputs[1],)
-
-        # Add last layer
-        if self.output_hidden_states:
-            all_hidden_states = all_hidden_states + (hidden_states,)
-
-        outputs = (hidden_states,)
-        if self.output_hidden_states:
-            outputs = outputs + (all_hidden_states,)
-        if self.output_attentions:
-            outputs = outputs + (all_attentions,)
-        # last-layer hidden state, (all hidden states), (all attentions)
-        return outputs
+            hidden_states = layer_module(hidden_states,
+                                            attention_mask=attention_mask, 
+                                            head_mask=head_mask[i])
+        return hidden_states
 
 
 class BertPooler(nn.Module):
@@ -425,7 +397,7 @@ class BertPredictionHeadTransform(nn.Module):
         super(BertPredictionHeadTransform, self).__init__()
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         if isinstance(config.hidden_act, str) or (sys.version_info[0] == 2 and isinstance(config.hidden_act, unicode)):
-            self.transform_act_fn = ACT2FN[config.hidden_act]
+            self.transform_act_fn = ACT2FN[config.hidden_act]()
         else:
             self.transform_act_fn = config.hidden_act
         self.LayerNorm = BertLayerNorm(
@@ -510,7 +482,6 @@ class BertPreTrainedModel(PreTrainedModel):
             module.weight.data.fill_(1.0)
         if isinstance(module, nn.Linear) and module.bias is not None:
             module.bias.data.zero_()
-
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, *model_args, **kwargs):
@@ -604,30 +575,36 @@ class BertPreTrainedModel(PreTrainedModel):
             elif os.path.isdir(pretrained_model_name_or_path):
                 if from_tf and os.path.isfile(os.path.join(pretrained_model_name_or_path, TF_WEIGHTS_NAME + ".index")):
                     # Load from a TF 1.0 checkpoint
-                    archive_file = os.path.join(pretrained_model_name_or_path, TF_WEIGHTS_NAME + ".index")
+                    archive_file = os.path.join(
+                        pretrained_model_name_or_path, TF_WEIGHTS_NAME + ".index")
                 elif from_tf and os.path.isfile(os.path.join(pretrained_model_name_or_path, TF2_WEIGHTS_NAME)):
                     # Load from a TF 2.0 checkpoint
-                    archive_file = os.path.join(pretrained_model_name_or_path, TF2_WEIGHTS_NAME)
+                    archive_file = os.path.join(
+                        pretrained_model_name_or_path, TF2_WEIGHTS_NAME)
                 elif os.path.isfile(os.path.join(pretrained_model_name_or_path, WEIGHTS_NAME)):
                     # Load from a PyTorch checkpoint
-                    archive_file = os.path.join(pretrained_model_name_or_path, WEIGHTS_NAME)
+                    archive_file = os.path.join(
+                        pretrained_model_name_or_path, WEIGHTS_NAME)
                 else:
                     raise EnvironmentError("Error no file named {} found in directory {} or `from_tf` set to False".format(
-                        [WEIGHTS_NAME, TF2_WEIGHTS_NAME, TF_WEIGHTS_NAME + ".index"],
+                        [WEIGHTS_NAME, TF2_WEIGHTS_NAME,
+                            TF_WEIGHTS_NAME + ".index"],
                         pretrained_model_name_or_path))
             elif os.path.isfile(pretrained_model_name_or_path):
                 archive_file = pretrained_model_name_or_path
             else:
-                assert from_tf, "Error finding file {}, no file or TF 1.X checkpoint found".format(pretrained_model_name_or_path)
+                assert from_tf, "Error finding file {}, no file or TF 1.X checkpoint found".format(
+                    pretrained_model_name_or_path)
                 archive_file = pretrained_model_name_or_path + ".index"
 
             # redirect to the cache, if necessary
             try:
-                resolved_archive_file = cached_path(archive_file, cache_dir=cache_dir, force_download=force_download, proxies=proxies)
+                resolved_archive_file = cached_path(
+                    archive_file, cache_dir=cache_dir, force_download=force_download, proxies=proxies)
             except EnvironmentError:
                 if pretrained_model_name_or_path in cls.pretrained_model_archive_map:
                     msg = "Couldn't reach server at '{}' to download pretrained weights.".format(
-                            archive_file)
+                        archive_file)
                 else:
                     msg = "Model name '{}' was not found in model name list ({}). " \
                         "We assumed '{}' was a path or url to model weight files named one of {} but " \
@@ -659,15 +636,17 @@ class BertPreTrainedModel(PreTrainedModel):
         if from_tf:
             if resolved_archive_file.endswith('.index'):
                 # Load from a TensorFlow 1.X checkpoint - provided by original authors
-                model = cls.load_tf_weights(model, config, resolved_archive_file[:-6])  # Remove the '.index'
+                model = cls.load_tf_weights(
+                    model, config, resolved_archive_file[:-6])  # Remove the '.index'
             else:
                 # Load from our TensorFlow 2.0 checkpoints
                 try:
                     from transformers import load_tf2_checkpoint_in_pytorch_model
-                    model = load_tf2_checkpoint_in_pytorch_model(model, resolved_archive_file, allow_missing_keys=True)
+                    model = load_tf2_checkpoint_in_pytorch_model(
+                        model, resolved_archive_file, allow_missing_keys=True)
                 except ImportError as e:
                     logger.error("Loading a TensorFlow model in PyTorch, requires both PyTorch and TensorFlow to be installed. Please see "
-                        "https://pytorch.org/ and https://www.tensorflow.org/install/ for installation instructions.")
+                                 "https://pytorch.org/ and https://www.tensorflow.org/install/ for installation instructions.")
                     raise e
         else:
             # Convert old format to new format if needed from a PyTorch state_dict
@@ -696,13 +675,14 @@ class BertPreTrainedModel(PreTrainedModel):
                 state_dict._metadata = metadata
 
             def load(module, prefix=''):
-                local_metadata = {} if metadata is None else metadata.get(prefix[:-1], {})
+                local_metadata = {} if metadata is None else metadata.get(
+                    prefix[:-1], {})
                 module._load_from_state_dict(
                     state_dict, prefix, local_metadata, True, missing_keys, unexpected_keys, error_msgs)
                 for name, child in module._modules.items():
                     if child is not None:
                         load(child, prefix + name + '.')
-            
+
             # b_w = model.bert.encoder
             # b_w = getattr(b_w, "11").intermediate.dense.weight.clone()
             # Make sure we are able to load base models as well as derived models (with heads)
@@ -724,7 +704,7 @@ class BertPreTrainedModel(PreTrainedModel):
                     model.__class__.__name__, unexpected_keys))
             if len(error_msgs) > 0:
                 raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
-                                model.__class__.__name__, "\n\t".join(error_msgs)))
+                    model.__class__.__name__, "\n\t".join(error_msgs)))
 
         if hasattr(model, 'tie_weights'):
             model.tie_weights()  # make sure word embedding weights are still tied
@@ -733,15 +713,17 @@ class BertPreTrainedModel(PreTrainedModel):
         model.eval()
 
         if output_loading_info:
-            loading_info = {"missing_keys": missing_keys, "unexpected_keys": unexpected_keys, "error_msgs": error_msgs}
+            loading_info = {"missing_keys": missing_keys,
+                            "unexpected_keys": unexpected_keys, "error_msgs": error_msgs}
             return model, loading_info
 
         # a_w = model.bert.encoder
         # a_w = getattr(a_w, "11").intermediate.dense.weight
-        
+
         # assert not(torch.allclose(b_w,a_w))
 
-        return model 
+        return model
+
 
 BERT_START_DOCSTRING = r"""    The BERT model was proposed in
     `BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding`_
@@ -905,15 +887,13 @@ class BertModel(BertPreTrainedModel):
 
         embedding_output = self.embeddings(
             input_ids, position_ids=position_ids, token_type_ids=token_type_ids)
-        encoder_outputs = self.encoder(embedding_output,
-                                       extended_attention_mask,
+        sequence_output = self.encoder(embedding_output,
+                                       attention_mask=extended_attention_mask,
                                        head_mask=head_mask)
-        sequence_output = encoder_outputs[0]
         pooled_output = self.pooler(sequence_output)
 
-        # add hidden_states and attentions if they are here
-        outputs = (sequence_output, pooled_output,) + encoder_outputs[1:]
-        # sequence_output, pooled_output, (hidden_states), (attentions)
+        outputs = (sequence_output, pooled_output,)
+        # sequence_output, pooled_output,
         return outputs
 
 
@@ -963,7 +943,8 @@ class BertForPreTraining(BertPreTrainedModel):
 
         self.bert = BertModel(config)
         self.cls = BertPreTrainingHeads(config)
-
+        self.masked_lm_loss = nn.CrossEntropyLoss(ignore_index=-100)
+        self.next_sentence_loss = nn.CrossEntropyLoss(ignore_index=-100)
         self.init_weights()
         self.tie_weights()
 
@@ -977,29 +958,28 @@ class BertForPreTraining(BertPreTrainedModel):
     def forward(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None,
                 masked_lm_labels=None, next_sentence_label=None):
 
-        outputs = self.bert(input_ids,
+        sequence_output, pooled_output = self.bert(input_ids,
                             attention_mask=attention_mask,
                             token_type_ids=token_type_ids,
                             position_ids=position_ids,
                             head_mask=head_mask)
 
-        sequence_output, pooled_output = outputs[:2]
-        prediction_scores, seq_relationship_score = self.cls(
-            sequence_output, pooled_output)
+      
+        prediction_scores, seq_relationship_score = self.cls(sequence_output, 
+                                                                pooled_output)
 
         # add hidden states and attention if they are here
-        outputs = (prediction_scores, seq_relationship_score,) + outputs[2:]
+        outputs = (prediction_scores, seq_relationship_score)
 
         if masked_lm_labels is not None and next_sentence_label is not None:
-            loss_fct = CrossEntropyLoss(ignore_index=-100)
-            masked_lm_loss = loss_fct(
+            masked_lm_loss = self.masked_lm_loss(
                 prediction_scores.view(-1, self.config.vocab_size), masked_lm_labels.view(-1))
-            next_sentence_loss = loss_fct(
+            next_sentence_loss = self.next_sentence_loss(
                 seq_relationship_score.view(-1, 2), next_sentence_label.view(-1))
             total_loss = masked_lm_loss + next_sentence_loss
-            outputs = (total_loss,) + outputs
+            outputs = (total_loss,)
 
-        # (loss), prediction_scores, seq_relationship_score, (hidden_states), (attentions)
+        # (loss), prediction_scores, seq_relationship_score
         return outputs
 
 
@@ -1041,7 +1021,7 @@ class BertForMaskedLM(BertPreTrainedModel):
 
         self.bert = BertModel(config)
         self.cls = BertOnlyMLMHead(config)
-
+        self.masked_lm_loss = nn.CrossEntropyLoss(ignore_index=-100)
         self.init_weights()
         self.tie_weights()
 
@@ -1065,14 +1045,13 @@ class BertForMaskedLM(BertPreTrainedModel):
         prediction_scores = self.cls(sequence_output)
 
         # Add hidden states and attention if they are here
-        outputs = (prediction_scores,) + outputs[2:]
+        outputs = (prediction_scores,)
         if masked_lm_labels is not None:
-            loss_fct = CrossEntropyLoss(ignore_index=-100)
-            masked_lm_loss = loss_fct(
+            masked_lm_loss = self.masked_lm_loss(
                 prediction_scores.view(-1, self.config.vocab_size), masked_lm_labels.view(-1))
-            outputs = (masked_lm_loss,) + outputs
+            outputs = (masked_lm_loss,)
 
-        # (masked_lm_loss), prediction_scores, (hidden_states), (attentions)
+        # (masked_lm_loss), prediction_scores
         return outputs
 
 
@@ -1114,6 +1093,7 @@ class BertForNextSentencePrediction(BertPreTrainedModel):
 
         self.bert = BertModel(config)
         self.cls = BertOnlyNSPHead(config)
+        self.next_sentence_loss = nn.CrossEntropyLoss(ignore_index=-100)
 
         self.init_weights()
 
@@ -1131,14 +1111,13 @@ class BertForNextSentencePrediction(BertPreTrainedModel):
         seq_relationship_score = self.cls(pooled_output)
 
         # add hidden states and attention if they are here
-        outputs = (seq_relationship_score,) + outputs[2:]
+        outputs = (seq_relationship_score,)
         if next_sentence_label is not None:
-            loss_fct = CrossEntropyLoss(ignore_index=-100)
-            next_sentence_loss = loss_fct(
+            next_sentence_loss = self.next_sentence_loss(
                 seq_relationship_score.view(-1, 2), next_sentence_label.view(-1))
-            outputs = (next_sentence_loss,) + outputs
+            outputs = (next_sentence_loss,)
 
-        # (next_sentence_loss), seq_relationship_score, (hidden_states), (attentions)
+        # (next_sentence_loss), seq_relationship_score
         return outputs
 
 
@@ -1185,6 +1164,11 @@ class BertForSequenceClassification(BertPreTrainedModel):
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, self.config.num_labels)
 
+        if self.num_labels == 1:
+            self.loss = nn.MSELoss()
+        else:
+            self.loss = nn.CrossEntropyLoss()
+
         self.init_weights()
 
     def forward(self, input_ids, labels=None, attention_mask=None, token_type_ids=None,
@@ -1202,22 +1186,18 @@ class BertForSequenceClassification(BertPreTrainedModel):
         logits = self.classifier(pooled_output)
 
         # add hidden states and attention if they are here
-        outputs = (logits,) + outputs[2:]
+        outputs = (logits,)
 
         if labels is not None:
             if self.num_labels == 1:
                 #  We are doing regression
-                # loss_fct = MSELoss()
-                loss_fct = torch.nn.functional.mse_loss
-                loss = loss_fct(logits.view(-1), labels.view(-1))
+                loss = self.loss(logits.view(-1), labels.view(-1))
             else:
-                # loss_fct = CrossEntropyLoss()
-                loss_fct = torch.nn.functional.cross_entropy
-                loss = loss_fct(
+                loss = self.loss(
                     logits.view(-1, self.num_labels), labels.view(-1))
-            outputs = (loss,) + outputs
+            outputs = (loss,)
 
-        return outputs  # (loss), logits, (hidden_states), (attentions)
+        return outputs  # loss, logits, 
 
 
 @add_start_docstrings("""Bert Model with a multiple choice classification head on top (a linear layer on top of
@@ -1262,6 +1242,7 @@ class BertForMultipleChoice(BertPreTrainedModel):
         self.bert = BertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, 1)
+        self.loss = nn.CrossEntropyLoss()
 
         self.init_weights()
 
@@ -1289,15 +1270,13 @@ class BertForMultipleChoice(BertPreTrainedModel):
         logits = self.classifier(pooled_output)
         reshaped_logits = logits.view(-1, num_choices)
 
-        # add hidden states and attention if they are here
-        outputs = (reshaped_logits,) + outputs[2:]
+        outputs = (reshaped_logits,)
 
         if labels is not None:
-            loss_fct = CrossEntropyLoss()
-            loss = loss_fct(reshaped_logits, labels)
-            outputs = (loss,) + outputs
+            loss = self.loss(reshaped_logits, labels)
+            outputs = (loss,)
 
-        # (loss), reshaped_logits, (hidden_states), (attentions)
+        # loss, reshaped_logits,
         return outputs
 
 
@@ -1341,6 +1320,7 @@ class BertForTokenClassification(BertPreTrainedModel):
         self.bert = BertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
+        self.loss = nn.CrossEntropyLoss()
 
         self.init_weights()
 
@@ -1358,22 +1338,20 @@ class BertForTokenClassification(BertPreTrainedModel):
         sequence_output = self.dropout(sequence_output)
         logits = self.classifier(sequence_output)
 
-        # add hidden states and attention if they are here
-        outputs = (logits,) + outputs[2:]
+        outputs = (logits,)
         if labels is not None:
-            loss_fct = CrossEntropyLoss()
             # Only keep active parts of the loss
             if attention_mask is not None:
                 active_loss = attention_mask.view(-1) == 1
                 active_logits = logits.view(-1, self.num_labels)[active_loss]
                 active_labels = labels.view(-1)[active_loss]
-                loss = loss_fct(active_logits, active_labels)
+                loss = self.loss(active_logits, active_labels)
             else:
-                loss = loss_fct(
+                loss = self.loss(
                     logits.view(-1, self.num_labels), labels.view(-1))
-            outputs = (loss,) + outputs
+            outputs = (loss,) 
 
-        return outputs  # (loss), scores, (hidden_states), (attentions)
+        return outputs  # loss, scores
 
 
 @add_start_docstrings("""Bert Model with a span classification head on top for extractive question-answering tasks like SQuAD (a linear layers on top of
@@ -1438,21 +1416,22 @@ class BertForQuestionAnswering(BertPreTrainedModel):
         logits = self.qa_outputs(sequence_output)
         return logits
 
-def SQUAD_loss(logits,start_positions,end_positions):
+
+def SQUAD_loss(logits, start_positions, end_positions):
     start_logits, end_logits = logits.split(1, dim=-1)
     start_logits = start_logits.squeeze(-1)
     end_logits = end_logits.squeeze(-1)
-    
+
     ignored_index = start_logits.size(1)
     start_positions.clamp_(0, ignored_index)
     end_positions.clamp_(0, ignored_index)
-    
-    def loss_fct(logits,targets):
-        return torch.nn.functional.cross_entropy(logits,targets,ignore_index=ignored_index)
-    
+
+    def loss_fct(logits, targets):
+        return torch.nn.functional.cross_entropy(logits, targets, ignore_index=ignored_index)
+
     start_loss = loss_fct(start_logits, start_positions)
     end_loss = loss_fct(end_logits, end_positions)
-    
+
     total_loss = (start_loss + end_loss) / 2
 
     return total_loss

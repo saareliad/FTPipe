@@ -98,7 +98,11 @@ def _detach_inputs(*inputs: Tensors):
     detached = []
     for x in inputs:
         if isinstance(x, torch.Tensor):
-            detached.append(x.detach())
+            # NOTE: it is required for shared stateless!
+            # to Set requires grad like the tensor.
+            # especially if isinstance(x, torch.nn.Parameter)
+            req_grad = x.requires_grad if isinstance(x, torch.nn.Parameter) else False
+            detached.append(x.detach().requires_grad_(req_grad))
         elif isinstance(x, (list, tuple)):
             tmp = []
             for a in x:
