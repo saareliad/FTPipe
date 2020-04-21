@@ -58,8 +58,9 @@ from transformers import (
 )
 
 from models.normal import GPT2LMHeadModel, GPT2Model
-from models.normal import StatelessGPT2LMHeadModel  # , StatelessGPT2Model
-from models.normal.NLP_models.modeling_ctrl import CTRLLMHeadModel, CTRLModel
+from models.normal import StatelessGPT2LMHeadModel  
+from models.normal import CTRLLMHeadModel, CTRLModel
+from models.normal import StatelessCTRLLMHeadModel
 from models.normal.NLP_models.modeling_t5 import T5Model, T5ForConditionalGeneration
 
 from pytorch_Gpipe import pipe_model
@@ -86,7 +87,8 @@ MODEL_CLASSES = {
 }
 
 MODEL_CLASSES_LM_HEAD_STATELESS_TIED = {
-    'gpt2': (GPT2Config, StatelessGPT2LMHeadModel, GPT2Tokenizer),  # TODO:
+    'gpt2': (GPT2Config, StatelessGPT2LMHeadModel, GPT2Tokenizer),
+    'ctrl': (CTRLConfig, StatelessCTRLLMHeadModel, CTRLTokenizer)
 }
 
 
