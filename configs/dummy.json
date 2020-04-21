@@ -20,6 +20,7 @@
     },
     "bs_train": 4,
     "train_seq_len": 1024,
+    "test_seq_len": 1024,
     "valid_seq_len": 1024,
     "bs_test": 4,
     "num_data_workers": 10,
@@ -55,8 +56,6 @@
         "type": "adam",
         "policy": "all_except_last",
         "args": {
-            "big_gamma": 0.999,
-            "epsilon": 1e-8
         }
     },
     "epochs": 3,

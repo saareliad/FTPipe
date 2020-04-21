@@ -42,8 +42,6 @@ class AdamWGapAware(GapAwareBase):
     """
     def __init__(self,
                  optimizer,
-                 big_gamma=0.999,
-                 epsilon=1e-8,
                  from_grad=True):
         """ Apply Gap Aware on computed gradients """
         super().__init__(optimizer)
