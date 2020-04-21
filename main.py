@@ -69,11 +69,40 @@ def parse_cli():
                         type=str,
                         help='distributed backend to use')
 
-    parser.add_argument('--model',
-                        choices=list(models.SUPPORTED_CONFIGS),
-                        default='wrn_16x4_p2',
-                        type=str,
-                        help="name of the file with partitioning definitions")
+    parser.add_argument(
+        '--debug',
+        nargs='*',
+        type=int,
+        required=False,
+        default=False,
+        help='Will wait for debugger attachment on given ranks.')
+
+    parser.add_argument('--config',
+                        help="Config File",
+                        default='configs/dummy.json')
+
+    # parser.add_argument('--model',
+    #                     choices=list(models.SUPPORTED_CONFIGS),
+    #                     default='wrn_16x4_p2',
+    #                     type=str,
+    #                     help="name of the file with partitioning definitions")
+
+    # parser.add_argument('--task',
+    #                         help='Task type to use',
+    #                         choices=AVAILABLE_TASKS.keys(),
+    #                         default='cv')
+
+    # parser.add_argument('--statistics',
+    #                     help='Statistics to collect',
+    #                     choices=AVAILBALE_STATS.keys(),
+    #                     default='cv')
+
+    # parser.add_argument(
+    #     '--work_scheduler',
+    #     type=str,
+    #     help="scheduling policy to indicate when to perform forward pass",
+    #     choices=AVAILABLE_WORK_SCHEDULERS.keys(),
+    #     default='1F1B')
 
     # Training, which are also needed for communication
     parser.add_argument('--bs_train',
@@ -103,49 +132,34 @@ def parse_cli():
                         default='./logs',
                         help="where logs and events go")
 
-    parser.add_argument('--out-dir',
+    parser.add_argument('--out_dir',
                         '-o',
                         type=str,
                         help='Output folder for results',
                         default='./results',
                         required=False)
 
-    parser.add_argument('--data-dir',
+    parser.add_argument('--data_dir',
                         type=str,
                         help="Data directory",
                         required=False)  # DEFAULT_DATA_DIR
 
-    parser.add_argument('--out-filename',
+    parser.add_argument('--out_filename',
                         '-n',
                         type=str,
                         help='Name of output file',
                         required=False)
 
-    parser.add_argument(
-        '--work_scheduler',
-        type=str,
-        help="scheduling policy to indicate when to perform forward pass",
-        choices=AVAILABLE_WORK_SCHEDULERS.keys(),
-        default='1F1B')
-
     parser.add_argument('--cpu',
                         action='store_true',
                         default=False,
                         help="run partition on cpu")
-    parser.add_argument('--num-data-workers',
+
+    # TODO: replace with dataloader config.
+    parser.add_argument('--num_data_workers',
                         type=int,
                         help='Number of workers to use for dataloading',
                         default=0)
-
-    parser.add_argument('--task',
-                        help='Task type to use',
-                        choices=AVAILABLE_TASKS.keys(),
-                        default='cv')
-
-    parser.add_argument('--statistics',
-                        help='Statistics to collect',
-                        choices=AVAILBALE_STATS.keys(),
-                        default='cv')
 
     parser.add_argument('--optimizer_type',
                         help='Optimizer type to use',
@@ -168,25 +182,15 @@ def parse_cli():
                         help="Aggregation steps",
                         default=1,
                         required=False)
-    # parser.add_argument('--linear_scaling', help="Use linear LR scaling rule", default=True)
 
-    parser.add_argument(
-        '--debug',
-        nargs='*',
-        type=int,
-        required=False,
-        # action='store_true',
-        default=False,
-        help='Will wait for debugger attachment on given ranks.')
-
-    parser.add_argument('--config',
-                        help="Config File",
-                        default='configs/dummy.json')
+    parser.add_argument("--step_every_from_cmd",
+                        action="store_true",
+                        default=False)
 
     parser.add_argument("--num_chunks",
                         help="Number of chunks for Double Buffering",
                         type=int,
-                        default=4)
+                        default=1)
 
     parser.add_argument("--weight_stashing",
                         action="store_true",
@@ -217,14 +221,23 @@ def parse_cli():
         default=False,
         help="Will not use recomputation (trading speed for memory).")
 
+    parser.add_argument(
+        "--base_config_path",
+        nargs="*",
+        type=str,
+        default=[],
+        help="config pathes to override. Must follow the same relativity rule")
     # TODO: option for weight stashing just statistics.
 
     args = parser.parse_args()
 
+    if args.base_config_path:
+        setattr(args, "base_config_path_from_cmd", True)
+
     return args
 
 
-def parse_json_config(args, config=None):
+def parse_json_config(args, config=None, first=False):
     if config is None:
         config = args.config
 
@@ -235,6 +248,11 @@ def parse_json_config(args, config=None):
         if is_relative:
             return os.path.join(os.path.dirname(config), base_config_path)
         return base_config_path
+
+    # Option to override base config path for the first thing.
+    # Warning: must follow the same relative rule of the config.
+    if first and args.base_config_path:
+        output["base_config_path"] = args.base_config_path
 
     # option to load a base config, reducing code duplication.
     if "base_config_path" in output:
@@ -256,7 +274,8 @@ def parse_json_config(args, config=None):
 
         # Allow skipping some options and loading them from cmd.
         # Example: seed_from_cmd
-        if output.get(f'{key}_from_cmd', False):
+        if output.get(f'{key}_from_cmd', False) or getattr(
+                args, f'{key}_from_cmd', False):
             if not hasattr(args, key):
                 raise RuntimeError(f"-W- {key}_from_cmd=True but not set")
             continue
@@ -834,12 +853,11 @@ def get_optimizer(args, optimizer_cls, parameters):
 
 def main():
     args = parse_cli()
-    parse_json_config(args, args.config)
+    parse_json_config(args, args.config, first=True)
     parse_env_vars(args)
     args.world_size = get_world_size(args.distributed_backend)
 
-    if args.debug and args.rank in args.debug:
-        # TODO: by specific ranks
+    if args.debug and ((args.rank in args.debug) or (-1 in args.debug)):
         import ptvsd
         port = 3000 + args.local_rank
         args.num_data_workers = 0  # NOTE: it does not work without this.
@@ -950,11 +968,11 @@ def main():
         last_batch_diff_train = train_dataset_len % args.bs_train if not train_dl.drop_last else 0
         last_batch_diff_test = test_dataset_len % args.bs_test if not test_dl.drop_last else 0
 
-        data = torch.tensor([
+        data = [
             train_dl_len, test_dl_len, last_batch_diff_train,
             last_batch_diff_test
-        ],
-                            dtype=torch.long)
+        ]
+        data = torch.tensor(data, dtype=torch.long)
     else:
         data = torch.zeros(4, dtype=torch.long)
 
@@ -1041,6 +1059,7 @@ def main():
         dp_sim.convert_to_num_gpus(partition.partition, args.ddp_sim_num_gpus)
 
     if is_last_partition:
+        # if we replace wp with nesterov, we save the wp arg, and set it back for config.
         lp_wp_arg = try_replace_prediction_with_nesterov(args)
 
     # After the partition is on its device:
@@ -1092,26 +1111,20 @@ def main():
     scheduler, sched_aware_stuff = get_lr_scheduler(args, optimizer)
 
     # Set Trainer (and Gap Aware)
-    trainer_extra_args = args.trainer['args']
+    trainer_kwds = dict(model=partition.partition,
+                        optimizer=optimizer,
+                        scheduler=scheduler,
+                        statistics=statistics,
+                        step_every=args.step_every)
+    trainer_kwds.update(args.trainer['args'])
     # NOTE: With hack_trainer_type_to_gap_aware  we modified trainer type if needed.
     if getattr(trainer_cls, "HAS_GAP_AWARE", False):
         gap_aware = get_gap_aware(args, optimizer)
-        trainer = trainer_cls(gap_aware,
-                              model=partition.partition,
-                              optimizer=optimizer,
-                              scheduler=scheduler,
-                              statistics=statistics,
-                              step_every=args.step_every,
-                              **trainer_extra_args)
+        trainer = trainer_cls(gap_aware, **trainer_kwds)
         partition.set_gap_aware(gap_aware)
     else:
         gap_aware = None
-        trainer = trainer_cls(model=partition.partition,
-                              optimizer=optimizer,
-                              scheduler=scheduler,
-                              statistics=statistics,
-                              step_every=args.step_every,
-                              **trainer_extra_args)
+        trainer = trainer_cls(**trainer_kwds)
 
     partition.set_trainer(trainer)
     partition.set_lr_scheduler(scheduler)
