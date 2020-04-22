@@ -36,11 +36,15 @@ def auto_file_name(args):
         args, "weight_prediction") else 'stale'
     ws = "ws_" if getattr(args, "weight_stashing", False) else ""
     ga = "ga_" if hasattr(args, "gap_aware") else ""
-    bs = f"bs_{args.bs_train * args.step_every}_"
-    se = f"se_{args.step_every}_"
+    bs = f"bs_{args.bs_train * args.step_every}"
+    se = f"se_{args.step_every}"
     ga_just_for_loss = "gaJFL_" if getattr(args, 'gap_aware_just_loss',
                                            False) else ""
-    s = f'{args.model}_{args.dataset}_{wp}_{ws}{ga}{bs}{se}{ga_just_for_loss}seed_{args.seed}'
+
+    if 'gpipe' == args.work_scheduler.lower():
+        s = f'{args.model}_{args.dataset}_gpipe_{bs}_{se}_seed_{args.seed}'
+    else:
+        s = f'{args.model}_{args.dataset}_{wp}_{ws}{ga}{bs}_{se}_{ga_just_for_loss}seed_{args.seed}'
     args.out_filename = f"{args.out_filename}_{s}"
     print(f"Out File Name will be: {args.out_filename}")
 

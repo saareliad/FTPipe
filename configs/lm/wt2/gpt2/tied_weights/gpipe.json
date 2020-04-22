@@ -1,0 +1,6 @@
+{
+    "base_config_path": "common.json",
+    "base_config_path_is_relative": true,
+    "work_scheduler": "GPIPE",
+    "step_every": 4
+}
