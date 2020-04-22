@@ -14,6 +14,7 @@ from pipeline import TrueWeightsStorage
 import models
 from pipeline import CommunicationHandlerBase, get_auto_comm_handler_cls
 from pipeline import SinglePartitionManager
+from pipeline.partition_manager import GPipePartitionManager
 
 from pipeline.training import AVAILABLE_TRAINERS
 from pipeline.tasks import AVAILABLE_TASKS
@@ -396,6 +397,13 @@ def get_optimizer(args, optimizer_cls, parameters):
 
 
 def prepare_pipeline(args):
+    work_scheduler = AVAILABLE_WORK_SCHEDULERS.get(args.work_scheduler)
+    is_gpipe = "gpipe" == args.work_scheduler.lower()
+    if is_gpipe:
+        print("Preparing pipeline for GPipe")
+        partition_cls = GPipePartitionManager
+    else:
+        partition_cls = SinglePartitionManager
 
     device = get_device(args)
     if not args.cpu:
@@ -520,7 +528,16 @@ def prepare_pipeline(args):
     args.steps_per_epoch = steps_per_epoch
     args.expected_training_steps = expected_training_steps
 
-    partition_using_gap_aware = hack_trainer_type_to_gap_aware(args)
+    ##############################
+    # Until here its common,
+    # To GPipe too.
+    ##############################
+
+    # Will automtomatically change trainer to gap aware compatible trainer
+    partition_using_gap_aware = False
+    if not is_gpipe:
+        partition_using_gap_aware = hack_trainer_type_to_gap_aware(args)
+
     if partition_using_gap_aware:
         logger.info(f"Stage {args.stage} will use Gap Aware")
 
@@ -530,18 +547,21 @@ def prepare_pipeline(args):
     statistics = get_statistics(args.statistics,
                                 is_last_partition=is_last_partition)
     assert not (statistics is None)
-    work_scheduler = AVAILABLE_WORK_SCHEDULERS.get(args.work_scheduler)
-    gap_aware_just_loss = getattr(args, 'gap_aware_just_loss', False)
-    if gap_aware_just_loss:
-        if is_last_partition:
-            gap_aware_just_loss = False
-        else:
-            if args.no_recomputation:
-                raise NotImplementedError(
-                    "gap_aware_just_loss works only with recomputation on")
 
-    # Init the partition manager
-    partition = SinglePartitionManager(
+    # Gap aware penatly just for the loss
+    gap_aware_just_loss = False
+    if not is_gpipe:
+        gap_aware_just_loss = getattr(args, 'gap_aware_just_loss', False)
+        if gap_aware_just_loss:
+            if is_last_partition:
+                gap_aware_just_loss = False
+            else:
+                if args.no_recomputation:
+                    raise NotImplementedError(
+                        "gap_aware_just_loss works only with recomputation on")
+
+    # Init the partition manager itself, warping the model and loading it to device.
+    partition = partition_cls(
         args.stage,
         args.num_stages,
         model,
@@ -566,15 +586,13 @@ def prepare_pipeline(args):
         last_batch_train_shapes=last_batch_train_shapes,
         last_batch_test_shapes=last_batch_test_shapes)
 
+    # support for simulating stage replication (dev)
     if hasattr(args, "ddp_sim_num_gpus") and args.ddp_sim_num_gpus > 1:
         print(
             f"-I- simulating DDP accuracy with {args.ddp_sim_num_gpus} (DDP) GPUs per stage"
         )
         dp_sim.convert_to_num_gpus(partition.partition, args.ddp_sim_num_gpus)
 
-    if is_last_partition:
-        # if we replace wp with nesterov, we save the wp arg, and set it back for config.
-        lp_wp_arg = try_replace_prediction_with_nesterov(args)
 
     # After the partition is on its device:
     # Set optimizer
@@ -612,10 +630,18 @@ def prepare_pipeline(args):
     else:
         optimizer_grouped_parameters = partition.partition.parameters()
 
+    # if we replace wp with nesterov, we save the wp arg, and set it back for config and auto experiment naming.
+    stashed_wp_arg = None
+    if not is_gpipe:
+        if is_last_partition:
+            stashed_wp_arg = try_replace_prediction_with_nesterov(args)
+
     optimizer = get_optimizer(args, optimizer_cls,
                               optimizer_grouped_parameters)
-    true_weights_storage = TrueWeightsStorage(optimizer)
-    partition.set_true_weights_storage(true_weights_storage)
+    
+    if not is_gpipe:
+        true_weights_storage = TrueWeightsStorage(optimizer)
+        partition.set_true_weights_storage(true_weights_storage)
 
     if args.flush_rate > 0 and args.flush_rate < args.step_every:
         raise NotImplementedError()
@@ -636,6 +662,7 @@ def prepare_pipeline(args):
         gap_aware = get_gap_aware(args, optimizer)
         trainer = trainer_cls(gap_aware, **trainer_kwds)
         partition.set_gap_aware(gap_aware)
+        assert not is_gpipe
     else:
         gap_aware = None
         trainer = trainer_cls(**trainer_kwds)
@@ -643,38 +670,39 @@ def prepare_pipeline(args):
     partition.set_trainer(trainer)
     partition.set_lr_scheduler(scheduler)
 
+    if not is_gpipe:
     # Set Weight predictor
-    weight_predictor, nag_with_predictor = get_weight_predictor(
-        args,
-        optimizer,
-        scheduler=scheduler,
-        true_weights_storage=true_weights_storage,
-        sched_aware_stuff=sched_aware_stuff,
-    )
-    if weight_predictor:
-        partition.set_weight_predictor(weight_predictor, nag_with_predictor)
+        weight_predictor, nag_with_predictor = get_weight_predictor(
+            args,
+            optimizer,
+            scheduler=scheduler,
+            true_weights_storage=true_weights_storage,
+            sched_aware_stuff=sched_aware_stuff,
+        )
+        if weight_predictor:
+            partition.set_weight_predictor(weight_predictor, nag_with_predictor)
 
-    # Set Weight Stashing
-    if getattr(args, "weight_stashing", False):
-        if not is_last_partition:
+        # Set Weight Stashing
+        if getattr(args, "weight_stashing", False):
+            if not is_last_partition:
 
-            has_weight_predictor = weight_predictor is not None
-            if has_weight_predictor:
-                using_clone_weight_predictor = args.weight_prediction['args'][
-                    'pred_mem'] == 'clone'
-            else:
-                using_clone_weight_predictor = False
+                has_weight_predictor = weight_predictor is not None
+                if has_weight_predictor:
+                    using_clone_weight_predictor = args.weight_prediction['args'][
+                        'pred_mem'] == 'clone'
+                else:
+                    using_clone_weight_predictor = False
 
-            weight_stasher = WeightStasher(
-                optimizer,
-                step_every=args.step_every,
-                has_weight_predictor=has_weight_predictor,
-                true_weights_storage=true_weights_storage,
-                using_clone_weight_predictor=using_clone_weight_predictor)
-            partition.set_weight_stasher(weight_stasher)
+                weight_stasher = WeightStasher(
+                    optimizer,
+                    step_every=args.step_every,
+                    has_weight_predictor=has_weight_predictor,
+                    true_weights_storage=true_weights_storage,
+                    using_clone_weight_predictor=using_clone_weight_predictor)
+                partition.set_weight_stasher(weight_stasher)
 
-    if gap_aware_just_loss:
-        assert (getattr(args, "weight_stashing", False))
+        if gap_aware_just_loss:
+            assert (getattr(args, "weight_stashing", False))
 
     # Set Task
     task = task_cls(device, is_last_partition, is_first_partition)
@@ -682,14 +710,14 @@ def prepare_pipeline(args):
 
     if hasattr(args, "auto_file_name"):
         # make sure this specific replacement does not ruin experiment name
-        if is_last_partition and lp_wp_arg:
-            setattr(args, 'weight_prediction', lp_wp_arg)
+        if is_last_partition and stashed_wp_arg:
+            setattr(args, 'weight_prediction', stashed_wp_arg)
 
         auto_file_name(args)
 
-        if is_last_partition and lp_wp_arg:
+        if is_last_partition and stashed_wp_arg:
             delattr(args, 'weight_prediction')
-            del lp_wp_arg
+            del stashed_wp_arg
 
     return (logger, train_dl, test_dl, is_first_partition, is_last_partition,
             partition, statistics, train_dl_len, test_dl_len, samplers)

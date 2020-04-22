@@ -979,6 +979,9 @@ class SinglePartitionManager:
             self.lr_scheduler.step()
 
 
+#################
+# GPIPE
+#################
 class GPipePartitionManager(SinglePartitionManager):
     PROBLEMATIC_POLICY = "None"
 

@@ -439,12 +439,18 @@ class GPipePartition(nn.Module):
     NO_RECOMP_PARTITION_CLS = PartitionWithoutRecomputation
 
     def __init__(self, *args, **kw):
-        super().__init__(*args, **kw)
+        super().__init__()
         self.is_last_micro_batch = False
 
         self.recomputation_partition = self.RECOMP_PARTITION_CLS(*args, **kw)
         self.no_recomputation_partition = self.NO_RECOMP_PARTITION_CLS(
             *args, **kw)
+    
+    def forward(self, *args, **kw):
+        if self.is_last_micro_batch:
+            self.no_recomputation_partition.forward(*args, **kw)            
+        else:
+            self.recomputation_partition.forward(*args, **kw)
 
     def recompute(self, micro_batch_idx):
         if not self.is_last_micro_batch:

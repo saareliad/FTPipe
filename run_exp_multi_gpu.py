@@ -6,7 +6,7 @@ ALL_SEEDS = [42, 20202020, 77777777, 314159, 1322019]
 def main():
     COMMAND = "mpirun -np 5 python main.py"
     cfgs_dir = "configs/lm/wt2/gpt2/tied_weights/"
-    all_algs = ["seq", "stale"]
+    all_algs = ["gpipe"]
 
     param_grid = {
         'config': [f"{cfgs_dir}{cfg}.json" for cfg in all_algs],
@@ -48,5 +48,5 @@ def gpt2xl_untied():
 
 if __name__ == "__main__":
     # gpt2xl_untied()
-    gpt2_tied()
-    # main2()
+    # gpt2_tied()
+    main()
