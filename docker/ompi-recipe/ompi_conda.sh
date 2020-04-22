@@ -1,5 +1,5 @@
-# wget https://download.open-mpi.org/release/open-mpi/v4.0/openmpi-4.0.2.tar.gz
-# tar -xvzf openmpi-4.0.2.tar.gz ompi
+# wget https://download.open-mpi.org/release/open-mpi/v4.0/openmpi-4.0.3.tar.gz
+# tar -xvzf openmpi-4.0.3.tar.gz ompi
 
 docker build -t conda:ompi-dev . && docker run --rm -it --runtime nvidia conda:ompi-dev /bin/bash
 # inside-container# anaconda login
