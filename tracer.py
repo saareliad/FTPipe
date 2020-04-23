@@ -9,8 +9,9 @@ from models.normal.vision_models.ResNet import BasicBlock
 from contextlib import contextmanager
 from collections import defaultdict
 from itertools import chain
+from functools import wraps
 import sys
-
+import operator
 
 # DONE
 # create a TracedValue which will record operations
@@ -27,7 +28,7 @@ import sys
 
 
 # NOTE this should be set after we modify tensor creation functions like torch.cat
-FUNCTION_NAMESPACE = {}
+FUNCTION_NAMESPACE = dict()
 
 SCOPE = ""
 
@@ -38,12 +39,43 @@ OUT_EDGES = defaultdict(list)
 
 
 def record_edge(src, dest):
+    assert src < dest
     # record the edge
     global IN_EGDES
     global OUT_EDGES
     print(f"\n recording edge {src} => {dest}\n")
     IN_EGDES[dest].append(src)
     OUT_EDGES[src].append(dest)
+
+
+def record_edges(args, kwargs, out):
+    for a in chain(flatten(args), flatten(kwargs)):
+        assert isinstance(a, (TracedValue, TracedFunction))
+        record_edge(a.id, out.id)
+
+
+def connect_inputs_to_output(connect_self=True):
+    def connect(func):
+        @wraps(func)
+        def wrapper(self_arg, *args, **kwargs):
+            args, kwargs = wrap_args_and_kwargs(*args, **kwargs)
+            out = func(self_arg, *args, **kwargs)
+
+            if connect_self:
+                record_edge(self_arg.id, out.id)
+            record_edges(args, kwargs, out)
+
+            return out
+        return wrapper
+    return connect
+
+
+def ensure_traced_args_and_kwargs(func):
+    @wraps(func)
+    def wrapper(self_arg, *args, **kwargs):
+        args, kwargs = wrap_args_and_kwargs(*args, **kwargs)
+        return func(self_arg, *args, **kwargs)
+    return wrapper
 
 
 # those function create tensors from potentially non tensor data
@@ -79,7 +111,7 @@ TENSOR_PRODUCING_FUNCTIONS = (
 )
 
 
-class TensorProducingFunction():
+class TracedTensorProducingFunction():
     """
     a Wrapper of a tensor producing torch function
     like torch.zeros which can produce tensors from untraced values
@@ -93,12 +125,13 @@ class TensorProducingFunction():
     def replace_binding(self):
         setattr(self.namespace, self.original_function.__name__, self)
 
+    @ensure_traced_args_and_kwargs
+    @connect_inputs_to_output(connect_self=False)
     def __call__(self, *args, **kwargs):
         print(f"calling Tensor producing function {self.original_function}")
         # TODO record args and kwargs
         u_args, u_kwargs = unwrap_args_and_kwargs(*args, **kwargs)
         out = TracedValue(self.original_function(*u_args, **u_kwargs))
-        connect_inputs_to_output(args, kwargs, out.id)
         return out
 
     def restore_binding(self):
@@ -109,7 +142,7 @@ class TensorProducingFunction():
 @contextmanager
 def patch_tensor_functions():
     # Before yield as the enter method
-    patched_functions = [TensorProducingFunction(torch, f)
+    patched_functions = [TracedTensorProducingFunction(torch, f)
                          for f in TENSOR_PRODUCING_FUNCTIONS]
 
     for f in patched_functions:
@@ -131,17 +164,34 @@ def isTracedValue(data):
                              torch.dtype, torch.memory_format))
 
 
-def connect_inputs_to_output(args, kwargs, dest_id):
-    for a in chain(flatten(args), flatten(kwargs)):
-        if isinstance(a, TracedValue):
-            record_edge(a.id, dest_id)
-
-
 def unwrap_args_and_kwargs(*args, **kwargs):
     args = unwrap_args(args)
-    kwargs = {k: v._data if isinstance(v, TracedValue) else v
-              for k, v in kwargs.items()}
+    kwargs = unwrap_kwargs(kwargs)
     return args, kwargs
+
+
+def wrap_args_and_kwargs(*args, **kwargs):
+    args = wrap_args(args)
+    kwargs = wrap_kwargs(kwargs)
+    return args, kwargs
+
+
+def wrap_args(args):
+    new_args = []
+    for t in args:
+        if isinstance(t, (list, tuple)):
+            new_args.append(type(t)(wrap_args(t)))
+        elif isinstance(t, TracedValue):
+            new_args.append(t)
+        else:
+            new_args.append(TracedValue(t))
+
+    return new_args
+
+
+def wrap_kwargs(kwargs):
+    return{k: v if isinstance(v, TracedValue) else TracedValue(v)
+           for k, v in kwargs.items()}
 
 
 def unwrap_args(args):
@@ -155,6 +205,11 @@ def unwrap_args(args):
             new_args.append(t)
 
     return new_args
+
+
+def unwrap_kwargs(kwargs):
+    return{k: v._data if isinstance(v, TracedValue) else v
+           for k, v in kwargs.items()}
 
 
 def flatten(args):
@@ -201,12 +256,13 @@ class TracedValue(object):
         # print(
         #     f"number of args {len(args)}, number of kwargs {len(kwargs)}\n")
         # TODO record args and kwargs
+        args, kwargs = wrap_args_and_kwargs(*args, **kwargs)
         u_args, u_kwargs = unwrap_args_and_kwargs(*args, **kwargs)
 
         out = func(*u_args, **u_kwargs)
         out = TracedValue(out, metadata=func.__name__)
 
-        connect_inputs_to_output(args, kwargs, out.id)
+        record_edges(args, kwargs, out)
 
         return out
 
@@ -221,47 +277,50 @@ class TracedValue(object):
 
         return TracedFunction(self.id, out)
 
+    # TODO auto patch __magic__ methods
+
+    @ensure_traced_args_and_kwargs
+    @connect_inputs_to_output(connect_self=True)
     def __getitem__(self, idx):
-        out = self._data[idx]
+        out = self._data[idx._data]
         out = TracedValue(out, metadata=f"{self.namespace}.__getitem__({idx})")
-        record_edge(self.id, out.id)
         return out
     ##############################
     # Arithmetic operations
     ##############################
-
+    @ensure_traced_args_and_kwargs
+    @connect_inputs_to_output(connect_self=True)
     def __add__(self, other):
-        out = TracedValue(data=self._data + other,
+        out = TracedValue(data=self._data + other._data,
                           metadata=f"{self.namespace}.add")
-        record_edge(self.id, out.id)
         return out
 
+    @ensure_traced_args_and_kwargs
+    @connect_inputs_to_output(connect_self=True)
     def __radd__(self, other):
         return self + other
 
+    @ensure_traced_args_and_kwargs
+    @connect_inputs_to_output(connect_self=True)
     def __mul__(self, other):
-        out = TracedValue(data=self._data * other,
+        out = TracedValue(data=self._data * other._data,
                           metadata=f"{self.namespace}.mul")
-        record_edge(self.id, out.id)
         return out
 
+    @ensure_traced_args_and_kwargs
+    @connect_inputs_to_output(connect_self=True)
     def __rmul__(self, other):
         return self * other
 
+    @ensure_traced_args_and_kwargs
+    @connect_inputs_to_output(connect_self=True)
     def __iadd__(self, other):
-        if isinstance(other, TracedValue):
-            self._data += other._data
-        else:
-            self._data += other
+        self._data += other._data
 
         # we create a new wrapper that shares the sampe data as the original
         # this is done so we can record the connection between the inputs
         # and the output (we cannot add a self edge)
         out = TracedValue(self._data, metadata=f"{self.namespace}.iadd")
-        record_edge(self.id, out.id)
-        if isinstance(other, TracedValue):
-            record_edge(other.id, out.id)
-
         return out
 
 
@@ -273,32 +332,32 @@ class TracedFunction(object):
        whose __call__ will record the return value
     """
 
-    def __init__(self, parent_id, func):
+    def __init__(self, id, func):
         self._func = func
-        self.parent_id = parent_id
+        self.id = id
 
+    @ensure_traced_args_and_kwargs
+    @connect_inputs_to_output(connect_self=False)
     def __call__(self, *args, **kwargs):
         print(f"Invoking function {self._func} of wrapped value")
         # TODO record args and kwargs
         u_args, u_kwargs = unwrap_args_and_kwargs(*args, **kwargs)
 
         # NOTE
-        #self._func = a.func
+        # self._func = a.func
         # self._func() is equivalent to a.func() equivalent to type(a).func(a)
         # the a_self is baked in implicitly inside of self._func
         out = self._func(*u_args, **u_kwargs)
 
         if isTracedValue(out):
             out = TracedValue(out, metadata=self._func)
-            record_edge(self.parent_id, out.id)
-            connect_inputs_to_output(args, kwargs, out.id)
             return out
         raise NotImplementedError(
             f"returning function from a function is unsupported got {out}")
 
 
 def _wrap_traced_layers(module: nn.Module, depth=1000, basic_blocks=()):
-    layers_dict = {}
+    layers_dict = dict()
     for sub_layer, scope, parent, terminal in traverse_model(module, depth=depth,
                                                              basic_blocks=basic_blocks,
                                                              full=True):
@@ -338,12 +397,13 @@ class TracedLayer(nn.Module):
         self.module = module
         self.terminal = terminal
 
+    @ensure_traced_args_and_kwargs
+    @connect_inputs_to_output(connect_self=False)
     def forward(self, *args, **kwargs):
         global SCOPE
         SCOPE += f"/{self.name}"
         s = "terminal" if self.terminal else "non terminal"
         print(f"entering {s} {SCOPE}")
-
         if self.terminal:
             # TODO record args and kwargs
             u_args, u_kwargs = unwrap_args_and_kwargs(*args, **kwargs)
@@ -352,11 +412,10 @@ class TracedLayer(nn.Module):
         else:
             out = self.module(*args, **kwargs)
 
-        assert isinstance(out, TracedValue)
-        connect_inputs_to_output(args, kwargs, out.id)
-
         print(f"leaving {s} {SCOPE}")
         SCOPE = SCOPE.rsplit("/", maxsplit=1)[0]
+
+        assert isinstance(out, TracedValue)
 
         return out
 
@@ -375,11 +434,13 @@ def trace(module: nn.Module, sample, depth=1000, basic_blocks=()):
     with patch_tensor_functions():
         module(*sample)
 
-    SCOPE = ""
     _unwrap_layers(module)
 
     for m in module.modules():
         assert not isinstance(m, TracedLayer)
+
+    assert SCOPE == f"{type(module).__name__}", SCOPE
+    SCOPE = ""
 
 
 if __name__ == "__main__":
@@ -404,14 +465,19 @@ if __name__ == "__main__":
         assert isinstance(m.t, TracedFunction)
         a = m * 2
         b = 2 * m
+        assert isinstance(a, TracedValue)
+        assert isinstance(b, TracedValue)
 
-        assert isinstance(t.t().unsqueeze(0).shape[0] + 1, TracedValue)
+        s = t.t().unsqueeze(0).shape[0] + 1
+        print(s)
+        assert isinstance(s, TracedValue)
 
         m = torch.cat([m, m])
+        assert isinstance(m, TracedValue)
         print(m)
 
-        m + 1
-        1 + m
+        assert isinstance(1 + m, TracedValue)
+        assert isinstance(m + 1, TracedValue)
         c = m
         print(m)
         m += 1
