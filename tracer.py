@@ -383,49 +383,47 @@ def trace(module: nn.Module, sample, depth=1000, basic_blocks=()):
 
 
 if __name__ == "__main__":
-    if True:
-        with patch_tensor_functions():
-            assert isinstance(torch.randn(10, 10), TracedValue)
+    with patch_tensor_functions():
+        assert isinstance(torch.randn(10, 10), TracedValue)
 
-            m = torch.as_tensor([[1, 2], [3, 4]])
-            assert isinstance(m, TracedValue)
+        m = torch.as_tensor([[1, 2], [3, 4]])
+        assert isinstance(m, TracedValue)
 
-            t = torch.tensor([[1, 2], [1, 2]])
-            assert isinstance(t, TracedValue)
+        t = torch.tensor([[1, 2], [1, 2]])
+        assert isinstance(t, TracedValue)
 
-            print(t)
+        print(t)
 
-            t = torch.add(t, m)
-            assert isinstance(t, TracedValue)
-            t = m.to("cuda")
-            assert isinstance(t, TracedValue)
-            print(t)
-            # sys.exit()
-            assert isinstance(m.device, TracedValue)
-            assert isinstance(m.t, TracedFunction)
-            a = m * 2
-            b = 2 * m
+        t = torch.add(t, m)
+        assert isinstance(t, TracedValue)
+        t = m.to("cuda")
+        assert isinstance(t, TracedValue)
+        print(t)
+        # sys.exit()
+        assert isinstance(m.device, TracedValue)
+        assert isinstance(m.t, TracedFunction)
+        a = m * 2
+        b = 2 * m
 
-            assert isinstance(t.t().unsqueeze(0).shape[0] + 1, TracedValue)
+        assert isinstance(t.t().unsqueeze(0).shape[0] + 1, TracedValue)
 
-            m = torch.cat([m, m])
-            print(m)
+        m = torch.cat([m, m])
+        print(m)
 
-            m + 1
-            1 + m
-            c = m
-            print(m)
-            m += 1
-            assert c._data is m._data
-            print(c)
+        m + 1
+        1 + m
+        c = m
+        print(m)
+        m += 1
+        assert c._data is m._data
+        print(c)
 
-            print(c.shape)
-            print(c.view(c.size(0), 2, 1, 1, 1, 1).size())
+        print(c.shape)
+        print(c.view(c.size(0), 2, 1, 1, 1, 1).size())
 
-            print(c.sum(dim=0))
+        print(c.sum(dim=0))
 
-    else:
-        m = resnet18()
-        t = torch.randn(10, 3, 224, 224)
+    m = resnet18()
+    t = torch.randn(10, 3, 224, 224)
 
-        trace(m, t, basic_blocks=(BasicBlock,))
+    trace(m, t, basic_blocks=(BasicBlock,))
