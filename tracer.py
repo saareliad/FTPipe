@@ -12,6 +12,7 @@ from itertools import chain
 from functools import wraps
 import sys
 import operator
+from collections import deque
 
 # DONE
 # create a TracedValue which will record operations
@@ -32,10 +33,12 @@ FUNCTION_NAMESPACE = dict()
 
 SCOPE = ""
 
-
 # basic graph data
 IN_EGDES = defaultdict(list)
 OUT_EDGES = defaultdict(list)
+
+
+DEBUG_CREATED_SCOPES = deque()
 
 
 def record_edge(src, dest):
@@ -121,9 +124,10 @@ class TracedTensorProducingFunction():
     def __init__(self, namespace, original_function):
         self.namespace = namespace
         self.original_function = original_function
+        self.function_name = self.original_function.__name__
 
     def replace_binding(self):
-        setattr(self.namespace, self.original_function.__name__, self)
+        setattr(self.namespace, self.function_name, self)
 
     @ensure_traced_args_and_kwargs
     @connect_inputs_to_output(connect_self=False)
@@ -131,11 +135,13 @@ class TracedTensorProducingFunction():
         print(f"calling Tensor producing function {self.original_function}")
         # TODO record args and kwargs
         u_args, u_kwargs = unwrap_args_and_kwargs(*args, **kwargs)
-        out = TracedValue(self.original_function(*u_args, **u_kwargs))
+        out = TracedValue(self.original_function(*u_args, **u_kwargs),
+                          f"torch::{self.function_name}")
         return out
 
     def restore_binding(self):
-        setattr(self.namespace, self.original_function.__name__,
+        setattr(self.namespace,
+                self.function_name,
                 self.original_function)
 
 
@@ -184,13 +190,13 @@ def wrap_args(args):
         elif isinstance(t, TracedValue):
             new_args.append(t)
         else:
-            new_args.append(TracedValue(t))
+            new_args.append(TracedValue(t, f"prim::constant_{t}"))
 
     return new_args
 
 
 def wrap_kwargs(kwargs):
-    return{k: v if isinstance(v, TracedValue) else TracedValue(v)
+    return{k: v if isinstance(v, TracedValue) else TracedValue(v, f"prim::constant_{v}")
            for k, v in kwargs.items()}
 
 
@@ -235,32 +241,33 @@ class TracedValue(object):
 
     ID = 0
 
-    def __init__(self, data, metadata=None):
+    def __init__(self, data, creating_op):
         assert isTracedValue(
             data), f"TracedValue expects a basic type got {type(data)} scope {SCOPE}"
         self._data = data
-        self._metadata = metadata
         self.namespace = f"{type(self._data).__name__}"
         self.id = TracedValue.ID
         TracedValue.ID += 1
-        self.scope = SCOPE
+        self.scope = SCOPE + f"/{creating_op}"
+
+        DEBUG_CREATED_SCOPES.append(self.scope)
 
     def __repr__(self):
-        return "\nID: {}\nProduced in scope: {}\nMetadata:{}\n".format(self.id, self.scope, self._metadata)
+        return f"Node ID:{self.id}\nScope:{self.scope}\nvalue: {self._data}\n"
 
     def __torch_function__(self, func, types, args=(), kwargs=None):
         if kwargs is None:
             kwargs = {}
-        # print(f"\ncalled function {func.__name__}")
-        # print(FUNCTION_NAMESPACE[func])
-        # print(
-        #     f"number of args {len(args)}, number of kwargs {len(kwargs)}\n")
+
+        func_name = func.__name__
+        namespace = FUNCTION_NAMESPACE[func].__name__
+        op = f"/{namespace}::{func_name}"
         # TODO record args and kwargs
         args, kwargs = wrap_args_and_kwargs(*args, **kwargs)
         u_args, u_kwargs = unwrap_args_and_kwargs(*args, **kwargs)
 
         out = func(*u_args, **u_kwargs)
-        out = TracedValue(out, metadata=func.__name__)
+        out = TracedValue(out, creating_op=op)
 
         record_edges(args, kwargs, out)
 
@@ -271,11 +278,11 @@ class TracedValue(object):
         out = getattr(self._data, name)
         print()
         if isTracedValue(out):
-            ret = TracedValue(out, metadata=f"{self.namespace}.{name}")
+            ret = TracedValue(out, creating_op=f"{self.namespace}::{name}")
             record_edge(self.id, ret.id)
             return ret
 
-        return TracedFunction(self.id, out)
+        return TracedFunction(self.id, self.namespace, out)
 
     # TODO auto patch __magic__ methods
 
@@ -283,7 +290,8 @@ class TracedValue(object):
     @connect_inputs_to_output(connect_self=True)
     def __getitem__(self, idx):
         out = self._data[idx._data]
-        out = TracedValue(out, metadata=f"{self.namespace}.__getitem__({idx})")
+        out = TracedValue(
+            out, creating_op=f"{self.namespace}::unpack[{idx._data}]")
         return out
     ##############################
     # Arithmetic operations
@@ -292,7 +300,7 @@ class TracedValue(object):
     @connect_inputs_to_output(connect_self=True)
     def __add__(self, other):
         out = TracedValue(data=self._data + other._data,
-                          metadata=f"{self.namespace}.add")
+                          creating_op=f"{self.namespace}::add")
         return out
 
     @ensure_traced_args_and_kwargs
@@ -304,7 +312,7 @@ class TracedValue(object):
     @connect_inputs_to_output(connect_self=True)
     def __mul__(self, other):
         out = TracedValue(data=self._data * other._data,
-                          metadata=f"{self.namespace}.mul")
+                          creating_op=f"{self.namespace}::mul")
         return out
 
     @ensure_traced_args_and_kwargs
@@ -320,7 +328,7 @@ class TracedValue(object):
         # we create a new wrapper that shares the sampe data as the original
         # this is done so we can record the connection between the inputs
         # and the output (we cannot add a self edge)
-        out = TracedValue(self._data, metadata=f"{self.namespace}.iadd")
+        out = TracedValue(self._data, creating_op=f"{self.namespace}::iadd")
         return out
 
 
@@ -332,9 +340,10 @@ class TracedFunction(object):
        whose __call__ will record the return value
     """
 
-    def __init__(self, id, func):
+    def __init__(self, self_id, namespace, func):
         self._func = func
-        self.id = id
+        self.self_id = self_id
+        self.namespace = namespace
 
     @ensure_traced_args_and_kwargs
     @connect_inputs_to_output(connect_self=False)
@@ -350,7 +359,8 @@ class TracedFunction(object):
         out = self._func(*u_args, **u_kwargs)
 
         if isTracedValue(out):
-            out = TracedValue(out, metadata=self._func)
+            out = TracedValue(out, f"{self.namespace}::{self._func.__name__}")
+            record_edge(self.self_id, out.id)
             return out
         raise NotImplementedError(
             f"returning function from a function is unsupported got {out}")
@@ -408,7 +418,7 @@ class TracedLayer(nn.Module):
             # TODO record args and kwargs
             u_args, u_kwargs = unwrap_args_and_kwargs(*args, **kwargs)
             out = self.module(*u_args, **u_kwargs)
-            out = TracedValue(out)
+            out = TracedValue(out, "")
         else:
             out = self.module(*args, **kwargs)
 
@@ -429,7 +439,7 @@ def trace(module: nn.Module, sample, depth=1000, basic_blocks=()):
     global SCOPE
     SCOPE = f"{type(module).__name__}"
 
-    sample = [TracedValue(t) for t in sample]
+    sample = [TracedValue(t, f"input{idx}") for idx, t in enumerate(sample)]
 
     with patch_tensor_functions():
         module(*sample)
@@ -449,6 +459,7 @@ if __name__ == "__main__":
 
         m = torch.as_tensor([[1, 2], [3, 4]])
         assert isinstance(m, TracedValue)
+        print(m)
 
         t = torch.tensor([[1, 2], [1, 2]])
         assert isinstance(t, TracedValue)
@@ -460,9 +471,9 @@ if __name__ == "__main__":
         t = m.to("cuda")
         assert isinstance(t, TracedValue)
         print(t)
-        # sys.exit()
         assert isinstance(m.device, TracedValue)
         assert isinstance(m.t, TracedFunction)
+        m.t()
         a = m * 2
         b = 2 * m
         assert isinstance(a, TracedValue)
@@ -489,6 +500,12 @@ if __name__ == "__main__":
 
         print(c.sum(dim=0))
 
+    print()
+    print("all created scopes")
+    for s in DEBUG_CREATED_SCOPES:
+        print(s)
+    print()
+    sys.exit()
     m = resnet18()
     t = torch.randn(10, 3, 224, 224)
 
