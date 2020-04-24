@@ -27,7 +27,7 @@ RUN mkdir /opt/ccache && ccache --set-config=cache_dir=/opt/ccache
 ENV PATH /opt/conda/bin:$PATH
 
 FROM dev-base as conda
-RUN curl -v -o ~/miniconda.sh -O  https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh  && \
+RUN curl -o ~/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh  && \
     chmod +x ~/miniconda.sh && \
     ~/miniconda.sh -b -p /opt/conda && \
     rm ~/miniconda.sh && \
@@ -38,7 +38,7 @@ RUN curl -v -o ~/miniconda.sh -O  https://repo.continuum.io/miniconda/Miniconda3
 FROM dev-base as submodule-update
 WORKDIR /opt/pytorch
 COPY . .
-RUN git submodule update --init --recursive
+RUN git submodule sync && git submodule update --init --recursive
 
 FROM conda as build
 WORKDIR /opt/pytorch
