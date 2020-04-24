@@ -448,9 +448,9 @@ class GPipePartition(nn.Module):
     
     def forward(self, *args, **kw):
         if self.is_last_micro_batch:
-            self.no_recomputation_partition.forward(*args, **kw)            
+            return self.no_recomputation_partition.forward(*args, **kw)            
         else:
-            self.recomputation_partition.forward(*args, **kw)
+            return self.recomputation_partition.forward(*args, **kw)
 
     def recompute(self, micro_batch_idx):
         if not self.is_last_micro_batch:
