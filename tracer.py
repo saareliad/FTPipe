@@ -414,10 +414,7 @@ def isTracedValue(data):
 ##############################
 
 def trace(module: nn.Module, args=(), kwargs=None, depth=1000, basic_blocks=()):
-    if not isinstance(args, tuple):
-        args = (args,)
-    if kwargs is None:
-        kwargs = dict()
+    args, kwargs = prepare_args_and_kwargs(args=args, kwargs=kwargs)
 
     layers_dict = _wrap_traced_layers(module, depth=depth,
                                       basic_blocks=basic_blocks)
@@ -434,6 +431,34 @@ def trace(module: nn.Module, args=(), kwargs=None, depth=1000, basic_blocks=()):
 
     assert CURRENT_SCOPE == f"{type(module).__name__}", CURRENT_SCOPE
     CURRENT_SCOPE = ""
+
+
+def prepare_args_and_kwargs(args=(), kwargs=None):
+    # NOTE we cannot use record_args_and_kwargs
+    # as they recursively record nested object
+    # but semantically we should only record the top level object
+    # for example a list input should not record the individual elements
+    # until they are accessed
+    # we should only know that a list was passed
+    # same with kwargs
+    if not isinstance(args, tuple):
+        args = (args,)
+    if kwargs is None:
+        kwargs = dict()
+
+    wrapped_args = []
+    for idx, a in enumerate(args):
+        v = TracedValue(f"input{idx}")
+        v.set_data(a)
+        wrapped_args.append(v)
+
+    wrapped_kwargs = dict()
+    for k, a in kwargs.items():
+        v = TracedValue(f"kwarg: {k}")
+        v.set_data(a)
+        wrapped_kwargs[k] = v
+
+    return wrapped_args, wrapped_kwargs
 
 
 @contextmanager
@@ -530,6 +555,9 @@ def record_args_and_kwargs(*args, **kwargs):
         and build the necessary hierarchy in the graph
         for list/tuple/set elements we record their position
         for dictionaries we record the keywords used
+        nested iterables will first record the elements and than the iterable itself
+        aka list elements are created before the list itself
+        thus ensuring topological/chronological order of traced values
 
         note that a TracedValue cannot be a dictionary key
     """
@@ -792,7 +820,7 @@ def check_is_valid_graph():
 
 
 if __name__ == "__main__":
-    if True:
+    if False:
         with patch_tensor_creating_functions():
             t = torch.randn(10, 10)
             t.view(size=[t.shape[0], 2, 5])
@@ -848,8 +876,10 @@ if __name__ == "__main__":
 
         m = resnet18().cuda()
         t = torch.randn(10, 3, 224, 224).cuda()
-        m(t)
-        trace(m, t, basic_blocks=(BasicBlock,))
+        m(x=t)
+        args = (t,)
+        kwargs = {"x": t}
+        trace(m, kwargs=kwargs, basic_blocks=(BasicBlock,))
         print()
 
     show_graph()
