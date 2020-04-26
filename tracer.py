@@ -73,7 +73,7 @@ class TracedTensorProducingFunction():
 
         # record the operation
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
-        out = TracedValue(f"/torch::{self.function_name}")
+        out = TracedValue(f"/{self.namespace.__name__}::{self.function_name}")
         record_function_args_and_kwargs(out.id, args, kwargs)
 
         # perform the operation
@@ -442,8 +442,8 @@ def patch_tensor_creating_functions():
     are traced
     """
     # Before yield as the enter method
-    patched_functions = [TracedTensorProducingFunction(torch, f)
-                         for f in TENSOR_PRODUCING_FUNCTIONS]
+    patched_functions = [TracedTensorProducingFunction(namespace, f)
+                         for f, namespace in TENSOR_PRODUCING_FUNCTIONS.items()]
 
     for f in patched_functions:
         f.replace_binding()
@@ -486,35 +486,36 @@ def _unwrap_layers(module: nn.Module):
 
 # those function create tensors from potentially non tensor data
 # so we wrap them in order to record their creation
-TENSOR_PRODUCING_FUNCTIONS = (
-    torch.as_tensor,
-    torch.from_numpy,
-    torch.tensor,
-    torch.align_tensors,
-    torch.arange,
-    torch.as_strided,
-    torch.bartlett_window,
-    torch.blackman_window,
-    torch.empty,
-    torch.empty_strided,
-    torch.eye,
-    torch.from_file,
-    torch.full,
-    torch.hamming_window,
-    torch.hann_window,
-    torch.linspace,
-    torch.logspace,
-    torch.ones,
-    torch.rand,
-    torch.randn,
-    torch.randint,
-    torch.randperm,
-    torch.range,
-    torch.sparse_coo_tensor,
-    torch.zeros,
-    torch.cat,
-    torch.stack
-)
+# we keep this in dict format to enable registering more namepsaces as necessary
+TENSOR_PRODUCING_FUNCTIONS = {
+    torch.as_tensor: torch,
+    torch.from_numpy: torch,
+    torch.tensor: torch,
+    torch.align_tensors: torch,
+    torch.arange: torch,
+    torch.as_strided: torch,
+    torch.bartlett_window: torch,
+    torch.blackman_window: torch,
+    torch.empty: torch,
+    torch.empty_strided: torch,
+    torch.eye: torch,
+    torch.from_file: torch,
+    torch.full: torch,
+    torch.hamming_window: torch,
+    torch.hann_window: torch,
+    torch.linspace: torch,
+    torch.logspace: torch,
+    torch.ones: torch,
+    torch.rand: torch,
+    torch.randn: torch,
+    torch.randint: torch,
+    torch.randperm: torch,
+    torch.range: torch,
+    torch.sparse_coo_tensor: torch,
+    torch.zeros: torch,
+    torch.cat: torch,
+    torch.stack: torch,
+}
 
 
 ##############################
