@@ -2,6 +2,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 from functools import wraps
 from itertools import chain
+import operator
 
 import torch
 import torch.nn as nn
@@ -91,8 +92,9 @@ def delegate_to_traced_value(func):
 
         # retrive the operation implemntation of the traced value
         # and perform it on the inputs
+        print(f"delegating {op_name}")
         args, _ = unpack_traced_args_and_kwargs(*args)
-        actual_op = getattr(type(args[0]), op_name)
+        actual_op = getattr(operator, op_name)
         out.set_data(actual_op(*args))
 
         return out
@@ -281,6 +283,14 @@ class TracedValue(object):
     ##############################
     # Logical operations
     ##############################
+    @delegate_to_traced_value
+    def __eq__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def ne(self, other):
+        pass
+
     @tracing_not_supported
     def __and__(self, other):
         return self.__and__(other)
@@ -302,20 +312,12 @@ class TracedValue(object):
         return self.__lt__(other)
 
     @tracing_not_supported
-    def ne(self, other):
-        return self.ne(other)
-
-    @tracing_not_supported
     def __or__(self, other):
         return self.__or__(other)
 
     @tracing_not_supported
     def __xor__(self, other):
         return self.__xor__(other)
-
-    @tracing_not_supported
-    def __eq__(self, other):
-        return self.__eq__(other)
 
 
 class TracedFunction(object):
@@ -942,7 +944,10 @@ if __name__ == "__main__":
 
         m = resnet18().cuda()
         t = torch.randn(10, 3, 224, 224).cuda()
-        m(x=t)
+
+        t = None
+        # sys.exit()
+        # m(x=t)
         args = (t,)
         kwargs = {"x": t}
         trace(m, kwargs=kwargs, basic_blocks=(BasicBlock,))
