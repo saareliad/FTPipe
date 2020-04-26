@@ -10,7 +10,7 @@ class WorkScheduler(abc.ABC):
         self.step_every = step_every
 
     @abc.abstractmethod
-    def __call__(self, stage, num_stages, num_steps, done_fwds,
+    def __call__(self, stage, num_stages, num_batches, done_fwds,
                  done_bwds) -> bool:
         raise NotImplementedError()
 
@@ -26,14 +26,14 @@ class FBScheduler(WorkScheduler):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
 
-    def __call__(self, stage, num_stages, num_steps, done_fwds, done_bwds):
+    def __call__(self, stage, num_stages, num_batches, done_fwds, done_bwds):
         assert 0 <= stage < num_stages
 
         # Last stage
         if stage == num_stages - 1:
             return True
 
-        if done_fwds == num_steps:
+        if done_fwds == num_batches:
             return False
 
         delta = done_fwds - done_bwds
@@ -51,14 +51,14 @@ class PipeDream1F1BScheduler(WorkScheduler):
     def set_warmup(self, warmup=True):
         self.warmup = warmup
 
-    def __call__(self, stage, num_stages, num_steps, done_fwds, done_bwds):
+    def __call__(self, stage, num_stages, num_batches, done_fwds, done_bwds):
         assert 0 <= stage < num_stages
 
         # Last stage
         if stage == num_stages - 1:
             return True
 
-        if done_fwds == num_steps:
+        if done_fwds == num_batches:
             return False
 
         delta = done_fwds - done_bwds
@@ -83,12 +83,12 @@ class SeqScheduler(WorkScheduler):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
 
-    def __call__(self, stage, num_stages, num_steps, done_fwds, done_bwds):
+    def __call__(self, stage, num_stages, num_batches, done_fwds, done_bwds):
 
         if stage == num_stages - 1:
             return True
 
-        if done_fwds == num_steps:
+        if done_fwds == num_batches:
             return False
 
         return done_bwds == done_fwds
@@ -98,7 +98,7 @@ class StepEvery1F1BScheduler(WorkScheduler):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
 
-    def __call__(self, stage, num_stages, num_steps, done_fwds, done_bwds):
+    def __call__(self, stage, num_stages, num_batches, done_fwds, done_bwds):
         raise NotImplementedError()
 
 
@@ -121,16 +121,17 @@ class GpipeScheduler(WorkScheduler):
         super().__init__(*args, **kw)
         assert hasattr(self, "step_every")
 
-    def __call__(self, stage, num_stages, num_steps, done_fwds, done_bwds):
+    def __call__(self, stage, num_stages, num_batches, done_fwds, done_bwds):
+        # NOTE: num_batches is number of batches
         num_micro_batches = self.step_every
 
-        fwd_batch_idx = done_fwds // num_micro_batches
         # Supports shorter "last batch"
         # User responsibility to check that
         # (1) last_batch_size % (normal_batch_size // step_every) == 0
         # (2) normal_batch_size % step_every == 0
-        if fwd_batch_idx == num_steps:
+        if done_fwds == num_batches:
             return False
+        fwd_batch_idx = done_fwds // num_micro_batches
         bwd_batch_idx = done_bwds // num_micro_batches
 
         return fwd_batch_idx == bwd_batch_idx
@@ -284,12 +285,13 @@ if __name__ == "__main__":
         breakpoint()
 
     num_stages = 4
-    EXTRA = 10
+    EXTRA = 1
     # stage = 0  # Should test the edge case.
     num_batches = num_stages * 2 + 1 + EXTRA
     step_every = 4
     sched_name = "1F1B"
-    sched_name = "GPIPE"
+    sched_name = "SEQ"
+    sched_name = 'GPIPE'
     # sched_name = "PIPEDREAM"
 
     PRINT_STAGE_STRINGS = True
