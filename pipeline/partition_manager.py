@@ -24,7 +24,7 @@ from .true_weights_storage import TrueWeightsStorage
 
 # from gpu_mem_track import MemTracker
 # import time
-
+DEBUG_FAKE_DRAW = True
 
 def make_buff(comm_handler,
               is_bwd,
@@ -374,10 +374,16 @@ class SinglePartitionManager:
     def set_trainer(self, trainer: PartitionedTrainer):
         self.trainer = trainer
 
-    def set_dataloader(self, dataloader):
+    def set_dataloader(self, dataloader, run_limit=-1, fake_draw=DEBUG_FAKE_DRAW):
         assert self.is_first_partition or self.is_last_partition
         # self.dataloader = dataloader
         self.dl_iter = iter(dataloader)
+
+        if fake_draw and (run_limit < len(dataloader)):
+            fake_draw = len(dataloader) - run_limit
+            for _ in range(fake_draw):
+                next(self.dl_iter)
+
 
     def set_weight_predictor(self, weight_predictor: WeightPredictor,
                              nag_with_predictor: bool):
@@ -463,11 +469,32 @@ class SinglePartitionManager:
             elif self.fwd_recv_buffers.is_initialized():
                 self.fwd_recv_buffers.create()
 
-    def wait_on_sent_object(self, is_fwd, fin=False):
+    def wait_on_sent_object(self, is_fwd, fin=False, clean_first=True):
         # TODO: can write the entire thing MUCH more nicely
         # if we just save asside and insert the new objects at the end.
 
         obj_holder = self.async_fwd_objects if is_fwd else self.async_bwd_objects
+        # Attempt to clean all done object for saving memory
+        # NOTE: this should be removed when this is supported by pytorch.
+        if clean_first:
+            to_del = []
+            for i in obj_holder:
+                a, b = obj_holder[i]
+                to_remove = [i for i, r in enumerate(a) if r.is_completed()]
+                for x in sorted(to_remove, reverse=True):
+                    del a[x]
+                # break early for simlicity
+                if not a:
+                    to_del.append(i)
+                else:
+                    break
+                    
+            for i in sorted(to_del, reverse=True):
+                del obj_holder[i]
+            
+            if not obj_holder:
+                return
+        
         if not fin and (len(obj_holder) <= self.sent_obejct_patience):
             return
 
@@ -1173,7 +1200,7 @@ class GPipePartitionManager(SinglePartitionManager):
         is_last_micro_batch = last_due_step_every or last_due_end
         partition.is_last_micro_batch = is_last_micro_batch
         old_lrs = None
-
+        
         # Special case: Last batch with differnt size
         if last_due_end and self.last_batch_train_shapes:
             # Delete previous buffers
@@ -1194,6 +1221,12 @@ class GPipePartitionManager(SinglePartitionManager):
                 is_grad=True)
 
             # Overrride
+            self.bwd_recv_buffers = bwd_recv_buffers
+        elif self.changed_shapes_last_batch_bwd:
+            # NOTE: this is a special case for gpipe as bwd is LIFO.
+            # already change, replace:
+            self.changed_shapes_last_batch_bwd = False
+            bwd_recv_buffers = self._bwd_recv_buffers()
             self.bwd_recv_buffers = bwd_recv_buffers
         else:
             bwd_recv_buffers = self.bwd_recv_buffers
@@ -1301,6 +1334,9 @@ class GPipePartitionManager(SinglePartitionManager):
                 done_fwds += 1
             else:
                 # NOTE: we want LIFO order
+                # TODO fix, we need to know if its last.
+                # FIXME: last batch size is problematic
+                # correspondig_fwd = 
                 micro_batch_to_run = done_fwds - 1 - done_bwds
                 sent_request_objects = run_batch_backward(
                     micro_batch_to_run, num_batches)

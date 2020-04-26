@@ -27,7 +27,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
         if eval_batches_to_run == 0:
             return False
         if test_dl:
-            partition.set_dataloader(test_dl)
+            partition.set_dataloader(test_dl, eval_batches_to_run)
         partition.eval()
 
         if statistics:
@@ -53,7 +53,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
         # Set Dataloader
         # sets only to first (+last) partition
         if train_dl:
-            partition.set_dataloader(train_dl)
+            partition.set_dataloader(train_dl, train_batches_to_run)
         # Start training
         partition.train()
         if statistics:
