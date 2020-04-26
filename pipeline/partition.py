@@ -117,13 +117,13 @@ class Partition(nn.Module):
                     # TODO: it could be done better if we use multiple input buffers instead of allocating
                     # (when #buffers==#max(len(input_buffer)))
                     # In pytorch it can happen auto matically with THCCashingAlocator.
-                    x = x.data.clone().requires_grad_(self._REQ_GRAD)
+                    x = x.data.clone().requires_grad_(self._REQ_GRAD and x.is_floating_point())
                     self.input_buffer[micro_batch_idx] = x
                     self.rng_stasher.stash_rng_state(micro_batch_idx)
                     x = self.layers(x)
                 else:
                     x = [
-                        tensor.data.clone().requires_grad_(self._REQ_GRAD)
+                        tensor.data.clone().requires_grad_(self._REQ_GRAD and tensor.is_floating_point())
                         for tensor in x
                     ]
                     self.input_buffer[micro_batch_idx] = x
@@ -274,13 +274,13 @@ class LastPartition(Partition):
             if isinstance(x, Tensor):
                 # # See note on option 1 below.
                 with torch.no_grad():
-                    x = x.requires_grad_()
+                    x = x.requires_grad_(x.is_floating_point())
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(x)
             else:
                 # Option 2
                 with torch.no_grad():
-                    x = [tensor.requires_grad_() for tensor in x]
+                    x = [tensor.requires_grad_(tensor.is_floating_point()) for tensor in x]
 
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(*x)
@@ -313,7 +313,7 @@ class LastPartitionWithLabelInput(LastPartition):
         label = x[-1]
         x = x[:-1]
         if self.training:
-            x = [tensor.requires_grad_() for tensor in x]
+            x = [tensor.requires_grad_(tensor.is_floating_point()) for tensor in x]
             self.input_buffer[micro_batch_idx] = x
             x = self.layers(*x, label)
         else:
@@ -380,14 +380,14 @@ class PartitionWithoutRecomputation(nn.Module):
                 # Save activation only if gradient is needed.
                 if self._REQ_GRAD:
                     with torch.no_grad():
-                        x = x.data.clone().requires_grad_(self._REQ_GRAD)
+                        x = x.data.clone().requires_grad_(self._REQ_GRAD and x.is_floating_point())
                     self.input_buffer[micro_batch_idx] = x
                 x = self.layers(x)
             else:
                 if self._REQ_GRAD:
                     with torch.no_grad():
                         x = [
-                            tensor.data.clone().requires_grad_(self._REQ_GRAD)
+                            tensor.data.clone().requires_grad_(self._REQ_GRAD and tensor.is_floating_point())
                             for tensor in x
                         ]
                         self.input_buffer[micro_batch_idx] = x
@@ -423,6 +423,11 @@ class PartitionWithoutRecomputation(nn.Module):
         else:
             return [y.grad for y in x]
 
+
+class FirstPartitionWithoutRecomputation(PartitionWithoutRecomputation):
+    """ its Just a hack for GPIpe... """
+    def __init__(self, *args, **kw):
+        super().__init__(*args, _REQ_GRAD=False, **kw)
 
 ##################
 # GPipe
@@ -475,55 +480,10 @@ class GPipePartition(nn.Module):
 class GPipeFirstPartition(GPipePartition):
     """ Do not do recomputation on the last micro batch """
     RECOMP_PARTITION_CLS = FirstPartition
-    NO_RECOMP_PARTITION_CLS = PartitionWithoutRecomputation
+    NO_RECOMP_PARTITION_CLS = FirstPartitionWithoutRecomputation
 
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
-
-
-# class GPipeRecomputingLastPartition(Partition):
-#     _REQ_GRAD = True
-#     _HAS_DUMMY_FORWARD = True  # NOTE: The only difference
-
-#     def __init__(self, *args, **kw):
-#         super(GPipeRecomputingLastPartition, self).__init__(*args, **kw)
-
-#     def forward(self, x, micro_batch_idx):
-#     # will be called at using partition
-#     x = super().forward(x, micro_batch_idx)
-#     #  Last partition outputs should be in a tensor format
-#     if not isinstance(x, Tensor):
-#         assert (len(x) == 1)
-#         return x[0]
-#     return x
-
-# class GPipeRecomputingLastPartitionWithLabelInput(Partition):
-#     """A assuming that given x is tuple in which last idx is the label.
-#         We don't store the label, because we don't need gradient on it.
-
-#         In use for our partitoned transformers with LMhead.
-#     """
-#     _REQ_GRAD = True
-#     _HAS_DUMMY_FORWARD = True
-
-#     def forward(self, x, micro_batch_idx):
-#         assert not isinstance(x, Tensor)
-#         label = x[-1]
-#         x = x[:-1]
-#         with torch.no_grad():
-#             if self.training:
-#                 x = [tensor.data.clone().requires_grad_() for tensor in x]
-#                 self.input_buffer[micro_batch_idx] = x
-#                 x = self.layers(*x, label)
-#             else:
-#                 x = self.layers(*x, label)
-
-#  Last partition outputs should be in a tensor format
-# will be called at using partition
-# if not isinstance(x, Tensor):
-#     assert (len(x) == 1)
-#     return x[0]
-# return x
 
 
 class GPipeLastPartition(GPipePartition):

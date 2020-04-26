@@ -1085,15 +1085,15 @@ class GPipePartitionManager(SinglePartitionManager):
         last_due_step_every = ((batch_idx + 1) % self.step_every) == 0
         last_due_end = batch_idx == (num_batches - 1)
         is_last_micro_batch = last_due_step_every or last_due_end
-        partition.is_last_micro_batch = is_last_micro_batch
         partition = self.partition
         trainer = self.trainer
         old_lrs = None
+        partition.is_last_micro_batch = is_last_micro_batch
 
         (x, *ctx) = self.saved_for_backward.pop(batch_idx)
 
         # NOTE: for last partition- batch idx is the same as num backwards.
-        do_step == is_last_micro_batch
+        do_step = is_last_micro_batch
         # Backprop
         # For the last batch, we must scale down the learning rate, and then restore.
         if last_due_end and (not last_due_step_every):
@@ -1270,25 +1270,23 @@ class GPipePartitionManager(SinglePartitionManager):
                 sent_request_objects = run_batch_forward(done_fwds,
                                                          num_batches,
                                                          done_bwds=done_bwds)
-                # wait on prev send
-                if async_fwd_objects:
-                    wait_on_sent_object(is_fwd=True)
-                async_fwd_objects[done_fwds] = sent_request_objects
+                if sent_request_objects:
+                    # wait on prev send
+                    if async_fwd_objects:
+                        wait_on_sent_object(is_fwd=True)
+                    async_fwd_objects[done_fwds] = sent_request_objects
+                done_fwds += 1
             else:
-
+                # NOTE: we want LIFO order
+                micro_batch_to_run = done_fwds - done_bwds
                 sent_request_objects = run_batch_backward(
-                    done_bwds, num_batches)
+                    micro_batch_to_run, num_batches)
 
                 if not (is_first_partition):
                     # wait on prev send
                     if async_bwd_objects:
                         wait_on_sent_object(is_fwd=False)
-                    async_bwd_objects[done_bwds] = sent_request_objects
-
-            # Increase counters
-            if action_is_fwd:
-                done_fwds += 1
-            else:
+                    async_bwd_objects[micro_batch_to_run] = sent_request_objects
                 done_bwds += 1
 
         while len(async_fwd_objects) > 0:
