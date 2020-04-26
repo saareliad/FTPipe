@@ -33,6 +33,11 @@ NODE_SCOPES = dict()
 KWARGS = defaultdict(dict)
 ARGS = defaultdict(list)
 
+VALUE_TYPES = dict()
+TENSOR_DTYPES = dict()
+TENSOR_SHAPES = dict()
+
+CONSTANT_VALUES = dict()
 
 ##############################
 # Tracing Wrappers
@@ -137,6 +142,10 @@ class TracedValue(object):
             data), f"TracedValue expects a basic type got {type(data)} scope {self.scope}"
         self._data = data
         self.namespace = f"{type(self._data).__name__}"
+        VALUE_TYPES[self.id] = type(data)
+        if isinstance(data, Tensor):
+            TENSOR_DTYPES[self.id] = data.dtype
+            TENSOR_SHAPES[self.id] = data.shape
 
     def __repr__(self):
         return f"Node ID:{self.id}\nScope:{self.scope}\nvalue: {self._data}\n"
@@ -361,9 +370,13 @@ class TracedLayer(nn.Module):
 
     def forward(self, *args, **kwargs):
         global CURRENT_SCOPE
-        CURRENT_SCOPE += f"/{self.name}"
+        if CURRENT_SCOPE == "":
+            CURRENT_SCOPE = self.name
+        else:
+            CURRENT_SCOPE += f"/{self.name}"
+
         s = "terminal" if self.terminal else "non terminal"
-        print(f"entering {s} {CURRENT_SCOPE}")
+        print(f"entering {s} scope {CURRENT_SCOPE}")
 
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
 
@@ -379,7 +392,7 @@ class TracedLayer(nn.Module):
             with record_free_floating_parameters_and_buffers(self.module):
                 out = self.module(*args, **kwargs)
 
-        print(f"leaving {s} {CURRENT_SCOPE}")
+        print(f"leaving {s} scope {CURRENT_SCOPE}")
         CURRENT_SCOPE = CURRENT_SCOPE.rsplit("/", maxsplit=1)[0]
 
         assert isinstance(out, TracedValue)
@@ -416,6 +429,11 @@ def trace(module: nn.Module, args=(), kwargs=None, depth=1000, basic_blocks=()):
 
     for m in module.modules():
         assert not isinstance(m, TracedLayer)
+
+    global CURRENT_SCOPE
+    assert CURRENT_SCOPE == traced_module.name
+
+    CURRENT_SCOPE = ""
 
 
 def prepare_args_and_kwargs(args=(), kwargs=None):
@@ -580,9 +598,11 @@ def record_args(args, top_level):
         elif isinstance(a, TracedValue):
             traced_value = a
         else:
-            s = "Tensor" if isinstance(a, Tensor) else a
-            traced_value = TracedValue(f"/prim::Constant_{s}")
+            assert not isinstance(
+                a, Tensor), "tensor constants should not happen"
+            traced_value = TracedValue(f"/prim::Constant")
             traced_value.set_data(a)
+            CONSTANT_VALUES[traced_value.id] = a
 
         if top_level:
             new_args.append(traced_value)
@@ -624,9 +644,11 @@ def record_kwargs(kwargs, top_level):
         elif isinstance(v, TracedValue):
             traced_value = v
         else:
-            s = "Tensor" if isinstance(v, Tensor) else v
-            traced_value = TracedValue(f"/prim::Constant_{s}")
+            assert not isinstance(
+                v, Tensor), "tensor constants should not happen"
+            traced_value = TracedValue(f"/prim::Constant")
             traced_value.set_data(v)
+            CONSTANT_VALUES[traced_value.id] = v
 
         new_kwargs_ids[k] = traced_value.id
 
@@ -752,7 +774,13 @@ def build_dot():
 
     # add nodes
     for idx, s in NODE_SCOPES.items():
-        dot.node(str(idx), label=f"{s}\nidx: {idx}", fillcolor="grey")
+        label = f"{s}\nidx: {idx}\nvalue type: {VALUE_TYPES[idx]}"
+        if idx in CONSTANT_VALUES:
+            label += f"\nvalue: {CONSTANT_VALUES[idx]}"
+        if idx in TENSOR_DTYPES:
+            label += f"\ntensor of type: {TENSOR_DTYPES[idx]}\nshape: {TENSOR_SHAPES[idx]}"
+
+        dot.node(str(idx), label=label, fillcolor="grey")
 
     # add edges
     for idx, in_nodes in IN_EDGES.items():
@@ -780,6 +808,8 @@ def check_is_valid_graph():
     n = len(IN_EDGES)
     assert len(IN_EDGES) == len(OUT_EDGES)
     assert len(IN_EDGES) == len(NODE_SCOPES)
+    assert len(VALUE_TYPES) == n
+    assert len(TENSOR_SHAPES) == len(TENSOR_DTYPES)
 
     errors = []
     for i in range(n):
@@ -826,7 +856,31 @@ def check_is_valid_graph():
                                f"keyword args: {KWARGS[i]}",
                                f"outgoing edges: {OUT_EDGES[i]}",
                                ""])
-            valid = False
+                valid = False
+
+        if i in CONSTANT_VALUES or "prim::Constant" in NODE_SCOPES[i]:
+            if not ((i in CONSTANT_VALUES) and ("prim::Constant" in NODE_SCOPES[i])):
+                errors.extend(["constant value not recorded in CONSTANT_VALUES",
+                               f"node id: {i}",
+                               f"scope: {NODE_SCOPES[i]}",
+                               f"incoming edges: {IN_EDGES[i]}",
+                               f"positional args: {ARGS[i]}",
+                               f"keyword args: {KWARGS[i]}",
+                               f"outgoing edges: {OUT_EDGES[i]}",
+                               ""])
+                valid = False
+
+        if i in TENSOR_SHAPES or i in TENSOR_DTYPES or issubclass(VALUE_TYPES[i], Tensor):
+            if not ((i in TENSOR_SHAPES) and (i in TENSOR_DTYPES) and (issubclass(VALUE_TYPES[i], Tensor))):
+                errors.extend(["tensor value value not recorded in all of TENSOR_SHAPES TENSOR_DTYPES VALUE_TYPES",
+                               f"node id: {i}",
+                               f"scope: {NODE_SCOPES[i]}",
+                               f"incoming edges: {IN_EDGES[i]}",
+                               f"positional args: {ARGS[i]}",
+                               f"keyword args: {KWARGS[i]}",
+                               f"outgoing edges: {OUT_EDGES[i]}",
+                               ""])
+                valid = False
 
     return valid, "\n".join(errors)
 
