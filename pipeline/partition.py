@@ -36,6 +36,11 @@ DEFAULT_CLASSES_LIST_TO_PATCH = [
 
 # TODO: LayerNorm?
 
+# def single_tensor(x):
+#     if not isinstance(x, Tensor):
+#         assert (len(x) == 1)
+#         return x[0]
+#     return x
 
 def get_buffers_for_ddp_sync(model,
                              classes_to_patch=DEFAULT_CLASSES_LIST_TO_PATCH):
@@ -117,13 +122,15 @@ class Partition(nn.Module):
                     # TODO: it could be done better if we use multiple input buffers instead of allocating
                     # (when #buffers==#max(len(input_buffer)))
                     # In pytorch it can happen auto matically with THCCashingAlocator.
-                    x = x.data.clone().requires_grad_(self._REQ_GRAD and x.is_floating_point())
+                    x = x.data.clone().requires_grad_(
+                        self._REQ_GRAD and x.is_floating_point())
                     self.input_buffer[micro_batch_idx] = x
                     self.rng_stasher.stash_rng_state(micro_batch_idx)
                     x = self.layers(x)
                 else:
                     x = [
-                        tensor.data.clone().requires_grad_(self._REQ_GRAD and tensor.is_floating_point())
+                        tensor.data.clone().requires_grad_(
+                            self._REQ_GRAD and tensor.is_floating_point())
                         for tensor in x
                     ]
                     self.input_buffer[micro_batch_idx] = x
@@ -280,7 +287,10 @@ class LastPartition(Partition):
             else:
                 # Option 2
                 with torch.no_grad():
-                    x = [tensor.requires_grad_(tensor.is_floating_point()) for tensor in x]
+                    x = [
+                        tensor.requires_grad_(tensor.is_floating_point())
+                        for tensor in x
+                    ]
 
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(*x)
@@ -313,7 +323,10 @@ class LastPartitionWithLabelInput(LastPartition):
         label = x[-1]
         x = x[:-1]
         if self.training:
-            x = [tensor.requires_grad_(tensor.is_floating_point()) for tensor in x]
+            x = [
+                tensor.requires_grad_(tensor.is_floating_point())
+                for tensor in x
+            ]
             self.input_buffer[micro_batch_idx] = x
             x = self.layers(*x, label)
         else:
@@ -380,14 +393,16 @@ class PartitionWithoutRecomputation(nn.Module):
                 # Save activation only if gradient is needed.
                 if self._REQ_GRAD:
                     with torch.no_grad():
-                        x = x.data.clone().requires_grad_(self._REQ_GRAD and x.is_floating_point())
+                        x = x.data.clone().requires_grad_(
+                            self._REQ_GRAD and x.is_floating_point())
                     self.input_buffer[micro_batch_idx] = x
                 x = self.layers(x)
             else:
                 if self._REQ_GRAD:
                     with torch.no_grad():
                         x = [
-                            tensor.data.clone().requires_grad_(self._REQ_GRAD and tensor.is_floating_point())
+                            tensor.data.clone().requires_grad_(
+                                self._REQ_GRAD and tensor.is_floating_point())
                             for tensor in x
                         ]
                         self.input_buffer[micro_batch_idx] = x
@@ -429,6 +444,7 @@ class FirstPartitionWithoutRecomputation(PartitionWithoutRecomputation):
     def __init__(self, *args, **kw):
         super().__init__(*args, _REQ_GRAD=False, **kw)
 
+
 ##################
 # GPipe
 # TODO: we can easly avoid clones() and just use the same buffer.
@@ -450,10 +466,10 @@ class GPipePartition(nn.Module):
         self.recomputation_partition = self.RECOMP_PARTITION_CLS(*args, **kw)
         self.no_recomputation_partition = self.NO_RECOMP_PARTITION_CLS(
             *args, **kw)
-    
+
     def forward(self, *args, **kw):
         if self.is_last_micro_batch:
-            return self.no_recomputation_partition.forward(*args, **kw)            
+            return self.no_recomputation_partition.forward(*args, **kw)
         else:
             return self.recomputation_partition.forward(*args, **kw)
 
@@ -462,6 +478,9 @@ class GPipePartition(nn.Module):
             self.recomputation_partition.recompute(micro_batch_idx)
 
     def backward_from_recomputed(self, g, micro_batch_idx):
+        # NOTE: for the last partition this API is not very clear
+        # Currently - ,just pass (NONE) as grad_tensor when we do recomputation,
+        # or call loss.backward() when we don't.
         if self.is_last_micro_batch:
             self.no_recomputation_partition.backward_from_recomputed(
                 g, micro_batch_idx)
@@ -476,6 +495,20 @@ class GPipePartition(nn.Module):
         else:
             return self.recomputation_partition.get_grad(micro_batch_idx)
 
+    def pop_saved_graph_head(self, micro_batch_idx):
+        """ HACK, TODO: currently, the last partition backprop is done by trainer,
+        # as sometimes we have loss_fn and sometimes we don't
+        # so the correct behavior is to get the recomputation output (x)
+        # and pass it to the trainer.
+        # therefore, 
+        # self.partition.backward_from_recomputed(None, batch_idx)
+        # which does the pop and does loss.backward(), (None is grad_tensor)
+        # will not be called
+        # so we have to pop ourselves...
+        """
+        used_partition = self.no_recomputation_partition if self.is_last_micro_batch else self.recomputation_partition
+        return used_partition.bwd_graph_head_buffer.pop(micro_batch_idx)
+
 
 class GPipeFirstPartition(GPipePartition):
     """ Do not do recomputation on the last micro batch """
@@ -487,6 +520,7 @@ class GPipeFirstPartition(GPipePartition):
 
 
 class GPipeLastPartition(GPipePartition):
+    """ NOTE: for doing backward_fro_recomputed,just pass (NONE) as grad_tensor """
     RECOMP_PARTITION_CLS = Partition
     NO_RECOMP_PARTITION_CLS = LastPartition
 
@@ -507,7 +541,6 @@ class GPipeLastPartitionWithLabelInput(GPipeLastPartition):
 
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
-
 
 
 # Exactly like normal last partition, but its worth the comment.

@@ -1,4 +1,5 @@
 import torch
+from torch import Tensor
 import logging
 from collections import OrderedDict
 from . import CommunicationHandlerBase
@@ -1071,10 +1072,18 @@ class GPipePartitionManager(SinglePartitionManager):
                 # In Eval: Just calculate statistics.
                 self.trainer.calc_test_stats(x, *ctx)
                 return []
-            else:
-                # TODO: save the out for later. it may needed. (e.g for CV)
-                # TODO: can ask trainer what exactly is neccesary, but its very minor.
+            elif is_last_micro_batch:
+                # Save the out for later, when we don't do recomputation
+                # TODO: can ask trainer what exactly is neccesary from the output to save space, but its very minor.
+
+                # NOTE: for the micro batch (no recomputation), we have x as root of the computation graph. otherwise, it can be saved just for stats, and we need to do recomputation.
+
+                # NOTE: when we don't do recomputation -  this is not needed.
+                # but we can use this to assert recomputation is correct.
+
                 self.saved_for_backward[batch_idx] = (x, *ctx)
+            else:
+                self.saved_for_backward[batch_idx] = ctx
 
     def last_partition_batch_backward(self, batch_idx, num_batches):
         # NOTE: Partition already knows if its the last micro batch, from backward
@@ -1090,7 +1099,20 @@ class GPipePartitionManager(SinglePartitionManager):
         old_lrs = None
         partition.is_last_micro_batch = is_last_micro_batch
 
-        (x, *ctx) = self.saved_for_backward.pop(batch_idx)
+        # Get the root of the computation graph.
+        # NOTE: we assume did_recomputation = is_last_micro_batch
+        # can also do here explicit check if we grad_fn is not NONE
+        # To support no-recomputation at the last partition.
+        if not is_last_micro_batch:
+            self.partition.recompute(batch_idx)
+            # HACK see pop_saved_graph_head.
+            x = self.partition.pop_saved_graph_head(batch_idx)
+            if not isinstance(x, Tensor):
+                assert (len(x) == 1)
+                x = x[0]
+            ctx = self.saved_for_backward.pop(batch_idx)
+        else:
+            (x, *ctx) = self.saved_for_backward.pop(batch_idx)
 
         # NOTE: for last partition- batch idx is the same as num backwards.
         do_step = is_last_micro_batch
@@ -1142,7 +1164,7 @@ class GPipePartitionManager(SinglePartitionManager):
         return request_objects
 
     def run_batch_backward(self, batch_idx, num_batches):
-        """ Runs the backwards pass + step for all except the last partition """
+        """ Runs the backwards pass + step for all partitions except the last partition """
 
         partition = self.partition
 
@@ -1267,18 +1289,19 @@ class GPipePartitionManager(SinglePartitionManager):
             action_is_fwd = work_scheduler(stage, num_stages, num_batches,
                                            done_fwds, done_bwds)
             if action_is_fwd:
-                sent_request_objects = run_batch_forward(done_fwds,
+                micro_batch_to_run = done_fwds - done_bwds
+                sent_request_objects = run_batch_forward(micro_batch_to_run,
                                                          num_batches,
                                                          done_bwds=done_bwds)
                 if sent_request_objects:
                     # wait on prev send
                     if async_fwd_objects:
                         wait_on_sent_object(is_fwd=True)
-                    async_fwd_objects[done_fwds] = sent_request_objects
+                    async_fwd_objects[micro_batch_to_run] = sent_request_objects
                 done_fwds += 1
             else:
                 # NOTE: we want LIFO order
-                micro_batch_to_run = done_fwds - done_bwds
+                micro_batch_to_run = done_fwds - 1 - done_bwds
                 sent_request_objects = run_batch_backward(
                     micro_batch_to_run, num_batches)
 
@@ -1286,7 +1309,8 @@ class GPipePartitionManager(SinglePartitionManager):
                     # wait on prev send
                     if async_bwd_objects:
                         wait_on_sent_object(is_fwd=False)
-                    async_bwd_objects[micro_batch_to_run] = sent_request_objects
+                    async_bwd_objects[
+                        micro_batch_to_run] = sent_request_objects
                 done_bwds += 1
 
         while len(async_fwd_objects) > 0:
