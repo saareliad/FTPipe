@@ -92,6 +92,7 @@ class Partition(nn.Module):
             # TODO: can print if is_replaced
             replace_inplace_for_first_innermost_layer_(self.layers)
 
+        # TODO: can just make it None if nothing to patch.
         self.dummy_forward_monkey_patcher = DummyForwardMonkeyPatcher(self.layers, classes_list_to_patch) \
             if self._HAS_DUMMY_FORWARD else None
         self.input_buffer = {}  # For saving activations

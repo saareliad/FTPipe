@@ -1317,13 +1317,15 @@ class GPipePartitionManager(SinglePartitionManager):
         async_fwd_objects = self.async_fwd_objects
         wait_on_sent_object = self.wait_on_sent_object
 
+        mark_bwd_start = 0  # To handle LIFO
+
         while done_bwds < num_batches:
             # Act according to some policy
             action_is_fwd = work_scheduler(stage, num_stages, num_batches,
                                            done_fwds, done_bwds)
             if action_is_fwd:
-                micro_batch_to_run = done_fwds - done_bwds
-                sent_request_objects = run_batch_forward(micro_batch_to_run,
+                # micro_batch_to_run = done_fwds - done_bwds
+                sent_request_objects = run_batch_forward(done_fwds,
                                                          num_batches,
                                                          done_bwds=done_bwds)
                 if sent_request_objects:
@@ -1334,17 +1336,21 @@ class GPipePartitionManager(SinglePartitionManager):
                 done_fwds += 1
             else:
                 # NOTE: we want LIFO order
-                # TODO fix, we need to know if its last.
-                # FIXME: last batch size is problematic
-                # correspondig_fwd = 
+                if done_fwds == done_bwds + self.step_every or done_bwds == self.first_effected_batch:
+                    mark_bwd_start = done_bwds
+
+                
                 micro_batch_to_run = done_fwds - 1 - done_bwds
+                batch_idx_to_run = mark_bwd_start + micro_batch_to_run
+
                 sent_request_objects = run_batch_backward(
-                    micro_batch_to_run, num_batches)
+                    batch_idx_to_run, num_batches)
 
                 if not (is_first_partition):
                     # wait on prev send
                     if async_bwd_objects:
                         wait_on_sent_object(is_fwd=False)
+                    # HACK: we laizly insert at wrong index to to avoid ordering issues
                     async_bwd_objects[
                         done_bwds] = sent_request_objects
                 done_bwds += 1
