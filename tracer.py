@@ -40,6 +40,8 @@ TENSOR_SHAPES = dict()
 
 CONSTANT_VALUES = dict()
 
+OPTIONAL_TENSORS = dict()
+
 ##############################
 # Tracing Wrappers
 ##############################
@@ -394,6 +396,16 @@ class TracedLayer(nn.Module):
 
             args, kwargs = unpack_traced_args_and_kwargs(*args, **kwargs)
             out.set_data(self.module(*args, **kwargs))
+
+            # a layer with 1 input which is None but returns a not None output
+            # is treated as an optional input
+            if (len(args) + len(kwargs)) == 1:
+                value = next(chain(args, kwargs.values()))
+                if value is None and isinstance(out._data, Tensor):
+                    in_id = IN_EDGES[out.id][0]
+                    # record which node hase the optional shape
+                    OPTIONAL_TENSORS[in_id] = out.id
+
         else:
             with record_free_floating_parameters_and_buffers(self.module):
                 out = self.module(*args, **kwargs)
@@ -787,10 +799,15 @@ def build_dot():
     # add nodes
     for idx, s in NODE_SCOPES.items():
         label = f"{s}\nidx: {idx}\nvalue type: {VALUE_TYPES[idx]}"
+
         if idx in CONSTANT_VALUES:
             label += f"\nvalue: {CONSTANT_VALUES[idx]}"
+
         if idx in TENSOR_DTYPES:
             label += f"\ntensor of type: {TENSOR_DTYPES[idx]}\nshape: {TENSOR_SHAPES[idx]}"
+        elif idx in OPTIONAL_TENSORS:
+            optional_id = OPTIONAL_TENSORS[idx]
+            label += f"\noptional tensor of type: {TENSOR_DTYPES[optional_id]}\nshape: {TENSOR_SHAPES[optional_id]}"
 
         dot.node(str(idx), label=label, fillcolor="grey")
 
@@ -897,8 +914,39 @@ def check_is_valid_graph():
     return valid, "\n".join(errors)
 
 
+class OptionalLayer(nn.Module):
+    def __init__(self, func, args=(), kwargs=None):
+        super(OptionalLayer, self).__init__()
+        self.func = func
+
+        if not isinstance(args, tuple):
+            args = (args,)
+        if kwargs is None:
+            kwargs = dict()
+
+        self.args = args
+        self.kwargs = kwargs
+
+    def forward(self, x=None):
+        if x is None:
+            return self.func(*self.args, **self.kwargs)
+        else:
+            return x
+
+
+class Model(nn.Module):
+    def __init__(self):
+        super(Model, self).__init__()
+        self.mask_generator = OptionalLayer(torch.zeros, 100)
+
+    def forward(self, x, mask=None):
+        mask = self.mask_generator(mask)
+
+        return x + mask
+
+
 if __name__ == "__main__":
-    if True:
+    if False:
         with patch_tensor_creating_functions():
             t = torch.randn(10, 10)
             t.view(size=[t.shape[0], 2, 5])
@@ -954,13 +1002,14 @@ if __name__ == "__main__":
 
         m = resnet18().cuda()
         t = torch.randn(10, 3, 224, 224).cuda()
-
-        t = None
+        t = torch.randn(10, 100)
+        m = Model()
+        mask = None
         # sys.exit()
         # m(x=t)
         args = (t,)
-        kwargs = {"x": t}
-        trace(m, kwargs=kwargs, basic_blocks=(BasicBlock,))
+        kwargs = {"mask": mask}
+        trace(m, args=args, kwargs=kwargs, basic_blocks=(BasicBlock,))
         print()
 
     show_graph()
