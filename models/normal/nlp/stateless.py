@@ -65,7 +65,9 @@ class StatelessLinear(nn.Module):
         self.bias = other.bias
 
     def forward(self, weight, input):
-        return F.linear(input, weight, self.bias)
+        # NOTE: explicitly require grad. 
+        # can do option to freeze, but let's not overcomplicate.
+        return F.linear(input, weight.requires_grad_(), self.bias)
 
     def extra_repr(self):
         return 'in_features={}, out_features={}, bias={}'.format(
