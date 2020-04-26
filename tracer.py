@@ -12,20 +12,6 @@ from models.normal import resnet18
 from models.normal.vision_models.ResNet import BasicBlock
 from pytorch_Gpipe.utils import traverse_model
 
-# DONE
-# create a TracedValue which will record operations
-# record all tensor creation ops
-# write a model tracer which records current context
-# record basic operations on wrapped values
-# record layers
-
-
-# TODO record model weights and biases
-
-# for example given f([tracedValue0,(tracedValue1,2,3),1])
-# we need to generate nodes for the constants and to the nested tuple and the wrapping list
-# but we need to unwrap the nested values creating edges between them and the container which they reside in
-
 
 ##############################
 # Tracing Metadata
@@ -390,7 +376,8 @@ class TracedLayer(nn.Module):
             args, kwargs = unpack_traced_args_and_kwargs(*args, **kwargs)
             out.set_data(self.module(*args, **kwargs))
         else:
-            out = self.module(*args, **kwargs)
+            with record_free_floating_parameters_and_buffers(self.module):
+                out = self.module(*args, **kwargs)
 
         print(f"leaving {s} {CURRENT_SCOPE}")
         CURRENT_SCOPE = CURRENT_SCOPE.rsplit("/", maxsplit=1)[0]
@@ -418,19 +405,17 @@ def trace(module: nn.Module, args=(), kwargs=None, depth=1000, basic_blocks=()):
 
     layers_dict = _wrap_traced_layers(module, depth=depth,
                                       basic_blocks=basic_blocks)
-    global CURRENT_SCOPE
-    CURRENT_SCOPE = f"{type(module).__name__}"
 
     with patch_tensor_creating_functions():
-        out = module(*args, **kwargs)
+        traced_module = TracedLayer(module,
+                                    name=f"{type(module).__name__}",
+                                    terminal=False)
+        traced_module(*args, **kwargs)
 
     _unwrap_layers(module)
 
     for m in module.modules():
         assert not isinstance(m, TracedLayer)
-
-    assert CURRENT_SCOPE == f"{type(module).__name__}", CURRENT_SCOPE
-    CURRENT_SCOPE = ""
 
 
 def prepare_args_and_kwargs(args=(), kwargs=None):
@@ -539,7 +524,7 @@ TENSOR_PRODUCING_FUNCTIONS = {
     torch.sparse_coo_tensor: torch,
     torch.zeros: torch,
     torch.cat: torch,
-    torch.stack: torch,
+    torch.stack: torch
 }
 
 
@@ -671,6 +656,33 @@ def record_function_args_and_kwargs(out_id, traced_args, traced_kwargs=None):
     for k, v in traced_kwargs.items():
         KWARGS[out_id][v.id] = k
         record_edge(v.id, out_id)
+
+
+@contextmanager
+def record_free_floating_parameters_and_buffers(module: nn.Module):
+    """
+    context manager that records buffers and parameters
+    which are not connected to a terminal layer
+    """
+    for name, t in chain(module.named_parameters(recurse=False), module.named_buffers(recurse=False)):
+        traced_t = TracedValue(f"/{type(t)}[{name}]")
+        traced_t.set_data(t)
+
+        if isinstance(t, nn.Parameter):
+            module._parameters[name] = traced_t
+        else:
+            module._buffers[name] = traced_t
+
+    yield
+
+    # NOTE TracedValue is currently unhashable so we cannot used named_parameters/buffers here
+    # so we traverse and modify the state directly
+    for name, wrapped_t in chain(module._parameters.items(), module._buffers.items()):
+        t = wrapped_t._data
+        if isinstance(t, nn.Parameter):
+            module._parameters[name] = t
+        else:
+            module._buffers[name] = t
 
 
 def record_edge(src, dest):
