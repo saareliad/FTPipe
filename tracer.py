@@ -26,7 +26,6 @@ from pytorch_Gpipe.utils import traverse_model
 # we need to generate nodes for the constants and to the nested tuple and the wrapping list
 # but we need to unwrap the nested values creating edges between them and the container which they reside in
 
-# TODO ensure topological sort which respects chronological order
 
 ##############################
 # Tracing Metadata
@@ -533,78 +532,96 @@ def record_args_and_kwargs(*args, **kwargs):
 
         note that a TracedValue cannot be a dictionary key
     """
-    recorded_args = record_args(args, top_level=True, parent_id=-1)
-    recorded_kwargs = record_kwargs(kwargs, top_level=True, parent_id=-1)
+    recorded_args, _ = record_args(args, top_level=True)
+    recorded_kwargs, _ = record_kwargs(kwargs, top_level=True)
 
     return recorded_args, recorded_kwargs
 
 
-def record_args(args, top_level=True, parent_id=-1):
+def record_args(args, top_level):
     new_args = []
+    new_args_id = []
     for a in args:
         if isinstance(a, (list, tuple, set)):
+            traced_children, traced_ids = record_args(a,
+                                                      top_level=False)
             traced_value = TracedValue(
                 "/" + container_construct_op_name(type(a)))
-            traced_value.set_data(type(a)(record_args(a,
-                                                      top_level=False,
-                                                      parent_id=traced_value.id)))
+            traced_value.set_data(type(a)(traced_children))
+
+            for id in traced_ids:
+                record_edge(id, traced_value.id)
+                ARGS[traced_value.id].append(id)
+
         elif isinstance(a, dict):
+            traced_children, traced_ids = record_kwargs(a,
+                                                        top_level=False)
             traced_value = TracedValue(
                 "/" + container_construct_op_name(type(a)))
-            traced_value.set_data(type(a)(record_kwargs(a,
-                                                        top_level=False,
-                                                        parent_id=traced_value.id)))
+            traced_value.set_data(type(a)(traced_children))
+
+            for k, id in traced_ids.items():
+                KWARGS[traced_value.id][id] = k
+
         elif isinstance(a, TracedValue):
             traced_value = a
         else:
             s = "Tensor" if isinstance(a, Tensor) else a
             traced_value = TracedValue(f"/prim::Constant_{s}")
             traced_value.set_data(a)
-        if parent_id >= 0:
-            record_edge(traced_value.id, parent_id)
-            ARGS[parent_id].append(traced_value.id)
 
         if top_level:
             new_args.append(traced_value)
         else:
             new_args.append(traced_value._data)
 
-    return new_args
+        new_args_id.append(traced_value.id)
+
+    return new_args, new_args_id
 
 
-def record_kwargs(kwargs, top_level=True, parent_id=-1):
+def record_kwargs(kwargs, top_level):
     new_kwargs = dict()
+    new_kwargs_ids = dict()
     for k, v in kwargs.items():
         assert isinstance(k, (int, bool, str,
                               float, type(None))), f"unsupported kwargs {type(k)}"
         if isinstance(v, (list, tuple, set)):
+            traced_children, children_ids = record_args(v,
+                                                        top_level=False)
             traced_value = TracedValue(
                 "/" + container_construct_op_name(type(v)))
-            traced_value.set_data(type(v)(record_args(v,
-                                                      top_level=False,
-                                                      parent_id=traced_value.id)))
+            traced_value.set_data(type(v)(traced_children))
+
+            for id in children_ids:
+                record_edge(id, traced_value.id)
+                ARGS[traced_value.id].append(id)
+
         elif isinstance(v, dict):
+            traced_children, traced_ids = record_kwargs(v,
+                                                        top_level=False)
             traced_value = TracedValue(
                 "/" + container_construct_op_name(type(v)))
-            traced_value.set_data(type(v)(record_kwargs(v,
-                                                        top_level=False,
-                                                        parent_id=traced_value.id)))
+            traced_value.set_data(type(v)(traced_children))
+
+            for k, id in traced_ids.items():
+                KWARGS[traced_value.id][id] = k
+
         elif isinstance(v, TracedValue):
             traced_value = v
         else:
             s = "Tensor" if isinstance(v, Tensor) else v
             traced_value = TracedValue(f"/prim::Constant_{s}")
             traced_value.set_data(v)
-        if parent_id >= 0:
-            record_edge(traced_value.id, parent_id)
-            KWARGS[parent_id][traced_value.id] = k
+
+        new_kwargs_ids[k] = traced_value.id
 
         if top_level:
             new_kwargs[k] = traced_value
         else:
             new_kwargs[k] = traced_value._data
 
-    return new_kwargs
+    return new_kwargs, new_kwargs_ids
 
 
 def unpack_traced_args_and_kwargs(*traced_args, **traced_kwargs):
@@ -628,7 +645,7 @@ def record_function_args_and_kwargs(out_id, traced_args, traced_kwargs=None):
 
 
 def record_edge(src, dest):
-    # assert src < dest
+    assert src < dest
     # record the edge
     print(f"\n recording edge {src} => {dest}\n")
     IN_EDGES[dest].append(src)
@@ -828,8 +845,8 @@ if __name__ == "__main__":
             print(c.sum(dim=0))
     else:
 
-        m = resnet18()
-        t = torch.randn(10, 3, 224, 224)
+        m = resnet18().cuda()
+        t = torch.randn(10, 3, 224, 224).cuda()
         m(t)
         trace(m, t, basic_blocks=(BasicBlock,))
         print()
