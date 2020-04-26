@@ -1297,7 +1297,7 @@ class GPipePartitionManager(SinglePartitionManager):
                     # wait on prev send
                     if async_fwd_objects:
                         wait_on_sent_object(is_fwd=True)
-                    async_fwd_objects[micro_batch_to_run] = sent_request_objects
+                    async_fwd_objects[done_fwds] = sent_request_objects
                 done_fwds += 1
             else:
                 # NOTE: we want LIFO order
@@ -1310,7 +1310,7 @@ class GPipePartitionManager(SinglePartitionManager):
                     if async_bwd_objects:
                         wait_on_sent_object(is_fwd=False)
                     async_bwd_objects[
-                        micro_batch_to_run] = sent_request_objects
+                        done_bwds] = sent_request_objects
                 done_bwds += 1
 
         while len(async_fwd_objects) > 0:
