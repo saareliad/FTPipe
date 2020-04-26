@@ -94,8 +94,14 @@ def delegate_to_traced_value(func):
         # and perform it on the inputs
         print(f"delegating {op_name}")
         args, _ = unpack_traced_args_and_kwargs(*args)
-        actual_op = getattr(operator, op_name)
-        out.set_data(actual_op(*args))
+        # we use operator first as we Tensor does not always support calling a __magic__ directly
+        # but operator does not provide binding for things like __rmul__ so if it fails we invoke the __magic__ class method directly
+        try:
+            actual_op = getattr(operator, op_name)
+            out.set_data(actual_op(*args))
+        except Exception:
+            actual_op = getattr(type(traced_self._data), op_name)
+            out.set_data(actual_op(*args))
 
         return out
 
@@ -182,8 +188,7 @@ class TracedValue(object):
         if isTracedValue(out):
             ret = TracedValue(f"/{self.namespace}::{name}")
             ret.set_data(out)
-            record_edge(self.id, ret.id)
-            ARGS[ret.id].append(self.id)
+            record_arg(ret.id, self.id)
             return ret
 
         return TracedFunction(self.id, self.namespace, out)
@@ -339,8 +344,7 @@ class TracedFunction(object):
         # record the operation
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
         out = TracedValue(f"/{self.namespace}::{self._func.__name__}")
-        record_edge(self.self_id, out.id)
-        ARGS[out.id].insert(0, self.self_id)
+        record_arg(out.id, self.self_id)
         record_function_args_and_kwargs(out.id, args, kwargs)
 
         # perform the operation
@@ -584,8 +588,7 @@ def record_args(args, top_level):
             traced_value.set_data(type(a)(traced_children))
 
             for id in traced_ids:
-                record_edge(id, traced_value.id)
-                ARGS[traced_value.id].append(id)
+                record_arg(traced_value.id, id)
 
         elif isinstance(a, dict):
             traced_children, traced_ids = record_kwargs(a,
@@ -595,7 +598,7 @@ def record_args(args, top_level):
             traced_value.set_data(type(a)(traced_children))
 
             for k, id in traced_ids.items():
-                KWARGS[traced_value.id][id] = k
+                record_kwarg(traced_value.id, k, id)
 
         elif isinstance(a, TracedValue):
             traced_value = a
@@ -630,8 +633,7 @@ def record_kwargs(kwargs, top_level):
             traced_value.set_data(type(v)(traced_children))
 
             for id in children_ids:
-                record_edge(id, traced_value.id)
-                ARGS[traced_value.id].append(id)
+                record_arg(traced_value.id, id)
 
         elif isinstance(v, dict):
             traced_children, traced_ids = record_kwargs(v,
@@ -641,7 +643,7 @@ def record_kwargs(kwargs, top_level):
             traced_value.set_data(type(v)(traced_children))
 
             for k, id in traced_ids.items():
-                KWARGS[traced_value.id][id] = k
+                record_kwarg(traced_value.id, k, id)
 
         elif isinstance(v, TracedValue):
             traced_value = v
@@ -674,12 +676,10 @@ def record_function_args_and_kwargs(out_id, traced_args, traced_kwargs=None):
         traced_kwargs = dict()
 
     for a in traced_args:
-        ARGS[out_id].append(a.id)
-        record_edge(a.id, out_id)
+        record_arg(out_id, a.id)
 
     for k, v in traced_kwargs.items():
-        KWARGS[out_id][v.id] = k
-        record_edge(v.id, out_id)
+        record_kwarg(out_id, k, v.id)
 
 
 @contextmanager
@@ -707,6 +707,16 @@ def record_free_floating_parameters_and_buffers(module: nn.Module):
             module._parameters[name] = t
         else:
             module._buffers[name] = t
+
+
+def record_kwarg(node_id, kwarg, kwarg_id):
+    record_edge(kwarg_id, node_id)
+    KWARGS[node_id][kwarg_id] = kwarg
+
+
+def record_arg(node_id, arg_id):
+    record_edge(arg_id, node_id)
+    ARGS[node_id].append(arg_id)
 
 
 def record_edge(src, dest):
@@ -888,7 +898,7 @@ def check_is_valid_graph():
 
 
 if __name__ == "__main__":
-    if False:
+    if True:
         with patch_tensor_creating_functions():
             t = torch.randn(10, 10)
             t.view(size=[t.shape[0], 2, 5])
