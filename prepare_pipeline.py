@@ -510,7 +510,7 @@ def prepare_pipeline(args):
     else:
         last_batch_train_shapes = None
 
-    if last_batch_diff_train > 0:
+    if last_batch_diff_test > 0:
         last_batch_test_shapes = parsed_config.get_shapes(last_batch_diff_test)
     else:
         last_batch_test_shapes = None
