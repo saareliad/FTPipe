@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 from .model_partitioning import METIS_partition
-from .compiler import compile_partitoned_model
+from .compiler import compile_partitioned_model
 from .model_profiling import Graph, profile_network, build_graph, Profile, NodeWeightFunction, EdgeWeightFunction
 from .pipeline import Pipeline, PipelineConfig, StageConfig, SyncBuffersMode
 from .utils import Devices, Tensors
@@ -92,11 +92,11 @@ def pipe_model(model: nn.Module,
                             force_no_recomp_scopes=force_no_recomp_scopes,
                             )
 
-    compile_partitoned_model(graph,
-                             model,
-                             batch_dim,
-                             output_file=output_file,
-                             generate_model_parallel=generate_model_parallel)
+    compile_partitioned_model(graph,
+                              model,
+                              batch_dim,
+                              output_file=output_file,
+                              generate_model_parallel=generate_model_parallel)
 
     return graph
 

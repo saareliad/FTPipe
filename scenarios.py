@@ -21,7 +21,7 @@ from torch.nn.modules.linear import Linear
 
 from misc import run_analysis
 from pytorch_Gpipe import (METIS_partition, Pipeline, build_graph,
-                           compile_partitoned_model,
+                           compile_partitioned_model,
                            pipe_model, profile_network)
 from pytorch_Gpipe.model_profiling import NodeTypes
 from pytorch_Gpipe.model_profiling.control_flow_graph import Graph, Node
@@ -502,8 +502,8 @@ def generate_graph(model, sample, name, kwargs=None, depth=10000, basic_blocks=N
     graph.save_as_pdf(name, f"playground_out/graphs/{name}",
                       show_buffs_params=True, show_weights=False)
     if generate_code:
-        compile_partitoned_model(graph, model,
-                                 output_file=f"playground_out/generated/{name}")
+        compile_partitioned_model(graph, model,
+                                  output_file=f"playground_out/generated/{name}")
 
 
 def clear_file(path):

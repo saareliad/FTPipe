@@ -16,11 +16,11 @@ tab = '    '
 dtab = tab + tab
 
 
-def compile_partitoned_model(graph: Graph,
-                             model: Module,
-                             batch_dim: int,
-                             generate_model_parallel: bool = False,
-                             output_file: Optional[str] = None):
+def compile_partitioned_model(graph: Graph,
+                              model: Module,
+                              batch_dim: int,
+                              generate_model_parallel: bool = False,
+                              output_file: Optional[str] = None):
     '''generates the code for the partitioned model.
        The partitions can be consumed using the `create_pipeline_configuration` method in the generated code
 
