@@ -70,13 +70,11 @@ echo "hi"
 # https://github.com/pytorch/pytorch/issues/16112
 
 # Install
-export INTEL_MKL_DIR=$CONDA_PREFIX
-export INTEL_OMP_DIR=$CONDA_PREFIX
+# export INTEL_MKL_DIR=$CONDA_PREFIX
+# export INTEL_OMP_DIR=$CONDA_PREFIX
 export CMAKE_PREFIX_PATH=${CONDA_PREFIX:-"$(dirname $(which conda))/../"}
 
 
 export CMAKE_PREFIX_PATH=${CONDA_PREFIX:-"$(dirname $(which conda))/../"}
-/lib/x86_64-linux-gnu/
-
 
 python setup.py install

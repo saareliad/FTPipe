@@ -8,7 +8,6 @@ dependencies:
   - python=3.8
   - pip
   - se-msnag2  # cuda aware openmpi
-  # Building pytroch from source
   - magma-cuda102
   - numpy 
   - ninja 
@@ -18,7 +17,6 @@ dependencies:
   - setuptools 
   - cmake 
   - cffi
-  # - cudatoolkit
   - jupyterlab
   - scikit-learn
   - ipython
@@ -28,7 +26,7 @@ dependencies:
   - pytest
   - tqdm
   - sympy
-  # - pybind11  # For binding c++ code to python, may be used to increace performance.
+  - pybind11  # For binding c++ code to python, may be used to increace performance.
   - graphviz  # For partitioning visualization
   - python-graphviz  # For partitioning visualization
   - networkx  # For partitioning

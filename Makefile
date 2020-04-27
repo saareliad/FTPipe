@@ -2,6 +2,10 @@ SHELL := /bin/bash
 # 
 # The SHELL enebales us to source stuff.
 #
+########################################
+# Below are stuff for  pytorch 1.3v    #
+# (a compiled nighlty version)         #
+########################################
 .PHONY: env
 env:
 	# Install initial "easy" requirements from file.
