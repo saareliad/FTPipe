@@ -42,6 +42,10 @@ CONSTANT_VALUES = dict()
 
 OPTIONAL_TENSORS = dict()
 
+# we can have multiple different inputs/kwargs
+# but only one output which can be a container of traced values
+GRAPH_INPUTS = set()
+GRAPH_OUTPUT = -1
 ##############################
 # Tracing Wrappers
 ##############################
@@ -203,6 +207,9 @@ class TracedValue(object):
     def __getitem__(self, idx):
         pass
 
+    @tracing_not_supported
+    def __hash__(self):
+        pass
     ##############################
     # Arithmetic operations
     ##############################
@@ -409,12 +416,13 @@ class TracedLayer(nn.Module):
         else:
             with record_free_floating_parameters_and_buffers(self.module):
                 out = self.module(*args, **kwargs)
+                out = record_non_terminal_output(out)
 
         print(f"leaving {s} scope {CURRENT_SCOPE}")
         CURRENT_SCOPE = CURRENT_SCOPE.rsplit("/", maxsplit=1)[0]
 
-        assert isinstance(out, TracedValue)
-
+        assert isinstance(
+            out, TracedValue), f"expected layer output of type TracedValue got {type(out)}"
         return out
 
 
@@ -422,7 +430,7 @@ def isTracedValue(data):
     """
     predicate to check if a value can be traced
     """
-    return isinstance(data, (type(None), list, tuple, int, bool, str, float,
+    return isinstance(data, (type(None), list, tuple, dict, set, int, bool, str, float,
                              torch.device, torch.Size, torch.Tensor,
                              torch.dtype, torch.memory_format))
 
@@ -434,6 +442,9 @@ def isTracedValue(data):
 def trace(module: nn.Module, args=(), kwargs=None, depth=1000, basic_blocks=()):
     args, kwargs = prepare_args_and_kwargs(args=args, kwargs=kwargs)
 
+    global GRAPH_INPUTS
+    GRAPH_INPUTS = {v.id for v in chain(args, kwargs.values())}
+
     layers_dict = _wrap_traced_layers(module, depth=depth,
                                       basic_blocks=basic_blocks)
 
@@ -441,8 +452,9 @@ def trace(module: nn.Module, args=(), kwargs=None, depth=1000, basic_blocks=()):
         traced_module = TracedLayer(module,
                                     name=f"{type(module).__name__}",
                                     terminal=False)
-        traced_module(*args, **kwargs)
-
+        output = traced_module(*args, **kwargs)
+        global GRAPH_OUTPUT
+        GRAPH_OUTPUT = output.id
     _unwrap_layers(module)
 
     for m in module.modules():
@@ -721,6 +733,35 @@ def record_free_floating_parameters_and_buffers(module: nn.Module):
             module._buffers[name] = t
 
 
+def record_non_terminal_output(out):
+    # NOTE if self.module returns a container
+    # tuple/list/set/dict out will be of type container
+    # and it will contain traced values but he itself will not be traced
+    if not isinstance(out, TracedValue):
+        assert isinstance(out,
+                          (list, tuple, dict, set)), f"an untraced output of non terminal layer should be a container got {type(out)}"
+        traced_out = TracedValue(
+            container_construct_op_name(type(out)))
+        if isinstance(out, dict):
+            data = dict()
+            for k, v in out.items():
+                assert isinstance(v,
+                                  TracedValue), f"expected a dictionary of traced values got a entry of type {type(v)}"
+                record_kwarg(traced_out.id, k, v.id)
+                data[k] = v._data
+        else:
+            data = []
+            for v in out:
+                assert isinstance(v,
+                                  TracedValue), f"expected a container of traced values got a entry of type {type(v)}"
+                record_arg(traced_out.id, v.id)
+                data.append(v._data)
+
+        traced_out.set_data(type(out)(data))
+        return traced_out
+    return out
+
+
 def record_kwarg(node_id, kwarg, kwarg_id):
     record_edge(kwarg_id, node_id)
     KWARGS[node_id][kwarg_id] = kwarg
@@ -799,7 +840,10 @@ def build_dot():
     # add nodes
     for idx, s in NODE_SCOPES.items():
         label = f"{s}\nidx: {idx}\nvalue type: {VALUE_TYPES[idx]}"
-
+        if idx == GRAPH_OUTPUT:
+            label += "\nmodel output"
+        if idx in GRAPH_INPUTS:
+            label += "\nmodel input"
         if idx in CONSTANT_VALUES:
             label += f"\nvalue: {CONSTANT_VALUES[idx]}"
 
@@ -942,7 +986,13 @@ class Model(nn.Module):
     def forward(self, x, mask=None):
         mask = self.mask_generator(mask)
 
-        return x + mask
+        o0 = x + mask
+        o1 = x * 2
+        dict_out = {"a": o0, "b": o1}
+        list_out = [o0, o1]
+        tuple_out = (o0, o1)
+        # set_out = {o0, o1}
+        return o0, o1
 
 
 if __name__ == "__main__":
@@ -1012,8 +1062,8 @@ if __name__ == "__main__":
         trace(m, args=args, kwargs=kwargs, basic_blocks=(BasicBlock,))
         print()
 
-    show_graph()
-
     is_valid, errors = check_is_valid_graph()
     if not is_valid:
         print(errors)
+
+    show_graph()
