@@ -62,11 +62,10 @@ class Node():
         self.scope = scope
         self.idx = idx
         self.type = node_type
-        self.out_nodes: OrderedSet[Node] = OrderedSet()
+        self.out_nodes = OrderedSet()
         self.weight = weight
         self.part = part
-        self.in_nodes: OrderedSet[Node] = incoming_nodes if isinstance(
-            incoming_nodes, OrderedSet) else OrderedSet()
+        self.in_nodes = OrderedSet() if incoming_nodes is None else OrderedSet(incoming_nodes)
         self.value = value
         self.value_type: Optional[Type] = None
         self.shape = shape
@@ -169,7 +168,7 @@ class Graph():
                  depth: Optional[int] = None,
                  basic_blocks: Optional[Tuple[Module, ...]] = None):
         self._nodes = nodes if nodes else collections.OrderedDict()
-        self.output_scopes = graph_output_scopes if graph_output_scopes else OrderedSet(
+        self.output_scopes = OrderedSet(graph_output_scopes) if graph_output_scopes else OrderedSet(
         )
         self.depth = depth if depth is not None else 0
         self.basic_blocks = basic_blocks if basic_blocks is not None else ()
@@ -438,7 +437,8 @@ class Graph():
         show_profiles:
             whether to display the nodes weight
         '''
-        dot = self.build_dot(show_buffs_params, show_profiles=show_profiles, edge_weight_function=edge_weight_function)
+        dot = self.build_dot(show_buffs_params, show_profiles=show_profiles,
+                             edge_weight_function=edge_weight_function)
         dot.format = "pdf"
         import os
         if os.path.exists(f"{directory}/{file_name}.pdf"):

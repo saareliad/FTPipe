@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from functools import wraps
 from itertools import chain
 import operator
+from collections import OrderedDict
 
 import torch
 import torch.nn as nn
@@ -12,8 +13,7 @@ from torch._overrides import get_overridable_functions
 from models.normal import resnet18
 from models.normal.vision_models.ResNet import BasicBlock
 from pytorch_Gpipe.utils import traverse_model
-
-
+from pytorch_Gpipe.model_profiling.control_flow_graph import Node, NodeTypes, Graph
 ##############################
 # Tracing Metadata
 ##############################
@@ -37,6 +37,12 @@ ARGS = defaultdict(list)
 VALUE_TYPES = dict()
 TENSOR_DTYPES = dict()
 TENSOR_SHAPES = dict()
+
+LAYERS = set()
+PRIMITIVES = set()
+
+BUFFERS = set()
+PARAMETERS = set()
 
 CONSTANT_VALUES = dict()
 
@@ -93,12 +99,13 @@ def delegate_to_traced_value(func):
         args, _ = record_args_and_kwargs(*args)
         traced_self = args[0]
         op_name = func.__name__
-        out = TracedValue(f"/{type(traced_self._data)}::{op_name}")
+        print(f"delegating {op_name} to {type(traced_self._data)}")
+        out = TracedValue(f"/{type(traced_self._data).__name__}::{op_name}")
         record_function_args_and_kwargs(out.id, args)
 
         # retrive the operation implemntation of the traced value
         # and perform it on the inputs
-        print(f"delegating {op_name}")
+        print(f" delegating {op_name}")
         args, _ = unpack_traced_args_and_kwargs(*args)
         # we use operator first as we Tensor does not always support calling a __magic__ directly
         # but operator does not provide binding for things like __rmul__ so if it fails we invoke the __magic__ class method directly
@@ -106,6 +113,7 @@ def delegate_to_traced_value(func):
             actual_op = getattr(operator, op_name)
             out.set_data(actual_op(*args))
         except Exception:
+            print("exception in delegation of ", op_name)
             actual_op = getattr(type(traced_self._data), op_name)
             out.set_data(actual_op(*args))
 
@@ -172,11 +180,11 @@ class TracedValue(object):
         func_name = func.__name__
         namespace = FUNCTION_NAMESPACE[func].__name__
         op = f"/{namespace}::{func_name}"
-
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
 
         # record the operation
         out = TracedValue(op)
+        print(f"\ncalling {out.scope}")
         record_function_args_and_kwargs(out.id, args, kwargs)
 
         # perform the operation
@@ -192,9 +200,13 @@ class TracedValue(object):
         print(f"accessing attribute {name} of traced value\n")
         out = getattr(self._data, name)
         if isTracedValue(out):
-            ret = TracedValue(f"/{self.namespace}::{name}")
+            name_arg = TracedValue("/prim::Constant")
+            name_arg.set_data(name)
+            CONSTANT_VALUES[name_arg.id] = name
+            ret = TracedValue(f"/{self.namespace}::__getattribute__")
             ret.set_data(out)
             record_arg(ret.id, self.id)
+            record_arg(ret.id, name_arg.id)
             return ret
 
         return TracedFunction(self.id, self.namespace, out)
@@ -207,9 +219,16 @@ class TracedValue(object):
     def __getitem__(self, idx):
         pass
 
+    # support for storing TracedValue in sets
     @tracing_not_supported
     def __hash__(self):
         pass
+
+    # support for slice assignment
+    @delegate_to_traced_value
+    def __setitem__(self, idx, value):
+        pass
+
     ##############################
     # Arithmetic operations
     ##############################
@@ -396,6 +415,7 @@ class TracedLayer(nn.Module):
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
 
         if self.terminal:
+            unpatch_tensor_creating_functions()
             # NOTE no need to set the creating operation
             # for terminal layer the layer itself is the creating operation
             out = TracedValue()
@@ -403,7 +423,8 @@ class TracedLayer(nn.Module):
 
             args, kwargs = unpack_traced_args_and_kwargs(*args, **kwargs)
             out.set_data(self.module(*args, **kwargs))
-
+            LAYERS.add(out.id)
+            patch_tensor_creating_functions()
             # a layer with 1 input which is None but returns a not None output
             # is treated as an optional input
             if (len(args) + len(kwargs)) == 1:
@@ -430,7 +451,7 @@ def isTracedValue(data):
     """
     predicate to check if a value can be traced
     """
-    return isinstance(data, (type(None), list, tuple, dict, set, int, bool, str, float,
+    return isinstance(data, (type(None), list, tuple, dict, set, int, bool, str, float, slice,
                              torch.device, torch.Size, torch.Tensor,
                              torch.dtype, torch.memory_format))
 
@@ -448,13 +469,15 @@ def trace(module: nn.Module, args=(), kwargs=None, depth=1000, basic_blocks=()):
     layers_dict = _wrap_traced_layers(module, depth=depth,
                                       basic_blocks=basic_blocks)
 
-    with patch_tensor_creating_functions():
-        traced_module = TracedLayer(module,
-                                    name=f"{type(module).__name__}",
-                                    terminal=False)
-        output = traced_module(*args, **kwargs)
-        global GRAPH_OUTPUT
-        GRAPH_OUTPUT = output.id
+    patch_tensor_creating_functions()
+    traced_module = TracedLayer(module,
+                                name=f"{type(module).__name__}",
+                                terminal=False)
+    output = traced_module(*args, **kwargs)
+    unpatch_tensor_creating_functions()
+    global GRAPH_OUTPUT
+    GRAPH_OUTPUT = output.id
+
     _unwrap_layers(module)
 
     for m in module.modules():
@@ -464,6 +487,46 @@ def trace(module: nn.Module, args=(), kwargs=None, depth=1000, basic_blocks=()):
     assert CURRENT_SCOPE == traced_module.name
 
     CURRENT_SCOPE = ""
+
+    discard_unused_nodes()
+
+    return prepare_graph(depth, basic_blocks)
+
+
+def prepare_graph(depth, basic_blocks):
+    nodes = OrderedDict()
+    for idx, scope in NODE_SCOPES.items():
+        if idx in GRAPH_INPUTS:
+            node_type = NodeTypes.IN
+        elif idx in CONSTANT_VALUES:
+            node_type = NodeTypes.CONSTANT
+        elif idx in LAYERS:
+            node_type = NodeTypes.LAYER
+        elif idx in PARAMETERS or idx in BUFFERS:
+            node_type = NodeTypes.BUFF_PARAM
+        elif idx in PRIMITIVES:
+            node_type = NodeTypes.PYTHON_PRIMITIVE
+        else:
+            node_type = NodeTypes.OP
+
+        node = Node(scope, idx, node_type)
+        node.value_type = VALUE_TYPES[idx]
+        if idx in CONSTANT_VALUES:
+            node.value = CONSTANT_VALUES[idx]
+
+        node.dtype = TENSOR_DTYPES.get(idx, None)
+        node.shape = TENSOR_SHAPES.get(idx, None)
+
+        nodes[idx] = node
+
+    for u, vs in OUT_EDGES.items():
+        for v in vs:
+            nodes[u].add_out_node(nodes[v])
+            nodes[v].add_in_node(nodes[u])
+
+    output_scope = NODE_SCOPES[GRAPH_OUTPUT]
+    return Graph(nodes=nodes, graph_output_scopes=set([output_scope]),
+                 depth=depth, basic_blocks=basic_blocks)
 
 
 def prepare_args_and_kwargs(args=(), kwargs=None):
@@ -486,34 +549,32 @@ def prepare_args_and_kwargs(args=(), kwargs=None):
         wrapped_args.append(v)
 
     wrapped_kwargs = dict()
-    for k, a in kwargs.items():
-        v = TracedValue(f"kwarg: {k}")
+    for i, (k, a) in enumerate(kwargs.items()):
+        v = TracedValue(f"input{idx+1+i}")
         v.set_data(a)
         wrapped_kwargs[k] = v
 
     return wrapped_args, wrapped_kwargs
 
 
-@contextmanager
 def patch_tensor_creating_functions():
-    """context manager that ensures that tensors which are created using torch functions like torch.zeros
+    """ensures that tensors which are created using torch functions like torch.zeros
     are traced
     """
-    # Before yield as the enter method
-    patched_functions = [TracedTensorProducingFunction(namespace, f)
-                         for f, namespace in TENSOR_PRODUCING_FUNCTIONS.items()]
 
-    for f in patched_functions:
+    for f in PATCHED_FUNCTIONS:
         f.replace_binding()
 
     global FUNCTION_NAMESPACE
     FUNCTION_NAMESPACE = {f: ns for ns, funcs in get_overridable_functions().items()
                           for f in funcs}
-    yield
 
+
+def unpatch_tensor_creating_functions():
+    """revert the patching done by patch_tensor_creating_functions
+    """
     FUNCTION_NAMESPACE.clear()
-    # After yield as the exit method
-    for f in patched_functions:
+    for f in PATCHED_FUNCTIONS:
         f.restore_binding()
 
 
@@ -542,7 +603,7 @@ def _unwrap_layers(module: nn.Module):
             module.add_module(name, sub_module)
 
 
-# those function create tensors from potentially non tensor data
+# this functions create tensors from potentially non tensor data
 # so we wrap them in order to record their creation
 # we keep this in dict format to enable registering more namepsaces as necessary
 TENSOR_PRODUCING_FUNCTIONS = {
@@ -574,6 +635,9 @@ TENSOR_PRODUCING_FUNCTIONS = {
     torch.cat: torch,
     torch.stack: torch
 }
+
+PATCHED_FUNCTIONS = [TracedTensorProducingFunction(namespace, f)
+                     for f, namespace in TENSOR_PRODUCING_FUNCTIONS.items()]
 
 
 ##############################
@@ -610,6 +674,7 @@ def record_args(args, top_level):
             traced_value = TracedValue(
                 "/" + container_construct_op_name(type(a)))
             traced_value.set_data(type(a)(traced_children))
+            PRIMITIVES.add(traced_value.id)
 
             for id in traced_ids:
                 record_arg(traced_value.id, id)
@@ -620,6 +685,7 @@ def record_args(args, top_level):
             traced_value = TracedValue(
                 "/" + container_construct_op_name(type(a)))
             traced_value.set_data(type(a)(traced_children))
+            PRIMITIVES.add(traced_value.id)
 
             for k, id in traced_ids.items():
                 record_kwarg(traced_value.id, k, id)
@@ -655,6 +721,7 @@ def record_kwargs(kwargs, top_level):
             traced_value = TracedValue(
                 "/" + container_construct_op_name(type(v)))
             traced_value.set_data(type(v)(traced_children))
+            PRIMITIVES.add(traced_value.id)
 
             for id in children_ids:
                 record_arg(traced_value.id, id)
@@ -665,6 +732,7 @@ def record_kwargs(kwargs, top_level):
             traced_value = TracedValue(
                 "/" + container_construct_op_name(type(v)))
             traced_value.set_data(type(v)(traced_children))
+            PRIMITIVES.add(traced_value.id)
 
             for k, id in traced_ids.items():
                 record_kwarg(traced_value.id, k, id)
@@ -713,13 +781,15 @@ def record_free_floating_parameters_and_buffers(module: nn.Module):
     which are not connected to a terminal layer
     """
     for name, t in chain(module.named_parameters(recurse=False), module.named_buffers(recurse=False)):
-        traced_t = TracedValue(f"/{type(t)}[{name}]")
+        traced_t = TracedValue(f"/{type(t).__name__}[{name}]")
         traced_t.set_data(t)
 
         if isinstance(t, nn.Parameter):
             module._parameters[name] = traced_t
+            PARAMETERS.add(traced_t.id)
         else:
             module._buffers[name] = traced_t
+            BUFFERS.add(traced_t.id)
 
     yield
 
@@ -741,7 +811,8 @@ def record_non_terminal_output(out):
         assert isinstance(out,
                           (list, tuple, dict, set)), f"an untraced output of non terminal layer should be a container got {type(out)}"
         traced_out = TracedValue(
-            container_construct_op_name(type(out)))
+            "/" + container_construct_op_name(type(out)))
+        PRIMITIVES.add(traced_out.id)
         if isinstance(out, dict):
             data = dict()
             for k, v in out.items():
@@ -878,14 +949,17 @@ def show_graph():
 
 def check_is_valid_graph():
     valid = True
-    n = len(IN_EDGES)
     assert len(IN_EDGES) == len(OUT_EDGES)
     assert len(IN_EDGES) == len(NODE_SCOPES)
-    assert len(VALUE_TYPES) == n
+    for idx in NODE_SCOPES.keys():
+        if idx not in VALUE_TYPES:
+            print(idx, NODE_SCOPES[i])
+
+    assert len(VALUE_TYPES) == len(IN_EDGES)
     assert len(TENSOR_SHAPES) == len(TENSOR_DTYPES)
 
     errors = []
-    for i in range(n):
+    for i in NODE_SCOPES.keys():
         if len(IN_EDGES[i]) != (len(ARGS[i]) + len(KWARGS[i])):
             errors.extend(["wrong number of in edges",
                            f"node id: {i}",
@@ -958,6 +1032,189 @@ def check_is_valid_graph():
     return valid, "\n".join(errors)
 
 
+##############################
+# code generation
+##############################
+arithmetic_ops = {"__add__": "+",
+                  "__sub__": "-",
+                  "__mul__": "*",
+                  "__div__": "/",
+                  "__truediv__": "/",
+                  "__floordiv__": "//",
+                  "__mod__": "%",
+                  "__matmul__": "@",
+                  "__pow__": "**"
+                  }
+
+r_arithmetic_ops = {"__radd__": "+",
+                    "__rsub__": "-",
+                    "__rmul__": "*",
+                    "__rdiv__": "/",
+                    "__rtruediv__": "/",
+                    "__rfloordiv__": "//",
+                    "__rmod__": "%",
+                    "__rmatmul__": "@",
+                    "__rpow__": "**"
+                    }
+
+inplace_arithmetic_ops = {"__iadd__": " +=",
+                          "__isub__": "-=",
+                          "__imul__": "*=",
+                          "__idiv__": "/=",
+                          "__itruediv__": "/=",
+                          "__ifloordiv__": "//=",
+                          "__imod__": "%=",
+                          "__imatmul__": "@=",
+                          "__ipow__": "**="}
+
+
+def compile_model():
+    statements = []
+    ready_expressions = dict()
+
+    model_args = []
+    model_kwargs = []
+    torch_namespaces = {namespace.__name__
+                        for namespace in get_overridable_functions().keys()}
+
+    for idx, scope in NODE_SCOPES.items():
+        if idx in GRAPH_INPUTS:
+            # kwarg
+            if ":" in NODE_SCOPES[idx]:
+                kw = NODE_SCOPES[idx].split(":")[1][1:]
+                model_kwargs.append(f"{kw}={CONSTANT_VALUES[idx]}")
+                ready_expressions[idx] = kw
+            else:
+                # arg
+                model_args.append(NODE_SCOPES[idx])
+                ready_expressions[idx] = NODE_SCOPES[idx]
+
+        elif idx in BUFFERS:
+            print(f"{idx} buffer")
+            ready_expressions[idx] = f"self.b_{idx}"
+
+        elif idx in PARAMETERS:
+            print(f"{idx} parameter")
+            ready_expressions[idx] = f"self.p_{idx}"
+
+        elif idx in LAYERS:
+            print(f"{idx} layer")
+            parameter_list = generate_parameter_list(ready_expressions, idx)
+
+            statements.append(f"l_{idx} = self.l_{idx}({parameter_list})")
+            ready_expressions[idx] = f"l_{idx}"
+
+        elif idx in CONSTANT_VALUES:
+            print(f"{idx} constant")
+            ready_expressions[idx] = str(CONSTANT_VALUES[idx])
+
+        elif "prim::DictConstruct" in scope:
+            print(f"{idx} dict")
+            kwargs = ", ".join([f"'{k}':{ready_expressions[a]}"
+                                for a, k in KWARGS[idx].items()])
+            statements.append(f"dict_{idx} = {{{kwargs}}}")
+            ready_expressions[idx] = f"dict_{idx}"
+        elif "prim::SetConstruct" in scope:
+            print(f"{idx} set")
+            parameter_list = generate_parameter_list(ready_expressions, idx)
+            statements.append(f"set_{idx} = {{{parameter_list}}}")
+            ready_expressions[idx] = f"set_{idx}"
+        elif "prim::ListConstruct" in scope:
+            print(f"{idx} list")
+            parameter_list = generate_parameter_list(ready_expressions, idx)
+            statements.append(f"list_{idx} = [{parameter_list}]")
+            ready_expressions[idx] = f"list_{idx}"
+        elif "prim::TupleConstruct" in scope:
+            print(f"{idx} tuple")
+            parameter_list = generate_parameter_list(ready_expressions, idx)
+            if len(ARGS[idx]) == 1:
+                parameter_list += ","
+            statements.append(f"tuple_{idx} = ({parameter_list})")
+            ready_expressions[idx] = f"tuple_{idx}"
+        else:
+            # op
+            print(f"{idx} op")
+            parameter_list = generate_parameter_list(ready_expressions, idx)
+            op_path = scope.rsplit("/", maxsplit=1)[1]
+            namespace, func_name = op_path.split("::")
+
+            # torch op
+            if namespace in torch_namespaces:
+                print(f"torch op ", func_name)
+                statements.append(
+                    f"t_{idx} = {namespace}.{func_name}({parameter_list})")
+            else:
+                self_arg, *rest = parameter_list.split(", ")
+
+                if "__" not in func_name:
+                    print("calling instance method ", func_name)
+                    statements.append(
+                        f"t_{idx} = {self_arg}.{func_name}({''.join(rest)})")
+                elif func_name == "__getattribute__":
+                    statements.append(f"t_{idx} = {self_arg}.{rest[0]}")
+                elif func_name == "__getitem__":
+                    statements.append(f"t_{idx} = {self_arg}[{rest[0]}]")
+                elif func_name == "__setitem__":
+                    statements.extend([f"{self_arg}[{rest[0]}] = {rest[1]}",
+                                       f"t_{idx} = {self_arg}"])
+                elif func_name in arithmetic_ops:
+                    statements.append(
+                        f"t_{idx} = {self_arg} {arithmetic_ops[func_name]} {rest[0]}")
+                elif func_name in inplace_arithmetic_ops:
+                    statements.extend(
+                        [f"{self_arg} {inplace_arithmetic_ops[func_name]} {rest[0]}",
+                         f"t_{idx} = {self_arg}"])
+                elif func_name in r_arithmetic_ops:
+                    statements.append(
+                        f"t_{idx} = {rest[0]} {r_arithmetic_ops[func_name]} {self_arg}")
+                else:
+                    print("calling magic ", func_name)
+                    statements.append(
+                        f"t_{idx} = {self_arg}.{func_name}({''.join(rest)})")
+            ready_expressions[idx] = f"t_{idx}"
+
+    statements.append(f"return {ready_expressions[GRAPH_OUTPUT]}")
+    print("\n")
+    parameter_list = ", ".join(["self"] + model_args + model_kwargs)
+
+    forward_decl = f"def forward({parameter_list}):\n"
+    imports = ["import torch", "from torch import Tensor",
+               "import torch.functional", "import torch.nn.functional"]
+    # print("\n".join(statements))
+    with open("generated.py", "w") as f:
+        f.write("\n".join(imports) + "\n\n")
+        f.write(forward_decl)
+        f.write("    " + "\n    ".join(statements))
+
+
+def generate_parameter_list(ready_expressions, idx):
+    args = [ready_expressions[a] for a in ARGS[idx]]
+    kwargs = [f"{k}={ready_expressions[a]}"
+              for a, k in KWARGS[idx].items()]
+
+    return ", ".join(args + kwargs)
+
+
+def discard_unused_nodes():
+    for i in range(TracedValue.ID):
+        if i not in VALUE_TYPES:
+            # a,b=f() will actually invoke __getitem__ 3 times so we discard the last node
+            assert not OUT_EDGES[i], f"traced value with no data should be unused"
+            for u in IN_EDGES.pop(i):
+                OUT_EDGES[u].remove(i)
+
+            OUT_EDGES.pop(i)
+            NODE_SCOPES.pop(i)
+
+            KWARGS.pop(i)
+            ARGS.pop(i)
+
+
+##############################
+# examples
+##############################
+
+
 class OptionalLayer(nn.Module):
     def __init__(self, func, args=(), kwargs=None):
         super(OptionalLayer, self).__init__()
@@ -973,97 +1230,109 @@ class OptionalLayer(nn.Module):
 
     def forward(self, x=None):
         if x is None:
-            return self.func(*self.args, **self.kwargs)
-        else:
-            return x
+            x = self.func(*self.args, **self.kwargs)
+
+        return x * 10, x + 1
 
 
 class Model(nn.Module):
     def __init__(self):
         super(Model, self).__init__()
-        self.mask_generator = OptionalLayer(torch.zeros, 100)
+        self.mask_generator = OptionalLayer(torch.zeros, (10, 100))
 
     def forward(self, x, mask=None):
-        mask = self.mask_generator(mask)
+        # mask = self.mask_generator(mask)
 
-        o0 = x + mask
-        o1 = x * 2
-        dict_out = {"a": o0, "b": o1}
-        list_out = [o0, o1]
-        tuple_out = (o0, o1)
-        # set_out = {o0, o1}
-        return o0, o1
+        # o0 = x + mask
+        # o1 = x * 2
+        # dict_out = {"a": o0, "b": o1}
+        # list_out = [o0, o1]
+        # tuple_out = (o0, o1)
+        # # set_out = {o0, o1}
+        # return dict_out
+
+        a, b = self.mask_generator(mask)
+        a.device
+        b.size()
+        a[:, 0] = 10
+        # print(type(t), type(t._data), type(t._data[0]), type(t._data[1]))
+        return a, b + x
 
 
 if __name__ == "__main__":
     if False:
-        with patch_tensor_creating_functions():
-            t = torch.randn(10, 10)
-            t.view(size=[t.shape[0], 2, 5])
-            # d = {"size": [t.shape[0], 2, 5]}
-            # t.view(**d)
-            # print(record_kwargs(d))
+        patch_tensor_creating_functions()
+        t = torch.randn(10, 10)
+        t.view(size=[t.shape[0], 2, 5])
+        # d = {"size": [t.shape[0], 2, 5]}
+        # t.view(**d)
+        # print(record_kwargs(d))
 
-            assert isinstance(torch.randn(10, 10), TracedValue)
+        assert isinstance(torch.randn(10, 10), TracedValue)
 
-            m = torch.as_tensor([[1, 2], [3, 4]])
-            assert isinstance(m, TracedValue)
-            print(m)
+        m = torch.as_tensor([[1, 2], [3, 4]])
+        assert isinstance(m, TracedValue)
+        print(m)
 
-            t = torch.tensor([[1, 2], [1, 2]])
-            assert isinstance(t, TracedValue)
+        t = torch.tensor([[1, 2], [1, 2]])
+        assert isinstance(t, TracedValue)
 
-            print(t)
+        print(t)
 
-            t = torch.add(t, m)
-            assert isinstance(t, TracedValue)
-            t = m.to(device="cuda")
-            assert isinstance(t, TracedValue)
-            print(t)
-            assert isinstance(m.device, TracedValue)
-            assert isinstance(m.t, TracedFunction)
-            m.t()
-            a = m * 2
-            b = 2 * m
-            assert isinstance(a, TracedValue)
-            assert isinstance(b, TracedValue)
+        t = torch.add(t, m)
+        assert isinstance(t, TracedValue)
+        t = m.to(device="cuda")
+        assert isinstance(t, TracedValue)
+        print(t)
+        assert isinstance(m.device, TracedValue)
+        assert isinstance(m.t, TracedFunction)
+        m.t()
+        a = m * 2
+        b = 2 * m
+        assert isinstance(a, TracedValue)
+        assert isinstance(b, TracedValue)
 
-            s = t.t().unsqueeze(0).shape[0] + 1
-            print(s)
-            assert isinstance(s, TracedValue)
+        s = t.t().unsqueeze(0).shape[0] + 1
+        print(s)
+        assert isinstance(s, TracedValue)
 
-            m = torch.cat([m, m])
-            assert isinstance(m, TracedValue)
-            print(m)
+        m = torch.cat([m, m])
+        assert isinstance(m, TracedValue)
+        print(m)
 
-            assert isinstance(1 + m, TracedValue)
-            assert isinstance(m + 1, TracedValue)
-            c = m
-            print(m)
-            m += 1
-            assert c._data is m._data
-            print(c)
-            m.add
-            print(c.shape)
-            print(c.view(c.size(0), 2, 1, 1, 1, 1).size())
+        assert isinstance(1 + m, TracedValue)
+        assert isinstance(m + 1, TracedValue)
+        c = m
+        print(m)
+        m += 1
+        assert c._data is m._data
+        print(c)
+        m.add
+        print(c.shape)
+        print(c.view(c.size(0), 2, 1, 1, 1, 1).size())
 
-            print(c.sum(dim=0))
+        print(c.sum(dim=0))
+
+        unpatch_tensor_creating_functions()
     else:
 
         m = resnet18().cuda()
         t = torch.randn(10, 3, 224, 224).cuda()
-        t = torch.randn(10, 100)
-        m = Model()
+        # t = torch.randn(10, 100)
+        # m = Model()
         mask = None
         # sys.exit()
         # m(x=t)
         args = (t,)
         kwargs = {"mask": mask}
-        trace(m, args=args, kwargs=kwargs, basic_blocks=(BasicBlock,))
+        trace_graph = trace(m, args=args, kwargs=kwargs,
+                            basic_blocks=(BasicBlock,))
         print()
 
+        # with open("trace.txt", "w") as f:
+        #     f.write(str(torch.jit.trace(m, args, check_trace=False).graph))
+    compile_model()
+    show_graph()
     is_valid, errors = check_is_valid_graph()
     if not is_valid:
         print(errors)
-
-    show_graph()
