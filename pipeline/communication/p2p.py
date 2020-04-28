@@ -51,7 +51,7 @@ class P2PCommunicationHandler(SimpleCommBase):
                 # tag for minibatch idx too
                 if is_grad:
                     with torch.no_grad():
-                        # we do not clone. so don't torch it until then.
+                        # we do not clone. so don't touch it until then.
                         tensor = tensor.data
                 else:
                     # tensor.detach_()

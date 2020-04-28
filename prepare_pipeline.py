@@ -376,20 +376,8 @@ def get_optimizer_cls(args, has_gap_aware):
 
 def get_optimizer(args, optimizer_cls, parameters):
     if len(parameters) == 0:
-        if not getattr(args, "allow_stateless"):
+        if not getattr(args, "allow_stateless", False):
             raise ValueError(f"Got stateless partition {args.stage}")
-
-        print(f"-I- Using dummy optimizer for stage {args.stage}")
-
-        class DummyOpt(optimizer_cls):
-            def __init__(self, parameters, *args, **kw):
-                super().__init__(torch.nn.Parameter(torch.randn(1)), *args,
-                                 **kw)
-
-            def step():
-                pass
-
-        optimizer_cls = DummyOpt
 
     optimizer = optimizer_cls(parameters, **args.optimizer['args'])
 

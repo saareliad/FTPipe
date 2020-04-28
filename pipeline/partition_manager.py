@@ -26,6 +26,7 @@ from .true_weights_storage import TrueWeightsStorage
 # import time
 DEBUG_FAKE_DRAW = True
 
+
 def make_buff(comm_handler,
               is_bwd,
               shapes,
@@ -374,7 +375,10 @@ class SinglePartitionManager:
     def set_trainer(self, trainer: PartitionedTrainer):
         self.trainer = trainer
 
-    def set_dataloader(self, dataloader, run_limit=-1, fake_draw=DEBUG_FAKE_DRAW):
+    def set_dataloader(self,
+                       dataloader,
+                       run_limit=-1,
+                       fake_draw=DEBUG_FAKE_DRAW):
         assert self.is_first_partition or self.is_last_partition
         # self.dataloader = dataloader
         self.dl_iter = iter(dataloader)
@@ -383,7 +387,6 @@ class SinglePartitionManager:
             fake_draw = len(dataloader) - run_limit
             for _ in range(fake_draw):
                 next(self.dl_iter)
-
 
     def set_weight_predictor(self, weight_predictor: WeightPredictor,
                              nag_with_predictor: bool):
@@ -488,13 +491,13 @@ class SinglePartitionManager:
                     to_del.append(i)
                 else:
                     break
-                    
+
             for i in sorted(to_del, reverse=True):
                 del obj_holder[i]
-            
+
             if not obj_holder:
                 return
-        
+
         if not fin and (len(obj_holder) <= self.sent_obejct_patience):
             return
 
@@ -1105,7 +1108,7 @@ class GPipePartitionManager(SinglePartitionManager):
 
                 # NOTE: for the micro batch (no recomputation), we have x as root of the computation graph. otherwise, it can be saved just for stats, and we need to do recomputation.
 
-                # NOTE: when we don't do recomputation -  this is not needed.
+                # NOTE: when we do recomputation -  this is not needed.
                 # but we can use this to assert recomputation is correct.
 
                 self.saved_for_backward[batch_idx] = (x, *ctx)
@@ -1123,8 +1126,13 @@ class GPipePartitionManager(SinglePartitionManager):
         is_last_micro_batch = last_due_step_every or last_due_end
         partition = self.partition
         trainer = self.trainer
-        old_lrs = None
         partition.is_last_micro_batch = is_last_micro_batch
+
+        # we actually step and change LR at the FIRST micro batch
+        is_first_micro_batch = (batch_idx % self.step_every) == 0
+        do_step = is_first_micro_batch
+        is_final_shorter_batch = (batch_idx + self.step_every) > num_batches
+        change_lr = do_step and is_final_shorter_batch
 
         # Get the root of the computation graph.
         # NOTE: we assume did_recomputation = is_last_micro_batch
@@ -1141,13 +1149,8 @@ class GPipePartitionManager(SinglePartitionManager):
         else:
             (x, *ctx) = self.saved_for_backward.pop(batch_idx)
 
-        # NOTE: for last partition- batch idx is the same as num backwards.
-        do_step = is_last_micro_batch
         # Backprop
-        # For the last batch, we must scale down the learning rate, and then restore.
-        if last_due_end and (not last_due_step_every):
-            # do_step = True
-            old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
+
 
         # NOTE: Usually, this is loss.backward()
         if (not do_step) and self.is_replicated:
@@ -1163,6 +1166,12 @@ class GPipePartitionManager(SinglePartitionManager):
         if hasattr(trainer, "grad_norm"):
             # trainer: GradNormStepper
             trainer.grad_norm()
+
+        if change_lr:
+            # Scale down the learning rate, and then restore.
+            old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
+        else:
+            old_lrs = None
 
         # Step
         trainer.last_partition_step_and_statistics(x,
@@ -1199,8 +1208,15 @@ class GPipePartitionManager(SinglePartitionManager):
         last_due_end = batch_idx == (num_batches - 1)
         is_last_micro_batch = last_due_step_every or last_due_end
         partition.is_last_micro_batch = is_last_micro_batch
-        old_lrs = None
-        
+
+        # we actually step and change LR at the FIRST micro batch
+        is_first_micro_batch = (batch_idx % self.step_every) == 0
+
+        # Allow skiping steps (Gradient aggregation)
+        do_step = is_first_micro_batch
+        is_final_shorter_batch = (batch_idx + self.step_every > num_batches)
+        # change_lr = do_step and is_final_shorter_batch
+
         # Special case: Last batch with differnt size
         if last_due_end and self.last_batch_train_shapes:
             # Delete previous buffers
@@ -1245,14 +1261,6 @@ class GPipePartitionManager(SinglePartitionManager):
         g = bwd_recv_buffers.wait_first()
         g = self.comm_handler.fix_after_recv(g)
 
-        # Allow skiping steps (Gradient aggregation)
-        do_step = is_last_micro_batch
-
-        # also do step for the last. (but with smaller LR)
-        if last_due_end and (not last_due_step_every):
-            # do_step = True
-            old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
-
         # Compute gradients
         if (not do_step) and self.is_replicated:
             with self.backward_nosync_context_manager():
@@ -1276,12 +1284,20 @@ class GPipePartitionManager(SinglePartitionManager):
         if do_step:
             trainer = self.trainer
 
+            # Sometimes last batch is smaller and needs smaller LR.
+            if is_final_shorter_batch:
+                old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
+            else:
+                old_lrs = None
+            
             # if isinstance(trainer, GradNormStepper):
             if hasattr(trainer, "grad_norm"):
                 # trainer: GradNormStepper
                 trainer.grad_norm()
 
-            # ####### Preparing to step
+            # Do the actual step.
+            trainer.non_last_partition_step()
+            
             if old_lrs:
                 # Note that sometimes its not defined locally.
                 pgs = trainer.optimizer.param_groups
@@ -1339,7 +1355,6 @@ class GPipePartitionManager(SinglePartitionManager):
                 if done_fwds == done_bwds + self.step_every or done_bwds == self.first_effected_batch:
                     mark_bwd_start = done_bwds
 
-                
                 micro_batch_to_run = done_fwds - 1 - done_bwds
                 batch_idx_to_run = mark_bwd_start + micro_batch_to_run
 
@@ -1351,8 +1366,7 @@ class GPipePartitionManager(SinglePartitionManager):
                     if async_bwd_objects:
                         wait_on_sent_object(is_fwd=False)
                     # HACK: we laizly insert at wrong index to to avoid ordering issues
-                    async_bwd_objects[
-                        done_bwds] = sent_request_objects
+                    async_bwd_objects[done_bwds] = sent_request_objects
                 done_bwds += 1
 
         while len(async_fwd_objects) > 0:
