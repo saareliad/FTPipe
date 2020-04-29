@@ -425,14 +425,15 @@ class TracedLayer(nn.Module):
             out.set_data(self.module(*args, **kwargs))
             LAYERS.add(out.id)
             patch_tensor_creating_functions()
+
             # a layer with 1 input which is None but returns a not None output
             # is treated as an optional input
-            if (len(args) + len(kwargs)) == 1:
-                value = next(chain(args, kwargs.values()))
-                if value is None and isinstance(out._data, Tensor):
-                    in_id = IN_EDGES[out.id][0]
-                    # record which node hase the optional shape
-                    OPTIONAL_TENSORS[in_id] = out.id
+            # if (len(args) + len(kwargs)) == 1:
+            #     value = next(chain(args, kwargs.values()))
+            #     if value is None and isinstance(out._data, Tensor):
+            #         in_id = IN_EDGES[out.id][0]
+            #         # record which node hase the optional shape
+            #         OPTIONAL_TENSORS[in_id] = out.id
 
         else:
             with record_free_floating_parameters_and_buffers(self.module):
@@ -639,6 +640,36 @@ TENSOR_PRODUCING_FUNCTIONS = {
 PATCHED_FUNCTIONS = [TracedTensorProducingFunction(namespace, f)
                      for f, namespace in TENSOR_PRODUCING_FUNCTIONS.items()]
 
+
+def reset_tracing_state():
+    FUNCTION_NAMESPACE.clear()
+
+    IN_EDGES.clear()
+    OUT_EDGES.clear()
+
+    NODE_SCOPES.clear()
+
+    KWARGS.clear()
+    ARGS.clear()
+
+    VALUE_TYPES.clear()
+    TENSOR_DTYPES.clear()
+    TENSOR_SHAPES.clear()
+
+    LAYERS.clear()
+    PRIMITIVES.clear()
+
+    BUFFERS.clear()
+    PARAMETERS.clear()
+
+    CONSTANT_VALUES.clear()
+
+    OPTIONAL_TENSORS.clear()
+
+    GRAPH_INPUTS.clear()
+    global GRAPH_OUTPUT
+    GRAPH_OUTPUT = -1
+    TracedValue.ID = 0
 
 ##############################
 # recording of function args and kwargs
@@ -938,8 +969,8 @@ def build_dot():
     return dot
 
 
-def show_graph():
-    build_dot().render(filename='graph', directory='.', cleanup=True, format='pdf')
+def show_graph(filename="graph"):
+    build_dot().render(filename=filename, directory='.', cleanup=True, format='pdf')
 
 
 ##############################
@@ -1068,7 +1099,7 @@ inplace_arithmetic_ops = {"__iadd__": " +=",
                           "__ipow__": "**="}
 
 
-def compile_model():
+def compile_model(output_file=None):
     statements = []
     ready_expressions = dict()
 
@@ -1180,8 +1211,14 @@ def compile_model():
     forward_decl = f"def forward({parameter_list}):\n"
     imports = ["import torch", "from torch import Tensor",
                "import torch.functional", "import torch.nn.functional"]
-    # print("\n".join(statements))
-    with open("generated.py", "w") as f:
+
+    if output_file is None:
+        output_file = f"generated_{type()}"
+
+    if not output_file.endswith(".py"):
+        output_file += ".py"
+
+    with open(output_file, "w") as f:
         f.write("\n".join(imports) + "\n\n")
         f.write(forward_decl)
         f.write("    " + "\n    ".join(statements))
@@ -1196,18 +1233,27 @@ def generate_parameter_list(ready_expressions, idx):
 
 
 def discard_unused_nodes():
-    for i in range(TracedValue.ID):
-        if i not in VALUE_TYPES:
+    for i in reversed(range(TracedValue.ID)):
+        if i not in VALUE_TYPES or (i == -1) or (i in CONSTANT_VALUES and (len(OUT_EDGES[i]) == 0)):
             # a,b=f() will actually invoke __getitem__ 3 times so we discard the last node
+            # also discar unused constants
             assert not OUT_EDGES[i], f"traced value with no data should be unused"
             for u in IN_EDGES.pop(i):
                 OUT_EDGES[u].remove(i)
-
-            OUT_EDGES.pop(i)
-            NODE_SCOPES.pop(i)
-
-            KWARGS.pop(i)
-            ARGS.pop(i)
+            IN_EDGES.pop(i, None)
+            OUT_EDGES.pop(i, None)
+            NODE_SCOPES.pop(i, None)
+            KWARGS.pop(i, None)
+            ARGS.pop(i, None)
+            VALUE_TYPES.pop(i, None)
+            TENSOR_DTYPES.pop(i, None)
+            TENSOR_SHAPES.pop(i, None)
+            LAYERS.discard(i)
+            PRIMITIVES.discard(i)
+            BUFFERS.discard(i)
+            PARAMETERS.discard(i)
+            CONSTANT_VALUES.pop(i, None)
+            OPTIONAL_TENSORS.pop(i, None)
 
 
 ##############################
@@ -1325,14 +1371,15 @@ if __name__ == "__main__":
         # m(x=t)
         args = (t,)
         kwargs = {"mask": mask}
-        trace_graph = trace(m, args=args, kwargs=kwargs,
-                            basic_blocks=(BasicBlock,))
-        print()
 
-        # with open("trace.txt", "w") as f:
-        #     f.write(str(torch.jit.trace(m, args, check_trace=False).graph))
-    compile_model()
-    show_graph()
-    is_valid, errors = check_is_valid_graph()
-    if not is_valid:
-        print(errors)
+        for d in range(3):
+            print(f"depth_{d}")
+            reset_tracing_state()
+            trace_graph = trace(m, depth=d, args=args, kwargs=kwargs)
+            print()
+
+            compile_model(output_file=f"resnet_depth_{d}")
+            show_graph(filename=f"resnet_depth_{d}")
+            is_valid, errors = check_is_valid_graph()
+            if not is_valid:
+                print(errors)
