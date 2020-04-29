@@ -12,6 +12,7 @@ def get_generated_last_stage_scopes(model,
     generated = importlib.import_module(module_path)
     create_pipeline_configuration = generated.create_pipeline_configuration
     config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
+    pipe_config = PipelineConfig.fromDict(config)
 
     n_stages = len(config['stages'])
     last_stage = n_stages - 1
@@ -21,7 +22,7 @@ def get_generated_last_stage_scopes(model,
     tensor_dict = tensorDict(model)
     layer_dict = layerDict(model,
                            depth=config['depth'],
-                           basic_blocks=config['basic_blocks'])
+                           basic_blocks=pipe_config.basic_blocks)
     last_stage_scopes = last_stage_cls(layer_dict, tensor_dict).scopes
 
     return last_stage_scopes
