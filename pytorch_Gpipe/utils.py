@@ -7,7 +7,7 @@ from torch import Tensor
 from functools import reduce
 
 __all__ = ["traverse_model", "traverse_params_buffs",
-           "get_device", "_detach_inputs", "_get_size_and_shape","_get_dtypes",
+           "get_device", "_detach_inputs", "_get_size_and_shape", "_get_dtypes",
            "Tensors", "TensorsShape", "Devices", "OrderedSet", "layerDict", "tensorDict"]
 
 # the officially supported input types
@@ -19,7 +19,7 @@ Devices = Union[List[Device], Tuple[Device, ...]]
 
 
 def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
-                   basic_blocks: Optional[Iterable[nn.Module]] = None, full: bool = False) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
+                   basic_blocks: Tuple[nn.Module] = (), full: bool = False) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
     '''
     iterate over model layers yielding the layer,layer_scope,encasing_module
     Parameters:
@@ -38,14 +38,12 @@ def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
 
     for name, sub_module in module.named_children():
         scope = prefix + "/" + type(sub_module).__name__ + f"[{name}]"
-        if len(list(sub_module.children())) == 0 or ((basic_blocks is not None)
-                                                     and isinstance(sub_module, tuple(basic_blocks))) or depth == 0:
+        if len(list(sub_module.children())) == 0 or isinstance(sub_module, tuple(basic_blocks)) or depth == 0:
             yield sub_module, scope, module
         else:
             if full:
                 yield sub_module, scope, module
-            yield from traverse_model(sub_module, depth - 1, prefix + "/" + type(
-                sub_module).__name__ + f"[{name}]", basic_blocks, full)
+            yield from traverse_model(sub_module, depth - 1, scope, basic_blocks, full)
 
 
 def traverse_params_buffs(module: nn.Module, prefix: Optional[str] = None) -> Iterator[Tuple[torch.tensor, str]]:
@@ -101,7 +99,8 @@ def _detach_inputs(*inputs: Tensors):
             # NOTE: it is required for shared stateless!
             # to Set requires grad like the tensor.
             # especially if isinstance(x, torch.nn.Parameter)
-            req_grad = x.requires_grad if isinstance(x, torch.nn.Parameter) else False
+            req_grad = x.requires_grad if isinstance(
+                x, torch.nn.Parameter) else False
             detached.append(x.detach().requires_grad_(req_grad))
         elif isinstance(x, (list, tuple)):
             tmp = []
@@ -138,7 +137,8 @@ def _get_size_and_shape(x: Tensors):
     else:
         raise ValueError(INCORRECT_INPUT_TYPE + f"{type(x)} ")
 
-def _get_dtypes(x:Tensors):
+
+def _get_dtypes(x: Tensors):
     dtypes = []
 
     if isinstance(x, torch.Tensor):
@@ -150,6 +150,7 @@ def _get_dtypes(x:Tensors):
         return tuple(dtypes)
     else:
         raise ValueError(INCORRECT_INPUT_TYPE + f"{type(x)} ")
+
 
 def flatten(x: Tensors):
     if isinstance(x, Tensor) or x is None:

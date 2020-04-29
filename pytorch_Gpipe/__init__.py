@@ -76,6 +76,9 @@ def pipe_model(model: nn.Module,
         defaut is lambda x: False
     '''
 
+    if basic_blocks is None:
+        basic_blocks = ()
+
     graph = partition_model(model,
                             sample_batch,
                             kwargs=kwargs,
@@ -144,6 +147,8 @@ def partition_model(model: nn.Module,
     METIS_opt:
         dict of additional kwargs to pass to the METIS partitioning algorithm
     '''
+    if basic_blocks is None:
+        basic_blocks = ()
     graph = build_graph(model,
                         sample_batch,
                         kwargs=kwargs,
