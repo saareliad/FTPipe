@@ -1,6 +1,7 @@
 from collections import defaultdict
 from typing import List, Dict, Set
 from copy import copy
+import os
 from ..model_profiling import Graph, NodeTypes, Node
 
 
@@ -22,8 +23,9 @@ def post_process_partition(graph: Graph, verbose_on_error=True) -> Graph:
 
     cannonize_partition_indices(graph)
     if has_cycles(graph):
-        graph.save_as_pdf(f"{graph.model_name}_before_fix",
-                            ".", show_profiles=True)
+        if os.environ.get("DEBUG", False):
+            graph.save_as_pdf(f"{graph.model_name}_before_fix",
+                              ".", show_profiles=True)
         break_partition_cycles(graph)
 
         # possibly redundent
@@ -31,8 +33,9 @@ def post_process_partition(graph: Graph, verbose_on_error=True) -> Graph:
 
     # this is a sanity check
     if has_cycles(graph):
-        graph.save_as_pdf(f"{graph.model_name}_after_fix",
-                        ".", show_profiles=True)
+        if os.environ.get("DEBUG", False):
+            graph.save_as_pdf(f"{graph.model_name}_after_fix",
+                              ".", show_profiles=True)
 
         if verbose_on_error:
             problems, info = get_problematic_partitions(graph)
@@ -44,9 +47,8 @@ def post_process_partition(graph: Graph, verbose_on_error=True) -> Graph:
         error = "error cycle detected mutual dependecy between partitions"
         raise AssertionError(error)
 
-    
-    is_valid,error=is_valid_partitioning(graph)
-    assert is_valid,error
+    is_valid, error = is_valid_partitioning(graph)
+    assert is_valid, error
 
     return graph
 
@@ -85,6 +87,7 @@ def _topological_sort(out_edges: Dict[int, Set[int]], v: int, visited: Dict[int,
 
     stack.insert(0, v)
 
+
 def get_problematic_partitions(graph):
     """ For debug when cycle are detected """
     problems = []
@@ -95,6 +98,7 @@ def get_problematic_partitions(graph):
                 problems.append([v.part, u.part])
                 info.append([v, u])
     return problems, info
+
 
 def has_cycles(graph: Graph) -> bool:
     for u in graph.nodes:
@@ -151,16 +155,17 @@ def find_subtree(roots: Set[Node], graph_size: int):
                 nodes.add(u)
     return nodes
 
-def is_valid_partitioning(graph:Graph):
+
+def is_valid_partitioning(graph: Graph):
     """
     check if we only send tensors between partitions
     """
     for n in graph.nodes:
-        if n.valueType() in {type(None),list,tuple,int,bool,float,str}:
+        if n.valueType() in {type(None), list, tuple, int, bool, float, str}:
             for o in n.out_nodes:
                 if n.part != o.part:
-                    msg=f"invalid output type at partition boundary {n.part}=>{o.part}"
-                    msg+=f"\noutput is {n.scope} of type {n.valueType()}"
-                    return False,msg
-    
-    return True,""
+                    msg = f"invalid output type at partition boundary {n.part}=>{o.part}"
+                    msg += f"\noutput is {n.scope} of type {n.valueType()}"
+                    return False, msg
+
+    return True, ""

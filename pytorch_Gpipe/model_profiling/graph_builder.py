@@ -25,9 +25,7 @@ __all__ = ["build_graph"]
 
 # TODO there are still some problems with lstms should think if we want to tackle it
 
-# set False to disable debuging on failure
-DEBUG_ON_FAILURE = False
-WRITE_TRACE_GRAPHS = False
+
 DEBUG_MODEL_NAME = ""
 
 
@@ -46,7 +44,7 @@ def DEBUG_DUMP_GRAPH(func):
     @functools.wraps(func)
     def wrapper_dump(*args, **kwargs):
         # FIXME: temporarly disabled.
-        if not DEBUG_ON_FAILURE:
+        if not os.environ.get("DEBUG", False):
             return func(*args, **kwargs)
 
         assert len(args) >= 1
@@ -123,7 +121,7 @@ def build_graph(model: torch.nn.Module,
     global DEBUG_MODEL_NAME
     DEBUG_MODEL_NAME = model.__class__.__name__
 
-    if not os.path.exists("GPIPE_DEBUG/"):
+    if os.environ.get("DEBUG",False,) and (not os.path.exists("GPIPE_DEBUG/")):
         os.mkdir("GPIPE_DEBUG/")
     old_value = torch._C._jit_get_inline_everything_mode()
     torch._C._jit_set_inline_everything_mode(False)
@@ -131,7 +129,7 @@ def build_graph(model: torch.nn.Module,
         trace_graph: torch._C.Graph = torch.jit.trace(model,
                                                       sample_batch,
                                                       check_trace=False).graph
-        if WRITE_TRACE_GRAPHS:
+        if os.environ.get("DEBUG", False):
             with open(f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_DEBUG_base_trace.txt",
                       "w") as f:
                 f.write(str(trace_graph))
@@ -148,7 +146,7 @@ def build_graph(model: torch.nn.Module,
 
     torch._C._jit_set_inline_everything_mode(old_value)
 
-    if WRITE_TRACE_GRAPHS:
+    if os.environ.get("DEBUG", False):
         with open(f"GPIPE_DEBUG/{DEBUG_MODEL_NAME}_DEBUG_inlined_trace.txt",
                   "w") as f:
             f.write(str(trace_graph))
