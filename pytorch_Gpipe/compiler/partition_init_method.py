@@ -14,6 +14,14 @@ def generate_init_method(class_name: str, full_names: List[str], layer_classes: 
     init_dec = f"{tab}def __init__(self, layers, tensors):"
     super_init = f'{dtab}super({class_name}, self).__init__()'
     layer_names = [f'self.l_{idx}' for idx, _ in enumerate(full_names)]
+    scope_field = [f"SCOPES={{"]
+    for s in full_names:
+        scope_field.append(f"{tab}'{s}',")
+
+    scope_field.append("}")
+
+    scope_field = tab + f"\n{dtab}".join(scope_field)
+
     layers_init = generate__init__layersStatements(layer_names, full_names,
                                                    layer_classes)
     scope = dict(zip(full_names, layer_names))
@@ -37,7 +45,7 @@ def generate_init_method(class_name: str, full_names: List[str], layer_classes: 
     # we initialize it to expected device if DEBUG then the pipeline will set it to cpu device
     device = f"{dtab}self.device = torch.device('cuda:{device_id}')"
 
-    return '\n'.join([class_decl, init_dec, super_init, layers_init, tensor_init, device, lookup]) + '\n', scope
+    return '\n'.join([class_decl, scope_field, init_dec, super_init, layers_init, tensor_init, device, lookup]) + '\n', scope
 
 
 def generate__init__layersStatements(layer_names: List[str], full_names: List[str], layer_classes: Dict[str, Module]) -> str:
