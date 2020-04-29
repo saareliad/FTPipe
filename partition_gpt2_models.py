@@ -60,6 +60,8 @@ from pytorch_Gpipe import pipe_model
 from misc import run_analysis  # , run_partitions
 from pytorch_Gpipe.utils import layerDict, tensorDict
 from pytorch_Gpipe import PipelineConfig
+import functools
+from partition_async_pipe import AsyncPipePartitioner
 
 MODEL_CLASSES_LM_HEAD = {
     'gpt2': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
@@ -78,6 +80,25 @@ MODEL_CLASSES = {
 MODEL_CLASSES_LM_HEAD_STATELESS_TIED = {
     'gpt2': (GPT2Config, StatelessGPT2LMHeadModel, GPT2Tokenizer),  # TODO:
 }
+
+
+def run_x_tries_until_no_fail(func, number_of_tries, *args, **kw):
+    count = 0
+    success = False
+    res = None
+
+    while number_of_tries < 0 or count < number_of_tries:
+
+        try:
+            res = func(*args, **kew)
+            success = True
+            count += 1
+            break
+        except:
+            count += 1
+            
+    print(f"running function got succcess={success} after {count} attempts")
+    return res
 
 
 class TextDataset(Dataset):
@@ -213,24 +234,55 @@ def partition_model(args,
         else:
             return recomputation
 
-    graph = pipe_model(model,
-                       batch_dim,
-                       sample,
-                       depth=args.depth,
-                       n_iter=args.n_iter,
-                       nparts=args.n_partitions,
-                       node_weight_function=node_weight_function(
-                           bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-                       edge_weight_function=edge_weight_function(
-                           args.bandwidth_gps,
-                           bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-                       use_layers_only_graph=args.partition_layer_graph,
-                       output_file=args.output_file,
-                       generate_model_parallel=args.generate_model_parallel,
-                       save_memory_mode=args.save_memory_mode,
-                       recomputation=recomputation,
-                       METIS_opt=METIS_opt,
-                       force_no_recomp_scopes=force_no_recomputation_fn)
+    # graph = pipe_model(model,
+    #                    batch_dim,
+    #                    sample,
+    #                    depth=args.depth,
+    #                    n_iter=args.n_iter,
+    #                    nparts=args.n_partitions,
+    #                    node_weight_function=node_weight_function(
+    #                        bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+    #                    edge_weight_function=edge_weight_function(
+    #                        args.bandwidth_gps,
+    #                        bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+    #                    use_layers_only_graph=args.partition_layer_graph,
+    #                    output_file=args.output_file,
+    #                    generate_model_parallel=args.generate_model_parallel,
+    #                    save_memory_mode=args.save_memory_mode,
+    #                    recomputation=recomputation,
+    #                    METIS_opt=METIS_opt,
+    #                    force_no_recomp_scopes=force_no_recomputation_fn)
+
+    partial_pipe_model = functools.partial(
+        pipe_model,
+        model,
+        batch_dim,
+        sample,
+        depth=args.depth,
+        n_iter=args.n_iter,
+        nparts=args.n_partitions,
+        node_weight_function=node_weight_function(
+            bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+        edge_weight_function=edge_weight_function(
+            args.bandwidth_gps, bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+        use_layers_only_graph=args.partition_layer_graph,
+        output_file=args.output_file,
+        generate_model_parallel=args.generate_model_parallel,
+        save_memory_mode=args.save_memory_mode,
+        recomputation=recomputation,
+        METIS_opt=METIS_opt)
+
+    if args.async_pipeline and (not args.no_recomputation):
+        async_pipe_partitioner = AsyncPipePartitioner(
+            model,
+            args.output_file,
+            partial_pipe_model)
+        
+        # graph = run_x_tries_until_no_fail(async_pipe_partitioner.partition, 3, force_no_recomp_scopes=force_no_recomputation_fn, allowed_mistakes=0)
+        graph = async_pipe_partitioner.partition(force_no_recomp_scopes=force_no_recomputation_fn, allowed_mistakes=0)
+    else:
+        graph = partial_pipe_model(force_no_recomp_scopes=force_no_recomputation_fn)
+
     if args.dot:
         graph.save_as_pdf(args.output_file, ".")
 
@@ -484,7 +536,7 @@ def parse_cli():
                         "--async_pipeline",
                         default=False,
                         action="store_true",
-                        help="Do analysis for async pipeline")
+                        help="Do analysis and partitioning for async pipeline")
 
     ParseMetisOpts.add_metis_arguments(parser)
 
