@@ -57,7 +57,7 @@ def run_analysis(sample,
     for i in unique_stages_on_same_gpu:
         assert len(i) >= 1
 
-    num_dummy_stages = sum([(len(i) - 1) for i in unique_stages_on_same_gpu])
+    num_dummy_stages = sum((len(i) - 1) for i in unique_stages_on_same_gpu)
 
     if graph is not None:
         # thoeretical analysis
@@ -70,13 +70,15 @@ def run_analysis(sample,
         # theoretical analysis based on the graph assuming the computation is sequential
         theoretical_sequential_b_balance = worst_balance(sequential_b)
         theoretical_sequential_f_balance = worst_balance(sequential_f)
-        (topology_aware_sequential_f_balance,
-         topology_aware_sequential_b_balance) = topology_aware_balance(
-             sequential_f, sequential_b, edges)
+        if TOPO_AWARE:
+            (topology_aware_sequential_f_balance,
+             topology_aware_sequential_b_balance) = topology_aware_balance(
+                 sequential_f, sequential_b, edges)
         # theoretical anaysis based on the graph assuming the computation is fully parallel
         theoretical_parallel_b_balance = worst_balance(parallel_b)
         theoretical_parallel_f_balance = worst_balance(parallel_f)
-        topology_aware_parallel_f_balance, topology_aware_parallel_b_balance = topology_aware_balance(
+        if TOPO_AWARE:
+            topology_aware_parallel_f_balance, topology_aware_parallel_b_balance = topology_aware_balance(
             parallel_f, parallel_b, edges)
     else:
         edges = None
@@ -112,7 +114,7 @@ def run_analysis(sample,
                                                        val) in newd.items())
         return communication_volume
 
-    n_partitions = sum([1 for k in config if isinstance(k, int)])
+    n_partitions = sum(1 for k in config if isinstance(k, int))
     num_real_stages = n_partitions - num_dummy_stages
 
     if n_partitions != num_real_stages:
@@ -304,7 +306,7 @@ def profile_execution(model_inputs,
                       stages_on_same_gpu=[]):
     '''perfrom forward/backward passes and measure execution times accross n batches
     '''
-    n_partitions = sum([1 for k in partition_config if isinstance(k, int)])
+    n_partitions = sum(1 for k in partition_config if isinstance(k, int))
     f_times = {i: [] for i in range(n_partitions)}
     b_times = {i: [] for i in range(n_partitions)}
 
@@ -666,8 +668,8 @@ def cpu_backward(partition,
     if not recomputation:
         start = time.time()
 
-    #compute gradient only for outputs that require grad
-    flattened_outputs = filter(lambda t: t.requires_grad,flattened_outputs)
+    # compute gradient only for outputs that require grad
+    flattened_outputs = filter(lambda t: t.requires_grad, flattened_outputs)
 
     torch.autograd.backward(tensors=flattened_outputs, grad_tensors=grad_tensors)
     end = time.time()
@@ -889,7 +891,7 @@ def topology_aware_balance(f_times, b_times, cutting_edges):
 
 
 def run_partitions(model_inputs, partition_config):
-    n_partitions = sum([1 for k in partition_config if isinstance(k, int)])
+    n_partitions = sum(1 for k in partition_config if isinstance(k, int))
 
     if not isinstance(model_inputs, tuple):
         model_inputs = (model_inputs, )
@@ -935,7 +937,7 @@ def trace_partitions(model_inputs, partition_config):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     device = torch.device(device)
 
-    n_partitions = sum([1 for k in partition_config if isinstance(k, int)])
+    n_partitions = sum(1 for k in partition_config if isinstance(k, int))
 
     if not isinstance(model_inputs, tuple):
         model_inputs = (model_inputs, )
