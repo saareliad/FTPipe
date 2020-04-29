@@ -24,9 +24,9 @@
 ###
 # Parameters for sbatch
 #
-NODE=rishon1
-NUM_CORES=8
-NUM_GPUS=4
+NODE=rishon3
+NUM_CORES=16
+NUM_GPUS=8
 JOB_NAME="Pytorch_Gpipe_CTRL"
 MAIL_USER="alonde-jager@campus.technion.ac.il"
 MAIL_TYPE=ALL # Valid values are NONE, BEGIN, END, FAIL, REQUEUE, ALL

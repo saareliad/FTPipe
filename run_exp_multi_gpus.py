@@ -5,16 +5,17 @@ import torch
 
 
 def find_best(path):
-    files = os.listdir(path)
-    for f in files:
-        if not f.endswith("py"):
-            continue
-        basename = os.path.basename(f)
+    if os.path.exists(path):
+        files = os.listdir(path)
+        for f in files:
+            if not f.endswith("py"):
+                continue
+            basename = os.path.basename(f)
 
-        print(
-            basename, ": ",
-            subprocess.check_output(['tail', '-2',
-                                     os.path.join(path, f)]).decode())
+            print(
+                basename, ": ",
+                subprocess.check_output(['tail', '-2',
+                                         os.path.join(path, f)]).decode())
 
 
 def gpt2xl_tied_p8():
@@ -120,6 +121,9 @@ def partition_lm_model(model_type, model_name_or_path, n_partitions=2, batch_siz
     if not isinstance(batch_size, list):
         batch_size = list(batch_size)
 
+    if not os.path.exists(OUT_DIR):
+        os.makedirs(OUT_DIR, exist_ok=True)
+
     param_grid = dict(
         seed=[42],
         model_type=[model_type],
@@ -158,7 +162,7 @@ if __name__ == "__main__":
         for use_partition_layer_graph in [True, False]:
             partition_lm_model("ctrl", "ctrl",
                                n_partitions=[4, 8],
-                               batch_size=[1],
+                               batch_size=[1, 2, 4],
                                save_memory=True,
                                tied=use_tied,
                                partition_layer_graph=use_partition_layer_graph)
