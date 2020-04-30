@@ -42,6 +42,8 @@ def run_analysis(sample, model, n_workers, bw_GBps=12, verbose=True):
 def cuda_computation_times(model, inputs):
     ''' measure forward/backward time of a partition on the GPU
     '''
+    if not isinstance(inputs, tuple):
+        inputs = (inputs,)
     model.cuda()
     # now we move inputs to GPU
     inputs = [i.to('cuda') for i in inputs]
