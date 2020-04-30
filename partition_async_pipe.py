@@ -28,6 +28,33 @@ def get_generated_last_stage_scopes(model,
     return last_stage_scopes
 
 
+def get_all_generated_stage_scopes(model,
+                                   output_file,
+                                   GET_PARTITIONS_ON_CPU=True):
+
+    module_path = output_file.replace("/", ".")
+    generated = importlib.import_module(module_path)
+    create_pipeline_configuration = generated.create_pipeline_configuration
+    config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
+    pipe_config = PipelineConfig.fromDict(config)
+
+    n_stages = len(config['stages'])
+
+    all_scopes = []
+    for stage_id in range(n_stages):
+        stage_cls = getattr(generated, f"Partition{stage_id}")
+
+        # TODO: this could be spared if the last partition would have scops as class attr
+        tensor_dict = tensorDict(model)
+        layer_dict = layerDict(model,
+                               depth=config['depth'],
+                               basic_blocks=pipe_config.basic_blocks)
+        stage_scopes = stage_cls(layer_dict, tensor_dict).scopes
+
+        all_scopes.extend(stage_scopes)
+    return all_scopes
+
+
 def force_no_recomp_fn_factory(scopes):
     def foo(scope):
         return scope in scopes
@@ -58,9 +85,12 @@ class AsyncPipePartitioner:
         self.model = model
         self.output_file = output_file
 
-    def partition(self, force_no_recomp_scopes=None, scopes_to_begin_with=set(), allowed_mistakes=2):
+    def partition(self,
+                  force_no_recomp_scopes=None,
+                  scopes_to_begin_with=set(),
+                  allowed_mistakes=2):
         """Force no recomputation for given layers in last partition until a certain allowed_mistakes is achieved. """
-        
+
         if force_no_recomp_scopes and scopes_to_begin_with:
             raise ValueError("mutially exlusive")
         elif force_no_recomp_scopes:
@@ -70,6 +100,7 @@ class AsyncPipePartitioner:
 
         last_partition_scopes = scopes_to_begin_with
 
+        # Just initialize it higher
         current_mistakes = allowed_mistakes + 1
 
         # TODO: take care of METIS seed here, can be important for stability
@@ -88,7 +119,6 @@ class AsyncPipePartitioner:
             # Generate rule based on current scopes
             if start_with_fn:
                 f = force_no_recomp_scopes
-                start_with_fn = False
             else:
                 f = force_no_recomp_fn_factory(last_partition_scopes)
 
@@ -99,6 +129,15 @@ class AsyncPipePartitioner:
             # Load last partition last stage scopes
             generated_last_stage_scopes = get_generated_last_stage_scopes(
                 self.model, self.output_file, GET_PARTITIONS_ON_CPU=True)
+
+            if start_with_fn:
+                start_with_fn = False
+                # For stats, we record for which scopes our function returns True
+                # (that is, predicts its in the last stage)
+                all_scopes = get_all_generated_stage_scopes(
+                    self.model, self.output_file, GET_PARTITIONS_ON_CPU=True)
+                last_partition_scopes = [s for s in all_scopes if f(s)]
+                # del all_scopes
 
             # Count mistakes (false positives and false negatives)
             A = set(last_partition_scopes)
