@@ -90,7 +90,7 @@ def run_x_tries_until_no_fail(func, number_of_tries, *args, **kw):
     while number_of_tries < 0 or count < number_of_tries:
 
         try:
-            res = func(*args, **kew)
+            res = func(*args, **kw)
             success = True
             count += 1
             break
