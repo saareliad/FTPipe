@@ -4,13 +4,14 @@ from functools import wraps
 from itertools import chain
 import operator
 from collections import OrderedDict
+import inspect
 
 import torch
 import torch.nn as nn
 from torch import Tensor
 from torch._overrides import get_overridable_functions
 
-from models.normal import resnet18
+from models.normal import resnet50
 from models.normal.vision_models.ResNet import BasicBlock
 from pytorch_Gpipe.utils import traverse_model
 from pytorch_Gpipe.model_profiling.control_flow_graph import Node, NodeTypes, Graph
@@ -97,8 +98,14 @@ def delegate_to_traced_value(func):
     def wrapper(*args):
         # record the operation
         args, _ = record_args_and_kwargs(*args)
-        traced_self = args[0]
         op_name = func.__name__
+
+        # for example we switch __radd__ to __add__
+        if op_name in r_arithmetic_ops:
+            op_name = "__" + op_name[3:]
+            args = tuple(reversed(args))
+
+        traced_self = args[0]
         print(f"delegating {op_name} to {type(traced_self._data)}")
         out = TracedValue(f"/{type(traced_self._data).__name__}::{op_name}")
         record_function_args_and_kwargs(out.id, args)
@@ -367,7 +374,7 @@ class TracedFunction(object):
         self.namespace = namespace
 
     def __call__(self, *args, **kwargs):
-        print(f"Invoking function {self._func} of wrapped value\n")
+        print(f"Invoking function {self._func.__name__} of wrapped value\n")
 
         # record the operation
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
@@ -452,7 +459,7 @@ def isTracedValue(data):
     """
     predicate to check if a value can be traced
     """
-    return isinstance(data, (type(None), list, tuple, dict, set, int, bool, str, float, slice,
+    return isinstance(data, (type(None), type(Ellipsis), list, tuple, dict, set, int, bool, str, float, slice,
                              torch.device, torch.Size, torch.Tensor,
                              torch.dtype, torch.memory_format))
 
@@ -462,6 +469,7 @@ def isTracedValue(data):
 ##############################
 
 def trace(module: nn.Module, args=(), kwargs=None, depth=1000, basic_blocks=()):
+    reset_tracing_state()
     args, kwargs = prepare_args_and_kwargs(args=args, kwargs=kwargs)
 
     global GRAPH_INPUTS
@@ -558,13 +566,25 @@ def prepare_args_and_kwargs(args=(), kwargs=None):
     return wrapped_args, wrapped_kwargs
 
 
+def register_new_traced_function(function):
+    namespace = inspect.getmodule(function)
+    if namespace is None:
+        namespace = function.__module__
+
+    ADDITIONAL_TRACED_FUNCTIONS[function] = namespace
+
+
 def patch_tensor_creating_functions():
     """ensures that tensors which are created using torch functions like torch.zeros
     are traced
     """
-
-    for f in PATCHED_FUNCTIONS:
-        f.replace_binding()
+    global PATCHED_FUNCTIONS
+    if PATCHED_FUNCTIONS:
+        for f in PATCHED_FUNCTIONS:
+            f.replace_binding()
+    else:
+        PATCHED_FUNCTIONS = [TracedTensorProducingFunction(namespace, f)
+                             for f, namespace in ADDITIONAL_TRACED_FUNCTIONS.items()]
 
     global FUNCTION_NAMESPACE
     FUNCTION_NAMESPACE = {f: ns for ns, funcs in get_overridable_functions().items()
@@ -606,8 +626,8 @@ def _unwrap_layers(module: nn.Module):
 
 # this functions create tensors from potentially non tensor data
 # so we wrap them in order to record their creation
-# we keep this in dict format to enable registering more namepsaces as necessary
-TENSOR_PRODUCING_FUNCTIONS = {
+# we keep this in dict format to enable registering more namespaces as necessary
+ADDITIONAL_TRACED_FUNCTIONS = {
     torch.as_tensor: torch,
     torch.from_numpy: torch,
     torch.tensor: torch,
@@ -637,8 +657,7 @@ TENSOR_PRODUCING_FUNCTIONS = {
     torch.stack: torch
 }
 
-PATCHED_FUNCTIONS = [TracedTensorProducingFunction(namespace, f)
-                     for f, namespace in TENSOR_PRODUCING_FUNCTIONS.items()]
+PATCHED_FUNCTIONS = []
 
 
 def reset_tracing_state():
@@ -720,6 +739,16 @@ def record_args(args, top_level):
 
             for k, id in traced_ids.items():
                 record_kwarg(traced_value.id, k, id)
+        elif isinstance(a, slice):
+            traced_children, traced_ids = record_args((a.start, a.stop, a.step),
+                                                      top_level=False)
+            traced_value = TracedValue(
+                "/" + container_construct_op_name(type(a)))
+            traced_value.set_data(type(a)(*traced_children))
+            PRIMITIVES.add(traced_value.id)
+
+            for id in traced_ids:
+                record_arg(traced_value.id, id)
 
         elif isinstance(a, TracedValue):
             traced_value = a
@@ -886,8 +915,8 @@ def container_construct_op_name(container_cls):
     container_str = {dict: "Dict",
                      list: "List",
                      tuple: "Tuple",
-                     set: "Set"
-                     }[container_cls]
+                     set: "Set",
+                     slice: "Slice"}[container_cls]
 
     return f"prim::{container_str}Construct"
 
@@ -984,7 +1013,7 @@ def check_is_valid_graph():
     assert len(IN_EDGES) == len(NODE_SCOPES)
     for idx in NODE_SCOPES.keys():
         if idx not in VALUE_TYPES:
-            print(idx, NODE_SCOPES[i])
+            print(idx, NODE_SCOPES[idx])
 
     assert len(VALUE_TYPES) == len(IN_EDGES)
     assert len(TENSOR_SHAPES) == len(TENSOR_DTYPES)
@@ -1105,8 +1134,8 @@ def compile_model(output_file=None):
 
     model_args = []
     model_kwargs = []
-    torch_namespaces = {namespace.__name__
-                        for namespace in get_overridable_functions().keys()}
+    namespaces = {namespace.__name__ for namespace in
+                  chain(get_overridable_functions().keys(), ADDITIONAL_TRACED_FUNCTIONS.values())}
 
     for idx, scope in NODE_SCOPES.items():
         if idx in GRAPH_INPUTS:
@@ -1162,6 +1191,10 @@ def compile_model(output_file=None):
                 parameter_list += ","
             statements.append(f"tuple_{idx} = ({parameter_list})")
             ready_expressions[idx] = f"tuple_{idx}"
+        elif "prim::SliceConstruct" in scope:
+            parameter_list = generate_parameter_list(ready_expressions, idx)
+            statements.append(f"slice_{idx} = slice({parameter_list})")
+            ready_expressions[idx] = f"slice_{idx}"
         else:
             # op
             print(f"{idx} op")
@@ -1169,51 +1202,52 @@ def compile_model(output_file=None):
             op_path = scope.rsplit("/", maxsplit=1)[1]
             namespace, func_name = op_path.split("::")
 
-            # torch op
-            if namespace in torch_namespaces:
-                print(f"torch op ", func_name)
+            # function call
+            if namespace in namespaces:
+                print(f"function call ", func_name)
                 statements.append(
                     f"t_{idx} = {namespace}.{func_name}({parameter_list})")
             else:
-                self_arg, *rest = parameter_list.split(", ")
-
+                param_list = generate_parameter_list(ready_expressions,
+                                                     idx,
+                                                     string=False)
+                self_arg = param_list[0]
                 if "__" not in func_name:
                     print("calling instance method ", func_name)
                     statements.append(
-                        f"t_{idx} = {self_arg}.{func_name}({''.join(rest)})")
+                        f"t_{idx} = {self_arg}.{func_name}({', '.join(param_list[1:])})")
                 elif func_name == "__getattribute__":
-                    statements.append(f"t_{idx} = {self_arg}.{rest[0]}")
+                    statements.append(f"t_{idx} = {self_arg}.{param_list[1]}")
                 elif func_name == "__getitem__":
-                    statements.append(f"t_{idx} = {self_arg}[{rest[0]}]")
+                    statements.append(f"t_{idx} = {self_arg}[{param_list[1]}]")
                 elif func_name == "__setitem__":
-                    statements.extend([f"{self_arg}[{rest[0]}] = {rest[1]}",
+                    statements.extend([f"{self_arg}[{param_list[1]}] = {param_list[2]}",
                                        f"t_{idx} = {self_arg}"])
                 elif func_name in arithmetic_ops:
                     statements.append(
-                        f"t_{idx} = {self_arg} {arithmetic_ops[func_name]} {rest[0]}")
+                        f"t_{idx} = {self_arg} {arithmetic_ops[func_name]} {param_list[1]}")
                 elif func_name in inplace_arithmetic_ops:
                     statements.extend(
-                        [f"{self_arg} {inplace_arithmetic_ops[func_name]} {rest[0]}",
+                        [f"{self_arg} {inplace_arithmetic_ops[func_name]} {param_list[1]}",
                          f"t_{idx} = {self_arg}"])
                 elif func_name in r_arithmetic_ops:
                     statements.append(
-                        f"t_{idx} = {rest[0]} {r_arithmetic_ops[func_name]} {self_arg}")
+                        f"t_{idx} = {param_list[1]} {r_arithmetic_ops[func_name]} {self_arg}")
                 else:
                     print("calling magic ", func_name)
                     statements.append(
-                        f"t_{idx} = {self_arg}.{func_name}({''.join(rest)})")
+                        f"t_{idx} = {self_arg}.{func_name}({', '.join(param_list[1:])})")
             ready_expressions[idx] = f"t_{idx}"
 
     statements.append(f"return {ready_expressions[GRAPH_OUTPUT]}")
     print("\n")
-    parameter_list = ", ".join(["self"] + model_args + model_kwargs)
+    stage_input_str = ", ".join(["self"] + model_args + model_kwargs)
 
-    forward_decl = f"def forward({parameter_list}):\n"
-    imports = ["import torch", "from torch import Tensor",
-               "import torch.functional", "import torch.nn.functional"]
+    forward_decl = f"def forward({stage_input_str}):\n"
+    imports = [f"import {namespace}" for namespace in namespaces]
 
     if output_file is None:
-        output_file = f"generated_{type()}"
+        output_file = f"generated"
 
     if not output_file.endswith(".py"):
         output_file += ".py"
@@ -1224,12 +1258,13 @@ def compile_model(output_file=None):
         f.write("    " + "\n    ".join(statements))
 
 
-def generate_parameter_list(ready_expressions, idx):
+def generate_parameter_list(ready_expressions, idx, string=True):
     args = [ready_expressions[a] for a in ARGS[idx]]
     kwargs = [f"{k}={ready_expressions[a]}"
               for a, k in KWARGS[idx].items()]
-
-    return ", ".join(args + kwargs)
+    if string:
+        return ", ".join(args + kwargs)
+    return args + kwargs
 
 
 def discard_unused_nodes():
@@ -1300,7 +1335,11 @@ class Model(nn.Module):
         a, b = self.mask_generator(mask)
         a.device
         b.size()
-        a[:, 0] = 10
+
+        t = torch.randn(10, 10, 10, 10)
+        ns = t.size(2) // 5
+        nd = t.size(2)
+        t[:, :, ns - nd:ns, :ns]
         # print(type(t), type(t._data), type(t._data[0]), type(t._data[1]))
         return a, b + x
 
@@ -1362,24 +1401,23 @@ if __name__ == "__main__":
         unpatch_tensor_creating_functions()
     else:
 
-        m = resnet18().cuda()
+        m = resnet50().cuda()
         t = torch.randn(10, 3, 224, 224).cuda()
-        # t = torch.randn(10, 100)
-        # m = Model()
+        t = torch.randn(10, 100)
+        m = Model()
         mask = None
         # sys.exit()
         # m(x=t)
         args = (t,)
-        kwargs = {"mask": mask}
-
+        # kwargs = {"mask": mask}
+        kwargs = dict()
         for d in range(3):
             print(f"depth_{d}")
             reset_tracing_state()
             trace_graph = trace(m, depth=d, args=args, kwargs=kwargs)
             print()
-
-            compile_model(output_file=f"resnet_depth_{d}")
-            show_graph(filename=f"resnet_depth_{d}")
+            compile_model(output_file=f"{type(m).__name__}_depth_{d}")
+            show_graph(filename=f"{type(m).__name__}_depth_{d}")
             is_valid, errors = check_is_valid_graph()
             if not is_valid:
                 print(errors)

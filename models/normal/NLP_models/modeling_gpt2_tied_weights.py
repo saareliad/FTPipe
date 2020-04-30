@@ -39,7 +39,8 @@ import types
 
 logger = logging.getLogger(__name__)
 
-_DROPOUT_INPLACE = False  # NOTE: this is the default, and I got autograd RuntimeError otherwise.
+# NOTE: this is the default, and I got autograd RuntimeError otherwise.
+_DROPOUT_INPLACE = False
 
 GPT2_PRETRAINED_MODEL_ARCHIVE_MAP = {"gpt2": "https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-pytorch_model.bin",
                                      "gpt2-medium": "https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-medium-pytorch_model.bin",
@@ -103,8 +104,32 @@ def load_tf_weights_in_gpt2(model, config, gpt2_checkpoint_path):
     return model
 
 
-def gelu(x):
-    return 0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
+class Gelu(nn.Module):
+    def forward(self, x):
+        return 0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
+
+
+class OptionalMasking(nn.Module):
+    def __init__(self, func):
+        super(OptionalMasking, self).__init__()
+        self.func = func
+
+    def forward(self, x, mask=None):
+        if mask is None:
+            return x
+
+        return self.func(x, mask)
+
+
+class ApplyPast(nn.Module):
+    def forward(self, key, value, past=None):
+        if past is not None:
+            # transpose back cf below
+            past_key, past_value = past[0].transpose(
+                -2, -1), past[1]
+            key = torch.cat((past_key, key), dim=-1)
+            value = torch.cat((past_value, value), dim=-2)
+        return key, value
 
 
 class Attention(nn.Module):
@@ -119,14 +144,21 @@ class Attention(nn.Module):
             torch.ones(n_ctx, n_ctx)).view(1, 1, n_ctx, n_ctx))
         self.n_head = config.n_head
         self.split_size = n_state
-        
+
         self.scale = scale
 
         self.c_attn = Conv1D(n_state * 3, nx)
         self.c_proj = Conv1D(n_state, nx)
-        self.attn_dropout = nn.Dropout(config.attn_pdrop, inplace=_DROPOUT_INPLACE)
-        self.resid_dropout = nn.Dropout(config.resid_pdrop, inplace=_DROPOUT_INPLACE)
+        self.attn_dropout = nn.Dropout(
+            config.attn_pdrop, inplace=_DROPOUT_INPLACE)
+        self.resid_dropout = nn.Dropout(
+            config.resid_pdrop, inplace=_DROPOUT_INPLACE)
         self.pruned_heads = set()
+        self.apply_attention_mask = OptionalMasking(lambda w, mask: w + mask)
+        self.apply_head_mask = OptionalMasking(lambda w, head_mask:
+                                               w * head_mask)
+
+        self.apply_past = ApplyPast()
 
     def prune_heads(self, heads):
         if len(heads) == 0:
@@ -163,17 +195,13 @@ class Attention(nn.Module):
         b = self.bias[:, :, ns - nd:ns, :ns]
         w = w * b - 1e4 * (1 - b)
 
-        if attention_mask is not None:
-            # Apply the attention mask
-            w = w + attention_mask
+        w = self.apply_attention_mask(w, mask=attention_mask)
 
         # w = nn.Softmax(dim=-1)(w)
         w = torch.softmax(w, dim=-1)
         w = self.attn_dropout(w)
 
-        # Mask heads if we want to
-        if head_mask is not None:
-            w = w * head_mask
+        w = self.apply_head_mask(w, mask=head_mask)
 
         outputs = [torch.matmul(w, v)]
         if self.output_attentions:
@@ -202,12 +230,8 @@ class Attention(nn.Module):
         query = self.split_heads(query)
         key = self.split_heads(key, k=True)
         value = self.split_heads(value)
-        if layer_past is not None:
-            # transpose back cf below
-            past_key, past_value = layer_past[0].transpose(
-                -2, -1), layer_past[1]
-            key = torch.cat((past_key, key), dim=-1)
-            value = torch.cat((past_value, value), dim=-2)
+        key, value = self.apply_past(key, value, past=layer_past)
+
         # transpose to have same shapes for stacking
         present = torch.stack((key.transpose(-2, -1), value))
 
@@ -228,7 +252,7 @@ class MLP(nn.Module):
         nx = config.n_embd
         self.c_fc = Conv1D(n_state, nx)
         self.c_proj = Conv1D(nx, n_state)
-        self.act = gelu
+        self.act = Gelu()
         self.dropout = nn.Dropout(config.resid_pdrop, inplace=_DROPOUT_INPLACE)
 
     def forward(self, x):
@@ -259,6 +283,73 @@ class Block(nn.Module):
 
         outputs = [x] + output_attn[1:]
         return outputs  # x, present, (attentions)
+
+
+class MasksGenerator(nn.Module):
+    def __init__(self, num_layers, dtype):
+        super(MasksGenerator, self).__init__()
+        self.num_layers = num_layers
+        self.dtype = dtype
+
+    def forward(self, past, input_shape, attention_mask=None, head_mask=None):
+        attention_mask = self.get_attention_mask(input_shape, self.dtype,
+                                                 attention_mask=attention_mask)
+        head_mask = self.get_head_mask(self.dtype, head_mask=head_mask)
+        past, past_length = self.get_past(past=past)
+
+        return past, past_length, attention_mask, head_mask
+
+    def get_past(self, past=None):
+        if past is None:
+            past_length = 0
+            past = [None] * self.num_layers
+        else:
+            past_length = past[0][0].size(-2)
+
+        return past, past_length
+
+    def get_head_mask(self, dtype, head_mask=None):
+        # Prepare head mask if needed
+        # 1.0 in head_mask indicate we keep the head
+        # attention_probs has shape bsz x n_heads x N x N
+        # head_mask has shape n_layer x batch x n_heads x N x N
+        if head_mask is not None:
+            if head_mask.dim() == 1:
+                head_mask = head_mask.unsqueeze(0).unsqueeze(
+                    0).unsqueeze(-1).unsqueeze(-1)
+                head_mask = head_mask.expand(
+                    self.num_layers, -1, -1, -1, -1)
+            elif head_mask.dim() == 2:
+                # We can specify head_mask for each layer
+                head_mask = head_mask.unsqueeze(1).unsqueeze(-1).unsqueeze(-1)
+            # switch to fload if need + fp16 compatibility
+            head_mask = head_mask.to(dtype=dtype)
+        else:
+            head_mask = [None] * self.num_layers
+
+        return head_mask
+
+    def get_attention_mask(self, input_shape, dtype, attention_mask=None):
+        # Attention mask.
+        if attention_mask is not None:
+            attention_mask = attention_mask.view(-1, input_shape[-1])
+            # We create a 3D attention mask from a 2D tensor mask.
+            # Sizes are [batch_size, 1, 1, to_seq_length]
+            # So we can broadcast to [batch_size, num_heads, from_seq_length, to_seq_length]
+            # this attention mask is more simple than the triangular masking of causal attention
+            # used in OpenAI GPT, we just need to prepare the broadcast dimension here.
+            attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
+
+            # Since attention_mask is 1.0 for positions we want to attend and 0.0 for
+            # masked positions, this operation will create a tensor which is 0.0 for
+            # positions we want to attend and -10000.0 for masked positions.
+            # Since we are adding it to the raw scores before the softmax, this is
+            # effectively the same as removing these entirely.
+            attention_mask = attention_mask.to(
+                dtype=dtype)  # fp16 compatibility
+            attention_mask = (1.0 - attention_mask) * -10000.0
+
+        return attention_mask
 
 
 class GPT2PreTrainedModel(PreTrainedModel):
@@ -616,10 +707,14 @@ class GPT2Model(GPT2PreTrainedModel):
         # self.h = nn.ModuleList(
         #     [Block(config.n_ctx, config, scale=True) for _ in range(1)])
         self.num_layers = config.n_layer
+        self.num_layers = 1
         for i in range(self.num_layers):
             self.add_module(str(i), Block(config.n_ctx, config, scale=True))
 
         self.ln_f = nn.LayerNorm(config.n_embd, eps=config.layer_norm_epsilon)
+
+        self.mask_generator = MasksGenerator(
+            self.num_layers, next(self.parameters()).dtype)
 
         self.init_weights()
 
@@ -646,75 +741,30 @@ class GPT2Model(GPT2PreTrainedModel):
         del self.wte
 
         def _resize_token_embeddings(self, new_num_tokens):
-            raise NotImplementedError("Can't call this after creating Stateless embedding")
-        self._resize_token_embeddings = types.MethodType(_resize_token_embeddings, self)
+            raise NotImplementedError(
+                "Can't call this after creating Stateless embedding")
+        self._resize_token_embeddings = types.MethodType(
+            _resize_token_embeddings, self)
 
         return w_wte
 
-    def forward(self, input_ids, w_wte, past=None, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None):
+    def forward(self, input_ids, w_wte, past=None, attention_mask=None, head_mask=None):
         # Meant to be used by LMhead model
         input_shape = input_ids.size()
         input_ids = input_ids.view(-1, input_shape[-1])
-        if token_type_ids is not None:
-            token_type_ids = token_type_ids.view(-1, input_shape[-1])
-        if position_ids is not None:
-            position_ids = position_ids.view(-1, input_shape[-1])
+        past, past_length, attention_mask, head_mask = self.mask_generator(past, input_shape,
+                                                                           attention_mask=attention_mask,
+                                                                           head_mask=head_mask)
 
-        if past is None:
-            past_length = 0
-            # past = [None] * len(self.h)
-            past = [None] * self.num_layers
-        else:
-            past_length = past[0][0].size(-2)
-        if position_ids is None:
-            position_ids = torch.arange(
-                past_length, input_ids.size(-1) + past_length, dtype=torch.long, device=input_ids.device)
-            position_ids = position_ids.unsqueeze(0).expand_as(input_ids)
-
-        # Attention mask.
-        if attention_mask is not None:
-            attention_mask = attention_mask.view(-1, input_shape[-1])
-            # We create a 3D attention mask from a 2D tensor mask.
-            # Sizes are [batch_size, 1, 1, to_seq_length]
-            # So we can broadcast to [batch_size, num_heads, from_seq_length, to_seq_length]
-            # this attention mask is more simple than the triangular masking of causal attention
-            # used in OpenAI GPT, we just need to prepare the broadcast dimension here.
-            attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
-
-            # Since attention_mask is 1.0 for positions we want to attend and 0.0 for
-            # masked positions, this operation will create a tensor which is 0.0 for
-            # positions we want to attend and -10000.0 for masked positions.
-            # Since we are adding it to the raw scores before the softmax, this is
-            # effectively the same as removing these entirely.
-            attention_mask = attention_mask.to(dtype=next(
-                self.parameters()).dtype)  # fp16 compatibility
-            attention_mask = (1.0 - attention_mask) * -10000.0
-
-        # Prepare head mask if needed
-        # 1.0 in head_mask indicate we keep the head
-        # attention_probs has shape bsz x n_heads x N x N
-        # head_mask has shape n_layer x batch x n_heads x N x N
-        if head_mask is not None:
-            if head_mask.dim() == 1:
-                head_mask = head_mask.unsqueeze(0).unsqueeze(
-                    0).unsqueeze(-1).unsqueeze(-1)
-                head_mask = head_mask.expand(
-                    self.config.n_layer, -1, -1, -1, -1)
-            elif head_mask.dim() == 2:
-                # We can specify head_mask for each layer
-                head_mask = head_mask.unsqueeze(1).unsqueeze(-1).unsqueeze(-1)
-            # switch to fload if need + fp16 compatibility
-            head_mask = head_mask.to(dtype=next(self.parameters()).dtype)
-        else:
-            head_mask = [None] * self.config.n_layer
+        position_ids = torch.arange(past_length,
+                                    input_ids.size(-1) + past_length,
+                                    dtype=torch.long,
+                                    device=input_ids.device).unsqueeze(0).expand_as(input_ids)
 
         inputs_embeds = self.stateless_wte(w_wte, input_ids)
         position_embeds = self.wpe(position_ids)
-        if token_type_ids is not None:
-            token_type_embeds = self.stateless_wte(w_wte, token_type_ids)
-        else:
-            token_type_embeds = 0
-        hidden_states = inputs_embeds + position_embeds + token_type_embeds
+
+        hidden_states = inputs_embeds + position_embeds
         hidden_states = self.drop(hidden_states)
 
         # output_shape = input_shape + (hidden_states.size(-1),)
@@ -761,6 +811,29 @@ class GPT2Model(GPT2PreTrainedModel):
                                    for t in all_attentions)
             outputs = outputs + (all_attentions,)
         # last hidden state, (presents), (all hidden_states), (attentions)
+        return outputs
+
+
+class LMOutputs(nn.Module):
+    def forward(self, lm_logits, transformer_outputs, labels=None):
+        outputs = (lm_logits,) + transformer_outputs
+        if labels is not None:
+            # Shift so that tokens < n predict n
+            shift_logits = lm_logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            # Flatten the tokens
+            # loss_fct = CrossEntropyLoss(ignore_index=-100)
+
+            def loss_fct(logits, labels):
+                return nn.functional.cross_entropy(logits, labels, ignore_index=-100)
+            loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)),
+                            shift_labels.view(-1))
+
+            # HACK: changed to output just the loss, somehow this improves partitioning results,
+            # need to understand why.
+            # outputs = (loss,)
+            outputs = (loss,) + outputs
+
         return outputs
 
 
@@ -811,6 +884,8 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
         self.transformer = GPT2Model(config)
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
 
+        self.compute_outputs = LMOutputs()
+
         self.init_weights()
         self.tie_weights()
         # self.n_embed=config.n_embd
@@ -829,7 +904,8 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
         del self.lm_head
 
         def tie_weights(self):
-            raise NotImplementedError("Can't call this after stateless version")
+            raise NotImplementedError(
+                "Can't call this after stateless version")
         self.tie_weights = types.MethodType(tie_weights, self)
 
     def tie_weights(self):
@@ -839,37 +915,21 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
         self._tie_or_clone_weights(self.lm_head,
                                    self.transformer.wte)
 
-    def forward(self, input_ids, labels=None, past=None, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None,
+    def forward(self, input_ids, labels=None, past=None, attention_mask=None, head_mask=None,
                 ):
         transformer_outputs = self.transformer(input_ids,
                                                self.w_wte,
                                                past=past,
                                                attention_mask=attention_mask,
-                                               token_type_ids=token_type_ids,
-                                               position_ids=position_ids,
                                                head_mask=head_mask)
 
         hidden_states = transformer_outputs[0]
         # hidden_states should be torch.Size([1, 1024, 768]) after reshape
         # hidden_states=hidden_states.view(-1,self.n_positions,self.n_embed)
         lm_logits = self.stateless_lm_head(self.w_wte, hidden_states)
-        outputs = (lm_logits,) + transformer_outputs[1:]
-        if labels is not None:
-            # Shift so that tokens < n predict n
-            shift_logits = lm_logits[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous()
-            # Flatten the tokens
-            # loss_fct = CrossEntropyLoss(ignore_index=-100)
-
-            def loss_fct(logits, labels):
-                return nn.functional.cross_entropy(logits, labels, ignore_index=-100)
-            loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)),
-                            shift_labels.view(-1))
-            
-            # HACK: changed to output just the loss, somehow this improves partitioning results,
-            # need to understand why.
-            outputs = (loss,)
-            # outputs = (loss,) + outputs
+        outputs = self.compute_outputs(lm_logits,
+                                       transformer_outputs[1:],
+                                       labels=labels)
 
         # (loss), lm_logits, presents, (all hidden_states), (attentions)
         return outputs
@@ -971,16 +1031,16 @@ class GPT2DoubleHeadsModel(GPT2PreTrainedModel):
         del self.lm_head
 
         def tie_weights(self):
-            raise NotImplementedError("Can't call this after stateless version")
+            raise NotImplementedError(
+                "Can't call this after stateless version")
         self.tie_weights = types.MethodType(tie_weights, self)
 
-    def forward(self, input_ids, past=None, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None,
+    def forward(self, input_ids, past=None, attention_mask=None, position_ids=None, head_mask=None,
                 mc_token_ids=None, lm_labels=None, mc_labels=None):
         transformer_outputs = self.transformer(input_ids,
                                                self.w_wte,
                                                past=past,
                                                attention_mask=attention_mask,
-                                               token_type_ids=token_type_ids,
                                                position_ids=position_ids,
                                                head_mask=head_mask)
 
