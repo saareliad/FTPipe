@@ -707,7 +707,6 @@ class GPT2Model(GPT2PreTrainedModel):
         # self.h = nn.ModuleList(
         #     [Block(config.n_ctx, config, scale=True) for _ in range(1)])
         self.num_layers = config.n_layer
-        self.num_layers = 1
         for i in range(self.num_layers):
             self.add_module(str(i), Block(config.n_ctx, config, scale=True))
 

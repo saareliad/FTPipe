@@ -570,8 +570,9 @@ def register_new_traced_function(function):
     namespace = inspect.getmodule(function)
     if namespace is None:
         namespace = function.__module__
-
-    raise ValueError(f"could not resolve module for {function}")
+    
+    if namespace is None:
+        raise ValueError(f"could not resolve module for {function}")
 
     ADDITIONAL_TRACED_FUNCTIONS[function] = namespace
 
