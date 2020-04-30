@@ -12,6 +12,7 @@ playground.py
 glue_data/**
 wikitext-2-raw/**
 papers/*
+.mypy_cache/
 
 old/
 squad1/*
