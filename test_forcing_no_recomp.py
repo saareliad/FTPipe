@@ -19,7 +19,8 @@ if DEBUG:
     ptvsd.wait_for_attach()
     breakpoint()
 
-args = SimpleNamespace(output_file="generated_AlexNet4",
+MODEL = 'SEQ'
+args = SimpleNamespace(output_file=f"generated_{MODEL}",
                        no_test_run=False,
                        no_analysis=False,
                        async_pipeline=True,
@@ -28,12 +29,13 @@ args = SimpleNamespace(output_file="generated_AlexNet4",
                        no_recomputation=False,
                        bwd_to_fwd_ratio=-1,
                        n_partitions=2,
-                       bw_GBps=12)
-MODEL = 'SEQ'
+                       bw_GBps=12,
+                       n_iter=1)
 if MODEL == 'SEQ':
-    model = torch.nn.Sequential(*[torch.nn.Linear(10, 10) for i in range(40)])
+    model_dim = 10
+    model = torch.nn.Sequential(*[torch.nn.Linear(model_dim, model_dim) for i in range(40)])
     model = model.cuda()
-    sample = torch.randn(args.batch, 10).cuda()
+    sample = torch.randn(args.batch, model_dim).cuda()
 elif MODEL == 'ALEXNET':
     model = alexnet().cuda()
     sample = torch.randn(args.batch, 3, 224, 224).cuda()
@@ -45,7 +47,7 @@ partial_pipe_model = partial(pipe_model,
                              model,
                              0,
                              sample,
-                             n_iter=1,
+                             n_iter=args.n_iter,
                              nparts=args.n_partitions,
                              output_file=args.output_file,
                              node_weight_function=node_weight_function(
@@ -84,7 +86,7 @@ analysis_result, summary = run_analysis(
     sample,
     graph,
     analysis_config,
-    n_iter=1,
+    n_iter=args.n_iter,
     recomputation=not args.no_recomputation,
     bw_GBps=args.bw_GBps,
     verbose=True,

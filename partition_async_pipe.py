@@ -5,11 +5,41 @@ from pytorch_Gpipe.utils import layerDict, tensorDict
 from collections import deque
 
 
+class AutoReLoader:
+    __instance = None
+    d = {}  # module_path --> generated
+
+    # Singleton
+    def __new__(cls):
+        if AutoReLoader.__instance is None:
+            AutoReLoader.__instance = object.__new__(cls)
+        return AutoReLoader.__instance
+
+    @classmethod
+    def load_or_reload_module(cls, module_path):
+        if module_path not in cls.d:
+            # Loading
+            generated = importlib.import_module(module_path)
+            cls.d[module_path] = generated
+        else:
+            # Reloading
+            generated = cls.d.pop(module_path)
+            generated = importlib.reload(generated)
+            cls.d[module_path] = generated
+
+        return generated
+
+    @classmethod
+    def import_module(cls, module_path):
+        # Hiding...
+        return cls.load_or_reload_module(module_path)
+
+
 def get_generated_last_stage_scopes(model,
                                     output_file,
                                     GET_PARTITIONS_ON_CPU=True):
     module_path = output_file.replace("/", ".")
-    generated = importlib.import_module(module_path)
+    generated = AutoReLoader.import_module(module_path)
     create_pipeline_configuration = generated.create_pipeline_configuration
     config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
     pipe_config = PipelineConfig.fromDict(config)
@@ -33,7 +63,7 @@ def get_all_generated_stage_scopes(model,
                                    GET_PARTITIONS_ON_CPU=True):
 
     module_path = output_file.replace("/", ".")
-    generated = importlib.import_module(module_path)
+    generated = AutoReLoader.import_module(module_path)
     create_pipeline_configuration = generated.create_pipeline_configuration
     config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
     pipe_config = PipelineConfig.fromDict(config)
