@@ -220,7 +220,7 @@ class Wrapper(nn.Module):
         self.output_dtype = []
         self.scope = scope
         self.save_memory_mode = save_memory_mode
-        self.recomputation = recomputation  # TODO
+        self.recomputation = recomputation
 
         if save_memory_mode:
             self.layer.to('cpu')
@@ -391,16 +391,15 @@ class Wrapper(nn.Module):
 
 
 def time_op(device, func, *inputs: Tensors, **kwargs: Dict):
-    exec_time = 0
     cuda_mem = 0
     if (device.type == 'cuda'):
         torch.cuda.reset_max_memory_allocated(device=device)
         base_mem = torch.cuda.max_memory_allocated(device=device)
 
         # measure execution time
-        torch.cuda.synchronize(device=device)
         start = torch.cuda.Event(enable_timing=True)
         end = torch.cuda.Event(enable_timing=True)
+        torch.cuda.synchronize(device=device)
         start.record()
         out = func(*inputs, **kwargs)
         end.record()
