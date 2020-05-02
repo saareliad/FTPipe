@@ -39,13 +39,17 @@ class NodeTypes(IntEnum):
         return self.name
 
 
+# TODO integrate with original Node
 class Node():
     def __init__(self, node_type, idx, scope):
         self.type = node_type
         self.id = idx
         self.scope = scope
 
-        self.out_edges = []
+        self.stage_id = 0
+        self.profie = None
+
+        self.out_edges = set()
         self.args = []
         self.kwargs = dict()
         self.value_type = None
@@ -56,17 +60,17 @@ class Node():
         self.constant_value = None
         NODES[self.id] = (self)
 
-    def add_kwarg(self, kwarg, kwarg_id):
-        self.kwargs[kwarg_id] = kwarg
+    def add_kwarg(self, kwarg, kwarg_node):
+        self.kwargs[kwarg_node] = kwarg
 
-    def add_arg(self, arg_id):
-        self.args.append(arg_id)
+    def add_arg(self, arg_node):
+        self.args.append(arg_node)
 
-    def add_out_edge(self, dest):
-        self.out_edges.append(dest)
+    def add_out_edge(self, dest_node):
+        self.out_edges.add(dest_node)
 
-    def remove_output(self, out_id):
-        self.out_edges.remove(out_id)
+    def remove_output(self, out_node):
+        self.out_edges.remove(out_node)
 
     @property
     def in_edges(self):
@@ -881,16 +885,16 @@ def record_kwarg(node_id, kwarg, kwarg_id):
     assert kwarg_id < node_id
     # record the edge
     print(f"\n recording edge {kwarg_id} => {node_id}\n")
-    NODES[kwarg_id].add_out_edge(node_id)
-    NODES[node_id].add_kwarg(kwarg, kwarg_id)
+    NODES[kwarg_id].add_out_edge(NODES[node_id])
+    NODES[node_id].add_kwarg(kwarg, NODES[kwarg_id])
 
 
 def record_arg(node_id, arg_id):
     assert arg_id < node_id
     # record the edge
     print(f"\n recording edge {arg_id} => {node_id}\n")
-    NODES[arg_id].add_out_edge(node_id)
-    NODES[node_id].add_arg(arg_id)
+    NODES[arg_id].add_out_edge(NODES[node_id])
+    NODES[node_id].add_arg(NODES[arg_id])
 
 
 def container_construct_op_name(container_cls):
@@ -974,9 +978,9 @@ def build_dot(nodes, output_id):
         # add edges
         args, kwargs = node.args, node.kwargs
         for idx, i in enumerate(args):
-            dot.edge(str(i), str(node_id), label=f"arg: {idx}")
+            dot.edge(str(i.id), str(node_id), label=f"arg: {idx}")
         for i, kw in kwargs.items():
-            dot.edge(str(i), str(node_id), label=f"kwarg: {kw}")
+            dot.edge(str(i.id), str(node_id), label=f"kwarg: {kw}")
 
     return dot
 
@@ -996,81 +1000,81 @@ def check_is_valid_graph(nodes):
                            f"node id: {i}",
                            f"node type: {node.type.__name__}"
                            f"scope: {node.scope}",
-                           f"incoming edges: {node.in_edges}",
+                           f"incoming edges: {[n.id for n in node.in_edges]}",
                            f"positional args: {node.args}",
                            f"keyword args: {node.kwargs}",
-                           f"outgoing edges: {node.out_edges}",
+                           f"outgoing edges: {[n.id for n in node.out_edges]}",
                            ""])
             valid = False
 
         for o in node.out_edges:
-            if i == o:
+            if i == o.id:
                 errors.extend(["self cycle",
                                f"node id: {i}",
                                f"node type: {node.type.__name__}"
                                f"scope: {node.scope}",
-                               f"incoming edges: {node.in_edges}",
+                               f"incoming edges: {[n.id for n in node.in_edges]}",
                                f"positional args: {node.args}",
                                f"keyword args: {node.kwargs}",
-                               f"outgoing edges: {node.out_edges}",
+                               f"outgoing edges: {[n.id for n in node.out_edges]}",
                                ""])
                 valid = False
 
-            if o < i:
+            if o.id < i:
                 errors.extend(["violation of topological sort",
                                f"node id: {i}",
                                f"scope: {node.scope}",
-                               f"incoming edges: {node.in_edges}",
+                               f"incoming edges: {[n.id for n in node.in_edges]}",
                                f"positional args: {node.args}",
                                f"keyword args: {node.kwargs}",
-                               f"outgoing edges: {node.out_edges}",
+                               f"outgoing edges: {[n.id for n in node.out_edges]}",
                                ""])
                 valid = False
 
-            if i not in nodes[o].in_edges:
+            if node not in o.in_edges:
                 errors.extend(["graph violating back edge not set",
                                f"src id: {i}",
                                f"dest id: {o}",
                                f"src_scope: {node.scope}",
-                               f"dest_scope: {nodes[o].scope}",
-                               f"src_out_edges: {node.out_edges}",
-                               f"dest_in_edges: {nodes[o].in_edges}",
+                               f"dest_scope: {o.scope}",
+                               f"src_out_edges: {[n.id for n in node.out_edges]}",
+                               f"dest_in_edges: {[n.id for n in o.in_edges]}",
                                ""])
 
                 valid = False
 
         for in_node in node.in_edges:
-            if i == in_node:
+            if i == in_node.id:
                 errors.extend(["self cycle",
                                f"node id: {i}",
                                f"node type: {node.type.__name__}"
                                f"scope: {node.scope}",
-                               f"incoming edges: {node.in_edges}",
+                               f"incoming edges: {[n.id for n in node.in_edges]}",
                                f"positional args: {node.args}",
                                f"keyword args: {node.kwargs}",
-                               f"outgoing edges: {node.out_edges}",
+                               f"outgoing edges: {[n.id for n in node.out_edges]}",
                                ""])
                 valid = False
 
-            if i < in_node:
+            if i < in_node.id:
                 errors.extend(["violation of topological sort",
                                f"node id: {i}",
                                f"scope: {node.scope}",
-                               f"incoming edges: {node.in_edges}",
+                               f"incoming edges: {[n.id for n in node.in_edges]}",
                                f"positional args: {node.args}",
                                f"keyword args: {node.kwargs}",
-                               f"outgoing edges: {node.out_edges}",
+                               f"outgoing edges: {[n.id for n in node.out_edges]}",
                                ""])
                 valid = False
 
-            if i not in nodes[in_node].out_edges:
+            if node not in in_node.out_edges:
                 errors.extend(["graph violating forward edge not set",
                                f"src id: {in_node}",
                                f"dest id: {i}",
-                               f"src_scope: {nodes[in_node].scope}",
+                               f"src_scope: {in_node.scope}",
                                f"dest_scope: {node.scope}",
-                               f"src_out_edges: {nodes[in_node].out_edges}",
-                               f"dest_in_edges: {node.in_edges}",
+                               f"src_out_edges: {in_node.out_edges}",
+                               f"dest_in_edges: {[n.id for n in node.in_edges]}",
                                ""])
 
                 valid = False
@@ -1080,10 +1084,10 @@ def check_is_valid_graph(nodes):
                            f"node id: {i}",
                            f"scope: {node.scope}",
                            f"value: {node.constant_value}",
-                           f"incoming edges: {node.in_edges}",
+                           f"incoming edges: {[n.id for n in node.in_edges]}",
                            f"positional args: {node.args}",
                            f"keyword args: {node.kwargs}",
-                           f"outgoing edges: {node.out_edges}",
+                           f"outgoing edges: {[n.id for n in node.out_edges]}",
                            ""])
             valid = False
 
@@ -1093,10 +1097,10 @@ def check_is_valid_graph(nodes):
                                f"node id: {i}",
                                f"node id: {i}",
                                f"scope: {node.scope}",
-                               f"incoming edges: {node.in_edges}",
+                               f"incoming edges: {[n.id for n in node.in_edges]}",
                                f"positional args: {node.args}",
                                f"keyword args: {node.kwargs}",
-                               f"outgoing edges: {node.out_edges}",
+                               f"outgoing edges: {[n.id for n in node.out_edges]}",
                                ""])
                 valid = False
 
@@ -1157,19 +1161,19 @@ def compile_model(nodes, output_id, output_file=None):
             if ":" in scope:
                 kw = scope.split(":")[1][1:]
                 model_kwargs.append(f"{kw}={node.constant_value}")
-                ready_expressions[idx] = kw
+                ready_expressions[node] = kw
             else:
                 # arg
                 model_args.append(scope)
-                ready_expressions[idx] = scope
+                ready_expressions[node] = scope
 
         elif node_type is NodeTypes.BUFF_PARAM:
             if node.value_type is Tensor:
                 print(f"{idx} buffer")
-                ready_expressions[idx] = f"self.b_{idx}"
+                ready_expressions[node] = f"self.b_{idx}"
             else:
                 print(f"{idx} parameter")
-                ready_expressions[idx] = f"self.p_{idx}"
+                ready_expressions[node] = f"self.p_{idx}"
 
         elif node_type is NodeTypes.LAYER:
             print(f"{idx} layer")
@@ -1177,30 +1181,30 @@ def compile_model(nodes, output_id, output_file=None):
                                                      ready_expressions)
 
             statements.append(f"l_{idx} = self.l_{idx}({parameter_list})")
-            ready_expressions[idx] = f"l_{idx}"
+            ready_expressions[node] = f"l_{idx}"
 
         elif node_type is NodeTypes.CONSTANT:
             print(f"{idx} constant")
-            ready_expressions[idx] = str(node.constant_value)
+            ready_expressions[node] = str(node.constant_value)
 
         elif "prim::DictConstruct" in scope:
             print(f"{idx} dict")
             kwargs = ", ".join([f"'{k}':{ready_expressions[a]}"
                                 for a, k in node.kwargs.items()])
             statements.append(f"dict_{idx} = {{{kwargs}}}")
-            ready_expressions[idx] = f"dict_{idx}"
+            ready_expressions[node] = f"dict_{idx}"
         elif "prim::SetConstruct" in scope:
             print(f"{idx} set")
             parameter_list = generate_parameter_list(node.args, node.kwargs,
                                                      ready_expressions)
             statements.append(f"set_{idx} = {{{parameter_list}}}")
-            ready_expressions[idx] = f"set_{idx}"
+            ready_expressions[node] = f"set_{idx}"
         elif "prim::ListConstruct" in scope:
             print(f"{idx} list")
             parameter_list = generate_parameter_list(node.args, node.kwargs,
                                                      ready_expressions)
             statements.append(f"list_{idx} = [{parameter_list}]")
-            ready_expressions[idx] = f"list_{idx}"
+            ready_expressions[node] = f"list_{idx}"
         elif "prim::TupleConstruct" in scope:
             print(f"{idx} tuple")
             parameter_list = generate_parameter_list(node.args, node.kwargs,
@@ -1208,12 +1212,12 @@ def compile_model(nodes, output_id, output_file=None):
             if len(node.args) == 1:
                 parameter_list += ","
             statements.append(f"tuple_{idx} = ({parameter_list})")
-            ready_expressions[idx] = f"tuple_{idx}"
+            ready_expressions[node] = f"tuple_{idx}"
         elif "prim::SliceConstruct" in scope:
             parameter_list = generate_parameter_list(node.args, node.kwargs,
                                                      ready_expressions)
             statements.append(f"slice_{idx} = slice({parameter_list})")
-            ready_expressions[idx] = f"slice_{idx}"
+            ready_expressions[node] = f"slice_{idx}"
         else:
             # op
             print(f"{idx} op")
@@ -1257,9 +1261,9 @@ def compile_model(nodes, output_id, output_file=None):
                     print("calling magic ", func_name)
                     statements.append(
                         f"t_{idx} = {self_arg}.{func_name}({', '.join(param_list[1:])})")
-            ready_expressions[idx] = f"t_{idx}"
+            ready_expressions[node] = f"t_{idx}"
 
-    statements.append(f"return {ready_expressions[output_id]}")
+    statements.append(f"return {ready_expressions[nodes[output_id]]}")
     print("\n")
     stage_input_str = ", ".join(["self"] + model_args + model_kwargs)
 
@@ -1299,7 +1303,7 @@ def discard_unused_nodes(nodes):
                 node.out_edges) == 0, "unused traced value should not have outgoing edges"
 
             for u in node.in_edges:
-                nodes[u].remove_output(node.id)
+                u.remove_output(node)
         else:
             new_nodes.append((node.id, node))
 
@@ -1314,22 +1318,15 @@ def set_node_indices(nodes, output_id):
         return nodes
 
     new_nodes = dict()
-    lookup = dict()
 
     # populate lookup table for new ids
     for idx, node in enumerate(nodes.values()):
         assert idx <= node.id
-        lookup[node.id] = idx
+
         node.id = idx
         new_nodes[idx] = node
 
-    # translate out_edges args and kwargs to new indices
-    for node in nodes.values():
-        node.out_edges = [lookup[idx] for idx in node.out_edges]
-        node.args = [lookup[idx] for idx in node.args]
-        node.kwargs = {lookup[idx]: kw for idx, kw in node.kwargs.items()}
-
-    return new_nodes, lookup[output_id]
+    return new_nodes, nodes[output_id].id
 
 
 ##############################
