@@ -295,6 +295,72 @@ class SinglePartitionManager:
                          is_bwd=True,
                          create=True)
 
+
+
+    def _ensure_bwd_recv_buffers_size_set(self, last_due_end):
+        # Special case: Last batch with differnt size
+        if last_due_end and self.last_batch_train_shapes:
+            # Delete previous buffers
+            print(
+                f"stage: {self.stage} replacing buffers for last batch, backward"
+            )
+            self.changed_shapes_last_batch_bwd = True
+            del self.bwd_recv_buffers
+
+            # Create a new buffer with the new size
+            shapes = self.last_batch_train_shapes
+            self.comm_handler.set_tensor_shapes(shapes)
+
+            bwd_recv_buffers = Buffers(
+                1,  # max buffers is 1
+                self.comm_handler.create_gradients_rcv_buffers,
+                self.comm_handler.recv_gradients,
+                is_grad=True)
+
+            # Overrride
+            self.bwd_recv_buffers = bwd_recv_buffers
+        elif self.changed_shapes_last_batch_bwd:
+            # NOTE: this is a special case for gpipe as bwd is LIFO.
+            # already change, replace:
+            self.changed_shapes_last_batch_bwd = False
+            bwd_recv_buffers = self._bwd_recv_buffers()
+            self.bwd_recv_buffers = bwd_recv_buffers
+        else:
+            bwd_recv_buffers = self.bwd_recv_buffers
+
+        if not bwd_recv_buffers.is_initialized():
+            bwd_recv_buffers.create()
+
+    def _ensure_fwd_recv_buffers_size_set(self, last_due_end):
+        if last_due_end and (
+            (self.partition.training and self.last_batch_train_shapes) or
+            (not self.partition.training and self.last_batch_test_shapes)):
+            # Delete previous buffers
+            print(
+                f"stage: {self.stage} replacing buffers for last batch, forward"
+            )
+            self.changed_shapes_last_batch_fwd = True
+            del self.fwd_recv_buffers
+
+            # Create a new buffer with the new size
+            shapes = self.last_batch_train_shapes if self.partition.training else self.last_batch_test_shapes
+            self.comm_handler.set_tensor_shapes(shapes)
+
+            fwd_recv_buffers = Buffers(
+                1,  # max buffers is 1
+                self.comm_handler.create_activations_recv_buffers,
+                self.comm_handler.recv_activations,
+                is_grad=False)
+
+            # Overrride
+            self.fwd_recv_buffers = fwd_recv_buffers
+        else:
+            fwd_recv_buffers = self.fwd_recv_buffers
+
+        if not fwd_recv_buffers.is_initialized():
+            fwd_recv_buffers.create()
+
+
     def set_true_weights_storage(self, true_weights_storage):
         self.true_weights_storage = true_weights_storage
 
@@ -521,34 +587,10 @@ class SinglePartitionManager:
             x, *ctx = self.task.unpack_data_for_partition(next(self.dl_iter))
             return x, ctx
 
-        # Special case: Last batch with differnt size
-        if batch_idx + 1 == num_batches and (
-            (self.partition.training and self.last_batch_train_shapes) or
-            (not self.partition.training and self.last_batch_test_shapes)):
-            # Delete previous buffers
-            print(
-                f"stage: {self.stage} replacing buffers for last batch, forward"
-            )
-            self.changed_shapes_last_batch_fwd = True
-            del self.fwd_recv_buffers
 
-            # Create a new buffer with the new size
-            shapes = self.last_batch_train_shapes if self.partition.training else self.last_batch_test_shapes
-            self.comm_handler.set_tensor_shapes(shapes)
-
-            fwd_recv_buffers = Buffers(
-                1,  # max buffers is 1
-                self.comm_handler.create_activations_recv_buffers,
-                self.comm_handler.recv_activations,
-                is_grad=False)
-
-            # Overrride
-            self.fwd_recv_buffers = fwd_recv_buffers
-        else:
-            fwd_recv_buffers = self.fwd_recv_buffers
-
-        if not fwd_recv_buffers.is_initialized():
-            fwd_recv_buffers.create()
+        last_due_end = batch_idx + 1 == num_batches
+        self._ensure_fwd_recv_buffers_size_set(last_due_end)
+        fwd_recv_buffers = self.fwd_recv_buffers
 
         recved_all = False
         if fwd_recv_buffers.first_rcv_after_created or fwd_recv_buffers.max_buffers == 1:
@@ -759,33 +801,11 @@ class SinglePartitionManager:
 
     def run_batch_backward(self, batch_idx, num_batches):
         """ Runs the backwards pass + step for all except the last partition """
+        last_due_end = batch_idx + 1 == num_batches
 
         # Special case: Last batch with differnt size
-        if batch_idx + 1 == num_batches and self.last_batch_train_shapes:
-            # Delete previous buffers
-            print(
-                f"stage: {self.stage} replacing buffers for last batch, backward"
-            )
-            self.changed_shapes_last_batch_bwd = True
-            del self.bwd_recv_buffers
-
-            # Create a new buffer with the new size
-            shapes = self.last_batch_train_shapes
-            self.comm_handler.set_tensor_shapes(shapes)
-
-            bwd_recv_buffers = Buffers(
-                1,  # max buffers is 1
-                self.comm_handler.create_gradients_rcv_buffers,
-                self.comm_handler.recv_gradients,
-                is_grad=True)
-
-            # Overrride
-            self.bwd_recv_buffers = bwd_recv_buffers
-        else:
-            bwd_recv_buffers = self.bwd_recv_buffers
-
-        if not bwd_recv_buffers.is_initialized():
-            bwd_recv_buffers.create()
+        self._ensure_bwd_recv_buffers_size_set(last_due_end)
+        bwd_recv_buffers = self.bwd_recv_buffers
 
         recved_all = False
         if bwd_recv_buffers.first_rcv_after_created or bwd_recv_buffers.max_buffers == 1:
@@ -1217,38 +1237,8 @@ class GPipePartitionManager(SinglePartitionManager):
         is_final_shorter_batch = (batch_idx + self.step_every > num_batches)
         # change_lr = do_step and is_final_shorter_batch
 
-        # Special case: Last batch with differnt size
-        if last_due_end and self.last_batch_train_shapes:
-            # Delete previous buffers
-            print(
-                f"stage: {self.stage} replacing buffers for last batch, backward"
-            )
-            self.changed_shapes_last_batch_bwd = True
-            del self.bwd_recv_buffers
-
-            # Create a new buffer with the new size
-            shapes = self.last_batch_train_shapes
-            self.comm_handler.set_tensor_shapes(shapes)
-
-            bwd_recv_buffers = Buffers(
-                1,  # max buffers is 1
-                self.comm_handler.create_gradients_rcv_buffers,
-                self.comm_handler.recv_gradients,
-                is_grad=True)
-
-            # Overrride
-            self.bwd_recv_buffers = bwd_recv_buffers
-        elif self.changed_shapes_last_batch_bwd:
-            # NOTE: this is a special case for gpipe as bwd is LIFO.
-            # already change, replace:
-            self.changed_shapes_last_batch_bwd = False
-            bwd_recv_buffers = self._bwd_recv_buffers()
-            self.bwd_recv_buffers = bwd_recv_buffers
-        else:
-            bwd_recv_buffers = self.bwd_recv_buffers
-
-        if not bwd_recv_buffers.is_initialized():
-            bwd_recv_buffers.create()
+        self._ensure_bwd_recv_buffers_size_set(last_due_end)
+        bwd_recv_buffers = self.bwd_recv_buffers
 
         recved_all = False
         if bwd_recv_buffers.first_rcv_after_created or bwd_recv_buffers.max_buffers == 1:
