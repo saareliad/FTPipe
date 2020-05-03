@@ -29,7 +29,10 @@ def post_process_partition(graph: Graph, verbose_on_error=True) -> Graph:
         break_partition_cycles(graph)
 
         # possibly redundent
-        cannonize_partition_indices(graph)
+        try:
+            cannonize_partition_indices(graph)
+        except:
+            print("-W- ignorring exception of redundent cannonize_partition_indices(graph)")
 
     # this is a sanity check
     if has_cycles(graph):
@@ -43,6 +46,9 @@ def post_process_partition(graph: Graph, verbose_on_error=True) -> Graph:
             for p, i in zip(problems, info):
                 print(p)
                 print(i)
+
+            n_partitions = len(set(u.part for u in graph.nodes))
+            print("n_partitions:", n_partitions)
 
         error = "error cycle detected mutual dependecy between partitions"
         raise AssertionError(error)
