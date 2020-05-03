@@ -262,7 +262,8 @@ class Graph():
     def build_dot(self,
                   show_buffs_params: bool = True,
                   show_profiles: bool = True,
-                  edge_weight_function=None):
+                  edge_weight_function=None,
+                  node_weight_function=None):
         '''
         return a graphviz representation of the graph
         Parameters
@@ -367,6 +368,10 @@ class Graph():
                         label += " ms"
                     elif "memory" in k or "size" in k:
                         label += " MB"
+            if node_weight_function is not None:
+                w = node_weight_function(node)
+                label += "\n"
+                label += f"weight:{w}"
 
             label = f"{label}\n type: {node.valueType()}"
             if not (node.value is None):
@@ -423,7 +428,8 @@ class Graph():
                     directory: str,
                     show_buffs_params: bool = True,
                     show_profiles: bool = True,
-                    edge_weight_function=None):
+                    edge_weight_function=None,
+                    node_weight_function=None):
         '''
         save the rendered graph to a pdf file
 
@@ -438,7 +444,7 @@ class Graph():
         show_profiles:
             whether to display the nodes weight
         '''
-        dot = self.build_dot(show_buffs_params, show_profiles=show_profiles, edge_weight_function=edge_weight_function)
+        dot = self.build_dot(show_buffs_params, show_profiles=show_profiles, edge_weight_function=edge_weight_function, node_weight_function=node_weight_function)
         dot.format = "pdf"
         import os
         if os.path.exists(f"{directory}/{file_name}.pdf"):
@@ -680,6 +686,9 @@ def _remove_nodes(nodes: GraphNodes, condition: Callable[[Node],
             break
     return nodes
 
+
+# TODO: this is very bad to have this here as default,
+#        it generally outputs wrong weights...
 
 MULT_FACTOR = 1000
 bw_GBps = 12

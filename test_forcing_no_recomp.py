@@ -31,10 +31,11 @@ args = SimpleNamespace(output_file=f"results/generated_{MODEL}",
                        batch=256,
                        analyze_traced_model=False,
                        no_recomputation=False,
-                       bwd_to_fwd_ratio=-1,
+                       bwd_to_fwd_ratio=2,
                        n_partitions=2,
                        bw_GBps=12,
-                       n_iter=1)
+                       n_iter=1,
+                       stateless_tied=False)
 
 if not os.path.exists("results"):
     os.makedirs("result")
@@ -42,7 +43,8 @@ if not os.path.exists("results"):
 if MODEL == 'SEQ':
     model_dim = 10
     n_layers = 40
-    model = torch.nn.Sequential(*[torch.nn.Linear(model_dim, model_dim) for i in range(n_layers)])
+    model = torch.nn.Sequential(
+        *[torch.nn.Linear(model_dim, model_dim) for i in range(n_layers)])
     model = model.cuda()
     sample = torch.randn(args.batch, model_dim).cuda()
 elif MODEL == 'SEQ_TIED':
@@ -62,6 +64,11 @@ else:
     raise NotImplementedError()
 
 #graph = pipe_model(model, 0, sample, n_iter=1, output_file=args.output_file)
+
+nwf = node_weight_function(bwd_to_fwd_ratio=args.bwd_to_fwd_ratio)
+ewf = edge_weight_function(args.bw_GBps,
+                           bwd_to_fwd_ratio=args.bwd_to_fwd_ratio)
+
 partial_pipe_model = partial(pipe_model,
                              model,
                              0,
@@ -69,17 +76,19 @@ partial_pipe_model = partial(pipe_model,
                              n_iter=args.n_iter,
                              nparts=args.n_partitions,
                              output_file=args.output_file,
-                             node_weight_function=node_weight_function(
-                                 bwd_to_fwd_ratio=args.bwd_to_fwd_ratio),
-                             edge_weight_function=edge_weight_function(
-                                 args.bw_GBps,
-                                 bwd_to_fwd_ratio=args.bwd_to_fwd_ratio),
+                             node_weight_function=nwf,
+                             edge_weight_function=ewf,
                              recomputation=not args.no_recomputation)
 if args.async_pipeline and (not args.no_recomputation):
     async_pipe_partitioner = AsyncPipePartitioner(model, args.output_file,
                                                   partial_pipe_model)
 
 graph = async_pipe_partitioner.partition(allowed_mistakes=0)
+graph.save_as_pdf(args.output_file,
+                  ".",
+                  node_weight_function=nwf,
+                  edge_weight_function=ewf)
+graph.serialize(args.output_file)
 
 module_path = args.output_file.replace("/", ".")
 generated = importlib.import_module(module_path)
@@ -101,10 +110,8 @@ blocks = pipe_config.basic_blocks
 analysis_config = pipe_config._to_old_format(
     layerDict(model, depth=depth, basic_blocks=blocks), tensorDict(model))
 
-
 stages_on_same_gpu = set()
-if args.stateless_tied and len(
-        pipe_config.stages) == args.n_partitions + 1:
+if args.stateless_tied and len(pipe_config.stages) == args.n_partitions + 1:
     stages_on_same_gpu = [{0, args.n_partitions}]
 
 analysis_result, summary = run_analysis(
