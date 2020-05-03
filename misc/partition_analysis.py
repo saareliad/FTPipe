@@ -11,6 +11,9 @@ import warnings
 from typing import List, Set
 from functools import wraps
 
+# TODO: compare expected speedup to execution without recomputation,
+# as async pipe partitioning will put many layers without recompuatation, therefore making it hard to understand which is the best partitioning.
+
 
 def run_analysis(sample,
                  graph,
@@ -79,7 +82,7 @@ def run_analysis(sample,
         theoretical_parallel_f_balance = worst_balance(parallel_f)
         if TOPO_AWARE:
             topology_aware_parallel_f_balance, topology_aware_parallel_b_balance = topology_aware_balance(
-            parallel_f, parallel_b, edges)
+                parallel_f, parallel_b, edges)
     else:
         edges = None
         TOPO_AWARE = False
@@ -596,9 +599,10 @@ def cuda_backward(partition,
         start.record()
 
     #compute gradient only for outputs that require grad
-    flattened_outputs = filter(lambda t: t.requires_grad,flattened_outputs)
+    flattened_outputs = filter(lambda t: t.requires_grad, flattened_outputs)
 
-    torch.autograd.backward(tensors=flattened_outputs, grad_tensors=grad_tensors)
+    torch.autograd.backward(tensors=flattened_outputs,
+                            grad_tensors=grad_tensors)
 
     end.record()
     torch.cuda.synchronize(device='cuda')
@@ -671,7 +675,8 @@ def cpu_backward(partition,
     # compute gradient only for outputs that require grad
     flattened_outputs = filter(lambda t: t.requires_grad, flattened_outputs)
 
-    torch.autograd.backward(tensors=flattened_outputs, grad_tensors=grad_tensors)
+    torch.autograd.backward(tensors=flattened_outputs,
+                            grad_tensors=grad_tensors)
     end = time.time()
     b_time = 1000 * (end - start)
 
