@@ -7,8 +7,8 @@ tab = '    '
 dtab = tab + tab
 
 
-def create_model_parallel_module(graph: Graph, batch_dim: int, name: str, ios: Dict[int, Dict[str,
-                                                                                              List[str]]],
+def create_model_parallel_module(graph: Graph, batch_dim: int, ios: Dict[int, Dict[str,
+                                                                                   List[str]]],
                                  num_inputs: int,
                                  model_outputs: List[str]) -> str:
     '''create a modelParallel version of the partition config
@@ -207,7 +207,7 @@ def generate_merge_mb(graph: Graph, model_outputs: List[str]) -> List[str]:
     l = []
     l.append(f"# merge output chunks")
     for n, o in zip(graph.outputs, model_outputs):
-        if len(n.shape) == 1 and len(n.shape) == 1:
+        if len(n.tensor_shape) == 1 and len(n.tensor_shape) == 1:
             # scalar
             l.append(f"{o} = sum({o}_chunks)")
         else:

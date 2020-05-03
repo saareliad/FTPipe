@@ -5,7 +5,7 @@ import operator
 import inspect
 from enum import IntEnum
 import pickle
-from typing import Tuple, Optional, Callable, Dict, Iterable
+from typing import Tuple, Optional, Callable, Dict, Iterable, List
 
 import torch
 import torch.nn as nn
@@ -36,6 +36,7 @@ class NodeTypes(IntEnum):
     LAYER = 3
     OP = 4
     CONSTANT = 5
+    PRIMITIVE = 6
 
     def __repr__(self):
         return self.name
@@ -84,9 +85,9 @@ EdgeWeightFunction = Callable[[Tuple[Node, Node]], int]
 
 
 class Graph():
-    def __init__(self, nodes: GraphNodes, output_id: int, depth: int, basic_blocks: Tuple[nn.Module, ...]):
+    def __init__(self, nodes: GraphNodes, output_ids: List[int], depth: int, basic_blocks: Tuple[nn.Module, ...]):
         self._nodes: GraphNodes = nodes
-        self.output_id = output_id
+        self.output_ids = output_ids
         self.depth = depth
         self.basic_blocks = basic_blocks
 
@@ -95,16 +96,12 @@ class Graph():
         return self._nodes.values()
 
     @property
-    def output_node(self) -> Node:
-        return self._nodes[self.output_id]
-
-    @property
     def inputs(self):
         return (n for n in self.nodes if n.type is NodeTypes.IN)
 
     @property
     def num_inputs(self) -> int:
-        return len(self.inputs)
+        return len(list(self.inputs))
 
     @property
     def num_partitions(self) -> int:
@@ -112,11 +109,15 @@ class Graph():
 
     @property
     def output_scopes(self):
-        return [self._nodes[self.output_id].scope]
+        return [n.scope for n in self.outputs]
 
     @property
     def outputs(self):
-        return [self._nodes[self.output_id]]
+        return [self._nodes[id] for id in self.output_ids]
+
+    @property
+    def model_name(self):
+        return self._nodes[self.output_ids[0]].scope.split("/", maxsplit=1)[0]
 
     def asNetworkx(self,
                    directed: bool = False,
@@ -256,7 +257,7 @@ class Graph():
                 scope = node.scope
                 value_type = node.value_type
                 node_label = f"{scope}\nidx: {node_id}\nvalue type: {value_type}"
-                if node_id == self.output_id:
+                if node in self.outputs:
                     node_label += "\nmodel output"
                 if node.type is NodeTypes.IN:
                     node_label += "\nmodel input"
@@ -385,7 +386,7 @@ class Graph():
             node_states.append(state)
 
         return{"node_data": node_states,
-               "output_id": self.output_id,
+               "output_id": self.output_ids,
                "depth": self.depth,
                "basic_blocks": self.basic_blocks
                }
@@ -512,6 +513,44 @@ class TracedFunction():
         setattr(self.namespace,
                 self.function_name,
                 self.original_function)
+
+
+def used_namespaces():
+    return {namespace.__name__ for namespace in
+            chain(get_overridable_functions().keys(), TracedFunctions.traced_namespaces())}
+
+
+arithmetic_ops = {"__add__": "+",
+                  "__sub__": "-",
+                  "__mul__": "*",
+                  "__div__": "/",
+                  "__truediv__": "/",
+                  "__floordiv__": "//",
+                  "__mod__": "%",
+                  "__matmul__": "@",
+                  "__pow__": "**"
+                  }
+
+r_arithmetic_ops = {"__radd__": "+",
+                    "__rsub__": "-",
+                    "__rmul__": "*",
+                    "__rdiv__": "/",
+                    "__rtruediv__": "/",
+                    "__rfloordiv__": "//",
+                    "__rmod__": "%",
+                    "__rmatmul__": "@",
+                    "__rpow__": "**"
+                    }
+
+inplace_arithmetic_ops = {"__iadd__": "+=",
+                          "__isub__": "-=",
+                          "__imul__": "*=",
+                          "__idiv__": "/=",
+                          "__itruediv__": "/=",
+                          "__ifloordiv__": "//=",
+                          "__imod__": "%=",
+                          "__imatmul__": "@=",
+                          "__ipow__": "**="}
 
 
 def delegate_to_traced_value(func):
@@ -871,7 +910,8 @@ class TracedLayer(nn.Module):
         else:
             with record_free_floating_parameters_and_buffers(self.module):
                 out = self.module(*args, **kwargs)
-                out = record_non_terminal_output(out)
+                if not isinstance(out, TracedValue):
+                    out = record_non_terminal_output(out)
 
         print(f"leaving {s} scope {CURRENT_SCOPE}")
         CURRENT_SCOPE = CURRENT_SCOPE.rsplit("/", maxsplit=1)[0]
@@ -924,11 +964,13 @@ def trace(module: nn.Module, args=(), kwargs=None, depth=1000, basic_blocks=()):
     nodes, output_id = set_node_indices(nodes, output_id)
     NODES.clear()
 
+    nodes, output_ids = prepare_graph_outputs(nodes, output_id)
+
     is_valid, errors = check_is_valid_graph(nodes)
     if not is_valid:
         raise RuntimeError(errors)
 
-    return Graph(nodes, output_id, depth, basic_blocks)
+    return Graph(nodes, output_ids, depth, basic_blocks)
 
 
 def prepare_args_and_kwargs(args=(), kwargs=None):
@@ -1051,10 +1093,71 @@ def reset_tracing_state():
     TracedValue.ID = 0
 
 
+def discard_unused_nodes(nodes):
+    new_nodes = []
+
+    for node_id in reversed(range(len(nodes))):
+        node = nodes[node_id]
+        if node.value_type is None or (node.type is NodeTypes.CONSTANT and (len(node.out_edges) == 0)):
+            # a,b=f() will actually invoke __getitem__ 3 times so we discard the last node
+            # also discar unused constants
+            assert len(
+                node.out_edges) == 0, "unused traced value should not have outgoing edges"
+
+            for u in node.in_edges:
+                u.remove_output(node)
+        else:
+            new_nodes.append((node.id, node))
+
+    # reverse dict_order
+
+    return dict(reversed(new_nodes))
+
+
+def set_node_indices(nodes, output_id):
+    if len(nodes) == TracedValue.ID:
+        # no nodes were discarded
+        return nodes
+
+    new_nodes = dict()
+
+    for idx, node in enumerate(nodes.values()):
+        assert idx <= node.id
+
+        node.id = idx
+        new_nodes[idx] = node
+
+    return new_nodes, nodes[output_id].id
+
+
+def prepare_graph_outputs(nodes, output_id):
+    """by our convention a graph multiple outputs are represented by multiple nodes
+     and not by a single list/tuple node
+    """
+    output_node = nodes[output_id]
+
+    is_layer_or_tuple = output_node.value_type in {list, tuple}
+    is_primitive = output_node.type is NodeTypes.PRIMITIVE
+
+    if not (is_layer_or_tuple and is_primitive):
+        return nodes, [output_id]
+
+    # remove the node from the graph
+    # set it's parents as outputs
+    nodes.pop(output_id)
+    output_ids = []
+    for n in output_node.in_edges:
+        n.remove_output(output_node)
+        output_ids.append(n.id)
+
+    return nodes, output_ids
+
 ##############################
 # recording of function args and kwargs
 # support for nested iterables and mix and match of traced and untraced values
 ##############################
+
+
 def record_args_and_kwargs(*args, **kwargs):
     """ recording of args and kwargs input format
         this will record all literal values lists/dicts/ints etch
@@ -1080,7 +1183,7 @@ def record_args(args, top_level):
         if isinstance(a, (list, tuple, set)):
             traced_children, traced_ids = record_args(a,
                                                       top_level=False)
-            traced_value = TracedValue(NodeTypes.OP,
+            traced_value = TracedValue(NodeTypes.PRIMITIVE,
                                        "/" + container_construct_op_name(type(a)))
             traced_value.set_data(type(a)(traced_children))
 
@@ -1090,7 +1193,7 @@ def record_args(args, top_level):
         elif isinstance(a, dict):
             traced_children, traced_ids = record_kwargs(a,
                                                         top_level=False)
-            traced_value = TracedValue(NodeTypes.OP,
+            traced_value = TracedValue(NodeTypes.PRIMITIVE,
                                        "/" + container_construct_op_name(type(a)))
             traced_value.set_data(type(a)(traced_children))
 
@@ -1099,7 +1202,7 @@ def record_args(args, top_level):
         elif isinstance(a, slice):
             traced_children, traced_ids = record_args((a.start, a.stop, a.step),
                                                       top_level=False)
-            traced_value = TracedValue(NodeTypes.OP,
+            traced_value = TracedValue(NodeTypes.PRIMITIVE,
                                        "/" + container_construct_op_name(type(a)))
             traced_value.set_data(type(a)(*traced_children))
 
@@ -1134,7 +1237,7 @@ def record_kwargs(kwargs, top_level):
         if isinstance(v, (list, tuple, set)):
             traced_children, children_ids = record_args(v,
                                                         top_level=False)
-            traced_value = TracedValue(NodeTypes.OP,
+            traced_value = TracedValue(NodeTypes.PRIMITIVE,
                                        "/" + container_construct_op_name(type(v)))
             traced_value.set_data(type(v)(traced_children))
 
@@ -1144,7 +1247,7 @@ def record_kwargs(kwargs, top_level):
         elif isinstance(v, dict):
             traced_children, traced_ids = record_kwargs(v,
                                                         top_level=False)
-            traced_value = TracedValue(NodeTypes.OP,
+            traced_value = TracedValue(NodeTypes.PRIMITIVE,
                                        "/" + container_construct_op_name(type(v)))
             traced_value.set_data(type(v)(traced_children))
 
@@ -1217,31 +1320,42 @@ def record_free_floating_parameters_and_buffers(module: nn.Module):
 
 
 def record_non_terminal_output(out):
-    # NOTE if self.module returns a container
-    # tuple/list/set/dict out will be of type container
-    # and it will contain traced values but he itself will not be traced
+    # NOTE if a module returns a container
+    # it's possible that it contains a mix of traced values and nested containers
+    # here we ensure that all nested containers are recorded
+    # and only the primary container is actively wrapped
     if not isinstance(out, TracedValue):
         assert isinstance(out,
                           (list, tuple, dict, set)), f"an untraced output of non terminal layer should be a container got {type(out)}"
-        traced_out = TracedValue(NodeTypes.OP,
-                                 "/" + container_construct_op_name(type(out)))
+
         if isinstance(out, dict):
-            data = dict()
+            children = dict()
             for k, v in out.items():
-                assert isinstance(v,
-                                  TracedValue), f"expected a dictionary of traced values got a entry of type {type(v)}"
+                traced_v = record_non_terminal_output(v)
+                children[k] = traced_v
+
+            traced_out = TracedValue(NodeTypes.PRIMITIVE,
+                                     "/" + container_construct_op_name(type(out)))
+            data = dict()
+            for k, v in children.items():
                 record_kwarg(traced_out.id, k, v.id)
                 data[k] = v._data
         else:
-            data = []
+            children = []
             for v in out:
-                assert isinstance(v,
-                                  TracedValue), f"expected a container of traced values got a entry of type {type(v)}"
+                traced_v = record_non_terminal_output(v)
+                children.append(traced_v)
+
+            traced_out = TracedValue(NodeTypes.PRIMITIVE,
+                                     "/" + container_construct_op_name(type(out)))
+            data = []
+            for v in children:
                 record_arg(traced_out.id, v.id)
                 data.append(v._data)
 
         traced_out.set_data(type(out)(data))
         return traced_out
+
     return out
 
 
@@ -1391,358 +1505,3 @@ def check_is_valid_graph(nodes):
                 valid = False
 
     return valid, "\n".join(errors)
-
-
-##############################
-# code generation
-##############################
-arithmetic_ops = {"__add__": "+",
-                  "__sub__": "-",
-                  "__mul__": "*",
-                  "__div__": "/",
-                  "__truediv__": "/",
-                  "__floordiv__": "//",
-                  "__mod__": "%",
-                  "__matmul__": "@",
-                  "__pow__": "**"
-                  }
-
-r_arithmetic_ops = {"__radd__": "+",
-                    "__rsub__": "-",
-                    "__rmul__": "*",
-                    "__rdiv__": "/",
-                    "__rtruediv__": "/",
-                    "__rfloordiv__": "//",
-                    "__rmod__": "%",
-                    "__rmatmul__": "@",
-                    "__rpow__": "**"
-                    }
-
-inplace_arithmetic_ops = {"__iadd__": " +=",
-                          "__isub__": "-=",
-                          "__imul__": "*=",
-                          "__idiv__": "/=",
-                          "__itruediv__": "/=",
-                          "__ifloordiv__": "//=",
-                          "__imod__": "%=",
-                          "__imatmul__": "@=",
-                          "__ipow__": "**="}
-
-
-def compile_model(graph, output_file=None):
-    statements = []
-    ready_expressions = dict()
-
-    model_args = []
-    model_kwargs = []
-    namespaces = {namespace.__name__ for namespace in
-                  chain(get_overridable_functions().keys(), TracedFunctions.traced_namespaces())}
-
-    for node in graph.nodes:
-        idx = node.id
-        scope = node.scope
-        node_type = node.type
-        if node_type is NodeTypes.IN:
-            # kwarg
-            if ":" in scope:
-                kw = scope.split(":")[1][1:]
-                model_kwargs.append(f"{kw}={node.constant_value}")
-                ready_expressions[node] = kw
-            else:
-                # arg
-                model_args.append(scope)
-                ready_expressions[node] = scope
-
-        elif node_type is NodeTypes.BUFF_PARAM:
-            if node.value_type is Tensor:
-                print(f"{idx} buffer")
-                ready_expressions[node] = f"self.b_{idx}"
-            else:
-                print(f"{idx} parameter")
-                ready_expressions[node] = f"self.p_{idx}"
-
-        elif node_type is NodeTypes.LAYER:
-            print(f"{idx} layer")
-            parameter_list = generate_parameter_list(node.args, node.kwargs,
-                                                     ready_expressions)
-
-            statements.append(f"l_{idx} = self.l_{idx}({parameter_list})")
-            ready_expressions[node] = f"l_{idx}"
-
-        elif node_type is NodeTypes.CONSTANT:
-            print(f"{idx} constant")
-            ready_expressions[node] = str(node.constant_value)
-
-        elif "prim::DictConstruct" in scope:
-            print(f"{idx} dict")
-            kwargs = ", ".join([f"'{k}':{ready_expressions[a]}"
-                                for a, k in node.kwargs.items()])
-            statements.append(f"dict_{idx} = {{{kwargs}}}")
-            ready_expressions[node] = f"dict_{idx}"
-        elif "prim::SetConstruct" in scope:
-            print(f"{idx} set")
-            parameter_list = generate_parameter_list(node.args, node.kwargs,
-                                                     ready_expressions)
-            statements.append(f"set_{idx} = {{{parameter_list}}}")
-            ready_expressions[node] = f"set_{idx}"
-        elif "prim::ListConstruct" in scope:
-            print(f"{idx} list")
-            parameter_list = generate_parameter_list(node.args, node.kwargs,
-                                                     ready_expressions)
-            statements.append(f"list_{idx} = [{parameter_list}]")
-            ready_expressions[node] = f"list_{idx}"
-        elif "prim::TupleConstruct" in scope:
-            print(f"{idx} tuple")
-            parameter_list = generate_parameter_list(node.args, node.kwargs,
-                                                     ready_expressions)
-            if len(node.args) == 1:
-                parameter_list += ","
-            statements.append(f"tuple_{idx} = ({parameter_list})")
-            ready_expressions[node] = f"tuple_{idx}"
-        elif "prim::SliceConstruct" in scope:
-            parameter_list = generate_parameter_list(node.args, node.kwargs,
-                                                     ready_expressions)
-            statements.append(f"slice_{idx} = slice({parameter_list})")
-            ready_expressions[node] = f"slice_{idx}"
-        else:
-            # op
-            print(f"{idx} op")
-            parameter_list = generate_parameter_list(node.args, node.kwargs,
-                                                     ready_expressions)
-            op_path = scope.rsplit("/", maxsplit=1)[1]
-            namespace, func_name = op_path.split("::")
-
-            # function call
-            if namespace in namespaces:
-                print(f"function call ", func_name)
-                statements.append(
-                    f"t_{idx} = {namespace}.{func_name}({parameter_list})")
-            else:
-                param_list = generate_parameter_list(node.args, node.kwargs,
-                                                     ready_expressions,
-                                                     string=False)
-                self_arg = param_list[0]
-                if "__" not in func_name:
-                    print("calling instance method ", func_name)
-                    statements.append(
-                        f"t_{idx} = {self_arg}.{func_name}({', '.join(param_list[1:])})")
-                elif func_name == "__getattribute__":
-                    statements.append(f"t_{idx} = {self_arg}.{param_list[1]}")
-                elif func_name == "__getitem__":
-                    statements.append(f"t_{idx} = {self_arg}[{param_list[1]}]")
-                elif func_name == "__setitem__":
-                    statements.extend([f"{self_arg}[{param_list[1]}] = {param_list[2]}",
-                                       f"t_{idx} = {self_arg}"])
-                elif func_name in arithmetic_ops:
-                    statements.append(
-                        f"t_{idx} = {self_arg} {arithmetic_ops[func_name]} {param_list[1]}")
-                elif func_name in inplace_arithmetic_ops:
-                    statements.extend(
-                        [f"{self_arg} {inplace_arithmetic_ops[func_name]} {param_list[1]}",
-                         f"t_{idx} = {self_arg}"])
-                elif func_name in r_arithmetic_ops:
-                    statements.append(
-                        f"t_{idx} = {param_list[1]} {r_arithmetic_ops[func_name]} {self_arg}")
-                else:
-                    print("calling magic ", func_name)
-                    statements.append(
-                        f"t_{idx} = {self_arg}.{func_name}({', '.join(param_list[1:])})")
-            ready_expressions[node] = f"t_{idx}"
-
-    statements.append(f"return {ready_expressions[graph.output_node]}")
-    print("\n")
-    stage_input_str = ", ".join(["self"] + model_args + model_kwargs)
-
-    forward_decl = f"def forward({stage_input_str}):\n"
-    imports = [f"import {namespace}" for namespace in namespaces]
-
-    if output_file is None:
-        output_file = f"generated"
-
-    if not output_file.endswith(".py"):
-        output_file += ".py"
-
-    with open(output_file, "w") as f:
-        f.write("\n".join(imports) + "\n\n")
-        f.write(forward_decl)
-        f.write("    " + "\n    ".join(statements))
-
-
-def generate_parameter_list(node_args, node_kwargs, ready_expressions, string=True):
-    args = [ready_expressions[a] for a in node_args]
-    kwargs = [f"{k}={ready_expressions[a]}"
-              for a, k in node_kwargs.items()]
-    if string:
-        return ", ".join(args + kwargs)
-    return args + kwargs
-
-
-def discard_unused_nodes(nodes):
-    new_nodes = []
-
-    for node_id in reversed(range(len(nodes))):
-        node = nodes[node_id]
-        if node.value_type is None or (node.type is NodeTypes.CONSTANT and (len(node.out_edges) == 0)):
-            # a,b=f() will actually invoke __getitem__ 3 times so we discard the last node
-            # also discar unused constants
-            assert len(
-                node.out_edges) == 0, "unused traced value should not have outgoing edges"
-
-            for u in node.in_edges:
-                u.remove_output(node)
-        else:
-            new_nodes.append((node.id, node))
-
-    # reverse dict_order
-
-    return dict(reversed(new_nodes))
-
-
-def set_node_indices(nodes, output_id):
-    if len(nodes) == TracedValue.ID:
-        # no nodes were discarded
-        return nodes
-
-    new_nodes = dict()
-
-    for idx, node in enumerate(nodes.values()):
-        assert idx <= node.id
-
-        node.id = idx
-        new_nodes[idx] = node
-
-    return new_nodes, nodes[output_id].id
-
-
-##############################
-# examples
-##############################
-class OptionalLayer(nn.Module):
-    def __init__(self, func, args=(), kwargs=None):
-        super(OptionalLayer, self).__init__()
-        self.func = func
-
-        if not isinstance(args, tuple):
-            args = (args,)
-        if kwargs is None:
-            kwargs = dict()
-
-        self.args = args
-        self.kwargs = kwargs
-
-    def forward(self, x=None):
-        if x is None:
-            x = self.func(*self.args, **self.kwargs)
-
-        return x * 10, x + 1
-
-
-class Model(nn.Module):
-    def __init__(self):
-        super(Model, self).__init__()
-        self.mask_generator = OptionalLayer(torch.zeros, (10, 100))
-
-    def forward(self, x, mask=None):
-        # mask = self.mask_generator(mask)
-
-        # o0 = x + mask
-        # o1 = x * 2
-        # dict_out = {"a": o0, "b": o1}
-        # list_out = [o0, o1]
-        # tuple_out = (o0, o1)
-        # # set_out = {o0, o1}
-        # return dict_out
-
-        a, b = self.mask_generator(mask)
-        a.device
-        b.size()
-
-        t = torch.randn(10, 10, 10, 10)
-        ns = t.size(2) // 5
-        nd = t.size(2)
-        t[:, :, ns - nd:ns, :ns]
-        # print(type(t), type(t._data), type(t._data[0]), type(t._data[1]))
-        return a, b + x
-
-
-def test_cases():
-    from models.normal import resnet50
-    from models.normal.vision_models.ResNet import BasicBlock
-    if False:
-        trace_registered_functions()
-        t = torch.randn(10, 10)
-        t.view(size=[t.shape[0], 2, 5])
-        # d = {"size": [t.shape[0], 2, 5]}
-        # t.view(**d)
-        # print(record_kwargs(d))
-
-        assert isinstance(torch.randn(10, 10), TracedValue)
-
-        m = torch.as_tensor([[1, 2], [3, 4]])
-        assert isinstance(m, TracedValue)
-        print(m)
-
-        t = torch.tensor([[1, 2], [1, 2]])
-        assert isinstance(t, TracedValue)
-
-        print(t)
-
-        t = torch.add(t, m)
-        assert isinstance(t, TracedValue)
-        t = m.to(device="cuda")
-        assert isinstance(t, TracedValue)
-        print(t)
-        assert isinstance(m.device, TracedValue)
-        assert isinstance(m.t, TracedInstanceFunction)
-        m.t()
-        a = m * 2
-        b = 2 * m
-        assert isinstance(a, TracedValue)
-        assert isinstance(b, TracedValue)
-
-        s = t.t().unsqueeze(0).shape[0] + 1
-        print(s)
-        assert isinstance(s, TracedValue)
-
-        m = torch.cat([m, m])
-        assert isinstance(m, TracedValue)
-        print(m)
-
-        assert isinstance(1 + m, TracedValue)
-        assert isinstance(m + 1, TracedValue)
-        c = m
-        print(m)
-        m += 1
-        assert c._data is m._data
-        print(c)
-        m.add
-        print(c.shape)
-        print(c.view(c.size(0), 2, 1, 1, 1, 1).size())
-
-        print(c.sum(dim=0))
-
-        disable_function_tracing()
-    else:
-        import math
-        register_new_traced_function(math.sqrt)
-        m = resnet50().cuda()
-        t = torch.randn(10, 3, 224, 224).cuda()
-        # t = torch.randn(10, 100)
-        # m = Model()
-        mask = None
-        # sys.exit()
-        # m(x=t)
-        args = (t,)
-        # kwargs = {"mask": mask}
-        kwargs = dict()
-        for d in range(3):
-            print(f"depth_{d}")
-            graph = trace(m, depth=d, args=args, kwargs=kwargs)
-            print()
-            compile_model(graph,
-                          output_file=f"{type(m).__name__}_depth_{d}")
-            graph.save_as_pdf(f"{type(m).__name__}_depth_{d}", ".")
-
-
-if __name__ == "__main__":
-    test_cases()
