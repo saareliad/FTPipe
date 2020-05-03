@@ -85,7 +85,7 @@ def model_parallel_forward(graph: Graph, ios: Dict[int, Dict[str, List[str]]],
                            model_inputs: List[str],
                            model_outputs: List[str]) -> List[str]:
 
-    body, activations = forward_statements(ios, model_inputs, model_outputs)
+    body, activations = forward_statements(ios, model_inputs)
     outputs = ",".join([activations[o] for o in model_outputs])
     forward = simple_forward(model_inputs, body, outputs)
 
@@ -224,8 +224,7 @@ def simple_forward(model_inputs: List[str], body: List[str], outputs: str) -> st
 
 
 def forward_statements(ios: Dict[int, Dict[str, List[str]]],
-                       model_inputs: List[str],
-                       model_outputs: List[str]) -> Tuple[List[str], Dict[str, str]]:
+                       model_inputs: List[str]) -> Tuple[List[str], Dict[str, str]]:
     '''generates the forward nethod of the model parallel version of the config
     '''
     n_partitions = len(ios)

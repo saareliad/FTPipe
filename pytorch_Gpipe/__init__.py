@@ -5,12 +5,12 @@ import torch.nn as nn
 
 from .model_partitioning import METIS_partition
 from .compiler import compile_partitioned_model
-from .model_profiling import Graph, profile_network, build_graph, Profile, NodeWeightFunction, EdgeWeightFunction
+from .model_profiling import Graph, profile_network, trace_module, Profile, NodeWeightFunction, EdgeWeightFunction
 from .pipeline import Pipeline, PipelineConfig, StageConfig, SyncBuffersMode
 from .utils import Devices, Tensors
 
 __all__ = [
-    'pipe_model', 'profile_network', 'build_graph', 'partition_model',
+    'pipe_model', 'profile_network', 'trace_module', 'partition_model',
     'METIS_partition', 'Pipeline'
 ]
 

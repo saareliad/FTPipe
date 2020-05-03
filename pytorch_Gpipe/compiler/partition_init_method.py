@@ -1,8 +1,7 @@
 from typing import List, Tuple, Dict, Set
 import re
 from itertools import chain
-from torch.nn import Module
-from tracer import Node
+from ..model_profiling import Node
 tab = '    '
 dtab = tab + tab
 

@@ -1,5 +1,5 @@
 from .control_flow_graph import Graph, NodeTypes, Node, NodeWeightFunction, EdgeWeightFunction
 from .network_profiler import profile_network, Profile
-from .graph_builder import build_graph
+from .tracer import trace_module, register_new_traced_function, used_namespaces
 
-__all__ = ['build_graph', 'profile_network']
+__all__ = ['trace_module', 'profile_network']

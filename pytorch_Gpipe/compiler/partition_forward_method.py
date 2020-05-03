@@ -1,13 +1,9 @@
-import torch
-import torch.nn.functional as F
-from torch import Tensor
 from pytorch_Gpipe.utils import OrderedSet
-from collections import OrderedDict, defaultdict, deque
+from collections import defaultdict, deque
 from itertools import chain
 from typing import List, Tuple, Dict, Iterator, Set
 import re
-import sys
-from tracer import used_namespaces, Node, NodeTypes
+from ..model_profiling import used_namespaces, Node, NodeTypes
 tab = '    '
 dtab = tab + tab
 
@@ -69,7 +65,6 @@ def generate_forward_method(
     # partition buffers and params are also ready
     remove_buffs_params = []
     for k, v in partition_fields.items():
-        print(k, v)
         if 'self.b_' in v or 'self.p_' in v:
             ready_expressions[k] = v
             remove_buffs_params.append(k)
@@ -201,7 +196,6 @@ def generate_statements(partition_nodes: List[Node],
             statements.append(statement)
 
         else:
-            print(scope)
             op_path = scope.rsplit("/", maxsplit=1)[1]
             namespace, func_name = op_path.split("::")
             # function call

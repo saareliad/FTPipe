@@ -1,5 +1,4 @@
 from typing import Tuple
-from itertools import chain
 import torch
 import torch.nn as nn
 tab = '    '

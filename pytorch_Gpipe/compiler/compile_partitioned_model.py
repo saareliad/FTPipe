@@ -1,6 +1,6 @@
 import torch
 from torch.nn import Module
-from tracer import Node, NodeTypes, Graph, used_namespaces
+from ..model_profiling import Node, NodeTypes, Graph, used_namespaces
 from pytorch_Gpipe.utils import traverse_model, traverse_params_buffs, layerDict, tensorDict
 from .partition_forward_method import generate_forward_method
 from .partition_init_method import generate_init_method
@@ -11,7 +11,6 @@ from collections import OrderedDict
 import inspect
 import os
 import pathlib
-from .utils import format_shape_or_dtype
 tab = '    '
 dtab = tab + tab
 
@@ -80,7 +79,7 @@ def compile_partitioned_model(graph: Graph,
         output_file = output_file[:-3]
 
     lines.append(
-        create_pipeline_configuration(graph, ios, layer_classes, batch_dim, output_file))
+        create_pipeline_configuration(graph, ios, layer_classes, batch_dim))
     if generate_model_parallel:
         lines.append(
             create_model_parallel_module(graph, batch_dim, ios, graph.num_inputs,
@@ -154,8 +153,7 @@ def create_pipeline_configuration(graph: Graph,
                                             Dict[str,
                                                  List[str]]],
                                   model_blocks: Dict[str, Module],
-                                  batch_dim: int,
-                                  output_file: str) -> str:
+                                  batch_dim: int) -> str:
     '''generates the create_pipeline_configuration method which given a model creates his partitioned counterpart
     '''
     # TODO assumption the first input is batched
