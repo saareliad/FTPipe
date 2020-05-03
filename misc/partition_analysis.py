@@ -575,8 +575,9 @@ def cuda_backward(partition,
     ''' measure forward/backward time of a partition on the GPU
     '''
     # now we move inputs to GPU
+    # with torch.no_grad():
     inputs = [
-        i.to('cuda').requires_grad_(inputs_requires_grad
+        i.data.to('cuda').requires_grad_(inputs_requires_grad
                                     and i.is_floating_point()) for i in inputs
     ]
     # Pre infer, so it won't get stuck in the the record.
