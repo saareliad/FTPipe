@@ -7,6 +7,9 @@ import importlib
 from partition_async_pipe import AsyncPipePartitioner
 from functools import partial
 from heuristics import node_weight_function, edge_weight_function
+import os
+
+from models.normal.NLP_models.stateless import StatelessLinear, StatelessEmbedding, StatelessSequential, CompositionStatelessSequential
 
 # For debugging inside docker.
 import ptvsd
@@ -20,20 +23,36 @@ if DEBUG:
     breakpoint()
 
 MODEL = 'SEQ'
-args = SimpleNamespace(output_file=f"generated_{MODEL}",
+MODEL = 'SEQ_TIED'
+args = SimpleNamespace(output_file=f"results/generated_{MODEL}",
                        no_test_run=False,
                        no_analysis=False,
                        async_pipeline=True,
                        batch=256,
-                       analyze_traced_model=True,
+                       analyze_traced_model=False,
                        no_recomputation=False,
                        bwd_to_fwd_ratio=-1,
                        n_partitions=2,
                        bw_GBps=12,
                        n_iter=1)
+
+if not os.path.exists("results"):
+    os.makedirs("result")
+
 if MODEL == 'SEQ':
     model_dim = 10
-    model = torch.nn.Sequential(*[torch.nn.Linear(model_dim, model_dim) for i in range(40)])
+    n_layers = 40
+    model = torch.nn.Sequential(*[torch.nn.Linear(model_dim, model_dim) for i in range(n_layers)])
+    model = model.cuda()
+    sample = torch.randn(args.batch, model_dim).cuda()
+elif MODEL == 'SEQ_TIED':
+    model_dim = 1024
+    n_layers = 8
+    setattr(args, "stateless_tied", True)
+    layers = [torch.nn.Linear(model_dim, model_dim) for i in range(n_layers)]
+    model = CompositionStatelessSequential(*layers)
+    # TODO: stages on same GPU...
+    # TODO: currently we are not having it tied...
     model = model.cuda()
     sample = torch.randn(args.batch, model_dim).cuda()
 elif MODEL == 'ALEXNET':
@@ -82,6 +101,12 @@ blocks = pipe_config.basic_blocks
 analysis_config = pipe_config._to_old_format(
     layerDict(model, depth=depth, basic_blocks=blocks), tensorDict(model))
 
+
+stages_on_same_gpu = set()
+if args.stateless_tied and len(
+        pipe_config.stages) == args.n_partitions + 1:
+    stages_on_same_gpu = [{0, args.n_partitions}]
+
 analysis_result, summary = run_analysis(
     sample,
     graph,
@@ -92,4 +117,5 @@ analysis_result, summary = run_analysis(
     verbose=True,
     async_pipeline=args.async_pipeline,
     sequential_model=model,
-    analyze_traced_model=args.analyze_traced_model)
+    analyze_traced_model=args.analyze_traced_model,
+    stages_on_same_gpu=stages_on_same_gpu)
