@@ -271,14 +271,17 @@ def partition_model(args,
         METIS_opt=METIS_opt)
 
     if args.async_pipeline and (not args.no_recomputation):
-        async_pipe_partitioner = AsyncPipePartitioner(
-            model,
-            args.output_file,
-            partial_pipe_model)
+        async_pipe_partitioner = AsyncPipePartitioner(model, args.output_file,
+                                                      partial_pipe_model)
 
-        # graph = run_x_tries_until_no_fail(async_pipe_partitioner.partition, 3, force_no_recomp_scopes=force_no_recomputation_fn, allowed_mistakes=0)
-        graph = async_pipe_partitioner.partition(
-            force_no_recomp_scopes=force_no_recomputation_fn, allowed_mistakes=0)
+        graph = run_x_tries_until_no_fail(
+            async_pipe_partitioner.partition,
+            10,
+            force_no_recomp_scopes=force_no_recomputation_fn,
+            allowed_mistakes=0)
+
+        # graph = async_pipe_partitioner.partition(
+        #     force_no_recomp_scopes=force_no_recomputation_fn, allowed_mistakes=0)
     else:
         graph = partial_pipe_model(
             force_no_recomp_scopes=force_no_recomputation_fn)
@@ -392,7 +395,8 @@ def parse_cli():
     tr_params.add_argument(
         "--mlm",
         action='store_true',
-        help="Train with masked-language modeling loss instead of language modeling."
+        help=
+        "Train with masked-language modeling loss instead of language modeling."
     )
     tr_params.add_argument(
         "--mlm_probability",
@@ -403,19 +407,22 @@ def parse_cli():
         "--config_name",
         default="",
         type=str,
-        help="Optional pretrained config name or path if not the same as model_name_or_path"
+        help=
+        "Optional pretrained config name or path if not the same as model_name_or_path"
     )
     tr_params.add_argument(
         "--tokenizer_name",
         default="",
         type=str,
-        help="Optional pretrained tokenizer name or path if not the same as model_name_or_path"
+        help=
+        "Optional pretrained tokenizer name or path if not the same as model_name_or_path"
     )
     tr_params.add_argument(
         "--cache_dir",
         default="",
         type=str,
-        help="Optional directory to store the pre-trained models downloaded from s3 (instread of the default one)"
+        help=
+        "Optional directory to store the pre-trained models downloaded from s3 (instread of the default one)"
     )
     tr_params.add_argument(
         "--block_size",
@@ -452,7 +459,8 @@ def parse_cli():
         "--stateless_tied",
         default=False,
         action="store_true",
-        help="Tie weights stateless trick. Note that shared weight may be sent in pipe"
+        help=
+        "Tie weights stateless trick. Note that shared weight may be sent in pipe"
     )
 
     # parameters of the partitioning script
@@ -464,7 +472,8 @@ def parse_cli():
         '--model_too_big',
         action='store_true',
         default=False,
-        help="if the model is too big run the whole partitioning process on CPU, and drink a cup of coffee in the meantime"
+        help=
+        "if the model is too big run the whole partitioning process on CPU, and drink a cup of coffee in the meantime"
     )
     parser.add_argument('--n_partitions', type=int, default=4)
     parser.add_argument('--output_file', default='gpt2')
@@ -481,7 +490,8 @@ def parse_cli():
         '--n_iter',
         type=int,
         default=10,
-        help="number of iteration used in order to profile the network and run analysis"
+        help=
+        "number of iteration used in order to profile the network and run analysis"
     )
     parser.add_argument(
         '--bandwidth_gps',
