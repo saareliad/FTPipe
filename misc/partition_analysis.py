@@ -101,6 +101,33 @@ def run_analysis(sample,
          add_comm_times_to_balance=add_comm_times_to_balance,
          stages_on_same_gpu=stages_on_same_gpu)
 
+    def get_seq_no_recomp_no_comm_times():
+        ((real_f_times, f_vars,
+          f_deviance), (real_b_times, b_vars,
+                        b_deviance), comm_volume_stats, nocomm_real_f_times,
+         nocomm_real_b_times, warnings_list) = profile_execution(
+             sample,
+             config,
+             n_iter + 1,
+             recomputation=False,
+             bw_GBps=bw_GBps,  # don't care
+             async_pipeline=False,  # don't care
+             add_comm_times_to_balance=add_comm_times_to_balance,  # don't care
+             stages_on_same_gpu=stages_on_same_gpu)  # don't care
+
+        b_seq_no_recomp_no_comm_times = sum(nocomm_real_b_times.values())
+        f_seq_no_recomp_no_comm_times = sum(nocomm_real_f_times.values())
+
+        # with commm
+        b_seq_no_recomp_with_comm_times = sum(real_b_times.values())
+        f_seq_no_recomp_with_comm_times = sum(real_f_times.values())
+
+        seq_times = ((b_seq_no_recomp_no_comm_times,
+                      f_seq_no_recomp_no_comm_times),
+                     (b_seq_no_recomp_with_comm_times,
+                      f_seq_no_recomp_with_comm_times))
+        return seq_times
+
     def get_comm_vol_str(comm_volume_stats):
         communication_volume = dict()
         for idx, stats in comm_volume_stats.items():
@@ -171,8 +198,13 @@ def run_analysis(sample,
     real_f_utilization = utilization(real_f_times, comp_comm_ratio_f)
     real_b_utilization = utilization(real_b_times, comp_comm_ratio_b)
 
-    expected_speedup = expected_speedup_after_partitioning(
-        real_f_times, real_b_times, nocomm_real_f_times, nocomm_real_b_times)
+    pipe_times = (real_f_times, real_b_times, nocomm_real_f_times,
+                  nocomm_real_b_times)
+
+    expected_speedup = expected_speedup_after_partitioning(*pipe_times)
+
+    expected_speedup_compared_to_seq_no_comm = expected_speedup_compared_to_seq(
+        pipe_times, get_seq_no_recomp_no_comm_times())
 
     def rounddict(d, x=2):
         return {k: round(v, x) for k, v in d.items()}
@@ -197,7 +229,7 @@ def run_analysis(sample,
             s += f"unique_stages_on_same_gpu: {unique_stages_on_same_gpu}\n"
 
         if edges is not None:
-            s += "cutting edges are edges between partitions\n"
+            s += f"cutting edges are edges between partitions\n"
             s += f"number of cutting edges: {len(edges)}\n\n"
             # TODO: for partitions on differnt devices...
 
@@ -219,7 +251,7 @@ def run_analysis(sample,
             s += f"avg diviation from the mean of real execution times ms\n"
             s += f"forward{rounddict(f_deviance)}\nbackward{rounddict(b_deviance)}\n"
 
-        s += "\nbalance is ratio of computation time between fastest and slowest parts."
+        s += f"\nbalance is ratio of computation time between fastest and slowest parts."
         s += " (between 0 and 1 higher is better)\n"
         if PRINT_THEORETICAL:
             s += f"theoretical sequential balance:\n"
@@ -231,7 +263,7 @@ def run_analysis(sample,
         s += f"forward {real_f_balance:.3f}\nbackward {real_b_balance:.3f}\n"
 
         if TOPO_AWARE:
-            s += "\ntopology aware balance is worst balance between 2 connected partitions\n"
+            s += f"\ntopology aware balance is worst balance between 2 connected partitions\n"
             s += f"theoretical sequential topology aware balance:\n"
             s += f"forwad {topology_aware_sequential_f_balance:.3f}\n"
             s += f"backward {topology_aware_sequential_b_balance:.3f}\n"
@@ -247,15 +279,20 @@ def run_analysis(sample,
         for idx, volume in comm_volume_str.items():
             s += f"{idx}: {volume}\n"
 
-        s += "\nCompuatation Communication ratio (comp/(comp+comm)):\n"
+        s += f"\nCompuatation Communication ratio (comp/(comp+comm)):\n"
         s += f"forward {comp_comm_ratio_f} \nbackward {comp_comm_ratio_b}\n"
 
         if UTILIZATION_SLOWDOWN_SPEEDUP:
-            s += "\nPipeline Slowdown: (compared to sequential executation with no communication)\n"
+            s += f"\nPipeline Slowdown: (compared to sequential executation with no communication, and same recompute policy)\n"
             s += f"forward {real_f_slowdown:.3f}\nbackward {real_b_slowdown:.3f}\n"
 
-            s += "\nExpected utilization by partition\n"
+            s += f"\nExpected utilization by partition\n"
             s += f"forward {real_f_utilization}\nbackward {real_b_utilization}\n"
+
+            # worstcase is important, it allows comparing between partitions
+            s += f"\nworstcase: bwd: {max(real_b_times.values()):.3f} fwd: {max(real_f_times.values()):.3f}"
+
+            s += f"\nexpected_speedup_compared_to_seq_no_recomp_no_comm: {expected_speedup_compared_to_seq_no_comm:.3f}"
 
             s += f"\nExpected speedup for {num_real_stages} partitions is: {expected_speedup:.3f}"
 
@@ -578,7 +615,8 @@ def cuda_backward(partition,
     # with torch.no_grad():
     inputs = [
         i.data.to('cuda').requires_grad_(inputs_requires_grad
-                                    and i.is_floating_point()) for i in inputs
+                                         and i.is_floating_point())
+        for i in inputs
     ]
     # Pre infer, so it won't get stuck in the the record.
     grad_tensors = infer_grad_tensors_for_partition(partition, inputs)
@@ -870,6 +908,38 @@ def expected_speedup_after_partitioning(fwd_times, bwd_times,
     expected_speedup = n_partitions / partitioning_slowdown
 
     return expected_speedup
+
+
+def expected_speedup_compared_to_seq(pipe_times, seq_times):
+
+    # Unpack: pipe
+    # NOTE: its a dict
+
+    (fwd_times, bwd_times, fwd_times_wo_comm, bwd_times_wo_comm) = pipe_times
+
+    # Unpack: seq
+    # NOTE: its sum of values
+
+    ((b_seq_no_recomp_no_comm_times, f_seq_no_recomp_no_comm_times),
+     (b_seq_no_recomp_with_comm_times,
+      f_seq_no_recomp_with_comm_times)) = seq_times
+
+    # pipe:
+    n_partitions = len(fwd_times)
+    worst_fwd = max(fwd_times.values())
+    worst_bwd = max(bwd_times.values())
+    pipe_fwd_plus_bwd = worst_fwd + worst_bwd
+    # pipe_fwd_plus_bwd /= n_partitions  # steady state.
+
+    # seq:
+    seq_fwd_plus_bwd = f_seq_no_recomp_no_comm_times + b_seq_no_recomp_no_comm_times
+
+    expected_speedup = seq_fwd_plus_bwd / pipe_fwd_plus_bwd
+
+    return expected_speedup
+
+    # worst_fwd = max(fwd_times.values())
+    # worst_bwd = max(bwd_times.values())
 
 
 def worst_balance(times):

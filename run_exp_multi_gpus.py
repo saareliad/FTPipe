@@ -6,7 +6,7 @@ BWD_TO_FWD_RATIO_FULL_EXP = [1, 2, 3, 4, 5, -1]
 BWD_TO_FWD_RATIO_BEST_TRANSFORMER = [2]
 TRANSFORMER_USED_RATIO = BWD_TO_FWD_RATIO_FULL_EXP
 
-N_ITER = [10]
+N_ITER = [50]
 
 # NOTE: values have to be in lists.
 
@@ -178,9 +178,8 @@ def bert_p4():
 
 
 if __name__ == "__main__":
-    # TODO: run again with better force no recomp.
-    # TODO: debug tied
-    # gpt2_tied_p4()
+
+    gpt2_tied_p4()
     gpt2_untied_p4()
-    # gpt2xl_tied_p8()
+    gpt2xl_tied_p8()
     gpt2xl_untied_p8()
