@@ -102,6 +102,7 @@ class AsyncPipePartitioner:
 
             partition_method, *args, **kw:
                 partitioning method + args and kw for it, execpt force_no_recomp_scopes.
+
         """
 
         if "force_no_recomp_scopes" in kw:
@@ -195,5 +196,7 @@ class AsyncPipePartitioner:
         self.stats = stats
         self.scopes = scopes
         self.graphs = graphs
+
+        print(f"Success! got {current_mistakes} mistakes after {self.n_runs} runs")
 
         return graph
