@@ -1,0 +1,21 @@
+name: py38
+channels:
+  - defaults
+dependencies:
+  - scikit-learn # here we start
+  - jupyter
+  - jupyterlab
+  - pandas
+  - tqdm
+  - sympy
+  - networkx
+  - matplotlib
+  - pip:
+    - ptvsd
+    - flake8
+    - autopep8
+    - transformers
+
+
+prefix: /home_local/saareliad/miniconda3/envs/py38
+

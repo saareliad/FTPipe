@@ -375,6 +375,8 @@ def get_optimizer_cls(args, has_gap_aware):
 
 
 def get_optimizer(args, optimizer_cls, parameters):
+    # without the list, python 3.8 pytorch 1.5: TypeError: object of type 'generator' has no len()
+    parameters = list(parameters)
     if len(parameters) == 0:
         if not getattr(args, "allow_stateless", False):
             raise ValueError(f"Got stateless partition {args.stage}")
