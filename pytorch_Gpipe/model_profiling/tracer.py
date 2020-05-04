@@ -88,8 +88,9 @@ class TracedFunction():
 
         # perform the operation
         args, kwargs = unpack_traced_args_and_kwargs(*args, **kwargs)
-        # TODO profile
+
         if self.should_profile():
+            # TODO profile
             print(f"proflie {self.original_function}")
 
         out.set_data(self.original_function(*args, **kwargs))

@@ -149,15 +149,19 @@ def partition_model(model: nn.Module,
     '''
     if basic_blocks is None:
         basic_blocks = ()
-    graph = build_graph(model,
-                        sample_batch,
-                        kwargs=kwargs,
-                        max_depth=max_depth,
-                        basic_blocks=basic_blocks,
-                        n_iter=n_iter,
-                        recomputation=recomputation,
-                        save_memory_mode=save_memory_mode,
-                        force_no_recomp_scopes=force_no_recomp_scopes)
+    # TODO profiling integration
+    # graph = build_graph(model,
+    #                     sample_batch,
+    #                     kwargs=kwargs,
+    #                     max_depth=max_depth,
+    #                     basic_blocks=basic_blocks,
+    #                     n_iter=n_iter,
+    #                     recomputation=recomputation,
+    #                     save_memory_mode=save_memory_mode,
+    #                     force_no_recomp_scopes=force_no_recomp_scopes)
+
+    graph = trace_module(model, args=sample_batch, kwargs=kwargs,
+                         depth=max_depth, basic_blocks=basic_blocks)
 
     graph = METIS_partition(graph,
                             nparts,

@@ -735,7 +735,7 @@ def edge_cut(graph):
     '''
     edges = []
     for n in graph.nodes:
-        for u in n.out_nodes:
+        for u in n.out_edges:
             if n.part != u.part:
                 edges.append((n, u))
 
@@ -804,7 +804,7 @@ def parallel_execution_analysis(node, part_idx, cache):
 
     longest_f, longest_b = 0, 0
 
-    for n in node.in_nodes:
+    for n in node.in_edges:
         f, b = parallel_execution_analysis(n, part_idx, cache)
         longest_f = max(f, longest_f)
         longest_b = max(b, longest_b)

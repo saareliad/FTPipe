@@ -9,6 +9,8 @@ MULT_FACTOR = 10000
 
 def node_weight_function(bwd_to_fwd_ratio=-1):
     def f(node: Node):
+        # TODO profiling integration
+        return 1
         # TODO: factory with recomputation.
         if node.type is NodeTypes.LAYER:
             if bwd_to_fwd_ratio < 0:
@@ -30,6 +32,8 @@ def node_weight_function(bwd_to_fwd_ratio=-1):
 
 def edge_weight_function(bw_GBps, bwd_to_fwd_ratio=-1):
     def f(u: Node, v: Node):
+        # TODO profiling integration
+        return 1
         if u.type is NodeTypes.CONSTANT or (u.valueType() in [int, None]
                                             or u.shape == (torch.Size([]), )):
             # no constant or scalars on boundries
