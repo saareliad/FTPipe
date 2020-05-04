@@ -1,3 +1,4 @@
+# THIS IS DEPRECATED
 # Some explanation
 
 * `cifar10` and `cifar100` dirs are for wrn16x4,
