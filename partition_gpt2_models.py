@@ -290,6 +290,17 @@ def partition_model(args,
         graph.save_as_pdf(args.output_file, ".")
         graph.serialize(args.output_file)
 
+    # Replace the dummy partition wtih cuda:0.
+    if args.stateless_tied:
+        try:
+            import subprocess
+            subprocess.check_output([
+                'sed', '-s', '-i', f"s/cuda:{args.n_partitions}/cuda:0/g",
+                args.output_file + ".py"
+            ])
+        except:
+            print("Failed to replaced tied dummy partition device")
+
     record_cmdline(args.output_file)
     module_path = args.output_file.replace("/", ".")
     generated = importlib.import_module(module_path)
