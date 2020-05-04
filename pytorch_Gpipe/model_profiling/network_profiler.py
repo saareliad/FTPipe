@@ -56,6 +56,8 @@ def profile_network(
     '''
     if kwargs is None:
         kwargs = {}
+    if basic_blocks is None:
+        basic_blocks = ()
     if not isinstance(sample_batch, tuple):
         sample_batch = (sample_batch, )
 
@@ -218,7 +220,7 @@ class Wrapper(nn.Module):
         self.output_dtype = []
         self.scope = scope
         self.save_memory_mode = save_memory_mode
-        self.recomputation = recomputation  # TODO
+        self.recomputation = recomputation
 
         if save_memory_mode:
             self.layer.to('cpu')
@@ -271,13 +273,12 @@ class Wrapper(nn.Module):
 
         self.forward_time.append(forward_time)
 
-
         if self.recomputation:
             # Then, we do fwd+bwd
             # FIXME: self.forward_cuda_mem...
             forward_time, outputs, self.forward_cuda_mem = time_op(self.device,
                                                                    self.layer, *detached_inputs, **kwargs)
-        
+
         # NOTE: the commented code is less accurate, but it can be usefull for memory problems
         # reduce outputs to calculate dummy loss
         # loss = torch.zeros(1, requires_grad=False, device=device)
@@ -297,7 +298,7 @@ class Wrapper(nn.Module):
                     has_grad_fn = True
             else:
                 grad_tensors.append(None)
-        
+
         # measure backward execution time
 
         # if loss.grad_fn is not None or loss.requires_grad:
@@ -390,16 +391,15 @@ class Wrapper(nn.Module):
 
 
 def time_op(device, func, *inputs: Tensors, **kwargs: Dict):
-    exec_time = 0
     cuda_mem = 0
     if (device.type == 'cuda'):
         torch.cuda.reset_max_memory_allocated(device=device)
         base_mem = torch.cuda.max_memory_allocated(device=device)
 
         # measure execution time
-        torch.cuda.synchronize(device=device)
         start = torch.cuda.Event(enable_timing=True)
         end = torch.cuda.Event(enable_timing=True)
+        torch.cuda.synchronize(device=device)
         start.record()
         out = func(*inputs, **kwargs)
         end.record()

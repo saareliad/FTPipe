@@ -517,6 +517,9 @@ class StageConfig():
     def fromDict(cls, state) -> 'StageConfig':
         stage_path = state['stage_cls']
         module_path, stage_name = stage_path.rsplit(".", 1)
+        # fix relative imports on windows
+        module_path = module_path.replace("\\", ".")
+
         stage_module = importlib.import_module(module_path)
         stage_cls = getattr(stage_module, stage_name)
 

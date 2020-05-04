@@ -11,11 +11,17 @@ def generate_init_method(class_name: str, layers: List[Node],
     '''creates the partition constructor and the mapping between layers and field ids
     '''
     class_decl = f"class {class_name}(nn.Module):"
+
+    layer_scopes_field, tensor_scope_field = generate_layer_and_tensor_scopes(layers,
+                                                                              buff_params)
+    basic_blocks_field = generate_basic_blocks_field(layers)
+
     init_dec = f"{tab}def __init__(self, layers, tensors):"
     super_init = f'{dtab}super({class_name}, self).__init__()'
     layer_names = [f'self.l_{idx}' for idx, _ in enumerate(layers)]
     layers_init = generate__init__layersStatements(layer_names,
                                                    [n.scope for n in layers])
+
     partition_fields = dict(zip(layers, layer_names))
 
     params, buffs = [], []
@@ -35,19 +41,48 @@ def generate_init_method(class_name: str, layers: List[Node],
     # we initialize it to expected device if DEBUG then the pipeline will set it to cpu device
     device = f"{dtab}self.device = torch.device('cuda:{device_id}')"
 
-    return '\n'.join([class_decl, init_dec, super_init, layers_init, tensor_init, device, lookup]) + '\n', partition_fields
+    return '\n'.join([class_decl, basic_blocks_field, layer_scopes_field, tensor_scope_field, init_dec, super_init, layers_init, tensor_init, device, lookup]) + '\n', partition_fields
+
+
+def generate_layer_and_tensor_scopes(layers: List[Node], buff_params: Set[Node]):
+    scope_field = ["LAYER_SCOPES={"]
+    for n in layers:
+        scope_field.append(f"{tab}'{n.scope}',")
+    scope_field.append("}")
+    scope_field = tab + f"\n{dtab}".join(scope_field)
+
+    tensor_field = ["TENSORS={"]
+    for n in buff_params:
+        tensor_field.append(f"{tab}'{n.scope}',")
+    tensor_field.append("}")
+    tensor_field = tab + f"\n{dtab}".join(tensor_field)
+
+    return scope_field, tensor_field
+
+
+def generate_basic_blocks_field(layers: List[Node]):
+    basic_blocks = set()
+    for n in layers:
+        layer_cls = n.scope.rsplit("/", maxsplit=1)[1]
+        layer_cls = layer_cls.rsplit("[", maxsplit=1)[0]
+        basic_blocks.add(layer_cls)
+
+    field = ["BASIC_BLOCKS=("]
+    for b in basic_blocks:
+        field.append(f"{tab}{b},")
+    field.append(")")
+
+    return tab + f"\n{dtab}".join(field)
 
 
 def generate__init__layersStatements(layer_names: List[str], full_names: List[str]) -> str:
     ''' generates partition field initialization statements\n
         and save the layer scopes in the self.scopes field
     '''
-    statements = [f'{dtab}# initializing partition layers',
-                  "self.scopes=[]"]
+    statements = [f'{dtab}# initializing partition layers']
 
     for field, full_name in zip(layer_names, full_names):
-        statements.extend([f"{field} = layers['{full_name}']",
-                           f"self.scopes.append('{full_name}')"])
+        statements.append(f"{field} = layers['{full_name}']")
     return f'\n{dtab}'.join(statements)
 
 

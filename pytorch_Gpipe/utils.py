@@ -19,7 +19,7 @@ Devices = Union[List[Device], Tuple[Device, ...]]
 
 
 def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
-                   basic_blocks: Optional[Iterable[nn.Module]] = None, full: bool = False) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
+                   basic_blocks: Tuple[nn.Module] = (), full: bool = False) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
     '''
     iterate over model layers yielding the layer,layer_scope,encasing_module
     Parameters:
@@ -38,8 +38,7 @@ def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
 
     for name, sub_module in module.named_children():
         scope = prefix + "/" + type(sub_module).__name__ + f"[{name}]"
-        if len(list(sub_module.children())) == 0 or ((basic_blocks is not None)
-                                                     and isinstance(sub_module, tuple(basic_blocks))) or depth == 0:
+        if len(list(sub_module.children())) == 0 or isinstance(sub_module, tuple(basic_blocks)) or depth == 0:
             if full:
                 yield sub_module, scope, module, True
             else:
@@ -47,8 +46,7 @@ def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
         else:
             if full:
                 yield sub_module, scope, module, False
-            yield from traverse_model(sub_module, depth - 1, prefix + "/" + type(
-                sub_module).__name__ + f"[{name}]", basic_blocks, full)
+            yield from traverse_model(sub_module, depth - 1, scope, basic_blocks, full)
 
 
 def traverse_params_buffs(module: nn.Module, prefix: Optional[str] = None) -> Iterator[Tuple[torch.tensor, str]]:

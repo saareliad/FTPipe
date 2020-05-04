@@ -130,7 +130,7 @@ class Graph():
             G = nx.Graph()
 
         for u in self.nodes:
-            for v in u.out_nodes:
+            for v in u.out_edges:
                 if edge_weight_function is None:
                     w = 1
                 else:
@@ -149,7 +149,8 @@ class Graph():
     def build_dot(self,
                   show_buffs_params: bool = True,
                   show_profiles: bool = True,
-                  edge_weight_function=None):
+                  edge_weight_function=None,
+                  node_weight_function=None):
         '''
         return a graphviz representation of the graph
         Parameters
@@ -252,6 +253,8 @@ class Graph():
                             node_label += " ms"
                         elif "memory" in k or "size" in k:
                             node_label += " MB"
+                if node_weight_function:
+                    node_label += f"\nweight: {node_weight_function(node)}"
 
                 dot.node(str(node_id), label=node_label,
                          fillcolor=colors[node.part])
@@ -304,7 +307,8 @@ class Graph():
                     directory: str,
                     show_buffs_params: bool = True,
                     show_profiles: bool = True,
-                    edge_weight_function=None):
+                    edge_weight_function=None,
+                    node_weight_function=None):
         '''
         save the rendered graph to a pdf file
 
@@ -320,7 +324,7 @@ class Graph():
             whether to display the nodes weight
         '''
         dot = self.build_dot(show_buffs_params, show_profiles=show_profiles,
-                             edge_weight_function=edge_weight_function)
+                             edge_weight_function=edge_weight_function, node_weight_function=node_weight_function)
         dot.format = "pdf"
         import os
         if os.path.exists(f"{directory}/{file_name}.pdf"):
@@ -414,4 +418,5 @@ class Graph():
 
         returns the created graph and a map between g's indices and self indices
         '''
-        raise NotImplementedError()
+        raise NotImplementedError(
+            "layers graph not implemented yet for new graph format")
