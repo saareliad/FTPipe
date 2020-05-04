@@ -11,10 +11,10 @@ from typing import Optional, Tuple, Iterator, Iterable, OrderedDict, Dict
 import collections
 from transformers.modeling_utils import Conv1D
 from torch.nn.modules.sparse import Embedding
-from models.normal.nlp.stateless import StatelessEmbedding
+from models.normal.NLP_models.stateless import StatelessEmbedding
 from torch.nn.modules.normalization import LayerNorm
 from torch.nn.modules.dropout import Dropout
-from models.normal.nlp.stateless import StatelessLinear
+from models.normal.NLP_models.stateless import StatelessLinear
 import os
 # this is an auto generated file do not edit unless you know what you are doing
 
@@ -34,10 +34,10 @@ def create_pipeline_configuration(DEBUG=False):
     basic_blocks = (Conv1D,Embedding,StatelessEmbedding,LayerNorm,Dropout,StatelessLinear)
     blocks_path = [ 'transformers.modeling_utils.Conv1D',
             'torch.nn.modules.sparse.Embedding',
-            'models.normal.nlp.stateless.StatelessEmbedding',
+            'models.normal.NLP_models.stateless.StatelessEmbedding',
             'torch.nn.modules.normalization.LayerNorm',
             'torch.nn.modules.dropout.Dropout',
-            'models.normal.nlp.stateless.StatelessLinear']
+            'models.normal.NLP_models.stateless.StatelessLinear']
     module_path = os.path.relpath(__file__).replace("/",".")[:-3]
     
 

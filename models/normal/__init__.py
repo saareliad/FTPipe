@@ -1,3 +1,3 @@
 from .WideResNet import WideResNet
 from .ResNet import ResNet, Bottleneck
-from .nlp import GPT2LMHeadModel, GPT2Model, StatelessGPT2Model, StatelessGPT2LMHeadModel
+from .NLP_models import GPT2LMHeadModel, GPT2Model, StatelessGPT2Model, StatelessGPT2LMHeadModel
