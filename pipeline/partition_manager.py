@@ -262,7 +262,7 @@ class SinglePartitionManager:
             self.bwd_recv_buffers = bwd_recv_buffers
 
             if not dtypes_and_shapes_are_equal:
-                self.fwd_recv_buffers_eval = _fwd_recv_buffers_eval(
+                self.fwd_recv_buffers_eval = self._fwd_recv_buffers_eval(
                     create=False)
             else:
                 # HACK: use same buffer!
