@@ -1,0 +1,424 @@
+{
+    "batch_dim": 0,
+    "depth": 10000,
+    "basic_blocks": [
+        "torch.nn.modules.sparse.Embedding",
+        "torch.nn.modules.normalization.LayerNorm",
+        "torch.nn.modules.dropout.Dropout",
+        "models.normal.NLP_models.stateless.StatelessLinear",
+        "models.normal.NLP_models.stateless.StatelessEmbedding",
+        "transformers.modeling_utils.Conv1D"
+    ],
+    "model_inputs": {
+        "input0": {
+            "shape": [
+                1,
+                1024
+            ],
+            "dtype": "torch.int64",
+            "is_batched": true
+        },
+        "input1": {
+            "shape": [
+                1,
+                1024
+            ],
+            "dtype": "torch.int64",
+            "is_batched": true
+        }
+    },
+    "model_outputs": {
+        "GPT2LMHeadModel/aten::nll_loss16393": {
+            "shape": [
+                1
+            ],
+            "dtype": "torch.float32",
+            "is_batched": false
+        }
+    },
+    "stages": {
+        "0": {
+            "inputs": {
+                "input0": {
+                    "shape": [
+                        1,
+                        1024
+                    ],
+                    "dtype": "torch.int64",
+                    "is_batched": true
+                }
+            },
+            "outputs": {
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_proj]": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/aten::add19753": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "GPT2LMHeadModel/Parameter[w_wte]": {
+                    "shape": [
+                        50257,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": false
+                }
+            },
+            "stage_cls": "results.gpt2xl_tied_p8._gpt2_xl_p8_lm_tied_r3.Partition0",
+            "devices": [
+                "cpu"
+            ]
+        },
+        "1": {
+            "inputs": {
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_proj]": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/aten::add19753": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "outputs": {
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_proj]": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/aten::add20857": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "stage_cls": "results.gpt2xl_tied_p8._gpt2_xl_p8_lm_tied_r3.Partition1",
+            "devices": [
+                "cpu"
+            ]
+        },
+        "2": {
+            "inputs": {
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_proj]": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/aten::add20857": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "outputs": {
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[16]/MLP[mlp]/Dropout[dropout]": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[16]/aten::add21961": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "stage_cls": "results.gpt2xl_tied_p8._gpt2_xl_p8_lm_tied_r3.Partition2",
+            "devices": [
+                "cpu"
+            ]
+        },
+        "3": {
+            "inputs": {
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[16]/MLP[mlp]/Dropout[dropout]": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[16]/aten::add21961": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "outputs": {
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[23]/LayerNorm[ln_2]": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[23]/aten::add23249": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "stage_cls": "results.gpt2xl_tied_p8._gpt2_xl_p8_lm_tied_r3.Partition3",
+            "devices": [
+                "cpu"
+            ]
+        },
+        "4": {
+            "inputs": {
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[23]/LayerNorm[ln_2]": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[23]/aten::add23249": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "outputs": {
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[29]/aten::add24377": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "stage_cls": "results.gpt2xl_tied_p8._gpt2_xl_p8_lm_tied_r3.Partition4",
+            "devices": [
+                "cpu"
+            ]
+        },
+        "5": {
+            "inputs": {
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[29]/aten::add24377": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "outputs": {
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[35]/MLP[mlp]/Dropout[dropout]": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[35]/aten::add25457": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "stage_cls": "results.gpt2xl_tied_p8._gpt2_xl_p8_lm_tied_r3.Partition5",
+            "devices": [
+                "cpu"
+            ]
+        },
+        "6": {
+            "inputs": {
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[35]/MLP[mlp]/Dropout[dropout]": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[35]/aten::add25457": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "outputs": {
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[41]/aten::add26585": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[42]/Attention[attn]/aten::permute26721": {
+                    "shape": [
+                        1,
+                        1024,
+                        25,
+                        64
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "stage_cls": "results.gpt2xl_tied_p8._gpt2_xl_p8_lm_tied_r3.Partition6",
+            "devices": [
+                "cpu"
+            ]
+        },
+        "7": {
+            "inputs": {
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[41]/aten::add26585": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "GPT2LMHeadModel/GPT2Model[transformer]/Block[42]/Attention[attn]/aten::permute26721": {
+                    "shape": [
+                        1,
+                        1024,
+                        25,
+                        64
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "outputs": {
+                "GPT2LMHeadModel/GPT2Model[transformer]/LayerNorm[ln_f]": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "stage_cls": "results.gpt2xl_tied_p8._gpt2_xl_p8_lm_tied_r3.Partition7",
+            "devices": [
+                "cpu"
+            ]
+        },
+        "8": {
+            "inputs": {
+                "GPT2LMHeadModel/GPT2Model[transformer]/LayerNorm[ln_f]": {
+                    "shape": [
+                        1,
+                        1024,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "GPT2LMHeadModel/Parameter[w_wte]": {
+                    "shape": [
+                        50257,
+                        1600
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": false
+                },
+                "input1": {
+                    "shape": [
+                        1,
+                        1024
+                    ],
+                    "dtype": "torch.int64",
+                    "is_batched": true
+                }
+            },
+            "outputs": {
+                "GPT2LMHeadModel/aten::nll_loss16393": {
+                    "shape": [
+                        1
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": false
+                }
+            },
+            "stage_cls": "results.gpt2xl_tied_p8._gpt2_xl_p8_lm_tied_r3.Partition8",
+            "devices": [
+                "cpu"
+            ]
+        }
+    }
+}

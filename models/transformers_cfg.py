@@ -50,6 +50,17 @@ def gpt2xl_8p_tied():
                 stateless_tied=True)
 
 
+# GPipe version for the functions, as it has different balance.
+def gpt2_4p_tied_gpipe():
+    return gpt2_4p_tied()
+def gpt2_4p_untied_gpipe():
+    return gpt2_4p_untied()
+def gpt2xl_8p_tied_gpipe():
+    return gpt2xl_8p_tied()
+def gpt2xl_8p_untied_gpipe():
+    return gpt2xl_8p_untied()
+
+
 functions_list = getmembers(
     sys.modules[__name__],
     lambda o: isfunction(o) and o.__module__ == __name__)
