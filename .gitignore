@@ -1,12 +1,4 @@
-data/
-checkpoints/
-results/
-multithreaded_pipe/
-logs/
-cpp/
-old_bash_scripts/
-figures/
-csv/
+
 # Created by https://www.gitignore.io/api/python,pycharm,windows,osx,linux
 
 ### Linux ###
@@ -288,3 +280,17 @@ $RECYCLE.BIN/
 *.out
 
 .vscode/settings.json
+data/
+checkpoints/
+results/
+multithreaded_pipe/
+logs/
+cpp/
+old_bash_scripts/
+figures/
+csv/
+
+nsys_profile.sh
+py38_from_history.yml
+py38.yml
+analysis/load_experiment.py
