@@ -367,32 +367,19 @@ class Graph():
             node_states.append(state)
 
         return{"node_data": node_states,
-               "output_id": self.output_ids,
+               "output_ids": self.output_ids,
                "depth": self.depth,
                "basic_blocks": self.basic_blocks
                }
 
-    @classmethod
-    def deserialize(cls, path: str) -> "Graph":
-        '''
-        deserializes the graph from the path returning a Graph object
-
-        Parameters:
-        -------------
-        path:
-        the path to where the graph is stored
-        '''
-        if not path.endswith(".graph"):
-            path += ".graph"
-
-        graph_data = pickle.load(open(path, "rb"))
-        output_id = graph_data['output_id']
-        depth = graph_data['depth']
-        basic_blocks = graph_data['basic_blocks']
+    def load_state(self, state):
+        output_ids = state['output_ids']
+        depth = state['depth']
+        basic_blocks = state['basic_blocks']
 
         nodes = dict()
 
-        states = graph_data['node_data']
+        states = state['node_data']
         for state in states:
             node = Node(state['type'], state['id'], state['scope'])
             nodes[node.id] = node
@@ -409,14 +396,60 @@ class Graph():
         for node in nodes.values():
             node.out_edges = {nodes[n] for n in states[node.id]['out_edges']}
 
-        return cls(nodes, output_id, depth, basic_blocks)
+        self._nodes = nodes
+        self.basic_blocks = basic_blocks
+        self.depth = depth
+        self.output_ids = output_ids
+
+        return self
+
+    @classmethod
+    def deserialize(cls, path: str) -> "Graph":
+        '''
+        deserializes the graph from the path returning a Graph object
+
+        Parameters:
+        -------------
+        path:
+        the path to where the graph is stored
+        '''
+        if not path.endswith(".graph"):
+            path += ".graph"
+
+        graph_data = pickle.load(open(path, "rb"))
+
+        return cls(None, None, None, None).load_state(graph_data)
 
     def layers_graph(self) -> Tuple["Graph", Dict[int, int]]:
         '''
-        creates a graph g with nodes of types OP PYTHON_PRIMITIVE and CONSTANT removed
+        creates a graph g with nodes of type CONSTANT removed
         leaving only inputs layers and params/buffers
 
         returns the created graph and a map between g's indices and self indices
         '''
-        raise NotImplementedError(
-            "layers graph not implemented yet for new graph format")
+        new_nodes = dict()
+        output_ids = []
+
+        new_graph = Graph(None, None, None, None).load_state(self.state())
+
+        num_removed = 0
+        lookup = dict()
+        for node in new_graph._nodes.values():
+            if node.type is NodeTypes.CONSTANT:
+                for o in node.out_edges:
+                    o.kwargs.pop(node, None)
+                    o.args = [n for n in o.args if n is not node]
+                num_removed += 1
+            else:
+                old_id = node.id
+                new_id = old_id - num_removed
+                if node.id in new_graph.output_ids:
+                    output_ids.append(new_id)
+                node.id = new_id
+                new_nodes[new_id] = node
+                lookup[new_id] = old_id
+
+        new_graph._nodes = new_nodes
+        new_graph.output_ids = output_ids
+
+        return new_graph, lookup
