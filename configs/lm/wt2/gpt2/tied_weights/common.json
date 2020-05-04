@@ -7,7 +7,7 @@
     "distributed_backend": "mpi",
     "task": "lm_sep",
     "use_pre_loaded_input": true,
-    "model": "gpt2_tied_lm_5p",
+    "model": "gpt2_4p_tied",
     "stage_to_device_map": [0, 1, 2, 3, 0],
     "model_name_or_path": "gpt2",
     "dataset": "wt2",
