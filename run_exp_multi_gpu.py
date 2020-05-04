@@ -5,7 +5,7 @@ ALL_SEEDS = [42, 20202020, 77777777, 314159, 1322019]
 
 def main():
     COMMAND = "mpirun -np 5 python main.py"
-    cfgs_dir = "configs/lm/wt2/gpt2/tied_weights/"
+    cfgs_dir = "configs/lm/wt2/gpt2/tied/"
     all_algs = ["gpipe"]
 
     param_grid = {
@@ -20,7 +20,7 @@ def main():
 
 def gpt2_tied():
     COMMAND = "mpirun -np 5 python main.py"
-    cfgs_dir = "configs/lm/wt2/gpt2/tied_weights/"
+    cfgs_dir = "configs/lm/wt2/gpt2/tied/"
     all_algs = ["stale", "seq", "ws", "msnag", "ws_msnag_ga", "ws_msnag_ga_jfl", "ws_msnag"]
 
     param_grid = {
