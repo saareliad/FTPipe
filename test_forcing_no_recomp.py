@@ -12,9 +12,9 @@ import os
 from models.normal.NLP_models.stateless import StatelessLinear, StatelessEmbedding, StatelessSequential, CompositionStatelessSequential
 
 # For debugging inside docker.
-import ptvsd
 DEBUG = False
 if DEBUG:
+    import ptvsd
     port = 12345
     address = ('0.0.0.0', port)
     print(f"-I- waiting for attachment on {address}")

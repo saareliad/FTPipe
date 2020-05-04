@@ -572,8 +572,8 @@ def get_grad_tensors(flattened_outputs):
     """Infer grad_tensors to be used with:
             torch.autograd.backward(tensors=flattened_outputs, grad_tensors=grad_tensors)
     """
-    #input_gradient only if the output requires grad
-    #for ex. bert passes a mask which does not require grad
+    # input_gradient only if the output requires grad
+    # for ex. bert passes a mask which does not require grad
     grad_tensors = []
     for out in flattened_outputs:
         if isinstance(out, torch.Tensor) and out.requires_grad:
@@ -613,9 +613,10 @@ def cuda_backward(partition,
     '''
     # now we move inputs to GPU
     # with torch.no_grad():
+    # explicit detach_ to not record the cpu->gpu transfer
     inputs = [
-        i.data.to('cuda').requires_grad_(inputs_requires_grad
-                                         and i.is_floating_point())
+        i.to('cuda').detach_().requires_grad_(inputs_requires_grad
+                                              and i.is_floating_point())
         for i in inputs
     ]
     # Pre infer, so it won't get stuck in the the record.
@@ -625,9 +626,12 @@ def cuda_backward(partition,
 
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
+    # synchronize to not transfer times
+    # and include infer_grad_tensors_for_partition
+    # in the measurement
+    torch.cuda.synchronize(device='cuda')
 
     if recomputation:
-        torch.cuda.synchronize(device='cuda')
         start.record()
         outputs = partition(*inputs)
         flattened_outputs = flatten(outputs)
@@ -637,7 +641,7 @@ def cuda_backward(partition,
         torch.cuda.synchronize(device='cuda')
         start.record()
 
-    #compute gradient only for outputs that require grad
+    # compute gradient only for outputs that require grad
     flattened_outputs = filter(lambda t: t.requires_grad, flattened_outputs)
 
     torch.autograd.backward(tensors=flattened_outputs,
