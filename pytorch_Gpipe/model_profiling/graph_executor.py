@@ -1,16 +1,26 @@
+import abc
 import operator
-from typing import List
+from typing import List, Tuple, Optional, Dict, Callable, Any
 from importlib import import_module
 from torch import nn
 from pytorch_Gpipe.model_profiling import Node, NodeTypes, Graph, used_namespaces
 from pytorch_Gpipe.utils import tensorDict, layerDict
 
 
-def execute_graph(model: nn.Module, graph: Graph, args=(), kwargs=None):
+def execute_graph(model: nn.Module, graph: Graph, args=(), kwargs=None, pre_hook=None, post_hook=None):
     if kwargs is None:
         kwargs = dict()
     if not isinstance(args, tuple):
         args = tuple(args)
+
+    if pre_hook is None:
+        pre_hook = IdentityPreHook()
+
+    if post_hook is None:
+        post_hook = IdentityPostHook()
+
+    pre_hook = apply_pre_hook(pre_hook)
+    post_hook = apply_post_hook(post_hook)
 
     nodes: List[Node] = sorted(graph.nodes, key=lambda n: n.id)
 
@@ -41,23 +51,26 @@ def execute_graph(model: nn.Module, graph: Graph, args=(), kwargs=None):
             ready_expressions[node] = node.constant_value
             continue
 
+        args, kwargs = fetch_args_kwargs(node, ready_expressions)
+
         if node.type is NodeTypes.LAYER:
             print(f"layer call {node.scope}")
             l = layers[node.scope]
-            args, kwargs = fetch_args_kwargs(node, ready_expressions)
-            ready_expressions[node] = l(*args, **kwargs)
+            args, kwargs = pre_hook(node, l, args, kwargs)
+            outputs = l(*args, **kwargs)
+            ready_expressions[node] = post_hook(node, l, args, kwargs, outputs)
 
         elif node.type is NodeTypes.PRIMITIVE:
             print(f"building container {node.value_type} {node.scope}")
-            args, kwargs = fetch_args_kwargs(node, ready_expressions)
             ready_expressions[node] = create_container_construct(node,
                                                                  args,
                                                                  kwargs)
         else:
             assert node.type is NodeTypes.OP
-            ready_expressions[node] = call_function(ready_expressions,
-                                                    namespaces,
-                                                    node)
+            ready_expressions[node] = call_function(namespaces,
+                                                    node,
+                                                    args, kwargs,
+                                                    pre_hook, post_hook)
 
         # ensure we discard intermediate values as soon as possible to conserve memory
         for n in node.in_edges:
@@ -88,42 +101,34 @@ def create_container_construct(node, args, kwargs):
         return slice(*args)
 
 
-def call_function(ready_expressions, namespaces, node):
+def call_function(namespaces, node, args, kwargs, pre_hook, post_hook):
     op_path = node.scope.rsplit("/", maxsplit=1)[1]
     namespace, func_name = op_path.split("::")
-
     # function call
     if namespace in namespaces:
-        args, kwargs = fetch_args_kwargs(node, ready_expressions)
-
         print(f"calling {op_path}")
         namespace = import_module(namespace)
         function = getattr(namespace, func_name)
-        output = function(*args, **kwargs)
-
     else:
-        args, kwargs = fetch_args_kwargs(node, ready_expressions)
-        self_arg = args[0]
-
         if "__" not in func_name:
             print(f"calling instance method {op_path}")
-            instance_method = getattr(self_arg, func_name)
-            output = instance_method(*(args[1:]),
-                                     **kwargs)
-
+            function = getattr(type(args[0]), func_name)
         elif func_name == "__getattribute__":
             # __getattribute__ is implemented for all python objects
-            output = getattr(self_arg, args[1])
+            return getattr(args[0], args[1])
         else:
             assert len(kwargs) == 0, "no kwarg in magic method"
             if hasattr(operator, func_name):
                 print(f"calling magic {op_path} using operator")
-                magic_method = getattr(operator, func_name)
-                output = magic_method(*args)
+                function = getattr(operator, func_name)
             else:
                 print(f"calling magic {op_path} using the instance")
-                magic_method = getattr(self_arg, func_name)
-                output = magic_method(*(args[1:]))
+                function = getattr(type(args[0]), func_name)
+
+    args, kwargs = pre_hook(node, function, args, kwargs)
+    output = function(*args, **kwargs)
+    output = post_hook(node, function, args, kwargs, output)
+
     return output
 
 
@@ -132,3 +137,48 @@ def fetch_args_kwargs(node, ready_expressions):
     kwargs = {k: ready_expressions[n] for n, k in node.kwargs.items()}
 
     return args, kwargs
+
+
+def apply_pre_hook(pre_hook):
+    def wrapper(node: Node, function: Callable, args: tuple, kwargs: dict):
+        modified_args, modified_kwargs = pre_hook(node, function, args, kwargs)
+        if not (modified_args is None):
+            args = modified_args
+        if not (modified_kwargs is None):
+            kwargs = modified_kwargs
+
+        return args, kwargs
+
+    return wrapper
+
+
+def apply_post_hook(post_hook):
+    def wrapper(node: Node, function: Callable, args: tuple, kwargs: dict, outputs):
+        modified_outputs = post_hook(node, function, args, kwargs, outputs)
+        if not (modified_outputs is None):
+            outputs = modified_outputs
+        return outputs
+
+    return wrapper
+
+
+class PreHook(abc.ABC):
+    @abc.abstractmethod
+    def __call__(self, node: Node, function: Callable, args: tuple, kwargs: dict) -> Tuple[Optional[Tuple], Optional[Dict]]:
+        pass
+
+
+class PostHook(abc.ABC):
+    @abc.abstractmethod
+    def __call__(self, node: Node, function: Callable, args: tuple, kwargs: Dict, outputs: Any) -> Optional:
+        pass
+
+
+class IdentityPreHook(PreHook):
+    def __call__(self, node: Node, function: Callable, args: tuple, kwargs: dict) -> Tuple[Optional[Tuple], Optional[Dict]]:
+        return args, kwargs
+
+
+class IdentityPostHook(PostHook):
+    def __call__(self, node: Node, function: Callable, args: tuple, kwargs: Dict, outputs: Any) -> Optional:
+        return outputs
