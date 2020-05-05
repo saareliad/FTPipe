@@ -576,7 +576,10 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
     if not is_valid:
         raise RuntimeError(errors)
 
-    return Graph(nodes, output_ids, depth, basic_blocks)
+    # record input kwargs explicitly as they are not passed by position
+    input_kw_ids = {v.id: k for k, v in kwargs.items()}
+
+    return Graph(nodes, input_kw_ids, output_ids, depth, basic_blocks)
 
 
 def prepare_args_and_kwargs(args=(), kwargs=None):

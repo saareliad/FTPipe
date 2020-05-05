@@ -27,7 +27,7 @@ class Node():
         self.scope = scope
 
         self.part = 0
-        self.profile = None
+        self.weight = None
 
         self.out_edges = set()
         self.args = []
@@ -62,8 +62,9 @@ EdgeWeightFunction = Callable[[Tuple[Node, Node]], int]
 
 
 class Graph():
-    def __init__(self, nodes: GraphNodes, output_ids: List[int], depth: int, basic_blocks: Tuple[nn.Module, ...]):
+    def __init__(self, nodes: GraphNodes, input_kw_ids, output_ids: List[int], depth: int, basic_blocks: Tuple[nn.Module, ...]):
         self._nodes: GraphNodes = nodes
+        self.input_kw_ids = input_kw_ids
         self.output_ids = output_ids
         self.depth = depth
         self.basic_blocks = basic_blocks
@@ -239,13 +240,15 @@ class Graph():
                     node_label += "\nmodel output"
                 if node.type is NodeTypes.IN:
                     node_label += "\nmodel input"
+                if node.id in self.input_kw_ids:
+                    node_label += f"\nkwarg: {self.input_kw_ids[node.id]}"
                 if node.type is NodeTypes.CONSTANT:
                     node_label += f"\nvalue: {node.constant_value}"
 
                 if issubclass(node.value_type, Tensor):
                     node_label += f"\ntensor of type: {node.tensor_dtype}\nshape: {node.tensor_shape}"
 
-                if show_profiles and node.profile:
+                if show_profiles and node.weight:
                     node_label = f"{node_label}\nProfile:"
                     for k, v in node.weight._asdict().items():
                         node_label += f"\n{k}:{v}"
@@ -355,7 +358,7 @@ class Graph():
         node_states = []
         for node in self.nodes:
             state = dict(id=node.id, scope=node.scope, type=node.type,
-                         part=node.part, profile=node.profile,
+                         part=node.part, weight=node.weight,
                          out_edges=[n.id for n in node.out_edges],
                          args=[n.id for n in node.args],
                          kwargs={n.id: kw for n,
@@ -367,6 +370,7 @@ class Graph():
             node_states.append(state)
 
         return{"node_data": node_states,
+               "input_kw_ids": self.input_kw_ids,
                "output_ids": self.output_ids,
                "depth": self.depth,
                "basic_blocks": self.basic_blocks
@@ -376,6 +380,7 @@ class Graph():
         output_ids = state['output_ids']
         depth = state['depth']
         basic_blocks = state['basic_blocks']
+        input_kw_ids = state['input_kw_ids']
 
         nodes = dict()
 
@@ -385,7 +390,7 @@ class Graph():
             nodes[node.id] = node
 
             node.part = state['part']
-            node.profile = state['profile']
+            node.weight = state['weight']
             node.args = [nodes[n] for n in state['args']]
             node.kwargs = {nodes[n]: kw for n, kw in state['kwargs'].items()}
             node.constant_value = state['constant_value']
@@ -400,6 +405,7 @@ class Graph():
         self.basic_blocks = basic_blocks
         self.depth = depth
         self.output_ids = output_ids
+        self.input_kw_ids = input_kw_ids
 
         return self
 
@@ -418,7 +424,7 @@ class Graph():
 
         graph_data = pickle.load(open(path, "rb"))
 
-        return cls(None, None, None, None).load_state(graph_data)
+        return cls(None, None, None, None, None).load_state(graph_data)
 
     def layers_graph(self) -> Tuple["Graph", Dict[int, int]]:
         '''
@@ -430,7 +436,8 @@ class Graph():
         new_nodes = dict()
         output_ids = []
 
-        new_graph = Graph(None, None, None, None).load_state(self.state())
+        new_graph = Graph(None, None, None, None,
+                          None).load_state(self.state())
 
         num_removed = 0
         lookup = dict()
