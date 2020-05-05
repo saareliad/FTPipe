@@ -38,7 +38,7 @@ def create_pipeline_configuration(DEBUG=False):
             'torch.nn.modules.dropout.Dropout',
             'torch.nn.modules.linear.Linear',
             'transformers.modeling_utils.Conv1D']
-    module_path = 'models.partitioned.gpt2xl_8p_untied'
+    module_path = 'models.partitioned.old_gpt2xl_8p_untied'
     
 
     # creating configuration

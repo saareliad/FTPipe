@@ -7,7 +7,6 @@ from .normal import GPT2LMHeadModel, GPT2Model, StatelessGPT2LMHeadModel
 import sys
 from inspect import getmembers, isfunction
 
-
 # We use this to get cfg_class, model_class, and tokenizer_class
 MODEL_TYPES = {
     'gpt2': (GPT2Config, GPT2Model, GPT2Tokenizer),
@@ -18,7 +17,8 @@ MODEL_TYPES = {
 # NOTE: some of these configs are just for this repo, see
 # `models.transformers_utils.pretrained_model_config_and_tokenizer`
 
-def gpt2_4p_untied():
+
+def gpt2_p4_untied():
     return dict(model_type='gpt2_lm_stateless',
                 model_name_or_path='gpt2',
                 do_lower_case=False,
@@ -26,7 +26,7 @@ def gpt2_4p_untied():
                 stateless_tied=False)
 
 
-def gpt2_4p_tied():
+def gpt2_p4_tied():
     return dict(model_type='gpt2_lm_stateless',
                 model_name_or_path='gpt2',
                 do_lower_case=False,
@@ -34,7 +34,7 @@ def gpt2_4p_tied():
                 stateless_tied=True)
 
 
-def gpt2xl_8p_untied():
+def old_gpt2xl_8p_untied():
     return dict(model_type='gpt2_lm_stateless',
                 model_name_or_path='gpt2-xl',
                 do_lower_case=False,
@@ -42,7 +42,15 @@ def gpt2xl_8p_untied():
                 stateless_tied=False)
 
 
-def gpt2xl_8p_tied():
+def gpt2xl_p8_untied():
+    return dict(model_type='gpt2_lm_stateless',
+                model_name_or_path='gpt2-xl',
+                do_lower_case=False,
+                output_past=False,
+                stateless_tied=False)
+
+
+def gpt2xl_p8_tied():
     return dict(model_type='gpt2_lm_stateless',
                 model_name_or_path='gpt2-xl',
                 do_lower_case=False,
@@ -51,14 +59,20 @@ def gpt2xl_8p_tied():
 
 
 # GPipe version for the functions, as it has different balance.
-def gpt2_4p_tied_gpipe():
+def gpt2_p4_tied_gpipe():
     return gpt2_4p_tied()
-def gpt2_4p_untied_gpipe():
+
+
+def gpt2_p4_untied_gpipe():
     return gpt2_4p_untied()
-def gpt2xl_8p_tied_gpipe():
+
+
+def gpt2xl_p8_tied_gpipe():
     return gpt2xl_8p_tied()
-def gpt2xl_8p_untied_gpipe():
-    return gpt2xl_8p_untied()
+
+
+def gpt2xl_p8_untied_gpipe():
+    return gpt2xl_p8_untied()
 
 
 functions_list = getmembers(

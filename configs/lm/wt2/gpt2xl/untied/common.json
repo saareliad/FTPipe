@@ -7,7 +7,7 @@
     "out_filename": "wd",
     "distributed_backend": "mpi",
     "task": "lm_sep",
-    "model": "gpt2xl_8p_untied",
+    "model": "old_gpt2xl_8p_untied",
     "model_name_or_path": "gpt2-xl",
     "dataset": "wt2",
     "trainer": {
