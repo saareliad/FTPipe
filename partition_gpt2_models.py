@@ -32,7 +32,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset, RandomSampler
 import warnings
 import sys
-from partition_scripts_utils import ParseMetisOpts, ParsePartitioningOpts, record_cmdline
+from partition_scripts_utils import ParseMetisOpts, ParsePartitioningOpts, record_cmdline, run_x_tries_until_no_fail
 from heuristics import edge_weight_function, node_weight_function
 from transformers import (
     BertConfig,
@@ -80,26 +80,6 @@ MODEL_CLASSES = {
 MODEL_CLASSES_LM_HEAD_STATELESS_TIED = {
     'gpt2': (GPT2Config, StatelessGPT2LMHeadModel, GPT2Tokenizer),  # TODO:
 }
-
-
-def run_x_tries_until_no_fail(func, number_of_tries, *args, **kw):
-    count = 0
-    success = False
-    res = None
-
-    while number_of_tries < 0 or count < number_of_tries:
-
-        try:
-            res = func(*args, **kw)
-            success = True
-            count += 1
-            break
-        except:
-            count += 1
-
-    print(f"running function got succcess={success} after {count} attempts")
-    return res
-
 
 class TextDataset(Dataset):
     def __init__(self, tokenizer, args, file_path='train', block_size=512):
