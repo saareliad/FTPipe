@@ -3,6 +3,7 @@ from itertools import chain
 import torch
 from torch import Tensor
 from .tracer import NodeTypes
+from ..utils import nested_map
 
 
 class LayerProfiler():
@@ -140,19 +141,12 @@ class LayerProfiler():
 
     @staticmethod
     def detach_tensors(ts):
-        if isinstance(ts, (list, tuple, set)):
-            return type(ts)(LayerProfiler.detach_tensors(t) for t in ts)
-        elif isinstance(ts, dict):
-            return {k: LayerProfiler.detach_tensors(v) for k, v in ts.items()}
-        elif isinstance(ts, slice):
-            start = LayerProfiler.detach_tensors(ts.start)
-            stop = LayerProfiler.detach_tensors(ts.stop)
-            step = LayerProfiler.detach_tensors(ts.step)
-            return slice(start=start, stop=stop, step=step)
-        elif isinstance(ts, Tensor):
-            return ts.clone().detach().requires_grad_(ts.requires_grad)
-        else:
-            return ts
+        def detach_if_tensor(t):
+            if isinstance(t, Tensor):
+                return t.clone().detach().requires_grad_(t.requires_grad)
+            return t
+
+        return nested_map(detach_if_tensor, ts)
 
     @staticmethod
     def avg_time(times):

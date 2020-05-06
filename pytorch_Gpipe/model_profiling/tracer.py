@@ -89,10 +89,6 @@ class TracedFunction():
         # perform the operation
         args, kwargs = unpack_traced_args_and_kwargs(*args, **kwargs)
 
-        if self.should_profile():
-            # TODO profile
-            print(f"proflie {self.original_function}")
-
         out.set_data(self.original_function(*args, **kwargs))
 
         return out
@@ -101,9 +97,6 @@ class TracedFunction():
         setattr(self.namespace,
                 self.function_name,
                 self.original_function)
-
-    def should_profile(self):
-        return "torch" in self.namespace.__name__
 
 
 def used_namespaces():
@@ -172,10 +165,6 @@ def delegate_to_traced_value(func):
         # so we first invoke them through the operator module who provided functional bindings to most of the __magic__
         # if operator does not have binding for the invoked function we fall back to invoking it using the class method
         # passing an explicit self argument
-        if issubclass(NODES[traced_self.id].value_type, Tensor):
-            # TODO profile
-            print(f"profile magic {op_name}")
-
         try:
             actual_op = getattr(operator, op_name)
             out.set_data(actual_op(*args))
@@ -260,8 +249,7 @@ class TracedValue(object):
 
         # perform the operation
         args, kwargs = unpack_traced_args_and_kwargs(*args, **kwargs)
-        # TODO profile
-        print(f"profile {op}")
+
         out.set_data(func(*args, **kwargs))
 
         return out
@@ -458,16 +446,10 @@ class TracedInstanceFunction(object):
         # self._func = a.func
         # self._func() is equivalent to a.func() equivalent to type(a).func(a)
         # the a_self is baked in implicitly inside of self._func
-        if self.should_profile():
-            # TODO profile
-            print(f"profile {self.namespace}::{self._func.__name__}")
 
         out.set_data(self._func(*args, **kwargs))
 
         return out
-
-    def should_profile(self):
-        return issubclass(NODES[self.self_id].value_type, Tensor)
 
 
 class TracedLayer(nn.Module):
@@ -504,8 +486,7 @@ class TracedLayer(nn.Module):
             out = TracedValue(NodeTypes.LAYER, "")
 
             disable_function_tracing()
-            # TODO profile
-            print(f"profile {out.scope}")
+
             connect_inputs_to_output(out.id, args, kwargs)
             args, kwargs = unpack_traced_args_and_kwargs(*args, **kwargs)
 

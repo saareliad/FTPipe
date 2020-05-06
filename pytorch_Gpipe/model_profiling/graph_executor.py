@@ -1,11 +1,18 @@
 import abc
 import operator
-from typing import List, Tuple, Optional, Dict, Callable, Any
-from importlib import import_module
-from torch import nn
-from pytorch_Gpipe.model_profiling import Node, NodeTypes, Graph, used_namespaces
-from pytorch_Gpipe.utils import tensorDict, layerDict
 from functools import wraps
+from importlib import import_module
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+import torch
+from torch import nn
+from torch import Tensor
+
+from pytorch_Gpipe.model_profiling import (Graph, Node, NodeTypes,
+                                           used_namespaces)
+from pytorch_Gpipe.utils import layerDict, tensorDict
+
+from ..utils import nested_map
 
 
 class PreHook(abc.ABC):
@@ -34,7 +41,7 @@ class PostHook(abc.ABC):
         pass
 
 
-def execute_graph(model: nn.Module, graph: Graph, args=(), kwargs=None, pre_hook: Optional[PreHook] = None, post_hook: Optional[PostHook] = None):
+def execute_graph(model: nn.Module, graph: Graph, args=(), kwargs=None, save_memory=False, pre_hook: Optional[PreHook] = None, post_hook: Optional[PostHook] = None):
     if kwargs is None:
         kwargs = dict()
     if not isinstance(args, tuple):
@@ -48,6 +55,13 @@ def execute_graph(model: nn.Module, graph: Graph, args=(), kwargs=None, pre_hook
 
     pre_hook = apply_pre_hook(pre_hook)
     post_hook = apply_post_hook(post_hook)
+
+    cpu_device = torch.device('cpu')
+    cuda_device = torch.device('cuda')
+
+    if save_memory:
+        args, kwargs = nested_move(args, kwargs, cpu_device)
+        model = model.cpu()
 
     nodes: List[Node] = sorted(graph.nodes, key=lambda n: n.id)
 
@@ -75,7 +89,14 @@ def execute_graph(model: nn.Module, graph: Graph, args=(), kwargs=None, pre_hook
             continue
 
         if node.type is NodeTypes.CONSTANT:
-            ready_expressions[node] = node.constant_value
+            v = node.constant_value
+
+            if save_memory and isinstance(v, torch.device):
+                torch.device = cpu_device
+            elif isinstance(v, str) and "cuda" in v:
+                v = 'cpu'
+
+            ready_expressions[node] = v
             continue
 
         args, kwargs = fetch_args_kwargs(node, ready_expressions)
@@ -83,9 +104,20 @@ def execute_graph(model: nn.Module, graph: Graph, args=(), kwargs=None, pre_hook
         if node.type is NodeTypes.LAYER:
             print(f"layer call {node.scope}")
             l = layers[node.scope]
+            if save_memory:
+                l = l.to(cuda_device)
+                args, kwargs = nested_move(args, kwargs, cuda_device)
+
             args, kwargs = pre_hook(node, l, args, kwargs)
             outputs = l(*args, **kwargs)
-            ready_expressions[node] = post_hook(node, l, args, kwargs, outputs)
+            outputs = post_hook(node, l, args, kwargs, outputs)
+
+            if save_memory:
+                outputs, _ = nested_move(outputs, {},
+                                         cpu_device)
+                layers[node.scope] = l.to(cpu_device)
+
+            ready_expressions[node] = outputs
 
         elif node.type is NodeTypes.PRIMITIVE:
             print(f"building container {node.value_type} {node.scope}")
@@ -94,10 +126,19 @@ def execute_graph(model: nn.Module, graph: Graph, args=(), kwargs=None, pre_hook
                                                                  kwargs)
         else:
             assert node.type is NodeTypes.OP
-            ready_expressions[node] = call_function(namespaces,
-                                                    node,
-                                                    args, kwargs,
-                                                    pre_hook, post_hook)
+            if save_memory:
+                args, kwargs = nested_move(args, kwargs, cuda_device)
+                outputs = call_function(namespaces,
+                                        node,
+                                        args, kwargs,
+                                        pre_hook, post_hook)
+                ready_expressions[node] = nested_move(outputs, {},
+                                                      cpu_device)[0]
+            else:
+                ready_expressions[node] = call_function(namespaces,
+                                                        node,
+                                                        args, kwargs,
+                                                        pre_hook, post_hook)
 
         # ensure we discard intermediate values as soon as possible to conserve memory
         for n in node.in_edges:
@@ -164,6 +205,15 @@ def fetch_args_kwargs(node, ready_expressions):
     kwargs = {k: ready_expressions[n] for n, k in node.kwargs.items()}
 
     return args, kwargs
+
+
+def nested_move(args, kwargs, device):
+    def to(t):
+        if isinstance(t, Tensor):
+            return t.to(device)
+        return t
+
+    return nested_map(to, (args, kwargs))
 
 
 def apply_pre_hook(pre_hook):

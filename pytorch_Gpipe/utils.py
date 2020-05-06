@@ -87,6 +87,19 @@ def tensorDict(model: nn.Module) -> OrderedDict[str, Tensor]:
 INCORRECT_INPUT_TYPE = '''currently supported input types are torch.Tensor, List,Tuple or combination of them found: '''
 
 
+def nested_map(func, ts):
+    if isinstance(ts, (list, tuple, set)):
+        return type(ts)(nested_map(func, t) for t in ts)
+    elif isinstance(ts, dict):
+        return {k: nested_map(func, v) for k, v in ts.items()}
+    elif isinstance(ts, slice):
+        start = nested_map(func, ts.start)
+        stop = nested_map(func, ts.stop)
+        step = nested_map(func, ts.step)
+        return slice(start=start, stop=stop, step=step)
+    return func(ts)
+
+
 def get_device(x: Tensors) -> Device:
     if hasattr(x, "device"):
         return x.device
