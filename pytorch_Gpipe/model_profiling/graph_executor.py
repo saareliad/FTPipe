@@ -5,9 +5,36 @@ from importlib import import_module
 from torch import nn
 from pytorch_Gpipe.model_profiling import Node, NodeTypes, Graph, used_namespaces
 from pytorch_Gpipe.utils import tensorDict, layerDict
+from functools import wraps
 
 
-def execute_graph(model: nn.Module, graph: Graph, args=(), kwargs=None, pre_hook=None, post_hook=None):
+class PreHook(abc.ABC):
+    """
+    pre hook will be called before the node executes and should have the following signature
+
+    def hook (node: Node, function: Callable, args: tuple, kwargs: dict) -> Tuple[Optional[Tuple], Optional[Dict]]:
+
+    the hook can modify the args/kwargs or return None
+    """
+    @abc.abstractmethod
+    def __call__(self, node: Node, function: Callable, args: tuple, kwargs: dict) -> Tuple[Optional[Tuple], Optional[Dict]]:
+        pass
+
+
+class PostHook(abc.ABC):
+    """
+    posthook will be called after the node executes and should have the following signature
+
+    def hook (node: Node, function: Callable, args: tuple, kwargs: dict,outputs) ->Optional:
+
+    the hook can modify the output or return None
+    """
+    @abc.abstractmethod
+    def __call__(self, node: Node, function: Callable, args: tuple, kwargs: Dict, outputs: Any) -> Optional:
+        pass
+
+
+def execute_graph(model: nn.Module, graph: Graph, args=(), kwargs=None, pre_hook: Optional[PreHook] = None, post_hook: Optional[PostHook] = None):
     if kwargs is None:
         kwargs = dict()
     if not isinstance(args, tuple):
@@ -140,6 +167,7 @@ def fetch_args_kwargs(node, ready_expressions):
 
 
 def apply_pre_hook(pre_hook):
+    @wraps(pre_hook)
     def wrapper(node: Node, function: Callable, args: tuple, kwargs: dict):
         modified_args, modified_kwargs = pre_hook(node, function, args, kwargs)
         if not (modified_args is None):
@@ -153,6 +181,7 @@ def apply_pre_hook(pre_hook):
 
 
 def apply_post_hook(post_hook):
+    @wraps(post_hook)
     def wrapper(node: Node, function: Callable, args: tuple, kwargs: dict, outputs):
         modified_outputs = post_hook(node, function, args, kwargs, outputs)
         if not (modified_outputs is None):
@@ -160,18 +189,6 @@ def apply_post_hook(post_hook):
         return outputs
 
     return wrapper
-
-
-class PreHook(abc.ABC):
-    @abc.abstractmethod
-    def __call__(self, node: Node, function: Callable, args: tuple, kwargs: dict) -> Tuple[Optional[Tuple], Optional[Dict]]:
-        pass
-
-
-class PostHook(abc.ABC):
-    @abc.abstractmethod
-    def __call__(self, node: Node, function: Callable, args: tuple, kwargs: Dict, outputs: Any) -> Optional:
-        pass
 
 
 class IdentityPreHook(PreHook):
