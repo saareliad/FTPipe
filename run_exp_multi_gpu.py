@@ -61,8 +61,24 @@ def gpt2xl_untied_gpipe():
                                   gpus_per_config=8)
 
 
+def gpt2xl_tied():
+    COMMAND = "mpirun -np 9 python main.py"
+    cfgs_dir = "configs/lm/wt2/gpt2xl/tied/"
+    all_algs = ["stale"]
+    # all_algs = ["stale", "msnag", "ws", "ws_msnag_ga", "ws_msnag_ga_jfl", "ws_msnag"]
+    param_grid = {
+        'config': [f"{cfgs_dir}{cfg}.json" for cfg in all_algs],
+        'seed': [42]
+    }
+    run_grid_on_multi_gpu_per_run(COMMAND,
+                                  param_grid,
+                                  gpu_list=list(range(8)),
+                                  gpus_per_config=8)
+
+
 if __name__ == "__main__":
     # gpt2xl_untied()
     # gpt2_tied()
     # main()
-    gpt2xl_untied_gpipe()
+    # gpt2xl_untied_gpipe()
+    gpt2xl_tied()

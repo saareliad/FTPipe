@@ -18,7 +18,7 @@ MODEL_TYPES = {
 # `models.transformers_utils.pretrained_model_config_and_tokenizer`
 
 
-def gpt2_p4_untied():
+def gpt2_p4_lm_untied():
     return dict(model_type='gpt2_lm_stateless',
                 model_name_or_path='gpt2',
                 do_lower_case=False,
@@ -26,7 +26,7 @@ def gpt2_p4_untied():
                 stateless_tied=False)
 
 
-def gpt2_p4_tied():
+def gpt2_p4_lm_tied():
     return dict(model_type='gpt2_lm_stateless',
                 model_name_or_path='gpt2',
                 do_lower_case=False,
@@ -42,7 +42,7 @@ def old_gpt2xl_8p_untied():
                 stateless_tied=False)
 
 
-def gpt2xl_p8_untied():
+def gpt2_xl_p8_lm_untied():
     return dict(model_type='gpt2_lm_stateless',
                 model_name_or_path='gpt2-xl',
                 do_lower_case=False,
@@ -50,7 +50,7 @@ def gpt2xl_p8_untied():
                 stateless_tied=False)
 
 
-def gpt2xl_p8_tied():
+def gpt2_xl_p8_lm_tied():
     return dict(model_type='gpt2_lm_stateless',
                 model_name_or_path='gpt2-xl',
                 do_lower_case=False,
@@ -59,20 +59,20 @@ def gpt2xl_p8_tied():
 
 
 # GPipe version for the functions, as it has different balance.
-def gpt2_p4_tied_gpipe():
-    return gpt2_4p_tied()
+def gpt2_p4_lm_tied_gpipe():
+    return gpt2_4p_lm_tied()
 
 
-def gpt2_p4_untied_gpipe():
-    return gpt2_4p_untied()
+def gpt2_p4_lm_untied_gpipe():
+    return gpt2_4p_lm_untied()
 
 
-def gpt2xl_p8_tied_gpipe():
-    return gpt2xl_8p_tied()
+def gpt2_xl_p8_lm_tied_gpipe():
+    return gpt2_xl_8p_lm_tied()
 
 
-def gpt2xl_p8_untied_gpipe():
-    return gpt2xl_p8_untied()
+def gpt2_xl_p8_lm_untied_gpipe():
+    return gpt2_xl_p8_lm_untied()
 
 
 functions_list = getmembers(
