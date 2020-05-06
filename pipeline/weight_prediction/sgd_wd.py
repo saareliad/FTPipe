@@ -1,6 +1,6 @@
 import torch
 from .interface import WeightPredictor, FixFunction
-import math
+import math  # For sympy stuff.
 from .sym_pred_optimizers import auto_lambdify, WDSympySGD
 
 
@@ -44,8 +44,7 @@ class SGDWDClonedWeightPrediction(WeightPredictor):
                         continue
                     momentum = pg['momentum']
                     for p in pg['params']:
-                        p.data.add_(-lr * momentum,
-                                    os_state[p]["momentum_buffer"].data)
+                        p.add_(-lr * momentum, os_state[p]["momentum_buffer"])
 
         if not self.n_steps:
             return
@@ -79,8 +78,8 @@ class SGDWDClonedWeightPrediction(WeightPredictor):
                 coeff_v = f_v(*[d[a] for a in fs_v])
                 coeff_theta = f_theta(*[d[a] for a in fs_theta])
                 for p in pg['params']:
-                    p.data.mul_(coeff_theta).add_(
-                        coeff_v, os_state[p]["momentum_buffer"].data)
+                    p.mul_(coeff_theta).add_(coeff_v,
+                                             os_state[p]["momentum_buffer"])
 
     def revert(self):
         if not self.n_steps:

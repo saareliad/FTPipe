@@ -82,15 +82,19 @@ class WeightStasher:
         for i in self.dirty_mark:
             self.dirty_mark[i] = True
 
+    # TODO: this may cause the problem with aggregation.
     def _create_current_cloned_buff(self):
         # TODO: we can completly avoid the clone for clone weight prediction.
+        # becasue, we 
+        # (1) first clone() for weight preiction,
+        # (2) then stash the cloned weight.
         if self.using_clone_weight_predictor:
             with torch.no_grad():
-                buff = [[p.data for p in pg['params']]
+                buff = [[p for p in pg['params']]
                         for pg in self.optimizer.param_groups]
         else:
             with torch.no_grad():
-                buff = [[p.data.clone() for p in pg['params']]
+                buff = [[p.detach().clone() for p in pg['params']]
                         for pg in self.optimizer.param_groups]
         return buff
 
@@ -140,7 +144,7 @@ class WeightStasher:
         with torch.no_grad():
             for pg, cloned in zip(self.optimizer.param_groups, buff):
                 for p, bp in zip(pg['params'], cloned):
-                    p.data = bp.data
+                    p.data = bp.detach()
 
     def pop_and_load_stashed_params(self, batch_index):
         """

@@ -56,7 +56,7 @@ class AdamClonedWeightPrediction(WeightPredictor):
                     # NOTE: initial_step = step + 1
 
                     # Compute coefficient as sum of predictions.
-
+                    # TODO: replace this with something more efficeint
                     for staleness, lr in zip(range(1, self.n_steps + 1),
                                              step_lrs):
                         if lr == 0:
@@ -118,6 +118,7 @@ class AdamClonedWeightPredictionWithWD(WeightPredictor):
                     # NOTE: initial_step = step + 1
 
                     # Compute coefficient as sum of predictions.
+                    # TODO:  replace with something more efficient
 
                     exp_avg_hat = exp_avg
 

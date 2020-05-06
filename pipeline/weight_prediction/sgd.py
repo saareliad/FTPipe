@@ -31,9 +31,8 @@ class SGDRevertableLinearWeightPrediction(WeightPredictor):
                                        self.buffered_fixes):
                 if fix_fn_item:
                     for p in pg['params']:
-                        p.data.add_(
-                            -fix_fn_item,
-                            self.optimizer.state[p]["momentum_buffer"].data)
+                        p.add_(-fix_fn_item,
+                               self.optimizer.state[p]["momentum_buffer"])
 
     def revert(self):
         if not self.n_steps:
@@ -43,9 +42,9 @@ class SGDRevertableLinearWeightPrediction(WeightPredictor):
                                        self.buffered_fixes):
                 if fix_fn_item:
                     for p in pg['params']:
-                        p.data.add_(
+                        p.add_(
                             fix_fn_item,
-                            self.optimizer.state[p]["momentum_buffer"].data)
+                            self.optimizer.state[p]["momentum_buffer"])
 
 
 class SGDClonedWeightPrediction(WeightPredictor):
@@ -73,8 +72,7 @@ class SGDClonedWeightPrediction(WeightPredictor):
 
             for pg, fix_fn_item in zip(pgs, buffered_fixes):
                 for p in pg['params']:
-                    p.data.add_(-fix_fn_item,
-                                os_state[p]["momentum_buffer"].data)
+                    p.add_(-fix_fn_item, os_state[p]["momentum_buffer"])
 
     def revert(self):
         if not self.n_steps:

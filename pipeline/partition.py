@@ -123,14 +123,14 @@ class Partition(nn.Module):
                     # TODO: it could be done better if we use multiple input buffers instead of allocating
                     # (when #buffers==#max(len(input_buffer)))
                     # In pytorch it can happen auto matically with THCCashingAlocator.
-                    x = x.data.clone().requires_grad_(
+                    x = x.detach().clone().requires_grad_(
                         self._REQ_GRAD and x.is_floating_point())
                     self.input_buffer[micro_batch_idx] = x
                     self.rng_stasher.stash_rng_state(micro_batch_idx)
                     x = self.layers(x)
                 else:
                     x = [
-                        tensor.data.clone().requires_grad_(
+                        tensor.detach().clone().requires_grad_(
                             self._REQ_GRAD and tensor.is_floating_point())
                         for tensor in x
                     ]
@@ -163,9 +163,8 @@ class Partition(nn.Module):
                 x = self.layers(x)
             else:
                 x = self.layers(*x)
-
+        # Save for later
         self.bwd_graph_head_buffer[micro_batch_idx] = x
-        # TODO: check if its possible to delete x.data ?
 
     def backward_from_recomputed(self, g, micro_batch_idx):
         x = self.bwd_graph_head_buffer.pop(micro_batch_idx)
@@ -210,15 +209,10 @@ class FirstPartition(Partition):
                     # TODO: it could be done better if we use multiple input buffers instead of allocating
                     # (when #buffers==#max(len(input_buffer)))
                     # In pytorch it can happen auto matically with THCCashingAlocator.
-                    # x = x.data.clone().requires_grad_(self._REQ_GRAD)
                     self.input_buffer[micro_batch_idx] = x
                     self.rng_stasher.stash_rng_state(micro_batch_idx)
                     x = self.layers(x)
                 else:
-                    # x = [
-                    #     tensor.data.clone().requires_grad_(self._REQ_GRAD)
-                    #     for tensor in x
-                    # ]
                     self.input_buffer[micro_batch_idx] = x
                     self.rng_stasher.stash_rng_state(micro_batch_idx)
                     x = self.layers(*x)
@@ -298,9 +292,8 @@ class LastPartition(Partition):
         else:
             with torch.no_grad():
                 if isinstance(x, Tensor):
-                    x = self.layers(x.data)
+                    x = self.layers(x)
                 else:
-                    x = [y.data for y in x]
                     x = self.layers(*x)
 
         #  Last partition outputs should be in a tensor format
@@ -393,20 +386,18 @@ class PartitionWithoutRecomputation(nn.Module):
                 # In pytorch it can happen automatically with THCCashingAlocator.
                 # Save activation only if gradient is needed.
                 if self._REQ_GRAD:
-                    with torch.no_grad():
-                        x = x.data.clone().requires_grad_(
-                            self._REQ_GRAD and x.is_floating_point())
+                    x = x.detach().clone().requires_grad_(
+                        self._REQ_GRAD and x.is_floating_point())
                     self.input_buffer[micro_batch_idx] = x
                 x = self.layers(x)
             else:
                 if self._REQ_GRAD:
-                    with torch.no_grad():
-                        x = [
-                            tensor.data.clone().requires_grad_(
-                                self._REQ_GRAD and tensor.is_floating_point())
-                            for tensor in x
-                        ]
-                        self.input_buffer[micro_batch_idx] = x
+                    x = [
+                        tensor.detach().clone().requires_grad_(
+                            self._REQ_GRAD and tensor.is_floating_point())
+                        for tensor in x
+                    ]
+                    self.input_buffer[micro_batch_idx] = x
 
                 x = self.layers(*x)
 

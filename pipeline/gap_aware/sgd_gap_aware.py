@@ -129,13 +129,13 @@ class GapAware(GapAwareBase):
             for pg in self.optimizer.param_groups:
                 if pg['momentum'] != 0:
                     for p in pg['params']:
-                        ra[id(p)].data = bg * ra[id(p)].data + \
+                        ra[id(p)] = bg * ra[id(p)] + \
                             (1 - bg) * \
-                            (opt_s[p]["momentum_buffer"].data ** 2)
+                            (opt_s[p]["momentum_buffer"] ** 2)
                 else:
                     for p in pg['params']:
-                        ra[id(p)].data = bg * ra[id(p)].data + \
-                            (1 - bg) * ((p.grad.data) ** 2)
+                        ra[id(p)] = bg * ra[id(p)] + \
+                            (1 - bg) * ((p.grad) ** 2)
 
     def apply_from_grad(self):
         """ Calculate gap aware from gradient. Requires knowing the exact gap """
@@ -155,13 +155,13 @@ class GapAware(GapAwareBase):
                     # calculate C coefficient per-element
                     # Note: can remove the "data". but whatever.
                     avg_steps_needed = max_lr * \
-                        (((ra[id(p)].data / bias_correction) ** 0.5) + eps)
+                        (((ra[id(p)] / bias_correction) ** 0.5) + eps)
 
                     # calculate the gap per-element
                     penalty = 1 + (pg['lr'] * p.grad.abs() / avg_steps_needed)
 
                     # Apply penalty to gradient
-                    p.grad.data /= penalty
+                    p.grad /= penalty
                     # Apply penalty to weight decay (as it will be part of the gradient)
                     # HACK: we know that sgd does
                     #   d_p += p*wd
@@ -173,8 +173,8 @@ class GapAware(GapAwareBase):
                     # z = p*wd ((1/penalty) - 1) = ((1 - penalty) / penalty)
                     # so we do
                     #   d_p += z
-                    # z =  p.data * weight_decay * ((1 - penalty) / penalty)
-                    p.grad.data += p.data.mul(weight_decay *
+                    # z =  p * weight_decay * ((1 - penalty) / penalty)
+                    p.grad += p.mul(weight_decay *
                                               ((1 - penalty) / penalty))
 
     def apply_on_theta(self, real_theta):
@@ -194,7 +194,7 @@ class GapAware(GapAwareBase):
                     # calculate C coefficient per-element
                     # Note: can remove the "data". but whatever.
                     avg_steps_needed = max_lr * \
-                        (((ra[id(p)].data / bias_correction) ** 0.5) + eps)
+                        (((ra[id(p)] / bias_correction) ** 0.5) + eps)
 
                     gap = (p - rp).abs()
                     # pg['lr'] * p.grad.abs()
@@ -203,7 +203,7 @@ class GapAware(GapAwareBase):
                     penalty = 1 + (gap / avg_steps_needed)
 
                     # Apply penalty to gradient
-                    p.grad.data /= penalty
+                    p.grad /= penalty
                     # Apply penalty to weight decay (as it will be part of the gradient)
                     # HACK: we know that sgd does
                     #   d_p += p*wd
@@ -215,10 +215,10 @@ class GapAware(GapAwareBase):
                     # z = p*wd ((1/penalty) - 1) = ((1 - penalty) / penalty)
                     # so we do
                     #   d_p += z
-                    # z =  p.data * weight_decay * ((1 - penalty) / penalty)
+                    # z =  p * weight_decay * ((1 - penalty) / penalty)
 
                     # NOTE: we apply the weight decay on the real parameter weight, rp.
-                    p.grad.data += rp.data.mul(weight_decay *
+                    p.grad += rp.mul(weight_decay *
                                                ((1 - penalty) / penalty))
 
     def apply_on_stashed(self, stashed_theta):
@@ -239,7 +239,7 @@ class GapAware(GapAwareBase):
                     # calculate C coefficient per-element
                     # Note: can remove the "data". but whatever.
                     avg_steps_needed = max_lr * \
-                        (((ra[id(p)].data / bias_correction) ** 0.5) + eps)
+                        (((ra[id(p)] / bias_correction) ** 0.5) + eps)
 
                     gap = (p - sp).abs()
                     # pg['lr'] * p.grad.abs()
@@ -248,7 +248,7 @@ class GapAware(GapAwareBase):
                     penalty = 1 + (gap / avg_steps_needed)
 
                     # Apply penalty to gradient
-                    p.grad.data /= penalty
+                    p.grad /= penalty
                     # Apply penalty to weight decay (as it will be part of the gradient)
                     # HACK: we know that sgd does
                     #   d_p += p*wd
@@ -260,10 +260,10 @@ class GapAware(GapAwareBase):
                     # z = p*wd ((1/penalty) - 1) = ((1 - penalty) / penalty)
                     # so we do
                     #   d_p += z
-                    # z =  p.data * weight_decay * ((1 - penalty) / penalty)
+                    # z =  p * weight_decay * ((1 - penalty) / penalty)
 
                     # NOTE: we apply the weight decay on the real parameter weight, rp.
-                    p.grad.data += p.data.mul(weight_decay *
+                    p.grad += p.mul(weight_decay *
                                               ((1 - penalty) / penalty))
 
 

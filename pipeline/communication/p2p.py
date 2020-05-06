@@ -49,13 +49,7 @@ class P2PCommunicationHandler(SimpleCommBase):
 
             for tensor, (tensor_name, send_ranks) in zip(x, ranks_dict_items):
                 # tag for minibatch idx too
-                if is_grad:
-                    with torch.no_grad():
-                        # we do not clone. so don't touch it until then.
-                        tensor = tensor.data
-                else:
-                    # tensor.detach_()
-                    tensor = tensor.detach()
+                tensor = tensor.detach()
                 tensor = tensor.chunk(self.num_chunks)
                 tensor_tag = self.tensor_tags[tensor_name] + \
                     (self.TOTAL_TAGS * batch_idx)

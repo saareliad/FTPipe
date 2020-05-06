@@ -1,6 +1,6 @@
 import torch
 from abc import ABC, abstractmethod
-
+# TODO: WIP. goal is to allow gradient aggregation with gap aware.
 
 class HookFactory(ABC):
     def __init__(self):
@@ -48,7 +48,7 @@ class AdamGAHookFactory(HookFactory):
                         stashed_theta = get_stashed_theta_fn(batch_idx)
                         # TODO: don't forget to pop later
                         sp = stashed_theta[pg_idx][p_idx]
-                        avg_steps_needed = ((exp_step_avg_sq.data)**0.5) + eps
+                        avg_steps_needed = (exp_step_avg_sq**0.5) + eps
                         gap = (p - sp).abs()
                         penalty = 1 + (gap / avg_steps_needed)
                         # TODO: weight decay

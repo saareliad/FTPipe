@@ -45,7 +45,6 @@ class TrueWeightsStorage:
     def restore_if_needed(self):
         if self.true_weights_exist and self.change_mode:
             self._restore_from_buff(self.true_weights)
- 
             self.change_mode = None
 
             # A naive solution here is to pop,
@@ -68,35 +67,17 @@ class TrueWeightsStorage:
         self.restored_true_weights_to_the_model = False
 
     def _restore_from_buff(self, buff):
-        # Copy pointers.
+        """load tensor.data from saved buff. Gradients stays the same."""
         with torch.no_grad():
             for pg, cloned in zip(self.optimizer.param_groups, buff):
                 for p, bp in zip(pg['params'], cloned):
-                    p.data = bp.data
+                    p.data = bp.detach()
 
     def _create_current_cloned_buff(self):
-        with torch.no_grad():
-            buff = [[p.data.clone() for p in pg['params']]
-                    for pg in self.optimizer.param_groups]
+        buff = [[p.detach().clone() for p in pg['params']]
+                for pg in self.optimizer.param_groups]
         return buff
 
     def _return_current_weights(self):
-        with torch.no_grad():
-            buff = [[p.data for p in pg['params']]
-                    for pg in self.optimizer.param_groups]
-        return buff
-
-
-    # def _copy_restore_from_buff(self, buff):
-    #     with torch.no_grad():
-    #         for pg, cloned in zip(self.optimizer.param_groups, buff):
-    #             for p, bp in zip(pg['params'], cloned):
-    #                 p.data.copy_(bp.data)
-
-
-    # def _clone_restore_From_buff(self, buff):
-    #         def _copy_restore_from_buff(self, buff):
-    #     with torch.no_grad():
-    #         for pg, cloned in zip(self.optimizer.param_groups, buff):
-    #             for p, bp in zip(pg['params'], cloned):
-    #                 p.data = bp.data.clone()
+        return [[p for p in pg['params']]
+                for pg in self.optimizer.param_groups]
