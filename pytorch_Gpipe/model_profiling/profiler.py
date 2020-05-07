@@ -1,9 +1,14 @@
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from itertools import chain
 import torch
 from torch import Tensor
 from .tracer import NodeTypes
 from ..utils import nested_map
+
+ExecTimes = namedtuple(
+    'ExecTimes',
+    'forward_time backward_time'
+)
 
 
 class LayerProfiler():
@@ -53,7 +58,7 @@ class LayerProfiler():
                                             args, kwargs,
                                             output)
 
-        return output
+        return LayerProfiler.detach_tensors(output)
 
     def backward_no_recomputation(self, node, function, args, kwargs, output):
         for _ in range(self.n_iter):
@@ -106,6 +111,19 @@ class LayerProfiler():
                 for p in LayerProfiler.only_tensors_that_require_grad((args, kwargs)):
                     p.grad = None
 
+    def get_weights(self):
+        weights = dict()
+        for node, f_times in self.forward_times.items():
+            f_time = LayerProfiler.avg_time(f_times)
+            if node in self.backward_times:
+                b_time = LayerProfiler.avg_time(self.backward_times[node])
+            else:
+                b_time = 0
+
+            weights[node.scope] = ExecTimes(f_time, b_time)
+
+        return weights
+
     def print_times(self, backward=False):
         if backward:
             ts = self.backward_times
@@ -143,7 +161,7 @@ class LayerProfiler():
     def detach_tensors(ts):
         def detach_if_tensor(t):
             if isinstance(t, Tensor):
-                return t.clone().detach().requires_grad_(t.requires_grad)
+                return t.detach().requires_grad_(isinstance(t, torch.nn.Parameter))
             return t
 
         return nested_map(detach_if_tensor, ts)
@@ -158,9 +176,11 @@ class LayerProfiler():
     def should_profile(node, function, args, kwargs, output=None):
         if node.type is not NodeTypes.LAYER:
             return False
+
         if output is None:
             tmp_arg, tmp_kwargs = LayerProfiler.detach_tensors((args, kwargs))
             output = function(*tmp_arg, **tmp_kwargs)
             del tmp_arg
             del tmp_kwargs
+
         return len(LayerProfiler.only_tensors_that_require_grad(output)) > 0 or len(LayerProfiler.only_tensors_with_grad_fn(output))

@@ -157,17 +157,16 @@ def generate_statements(partition_nodes: List[Node],
     available_variable_names = deque()
     variable_name_generator = variableNameGenerator()
     namespaces = used_namespaces()
-    print("\n\n\n\ngenerating code\n\n")
+
     for node in sorted(partition_nodes, key=lambda n: n.id):
         if node in ready_expressions:
             # node is a partition input or a partition buffer/parameter
             continue
-        idx = node.id
         scope = node.scope
         node_type = node.type
 
         if node_type is NodeTypes.CONSTANT:
-            print(f"{idx} constant")
+
             ready_expressions[node] = str(node.constant_value)
             continue
 
@@ -182,7 +181,7 @@ def generate_statements(partition_nodes: List[Node],
             variable_name = next(variable_name_generator)
 
         if node_type is NodeTypes.LAYER:
-            print(f"{idx} layer")
+
             parameter_list = generate_parameter_list(node.args, node.kwargs,
                                                      ready_expressions)
 
@@ -200,7 +199,7 @@ def generate_statements(partition_nodes: List[Node],
             namespace, func_name = op_path.split("::")
             # function call
             if namespace in namespaces:
-                print(f"function call ", func_name)
+
                 parameter_list = generate_parameter_list(node.args, node.kwargs,
                                                          ready_expressions)
                 statements.append(
@@ -212,7 +211,7 @@ def generate_statements(partition_nodes: List[Node],
                                                      string=False)
                 self_arg = param_list[0]
                 if "__" not in func_name:
-                    print("calling instance method ", func_name)
+
                     statements.append(
                         f"{variable_name} = {self_arg}.{func_name}({', '.join(param_list[1:])})")
 
@@ -222,7 +221,6 @@ def generate_statements(partition_nodes: List[Node],
 
         ready_expressions[node] = variable_name
 
-    print("\n")
     return statements
 
 
@@ -230,25 +228,25 @@ def generate_container_construct(ready_expressions, node, variable_name):
     '''generate a dict/list/tuple/set/etc. object which has special syntax
     '''
     if "prim::DictConstruct" in node.scope:
-        print(f"{node.id} dict")
+
         kwargs = ", ".join([f"'{k}':{ready_expressions[a]}"
                             for a, k in node.kwargs.items()])
         statement = f"{variable_name} = {{{kwargs}}}"
 
     elif "prim::SetConstruct" in node.scope:
-        print(f"{node.id} set")
+
         parameter_list = generate_parameter_list(node.args, node.kwargs,
                                                  ready_expressions)
         statement = f"{variable_name} = {{{parameter_list}}}"
 
     elif "prim::ListConstruct" in node.scope:
-        print(f"{node.id} list")
+
         parameter_list = generate_parameter_list(node.args, node.kwargs,
                                                  ready_expressions)
         statement = f"{variable_name} = [{parameter_list}]"
 
     elif "prim::TupleConstruct" in node.scope:
-        print(f"{node.id} tuple")
+
         parameter_list = generate_parameter_list(node.args, node.kwargs,
                                                  ready_expressions)
         if len(node.args) == 1:
@@ -265,7 +263,7 @@ def generate_container_construct(ready_expressions, node, variable_name):
 
 
 def generate_magic(variable_name, self_arg, func_name, param_list):
-    print("calling magic ", func_name)
+
     if func_name == "__getattribute__":
         statement = [f"{variable_name} = {self_arg}.{param_list[1]}"]
     elif func_name == "__getitem__":

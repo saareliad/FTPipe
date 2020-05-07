@@ -10,7 +10,6 @@ MULT_FACTOR = 10000
 def node_weight_function(bwd_to_fwd_ratio=-1):
     def f(node: Node):
         # TODO profiling integration
-        return 1
         # TODO: factory with recomputation.
         if node.type is NodeTypes.LAYER:
             if bwd_to_fwd_ratio < 0:
@@ -33,19 +32,18 @@ def node_weight_function(bwd_to_fwd_ratio=-1):
 def edge_weight_function(bw_GBps, bwd_to_fwd_ratio=-1):
     def f(u: Node, v: Node):
         # TODO profiling integration
-        return 1
-        if u.type is NodeTypes.CONSTANT or (u.valueType() in [int, None]
-                                            or u.shape == (torch.Size([]), )):
+        if u.type is NodeTypes.CONSTANT or (u.value_type in [int, None]
+                                            or u.tensor_shape is None):
             # no constant or scalars on boundries
             return 1000 * MULT_FACTOR
 
-        if u.valueType() in [list, tuple]:
+        if u.value_type in [list, tuple, dict]:
             # no nested iterables on boundries
             return 1000 * MULT_FACTOR
 
         # TODO data type not included shouldn't really matter
         MB = 1e6
-        volume = _extract_volume_from_sizes(u.shape) / MB
+        volume = _extract_volume_from_sizes((u.tensor_shape,)) / MB
         # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
         w = max(1, (MULT_FACTOR * (volume / bw_GBps)))
 

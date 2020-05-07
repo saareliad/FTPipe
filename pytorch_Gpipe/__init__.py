@@ -5,7 +5,8 @@ import torch.nn as nn
 
 from .model_partitioning import METIS_partition
 from .compiler import compile_partitioned_model
-from .model_profiling import Graph, profile_network, trace_module, Profile, NodeWeightFunction, EdgeWeightFunction
+from .model_profiling import Graph, profile_network, LayerProfiler, trace_module, Profile, NodeWeightFunction, EdgeWeightFunction
+from .model_profiling.graph_executor import execute_graph
 from .pipeline import Pipeline, PipelineConfig, StageConfig, SyncBuffersMode
 from .utils import Devices, Tensors
 
@@ -29,9 +30,11 @@ def pipe_model(model: nn.Module,
                output_file: str = None,
                generate_model_parallel: bool = False,
                recomputation=False,
-               save_memory_mode=False,
                METIS_opt=dict(),
-               force_no_recomp_scopes=lambda s: False) -> Graph:
+               force_no_recomp_scopes=lambda s: False,
+               save_memory_mode=False,
+               use_layer_profiler=False,
+               use_network_profiler=True,) -> Graph:
     '''attemps to partition a model to given number of parts using our profiler
        this will produce a python file with the partition config
 
@@ -90,9 +93,11 @@ def pipe_model(model: nn.Module,
                             edge_weight_function=edge_weight_function,
                             use_layers_only_graph=use_layers_only_graph,
                             recomputation=recomputation,
-                            save_memory_mode=save_memory_mode,
                             METIS_opt=METIS_opt,
                             force_no_recomp_scopes=force_no_recomp_scopes,
+                            use_layer_profiler=use_layer_profiler,
+                            use_network_profiler=use_network_profiler,
+                            save_memory_mode=save_memory_mode
                             )
 
     compile_partitioned_model(graph,
@@ -115,9 +120,11 @@ def partition_model(model: nn.Module,
                     edge_weight_function: Optional[EdgeWeightFunction] = None,
                     use_layers_only_graph: bool = False,
                     recomputation: bool = False,
-                    save_memory_mode: bool = False,
                     METIS_opt=dict(),
-                    force_no_recomp_scopes=lambda s: False) -> Graph:
+                    force_no_recomp_scopes=lambda s: False,
+                    use_layer_profiler=False,
+                    use_network_profiler=True,
+                    save_memory_mode=False) -> Graph:
     '''
     profiles the network and return a graph representing the partition
 
@@ -150,18 +157,17 @@ def partition_model(model: nn.Module,
     if basic_blocks is None:
         basic_blocks = ()
     # TODO profiling integration
-    # graph = build_graph(model,
-    #                     sample_batch,
-    #                     kwargs=kwargs,
-    #                     max_depth=max_depth,
-    #                     basic_blocks=basic_blocks,
-    #                     n_iter=n_iter,
-    #                     recomputation=recomputation,
-    #                     save_memory_mode=save_memory_mode,
-    #                     force_no_recomp_scopes=force_no_recomp_scopes)
-
-    graph = trace_module(model, args=sample_batch, kwargs=kwargs,
-                         depth=max_depth, basic_blocks=basic_blocks)
+    graph = build_graph(model,
+                        args=sample_batch,
+                        kwargs=kwargs,
+                        max_depth=max_depth,
+                        basic_blocks=basic_blocks,
+                        n_iter=n_iter,
+                        use_layer_profiler=use_layer_profiler,
+                        use_network_profiler=use_network_profiler,
+                        recomputation=recomputation,
+                        force_no_recomp_scopes=force_no_recomp_scopes,
+                        save_memory_mode=save_memory_mode)
 
     graph = METIS_partition(graph,
                             nparts,
@@ -169,5 +175,38 @@ def partition_model(model: nn.Module,
                             edge_weight_function=edge_weight_function,
                             use_layers_only_graph=use_layers_only_graph,
                             **METIS_opt)
+
+    return graph
+
+
+def build_graph(model, args=(), kwargs=None, use_network_profiler=True, use_layer_profiler=False, save_memory_mode=False, recomputation=False, n_iter=10, max_depth=1000, basic_blocks=None, force_no_recomp_scopes=None):
+    if basic_blocks is None:
+        basic_blocks = ()
+    if kwargs is None:
+        kwargs = dict()
+
+    graph = trace_module(model, args=args, kwargs=kwargs, depth=max_depth,
+                         basic_blocks=basic_blocks)
+    weights = None
+
+    if use_layer_profiler:
+        assert not save_memory_mode, "save memory mode is not supported for LayerProfiler"
+        profiler = LayerProfiler(recomputation=recomputation, n_iter=n_iter,
+                                 force_no_recomp_scopes=force_no_recomp_scopes)
+        execute_graph(model, graph, model_args=args, model_kwargs=kwargs,
+                      pre_hook=profiler.time_forward, post_hook=profiler.time_backward)
+        weights = profiler.get_weights()
+    elif use_network_profiler:
+        weights = profile_network(model, args, kwargs=kwargs,
+                                  basic_blocks=basic_blocks,
+                                  max_depth=max_depth,
+                                  n_iter=n_iter,
+                                  save_memory_mode=False,
+                                  recomputation=recomputation,
+                                  save_memory_mode=save_memory_mode,
+                                  force_no_recomp_scopes=force_no_recomp_scopes)
+    if not (weights is None):
+        for n in graph.nodes:
+            n.weight = weights.get(n.scope, n.weight)
 
     return graph

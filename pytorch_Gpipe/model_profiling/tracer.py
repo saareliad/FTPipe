@@ -78,7 +78,6 @@ class TracedFunction():
         setattr(self.namespace, self.function_name, self)
 
     def __call__(self, *args, **kwargs):
-        print(f"calling traced function {self.original_function}")
 
         # record the operation
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
@@ -153,7 +152,7 @@ def delegate_to_traced_value(func):
             args = tuple(reversed(args))
 
         traced_self = args[0]
-        print(f"delegating {op_name} to {type(traced_self._data)}")
+
         out = TracedValue(NodeTypes.OP,
                           f"/{type(traced_self._data).__name__}::{op_name}")
         connect_inputs_to_output(out.id, args)
@@ -169,7 +168,7 @@ def delegate_to_traced_value(func):
             actual_op = getattr(operator, op_name)
             out.set_data(actual_op(*args))
         except Exception:
-            print("exception in delegation of ", op_name)
+
             actual_op = getattr(type(traced_self._data), op_name)
             out.set_data(actual_op(*args))
 
@@ -244,7 +243,7 @@ class TracedValue(object):
         # record the operation
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
         out = TracedValue(NodeTypes.OP, op)
-        print(f"\ncalling {out.scope}")
+
         connect_inputs_to_output(out.id, args, kwargs)
 
         # perform the operation
@@ -260,7 +259,6 @@ class TracedValue(object):
         assert isinstance(name,
                           str), f"getattr support only for string args got {type(name)}"
 
-        print(f"accessing attribute {name} of traced value\n")
         out = getattr(self._data, name)
         if isTracedValue(out):
             name_arg = TracedValue(NodeTypes.CONSTANT, "/prim::Constant")
@@ -431,7 +429,6 @@ class TracedInstanceFunction(object):
         self.namespace = namespace
 
     def __call__(self, *args, **kwargs):
-        print(f"Invoking function {self._func.__name__} of wrapped value\n")
 
         # record the operation
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
@@ -476,7 +473,6 @@ class TracedLayer(nn.Module):
             CURRENT_SCOPE += f"/{self.name}"
 
         s = "terminal" if self.terminal else "non terminal"
-        print(f"entering {s} scope {CURRENT_SCOPE}")
 
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
 
@@ -500,7 +496,6 @@ class TracedLayer(nn.Module):
                 if not isinstance(out, TracedValue):
                     out = record_non_terminal_output(out)
 
-        print(f"leaving {s} scope {CURRENT_SCOPE}")
         CURRENT_SCOPE = CURRENT_SCOPE.rsplit("/", maxsplit=1)[0]
 
         assert isinstance(
@@ -531,7 +526,10 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
     traced_module = TracedLayer(module,
                                 name=f"{type(module).__name__}",
                                 terminal=False)
-    output = traced_module(*args, **kwargs)
+
+    # explicit no grad as we only need the control flow
+    with torch.no_grad():
+        output = traced_module(*args, **kwargs)
     disable_function_tracing()
 
     output_id = output.id
@@ -707,7 +705,7 @@ def discard_unused_nodes(nodes):
 def set_node_indices(nodes, output_id):
     if len(nodes) == TracedValue.ID:
         # no nodes were discarded
-        return nodes
+        return nodes, output_id
 
     new_nodes = dict()
 
@@ -952,7 +950,7 @@ def record_non_terminal_output(out):
 def record_kwarg(node_id, kwarg, kwarg_id):
     assert kwarg_id < node_id
     # record the edge
-    print(f"\n recording edge {kwarg_id} => {node_id}\n")
+
     NODES[kwarg_id].add_out_edge(NODES[node_id])
     NODES[node_id].add_kwarg(kwarg, NODES[kwarg_id])
 
@@ -960,7 +958,7 @@ def record_kwarg(node_id, kwarg, kwarg_id):
 def record_arg(node_id, arg_id):
     assert arg_id < node_id
     # record the edge
-    print(f"\n recording edge {arg_id} => {node_id}\n")
+
     NODES[arg_id].add_out_edge(NODES[node_id])
     NODES[node_id].add_arg(NODES[arg_id])
 
