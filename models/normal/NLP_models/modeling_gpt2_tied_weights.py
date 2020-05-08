@@ -639,7 +639,7 @@ class GPT2Model(GPT2PreTrainedModel):
         return self.ln_f(hidden_states)
 
 
-class LMOutputs(nn.Module):
+class LMOutput(nn.Module):
     def forward(self, lm_logits, labels=None):
         output = lm_logits
         if labels is not None:
@@ -710,7 +710,7 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
         self.transformer = GPT2Model(config)
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
 
-        self.compute_outputs = LMOutputs()
+        self.compute_output = LMOutput()
 
         self.init_weights()
         self.tie_weights()
@@ -748,11 +748,11 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
         # hidden_states should be torch.Size([1, 1024, 768]) after reshape
         # hidden_states=hidden_states.view(-1,self.n_positions,self.n_embed)
         lm_logits = self.stateless_lm_head(self.w_wte, hidden_states)
-        outputs = self.compute_outputs(lm_logits,
-                                       labels=labels)
+        output = self.compute_output(lm_logits,
+                                     labels=labels)
 
-        # (loss), lm_logits, presents, (all hidden_states), (attentions)
-        return outputs
+        # loss or logits
+        return output
 
 
 @add_start_docstrings("""The GPT2 Model transformer with a language modeling and a multiple-choice classification
