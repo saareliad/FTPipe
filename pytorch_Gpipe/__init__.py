@@ -15,6 +15,8 @@ __all__ = [
     'METIS_partition', 'Pipeline'
 ]
 
+# TODO document everything. too many things have changed since last documantation pass
+
 
 def pipe_model(model: nn.Module,
                batch_dim: int,
@@ -42,6 +44,7 @@ def pipe_model(model: nn.Module,
     for this specific model config
 
     Parameters:
+    ------------
     model:
         the network we wish to model
      batch_dim:
@@ -77,6 +80,12 @@ def pipe_model(model: nn.Module,
         fn(scope):
             returns true if we want to force recomputation scope_specific_recomp
         defaut is lambda x: False
+    use_layer_profiler:
+        whether to use the new graph based profiler
+        default False
+    use_network_profiler:
+        whether to use the older model based network_profiler
+        default True
     '''
 
     if basic_blocks is None:
@@ -129,6 +138,7 @@ def partition_model(model: nn.Module,
     profiles the network and return a graph representing the partition
 
     Parameters:
+    -------------
     model:
         the network we wish to model
     sample_batch:
@@ -153,6 +163,12 @@ def partition_model(model: nn.Module,
         whether to partition a smaller version of the graph containing only the layers (usefull fo big models with lots of unprofiled ops)
     METIS_opt:
         dict of additional kwargs to pass to the METIS partitioning algorithm
+    use_layer_profiler:
+        whether to use the new graph based profiler
+        default False
+    use_network_profiler:
+        whether to use the older model based network_profiler
+        default True
     '''
     if basic_blocks is None:
         basic_blocks = ()
@@ -179,7 +195,41 @@ def partition_model(model: nn.Module,
     return graph
 
 
-def build_graph(model, args=(), kwargs=None, use_network_profiler=True, use_layer_profiler=False, save_memory_mode=False, recomputation=False, n_iter=10, max_depth=1000, basic_blocks=None, force_no_recomp_scopes=None):
+def build_graph(model: nn.Module, args: tuple = (), kwargs: Optional[Dict] = None, use_network_profiler: bool = True, use_layer_profiler: bool = False, save_memory_mode: bool = False, recomputation: bool = False, n_iter: int = 10, max_depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None, force_no_recomp_scopes: Optional[Callable[[str], bool]] = None) -> Graph:
+    """
+    builds a graph representation of the model which is semantically identical to the forward pass
+    optionaly can also profiler execution times of the model's oprations
+
+    Parameters:
+    ------------------
+    model:
+        the network we wish to model
+    args:
+        a sample input to use for tracing
+    kwargs:
+        aditional kwargs dictionary to pass to the model
+    n_iter:
+        number of profiling iteration used to gather statistics
+    max_depth:
+        how far down we go in the model tree determines the detail level of the graph
+    basic_blocks:
+        an optional list of modules that if encountered will not be broken down
+    node_weight_function:
+        an optional weight function for the nodes should be a function from Node to int
+        if not given a default weight of 1 will be given to all nodes
+    edge_weight_function:
+        an optional weight function for the edges should be a function (Node,Node) to int
+        if not given a default value of 1 will be given to all edges
+    use_layers_only_graph:
+        whether to partition a smaller version of the graph containing only the layers (usefull fo big models with lots of unprofiled ops)
+    use_layer_profiler:
+        whether to use the new graph based profiler
+        default False
+    use_network_profiler:
+        whether to use the older model based network_profiler
+        default True
+    """
+
     if basic_blocks is None:
         basic_blocks = ()
     if kwargs is None:
@@ -201,7 +251,6 @@ def build_graph(model, args=(), kwargs=None, use_network_profiler=True, use_laye
                                   basic_blocks=basic_blocks,
                                   max_depth=max_depth,
                                   n_iter=n_iter,
-                                  save_memory_mode=False,
                                   recomputation=recomputation,
                                   save_memory_mode=save_memory_mode,
                                   force_no_recomp_scopes=force_no_recomp_scopes)

@@ -55,8 +55,7 @@ def post_process_partition(graph: Graph, verbose_on_error=True) -> Graph:
         raise AssertionError(error)
 
     is_valid, error = is_valid_partitioning(graph)
-    # TODO disabled until we have smart partitioning
-    # assert is_valid, error
+    assert is_valid, error
 
     return graph
 

@@ -42,7 +42,7 @@ class LayerProfiler():
                     torch.cuda.synchronize(device='cuda')
                     self.forward_times[node].append(start.elapsed_time(end))
 
-        return None, None
+        return LayerProfiler.detach_tensors((args, kwargs))
 
     def time_backward(self, node, function, args, kwargs, output):
         if LayerProfiler.should_profile(node, function, args, kwargs, output=output):
