@@ -988,8 +988,8 @@ def check_is_valid_graph(nodes):
                            f"node type: {node.type.__name__}"
                            f"scope: {node.scope}",
                            f"incoming edges: {[n.id for n in node.in_edges]}",
-                           f"positional args: {node.args}",
-                           f"keyword args: {node.kwargs}",
+                           f"positional args: {[n.id for n in node.args]}",
+                           f"keyword args: {[(n.id,k) for n,k in node.kwargs.items()]}",
                            f"outgoing edges: {[n.id for n in node.out_edges]}",
                            ""])
             valid = False
@@ -1001,8 +1001,8 @@ def check_is_valid_graph(nodes):
                                f"node type: {node.type.__name__}"
                                f"scope: {node.scope}",
                                f"incoming edges: {[n.id for n in node.in_edges]}",
-                               f"positional args: {node.args}",
-                               f"keyword args: {node.kwargs}",
+                               f"positional args: {[n.id for n in node.args]}",
+                               f"keyword args: {[(n.id,k) for n,k in node.kwargs.items()]}",
                                f"outgoing edges: {[n.id for n in node.out_edges]}",
                                ""])
                 valid = False
@@ -1012,8 +1012,8 @@ def check_is_valid_graph(nodes):
                                f"node id: {i}",
                                f"scope: {node.scope}",
                                f"incoming edges: {[n.id for n in node.in_edges]}",
-                               f"positional args: {node.args}",
-                               f"keyword args: {node.kwargs}",
+                               f"positional args: {[n.id for n in node.args]}",
+                               f"keyword args: {[(n.id,k) for n,k in node.kwargs.items()]}",
                                f"outgoing edges: {[n.id for n in node.out_edges]}",
                                ""])
                 valid = False
@@ -1037,8 +1037,8 @@ def check_is_valid_graph(nodes):
                                f"node type: {node.type.__name__}"
                                f"scope: {node.scope}",
                                f"incoming edges: {[n.id for n in node.in_edges]}",
-                               f"positional args: {node.args}",
-                               f"keyword args: {node.kwargs}",
+                               f"positional args: {[n.id for n in node.args]}",
+                               f"keyword args: {[(n.id,k) for n,k in node.kwargs.items()]}",
                                f"outgoing edges: {[n.id for n in node.out_edges]}",
                                ""])
                 valid = False
@@ -1048,8 +1048,8 @@ def check_is_valid_graph(nodes):
                                f"node id: {i}",
                                f"scope: {node.scope}",
                                f"incoming edges: {[n.id for n in node.in_edges]}",
-                               f"positional args: {node.args}",
-                               f"keyword args: {node.kwargs}",
+                               f"positional args: {[n.id for n in node.args]}",
+                               f"keyword args: {[(n.id,k) for n,k in node.kwargs.items()]}",
                                f"outgoing edges: {[n.id for n in node.out_edges]}",
                                ""])
                 valid = False
@@ -1072,8 +1072,8 @@ def check_is_valid_graph(nodes):
                            f"scope: {node.scope}",
                            f"value: {node.constant_value}",
                            f"incoming edges: {[n.id for n in node.in_edges]}",
-                           f"positional args: {node.args}",
-                           f"keyword args: {node.kwargs}",
+                           f"positional args: {[n.id for n in node.args]}",
+                           f"keyword args: {[(n.id,k) for n,k in node.kwargs.items()]}",
                            f"outgoing edges: {[n.id for n in node.out_edges]}",
                            ""])
             valid = False
@@ -1085,8 +1085,8 @@ def check_is_valid_graph(nodes):
                                f"node id: {i}",
                                f"scope: {node.scope}",
                                f"incoming edges: {[n.id for n in node.in_edges]}",
-                               f"positional args: {node.args}",
-                               f"keyword args: {node.kwargs}",
+                               f"positional args: {[n.id for n in node.args]}",
+                               f"keyword args: {[(n.id,k) for n,k in node.kwargs.items()]}",
                                f"outgoing edges: {[n.id for n in node.out_edges]}",
                                ""])
                 valid = False

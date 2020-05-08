@@ -77,7 +77,10 @@ def tensorDict(model: nn.Module) -> OrderedDict[str, Tensor]:
 
 
 def nested_map(func, ts):
-    if isinstance(ts, (list, tuple, set)):
+    if isinstance(ts, torch.Size):
+        # size is inheriting from tuple which is stupid
+        return func(ts)
+    elif isinstance(ts, (list, tuple, set)):
         return type(ts)(nested_map(func, t) for t in ts)
     elif isinstance(ts, dict):
         return {k: nested_map(func, v) for k, v in ts.items()}
@@ -126,7 +129,7 @@ def get_tensor_dtypes(ts):
 def get_tensor_shapes(ts):
     def get_shape(t):
         if isinstance(t, Tensor):
-            return t.shape
+            return t.shape if t.shape else torch.Size([1])
         return None
 
     return nested_map(get_shape, ts)

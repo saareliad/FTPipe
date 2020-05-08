@@ -218,60 +218,63 @@ def partition_model(args,
     # so we could trace math.sqrt in gpt2 attention
     register_new_traced_function(math.sqrt, namespace=math)
 
-    graph = pipe_model(model,
-                       batch_dim,
-                       sample,
-                       depth=args.depth,
-                       n_iter=args.n_iter,
-                       nparts=args.n_partitions,
-                       node_weight_function=node_weight_function(
-                           bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-                       edge_weight_function=edge_weight_function(
-                           args.bandwidth_gps,
-                           bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-                       use_layers_only_graph=True,
-                       use_layer_profiler=True,
-                       output_file=args.output_file,
-                       generate_model_parallel=args.generate_model_parallel,
-                       save_memory_mode=args.save_memory_mode,
-                       recomputation=recomputation,
-                       METIS_opt=METIS_opt,
-                       force_no_recomp_scopes=force_no_recomputation_fn)
+    # graph = pipe_model(model,
+    #                    batch_dim,
+    #                    sample,
+    #                    depth=args.depth,
+    #                    n_iter=args.n_iter,
+    #                    nparts=args.n_partitions,
+    #                    node_weight_function=node_weight_function(
+    #                        bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+    #                    edge_weight_function=edge_weight_function(
+    #                        args.bandwidth_gps,
+    #                        bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+    #                    use_layers_only_graph=True,
+    #                    use_layer_profiler=True,
+    #                    output_file=args.output_file,
+    #                    generate_model_parallel=args.generate_model_parallel,
+    #                    save_memory_mode=args.save_memory_mode,
+    #                    recomputation=recomputation,
+    #                    METIS_opt=METIS_opt,
+    #                    force_no_recomp_scopes=force_no_recomputation_fn)
 
-    # partial_pipe_model = functools.partial(
-    #     pipe_model,
-    #     model,
-    #     batch_dim,
-    #     sample,
-    #     depth=args.depth,
-    #     n_iter=args.n_iter,
-    #     nparts=args.n_partitions,
-    #     node_weight_function=node_weight_function(
-    #         bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-    #     edge_weight_function=edge_weight_function(
-    #         args.bandwidth_gps, bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-    #     use_layers_only_graph=args.partition_layer_graph,
-    #     output_file=args.output_file,
-    #     generate_model_parallel=args.generate_model_parallel,
-    #     save_memory_mode=args.save_memory_mode,
-    #     recomputation=recomputation,
-    #     METIS_opt=METIS_opt)
+    partial_pipe_model = functools.partial(
+        pipe_model,
+        model,
+        batch_dim,
+        sample,
+        depth=args.depth,
+        n_iter=args.n_iter,
+        nparts=args.n_partitions,
+        node_weight_function=node_weight_function(
+            bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+        edge_weight_function=edge_weight_function(
+            args.bandwidth_gps,
+            bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+        use_layers_only_graph=True,
+        use_layer_profiler=True,
+        output_file=args.output_file,
+        generate_model_parallel=args.generate_model_parallel,
+        save_memory_mode=args.save_memory_mode,
+        recomputation=recomputation,
+        METIS_opt=METIS_opt)
 
-    # if args.async_pipeline and (not args.no_recomputation):
-    #     async_pipe_partitioner = AsyncPipePartitioner(model, args.output_file,
-    #                                                   partial_pipe_model)
+    if args.async_pipeline and (not args.no_recomputation):
+        print("using async partitioner")
+        async_pipe_partitioner = AsyncPipePartitioner(model, args.output_file,
+                                                      partial_pipe_model)
 
-    #     graph = run_x_tries_until_no_fail(
-    #         async_pipe_partitioner.partition,
-    #         10,
-    #         force_no_recomp_scopes=force_no_recomputation_fn,
-    #         allowed_mistakes=0)
+        graph = run_x_tries_until_no_fail(
+            async_pipe_partitioner.partition,
+            10,
+            force_no_recomp_scopes=force_no_recomputation_fn,
+            allowed_mistakes=0)
 
-    #     # graph = async_pipe_partitioner.partition(
-    #     #     force_no_recomp_scopes=force_no_recomputation_fn, allowed_mistakes=0)
-    # else:
-    #     graph = partial_pipe_model(
-    #         force_no_recomp_scopes=force_no_recomputation_fn)
+        # graph = async_pipe_partitioner.partition(
+        #     force_no_recomp_scopes=force_no_recomputation_fn, allowed_mistakes=0)
+    else:
+        graph = partial_pipe_model(
+            force_no_recomp_scopes=force_no_recomputation_fn)
 
     if args.dot:
         graph.save_as_pdf(args.output_file, ".")

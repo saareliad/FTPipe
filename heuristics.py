@@ -30,13 +30,12 @@ def node_weight_function(bwd_to_fwd_ratio=-1):
 
 def edge_weight_function(bw_GBps, bwd_to_fwd_ratio=-1):
     def f(u: Node, v: Node):
-        # TODO profiling integration
-        if u.type is NodeTypes.CONSTANT or (u.value_type in [int, None]
+        if u.type is NodeTypes.CONSTANT or (u.value_type in [float, str, bool, int, type(None)]
                                             or u.tensor_shape is None):
             # no constant or scalars on boundries
             return 1000 * MULT_FACTOR
 
-        if u.value_type in [list, tuple, dict]:
+        if issubclass(u.value_type, (list, tuple, dict, set, slice, torch.Size)):
             # no nested iterables on boundries
             return 1000 * MULT_FACTOR
         MB = 1e6

@@ -3,7 +3,7 @@ from typing import List, Dict, Set
 from copy import copy
 import os
 from ..model_profiling import Graph, NodeTypes, Node
-
+import torch
 
 __all__ = ["post_process_partition"]
 
@@ -100,7 +100,7 @@ def get_problematic_partitions(graph):
         for v in u.out_edges:
             if v.part < u.part:
                 problems.append([v.part, u.part])
-                info.append([v, u])
+                info.append([v.scope, u.scope])
     return problems, info
 
 
@@ -165,7 +165,7 @@ def is_valid_partitioning(graph: Graph):
     check if we only send tensors between partitions
     """
     for n in graph.nodes:
-        if n.value_type in {type(None), list, tuple, dict, set, int, bool, float, str, slice}:
+        if n.value_type in {type(None), list, tuple, dict, set, int, bool, float, str, slice, torch.Size, torch.dtype}:
             for o in n.out_edges:
                 if n.part != o.part:
                     msg = f"invalid output type at partition boundary {n.part}=>{o.part}"
