@@ -5,7 +5,7 @@ import torch.nn as nn
 
 from .model_partitioning import METIS_partition
 from .compiler import compile_partitioned_model
-from .model_profiling import Graph, profile_network, LayerProfiler, trace_module, Profile, NodeWeightFunction, EdgeWeightFunction
+from .model_profiling import Graph, profile_network, LayerProfiler, trace_module, Profile, ExecTimes, NodeWeightFunction, EdgeWeightFunction
 from .model_profiling.graph_executor import execute_graph
 from .pipeline import Pipeline, PipelineConfig, StageConfig, SyncBuffersMode
 from .utils import Devices, Tensors
@@ -256,6 +256,6 @@ def build_graph(model: nn.Module, args: tuple = (), kwargs: Optional[Dict] = Non
                                   force_no_recomp_scopes=force_no_recomp_scopes)
     if not (weights is None):
         for n in graph.nodes:
-            n.weight = weights.get(n.scope, n.weight)
+            n.weight = weights.get(n.scope, ExecTimes(0,0))
 
     return graph

@@ -96,7 +96,7 @@ def nested_map(func, ts):
         start = nested_map(func, ts.start)
         stop = nested_map(func, ts.stop)
         step = nested_map(func, ts.step)
-        return slice(start=start, stop=stop, step=step)
+        return slice(start, stop, step)
     return func(ts)
 
 

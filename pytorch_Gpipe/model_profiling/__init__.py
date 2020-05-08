@@ -2,5 +2,5 @@ from .control_flow_graph import Graph, NodeTypes, Node, NodeWeightFunction, Edge
 from .network_profiler import profile_network, Profile
 from .tracer import trace_module, register_new_traced_function, used_namespaces
 from .graph_executor import execute_graph, PostHook, PreHook
-from .profiler import LayerProfiler
+from .profiler import LayerProfiler, ExecTimes
 __all__ = ['trace_module', 'profile_network']

@@ -62,6 +62,8 @@ from pytorch_Gpipe.utils import layerDict, tensorDict
 from pytorch_Gpipe import PipelineConfig
 import functools
 from partition_async_pipe import AsyncPipePartitioner
+import math
+from pytorch_Gpipe.model_profiling.tracer import register_new_traced_function
 
 MODEL_CLASSES_LM_HEAD = {
     'gpt2': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
@@ -80,6 +82,7 @@ MODEL_CLASSES = {
 MODEL_CLASSES_LM_HEAD_STATELESS_TIED = {
     'gpt2': (GPT2Config, StatelessGPT2LMHeadModel, GPT2Tokenizer),  # TODO:
 }
+
 
 class TextDataset(Dataset):
     def __init__(self, tokenizer, args, file_path='train', block_size=512):
@@ -212,59 +215,63 @@ def partition_model(args,
         if "stateless_lm_head" in scope or "lm_head" in scope:
             return True
 
-    # graph = pipe_model(model,
-    #                    batch_dim,
-    #                    sample,
-    #                    depth=args.depth,
-    #                    n_iter=args.n_iter,
-    #                    nparts=args.n_partitions,
-    #                    node_weight_function=node_weight_function(
-    #                        bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-    #                    edge_weight_function=edge_weight_function(
-    #                        args.bandwidth_gps,
-    #                        bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-    #                    use_layers_only_graph=args.partition_layer_graph,
-    #                    output_file=args.output_file,
-    #                    generate_model_parallel=args.generate_model_parallel,
-    #                    save_memory_mode=args.save_memory_mode,
-    #                    recomputation=recomputation,
-    #                    METIS_opt=METIS_opt,
-    #                    force_no_recomp_scopes=force_no_recomputation_fn)
+    # so we could trace math.sqrt in gpt2 attention
+    register_new_traced_function(math.sqrt, namespace=math)
 
-    partial_pipe_model = functools.partial(
-        pipe_model,
-        model,
-        batch_dim,
-        sample,
-        depth=args.depth,
-        n_iter=args.n_iter,
-        nparts=args.n_partitions,
-        node_weight_function=node_weight_function(
-            bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-        edge_weight_function=edge_weight_function(
-            args.bandwidth_gps, bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-        use_layers_only_graph=args.partition_layer_graph,
-        output_file=args.output_file,
-        generate_model_parallel=args.generate_model_parallel,
-        save_memory_mode=args.save_memory_mode,
-        recomputation=recomputation,
-        METIS_opt=METIS_opt)
+    graph = pipe_model(model,
+                       batch_dim,
+                       sample,
+                       depth=args.depth,
+                       n_iter=args.n_iter,
+                       nparts=args.n_partitions,
+                       node_weight_function=node_weight_function(
+                           bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+                       edge_weight_function=edge_weight_function(
+                           args.bandwidth_gps,
+                           bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+                       use_layers_only_graph=True,
+                       use_layer_profiler=True,
+                       output_file=args.output_file,
+                       generate_model_parallel=args.generate_model_parallel,
+                       save_memory_mode=args.save_memory_mode,
+                       recomputation=recomputation,
+                       METIS_opt=METIS_opt,
+                       force_no_recomp_scopes=force_no_recomputation_fn)
 
-    if args.async_pipeline and (not args.no_recomputation):
-        async_pipe_partitioner = AsyncPipePartitioner(model, args.output_file,
-                                                      partial_pipe_model)
+    # partial_pipe_model = functools.partial(
+    #     pipe_model,
+    #     model,
+    #     batch_dim,
+    #     sample,
+    #     depth=args.depth,
+    #     n_iter=args.n_iter,
+    #     nparts=args.n_partitions,
+    #     node_weight_function=node_weight_function(
+    #         bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+    #     edge_weight_function=edge_weight_function(
+    #         args.bandwidth_gps, bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+    #     use_layers_only_graph=args.partition_layer_graph,
+    #     output_file=args.output_file,
+    #     generate_model_parallel=args.generate_model_parallel,
+    #     save_memory_mode=args.save_memory_mode,
+    #     recomputation=recomputation,
+    #     METIS_opt=METIS_opt)
 
-        graph = run_x_tries_until_no_fail(
-            async_pipe_partitioner.partition,
-            10,
-            force_no_recomp_scopes=force_no_recomputation_fn,
-            allowed_mistakes=0)
+    # if args.async_pipeline and (not args.no_recomputation):
+    #     async_pipe_partitioner = AsyncPipePartitioner(model, args.output_file,
+    #                                                   partial_pipe_model)
 
-        # graph = async_pipe_partitioner.partition(
-        #     force_no_recomp_scopes=force_no_recomputation_fn, allowed_mistakes=0)
-    else:
-        graph = partial_pipe_model(
-            force_no_recomp_scopes=force_no_recomputation_fn)
+    #     graph = run_x_tries_until_no_fail(
+    #         async_pipe_partitioner.partition,
+    #         10,
+    #         force_no_recomp_scopes=force_no_recomputation_fn,
+    #         allowed_mistakes=0)
+
+    #     # graph = async_pipe_partitioner.partition(
+    #     #     force_no_recomp_scopes=force_no_recomputation_fn, allowed_mistakes=0)
+    # else:
+    #     graph = partial_pipe_model(
+    #         force_no_recomp_scopes=force_no_recomputation_fn)
 
     if args.dot:
         graph.save_as_pdf(args.output_file, ".")
@@ -386,8 +393,7 @@ def parse_cli():
     tr_params.add_argument(
         "--mlm",
         action='store_true',
-        help=
-        "Train with masked-language modeling loss instead of language modeling."
+        help="Train with masked-language modeling loss instead of language modeling."
     )
     tr_params.add_argument(
         "--mlm_probability",
@@ -398,22 +404,19 @@ def parse_cli():
         "--config_name",
         default="",
         type=str,
-        help=
-        "Optional pretrained config name or path if not the same as model_name_or_path"
+        help="Optional pretrained config name or path if not the same as model_name_or_path"
     )
     tr_params.add_argument(
         "--tokenizer_name",
         default="",
         type=str,
-        help=
-        "Optional pretrained tokenizer name or path if not the same as model_name_or_path"
+        help="Optional pretrained tokenizer name or path if not the same as model_name_or_path"
     )
     tr_params.add_argument(
         "--cache_dir",
         default="",
         type=str,
-        help=
-        "Optional directory to store the pre-trained models downloaded from s3 (instread of the default one)"
+        help="Optional directory to store the pre-trained models downloaded from s3 (instread of the default one)"
     )
     tr_params.add_argument(
         "--block_size",
@@ -450,8 +453,7 @@ def parse_cli():
         "--stateless_tied",
         default=False,
         action="store_true",
-        help=
-        "Tie weights stateless trick. Note that shared weight may be sent in pipe"
+        help="Tie weights stateless trick. Note that shared weight may be sent in pipe"
     )
 
     # parameters of the partitioning script
@@ -463,8 +465,7 @@ def parse_cli():
         '--model_too_big',
         action='store_true',
         default=False,
-        help=
-        "if the model is too big run the whole partitioning process on CPU, and drink a cup of coffee in the meantime"
+        help="if the model is too big run the whole partitioning process on CPU, and drink a cup of coffee in the meantime"
     )
     parser.add_argument('--n_partitions', type=int, default=4)
     parser.add_argument('--output_file', default='gpt2')
@@ -481,8 +482,7 @@ def parse_cli():
         '--n_iter',
         type=int,
         default=10,
-        help=
-        "number of iteration used in order to profile the network and run analysis"
+        help="number of iteration used in order to profile the network and run analysis"
     )
     parser.add_argument(
         '--bandwidth_gps',
