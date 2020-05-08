@@ -1,5 +1,6 @@
 import torch
-from pytorch_Gpipe.utils import _extract_volume_from_sizes
+from functools import reduce
+import operator
 from pytorch_Gpipe.model_profiling import Node, NodeTypes
 
 __all__ = ["node_weight_function", "edge_weight_function"]
@@ -9,8 +10,6 @@ MULT_FACTOR = 10000
 
 def node_weight_function(bwd_to_fwd_ratio=-1):
     def f(node: Node):
-        # TODO profiling integration
-        # TODO: factory with recomputation.
         if node.type is NodeTypes.LAYER:
             if bwd_to_fwd_ratio < 0:
                 return int(MULT_FACTOR * (node.weight.backward_time))
@@ -40,10 +39,11 @@ def edge_weight_function(bw_GBps, bwd_to_fwd_ratio=-1):
         if u.value_type in [list, tuple, dict]:
             # no nested iterables on boundries
             return 1000 * MULT_FACTOR
-
-        # TODO data type not included shouldn't really matter
         MB = 1e6
-        volume = _extract_volume_from_sizes((u.tensor_shape,)) / MB
+        volume = reduce(operator.mul, u.tensor_shape) / MB
+        # include dtype size
+        volume *= torch.empty(1, dtype=u.tensor_dtype).element_size()
+
         # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
         w = max(1, (MULT_FACTOR * (volume / bw_GBps)))
 

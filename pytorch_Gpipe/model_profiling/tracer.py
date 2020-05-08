@@ -12,7 +12,7 @@ from torch._overrides import get_overridable_functions
 
 from pytorch_Gpipe.utils import traverse_model
 from .control_flow_graph import Node, NodeTypes, Graph
-
+from ..utils import get_tensor_shapes, get_tensor_dtypes
 ##############################
 # Tracing Metadata
 ##############################
@@ -224,9 +224,8 @@ class TracedValue(object):
         self._data = data
         self.namespace = f"{type(self._data).__name__}"
         self.node.value_type = type(data)
-        if isinstance(data, Tensor):
-            self.node.tensor_dtype = data.dtype
-            self.node.tensor_shape = data.shape
+        self.node.tensor_dtype = get_tensor_dtypes(data)
+        self.node.tensor_shape = get_tensor_shapes(data)
 
     def __repr__(self):
         return f"Node ID:{self.id}\nScope:{self.scope}\nvalue: {self._data}\n"
@@ -1079,8 +1078,8 @@ def check_is_valid_graph(nodes):
                            ""])
             valid = False
 
-        if node.tensor_shape or node.tensor_dtype or issubclass(node.value_type, Tensor):
-            if not ((node.tensor_shape) and (node.tensor_dtype) and (issubclass(node.value_type, Tensor))):
+        if isinstance(node.tensor_shape, torch.Size) or isinstance(node.tensor_dtype, torch.dtype) or issubclass(node.value_type, Tensor):
+            if not ((isinstance(node.tensor_shape, torch.Size)) and (isinstance(node.tensor_dtype, torch.dtype)) and (issubclass(node.value_type, Tensor))):
                 errors.extend(["tensor value value not recorded in all of TENSOR_SHAPES TENSOR_DTYPES VALUE_TYPES",
                                f"node id: {i}",
                                f"node id: {i}",

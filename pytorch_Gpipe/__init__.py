@@ -8,7 +8,6 @@ from .compiler import compile_partitioned_model
 from .model_profiling import Graph, profile_network, LayerProfiler, trace_module, Profile, ExecTimes, NodeWeightFunction, EdgeWeightFunction
 from .model_profiling.graph_executor import execute_graph
 from .pipeline import Pipeline, PipelineConfig, StageConfig, SyncBuffersMode
-from .utils import Devices, Tensors
 
 __all__ = [
     'pipe_model', 'profile_network', 'trace_module', 'partition_model',
@@ -20,7 +19,7 @@ __all__ = [
 
 def pipe_model(model: nn.Module,
                batch_dim: int,
-               sample_batch: Tensors,
+               sample_batch: tuple = (),
                kwargs: Optional[Dict] = None,
                n_iter=10,
                nparts: int = 4,
@@ -119,7 +118,7 @@ def pipe_model(model: nn.Module,
 
 
 def partition_model(model: nn.Module,
-                    sample_batch: Tensors,
+                    sample_batch: tuple = (),
                     kwargs: Optional[Dict] = None,
                     n_iter=10,
                     nparts=4,
@@ -256,6 +255,6 @@ def build_graph(model: nn.Module, args: tuple = (), kwargs: Optional[Dict] = Non
                                   force_no_recomp_scopes=force_no_recomp_scopes)
     if not (weights is None):
         for n in graph.nodes:
-            n.weight = weights.get(n.scope, ExecTimes(0,0))
+            n.weight = weights.get(n.scope, ExecTimes(0, 0))
 
     return graph

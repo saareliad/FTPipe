@@ -641,7 +641,7 @@ class GPT2Model(GPT2PreTrainedModel):
 
 class LMOutputs(nn.Module):
     def forward(self, lm_logits, labels=None):
-        outputs = lm_logits
+        output = lm_logits
         if labels is not None:
             # Shift so that tokens < n predict n
             shift_logits = lm_logits[..., :-1, :].contiguous()
@@ -657,9 +657,10 @@ class LMOutputs(nn.Module):
             # HACK: changed to output just the loss, somehow this improves partitioning results,
             # need to understand why.
             # outputs = (loss,)
-            outputs = (loss, lm_logits)
+            # outputs = (loss, lm_logits)
+            output = loss
 
-        return outputs
+        return output
 
 
 @add_start_docstrings("""The GPT2 Model transformer with a language modeling head on top

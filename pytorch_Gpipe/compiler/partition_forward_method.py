@@ -1,4 +1,3 @@
-from pytorch_Gpipe.utils import OrderedSet
 from collections import defaultdict, deque
 from itertools import chain
 from typing import List, Tuple, Dict, Iterator, Set
@@ -47,7 +46,7 @@ inplace_arithmetic_ops = {"__iadd__": "+=",
 def generate_forward_method(
         partition_nodes: List[Node],
         model_outputs: List[Node],
-        partition_fields: Dict[str, str]) -> Tuple[List[str], Dict[str, OrderedSet[str]]]:
+        partition_fields: Dict[str, str]) -> Tuple[List[str], Dict[str, List]]:
     '''the gateway to generate a forward function of a partition
     '''
     # function arguments are x0...xn
@@ -71,7 +70,7 @@ def generate_forward_method(
     for k in remove_buffs_params:
         partition_fields.pop(k)
 
-    input_scopes = OrderedSet([node.scope for node in part_inputs])
+    input_scopes = [node.scope for node in part_inputs]
     ready_expressions.update(zip(part_inputs, input_ids))
 
     lines = []
@@ -79,7 +78,7 @@ def generate_forward_method(
         generateDeclaration(input_ids, partition_fields,
                             ready_expressions))
     outputs = sortedPartitionOutputs(partition_nodes, model_outputs)
-    out_scopes = OrderedSet([n.scope for n in outputs])
+    out_scopes = [n.scope for n in outputs]
     body = generateBody(outputs,
                         partition_nodes,
                         partition_fields,
@@ -135,7 +134,7 @@ def generateBody(outputs: List[Node],
                                      scope_to_class_field,
                                      ready_expressions,
                                      uses)
-    output_scopes = OrderedSet([n for n in outputs])
+    output_scopes = [n for n in outputs]
     return_statement = generate_return_statement(output_scopes,
                                                  ready_expressions)
 
@@ -296,7 +295,7 @@ def generate_parameter_list(node_args, node_kwargs, ready_expressions, string=Tr
     return args + kwargs
 
 
-def generate_return_statement(output_nodes, ready_expressions):
+def generate_return_statement(output_nodes: List[Node], ready_expressions: Dict[Node, str]):
     ''' generate the return statement and descriptive comment
     '''
     scope_comment = f'\n{dtab}# '.join(map(lambda n: n.scope, output_nodes))

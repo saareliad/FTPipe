@@ -1,9 +1,8 @@
 from collections import defaultdict, namedtuple
-from itertools import chain
 import torch
 from torch import Tensor
 from .tracer import NodeTypes
-from ..utils import nested_map
+from ..utils import detach_tensors, flatten
 
 ExecTimes = namedtuple(
     'ExecTimes',
@@ -29,7 +28,7 @@ class LayerProfiler():
             recomputation = self.recomputation and (
                 not self.force_no_recomp_scopes(node.scope))
             for _ in range(self.n_iter):
-                args, kwargs = LayerProfiler.detach_tensors((args, kwargs))
+                args, kwargs = detach_tensors((args, kwargs))
                 with torch.set_grad_enabled(not recomputation):
                     start = torch.cuda.Event(enable_timing=True)
                     end = torch.cuda.Event(enable_timing=True)
@@ -42,7 +41,7 @@ class LayerProfiler():
                     torch.cuda.synchronize(device='cuda')
                     self.forward_times[node].append(start.elapsed_time(end))
 
-        return LayerProfiler.detach_tensors((args, kwargs))
+        return detach_tensors((args, kwargs))
 
     def time_backward(self, node, function, args, kwargs, output):
         if LayerProfiler.should_profile(node, function, args, kwargs, output=output):
@@ -58,7 +57,7 @@ class LayerProfiler():
                                             args, kwargs,
                                             output)
 
-        return LayerProfiler.detach_tensors(output)
+        return detach_tensors(output)
 
     def backward_no_recomputation(self, node, function, args, kwargs, output):
         for _ in range(self.n_iter):
@@ -87,7 +86,7 @@ class LayerProfiler():
 
     def backward_recomputation(self, node, function, args, kwargs, output):
         for _ in range(self.n_iter):
-            args, kwargs = LayerProfiler.detach_tensors((args, kwargs))
+            args, kwargs = detach_tensors((args, kwargs))
             with torch.enable_grad():
                 torch.cuda.synchronize(device='cuda')
                 start = torch.cuda.Event(enable_timing=True)
@@ -133,38 +132,16 @@ class LayerProfiler():
             print(n.scope, LayerProfiler.avg_time(t))
 
     @staticmethod
-    def flatten(ts):
-        if isinstance(ts, (list, tuple, set)):
-            yield from chain(*[LayerProfiler.flatten(t) for t in ts])
-        elif isinstance(ts, dict):
-            yield from chain(*[LayerProfiler.flatten(t) for t in ts.values()])
-        elif isinstance(ts, slice):
-            yield from LayerProfiler.flatten(ts.start)
-            yield from LayerProfiler.flatten(ts.stop)
-            yield from LayerProfiler.flatten(ts.step)
-        else:
-            yield ts
-
-    @staticmethod
     def only_tensors_that_require_grad(ts):
-        return [t for t in LayerProfiler.flatten(ts) if isinstance(t, Tensor) and t.requires_grad]
+        return [t for t in flatten(ts) if isinstance(t, Tensor) and t.requires_grad]
 
     @staticmethod
     def only_tensors_with_grad_fn(ts):
-        return [t for t in LayerProfiler.flatten(ts) if isinstance(t, Tensor)and(t.grad_fn is not None)]
+        return [t for t in flatten(ts) if isinstance(t, Tensor)and(t.grad_fn is not None)]
 
     @staticmethod
     def get_grads(ts):
         return [torch.randn_like(t) for t in ts]
-
-    @staticmethod
-    def detach_tensors(ts):
-        def detach_if_tensor(t):
-            if isinstance(t, Tensor):
-                return t.detach().requires_grad_(isinstance(t, torch.nn.Parameter))
-            return t
-
-        return nested_map(detach_if_tensor, ts)
 
     @staticmethod
     def avg_time(times):
@@ -178,7 +155,7 @@ class LayerProfiler():
             return False
 
         if output is None:
-            tmp_arg, tmp_kwargs = LayerProfiler.detach_tensors((args, kwargs))
+            tmp_arg, tmp_kwargs = detach_tensors((args, kwargs))
             output = function(*tmp_arg, **tmp_kwargs)
             del tmp_arg
             del tmp_kwargs
