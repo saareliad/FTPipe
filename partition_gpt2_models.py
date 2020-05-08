@@ -510,7 +510,7 @@ def parse_cli():
     parser.add_argument(
         "--partition_layer_graph",
         action="store_true",
-        default=False,
+        default=True,
         help="whether to partition a graph containing only layers")
 
     parser.add_argument("--dot",

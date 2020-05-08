@@ -10,7 +10,7 @@ def METIS_partition(graph: Graph,
                     num_partitions: int,
                     node_weight_function: Optional[NodeWeightFunction] = None,
                     edge_weight_function: Optional[EdgeWeightFunction] = None,
-                    use_layers_only_graph: bool = False,
+                    use_layers_only_graph: bool = True,
                     **METIS_opts: Dict) -> Graph:
     '''
     performs METIS Kway partitioning on the given graph

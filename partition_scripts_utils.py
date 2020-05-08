@@ -38,8 +38,7 @@ class ParsePartitioningOpts:
             '--model_too_big',
             action='store_true',
             default=False,
-            help=
-            "if the model is too big run the whole partitioning process on CPU, "
+            help="if the model is too big run the whole partitioning process on CPU, "
             "and drink a cup of coffee in the meantime")
         parser.add_argument('-p', '--n_partitions', type=int, default=4)
         parser.add_argument('-o', '--output_file', default='wrn_16x4')
@@ -50,15 +49,13 @@ class ParsePartitioningOpts:
         parser.add_argument(
             '--n_iter',
             type=int,
-            help=
-            "number of iteration used in order to profile the network and run analysis"
+            help="number of iteration used in order to profile the network and run analysis"
         )
         parser.add_argument(
             '--bw',
             type=float,
             default=12,
-            help=
-            "data transfer rate between gpus in GBps (Gigabytes per second)")
+            help="data transfer rate between gpus in GBps (Gigabytes per second)")
         parser.add_argument(
             '--no_recomputation',
             action='store_true',
@@ -76,14 +73,13 @@ class ParsePartitioningOpts:
         parser.add_argument(
             "--partition_layer_graph",
             action="store_true",
-            default=False,
+            default=True,
             help="whether to partition a graph containing only layers")
         parser.add_argument(
             "--generate_model_parallel",
             action="store_true",
             default=False,
-            help=
-            "wether to generate a modelParallel version of the partitioning")
+            help="wether to generate a modelParallel version of the partitioning")
 
         parser.add_argument("-a",
                             "--async_pipeline",
@@ -129,21 +125,18 @@ class ParseMetisOpts:
         metis_opts.add_argument(
             '--metis_niter',
             type=int,
-            help=
-            "Specifies the number of iterations for the refinement algorithms at each stage of the uncoarsening process."
+            help="Specifies the number of iterations for the refinement algorithms at each stage of the uncoarsening process."
             "Default is 10.")
         metis_opts.add_argument(
             '--nseps',
             type=int,
-            help=
-            "Specifies the number of different separators that it will compute at each level of nested dissection."
+            help="Specifies the number of different separators that it will compute at each level of nested dissection."
             "The final separator that is used is the smallest one. Default is 1."
         )
         metis_opts.add_argument(
             "--ncuts",
             type=int,
-            help=
-            "Specifies the number of different partitionings that it will compute."
+            help="Specifies the number of different partitionings that it will compute."
             " The final partitioning is the one that achieves the best edgecut or communication volume."
             "Default is 1.")
         metis_opts.add_argument(
@@ -153,8 +146,7 @@ class ParseMetisOpts:
         metis_opts.add_argument(
             '--objtype',
             type=int,
-            help=
-            "Extra objective type to miminize (0: edgecut, 1: vol, default: edgecut)"
+            help="Extra objective type to miminize (0: edgecut, 1: vol, default: edgecut)"
         )
 
     @staticmethod
