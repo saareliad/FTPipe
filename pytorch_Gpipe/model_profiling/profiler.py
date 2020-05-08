@@ -3,11 +3,12 @@ import torch
 from torch import Tensor
 from .tracer import NodeTypes
 from ..utils import detach_tensors, flatten
-
 ExecTimes = namedtuple(
     'ExecTimes',
     'forward_time backward_time'
 )
+
+# TODO save_memory_mode
 
 
 class LayerProfiler():

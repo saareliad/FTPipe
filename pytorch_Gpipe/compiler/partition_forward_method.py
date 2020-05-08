@@ -85,12 +85,14 @@ def generate_forward_method(
                         ready_expressions)
     lines.append(dtab + body)
 
+    # TODO it is possible that if we have a single output
+    # it's still a list/tuple for example return l(x) where l returns multiple outputs
     input_shapes = [n.tensor_shape for n in part_inputs]
     output_shapes = [n.tensor_shape for n in outputs]
     input_dtypes = [n.tensor_dtype for n in part_inputs]
     output_dtypes = [n.tensor_dtype for n in outputs]
-    io = {"inputs": list(input_scopes),
-          "outputs": list(out_scopes),
+    io = {"inputs": input_scopes,
+          "outputs": out_scopes,
           "input_shapes": input_shapes,
           "output_shapes": output_shapes,
           "input_dtypes": input_dtypes,
@@ -134,8 +136,7 @@ def generateBody(outputs: List[Node],
                                      scope_to_class_field,
                                      ready_expressions,
                                      uses)
-    output_scopes = [n for n in outputs]
-    return_statement = generate_return_statement(output_scopes,
+    return_statement = generate_return_statement(outputs,
                                                  ready_expressions)
 
     statements.append(return_statement)
