@@ -8,7 +8,9 @@ import importlib
 from misc import run_analysis, run_partitions
 import sys
 from heuristics import edge_weight_function, node_weight_function
-from partition_scripts_utils import ParseMetisOpts, ParsePartitioningOpts, record_cmdline
+from partition_scripts_utils import ParseMetisOpts, ParsePartitioningOpts, record_cmdline, run_x_tries_until_no_fail
+import functools
+from partition_async_pipe import AsyncPipePartitioner
 
 _VGG16_BN = dict(vgg16_bn=dict())
 
@@ -179,21 +181,55 @@ if __name__ == "__main__":
     n_partitions = args.n_partitions
     batch_dim = 0
     bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
-    graph = pipe_model(model,
-                       batch_dim,
-                       sample,
-                       depth=args.depth,
-                       kwargs=None,
-                       nparts=n_partitions,
-                       output_file=args.output_file,
-                       generate_model_parallel=args.generate_model_parallel,
-                       use_layers_only_graph=args.partition_layer_graph,
-                       node_weight_function=node_weight_function(bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-                       edge_weight_function=edge_weight_function(bw, bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-                       n_iter=n_iter,
-                       recomputation=recomputation,
-                       save_memory_mode=args.save_memory_mode,
-                       METIS_opt=METIS_opt)
+
+    partial_pipe_model = functools.partial(
+        pipe_model,
+        model,
+        batch_dim,
+        sample,
+        depth=args.depth,
+        kwargs=None,
+        nparts=n_partitions,
+        output_file=args.output_file,
+        generate_model_parallel=args.generate_model_parallel,
+        use_layers_only_graph=args.partition_layer_graph,
+        node_weight_function=node_weight_function(
+            bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+        edge_weight_function=edge_weight_function(
+            bw, bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+        n_iter=n_iter,
+        recomputation=recomputation,
+        save_memory_mode=args.save_memory_mode,
+        METIS_opt=METIS_opt)
+
+    if args.async_pipeline and (not args.no_recomputation):
+        async_pipe_partitioner = AsyncPipePartitioner(model, args.output_file,
+                                                      partial_pipe_model)
+
+        graph = run_x_tries_until_no_fail(
+            async_pipe_partitioner.partition,
+            10,
+            # force_no_recomp_scopes=force_no_recomputation_fn,
+            allowed_mistakes=0)
+    else:
+        graph = pipe_model(
+            model,
+            batch_dim,
+            sample,
+            depth=args.depth,
+            kwargs=None,
+            nparts=n_partitions,
+            output_file=args.output_file,
+            generate_model_parallel=args.generate_model_parallel,
+            use_layers_only_graph=args.partition_layer_graph,
+            node_weight_function=node_weight_function(
+                bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+            edge_weight_function=edge_weight_function(
+                bw, bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+            n_iter=n_iter,
+            recomputation=recomputation,
+            save_memory_mode=args.save_memory_mode,
+            METIS_opt=METIS_opt)
 
     if args.dot:
         graph.save_as_pdf(args.output_file, ".")
@@ -226,15 +262,16 @@ if __name__ == "__main__":
 
     if not args.no_analysis:
         sample = create_random_sample(args, analysis=True)
-        analysis_result, summary = run_analysis(sample,
-                                                graph,
-                                                analysis_config,
-                                                n_iter,
-                                                recomputation=recomputation,
-                                                bw_GBps=bw,
-                                                verbose=True,
-                                                async_pipeline=args.async_pipeline,
-                                                sequential_model=model)
+        analysis_result, summary = run_analysis(
+            sample,
+            graph,
+            analysis_config,
+            n_iter,
+            recomputation=recomputation,
+            bw_GBps=bw,
+            verbose=True,
+            async_pipeline=args.async_pipeline,
+            sequential_model=model)
         with open(f"{args.output_file}.py", "a") as f:
             f.write("\n")
             f.write('"""analysis summary\n' + summary + "\n" + '"""')
