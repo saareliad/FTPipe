@@ -7,8 +7,8 @@ tab = '    '
 dtab = tab + tab
 
 
-def create_model_parallel_module(graph: Graph, batch_dim: int, name: str, ios: Dict[int, Dict[str,
-                                                                                              List[str]]],
+def create_model_parallel_module(graph: Graph, batch_dim: int, ios: Dict[int, Dict[str,
+                                                                                   List[str]]],
                                  num_inputs: int,
                                  model_outputs: List[str]) -> str:
     '''create a modelParallel version of the partition config
@@ -85,7 +85,7 @@ def model_parallel_forward(graph: Graph, ios: Dict[int, Dict[str, List[str]]],
                            model_inputs: List[str],
                            model_outputs: List[str]) -> List[str]:
 
-    body, activations = forward_statements(ios, model_inputs, model_outputs)
+    body, activations = forward_statements(ios, model_inputs)
     outputs = ",".join([activations[o] for o in model_outputs])
     forward = simple_forward(model_inputs, body, outputs)
 
@@ -207,7 +207,7 @@ def generate_merge_mb(graph: Graph, model_outputs: List[str]) -> List[str]:
     l = []
     l.append(f"# merge output chunks")
     for n, o in zip(graph.outputs, model_outputs):
-        if len(n.shape) == 1 and len(n.shape) == 1:
+        if len(n.tensor_shape) == 1 and len(n.tensor_shape) == 1:
             # scalar
             l.append(f"{o} = sum({o}_chunks)")
         else:
@@ -224,8 +224,7 @@ def simple_forward(model_inputs: List[str], body: List[str], outputs: str) -> st
 
 
 def forward_statements(ios: Dict[int, Dict[str, List[str]]],
-                       model_inputs: List[str],
-                       model_outputs: List[str]) -> Tuple[List[str], Dict[str, str]]:
+                       model_inputs: List[str]) -> Tuple[List[str], Dict[str, str]]:
     '''generates the forward nethod of the model parallel version of the config
     '''
     n_partitions = len(ios)

@@ -5,7 +5,7 @@ from pytorch_Gpipe.model_profiling import Node, NodeTypes
 import argparse
 import importlib
 from misc import run_analysis, run_partitions
-from pytorch_Gpipe.utils import _extract_volume_from_sizes, layerDict, tensorDict
+from pytorch_Gpipe.utils import layerDict, tensorDict
 from pytorch_Gpipe import PipelineConfig, pipe_model
 from heuristics import node_weight_function, edge_weight_function
 # TODO: instea of code copy, do repeated calls to exisitng functions...
@@ -15,6 +15,7 @@ from types import SimpleNamespace
 class OverrrideArgsDict(SimpleNamespace):
     """ if key in override_dict, return its overriden value,
     else return its value from args """
+
     def __init__(self, args, override_dict):
         self.__dict__.update(args.__dict__)
         self.__dict__.update(override_dict)

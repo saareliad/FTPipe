@@ -4,7 +4,7 @@ import torch
 
 import sys
 sys.path.append("../")
-from pytorch_Gpipe import build_graph, Graph, compile_partitoned_model
+from pytorch_Gpipe import build_graph, Graph, compile_partitioned_model
 from pytorch_Gpipe.model_profiling.graph_builder import basic_blocks_new_scopes, layerDict, translate_scopes
 import os
 

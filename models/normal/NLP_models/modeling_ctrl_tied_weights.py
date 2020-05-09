@@ -505,7 +505,6 @@ class CTRLModel(CTRLPreTrainedModel):
         for layer, heads in heads_to_prune.items():
             self.h[layer].attn.prune_heads(heads)
 
-
     def make_stateless_after_loaded_tied_and_resized(self):
         """ Patch to create stateless layers with shared tied embedding """
         stateless_w = StatelessEmbedding(self.w)
@@ -516,11 +515,12 @@ class CTRLModel(CTRLPreTrainedModel):
         del self.w
 
         def _resize_token_embeddings(self, new_num_tokens):
-            raise NotImplementedError("Can't call this after creating Stateless embedding")
-        self._resize_token_embeddings = types.MethodType(_resize_token_embeddings, self)
+            raise NotImplementedError(
+                "Can't call this after creating Stateless embedding")
+        self._resize_token_embeddings = types.MethodType(
+            _resize_token_embeddings, self)
 
         return w_w
-
 
     @add_start_docstrings_to_callable(CTRL_INPUTS_DOCSTRING)
     def forward(
@@ -568,7 +568,7 @@ class CTRLModel(CTRLPreTrainedModel):
         token_type_embeds = 0
         position_ids = position_ids.view(-1, input_shape[-1])
 
-        inputs_embeds = self.stateless_w(w_w,input_ids)
+        inputs_embeds = self.stateless_w(w_w, input_ids)
         seq_len = input_shape[-1]
         mask = torch.triu(torch.ones(seq_len + self.num_layers,
                                      seq_len + self.num_layers), 1).to(inputs_embeds.device)
@@ -589,7 +589,31 @@ class CTRLModel(CTRLPreTrainedModel):
 
         hidden_states = self.layernorm(hidden_states)
         hidden_states = hidden_states.view(*output_shape)
-        return (hidden_states,)
+        return hidden_states
+
+
+class LMOutput(nn.Module):
+    def forward(self, lm_logits, labels=None):
+        output = lm_logits
+        if labels is not None:
+            # Shift so that tokens < n predict n
+            shift_logits = lm_logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            # Flatten the tokens
+            # loss_fct = CrossEntropyLoss(ignore_index=-100)
+
+            def loss_fct(logits, labels):
+                return nn.functional.cross_entropy(logits, labels, ignore_index=-100)
+            loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)),
+                            shift_labels.view(-1))
+
+            # HACK: changed to output just the loss, somehow this improves partitioning results,
+            # need to understand why.
+            # outputs = (loss,)
+            # outputs = (loss, lm_logits)
+            output = loss
+
+        return output
 
 
 @add_start_docstrings(
@@ -602,10 +626,9 @@ class CTRLLMHeadModel(CTRLPreTrainedModel):
         super().__init__(config)
         self.transformer = CTRLModel(config)
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=True)
-        self.lm_loss = nn.CrossEntropyLoss()
+        self.lm_output = LMOutput()
 
         self.init_weights()
-
 
     def make_stateless_after_loaded_tied_and_resized(self):
         """ Patch to create stateless layers with shared tied embedding """
@@ -620,7 +643,8 @@ class CTRLLMHeadModel(CTRLPreTrainedModel):
         del self.lm_head
 
         def tie_weights(self):
-            raise NotImplementedError("Can't call this after stateless version")
+            raise NotImplementedError(
+                "Can't call this after stateless version")
         self.tie_weights = types.MethodType(tie_weights, self)
 
     def tie_weights(self):
@@ -629,7 +653,6 @@ class CTRLLMHeadModel(CTRLPreTrainedModel):
         """
         self._tie_or_clone_weights(self.lm_head,
                                    self.transformer.w)
-
 
     def get_output_embeddings(self):
         return self.lm_head
@@ -682,20 +705,8 @@ class CTRLLMHeadModel(CTRLPreTrainedModel):
         outputs = model(input_ids, labels=input_ids)
         loss, logits = outputs[:2]
         """
-        hidden_states = self.transformer(input_ids,self.w_w)[0]
+        hidden_states = self.transformer(input_ids, self.w_w)
 
-        lm_logits = self.stateless_lm_head(self.w_w,hidden_states)
+        lm_logits = self.stateless_lm_head(self.w_w, hidden_states)
 
-        outputs = (lm_logits,)
-
-        if labels is not None:
-            # Shift so that tokens < n predict n
-            shift_logits = lm_logits[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous()
-            # Flatten the tokens
-            loss = self.lm_loss(shift_logits.view(-1, shift_logits.size(-1)),
-                                shift_labels.view(-1))
-            outputs = (loss,)
-
-        #loss, lm_logits
-        return outputs
+        return self.lm_output(lm_logits, labels=labels)

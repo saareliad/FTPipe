@@ -174,9 +174,9 @@ def all_predecessors(graph: Graph):
     all_predecessor_ids = dict()
 
     for node in graph.nodes:
-        all_predecessor_ids[node.idx] = {n.idx for n in node.in_nodes}
-        for n in node.in_nodes:
-            all_predecessor_ids[node.idx].update(all_predecessor_ids[n.idx])
+        all_predecessor_ids[node.id] = {n.id for n in node.in_edges}
+        for n in node.in_edges:
+            all_predecessor_ids[node.id].update(all_predecessor_ids[n.id])
 
     return all_predecessor_ids
 
@@ -186,19 +186,19 @@ def aggregate_stats(graph: Graph, all_predecessor_ids, node_weight_function: Opt
     # n^2 algorithm might revisit
     # statistics for the dependencies graph of each node
     for u in graph.nodes:
-        states[u.idx] = dict()
-        states[u.idx]["forward_time"] = _get_time(u, forward=True)
-        states[u.idx]["backward_time"] = _get_time(u, forward=False)
-        states[u.idx]["activation_size"] = _get_activation_size(u)
-        states[u.idx]["memory"] = _get_memory(u)
-        states[u.idx]["output_size"] = _get_output_size(u)
+        states[u.id] = dict()
+        states[u.id]["forward_time"] = _get_time(u, forward=True)
+        states[u.id]["backward_time"] = _get_time(u, forward=False)
+        states[u.id]["activation_size"] = _get_activation_size(u)
+        states[u.id]["memory"] = _get_memory(u)
+        states[u.id]["output_size"] = _get_output_size(u)
 
-        for v in map(lambda idx: graph.nodes[idx] for idx in all_predecessor_ids[u.idx]):
-            states[u.idx]["forward_time"] += _get_time(v, forward=True)
-            states[u.idx]["backward_time"] += _get_time(v, forward=False)
-            states[u.idx]["activation_size"] += _get_activation_size(v)
-            states[u.idx]["memory"] += _get_memory(v)
-            states[u.idx]["output_size"] += _get_output_size(v)
+        for v in map(lambda idx: graph.nodes[idx] for idx in all_predecessor_ids[u.id]):
+            states[u.id]["forward_time"] += _get_time(v, forward=True)
+            states[u.id]["backward_time"] += _get_time(v, forward=False)
+            states[u.id]["activation_size"] += _get_activation_size(v)
+            states[u.id]["memory"] += _get_memory(v)
+            states[u.id]["output_size"] += _get_output_size(v)
 
     forward_time = dict()
     backward_time = dict()

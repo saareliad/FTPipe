@@ -10,7 +10,7 @@ def METIS_partition(graph: Graph,
                     num_partitions: int,
                     node_weight_function: Optional[NodeWeightFunction] = None,
                     edge_weight_function: Optional[EdgeWeightFunction] = None,
-                    use_layers_only_graph: bool = False,
+                    use_layers_only_graph: bool = True,
                     **METIS_opts: Dict) -> Graph:
     '''
     performs METIS Kway partitioning on the given graph
@@ -84,13 +84,12 @@ def induce_layer_partition(original_graph: Graph, parts: List[int],
                            layers_to_original: Dict[int, int]) -> Graph:
     old_to_new = {v: k for k, v in layers_to_original.items()}
 
-    for node in reversed(original_graph.nodes):
-        if node.idx in old_to_new:
-            node.part = parts[old_to_new[node.idx]]
+    for node in reversed(list(original_graph.nodes)):
+        if node.id in old_to_new:
+            node.part = parts[old_to_new[node.id]]
         else:
             # as we iterate in reverse topological order we've already handled this node's outupts
-            node.part = node.out_nodes[0].part
-
+            node.part = next(iter(node.out_edges)).part
         assert node.part >= 0
 
     return original_graph

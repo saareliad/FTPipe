@@ -32,7 +32,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset, RandomSampler
 import warnings
 import sys
-from partition_scripts_utils import ParseMetisOpts, ParsePartitioningOpts, record_cmdline
+from partition_scripts_utils import ParseMetisOpts, ParsePartitioningOpts, record_cmdline, run_x_tries_until_no_fail
 from heuristics import edge_weight_function, node_weight_function
 from transformers import (
     BertConfig,
@@ -67,6 +67,10 @@ from pytorch_Gpipe import pipe_model
 from misc import run_analysis  # , run_partitions
 from pytorch_Gpipe.utils import layerDict, tensorDict
 from pytorch_Gpipe import PipelineConfig
+import functools
+from partition_async_pipe import AsyncPipePartitioner
+import math
+from pytorch_Gpipe.model_profiling.tracer import register_new_traced_function
 
 MODEL_CLASSES_LM_HEAD = {
     'gpt2': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
@@ -222,31 +226,84 @@ def partition_model(args,
     def force_no_recomputation_fn(scope):
         if "stateless_lm_head" in scope or "lm_head" in scope:
             return True
-        else:
-            return recomputation
 
-    graph = pipe_model(model,
-                       batch_dim,
-                       sample,
-                       depth=args.depth,
-                       n_iter=args.n_iter,
-                       nparts=args.n_partitions,
-                       node_weight_function=node_weight_function(
-                           bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-                       edge_weight_function=edge_weight_function(
-                           args.bandwidth_gps,
-                           bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-                       use_layers_only_graph=args.partition_layer_graph,
-                       output_file=args.output_file,
-                       generate_model_parallel=args.generate_model_parallel,
-                       save_memory_mode=args.save_memory_mode,
-                       recomputation=recomputation,
-                       METIS_opt=METIS_opt,
-                       force_no_recomp_scopes=force_no_recomputation_fn)
+    # so we could trace math.sqrt in gpt2 attention
+    register_new_traced_function(math.sqrt, namespace=math)
+
+    # graph = pipe_model(model,
+    #                    batch_dim,
+    #                    sample,
+    #                    depth=args.depth,
+    #                    n_iter=args.n_iter,
+    #                    nparts=args.n_partitions,
+    #                    node_weight_function=node_weight_function(
+    #                        bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+    #                    edge_weight_function=edge_weight_function(
+    #                        args.bandwidth_gps,
+    #                        bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+    #                    use_layers_only_graph=True,
+    #                    use_graph_profiler=args.use_graph_profiler,
+    #                   use_network_profiler=not args.use_graph_profiler,
+    #                    output_file=args.output_file,
+    #                    generate_model_parallel=args.generate_model_parallel,
+    #                    save_memory_mode=args.save_memory_mode,
+    #                    recomputation=recomputation,
+    #                    METIS_opt=METIS_opt,
+    #                    force_no_recomp_scopes=force_no_recomputation_fn)
+
+    partial_pipe_model = functools.partial(
+        pipe_model,
+        model,
+        batch_dim,
+        sample,
+        depth=args.depth,
+        n_iter=args.n_iter,
+        nparts=args.n_partitions,
+        node_weight_function=node_weight_function(
+            bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+        edge_weight_function=edge_weight_function(
+            args.bandwidth_gps,
+            bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+        use_layers_only_graph=True,
+        use_graph_profiler=args.use_graph_profiler,
+        use_network_profiler=not args.use_graph_profiler,
+        output_file=args.output_file,
+        generate_model_parallel=args.generate_model_parallel,
+        save_memory_mode=args.save_memory_mode,
+        recomputation=recomputation,
+        METIS_opt=METIS_opt)
+
+    if args.async_pipeline and (not args.no_recomputation):
+        print("using async partitioner")
+        async_pipe_partitioner = AsyncPipePartitioner(model, args.output_file,
+                                                      partial_pipe_model)
+
+        graph = run_x_tries_until_no_fail(
+            async_pipe_partitioner.partition,
+            10,
+            force_no_recomp_scopes=force_no_recomputation_fn,
+            allowed_mistakes=0)
+
+        # graph = async_pipe_partitioner.partition(
+        #     force_no_recomp_scopes=force_no_recomputation_fn, allowed_mistakes=0)
+    else:
+        graph = partial_pipe_model(
+            force_no_recomp_scopes=force_no_recomputation_fn)
+
     if args.dot:
         graph.save_as_pdf(args.output_file, ".")
+        graph.serialize(args.output_file)
 
-    graph.serialize(args.output_file)
+    # Replace the dummy partition wtih cuda:0.
+    if args.stateless_tied:
+        try:
+            import subprocess
+            subprocess.check_output([
+                'sed', '-s', '-i', f"s/cuda:{args.n_partitions}/cuda:0/g",
+                args.output_file + ".py"
+            ])
+        except:
+            print("Failed to replaced tied dummy partition device")
 
     record_cmdline(args.output_file)
     module_path = args.output_file.replace("/", ".")
@@ -468,11 +525,9 @@ def parse_cli():
                         type=int,
                         help="the depth in which we will partition the model")
     parser.add_argument(
-        "--partition_layer_graph",
-        action="store_true",
-        default=False,
-        help="whether to partition a graph containing only layers")
-
+        "--use_graph_profiler", default=False, action="store_true",
+        help="wether to use the new graph based profiler or the old network_profiler,"
+    )
     parser.add_argument("--dot",
                         default=False,
                         action="store_true",
@@ -489,7 +544,7 @@ def parse_cli():
                         "--async_pipeline",
                         default=False,
                         action="store_true",
-                        help="Do analysis for async pipeline")
+                        help="Do analysis and partitioning for async pipeline")
 
     ParseMetisOpts.add_metis_arguments(parser)
 

@@ -1,12 +1,8 @@
 from enum import IntEnum
-from typing import Any, List, Tuple, Optional, OrderedDict, Type, Callable, Union, Dict
-from ..utils import OrderedSet, _extract_volume_from_sizes
-from .network_profiler import Profile
-import torch
-from torch.nn import Module
-from torch import Tensor
 import pickle
-import collections
+from typing import Tuple, Optional, Callable, Dict, Iterable, List
+from itertools import chain
+from torch import Tensor, nn as nn
 
 
 class NodeTypes(IntEnum):
@@ -18,193 +14,88 @@ class NodeTypes(IntEnum):
     LAYER = 3
     OP = 4
     CONSTANT = 5
-    PYTHON_PRIMITIVE = 6
+    PRIMITIVE = 6
 
     def __repr__(self):
         return self.name
 
 
 class Node():
-    '''
-    a simple graph node for weighted directed graphs
-
-    Fields:
-    ------
-    scope:
-     the operation/layer the node represents
-    idx:
-        a serial number of the node for convience
-    node_type:
-        an enum representing if the node is an input Layer or operator(like arithmetic ops)
-    value:
-        if the node is of type NodeType.CONSTANT then value is the constant this node represents
-    incoming_nodes:
-        the nodes who have edges from them to this node
-    out_nodes:
-        the nodes who have edges from this node
-    weight:
-        the weight of the edge can be anything
-    part:
-        partition idx determines the color of the Node
-
-     parallel edges in the same direction are not allowed
-    '''
-
-    def __init__(self,
-                 scope: str,
-                 idx: int,
-                 node_type: NodeTypes,
-                 incoming_nodes: Optional[OrderedSet["Node"]] = None,
-                 weight: Union[Profile, int] = 0,
-                 part: int = 0,
-                 value: Optional[Any] = None,
-                 shape: Optional[List[int]] = None, dtype=None):
-        self.scope = scope
-        self.idx = idx
+    def __init__(self, node_type, idx, scope):
         self.type = node_type
-        self.out_nodes: OrderedSet[Node] = OrderedSet()
-        self.weight = weight
-        self.part = part
-        self.in_nodes: OrderedSet[Node] = incoming_nodes if isinstance(
-            incoming_nodes, OrderedSet) else OrderedSet()
-        self.value = value
-        self.value_type: Optional[Type] = None
-        self.shape = shape
-        self.dtype = dtype
+        self.id = idx
+        self.scope = scope
 
-    def valueType(self) -> Type:
-        if self.value_type:
-            return self.value_type
-        else:
-            return type(self.value)
+        self.part = 0
+        self.weight = None
 
-    def add_out_node(self, node):
-        if isinstance(node, Node):
-            self.out_nodes.add(node)
-        if isinstance(node, (set, OrderedSet)):
-            self.out_nodes.update(node)
+        self.out_edges = set()
+        self.args = []
+        self.kwargs = dict()
+        self.value_type = None
 
-    def add_in_node(self, node):
-        if isinstance(node, Node):
-            self.in_nodes.add(node)
-        if isinstance(node, (set, OrderedSet)):
-            self.in_nodes.update(node)
+        self.tensor_dtype = None
+        self.tensor_shape = None
 
-    def replace_out_node(self, to_replace, value):
-        if to_replace not in self.out_nodes:
-            return
+        self.constant_value = None
 
-        values = list(self.out_nodes)
-        idx = values.index(to_replace)
+    def add_kwarg(self, kwarg, kwarg_node):
+        self.kwargs[kwarg_node] = kwarg
 
-        before, after = values[:idx], values[idx + 1:]
-        try:
-            # we handle the case for iterable, if value is not then we recall with [value]
-            iter(value)
-            keys = value
-            to_add = [
-                v for v in keys if (v not in before) and (v not in after)
-            ]
-            self.out_nodes = OrderedSet(before + to_add + after)
+    def add_arg(self, arg_node):
+        self.args.append(arg_node)
 
-        except TypeError:
-            self.replace_out_node(to_replace, [value])
+    def add_out_edge(self, dest_node):
+        self.out_edges.add(dest_node)
 
-    def replace_in_node(self, to_replace, value):
-        if to_replace not in self.in_nodes:
-            return
+    def remove_output(self, out_node):
+        self.out_edges.remove(out_node)
 
-        values = list(self.in_nodes)
-        idx = values.index(to_replace)
-
-        before, after = values[:idx], values[idx + 1:]
-        try:
-            # we handle the case for iterable, if value is not then we recall with [value]
-            iter(value)
-            keys = value
-            to_add = [
-                v for v in keys if (v not in before) and (v not in after)
-            ]
-            self.in_nodes = OrderedSet(before + to_add + after)
-
-        except TypeError:
-            self.replace_in_node(to_replace, [value])
-
-    def __repr__(self):
-        out_idx = {node.idx for node in self.out_nodes}
-        in_idx = {node.idx for node in self.in_nodes}
-        return f"node {self.idx} in scope {self.scope} of type {self.type} flows to {out_idx} gathers {in_idx}\n"
+    @property
+    def in_edges(self):
+        return list(chain(self.args, self.kwargs.keys()))
 
 
-GraphNodes = OrderedDict[int, Node]
+GraphNodes = Dict[int, Node]
 NodeWeightFunction = Callable[[Node], int]
 EdgeWeightFunction = Callable[[Tuple[Node, Node]], int]
 
 
 class Graph():
-    '''
-    A simple graph data structure to be consumed by the partition algorithm and the code generator
-
-    Fields:
-    ------
-    nodes: List[Node]:
-        the graph Nodes
-    output_scopes: OrderedSet[str]:
-        the graph's output scopes representing the model outputs
-    depth: int:
-        the depth used in order to construct the graph
-    basic_blocks: Tuple[Module,...]:
-        the basic blocks specified by the user at creation time
-    num_inputs: int:
-        the number of inputs(Tensors) the model recieves
-    model_name: str:
-        the name of the model class this graph represents
-    num_partitions: int:
-        the number of partitions for the nodes
-    '''
-
-    def __init__(self,
-                 nodes: Optional[GraphNodes] = None,
-                 graph_output_scopes: Optional[OrderedSet[str]] = None,
-                 depth: Optional[int] = None,
-                 basic_blocks: Optional[Tuple[Module, ...]] = None):
-        self._nodes = nodes if nodes else collections.OrderedDict()
-        self.output_scopes = graph_output_scopes if graph_output_scopes else OrderedSet(
-        )
-        self.depth = depth if depth is not None else 0
-        self.basic_blocks = basic_blocks if basic_blocks is not None else ()
-
-    def __getitem__(self, idx) -> Node:
-        return self._nodes[idx]
+    def __init__(self, nodes: GraphNodes, input_kw_ids, output_ids: List[int], depth: int, basic_blocks: Tuple[nn.Module, ...]):
+        self._nodes: GraphNodes = nodes
+        self.input_kw_ids = input_kw_ids
+        self.output_ids = output_ids
+        self.depth = depth
+        self.basic_blocks = basic_blocks
 
     @property
-    def nodes(self) -> List[Node]:
-        return list(self._nodes.values())
+    def nodes(self) -> Iterable[Node]:
+        return self._nodes.values()
+
+    @property
+    def inputs(self):
+        return (n for n in self.nodes if n.type is NodeTypes.IN)
 
     @property
     def num_inputs(self) -> int:
-        return len([1 for node in self.nodes if node.type is NodeTypes.IN])
-
-    @property
-    def model_name(self) -> str:
-        for node in self.nodes:
-            if node.type != NodeTypes.IN:
-                return node.scope[:node.scope.find("/")]
+        return len(list(self.inputs))
 
     @property
     def num_partitions(self) -> int:
-        return len(set(node.part for node in self.nodes))
+        return len({n.part for n in self.nodes})
 
     @property
-    def outputs(self) -> List[Node]:
-        nodes = [n for n in self.nodes if n.scope in self.output_scopes]
-        order = {s: idx for idx, s in enumerate(self.output_scopes)}
-        return sorted(nodes, key=lambda n: order[n.scope])
+    def output_scopes(self):
+        return [n.scope for n in self.outputs]
 
     @property
-    def inputs(self) -> List[Node]:
-        nodes = [n for n in self.nodes if n.type is NodeTypes.IN]
-        return sorted(nodes, key=lambda n: n.idx)
+    def outputs(self):
+        return [self._nodes[id] for id in self.output_ids]
+
+    @property
+    def model_name(self):
+        return self._nodes[self.output_ids[0]].scope.split("/", maxsplit=1)[0]
 
     def asNetworkx(self,
                    directed: bool = False,
@@ -240,29 +131,27 @@ class Graph():
             G = nx.Graph()
 
         for u in self.nodes:
-            for v in u.out_nodes:
+            for v in u.out_edges:
                 if edge_weight_function is None:
                     w = 1
                 else:
                     w = edge_weight_function(u, v)
-                G.add_edge(u.idx, v.idx, weight=w)
+                G.add_edge(u.id, v.id, weight=w)
 
         for n in self.nodes:
             if node_weight_function is None:
                 w = 1
             else:
                 w = node_weight_function(n)
-            G.nodes[n.idx]['weight'] = w
-            G.nodes[n.idx]['label'] = n.scope
-            G.nodes[n.idx]['partition_idx'] = n.part
-            G.nodes[n.idx]['original_profile'] = n.weight
+            G.nodes[n.id]['weight'] = w
 
         return G
 
     def build_dot(self,
                   show_buffs_params: bool = True,
                   show_profiles: bool = True,
-                  edge_weight_function=None):
+                  edge_weight_function=None,
+                  node_weight_function=None):
         '''
         return a graphviz representation of the graph
         Parameters
@@ -274,8 +163,6 @@ class Graph():
         edge_weight_function:
             function to get edge weights
         '''
-        if edge_weight_function is None:
-            edge_weight_function = edge_weight
         theme = {
             "background_color": "#FFFFFF",
             "fill_color": "#E8E8E8",
@@ -339,57 +226,57 @@ class Graph():
             16: 'tan'
         }
 
-        def edge_label(sizes):
-            if sizes is None:
-                return None
-            if isinstance(sizes, torch.Size):
-                return list(sizes)
-            else:
-                l = [edge_label(s) for s in sizes if s]
-                l = list(filter(len, l))
-                if len(l) == 1 and isinstance(l[0], list):
-                    return l[0]
-                return l
+        def predicate(n):
+            return (n.type != NodeTypes.BUFF_PARAM) or show_buffs_params
 
-        def hide_node(node):
-            return (node.type == NodeTypes.BUFF_PARAM) and (
-                not show_buffs_params)
-
+        # add nodes
         for node in self.nodes:
-            if hide_node(node):
-                continue
-            label = node.scope + f"\nidx:{node.idx}"
-            if show_profiles and isinstance(node.weight, Profile):
-                label = f"{label}\nProfile:"
-                for k, v in node.weight._asdict().items():
-                    label += f"\n{k}:{v}"
-                    if "time" in k:
-                        label += " ms"
-                    elif "memory" in k or "size" in k:
-                        label += " MB"
+            node_id = node.id
+            if predicate(node):
+                scope = node.scope
+                value_type = node.value_type
+                node_label = f"{scope}\nidx: {node_id}\nvalue type: {value_type}"
+                if node in self.outputs:
+                    node_label += "\nmodel output"
+                if node.type is NodeTypes.IN:
+                    node_label += "\nmodel input"
+                if node.id in self.input_kw_ids:
+                    node_label += f"\nkwarg: {self.input_kw_ids[node.id]}"
+                if node.type is NodeTypes.CONSTANT:
+                    node_label += f"\nvalue: {node.constant_value}"
 
-            label = f"{label}\n type: {node.valueType()}"
-            if not (node.value is None):
-                label = f"{label}\n value={node.value}"
+                if issubclass(node.value_type, Tensor):
+                    node_label += f"\ntensor of type: {node.tensor_dtype}\nshape: {node.tensor_shape}"
 
-            dot.node(str(node.idx), label, fillcolor=colors[node.part])
+                if show_profiles and node.weight:
+                    node_label = f"{node_label}\nProfile:"
+                    for k, v in node.weight._asdict().items():
+                        node_label += f"\n{k}:{v}"
+                        if "time" in k:
+                            node_label += " ms"
+                        elif "memory" in k or "size" in k:
+                            node_label += " MB"
+                if node_weight_function:
+                    node_label += f"\nweight: {node_weight_function(node)}"
 
-        for node in self.nodes:
-            if hide_node(node):
-                continue
-            for out_node in node.out_nodes:
-                if hide_node(out_node):
-                    continue
-                if "Unpack" in out_node.scope:
-                    shape = out_node.shape
-                else:
-                    shape = node.shape
-                # TODO for DEBUG shape may be None or undefined
-                label = edge_label(shape)
-                label = f"{label}\nweight: {edge_weight_function(node,out_node)}"
+                dot.node(str(node_id), label=node_label,
+                         fillcolor=colors[node.part])
 
-                dot.edge(str(node.idx), str(out_node.idx),
-                         label=label)
+                # add edges
+                args, kwargs = node.args, node.kwargs
+                for idx, i in enumerate(args):
+                    if predicate(i):
+                        edge_label = f"arg: {idx}"
+                        if edge_weight_function:
+                            edge_label += f"\nweight: {edge_weight_function(i,node)}"
+                        dot.edge(str(i.id), str(node_id), label=edge_label)
+
+                for i, kw in kwargs.items():
+                    if predicate(i):
+                        edge_label = f"kwarg: {kw}"
+                        if edge_weight_function:
+                            edge_label += f"\nweight: {edge_weight_function(i,node)}"
+                        dot.edge(str(i.id), str(node_id), label=edge_label)
 
         return dot
 
@@ -423,7 +310,8 @@ class Graph():
                     directory: str,
                     show_buffs_params: bool = True,
                     show_profiles: bool = True,
-                    edge_weight_function=None):
+                    edge_weight_function=None,
+                    node_weight_function=None):
         '''
         save the rendered graph to a pdf file
 
@@ -438,7 +326,8 @@ class Graph():
         show_profiles:
             whether to display the nodes weight
         '''
-        dot = self.build_dot(show_buffs_params, show_profiles=show_profiles, edge_weight_function=edge_weight_function)
+        dot = self.build_dot(show_buffs_params, show_profiles=show_profiles,
+                             edge_weight_function=edge_weight_function, node_weight_function=node_weight_function)
         dot.format = "pdf"
         import os
         if os.path.exists(f"{directory}/{file_name}.pdf"):
@@ -465,118 +354,60 @@ class Graph():
         '''
         returns a dicitionary containing the graphs state
         '''
-        graph_output_scopes = self.output_scopes
-        graph_depth = self.depth
-        graph_basic_blocks = self.basic_blocks
-        graph_nodes_data = []
-        for u in self.nodes:
-            in_nodes = [v.idx for v in u.in_nodes]
-            out_nodes = [v.idx for v in u.out_nodes]
-            node_data = {
-                "idx": u.idx,
-                "part": u.part,
-                "weight": u.weight,
-                "scope": u.scope,
-                "type": u.type,
-                "value": u.value,
-                "value_type": u.value_type,
-                "in_nodes": in_nodes,
-                "out_nodes": out_nodes,
-                "shape": u.shape,
-                "dtype": str(u.dtype),
-            }
-            graph_nodes_data.append(node_data)
 
-        graph = {
-            "depth": graph_depth,
-            "output_scopes": graph_output_scopes,
-            "basic_blocks": graph_basic_blocks,
-            "nodes_data": graph_nodes_data
-        }
+        node_states = []
+        for node in self.nodes:
+            state = dict(id=node.id, scope=node.scope, type=node.type,
+                         part=node.part, weight=node.weight,
+                         out_edges=[n.id for n in node.out_edges],
+                         args=[n.id for n in node.args],
+                         kwargs={n.id: kw for n,
+                                 kw in node.kwargs.items()},
+                         value_type=node.value_type,
+                         constant_value=node.constant_value,
+                         tensor_dtype=node.tensor_dtype,
+                         tensor_shape=node.tensor_shape)
+            node_states.append(state)
 
-        return graph
+        return{"node_data": node_states,
+               "input_kw_ids": self.input_kw_ids,
+               "output_ids": self.output_ids,
+               "depth": self.depth,
+               "basic_blocks": self.basic_blocks
+               }
 
     def load_state(self, state):
-        '''
-        loads the given state into the graph overriding it
-        '''
-        nodes = collections.OrderedDict()
+        output_ids = state['output_ids']
+        depth = state['depth']
+        basic_blocks = state['basic_blocks']
+        input_kw_ids = state['input_kw_ids']
 
-        # load node data
-        for node in state["nodes_data"]:
-            idx = node["idx"]
-            part = node["part"]
-            weight = node["weight"]
-            scope = node["scope"]
-            node_type = node["type"]
-            value = node["value"]
-            value_type = node["value_type"]
-            shape = node["shape"]
-            nodes[idx] = Node(scope,
-                              idx,
-                              node_type,
-                              weight=weight,
-                              part=part,
-                              value=value,
-                              shape=shape,
-                              dtype=node['dtype'])
-            nodes[idx].value_type = value_type
+        nodes = dict()
 
-        # add edges
-        for node in state["nodes_data"]:
-            nodes[node["idx"]].in_nodes = OrderedSet(
-                [nodes[u] for u in node["in_nodes"]])
-            nodes[node["idx"]].out_nodes = OrderedSet(
-                [nodes[u] for u in node["out_nodes"]])
+        states = state['node_data']
+        for state in states:
+            node = Node(state['type'], state['id'], state['scope'])
+            nodes[node.id] = node
+
+            node.part = state['part']
+            node.weight = state['weight']
+            node.args = [nodes[n] for n in state['args']]
+            node.kwargs = {nodes[n]: kw for n, kw in state['kwargs'].items()}
+            node.constant_value = state['constant_value']
+            node.value_type = state['value_type']
+            node.tensor_dtype = state['tensor_dtype']
+            node.tensor_shape = state['tensor_shape']
+
+        for node in nodes.values():
+            node.out_edges = {nodes[n] for n in states[node.id]['out_edges']}
 
         self._nodes = nodes
-        self.output_scopes = state["output_scopes"]
-        self.depth = state["depth"]
-        self.basic_blocks = state["basic_blocks"]
+        self.basic_blocks = basic_blocks
+        self.depth = depth
+        self.output_ids = output_ids
+        self.input_kw_ids = input_kw_ids
 
         return self
-
-    def graphs_equal(self, other) -> bool:
-        '''
-        check if 2 graphs are equal\n
-        graphs are equal if the topography is the same and if the nodes data is the same 
-            (upto weights and partition idx)
-        '''
-        if not isinstance(other, Graph):
-            return False
-
-        if len(self.nodes) != len(other.nodes):
-            return False
-
-        for u, v in zip(self.nodes, other.nodes):
-            if u.idx != v.idx or u.scope != v.scope or u.type != v.type or u.shape != v.shape:
-                return False
-            if u.value_type != v.value_type or u.valueType() != v.valueType():
-                return False
-
-            if u.valueType() is Tensor:
-                if (u.value is None
-                        or v.value is None) and (not (u.value is v.value)):
-                    return False
-                if (u.value is not None and v.value is not None) and (
-                        not torch.allclose(u.value, v.value)):
-                    return False
-            if u.valueType() != Tensor and u.value != v.value:
-                return False
-
-            if len(u.out_nodes) != len(v.out_nodes):
-                return False
-            for x, y in zip(u.out_nodes, v.out_nodes):
-                if x.idx != y.idx:
-                    return False
-
-            if len(u.in_nodes) != len(v.in_nodes):
-                return False
-            for x, y in zip(u.in_nodes, v.in_nodes):
-                if x.idx != y.idx:
-                    return False
-
-        return True
 
     @classmethod
     def deserialize(cls, path: str) -> "Graph":
@@ -592,111 +423,40 @@ class Graph():
             path += ".graph"
 
         graph_data = pickle.load(open(path, "rb"))
-        graph = cls()
 
-        return graph.load_state(graph_data)
-
-    @classmethod
-    def _check(cls, nodes_or_graph: Union[GraphNodes, "Graph"]):
-        if isinstance(nodes_or_graph, Graph):
-            nodes = nodes_or_graph.nodes
-            _nodes = nodes_or_graph._nodes
-        else:
-            assert isinstance(nodes_or_graph, OrderedDict)
-            nodes = list(nodes_or_graph.values())
-            _nodes = nodes_or_graph
-
-        assert isinstance(_nodes, OrderedDict)
-        assert isinstance(nodes[0], Node)
-
-        expected_num_keys = len({n.idx for n in nodes})
-        assert expected_num_keys == len(nodes)
-        key_set = set()
-        for node in nodes:
-            key_set.add(node.idx)
-            assert node.idx in _nodes
-            for i in node.in_nodes:
-                assert node in i.out_nodes
-                assert i.idx in _nodes
-                assert node.idx > i.idx
-                key_set.add(i.idx)
-            for o in node.out_nodes:
-                assert node in o.in_nodes
-                assert o.idx in _nodes
-                assert node.idx < o.idx
-                key_set.add(o.idx)
-        assert len(key_set) == len(nodes)
-        return nodes_or_graph
+        return cls(None, None, None, None, None).load_state(graph_data)
 
     def layers_graph(self) -> Tuple["Graph", Dict[int, int]]:
         '''
-        creates a graph g with nodes of types OP PYTHON_PRIMITIVE and CONSTANT removed
+        creates a graph g with nodes of type CONSTANT removed
         leaving only inputs layers and params/buffers
 
         returns the created graph and a map between g's indices and self indices
         '''
-        g = Graph().load_state(self.state())
+        new_nodes = dict()
+        output_ids = []
 
-        def predicate(n: Node):
-            if n.scope in g.output_scopes:
-                return False
-            elif n.type is NodeTypes.IN:
-                return False
-            return n.type in {NodeTypes.PYTHON_PRIMITIVE, NodeTypes.CONSTANT} or (len(n.in_nodes) == 0 and n.type is NodeTypes.OP)
+        new_graph = Graph(None, None, None, None,
+                          None).load_state(self.state())
 
-        # inefficient but should only be called once
-        nodes = _remove_nodes(g._nodes, predicate)
-        new_to_old = dict()
-        g._nodes = collections.OrderedDict()
-        for idx, n in enumerate(nodes.values()):
-            new_to_old[idx] = n.idx
-            n.idx = idx
-            g._nodes[idx] = n
-        return g, new_to_old
-
-
-def _remove_nodes(nodes: GraphNodes, condition: Callable[[Node],
-                                                         bool]) -> GraphNodes:
-    # TODO code duplication from graph builder
-    while True:
-        changed = False
-        optimized_graph = OrderedDict()
-
-        for unique_id, node in nodes.items():
-            if condition(node):
-                changed = True
-                for in_node in node.in_nodes:
-                    in_node.replace_out_node(node, node.out_nodes)
-                    if node.value_type:
-                        in_node.value_type = node.value_type
-                        in_node.value = None
-                for out_node in node.out_nodes:
-                    out_node.replace_in_node(node, node.in_nodes)
+        num_removed = 0
+        lookup = dict()
+        for node in new_graph._nodes.values():
+            if node.type is NodeTypes.CONSTANT:
+                for o in node.out_edges:
+                    o.kwargs.pop(node, None)
+                    o.args = [n for n in o.args if n is not node]
+                num_removed += 1
             else:
-                optimized_graph[unique_id] = node
+                old_id = node.id
+                new_id = old_id - num_removed
+                if node.id in new_graph.output_ids:
+                    output_ids.append(new_id)
+                node.id = new_id
+                new_nodes[new_id] = node
+                lookup[new_id] = old_id
 
-        nodes = optimized_graph
-        if not changed:
-            break
-    return nodes
+        new_graph._nodes = new_nodes
+        new_graph.output_ids = output_ids
 
-
-MULT_FACTOR = 1000
-bw_GBps = 12
-
-
-def edge_weight(u: Node, v: Node):
-    if u.type is NodeTypes.CONSTANT or (u.valueType() in [int, None] or u.shape == (torch.Size([]),)):
-        # no constant or scalars on boundries
-        return 1000 * MULT_FACTOR
-
-    if u.valueType() in [list, tuple]:
-        # no nested iterables on boundries
-        return 1000 * MULT_FACTOR
-
-    # TODO data type not included shouldn't really matter
-    MB = 1e6
-    volume = _extract_volume_from_sizes(u.shape) / MB
-    # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
-    w = max(1, int(MULT_FACTOR * (volume / bw_GBps)))
-    return w
+        return new_graph, lookup

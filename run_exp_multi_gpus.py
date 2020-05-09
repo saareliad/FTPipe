@@ -3,52 +3,70 @@ import os
 import subprocess
 import torch
 
+BWD_TO_FWD_RATIO_FULL_EXP = [1, 2, 3, 4, 5, -1]
+BWD_TO_FWD_RATIO_BEST_TRANSFORMER = [2]
+TRANSFORMER_USED_RATIO = BWD_TO_FWD_RATIO_FULL_EXP
 
-def find_best(path):
-    if os.path.exists(path):
-        files = os.listdir(path)
-        for f in files:
-            if not f.endswith("py"):
-                continue
-            basename = os.path.basename(f)
+N_ITER = [50]
 
-            print(
-                basename, ": ",
-                subprocess.check_output(['tail', '-2',
-                                         os.path.join(path, f)]).decode())
+# NOTE: values have to be in lists.
+
+
+def find_best(path, do_print=True):
+    files = os.listdir(path)
+    res = dict()
+    for f in files:
+        if not f.endswith("py"):
+            continue
+        basename = os.path.basename(f)
+        out = subprocess.check_output(['tail', '-4',
+                                       os.path.join(path, f)]).decode()
+        res[basename] = out
+        if do_print:
+            print(basename, ": ", out)
+    # TODO: parse it better to get just the speedup.
+    return res
+
+
+#######################
+# GPT2 (gpt2,gpt2-xl)
+#######################
 
 
 def gpt2xl_tied_p8():
     COMMAND = "python partition_gpt2_models.py"
     TRAIN_FILE = "wikitext-2-raw/wiki.train.raw"
-    param_grid = dict(
-        seed=[42],
-        model_type=["gpt2"],
-        model_name_or_path=["gpt2-xl"],
-        train_data_file=[TRAIN_FILE],
-        n_partitions=[8],
-        partitioning_batch_size=[1],
-        analysis_batch_size=[1],
-        block_size=[-1],
-        n_iter=[1],
-        lmhead=[""],
-        async_pipeline=[""],
-        auto_file_name=[""],
-        overwrite_cache=[""],
-        bwd_to_fwd_ratio=[1, 2, 3, 4, 5, 6, -1],
-        # bwd_to_fwd_ratio=[-1],
-        output_file=["results/gpt2xl_tied_p8/"],
-        stateless_tied=[""])
+    OUT_DIR = "results/gpt2xl_tied_p8/"
+    os.makedirs(OUT_DIR, exist_ok=True)
+
+    param_grid = dict(seed=[42],
+                      model_type=["gpt2"],
+                      model_name_or_path=["gpt2-xl"],
+                      train_data_file=[TRAIN_FILE],
+                      n_partitions=[8],
+                      partitioning_batch_size=[1],
+                      analysis_batch_size=[1],
+                      block_size=[-1],
+                      n_iter=N_ITER,
+                      lmhead=[""],
+                      async_pipeline=[""],
+                      auto_file_name=[""],
+                      overwrite_cache=[""],
+                      bwd_to_fwd_ratio=TRANSFORMER_USED_RATIO,
+                      output_file=[OUT_DIR],
+                      stateless_tied=[""])
     run_grid_on_multi_gpu_per_run(COMMAND,
                                   param_grid,
                                   gpu_list=list(range(8)),
                                   gpus_per_config=1)
-    find_best("results/gpt2xl_tied_p8/")
+    find_best(OUT_DIR)
 
 
 def gpt2xl_untied_p8():
     COMMAND = "python partition_gpt2_models.py"
     TRAIN_FILE = "wikitext-2-raw/wiki.train.raw"
+    OUT_DIR = "results/gpt2xl_untied_p8/"
+    os.makedirs(OUT_DIR, exist_ok=True)
     param_grid = dict(
         seed=[42],
         model_type=["gpt2"],
@@ -58,26 +76,90 @@ def gpt2xl_untied_p8():
         partitioning_batch_size=[1],
         analysis_batch_size=[1],
         block_size=[-1],
-        n_iter=[1, 10, 30, 100],
+        n_iter=N_ITER,
         lmhead=[""],
         async_pipeline=[""],
         auto_file_name=[""],
         overwrite_cache=[""],
-        bwd_to_fwd_ratio=[1, 2, 3, 4, 5, 6, -1],
-        # bwd_to_fwd_ratio=[-1],
-        output_file=["results/gpt2xl_untied_p8/"],
+        bwd_to_fwd_ratio=TRANSFORMER_USED_RATIO,
+        output_file=[OUT_DIR],
     )
     run_grid_on_multi_gpu_per_run(COMMAND,
                                   param_grid,
                                   gpu_list=list(range(8)),
                                   gpus_per_config=1)
-    find_best("results/gpt2xl_untied_p8/")
+    find_best(OUT_DIR)
 
 
 def gpt2_tied_p4():
     COMMAND = "python partition_gpt2_models.py"
     TRAIN_FILE = "wikitext-2-raw/wiki.train.raw"
-    OUT_DIR = "results/new/new_40_iter/"
+    OUT_DIR = "results/gpt2_tied_p4/"
+    os.makedirs(OUT_DIR, exist_ok=True)
+
+    param_grid = dict(seed=[42],
+                      model_type=["gpt2"],
+                      model_name_or_path=["gpt2"],
+                      train_data_file=[TRAIN_FILE],
+                      n_partitions=[4],
+                      partitioning_batch_size=[4],
+                      analysis_batch_size=[4],
+                      block_size=[-1],
+                      n_iter=N_ITER,
+                      lmhead=[""],
+                      async_pipeline=[""],
+                      auto_file_name=[""],
+                      overwrite_cache=[""],
+                      bwd_to_fwd_ratio=TRANSFORMER_USED_RATIO,
+                      output_file=[OUT_DIR],
+                      stateless_tied=[""])
+    run_grid_on_multi_gpu_per_run(COMMAND,
+                                  param_grid,
+                                  gpu_list=list(range(8)),
+                                  gpus_per_config=1)
+
+    find_best(OUT_DIR)
+
+
+def gpt2_untied_p4():
+    COMMAND = "python partition_gpt2_models.py"
+    TRAIN_FILE = "wikitext-2-raw/wiki.train.raw"
+    OUT_DIR = "results/gpt2_untied_p4/"
+    os.makedirs(OUT_DIR, exist_ok=True)
+
+    param_grid = dict(seed=[42],
+                      model_type=["gpt2"],
+                      model_name_or_path=["gpt2"],
+                      train_data_file=[TRAIN_FILE],
+                      n_partitions=[4],
+                      partitioning_batch_size=[4],
+                      analysis_batch_size=[4],
+                      block_size=[-1],
+                      n_iter=N_ITER,
+                      lmhead=[""],
+                      async_pipeline=[""],
+                      auto_file_name=[""],
+                      overwrite_cache=[""],
+                      bwd_to_fwd_ratio=TRANSFORMER_USED_RATIO,
+                      output_file=[OUT_DIR])
+    run_grid_on_multi_gpu_per_run(COMMAND,
+                                  param_grid,
+                                  gpu_list=list(range(8)),
+                                  gpus_per_config=1)
+    find_best(OUT_DIR)
+
+
+######################
+# GPIPE GPT2
+#######################
+
+
+def gpt2_untied_p4_gpipe():
+    COMMAND = "python partition_gpt2_models.py"
+    TRAIN_FILE = "wikitext-2-raw/wiki.train.raw"
+    OUT_DIR = "results/gpipe/gpt2_untied_p4/"
+    os.makedirs(OUT_DIR, exist_ok=True)
+
     param_grid = dict(
         seed=[42],
         model_type=["gpt2"],
@@ -87,14 +169,39 @@ def gpt2_tied_p4():
         partitioning_batch_size=[4],
         analysis_batch_size=[4],
         block_size=[-1],
-        n_iter=[40],
+        n_iter=N_ITER,
         lmhead=[""],
-        async_pipeline=[""],
         auto_file_name=[""],
-        overwrite_cache=[""],
-        bwd_to_fwd_ratio=[1, 2, 3, 4, 5, 6, -1],
-        # bwd_to_fwd_ratio=[-1],
-        # output_file=["models/partitioned/tmp/"],
+        #   overwrite_cache=[""],
+        bwd_to_fwd_ratio=TRANSFORMER_USED_RATIO,
+        output_file=[OUT_DIR])
+    run_grid_on_multi_gpu_per_run(COMMAND,
+                                  param_grid,
+                                  gpu_list=list(range(8)),
+                                  gpus_per_config=1)
+    find_best(OUT_DIR)
+
+
+def gpt2_tied_p4_gpipe():
+    COMMAND = "python partition_gpt2_models.py"
+    TRAIN_FILE = "wikitext-2-raw/wiki.train.raw"
+    OUT_DIR = "results/gpipe/gpt2_tied_p4/"
+    os.makedirs(OUT_DIR, exist_ok=True)
+
+    param_grid = dict(
+        seed=[42],
+        model_type=["gpt2"],
+        model_name_or_path=["gpt2"],
+        train_data_file=[TRAIN_FILE],
+        n_partitions=[4],
+        partitioning_batch_size=[4],
+        analysis_batch_size=[4],
+        block_size=[-1],
+        n_iter=N_ITER,
+        lmhead=[""],
+        auto_file_name=[""],
+        #   overwrite_cache=[""],
+        bwd_to_fwd_ratio=TRANSFORMER_USED_RATIO,
         output_file=[OUT_DIR],
         stateless_tied=[""])
     run_grid_on_multi_gpu_per_run(COMMAND,
@@ -105,64 +212,110 @@ def gpt2_tied_p4():
     find_best(OUT_DIR)
 
 
-def partition_lm_model(model_type, model_name_or_path, n_partitions=2, batch_size=1, save_memory=False, tied=False, partition_layer_graph=False):
+def gpt2xl_tied_p8_gpipe():
     COMMAND = "python partition_gpt2_models.py"
     TRAIN_FILE = "wikitext-2-raw/wiki.train.raw"
-    OUT_DIR = f"results/{model_name_or_path.replace(' - ', '_')}/"
-
-    if partition_layer_graph:
-        OUT_DIR += "layer_graph/"
-    else:
-        OUT_DIR += "full_graph/"
-
-    if not isinstance(n_partitions, list):
-        n_partitions = list(n_partitions)
-
-    if not isinstance(batch_size, list):
-        batch_size = list(batch_size)
-
-    if not os.path.exists(OUT_DIR):
-        os.makedirs(OUT_DIR, exist_ok=True)
+    OUT_DIR = "results/gpipe/gpt2xl_tied_p8/"
+    os.makedirs(OUT_DIR, exist_ok=True)
 
     param_grid = dict(
         seed=[42],
-        model_type=[model_type],
-        model_name_or_path=[model_name_or_path],
-        lmhead=[""],
+        model_type=["gpt2"],
+        model_name_or_path=["gpt2-xl"],
         train_data_file=[TRAIN_FILE],
-        n_partitions=n_partitions,
-        partitioning_batch_size=batch_size,
-        analysis_batch_size=batch_size,
+        n_partitions=[8],
+        partitioning_batch_size=[1],
+        analysis_batch_size=[1],
         block_size=[-1],
-        n_iter=[1, 10, 20, 40, 50],
-        async_pipeline=[""],
+        n_iter=N_ITER,
+        lmhead=[""],
         auto_file_name=[""],
-        overwrite_cache=[""],
-        bwd_to_fwd_ratio=[1, 2, 3, 4, 5, 6, -1],
+        #   overwrite_cache=[""],
+        bwd_to_fwd_ratio=TRANSFORMER_USED_RATIO,
         output_file=[OUT_DIR],
-    )
-    if save_memory:
-        param_grid['save_memory_mode'] = [""]
-    if tied:
-        param_grid['stateless_tied'] = [""]
-    if partition_layer_graph:
-        param_grid['partition_layer_graph'] = [""]
-
+        stateless_tied=[""])
     run_grid_on_multi_gpu_per_run(COMMAND,
                                   param_grid,
-                                  gpu_list=list(
-                                      range(torch.cuda.device_count())),
+                                  gpu_list=list(range(8)),
                                   gpus_per_config=1)
+    find_best(OUT_DIR)
 
+
+def gpt2xl_untied_p8_gpipe():
+    COMMAND = "python partition_gpt2_models.py"
+    TRAIN_FILE = "wikitext-2-raw/wiki.train.raw"
+    OUT_DIR = "results/gpipe/gpt2xl_untied_p8/"
+    os.makedirs(OUT_DIR, exist_ok=True)
+    param_grid = dict(
+        seed=[42],
+        model_type=["gpt2"],
+        model_name_or_path=["gpt2-xl"],
+        train_data_file=[TRAIN_FILE],
+        n_partitions=[8],
+        partitioning_batch_size=[1],
+        analysis_batch_size=[1],
+        block_size=[-1],
+        n_iter=N_ITER,
+        lmhead=[""],
+        auto_file_name=[""],
+        # overwrite_cache=[""],
+        bwd_to_fwd_ratio=TRANSFORMER_USED_RATIO,
+        output_file=[OUT_DIR],
+    )
+    run_grid_on_multi_gpu_per_run(COMMAND,
+                                  param_grid,
+                                  gpu_list=list(range(8)),
+                                  gpus_per_config=1)
+    find_best(OUT_DIR)
+
+
+#######################
+# Bert [WIP]
+#######################
+
+
+def bert_p4():
+    raise NotImplementedError()
+    COMMAND = "python partition_squad_models.py"
+    TRAIN_FILE = "wikitext-2-raw/wiki.train.raw"
+    OUT_DIR = "results/bert_p4/"
+    os.makedirs(OUT_DIR, exist_ok=True)
+
+    param_grid = dict(seed=[26320],
+                      model_type=["gpt2"],
+                      model_name_or_path=["gpt2"],
+                      train_data_file=[TRAIN_FILE],
+                      n_partitions=[4],
+                      partitioning_batch_size=[4],
+                      analysis_batch_size=[4],
+                      block_size=[-1],
+                      n_iter=N_ITER,
+                      lmhead=[""],
+                      async_pipeline=[""],
+                      auto_file_name=[""],
+                      overwrite_cache=[""],
+                      bwd_to_fwd_ratio=TRANSFORMER_USED_RATIO,
+                      output_file=[OUT_DIR])
+    run_grid_on_multi_gpu_per_run(COMMAND,
+                                  param_grid,
+                                  gpu_list=list(range(8)),
+                                  gpus_per_config=1)
     find_best(OUT_DIR)
 
 
 if __name__ == "__main__":
-    for use_tied in [True, False]:
-        for use_partition_layer_graph in [True, False]:
-            partition_lm_model("ctrl", "ctrl",
-                               n_partitions=[4, 8],
-                               batch_size=[1, 2, 4],
-                               save_memory=True,
-                               tied=use_tied,
-                               partition_layer_graph=use_partition_layer_graph)
+
+    # Async pipeline
+
+    # gpt2_tied_p4()
+    # gpt2_untied_p4()
+    # gpt2xl_tied_p8()
+    # gpt2xl_untied_p8()
+
+    # GPipe
+    gpt2_tied_p4_gpipe()
+    gpt2_untied_p4_gpipe()
+    gpt2xl_tied_p8_gpipe()
+    gpt2xl_untied_p8_gpipe()
+
+    # gpt2xl_untied_p8()

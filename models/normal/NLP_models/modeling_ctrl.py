@@ -569,7 +569,31 @@ class CTRLModel(CTRLPreTrainedModel):
 
         hidden_states = self.layernorm(hidden_states)
         hidden_states = hidden_states.view(*output_shape)
-        return (hidden_states,)
+        return hidden_states
+
+
+class LMOutput(nn.Module):
+    def forward(self, lm_logits, labels=None):
+        output = lm_logits
+        if labels is not None:
+            # Shift so that tokens < n predict n
+            shift_logits = lm_logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            # Flatten the tokens
+            # loss_fct = CrossEntropyLoss(ignore_index=-100)
+
+            def loss_fct(logits, labels):
+                return nn.functional.cross_entropy(logits, labels, ignore_index=-100)
+            loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)),
+                            shift_labels.view(-1))
+
+            # HACK: changed to output just the loss, somehow this improves partitioning results,
+            # need to understand why.
+            # outputs = (loss,)
+            # outputs = (loss, lm_logits)
+            output = loss
+
+        return output
 
 
 @add_start_docstrings(
@@ -582,7 +606,7 @@ class CTRLLMHeadModel(CTRLPreTrainedModel):
         super().__init__(config)
         self.transformer = CTRLModel(config)
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=True)
-        self.lm_loss = nn.CrossEntropyLoss()
+        self.lm_output = LMOutput()
 
         self.init_weights()
 
@@ -637,20 +661,8 @@ class CTRLLMHeadModel(CTRLPreTrainedModel):
         outputs = model(input_ids, labels=input_ids)
         loss, logits = outputs[:2]
         """
-        hidden_states = self.transformer(input_ids)[0]
+        hidden_states = self.transformer(input_ids)
 
         lm_logits = self.lm_head(hidden_states)
 
-        outputs = (lm_logits,)
-
-        if labels is not None:
-            # Shift so that tokens < n predict n
-            shift_logits = lm_logits[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous()
-            # Flatten the tokens
-            loss = self.lm_loss(shift_logits.view(-1, shift_logits.size(-1)),
-                                shift_labels.view(-1))
-            outputs = (loss,)
-
-        #loss, lm_logits
-        return outputs
+        return self.lm_output(lm_logits, labels=labels)
