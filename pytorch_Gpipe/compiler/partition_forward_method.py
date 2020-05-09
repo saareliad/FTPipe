@@ -3,6 +3,8 @@ from itertools import chain
 from typing import List, Tuple, Dict, Iterator, Set
 import re
 from ..model_profiling import used_namespaces, Node, NodeTypes
+from ..utils import inplace_arithmetic_ops, r_arithmetic_ops
+
 tab = '    '
 dtab = tab + tab
 
@@ -20,27 +22,6 @@ arithmetic_ops = {"__add__": "+",
                   "__matmul__": "@",
                   "__pow__": "**"
                   }
-
-r_arithmetic_ops = {"__radd__": "+",
-                    "__rsub__": "-",
-                    "__rmul__": "*",
-                    "__rdiv__": "/",
-                    "__rtruediv__": "/",
-                    "__rfloordiv__": "//",
-                    "__rmod__": "%",
-                    "__rmatmul__": "@",
-                    "__rpow__": "**"
-                    }
-
-inplace_arithmetic_ops = {"__iadd__": "+=",
-                          "__isub__": "-=",
-                          "__imul__": "*=",
-                          "__idiv__": "/=",
-                          "__itruediv__": "/=",
-                          "__ifloordiv__": "//=",
-                          "__imod__": "%=",
-                          "__imatmul__": "@=",
-                          "__ipow__": "**="}
 
 
 def generate_forward_method(

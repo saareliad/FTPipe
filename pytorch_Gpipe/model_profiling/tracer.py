@@ -12,7 +12,7 @@ from torch._overrides import get_overridable_functions
 
 from pytorch_Gpipe.utils import traverse_model
 from .control_flow_graph import Node, NodeTypes, Graph
-from ..utils import get_tensor_shapes, get_tensor_dtypes
+from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops
 ##############################
 # Tracing Metadata
 ##############################
@@ -101,39 +101,6 @@ class TracedFunction():
 def used_namespaces():
     return {namespace.__name__ for namespace in
             chain(get_overridable_functions().keys(), TracedFunctions.traced_namespaces())}
-
-
-arithmetic_ops = {"__add__": "+",
-                  "__sub__": "-",
-                  "__mul__": "*",
-                  "__div__": "/",
-                  "__truediv__": "/",
-                  "__floordiv__": "//",
-                  "__mod__": "%",
-                  "__matmul__": "@",
-                  "__pow__": "**"
-                  }
-
-r_arithmetic_ops = {"__radd__": "+",
-                    "__rsub__": "-",
-                    "__rmul__": "*",
-                    "__rdiv__": "/",
-                    "__rtruediv__": "/",
-                    "__rfloordiv__": "//",
-                    "__rmod__": "%",
-                    "__rmatmul__": "@",
-                    "__rpow__": "**"
-                    }
-
-inplace_arithmetic_ops = {"__iadd__": "+=",
-                          "__isub__": "-=",
-                          "__imul__": "*=",
-                          "__idiv__": "/=",
-                          "__itruediv__": "/=",
-                          "__ifloordiv__": "//=",
-                          "__imod__": "%=",
-                          "__imatmul__": "@=",
-                          "__ipow__": "**="}
 
 
 def delegate_to_traced_value(func):

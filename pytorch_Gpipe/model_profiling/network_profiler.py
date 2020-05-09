@@ -1,18 +1,11 @@
 import time
-from collections import namedtuple
 from typing import Dict, List, Optional
-from itertools import chain
 import torch
 import torch.nn as nn
 
-from ..utils import flatten, detach_tensors, traverse_model, get_device
+from ..utils import flatten, detach_tensors, traverse_model, get_device, ExecTimes
 
-__all__ = ['profile_network', 'Profile']
-
-Profile = namedtuple(
-    'Profile',
-    'forward_time backward_time'
-)
+__all__ = ['profile_network']
 
 
 def profile_network(
@@ -25,10 +18,10 @@ def profile_network(
         save_memory_mode=False,
         recomputation=False,
         force_no_recomp_scopes=None,
-) -> Dict[str, Profile]:
+) -> Dict[str, ExecTimes]:
     '''
     profiles a network's computation time(forward/backward)
-    returns a dictionary from layer_scope to Profile
+    returns a dictionary from layer_scope to ExecTimes
 
     Parameters
     ----------
@@ -89,7 +82,7 @@ def profile_network(
 
     # prepare profiling results
     layers_profile = {
-        name: Profile(forward, backward)
+        name: ExecTimes(forward, backward)
         for name, forward, backward in zip(layers_dict.keys(), forward_times, backward_times)
     }
 

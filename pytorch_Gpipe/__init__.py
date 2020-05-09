@@ -5,7 +5,7 @@ import torch.nn as nn
 
 from .model_partitioning import METIS_partition
 from .compiler import compile_partitioned_model
-from .model_profiling import Graph, profile_network, LayerProfiler, trace_module, Profile, ExecTimes, NodeWeightFunction, EdgeWeightFunction
+from .model_profiling import Graph, profile_network, GraphProfiler, trace_module, ExecTimes, NodeWeightFunction, EdgeWeightFunction
 from .model_profiling.graph_executor import execute_graph
 from .pipeline import Pipeline, PipelineConfig, StageConfig, SyncBuffersMode
 
@@ -34,7 +34,7 @@ def pipe_model(model: nn.Module,
                METIS_opt=dict(),
                force_no_recomp_scopes=lambda s: False,
                save_memory_mode=False,
-               use_layer_profiler=False,
+               use_graph_profiler=False,
                use_network_profiler=True,) -> Graph:
     '''attemps to partition a model to given number of parts using our profiler
        this will produce a python file with the partition config
@@ -79,7 +79,7 @@ def pipe_model(model: nn.Module,
         fn(scope):
             returns true if we want to force recomputation scope_specific_recomp
         defaut is lambda x: False
-    use_layer_profiler:
+    use_graph_profiler:
         whether to use the new graph based profiler
         default False
     use_network_profiler:
@@ -103,7 +103,7 @@ def pipe_model(model: nn.Module,
                             recomputation=recomputation,
                             METIS_opt=METIS_opt,
                             force_no_recomp_scopes=force_no_recomp_scopes,
-                            use_layer_profiler=use_layer_profiler,
+                            use_graph_profiler=use_graph_profiler,
                             use_network_profiler=use_network_profiler,
                             save_memory_mode=save_memory_mode
                             )
@@ -130,7 +130,7 @@ def partition_model(model: nn.Module,
                     recomputation: bool = False,
                     METIS_opt=dict(),
                     force_no_recomp_scopes=lambda s: False,
-                    use_layer_profiler=False,
+                    use_graph_profiler=False,
                     use_network_profiler=True,
                     save_memory_mode=False) -> Graph:
     '''
@@ -162,7 +162,7 @@ def partition_model(model: nn.Module,
         whether to partition a smaller version of the graph containing only the layers (usefull fo big models with lots of unprofiled ops)
     METIS_opt:
         dict of additional kwargs to pass to the METIS partitioning algorithm
-    use_layer_profiler:
+    use_graph_profiler:
         whether to use the new graph based profiler
         default False
     use_network_profiler:
@@ -178,7 +178,7 @@ def partition_model(model: nn.Module,
                         max_depth=max_depth,
                         basic_blocks=basic_blocks,
                         n_iter=n_iter,
-                        use_layer_profiler=use_layer_profiler,
+                        use_graph_profiler=use_graph_profiler,
                         use_network_profiler=use_network_profiler,
                         recomputation=recomputation,
                         force_no_recomp_scopes=force_no_recomp_scopes,
@@ -194,7 +194,7 @@ def partition_model(model: nn.Module,
     return graph
 
 
-def build_graph(model: nn.Module, args: tuple = (), kwargs: Optional[Dict] = None, use_network_profiler: bool = True, use_layer_profiler: bool = False, save_memory_mode: bool = False, recomputation: bool = False, n_iter: int = 10, max_depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None, force_no_recomp_scopes: Optional[Callable[[str], bool]] = None) -> Graph:
+def build_graph(model: nn.Module, args: tuple = (), kwargs: Optional[Dict] = None, use_network_profiler: bool = True, use_graph_profiler: bool = False, save_memory_mode: bool = False, recomputation: bool = False, n_iter: int = 10, max_depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None, force_no_recomp_scopes: Optional[Callable[[str], bool]] = None) -> Graph:
     """
     builds a graph representation of the model which is semantically identical to the forward pass
     optionaly can also profiler execution times of the model's oprations
@@ -221,7 +221,7 @@ def build_graph(model: nn.Module, args: tuple = (), kwargs: Optional[Dict] = Non
         if not given a default value of 1 will be given to all edges
     use_layers_only_graph:
         whether to partition a smaller version of the graph containing only the layers (usefull fo big models with lots of unprofiled ops)
-    use_layer_profiler:
+    use_graph_profiler:
         whether to use the new graph based profiler
         default False
     use_network_profiler:
@@ -238,9 +238,9 @@ def build_graph(model: nn.Module, args: tuple = (), kwargs: Optional[Dict] = Non
                          basic_blocks=basic_blocks)
     weights = None
 
-    if use_layer_profiler:
-        assert not save_memory_mode, "save memory mode is not supported for LayerProfiler"
-        profiler = LayerProfiler(recomputation=recomputation, n_iter=n_iter,
+    if use_graph_profiler:
+        assert not save_memory_mode, "save memory mode is not supported for GraphProfiler"
+        profiler = GraphProfiler(recomputation=recomputation, n_iter=n_iter,
                                  force_no_recomp_scopes=force_no_recomp_scopes)
         execute_graph(model, graph, model_args=args, model_kwargs=kwargs,
                       pre_hook=profiler.time_forward, post_hook=profiler.time_backward)

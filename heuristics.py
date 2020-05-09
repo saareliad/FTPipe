@@ -1,7 +1,7 @@
 import torch
 from functools import reduce
 import operator
-from pytorch_Gpipe.model_profiling import Node, NodeTypes
+from pytorch_Gpipe.model_profiling import Node, NodeTypes, ExecTimes
 
 __all__ = ["node_weight_function", "edge_weight_function"]
 
@@ -10,7 +10,7 @@ MULT_FACTOR = 10000
 
 def node_weight_function(bwd_to_fwd_ratio=-1):
     def f(node: Node):
-        if node.type is NodeTypes.LAYER:
+        if isinstance(node.weight, ExecTimes):
             if bwd_to_fwd_ratio < 0:
                 return int(MULT_FACTOR * (node.weight.backward_time))
             else:

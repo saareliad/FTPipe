@@ -1,17 +1,13 @@
-from collections import defaultdict, namedtuple
+from collections import defaultdict
 import torch
 from torch import Tensor
 from .tracer import NodeTypes
-from ..utils import detach_tensors, flatten
-ExecTimes = namedtuple(
-    'ExecTimes',
-    'forward_time backward_time'
-)
+from ..utils import detach_tensors, flatten, set_grad_mode, inplace_arithmetic_ops, ExecTimes
 
 # TODO save_memory_mode
 
 
-class LayerProfiler():
+class GraphProfiler():
     def __init__(self, recomputation=False, n_iter=10, force_no_recomp_scopes=None):
         self.forward_times = defaultdict(list)
         self.backward_times = defaultdict(list)
@@ -25,7 +21,7 @@ class LayerProfiler():
             self.force_no_recomp_scopes = force_no_recomp_scopes
 
     def time_forward(self, node, function, args, kwargs):
-        if LayerProfiler.should_profile(node, function, args, kwargs):
+        if GraphProfiler.should_profile(node, function, args, kwargs):
             recomputation = self.recomputation and (
                 not self.force_no_recomp_scopes(node.scope))
             for _ in range(self.n_iter):
@@ -42,10 +38,14 @@ class LayerProfiler():
                     torch.cuda.synchronize(device='cuda')
                     self.forward_times[node].append(start.elapsed_time(end))
 
-        return detach_tensors((args, kwargs))
+            return detach_tensors((args, kwargs))
+
+        # if forward was not profiled than this op either does not produce tensors or it's inplace
+        # so we explicilty set grad to False to avoid inplace operations to leaf tensors
+        return set_grad_mode((args, kwargs), False)
 
     def time_backward(self, node, function, args, kwargs, output):
-        if LayerProfiler.should_profile(node, function, args, kwargs, output=output):
+        if GraphProfiler.should_profile(node, function, args, kwargs, output=output):
             recomputation = not self.force_no_recomp_scopes(node.scope)
             recomputation = recomputation and self.recomputation
 
@@ -58,7 +58,8 @@ class LayerProfiler():
                                             args, kwargs,
                                             output)
 
-        return detach_tensors(output)
+        # detach output from history and start recording again for future operations
+        return set_grad_mode(output, True)
 
     def backward_no_recomputation(self, node, function, args, kwargs, output):
         for _ in range(self.n_iter):
@@ -67,7 +68,7 @@ class LayerProfiler():
             end = torch.cuda.Event(enable_timing=True)
 
             tensors = self.only_tensors_that_require_grad(output)
-            grads = LayerProfiler.get_grads(tensors)
+            grads = GraphProfiler.get_grads(tensors)
 
             torch.cuda.synchronize(device='cuda')
             start.record()
@@ -82,7 +83,7 @@ class LayerProfiler():
             if node.type is NodeTypes.LAYER:
                 for p in function.parameters():
                     p.grad = None
-            for p in LayerProfiler.only_tensors_that_require_grad((args, kwargs)):
+            for p in GraphProfiler.only_tensors_that_require_grad((args, kwargs)):
                 p.grad = None
 
     def backward_recomputation(self, node, function, args, kwargs, output):
@@ -97,7 +98,7 @@ class LayerProfiler():
                 start.record()
                 output = function(*args, **kwargs)
                 tensors = self.only_tensors_that_require_grad(output)
-                grads = LayerProfiler.get_grads(tensors)
+                grads = GraphProfiler.get_grads(tensors)
                 torch.autograd.backward(tensors=tensors,
                                         grad_tensors=grads)
                 end.record()
@@ -108,15 +109,15 @@ class LayerProfiler():
                 if node.type is NodeTypes.LAYER:
                     for p in function.parameters():
                         p.grad = None
-                for p in LayerProfiler.only_tensors_that_require_grad((args, kwargs)):
+                for p in GraphProfiler.only_tensors_that_require_grad((args, kwargs)):
                     p.grad = None
 
     def get_weights(self):
         weights = dict()
         for node, f_times in self.forward_times.items():
-            f_time = LayerProfiler.avg_time(f_times)
+            f_time = GraphProfiler.avg_time(f_times)
             if node in self.backward_times:
-                b_time = LayerProfiler.avg_time(self.backward_times[node])
+                b_time = GraphProfiler.avg_time(self.backward_times[node])
             else:
                 b_time = 0
 
@@ -130,7 +131,7 @@ class LayerProfiler():
         else:
             ts = self.forward_times
         for n, t in ts.items():
-            print(n.scope, LayerProfiler.avg_time(t))
+            print(n.scope, GraphProfiler.avg_time(t))
 
     @staticmethod
     def only_tensors_that_require_grad(ts):
@@ -152,8 +153,15 @@ class LayerProfiler():
 
     @staticmethod
     def should_profile(node, function, args, kwargs, output=None):
-        if node.type is not NodeTypes.LAYER:
+        if node.type not in [NodeTypes.LAYER, NodeTypes.OP]:
             return False
+
+        if node.type is NodeTypes.OP:
+            # we cannot profile inplace ops
+            op_path = node.scope.rsplit("/", maxsplit=1)[1]
+            namespace, func_name = op_path.split("::")
+            if func_name in inplace_arithmetic_ops:
+                return False
 
         if output is None:
             tmp_arg, tmp_kwargs = detach_tensors((args, kwargs))
@@ -161,4 +169,9 @@ class LayerProfiler():
             del tmp_arg
             del tmp_kwargs
 
-        return len(LayerProfiler.only_tensors_that_require_grad(output)) > 0 or len(LayerProfiler.only_tensors_with_grad_fn(output))
+        output_w_grads = GraphProfiler.only_tensors_that_require_grad(output)
+        output_w_grad_fn = GraphProfiler.only_tensors_with_grad_fn(output)
+
+        should_profile = len(output_w_grads) > 0 or len(output_w_grad_fn) > 0
+
+        return should_profile

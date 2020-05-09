@@ -9,6 +9,11 @@ from itertools import chain
 __all__ = ["traverse_model", "traverse_params_buffs",
            "layerDict", "tensorDict"]
 
+ExecTimes = collections.namedtuple(
+    'ExecTimes',
+    'forward_time backward_time'
+)
+
 
 def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
                    basic_blocks: Tuple[nn.Module] = (), full: bool = False) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
@@ -111,10 +116,18 @@ def detach_tensors(ts):
             # NOTE: it is required for shared stateless!
             # to Set requires grad like the tensor.
             # especially if isinstance(x, torch.nn.Parameter)
-            return t.detach().requires_grad_(isinstance(t, torch.nn.Parameter))
+            return t.detach().requires_grad_(t.requires_grad)
         return t
 
     return nested_map(detach_if_tensor, ts)
+
+
+def set_grad_mode(ts, require_grad):
+    def grad_mode(t):
+        if isinstance(t, Tensor):
+            return t.detach().requires_grad_(require_grad)
+        return t
+    return nested_map(grad_mode, ts)
 
 
 def get_tensor_dtypes(ts):
@@ -142,3 +155,25 @@ def get_device(ts) -> torch.device:
 
     # default device
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+inplace_arithmetic_ops = {"__iadd__": "+=",
+                          "__isub__": "-=",
+                          "__imul__": "*=",
+                          "__idiv__": "/=",
+                          "__itruediv__": "/=",
+                          "__ifloordiv__": "//=",
+                          "__imod__": "%=",
+                          "__imatmul__": "@=",
+                          "__ipow__": "**="}
+
+r_arithmetic_ops = {"__radd__": "+",
+                    "__rsub__": "-",
+                    "__rmul__": "*",
+                    "__rdiv__": "/",
+                    "__rtruediv__": "/",
+                    "__rfloordiv__": "//",
+                    "__rmod__": "%",
+                    "__rmatmul__": "@",
+                    "__rpow__": "**"
+                    }
