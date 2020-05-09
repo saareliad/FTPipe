@@ -71,10 +71,9 @@ class ParsePartitioningOpts:
             type=int,
             help="the depth in which we will partition the model")
         parser.add_argument(
-            "--partition_layer_graph",
-            action="store_true",
-            default=True,
-            help="whether to partition a graph containing only layers")
+            "--use_graph_profiler", default=False, type=bool, action="store_true",
+            help="wether to use the new graph based profiler or the old network_profiler,"
+        )
         parser.add_argument(
             "--generate_model_parallel",
             action="store_true",

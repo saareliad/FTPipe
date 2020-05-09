@@ -230,7 +230,8 @@ def partition_model(args,
     #                        args.bandwidth_gps,
     #                        bwd_to_fwd_ratio=bwd_to_fwd_ratio),
     #                    use_layers_only_graph=True,
-    #                    use_graph_profiler=True,
+    #                    use_graph_profiler=args.use_graph_profiler,
+    #                   use_network_profiler=not args.use_graph_profiler,
     #                    output_file=args.output_file,
     #                    generate_model_parallel=args.generate_model_parallel,
     #                    save_memory_mode=args.save_memory_mode,
@@ -252,7 +253,8 @@ def partition_model(args,
             args.bandwidth_gps,
             bwd_to_fwd_ratio=bwd_to_fwd_ratio),
         use_layers_only_graph=True,
-        use_graph_profiler=True,
+        use_graph_profiler=args.use_graph_profiler,
+        use_network_profiler=not args.use_graph_profiler,
         output_file=args.output_file,
         generate_model_parallel=args.generate_model_parallel,
         save_memory_mode=args.save_memory_mode,
@@ -511,11 +513,9 @@ def parse_cli():
                         type=int,
                         help="the depth in which we will partition the model")
     parser.add_argument(
-        "--partition_layer_graph",
-        action="store_true",
-        default=True,
-        help="whether to partition a graph containing only layers")
-
+        "--use_graph_profiler", default=False, type=bool, action="store_true",
+        help="wether to use the new graph based profiler or the old network_profiler,"
+    )
     parser.add_argument("--dot",
                         default=False,
                         action="store_true",
