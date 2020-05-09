@@ -169,7 +169,7 @@ def is_valid_partitioning(graph: Graph):
             for o in n.out_edges:
                 if n.part != o.part:
                     msg = f"invalid output type at partition boundary {n.part}=>{o.part}"
-                    msg += f"\noutput is {n.scope} of type {n.value_type()}"
+                    msg += f"\noutput is {n.scope} of type {n.value_type}"
                     return False, msg
 
     return True, ""

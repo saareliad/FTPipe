@@ -71,7 +71,7 @@ class ParsePartitioningOpts:
             type=int,
             help="the depth in which we will partition the model")
         parser.add_argument(
-            "--use_graph_profiler", default=False, type=bool, action="store_true",
+            "--use_graph_profiler", default=False, action="store_true",
             help="wether to use the new graph based profiler or the old network_profiler,"
         )
         parser.add_argument(
@@ -216,8 +216,11 @@ def run_x_tries_until_no_fail(func, number_of_tries, *args, **kw):
             success = True
             count += 1
             break
-        except:
+        except Exception as e:
+            print()
+            print(e)
             count += 1
+            print()
 
     print(f"running function got succcess={success} after {count} attempts")
     return res

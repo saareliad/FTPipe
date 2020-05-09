@@ -113,7 +113,7 @@ def pipe_model(model: nn.Module,
                               batch_dim,
                               output_file=output_file,
                               generate_model_parallel=generate_model_parallel)
-
+    print("generated code")
     return graph
 
 
@@ -171,7 +171,6 @@ def partition_model(model: nn.Module,
     '''
     if basic_blocks is None:
         basic_blocks = ()
-    # TODO profiling integration
     graph = build_graph(model,
                         args=sample_batch,
                         kwargs=kwargs,
@@ -190,6 +189,7 @@ def partition_model(model: nn.Module,
                             edge_weight_function=edge_weight_function,
                             use_layers_only_graph=use_layers_only_graph,
                             **METIS_opt)
+    print("partitioned model")
 
     return graph
 
@@ -237,13 +237,16 @@ def build_graph(model: nn.Module, args: tuple = (), kwargs: Optional[Dict] = Non
     graph = trace_module(model, args=args, kwargs=kwargs, depth=max_depth,
                          basic_blocks=basic_blocks)
     weights = None
-
+    print("graph built")
     if use_graph_profiler:
+        print("using graph profiler")
         assert not save_memory_mode, "save memory mode is not supported for GraphProfiler"
+        torch.cuda.reset_max_memory_allocated()
         profiler = GraphProfiler(recomputation=recomputation, n_iter=n_iter,
                                  force_no_recomp_scopes=force_no_recomp_scopes)
         execute_graph(model, graph, model_args=args, model_kwargs=kwargs,
                       pre_hook=profiler.time_forward, post_hook=profiler.time_backward)
+        print(f"profiling mem {torch.cuda.max_memory_allocated()/1e9} GB")
         weights = profiler.get_weights()
     elif use_network_profiler:
         weights = profile_network(model, args, kwargs=kwargs,
@@ -254,6 +257,7 @@ def build_graph(model: nn.Module, args: tuple = (), kwargs: Optional[Dict] = Non
                                   save_memory_mode=save_memory_mode,
                                   force_no_recomp_scopes=force_no_recomp_scopes)
     if not (weights is None):
+        print("model profiled")
         for n in graph.nodes:
             n.weight = weights.get(n.scope, ExecTimes(0, 0))
 

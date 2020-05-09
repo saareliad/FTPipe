@@ -513,7 +513,7 @@ def parse_cli():
                         type=int,
                         help="the depth in which we will partition the model")
     parser.add_argument(
-        "--use_graph_profiler", default=False, type=bool, action="store_true",
+        "--use_graph_profiler", default=False, action="store_true",
         help="wether to use the new graph based profiler or the old network_profiler,"
     )
     parser.add_argument("--dot",

@@ -158,10 +158,8 @@ class Attention(nn.Module):
     def _attn(self, q, k, v):
         w = torch.matmul(q, k)
         if self.scale:
-            # TODO tracer warning using v.size(-1) as a value
             w = w / math.sqrt(v.size(-1))
         nd, ns = w.size(-2), w.size(-1)
-        # TODO tracer warning using w.size as values
         b = self.bias[:, :, ns - nd:ns, :ns]
         w = w * b - 1e4 * (1 - b)
 
@@ -172,7 +170,6 @@ class Attention(nn.Module):
 
     def merge_heads(self, x):
         x = x.permute(0, 2, 1, 3).contiguous()
-        # TODO this is stupid
         new_x_shape = x.size()[:-2] + (x.size(-2) * x.size(-1),)
         return x.view(*new_x_shape)  # in Tensorflow implem: fct merge_states
 

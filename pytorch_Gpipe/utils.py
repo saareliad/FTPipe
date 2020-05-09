@@ -125,7 +125,7 @@ def detach_tensors(ts):
 def set_grad_mode(ts, require_grad):
     def grad_mode(t):
         if isinstance(t, Tensor):
-            return t.detach().requires_grad_(require_grad)
+            return t.detach().requires_grad_(require_grad and t.is_floating_point())
         return t
     return nested_map(grad_mode, ts)
 
