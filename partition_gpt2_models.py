@@ -232,6 +232,7 @@ def partition_model(args,
     #                    use_layers_only_graph=True,
     #                    use_graph_profiler=args.use_graph_profiler,
     #                   use_network_profiler=not args.use_graph_profiler,
+    #                    profile_ops =args.profile_ops,
     #                    output_file=args.output_file,
     #                    generate_model_parallel=args.generate_model_parallel,
     #                    save_memory_mode=args.save_memory_mode,
@@ -255,6 +256,7 @@ def partition_model(args,
         use_layers_only_graph=True,
         use_graph_profiler=args.use_graph_profiler,
         use_network_profiler=not args.use_graph_profiler,
+        profile_ops=args.profile_ops,
         output_file=args.output_file,
         generate_model_parallel=args.generate_model_parallel,
         save_memory_mode=args.save_memory_mode,
@@ -515,6 +517,10 @@ def parse_cli():
     parser.add_argument(
         "--use_graph_profiler", default=False, action="store_true",
         help="wether to use the new graph based profiler or the old network_profiler,"
+    )
+    parser.add_argument(
+        "--profile_ops", default=False, action="store_true",
+        help="weheter to also profile ops when using the GraphProfiler"
     )
     parser.add_argument("--dot",
                         default=False,

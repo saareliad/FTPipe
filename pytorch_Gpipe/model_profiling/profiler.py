@@ -8,7 +8,7 @@ from ..utils import detach_tensors, flatten, set_grad_mode, inplace_arithmetic_o
 
 
 class GraphProfiler():
-    def __init__(self, recomputation=False, n_iter=10, force_no_recomp_scopes=None):
+    def __init__(self, recomputation=False, n_iter=10, force_no_recomp_scopes=None, profile_ops=True):
         self.forward_times = defaultdict(list)
         self.backward_times = defaultdict(list)
         self.recomputation = recomputation
@@ -20,8 +20,10 @@ class GraphProfiler():
         else:
             self.force_no_recomp_scopes = force_no_recomp_scopes
 
+        self.profile_ops = profile_ops
+
     def time_forward(self, node, function, args, kwargs):
-        if GraphProfiler.should_profile(node, function, args, kwargs):
+        if self.should_profile(node, function, args, kwargs):
             recomputation = self.recomputation and (
                 not self.force_no_recomp_scopes(node.scope))
             for _ in range(self.n_iter):
@@ -45,7 +47,7 @@ class GraphProfiler():
         return set_grad_mode((args, kwargs), False)
 
     def time_backward(self, node, function, args, kwargs, output):
-        if GraphProfiler.should_profile(node, function, args, kwargs, output=output):
+        if self.should_profile(node, function, args, kwargs, output=output):
             recomputation = not self.force_no_recomp_scopes(node.scope)
             recomputation = recomputation and self.recomputation
 
@@ -151,9 +153,11 @@ class GraphProfiler():
         total = sum([t for t in times if t < max_v])
         return total / (len(times) - 1)
 
-    @staticmethod
-    def should_profile(node, function, args, kwargs, output=None):
+    def should_profile(self, node, function, args, kwargs, output=None):
         if node.type not in [NodeTypes.LAYER, NodeTypes.OP]:
+            return False
+
+        if not self.profile_ops and node.type is NodeTypes.OP:
             return False
 
         if node.type is NodeTypes.OP:

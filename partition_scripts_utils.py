@@ -75,6 +75,10 @@ class ParsePartitioningOpts:
             help="wether to use the new graph based profiler or the old network_profiler,"
         )
         parser.add_argument(
+            "--profile_ops", default=False, action="store_true",
+            help="weheter to also profile ops when using the GraphProfiler"
+        )
+        parser.add_argument(
             "--generate_model_parallel",
             action="store_true",
             default=False,
