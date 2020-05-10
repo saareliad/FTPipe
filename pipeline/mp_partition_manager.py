@@ -211,15 +211,15 @@ class SinglePartitionManager:
         self._bwd_recv_buffers()
 
     def _fwd_recv_buffers_train(self):
-        return make_buff(self.comm_handler, self.self.training_tensor_shapes,
+        return make_buff(self.comm_handler, self.training_tensor_shapes,
                          self.training_tensor_dtypes, True)
 
     def _fwd_recv_buffers_eval(self):
-        return make_buff(self.comm_handler, self.self.eval_tensor_shapes,
+        return make_buff(self.comm_handler, self.eval_tensor_shapes,
                          self.eval_tensor_dtypes, True)
 
     def _bwd_recv_buffers(self):
-        return make_buff(self.comm_handler, self.self.training_tensor_shapes,
+        return make_buff(self.comm_handler, self.training_tensor_shapes,
                          self.training_tensor_dtypes, False)
 
     def _ensure_bwd_recv_buffers_size_set(self, last_due_end):

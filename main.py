@@ -49,6 +49,10 @@ def parse_distributed_cli(parser):
                         "instead of dynamically creating them every iteration")
 
 
+def parse_multiprocessing_cli(parser):
+    parser.add_argument("--pipeline_num_processes", type=int, default=4, help="Tells us how much processes do we want")
+
+
 def parse_cli():
     # TODO: note, some arguments are supported only through config and not argparse.
     # TODO: replace all this
@@ -59,6 +63,7 @@ def parse_cli():
         description='PyTorch partition as part of Async Pipeline')
 
     parse_distributed_cli(parser)
+    parse_multiprocessing_cli(parser)
 
     parser.add_argument(
         '--debug',
@@ -386,6 +391,6 @@ def main(args, shared_ctx=None):
 if __name__ == "__main__":
     # TODO set OMP_NUM_THREADS automatically
     print(f"Using {torch.get_num_threads()} Threads")
-    start_distributed()
-    # start_mutiprocessing()
+    # start_distributed()
+    start_mutiprocessing()
     # main(args)

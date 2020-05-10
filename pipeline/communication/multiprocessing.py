@@ -39,6 +39,8 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         self.rcv_shared_parameters = dict()
         self.send_shared_parameters = defaultdict(set)
 
+        self.send_buffers = dict()
+
     def _create_streams(self):
         # stat with 2 streams, than do more
         self.grad_send_stream = torch.cuda.Stream(self.device, priority=-2)
@@ -80,6 +82,9 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             if buff is None:  # shared parameter
                 continue
             sending_rank = sending[tensor_name]
+            assert len(sending_rank) == 1
+            sending_rank = sending_rank[0]
+
             # TODO: if sending rank is on same GPU...
             q = self.buffer_reuse_queues[sending_rank][self.rank]
             q.put(buff)
@@ -107,7 +112,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
     def _recv_tensors_p2p(self, x, batch_idx, ranks_dict_items,
                           is_activations):
         request_objects = []
-        for tensor, (tensor_name, receive_ranks) in zip(x, ranks_dict_items):
+        for (tensor_name, receive_ranks) in ranks_dict_items:
             assert len(receive_ranks) == 1
             receive_rank = receive_ranks[0]
             q = self.rcv_queues[self.rank][receive_rank]
@@ -178,14 +183,18 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                 for send_rank in send_ranks:
                     stream = self.grad_send_stream if is_grad else self.acti_send_stream
                     with torch.cuda.stream(stream):
+                        # TODO: buff
                         # get buff
                         buff_q = self.buffer_reuse_queues[self.rank][send_rank]
                         out_q = self.buffer_reuse_queues[send_rank][self.rank]
                         buff = buff_q.get()
                         # send tensor.
-                        buff.copy_(tensor)
+                        a = buff.clone()
+                        del buff
+                        # buff.copy_(tensor)
                         # TODO: check it does do problems with memory
-                        out_q.put(buff)
+                        stream.synchronize()
+                        out_q.put(a)
 
                         if self.verbose:
                             tensor_tag = self.tensor_tags[tensor_name] + (
