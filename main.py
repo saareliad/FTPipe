@@ -52,6 +52,8 @@ def parse_distributed_cli(parser):
 def parse_multiprocessing_cli(parser):
     parser.add_argument("--pipeline_num_processes", type=int, default=4, help="Tells us how much processes do we want")
 
+    parser.add_argument("--verbose_comm", action="store_true")
+
 
 def parse_cli():
     # TODO: note, some arguments are supported only through config and not argparse.

@@ -23,14 +23,19 @@ from .true_weights_storage import TrueWeightsStorage
 
 DEBUG_FAKE_DRAW = False
 
+# NOTE:
+# to send ack, USE:
+# comm_handler.create_activations_recv_buffers()
+# comm_handler.create_gradients_rcv_buffers()
 
-def make_buff(comm_handler, shapes, dtypes, is_fwd):
+
+def make_send_buff(comm_handler, shapes, dtypes, is_fwd):
     comm_handler.set_tensor_shapes(shapes)
     comm_handler.set_tensor_dtypes(dtypes)
     if is_fwd:
-        comm_handler.create_activations_recv_buffers()
+        comm_handler.create_activations_send_buffers()
     else:
-        comm_handler.create_gradients_rcv_buffers()
+        comm_handler.create_gradients_send_buffers()
 
 
 class SinglePartitionManager:
@@ -206,23 +211,23 @@ class SinglePartitionManager:
         self.keep_buffers_alive = keep_buffers_alive
 
         if keep_buffers_alive:
-            self._fwd_recv_buffers_train()
+            self._fwd_send_buffers_train()
 
-        self._bwd_recv_buffers()
+        self._bwd_send_buffers()
 
-    def _fwd_recv_buffers_train(self):
-        return make_buff(self.comm_handler, self.training_tensor_shapes,
-                         self.training_tensor_dtypes, True)
+    def _fwd_send_buffers_train(self):
+        return make_send_buff(self.comm_handler, self.training_tensor_shapes,
+                              self.training_tensor_dtypes, True)
 
-    def _fwd_recv_buffers_eval(self):
-        return make_buff(self.comm_handler, self.eval_tensor_shapes,
-                         self.eval_tensor_dtypes, True)
+    def _fwd_send_buffers_eval(self):
+        return make_send_buff(self.comm_handler, self.eval_tensor_shapes,
+                              self.eval_tensor_dtypes, True)
 
-    def _bwd_recv_buffers(self):
-        return make_buff(self.comm_handler, self.training_tensor_shapes,
-                         self.training_tensor_dtypes, False)
+    def _bwd_send_buffers(self):
+        return make_send_buff(self.comm_handler, self.training_tensor_shapes,
+                              self.training_tensor_dtypes, False)
 
-    def _ensure_bwd_recv_buffers_size_set(self, last_due_end):
+    def _ensure_bwd_send_buffers_size_set(self, last_due_end):
         # TODO: re-write, currently its inefficient
         # Special case: Last batch with differnt size
         if last_due_end and self.last_batch_train_shapes:
@@ -232,16 +237,16 @@ class SinglePartitionManager:
             )
             self.changed_shapes_last_batch_bwd = True
             # Create a new buffer with the new size
-            make_buff(self.comm_handler, self.last_batch_train_shapes,
-                      self.training_tensor_dtypes, False)
+            make_send_buff(self.comm_handler, self.last_batch_train_shapes,
+                           self.training_tensor_dtypes, False)
 
         elif self.changed_shapes_last_batch_bwd:
             # NOTE: this is a special case for gpipe as bwd is LIFO.
             # already change, replace:
             self.changed_shapes_last_batch_bwd = False
-            self._bwd_recv_buffers()
+            self._bwd_send_buffers()
 
-    def _ensure_fwd_recv_buffers_size_set(self, last_due_end):
+    def _ensure_fwd_send_buffers_size_set(self, last_due_end):
         # TODO: re-write, currently its inefficient
         if last_due_end and (
             (self.partition.training and self.last_batch_train_shapes) or
@@ -257,7 +262,7 @@ class SinglePartitionManager:
 
             dtypes = self.training_tensor_dtypes if self.partition.training else self.eval_tensor_dtypes
 
-            make_buff(self.comm_handler, shapes, dtypes, True)
+            make_send_buff(self.comm_handler, shapes, dtypes, True)
 
     def set_true_weights_storage(self, true_weights_storage):
         self.true_weights_storage = true_weights_storage
@@ -351,12 +356,12 @@ class SinglePartitionManager:
             # re-create if needed.
             if self.changed_shapes_last_batch_fwd:
                 self.changed_shapes_last_batch_fwd = False
-                self._fwd_recv_buffers_train()
+                self._fwd_send_buffers_train()
 
             # Backward buffers:
             if self.changed_shapes_last_batch_bwd:
                 self.changed_shapes_last_batch_fwd = False
-                self._bwd_recv_buffers()  # create=True
+                self._bwd_send_buffers()  # create=True
 
     def eval(self):
         """Sets evaluation mode.
@@ -377,7 +382,7 @@ class SinglePartitionManager:
         else:
             if self.changed_shapes_last_batch_fwd:
                 self.changed_shapes_last_batch_fwd = False
-                self._fwd_recv_buffers_eval()
+                self._fwd_send_buffers_eval()
 
     def get_input_data_forward(self, batch_idx, num_batches):
         # TODO: this entire thing should be part of the comm handler.
@@ -389,8 +394,8 @@ class SinglePartitionManager:
             return x, ctx
 
         # TODO:
-        # last_due_end = batch_idx + 1 == num_batches
-        # self._ensure_fwd_recv_buffers_size_set(last_due_end)
+        last_due_end = batch_idx + 1 == num_batches
+        self._ensure_fwd_send_buffers_size_set(last_due_end)
         x = self.comm_handler.recv_activations(None, batch_idx)
         x = self.comm_handler.fix_after_recv(x)
         x, *ctx = self.task.unpack_data_for_partition(x)
@@ -443,9 +448,12 @@ class SinglePartitionManager:
             Feature:
                 - Pre load Y to last partition if possible
         """
+
+        if not self.is_first_partition:
+            self.comm_handler.create_activations_recv_buffers()
+
         partition = self.partition
         is_training = partition.training
-
         if is_training:
             expected_staleness = self.expected_staleness(batch_idx, done_bwds)
             self.delay_at_batch[batch_idx] = expected_staleness
@@ -585,11 +593,12 @@ class SinglePartitionManager:
 
     def run_batch_backward(self, batch_idx, num_batches):
         """ Runs the backwards pass + step for all except the last partition """
-
+        if not self.is_last_partition:
+            self.comm_handler.create_gradients_rcv_buffers()
         # TODO:
         # # Special case: Last batch with differnt size
-        # last_due_end = batch_idx + 1 == num_batches
-        # self._ensure_bwd_recv_buffers_size_set(last_due_end)
+        last_due_end = batch_idx + 1 == num_batches
+        self._ensure_bwd_send_buffers_size_set(last_due_end)
 
         weight_stasher = self.weight_stasher
         #  Recompute before waiting to the first, so parallelize communication and computation
@@ -600,7 +609,7 @@ class SinglePartitionManager:
         self.partition.recompute(batch_idx)
 
         # NOTE: in MPI version there was hacky zero and sync here,,,
-        g = self.comm_handler.gradients(None, batch_idx)
+        g = self.comm_handler.recv_gradients(None, batch_idx)
         g = self.comm_handler.fix_after_recv(g)
 
         # Allow skiping steps (Gradient aggregation)
@@ -625,6 +634,7 @@ class SinglePartitionManager:
             request_objects = self.comm_handler.send_gradients(g, batch_idx)
 
         del g
+
 
         # TODO: here we can send the next rcev buffer
 

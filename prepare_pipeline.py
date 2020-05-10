@@ -71,7 +71,7 @@ def create_comm_handler(args, comm_init_args,
         args.num_chunks,
         device,
         GRAD_UGLY_SHAMEFUL_NAME="_grad",
-        verbose=args.verbose_comm if hasattr(args, "verbose_comm") else False)
+        verbose=getattr(args, "verbose_comm", False))
 
     return comm_handler
 
