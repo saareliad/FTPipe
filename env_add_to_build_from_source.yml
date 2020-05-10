@@ -15,6 +15,7 @@ dependencies:
     - flake8
     - autopep8
     - transformers
+    - yapf
 
 
 prefix: /home_local/saareliad/miniconda3/envs/py38
