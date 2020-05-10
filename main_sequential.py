@@ -5,7 +5,7 @@ import numpy as np
 import time
 import logging
 
-from main import parse_cli, parse_json_config, get_lr_scheduler, parse_env_vars
+from main import parse_cli, parse_json_config, get_lr_scheduler, parse_mpi_env_vars
 from models import create_normal_model_instance
 from experiments import save_experiment
 
@@ -28,7 +28,7 @@ from datasets import (simplified_get_train_valid_dl_from_args,
 # TODO: sync buffers only at validation
 # TODO: distributed validation
 # TODO: support LM
-# TODO: parse_env_vars
+# TODO: parse_mpi_env_vars
 # TODO: get_dataloaders
 
 
@@ -289,7 +289,7 @@ def training_loop(args, logger, train_dl, test_dl, partition, scheduler,
 def init_DDP(args, logger):
     if args.distributed_backend == 'mpi':
         raise NotImplementedError("DDP only works with gloo and nccl backends")
-    parse_env_vars(args)
+    parse_mpi_env_vars(args)
     print("WARNING - HARDCODED TO 4 and I don't want to think about this yet")
 
     args.world_size = 4  # get_world_size(args.distributed_backend) # FIXME:
@@ -348,7 +348,7 @@ def yuck_from_main():
     if hasattr(args, 'ddp') and args.ddp:
         init_DDP(args, logger)
 
-    # parse_env_vars(args)
+    # parse_mpi_env_vars(args)
     # args.world_size = get_world_size(args.distributed_backend)
 
     device = torch.device('cpu' if args.cpu else f"cuda:{args.local_rank}")

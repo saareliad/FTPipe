@@ -21,11 +21,13 @@ def main():
 def gpt2_tied():
     COMMAND = "mpirun -np 5 python main.py"
     cfgs_dir = "configs/lm/wt2/gpt2/tied/"
-    all_algs = ["stale", "seq", "ws", "msnag", "ws_msnag_ga", "ws_msnag_ga_jfl", "ws_msnag"]
+    all_algs = ["stale"]
+    # all_algs = ["stale", "seq", "ws", "msnag", "ws_msnag_ga", "ws_msnag_ga_jfl", "ws_msnag"]
 
     param_grid = {
         'config': [f"{cfgs_dir}{cfg}.json" for cfg in all_algs],
-        'seed': [42, 20202020, 77777777, 314159, 1322019]
+        # 'seed': [42, 20202020, 77777777, 314159, 1322019]
+        'seed': [42]
     }
     run_grid_on_multi_gpu_per_run(COMMAND,
                                   param_grid,
@@ -78,7 +80,6 @@ def gpt2xl_tied():
 
 if __name__ == "__main__":
     # gpt2xl_untied()
-    # gpt2_tied()
-    # main()
+    gpt2_tied()
     # gpt2xl_untied_gpipe()
-    gpt2xl_tied()
+    # gpt2xl_tied()

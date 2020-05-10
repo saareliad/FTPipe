@@ -11,21 +11,14 @@ from parse_json_config import parse_json_config
 from train import training_loop
 from experiments import save_experiment, load_experiment_for_update
 from prepare_pipeline import prepare_pipeline
-
+import torch.multiprocessing as mp
 # TODO: support multiple servers,
 # TODO heterogenous servers
 # TODO: support mix precision, in the future
 
 
-def parse_cli():
-    # TODO: note, some arguments are supported only through config and not argparse.
-    # TODO: replace all this
-    # with a function to tell the available options to the user,
-    # as we override the entire thing by json config anyway.
-
-    parser = argparse.ArgumentParser(
-        description='PyTorch partition as part of Async Pipeline')
-
+def parse_distributed_cli(parser):
+    # Mandatory for distributed
     parser.add_argument('--rank',
                         default=None,
                         type=int,
@@ -40,6 +33,32 @@ def parse_cli():
                         default='mpi',
                         type=str,
                         help='distributed backend to use')
+    # Also buffers, which we use in distributed.
+    parser.add_argument(
+        "--max_buffers",
+        type=int,
+        default=1,
+        help="Maximal Number of async recv buffers. "
+        "With 1: it actually means the recv is sync.(default=2 for best performance)."
+    )
+
+    parser.add_argument("--keep_buffers_alive",
+                        action="store_true",
+                        default=False,
+                        help="Keep forward buffers for both train and eval "
+                        "instead of dynamically creating them every iteration")
+
+
+def parse_cli():
+    # TODO: note, some arguments are supported only through config and not argparse.
+    # TODO: replace all this
+    # with a function to tell the available options to the user,
+    # as we override the entire thing by json config anyway.
+
+    parser = argparse.ArgumentParser(
+        description='PyTorch partition as part of Async Pipeline')
+
+    parse_distributed_cli(parser)
 
     parser.add_argument(
         '--debug',
@@ -52,29 +71,6 @@ def parse_cli():
     parser.add_argument('--config',
                         help="Config File",
                         default='configs/dummy.json')
-
-    # parser.add_argument('--model',
-    #                     choices=list(models.SUPPORTED_CONFIGS),
-    #                     default='wrn_16x4_p2',
-    #                     type=str,
-    #                     help="name of the file with partitioning definitions")
-
-    # parser.add_argument('--task',
-    #                         help='Task type to use',
-    #                         choices=AVAILABLE_TASKS.keys(),
-    #                         default='cv')
-
-    # parser.add_argument('--statistics',
-    #                     help='Statistics to collect',
-    #                     choices=AVAILBALE_STATS.keys(),
-    #                     default='cv')
-
-    # parser.add_argument(
-    #     '--work_scheduler',
-    #     type=str,
-    #     help="scheduling policy to indicate when to perform forward pass",
-    #     choices=AVAILABLE_WORK_SCHEDULERS.keys(),
-    #     default='1F1B')
 
     # Training, which are also needed for communication
     parser.add_argument('--bs_train',
@@ -167,19 +163,6 @@ def parse_cli():
         type=int,
         default=100,
         help="Print extra statistics every given number of batches")
-    parser.add_argument(
-        "--max_buffers",
-        type=int,
-        default=1,
-        help="Maximal Number of async recv buffers. "
-        "With 1: it actually means the recv is sync.(default=2 for best performance)."
-    )
-
-    parser.add_argument("--keep_buffers_alive",
-                        action="store_true",
-                        default=False,
-                        help="Keep forward buffers for both train and eval "
-                        "instead of dynamically creating them every iteration")
 
     parser.add_argument(
         "--no_recomputation",
@@ -198,12 +181,12 @@ def parse_cli():
     args = parser.parse_args()
 
     if args.base_config_path:
-        setattr(args, "base_config_path_from_cmd", True)
+        args.base_config_path_from_cmd = True
 
     return args
 
 
-def parse_env_vars(args):
+def parse_mpi_env_vars(args):
     """
     Parses env vars (e.g from mpirun) and push them into args (overriding).
     This allows completing some "incomplete" cli-argument parsing.
@@ -261,12 +244,63 @@ def save_distributed_experiment(statistics, args, world_size, rank, local_rank,
         torch.distributed.barrier()
 
 
-
-def main():
+def start_mutiprocessing():
     args = parse_cli()
     parse_json_config(args, args.config, first=True)
-    parse_env_vars(args)
+    # parse_mpi_env_vars(args)
+
+    args.world_size = args.pipeline_num_processes
+    # args.world_size = get_world_size(args.distributed_backend)
+    processes = []
+    for rank in range(args.pipeline_num_processes):
+        # TODO: for some cases - share parameters.
+        # TODO: support multiple nodes
+        local_rank = rank
+        p = mp.Process(target=multiprocessing_worker,
+                       args=(rank, local_rank, args))
+        # We first train the model across `num_processes` processes
+        p.start()
+        processes.append(p)
+    for p in processes:
+        p.join()
+
+
+def multiprocessing_worker(rank, local_rank, args):
+    args.rank = rank
+    args.local_rank = local_rank
+
+    # dist_rank = args.nproc_per_node * args.node_rank + local_rank
+    backend = "gloo"
+    current_env = os.environ
+    current_env["MASTER_ADDR"] = "127.0.0.1"  # args.master_addr
+    current_env["MASTER_PORT"] = str(29500)  # str(args.master_port)
+    current_env["WORLD_SIZE"] = str(args.world_size)  # str(dist_world_size)
+    current_env["RANK"] = str(rank)
+    current_env["LOCAL_RANK"] = str(local_rank)
+
+    # HACK: we init gloo, to allow several stuff written for distributed
+    torch.distributed.init_process_group(backend,
+                                         init_method="env://",
+                                         rank=rank,
+                                         world_size=args.world_size)
+
+    main(args)
+
+
+def start_distributed():
+    args = parse_cli()
+    parse_json_config(args, args.config, first=True)
+    parse_mpi_env_vars(args)
     args.world_size = get_world_size(args.distributed_backend)
+    main(args)
+
+
+def main(args):
+    # # TODO: some way to allow multiprocessing instead distributed.
+    # args = parse_cli()
+    # parse_json_config(args, args.config, first=True)
+    # parse_mpi_env_vars(args)
+    # args.world_size = get_world_size(args.distributed_backend)
 
     if args.debug and ((args.rank in args.debug) or (-1 in args.debug)):
         import ptvsd
@@ -327,9 +361,12 @@ def main():
     # Synchronize and save statistics from all partitions
     save_distributed_experiment(statistics, args, args.world_size, args.rank,
                                 args.local_rank, args.stage)
+    torch.distributed.destroy_process_group()
 
 
 if __name__ == "__main__":
-
+    # TODO set OMP_NUM_THREADS automatically
     print(f"Using {torch.get_num_threads()} Threads")
-    main()
+    start_distributed()
+    # start_mutiprocessing()
+    # main(args)

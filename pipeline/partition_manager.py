@@ -552,7 +552,7 @@ class SinglePartitionManager:
                 to_remove = [i for i, r in enumerate(a) if r.is_completed()]
                 for x in sorted(to_remove, reverse=True):
                     del a[x]
-                # break early for simlicity
+                # break early for simplicity
                 if not a:
                     to_del.append(i)
                 else:

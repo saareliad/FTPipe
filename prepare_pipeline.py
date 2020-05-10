@@ -386,7 +386,8 @@ def get_optimizer(args, optimizer_cls, parameters):
     return optimizer
 
 
-def prepare_pipeline(args):
+def prepare_pipeline(args, COMM_VERSION=1):
+    # TODO: partition manger for multiprocessing
     work_scheduler = AVAILABLE_WORK_SCHEDULERS.get(args.work_scheduler)
     is_gpipe = "gpipe" == args.work_scheduler.lower()
     if is_gpipe:
@@ -443,7 +444,6 @@ def prepare_pipeline(args):
                         name_prefix=args.out_filename)  # FIXME: real name
 
     # Comm handler
-    COMM_VERSION = 1
     if COMM_VERSION == 1:
         comm_handler = create_comm_handler(args, comm_init_args, device)
         comm_handler.init_process_group()
@@ -661,7 +661,7 @@ def prepare_pipeline(args):
     partition.set_lr_scheduler(scheduler)
 
     if not is_gpipe:
-    # Set Weight predictor
+        # Set Weight predictor
         weight_predictor, nag_with_predictor = get_weight_predictor(
             args,
             optimizer,
@@ -701,12 +701,12 @@ def prepare_pipeline(args):
     if hasattr(args, "auto_file_name"):
         # make sure this specific replacement does not ruin experiment name
         if is_last_partition and stashed_wp_arg:
-            setattr(args, 'weight_prediction', stashed_wp_arg)
+            args.weight_prediction = stashed_wp_arg
 
         auto_file_name(args)
 
         if is_last_partition and stashed_wp_arg:
-            delattr(args, 'weight_prediction')
+            del args.weight_prediction
             del stashed_wp_arg
 
     return (logger, train_dl, test_dl, is_first_partition, is_last_partition,
