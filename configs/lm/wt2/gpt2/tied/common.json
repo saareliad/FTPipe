@@ -6,7 +6,7 @@
     "out_filename": "tied",
     "distributed_backend": "mpi",
     "task": "lm_sep",
-    "use_pre_loaded_input": true,
+    "use_pre_loaded_label_input": true,
     "model": "gpt2_p4_lm_tied",
     "stage_to_device_map": [0, 1, 2, 3, 0],
     "model_name_or_path": "gpt2",

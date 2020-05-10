@@ -53,7 +53,7 @@
     "step_every": 1,
     "train_batches_limit": -1,
     "dont_drop_last": true,
-    "use_pre_loaded_input": true,
+    "use_pre_loaded_label_input": true,
     "keep_buffers_alive": false,
     "log_frequency": 80,
     "stateless_tied": true,

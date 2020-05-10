@@ -386,15 +386,22 @@ def get_optimizer(args, optimizer_cls, parameters):
     return optimizer
 
 
-def prepare_pipeline(args, COMM_VERSION=1):
-    # TODO: partition manger for multiprocessing
-    work_scheduler = AVAILABLE_WORK_SCHEDULERS.get(args.work_scheduler)
+def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
+    
     is_gpipe = "gpipe" == args.work_scheduler.lower()
-    if is_gpipe:
-        print("Preparing pipeline for GPipe")
-        partition_cls = GPipePartitionManager
+    if not args.is_multiprocessing_worker:
+        # select a partition manager
+        if is_gpipe:
+            print("Preparing pipeline for GPipe")
+            partition_cls = GPipePartitionManager
+        else:
+            partition_cls = SinglePartitionManager
     else:
-        partition_cls = SinglePartitionManager
+        raise NotImplementedError()
+        # TODO: partition manger for multiprocessing
+
+    # get work scheduler
+    work_scheduler = AVAILABLE_WORK_SCHEDULERS.get(args.work_scheduler)
 
     device = get_device(args)
     if not args.cpu:
@@ -447,6 +454,9 @@ def prepare_pipeline(args, COMM_VERSION=1):
     if COMM_VERSION == 1:
         comm_handler = create_comm_handler(args, comm_init_args, device)
         comm_handler.init_process_group()
+    elif COMM_VERSION == 2:
+        # Multiprocessing
+        raise NotImplementedError()
     else:
         # comm_handler =
         raise NotImplementedError("In progress")
@@ -560,6 +570,7 @@ def prepare_pipeline(args, COMM_VERSION=1):
         training_tensor_shapes,
         eval_tensor_shapes,
         training_tensor_dtypes,
+        training_tensor_dtypes,  # HACK, FIXME
         device,
         is_last_partition,
         is_first_partition,
@@ -569,7 +580,7 @@ def prepare_pipeline(args, COMM_VERSION=1):
         keep_buffers_alive=args.keep_buffers_alive,
         use_recomputation=(not args.no_recomputation),
         gap_aware_just_loss=gap_aware_just_loss,
-        use_pre_loaded_input=getattr(args, "use_pre_loaded_input", False),
+        use_pre_loaded_label_input=getattr(args, "use_pre_loaded_label_input", False),
         weight_stashing_just_for_stats=getattr(
             args, "weight_stashing_just_for_stats", False),
         stateless_tied=getattr(args, "stateless_tied", False),
@@ -582,7 +593,6 @@ def prepare_pipeline(args, COMM_VERSION=1):
             f"-I- simulating DDP accuracy with {args.ddp_sim_num_gpus} (DDP) GPUs per stage"
         )
         dp_sim.convert_to_num_gpus(partition.partition, args.ddp_sim_num_gpus)
-
 
     # After the partition is on its device:
     # Set optimizer
@@ -615,7 +625,7 @@ def prepare_pipeline(args, COMM_VERSION=1):
             "no_decay": len(optimizer_grouped_parameters[1]['params']),
             "decay": len(optimizer_grouped_parameters[0]['params'])
         }
-        total_length = lengths['decay'] + lengths['no_decay']
+        # total_length = lengths['decay'] + lengths['no_decay']
         print(f"-I- optimizer_grouped_parameters: {lengths}")
     else:
         optimizer_grouped_parameters = partition.partition.parameters()

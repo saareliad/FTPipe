@@ -63,7 +63,7 @@
     "max_query_length": 64,
     "threads": 20,
     "overwrite_cache": false,
-    "use_pre_loaded_input": false
+    "use_pre_loaded_label_input": false
 }
 
 

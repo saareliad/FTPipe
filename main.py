@@ -247,17 +247,21 @@ def save_distributed_experiment(statistics, args, world_size, rank, local_rank,
 def start_mutiprocessing():
     args = parse_cli()
     parse_json_config(args, args.config, first=True)
-    # parse_mpi_env_vars(args)
 
     args.world_size = args.pipeline_num_processes
-    # args.world_size = get_world_size(args.distributed_backend)
+
+    # TODO: create queus for communication
+    rcv_queues = mp_queue_matrix(args.world_size)
+    buffer_reuse_queues = mp_queue_matrix(args.world_size)
+
+    share = (rcv_queues, buffer_reuse_queues)
     processes = []
     for rank in range(args.pipeline_num_processes):
         # TODO: for some cases - share parameters.
         # TODO: support multiple nodes
         local_rank = rank
         p = mp.Process(target=multiprocessing_worker,
-                       args=(rank, local_rank, args))
+                       args=(rank, local_rank, args, share))
         # We first train the model across `num_processes` processes
         p.start()
         processes.append(p)
@@ -265,9 +269,23 @@ def start_mutiprocessing():
         p.join()
 
 
-def multiprocessing_worker(rank, local_rank, args):
+def mp_queue_matrix(world_size):
+    # create queues matrix.
+    # rcv_queues[i][j] : proc i rcevs from proc j
+    # with rcv_queues[i][i] = None
+    queues = []
+    for i in range(world_size):
+        qs = []
+        for j in range(world_size):
+            qs.append(mp.Queue() if i != j else None)
+        queues.append(qs)
+    return queues
+
+
+def multiprocessing_worker(rank, local_rank, args, share):
     args.rank = rank
     args.local_rank = local_rank
+    args.is_multiprocessing_worker = True
 
     # dist_rank = args.nproc_per_node * args.node_rank + local_rank
     backend = "gloo"
@@ -284,7 +302,7 @@ def multiprocessing_worker(rank, local_rank, args):
                                          rank=rank,
                                          world_size=args.world_size)
 
-    main(args)
+    main(args, share)
 
 
 def start_distributed():
@@ -292,10 +310,11 @@ def start_distributed():
     parse_json_config(args, args.config, first=True)
     parse_mpi_env_vars(args)
     args.world_size = get_world_size(args.distributed_backend)
+    args.is_multiprocessing_worker = False
     main(args)
 
 
-def main(args):
+def main(args, shared_ctx=None):
     # # TODO: some way to allow multiprocessing instead distributed.
     # args = parse_cli()
     # parse_json_config(args, args.config, first=True)
@@ -325,7 +344,7 @@ def main(args):
     np.random.seed(args.seed)
 
     # Default: use cudnn _benchmark.
-    if getattr(args, "cudnn_benchmark", "True"):
+    if getattr(args, "cudnn_benchmark", True):
         torch.backends.cudnn.benchmark = True
 
     ###############################
@@ -338,7 +357,7 @@ def main(args):
     # "spaghetti code" and can't really escape it.
     (logger, train_dl, test_dl, is_first_partition, is_last_partition,
      partition, statistics, train_dl_len, test_dl_len,
-     samplers) = prepare_pipeline(args)
+     samplers) = prepare_pipeline(args, shared_ctx=shared_ctx)
 
     # Main Training Loop
 

@@ -85,7 +85,7 @@ class WeightStasher:
     # TODO: this may cause the problem with aggregation.
     def _create_current_cloned_buff(self):
         # TODO: we can completly avoid the clone for clone weight prediction.
-        # becasue, we 
+        # becasue, we
         # (1) first clone() for weight preiction,
         # (2) then stash the cloned weight.
         if self.using_clone_weight_predictor:

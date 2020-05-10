@@ -104,14 +104,11 @@ class SimpleCommBase(CommunicationHandlerBase):
             buffers = []
             for tensor_name in tensor_names:
                 dtype = self.tensor_dtypes[tensor_name]
-                # TODO: also eval dtype
                 shape = self.tensor_shapes[tensor_name]
-                # rcv_buffer = torch.empty(shape, dtype=dtype, requires_grad=requires_grad)
                 rcv_buffer = torch.zeros(shape,
                                          dtype=dtype,
                                          device=self.device,
                                          requires_grad=requires_grad)
-
                 # # NOTE: if we use this we need to do fix after recv, and also send in chunks
                 # TODO: generally we would like pinned + shared memory for this...  (actually depends on send/recv )
                 # Alocate for double buffering
