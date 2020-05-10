@@ -19,6 +19,7 @@ def compile_partitioned_model(graph: Graph,
                               model: Module,
                               batch_dim: int,
                               generate_model_parallel: bool = False,
+                              generate_explicit_del=False,
                               output_file: Optional[str] = None):
     '''generates the code for the partitioned model.
        The partitions can be consumed using the `create_pipeline_configuration` method in the generated code
@@ -32,6 +33,9 @@ def compile_partitioned_model(graph: Graph,
         the batch dimention of the input
     generate_model_parallel:
         whether to generate a model parallel version of the partition in the addition to the partitions themselves
+    generate_explicit_del:
+        whether to generate del statements to explicitly delete variables when they are no longer used
+        default False
     output_file:
         optional path to the generated code. if None uses generated_{model_name}{numberOfPatitions}.py
     '''
@@ -66,7 +70,8 @@ def compile_partitioned_model(graph: Graph,
         state_methods_functions = generate_partition_state_methods()
         forward_function, io = generate_forward_method(part,
                                                        graph.outputs,
-                                                       scope_to_class_field)
+                                                       scope_to_class_field,
+                                                       generate_explicit_del=generate_explicit_del)
         partitions_code.append(class_decl)
         partitions_code.extend(forward_function)
         partitions_code.append("")

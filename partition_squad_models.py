@@ -394,6 +394,8 @@ def main():
                        use_layers_only_graph=True,
                        use_graph_profiler=args.use_graph_profiler,
                        use_network_profiler=not args.use_graph_profiler,
+                       profile_ops=args.profile_ops,
+                       generate_explicit_del=args.generate_explicit_del,
                        node_weight_function=node_weight_function(
                            bwd_to_fwd_ratio=bwd_to_fwd_ratio),
                        edge_weight_function=edge_weight_function(

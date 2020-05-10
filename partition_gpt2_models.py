@@ -244,8 +244,10 @@ def partition_model(args,
     #                    use_layers_only_graph=True,
     #                    use_graph_profiler=args.use_graph_profiler,
     #                   use_network_profiler=not args.use_graph_profiler,
+    #                    profile_ops =args.profile_ops,
     #                    output_file=args.output_file,
     #                    generate_model_parallel=args.generate_model_parallel,
+    #                    generate_explicit_del=args.generate_explicit_del,
     #                    save_memory_mode=args.save_memory_mode,
     #                    recomputation=recomputation,
     #                    METIS_opt=METIS_opt,
@@ -267,8 +269,10 @@ def partition_model(args,
         use_layers_only_graph=True,
         use_graph_profiler=args.use_graph_profiler,
         use_network_profiler=not args.use_graph_profiler,
+        profile_ops=args.profile_ops,
         output_file=args.output_file,
         generate_model_parallel=args.generate_model_parallel,
+        generate_explicit_del=args.generate_explicit_del,
         save_memory_mode=args.save_memory_mode,
         recomputation=recomputation,
         METIS_opt=METIS_opt)
@@ -491,6 +495,11 @@ def parse_cli():
         action="store_true",
         default=False,
         help="wether to generate a modelParallel version of the partitioning")
+    parser.add_argument(
+        "--generate_explicit_del",
+        action="store_true",
+        default=False,
+        help="wether to generate del statements in partitioned code")
     parser.add_argument('--auto_file_name',
                         action='store_true',
                         default=False,
@@ -527,6 +536,10 @@ def parse_cli():
     parser.add_argument(
         "--use_graph_profiler", default=False, action="store_true",
         help="wether to use the new graph based profiler or the old network_profiler,"
+    )
+    parser.add_argument(
+        "--profile_ops", default=False, action="store_true",
+        help="weheter to also profile ops when using the GraphProfiler"
     )
     parser.add_argument("--dot",
                         default=False,
