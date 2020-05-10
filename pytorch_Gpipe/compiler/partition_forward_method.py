@@ -27,7 +27,8 @@ arithmetic_ops = {"__add__": "+",
 def generate_forward_method(
         partition_nodes: List[Node],
         model_outputs: List[Node],
-        partition_fields: Dict[str, str]) -> Tuple[List[str], Dict[str, List]]:
+        partition_fields: Dict[str, str],
+        generate_explicit_del=False) -> Tuple[List[str], Dict[str, List]]:
     '''the gateway to generate a forward function of a partition
     '''
     # function arguments are x0...xn
@@ -64,7 +65,13 @@ def generate_forward_method(
                         partition_nodes,
                         partition_fields,
                         ready_expressions)
-    lines.append(dtab + body)
+
+    if generate_explicit_del:
+        body = add_del_statements(body)
+
+    body = dtab + f"\n{dtab}".join(body)
+
+    lines.append(body)
 
     # TODO it is possible that if we have a single output
     # it's still a list/tuple for example return l(x) where l returns multiple outputs
@@ -105,7 +112,7 @@ def generateDeclaration(input_ids: List[str], partition_fields: Dict[Node,
 def generateBody(outputs: List[Node],
                  partition: List[Node],
                  scope_to_class_field: Dict[str, str],
-                 ready_expressions: Dict[Node, str]) -> str:
+                 ready_expressions: Dict[Node, str]) -> List[str]:
     '''generates the forwad function body and return statement
     '''
     uses = node_uses(partition, outputs)
@@ -122,9 +129,7 @@ def generateBody(outputs: List[Node],
 
     statements.append(return_statement)
 
-    statements = add_del_statements(statements)
-
-    return f"\n{dtab}".join(statements)
+    return statements
 
 
 def generate_statements(partition_nodes: List[Node],

@@ -83,6 +83,11 @@ class ParsePartitioningOpts:
             action="store_true",
             default=False,
             help="wether to generate a modelParallel version of the partitioning")
+        parser.add_argument(
+            "--generate_explicit_del",
+            action="store_true",
+            default=False,
+            help="wether to generate del statements in partitioned code")
 
         parser.add_argument("-a",
                             "--async_pipeline",

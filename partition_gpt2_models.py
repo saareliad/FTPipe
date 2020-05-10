@@ -235,6 +235,7 @@ def partition_model(args,
     #                    profile_ops =args.profile_ops,
     #                    output_file=args.output_file,
     #                    generate_model_parallel=args.generate_model_parallel,
+    #                    generate_explicit_del=args.generate_explicit_del,
     #                    save_memory_mode=args.save_memory_mode,
     #                    recomputation=recomputation,
     #                    METIS_opt=METIS_opt,
@@ -259,6 +260,7 @@ def partition_model(args,
         profile_ops=args.profile_ops,
         output_file=args.output_file,
         generate_model_parallel=args.generate_model_parallel,
+        generate_explicit_del=args.generate_explicit_del,
         save_memory_mode=args.save_memory_mode,
         recomputation=recomputation,
         METIS_opt=METIS_opt)
@@ -481,6 +483,11 @@ def parse_cli():
         action="store_true",
         default=False,
         help="wether to generate a modelParallel version of the partitioning")
+    parser.add_argument(
+        "--generate_explicit_del",
+        action="store_true",
+        default=False,
+        help="wether to generate del statements in partitioned code")
     parser.add_argument('--auto_file_name',
                         action='store_true',
                         default=False,

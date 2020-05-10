@@ -30,6 +30,7 @@ def pipe_model(model: nn.Module,
                use_layers_only_graph: bool = True,
                output_file: str = None,
                generate_model_parallel: bool = False,
+               generate_explicit_del=False,
                recomputation=False,
                METIS_opt=dict(),
                force_no_recomp_scopes=lambda s: False,
@@ -74,6 +75,9 @@ def pipe_model(model: nn.Module,
         if not given defualts to generated_{modelClass}{actualNumberOfPartitions}
      generate_model_parallel:
         whether to generate a model parallel version of the partition in the addition to the partitions themselves
+    generate_explicit_del:
+        whether to generate del statements to explicitly delete variables when they are no longer used
+        default False
     METIS_opt:
         dict of additional kwargs to pass to the METIS partitioning algorithm
     force_no_recomp_scopes:
@@ -117,6 +121,7 @@ def pipe_model(model: nn.Module,
                               model,
                               batch_dim,
                               output_file=output_file,
+                              generate_explicit_del=generate_explicit_del,
                               generate_model_parallel=generate_model_parallel)
     print("generated code")
     return graph
@@ -257,7 +262,7 @@ def build_graph(model: nn.Module, args: tuple = (), kwargs: Optional[Dict] = Non
     weights = None
     print("graph built")
     if use_graph_profiler:
-        print(f"using graph profiler with profile_ops = {profile_ops}")
+        print(f"using graph profiler with op profiling = {profile_ops}")
         assert not save_memory_mode, "save memory mode is not supported for GraphProfiler"
         torch.cuda.reset_max_memory_allocated()
         profiler = GraphProfiler(recomputation=recomputation, n_iter=n_iter, profile_ops=profile_ops,
