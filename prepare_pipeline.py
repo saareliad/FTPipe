@@ -13,7 +13,11 @@ from pipeline import TrueWeightsStorage
 
 import models
 from pipeline import CommunicationHandlerBase, get_auto_comm_handler_cls
-from pipeline import SinglePartitionManager
+from pipeline.communication.multiprocessing import MultiprocessingCommunicationHandler
+
+from pipeline.partition_manager import SinglePartitionManager
+from pipeline.mp_partition_manager import SinglePartitionManager as MPSinglePartitionManager
+
 from pipeline.partition_manager import GPipePartitionManager
 
 from pipeline.training import AVAILABLE_TRAINERS
@@ -69,6 +73,26 @@ def create_comm_handler(args, comm_init_args,
         GRAD_UGLY_SHAMEFUL_NAME="_grad",
         verbose=args.verbose_comm if hasattr(args, "verbose_comm") else False)
 
+    return comm_handler
+
+
+def create_comm_handler_v2(args, comm_init_args, device,
+                           v2_args) -> CommunicationHandlerBase:
+    handler_cls = MultiprocessingCommunicationHandler
+    comm_handler = handler_cls(
+        *v2_args,
+        args.rank,
+        args.local_rank,
+        args.distributed_backend,
+        args.world_size,
+        args.num_stages,
+        args.stage,
+        *comm_init_args,
+        args.cpu,
+        args.num_chunks,
+        device,
+        GRAD_UGLY_SHAMEFUL_NAME="_grad",
+        verbose=args.verbose_comm if hasattr(args, "verbose_comm") else False)
     return comm_handler
 
 
@@ -387,7 +411,7 @@ def get_optimizer(args, optimizer_cls, parameters):
 
 
 def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
-    
+
     is_gpipe = "gpipe" == args.work_scheduler.lower()
     if not args.is_multiprocessing_worker:
         # select a partition manager
@@ -397,8 +421,11 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         else:
             partition_cls = SinglePartitionManager
     else:
-        raise NotImplementedError()
-        # TODO: partition manger for multiprocessing
+        # Partition manger for multiprocessing
+        partition_cls = MPSinglePartitionManager
+        COMM_VERSION = 2
+        if is_gpipe:
+            raise NotImplementedError()
 
     # get work scheduler
     work_scheduler = AVAILABLE_WORK_SCHEDULERS.get(args.work_scheduler)
@@ -456,9 +483,10 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         comm_handler.init_process_group()
     elif COMM_VERSION == 2:
         # Multiprocessing
-        raise NotImplementedError()
+        stage_to_device_map = []  # TODO
+        v2_args = (shared_ctx, stage_to_device_map)
+        comm_handler = create_comm_handler_v2(args, comm_init_args, device, v2_args)
     else:
-        # comm_handler =
         raise NotImplementedError("In progress")
 
     # Try getting separate X,Y dataloaders
@@ -580,7 +608,8 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         keep_buffers_alive=args.keep_buffers_alive,
         use_recomputation=(not args.no_recomputation),
         gap_aware_just_loss=gap_aware_just_loss,
-        use_pre_loaded_label_input=getattr(args, "use_pre_loaded_label_input", False),
+        use_pre_loaded_label_input=getattr(args, "use_pre_loaded_label_input",
+                                           False),
         weight_stashing_just_for_stats=getattr(
             args, "weight_stashing_just_for_stats", False),
         stateless_tied=getattr(args, "stateless_tied", False),
@@ -638,7 +667,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
 
     optimizer = get_optimizer(args, optimizer_cls,
                               optimizer_grouped_parameters)
-    
+
     if not is_gpipe:
         true_weights_storage = TrueWeightsStorage(optimizer)
         partition.set_true_weights_storage(true_weights_storage)
@@ -680,7 +709,8 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
             sched_aware_stuff=sched_aware_stuff,
         )
         if weight_predictor:
-            partition.set_weight_predictor(weight_predictor, nag_with_predictor)
+            partition.set_weight_predictor(weight_predictor,
+                                           nag_with_predictor)
 
         # Set Weight Stashing
         if getattr(args, "weight_stashing", False):
@@ -688,8 +718,8 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
 
                 has_weight_predictor = weight_predictor is not None
                 if has_weight_predictor:
-                    using_clone_weight_predictor = args.weight_prediction['args'][
-                        'pred_mem'] == 'clone'
+                    using_clone_weight_predictor = args.weight_prediction[
+                        'args']['pred_mem'] == 'clone'
                 else:
                     using_clone_weight_predictor = False
 

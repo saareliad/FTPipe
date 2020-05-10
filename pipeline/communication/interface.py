@@ -64,7 +64,7 @@ class CommunicationHandlerBase(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def init_proccess_groups(self, *args, **kw):
+    def init_process_group(self, *args, **kw):
         # TODO: arguments.
         pass
 

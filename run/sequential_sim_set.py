@@ -22,7 +22,7 @@ def call_function(COMMAND, *args, **kw):
     os.system(f"{COMMAND} {sargs}")
 
 
-def subproccess_func(COMMAND, *args, **kw):
+def subprocess_func(COMMAND, *args, **kw):
     sargs = "--" + " --".join([f"{i} {v}" for i, v in kw.items()])
     command_line = f"{COMMAND} {sargs}"
     args = shlex.split(command_line)
@@ -38,7 +38,7 @@ def run_grid_on(COMMAND, param_grid, gpu_list, skip_first=0):
         print(f"-I- Skipping first {skip_first} configs")
         print(f"-I- Skipping: {list(configs)[:skip_first]}")
         configs = list(configs)[skip_first:]
-    func = partial(subproccess_func, COMMAND)
+    func = partial(subprocess_func, COMMAND)
     # func = partial(call_function, COMMAND)
     map_to_limited_gpus(func, configs, len(gpu_list),
                         CUDA_VISIBLE_DEVICES=gpu_list)
@@ -49,7 +49,7 @@ def run_grid_on_multi_gpu_per_run(COMMAND, param_grid, gpu_list, gpus_per_config
 
     # Assumes required gpu per run is 1
     configs = ParameterGrid(param_grid)
-    # func = partial(subproccess_func, COMMAND)
+    # func = partial(subprocess_func, COMMAND)
     func = partial(call_function, COMMAND)
     map_to_several_limited_gpus(func, configs, gpus_per_config, len(gpu_list),
                                 CUDA_VISIBLE_DEVICES=gpu_list)

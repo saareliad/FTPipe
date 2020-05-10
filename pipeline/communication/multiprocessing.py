@@ -98,7 +98,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                                          is_activations=False,
                                          requires_grad=requires_grad)
 
-    def init_proccess_groups(self, *args, **kw):
+    def init_process_group(self, *args, **kw):
         pass
 
     def fix_after_recv(self, x):

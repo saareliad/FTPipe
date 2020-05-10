@@ -8,8 +8,8 @@ class P2PCommunicationHandler(SimpleCommBase):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
 
-    def init_proccess_groups(self, *args, **kw):
-        super().init_proccess_groups(*args, **kw)
+    def init_process_group(self, *args, **kw):
+        super().init_process_group(*args, **kw)
 
     def _recv_tensors_p2p(self, x, batch_idx, ranks_dict_items):
         with torch.no_grad():

@@ -350,7 +350,7 @@ class P2PRankIO(CommunicationHandlerBase):
     def set_tensor_shapes(self, tensor_shapes):
         self.tensor_shapes = tensor_shapes
 
-    def init_proccess_groups(self, backend, ddp_backend, rank, local_rank,
+    def init_process_group(self, backend, ddp_backend, rank, local_rank,
                              world_size,
                              groups: List[List[int]]):  # stage, num_stages
 

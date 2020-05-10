@@ -52,7 +52,7 @@ def tensor_tags_from_config(config,
 
         return np.array(list(config_to_tuples_generator(config.stages)))
 
-    # Note: same tags for all proccess
+    # Note: same tags for all process
 
     tensor_tags = {}
     tensor_tag = 1

@@ -158,7 +158,7 @@ class InferStuff:
         return pd.DataFrame(self.all_data)
 
 
-def proccess_file(f):
+def process_file(f):
     """ Returns a dataframe """
     config, fit_res = load_experiment(f)
     inferer = InferStuff(config, fit_res)
@@ -179,7 +179,7 @@ def all_results_to_csv(root_paths, csv_name):
 
     print(f"-I- There are {len(files)} json files in {root_paths}")
     print("-I- Creating....")
-    df = pd.concat([proccess_file(f) for f in files], sort=False)
+    df = pd.concat([process_file(f) for f in files], sort=False)
     print(f"-I- Created df.shape: {df.shape}")
     print(f"-I- Writing csv: {csv_name}")
     df.to_csv(csv_name, index=False)

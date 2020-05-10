@@ -9,8 +9,8 @@ class BCASTCommunicationHandler(SimpleCommBase):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
 
-    def init_proccess_groups(self, stage, num_stages):
-        # Init all proccess groups
+    def init_process_group(self, stage, num_stages):
+        # Init all process groups
         # And remember my groups
         self.my_right_group = {}
         self.my_left_group = {}
