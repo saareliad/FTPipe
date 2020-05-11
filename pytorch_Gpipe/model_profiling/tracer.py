@@ -2,7 +2,6 @@ from contextlib import contextmanager
 from functools import wraps
 from itertools import chain
 import operator
-import inspect
 
 
 import torch
@@ -12,7 +11,7 @@ from torch._overrides import get_overridable_functions
 
 from pytorch_Gpipe.utils import traverse_model
 from .control_flow_graph import Node, NodeTypes, Graph
-from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops
+from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops, nested_map
 ##############################
 # Tracing Metadata
 ##############################
@@ -32,15 +31,7 @@ class TracedFunctions():
     functions = set()
 
     @classmethod
-    def register_function(cls, function, namespace=None):
-        if namespace is None:
-            namespace = inspect.getmodule(function)
-            if namespace is None:
-                namespace = function.__module__
-
-        if namespace is None:
-            raise ValueError(f"could not resolve module for {function}")
-
+    def register_function(cls, function, namespace):
         assert hasattr(namespace, function.__name__)
 
         traced_function = TracedFunction(namespace, function)
@@ -60,6 +51,63 @@ class TracedFunctions():
     @classmethod
     def traced_namespaces(cls):
         return {f.namespace for f in cls.functions}
+
+
+class ExplicitUntracedFunctions():
+    functions = set()
+
+    @classmethod
+    def register_function(cls, function, namespace):
+        assert hasattr(namespace, function.__name__)
+
+        traced_function = ExplicitUntracedFunction(namespace, function)
+
+        cls.functions.add(traced_function)
+
+    @classmethod
+    def enable(cls):
+        for f in cls.functions:
+            f.replace_binding()
+
+    @classmethod
+    def disable(cls):
+        for f in cls.functions:
+            f.restore_binding()
+
+
+class ExplicitUntracedFunction():
+    """
+    a Wrapper of an arbitrary static function
+    which will not be recorded.
+    it will not record it's inputs or outputs
+    """
+
+    def __init__(self, namespace, original_function):
+        self.namespace = namespace
+        self.original_function = original_function
+        self.function_name = self.original_function.__name__
+
+    def replace_binding(self):
+        setattr(self.namespace, self.function_name, self)
+
+    def restore_binding(self):
+        setattr(self.namespace,
+                self.function_name,
+                self.original_function)
+
+    def __call__(self, *args, **kwargs):
+        args, kwargs = ExplicitUntracedFunction.ensure_untraced((args, kwargs))
+
+        return self.original_function(*args, **kwargs)
+
+    @staticmethod
+    def ensure_untraced(vs):
+        def untraced(v):
+            if isinstance(v, TracedValue):
+                return v._data
+            return v
+
+        return nested_map(untraced, vs)
 
 
 class TracedFunction():
@@ -438,8 +486,6 @@ class TracedLayer(nn.Module):
         else:
             CURRENT_SCOPE += f"/{self.name}"
 
-        s = "terminal" if self.terminal else "non terminal"
-
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
 
         if self.terminal:
@@ -489,6 +535,7 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
                                       basic_blocks=basic_blocks)
 
     trace_registered_functions()
+    ExplicitUntracedFunctions.enable()
     traced_module = TracedLayer(module,
                                 name=f"{type(module).__name__}",
                                 terminal=False)
@@ -497,6 +544,7 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
     with torch.no_grad():
         output = traced_module(*args, **kwargs)
     disable_function_tracing()
+    ExplicitUntracedFunctions.disable()
 
     output_id = output.id
 
@@ -556,8 +604,12 @@ def prepare_args_and_kwargs(args=(), kwargs=None):
     return wrapped_args, wrapped_kwargs
 
 
-def register_new_traced_function(function, namespace=None):
-    TracedFunctions.register_function(function, namespace=namespace)
+def register_new_traced_function(function, namespace):
+    TracedFunctions.register_function(function, namespace)
+
+
+def register_new_explicit_untraced_function(function, namespace):
+    ExplicitUntracedFunctions.register_function(function, namespace)
 
 
 def register_torch_functions():
@@ -642,6 +694,7 @@ def reset_tracing_state():
     global CURRENT_SCOPE
     CURRENT_SCOPE = ""
     disable_function_tracing()
+    ExplicitUntracedFunctions.disable()
     NODES.clear()
     FUNCTION_NAMESPACE.clear()
     TracedValue.ID = 0
