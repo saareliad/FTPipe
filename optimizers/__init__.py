@@ -1,6 +1,9 @@
 from .sutskever_modified_sgd import SGD as SutskeverSGD
-from torch.optim import SGD as PytorchSGD
-from torch.optim import Adam, AdamW
+
+# .data parameter update is only change (pytorch 1.5)
+from .sgd import SGD as PytorchSGD
+from .adam import Adam
+from .adamw import AdamW
 
 from .adam_record import Adam as AdamGA
 from .adamw_record import AdamW as AdamWGA
