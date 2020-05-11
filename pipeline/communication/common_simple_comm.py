@@ -58,6 +58,10 @@ class SimpleCommBase(CommunicationHandlerBase):
                                 for i, v in self.receive_ranks.items()
                                 if not (i in self.tensors_names_with_no_grad)]
 
+        self.grad_send_dict = dict(self.grad_send_items)
+        self.grad_rcv_dict = dict(self.grad_rcv_items)
+
+
         if target_tensor_names:
             self._register_target_tensor(target_tensor_names,
                                          ranks_in_previous_stage,

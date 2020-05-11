@@ -340,14 +340,18 @@ def get_just_test_dataloader(args, explicit_separated_dataset=False, **kw):
     return test_dl, sampler
 
 
-def get_device(args):
+def get_device(args, local_rank):
     if hasattr(args, "stage_to_device_map"):
         stage_to_device_map = args.stage_to_device_map
-        cuda_device_id = stage_to_device_map[args.local_rank]
+        cuda_device_id = stage_to_device_map[local_rank]
         device = torch.device('cpu' if args.cpu else f"cuda:{cuda_device_id}")
     else:
-        device = torch.device('cpu' if args.cpu else f"cuda:{args.local_rank}")
+        device = torch.device('cpu' if args.cpu else f"cuda:{local_rank}")
     return device
+
+
+def get_rank_to_device_map(args):
+    return {rank: get_device(args, local_rank=rank) for rank in range(args.world_size)}
 
 
 def hack_trainer_type_to_gap_aware(args):
@@ -430,14 +434,15 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     # get work scheduler
     work_scheduler = AVAILABLE_WORK_SCHEDULERS.get(args.work_scheduler)
 
-    device = get_device(args)
+    # set device
+    local_rank_to_device_map = get_rank_to_device_map(args)
+    args.local_rank_to_device_map = local_rank_to_device_map
+    device = local_rank_to_device_map[args.local_rank]
     if not args.cpu:
         torch.cuda.set_device(device)
 
-    print(f"Loading partitioned model and dataset...")
-
     # Parse partitioning config and requires args
-
+    print(f"Loading partitioned model and dataset...")
     model_instance = None
     dataset_keywords = {}
     if args.model in models.transformers_cfg.MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS.keys(
@@ -484,7 +489,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     elif COMM_VERSION == 2:
         # Multiprocessing
         stage_to_device_map = []  # TODO
-        v2_args = (shared_ctx, stage_to_device_map)
+        v2_args = (shared_ctx, stage_to_device_map, local_rank_to_device_map)
         comm_handler = create_comm_handler_v2(args, comm_init_args, device, v2_args)
     else:
         raise NotImplementedError("In progress")

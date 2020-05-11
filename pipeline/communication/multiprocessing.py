@@ -14,8 +14,14 @@ def is_shared_parameter(tensor_scope):
     # return t1 or t2
 
 
+# For finding who we send too:
+# self.send_ranks.items()
+# self.grad_send_items
+
+
 class MultiprocessingCommunicationHandler(SimpleCommBase):
-    def __init__(self, share, stage_to_device_map, *args, **kw):
+    def __init__(self, share, stage_to_device_map, local_rank_to_device_map,
+                 *args, **kw):
         # kw.pop("GRAD_UGLY_SHAMEFUL_NAME")
         # FIXME
         kw["GRAD_UGLY_SHAMEFUL_NAME"] = ""
@@ -26,6 +32,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         self.rcv_queues = rcv_queues
         self.buffer_reuse_queues = buffer_reuse_queues
         self.stage_to_device_map = stage_to_device_map
+        self.local_rank_to_device_map = local_rank_to_device_map
 
         # Matrix of data structure, in which we will stroe aquired buffers
         queues = []
@@ -42,10 +49,22 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         self.rcv_shared_parameters = dict()
         self.send_shared_parameters = defaultdict(set)
 
-        self.send_buffers = defaultdict(dict)
+        # Buffer per target
+        self.send_buffers = dict()  # { tensor_name: { rank: buff } }
+        self.send_buffers_versions = {}
+
+    def save_send_buffers(self, name):
+        self.send_buffers_versions[name] = self.send_buffers
+
+    def clear_send_buffers(self):
+        self.send_buffers = dict()
+
+    def use_send_buffers(self, name):
+        self.send_buffers = self.send_buffers_versions[name]
 
     def _create_streams(self):
-        # stat with 2 streams, than do more
+        # start with 2 streams, then do more
+        # NOTE: checking lower priority for grad stream
         self.grad_send_stream = torch.cuda.Stream(self.device, priority=-2)
         self.acti_send_stream = torch.cuda.Stream(self.device, priority=-1)
 
@@ -73,11 +92,11 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             q.put(None)
 
     def _create_send_buffers(self,
-                             tensor_names,
+                             tensor_send_ranks,
                              is_activations,
                              requires_grad=False):
         """ the sender creates the buffers """
-        # buffers = []
+        tensor_names = tensor_send_ranks.keys()
         for tensor_name in tensor_names:
             if is_activations:
                 is_parameter = is_shared_parameter(tensor_name)
@@ -87,31 +106,31 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
 
             dtype = self.tensor_dtypes[tensor_name]
             shape = self.tensor_shapes[tensor_name]
-            send_buffer = torch.zeros(
-                shape,
-                dtype=dtype,
-                # TODO: target device.
-                # TODO: target device.
-                # TODO: target device.
-                # TODO: target device.
-                # TODO: target device.
-                device=self.device,
-                requires_grad=requires_grad)
-            send_buffer.share_memory_()
-            self.send_buffers[tensor_name] = send_buffer
+
+            d = {}
+            for rank in tensor_send_ranks[tensor_name]:
+                # Target device:
+                device = self.local_rank_to_device_map[rank]
+                send_buffer = torch.zeros(shape,
+                                          dtype=dtype,
+                                          device=device,
+                                          requires_grad=requires_grad)
+                send_buffer.share_memory_()
+                d[rank] = send_buffer
+            self.send_buffers[tensor_name] = d
 
     def create_activations_send_buffers(self, requires_grad=False):
-        return self._create_send_buffers(self.send_ranks.keys(),
+        return self._create_send_buffers(self.send_ranks,
                                          is_activations=True,
                                          requires_grad=requires_grad)
 
     def create_gradients_send_buffers(self, requires_grad=False):
-        tensor_names = [i[0] for i in self.grad_send_items]
-        print(40*"-")
+        tensor_names = self.grad_send_dict.keys()
+        print(40 * "-")
         print("create_gradients_send_buffers for", tensor_names)
-        print(40*"-")
+        print(40 * "-")
 
-        return self._create_send_buffers(tensor_names,
+        return self._create_send_buffers(self.grad_send_dict,
                                          is_activations=False,
                                          requires_grad=requires_grad)
 
@@ -121,7 +140,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                                          requires_grad=requires_grad)
 
     def create_gradients_rcv_buffers(self, requires_grad=False):
-        tensor_names = [i[0] for i in self.grad_rcv_items]
+        tensor_names = self.grad_rcv_dict.keys()
         # print(40*"-")
         # print("create_gradients_rcv_buffers for", tensor_names)
         # print(40*"-")
@@ -171,7 +190,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             with torch.no_grad():
                 t = x.clone()
             reuse_q = self.buffer_reuse_queues[receive_rank][self.rank]
-            # reuse_q.put(None)  # TODO:
+            reuse_q.put(None)  # TODO:
 
             request_objects.append(t)
             # TODO: we expect request object os it has to be changed.
@@ -198,7 +217,8 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                             stream = self.grad_send_stream if is_grad else self.acti_send_stream
                             with torch.cuda.stream(stream):
                                 out_q = self.rcv_queues[send_rank][self.rank]
-                                event = stream.record_event()
+                                event = torch.cuda.Event(blocking=True)
+                                stream.record_event(event)
                                 request_objects.append(event)
                                 stream.wait_event(event)  # FIXME
                                 # stream.synchronize()
@@ -209,21 +229,23 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
 
                 tensor = tensor.detach()
 
-                # for send_rank in send_ranks:
-                #     buff_q = self.buffer_reuse_queues[self.rank][send_rank]
-                #     buff_q.get()  # Synch with reciever we can use it.
-
+                send_buffers = self.send_buffers[tensor_name]
+                my_buff_reuse_queues = self.buffer_reuse_queues[self.rank]
                 for send_rank in send_ranks:
+                    buff_q = my_buff_reuse_queues[send_rank]
+                    buff_q.get()  # Synch with reciever we can use it.
+
                     stream = self.grad_send_stream if is_grad else self.acti_send_stream
                     with torch.cuda.stream(stream):
                         # TODO: order of buffers
                         # NOTE: we waste some memory,
                         # can just write stright to the buffer in the partition
                         out_q = self.rcv_queues[send_rank][self.rank]
-                        buff = self.send_buffers[tensor_name]
+                        buff = send_buffers[send_rank]
                         buff.copy_(tensor)
                         # FIXME: can do it in a thread.
-                        event = stream.record_event()
+                        event = torch.cuda.Event(blocking=True)
+                        stream.record_event(event)
                         request_objects.append(event)
                         stream.wait_event(event)  # FIXME
                         # stream.synchronize()
@@ -233,7 +255,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                             tensor_tag = self.tensor_tags[tensor_name] + (
                                 self.TOTAL_TAGS * batch_idx)
                             self.logger.info(
-                                f"copy_(), dst={send_rank}, tag={tensor_tag}, name={tensor_name}, rank={self.local_rank}"
+                                f"copy_(), dst={send_rank}, tag={tensor_tag}, name={tensor_name}, rank={self.rank}"
                             )
 
         return request_objects

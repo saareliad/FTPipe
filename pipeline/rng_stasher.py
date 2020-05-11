@@ -3,8 +3,14 @@ import torch
 
 class PartitionRngStasher:
     """
-    Utility class to stash and restore RNG state
-    pop happens when re restore the state (therefore we can only restore once).
+    Utility class to stash and restore RNG state.
+    Used during recomputation.
+
+    Pop happens when we restore the state (therefore can only restore state once).
+
+    # NOTE: 
+    #   (1) it will be problematic when 2 recomputing stages are use the same device. (e.g tied GPipe)
+    #   (2) currently does not set numpy or python random seeds. just pytorch's. (TODO)
     """
 
     def __init__(self, device=torch.device('cpu')):

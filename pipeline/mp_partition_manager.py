@@ -202,18 +202,33 @@ class SinglePartitionManager:
         shapes_are_equal = eval_tensor_shapes == training_tensor_shapes
         dtypes_are_equal = eval_tensor_dtypes == training_tensor_dtypes
         dtypes_and_shapes_are_equal = shapes_are_equal and dtypes_are_equal
-        if dtypes_and_shapes_are_equal and (last_batch_train_shapes is
-                                            None) and (last_batch_test_shapes
-                                                       is None):
+
+        no_different_last_batch_shapes = (last_batch_train_shapes is
+                                          None) and (last_batch_test_shapes is
+                                                     None)
+
+        if dtypes_and_shapes_are_equal and no_different_last_batch_shapes:
             # HACK: if same shapes and datatypes, the buffers can remain!
             keep_buffers_alive = True
+        elif keep_buffers_alive and dtypes_and_shapes_are_equal:
+            raise ValueError(
+                f"got keep_buffers_alive=True, but can't because last batch has different size."
+            )
 
         self.keep_buffers_alive = keep_buffers_alive
 
+        self._bwd_send_buffers()
+
         if keep_buffers_alive:
             self._fwd_send_buffers_train()
+            if not dtypes_and_shapes_are_equal:
+                self.comm_handler.save_send_buffers(name="train")
+                self.comm_handler.clear_send_buffers()
+                self._fwd_send_buffers_eval()
+                self.comm_handler.save_send_buffers(name="eval")
+                self.comm_handler.use_send_buffers("train")
 
-        self._bwd_send_buffers()
+        self.dtypes_and_shapes_are_equal = dtypes_and_shapes_are_equal
 
     def _fwd_send_buffers_train(self):
         return make_send_buff(self.comm_handler, self.training_tensor_shapes,
@@ -349,8 +364,8 @@ class SinglePartitionManager:
 
         self.partition.train()
 
-        if self.keep_buffers_alive:
-            pass
+        if self.keep_buffers_alive and not self.dtypes_and_shapes_are_equal:
+            self.comm_handler.use_send_buffers("train")
         else:
             # Forward buffers:
             # re-create if needed.
@@ -377,8 +392,8 @@ class SinglePartitionManager:
         if self.is_replicated and self.sync_buffers:
             self.comm_handler.sync_buffers(self.buffers_to_sync)
 
-        if self.keep_buffers_alive:
-            pass
+        if self.keep_buffers_alive and not self.dtypes_and_shapes_are_equal:
+            self.comm_handler.use_send_buffers("eval")
         else:
             if self.changed_shapes_last_batch_fwd:
                 self.changed_shapes_last_batch_fwd = False
@@ -634,7 +649,6 @@ class SinglePartitionManager:
             request_objects = self.comm_handler.send_gradients(g, batch_idx)
 
         del g
-
 
         # TODO: here we can send the next rcev buffer
 

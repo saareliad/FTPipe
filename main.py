@@ -52,7 +52,9 @@ def parse_distributed_cli(parser):
 def parse_multiprocessing_cli(parser):
     parser.add_argument("--pipeline_num_processes", type=int, default=4, help="Tells us how much processes do we want")
 
+    # for Debug
     parser.add_argument("--verbose_comm", action="store_true")
+    parser.add_argument("--verbose_comm_from_cmd", action="store_true")
 
 
 def parse_cli():
@@ -71,7 +73,6 @@ def parse_cli():
         '--debug',
         nargs='*',
         type=int,
-        required=False,
         default=False,
         help='Will wait for debugger attachment on given ranks.')
 
@@ -111,7 +112,7 @@ def parse_cli():
                         type=str,
                         help='Output folder for results',
                         default='./results',
-                        required=False)
+                        )
 
     parser.add_argument('--data_dir',
                         type=str,
@@ -121,8 +122,8 @@ def parse_cli():
     parser.add_argument('--out_filename',
                         '-n',
                         type=str,
-                        help='Name of output file',
-                        required=False)
+                        default='out',
+                        help='Name of output file')
 
     parser.add_argument('--cpu',
                         action='store_true',
@@ -139,22 +140,21 @@ def parse_cli():
                         type=int,
                         help="Training epochs to run",
                         default=-1,
-                        required=False)
+                        )
 
     parser.add_argument("--steps",
                         type=int,
                         help="Training steps to run",
                         default=-1,
-                        required=False)
+                        )
     parser.add_argument("--step_every",
                         type=int,
                         help="Aggregation steps",
                         default=1,
-                        required=False)
+                        )
 
     parser.add_argument("--step_every_from_cmd",
-                        action="store_true",
-                        default=False)
+                        action="store_true")
 
     parser.add_argument("--num_chunks",
                         help="Number of chunks for Double Buffering",
