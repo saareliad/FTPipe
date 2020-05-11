@@ -27,6 +27,7 @@ class SimpleCommBase(CommunicationHandlerBase):
             GRAD_UGLY_SHAMEFUL_NAME="_grad",
             verbose=False):
         assert isinstance(GRAD_UGLY_SHAMEFUL_NAME, str)
+        self.GRAD_UGLY_SHAMEFUL_NAME = GRAD_UGLY_SHAMEFUL_NAME
         self.verbose = verbose
         self.rank = rank
         self.local_rank = local_rank
@@ -60,7 +61,6 @@ class SimpleCommBase(CommunicationHandlerBase):
 
         self.grad_send_dict = dict(self.grad_send_items)
         self.grad_rcv_dict = dict(self.grad_rcv_items)
-
 
         if target_tensor_names:
             self._register_target_tensor(target_tensor_names,

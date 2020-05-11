@@ -24,7 +24,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                  *args, **kw):
         # kw.pop("GRAD_UGLY_SHAMEFUL_NAME")
         # FIXME
-        kw["GRAD_UGLY_SHAMEFUL_NAME"] = ""
+        kw["GRAD_UGLY_SHAMEFUL_NAME"] = "_grad"
         super().__init__(*args, **kw)
         # TODO (shared) prameters
 
@@ -85,7 +85,12 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                     self.send_shared_parameters[tensor_name] = set()
                     continue
 
-            sending_rank = sending[tensor_name]
+            if tensor_name.endswith(self.GRAD_UGLY_SHAMEFUL_NAME):
+                cname = tensor_name[:-(len(self.GRAD_UGLY_SHAMEFUL_NAME))]
+                sending_rank = sending[cname]
+            else:
+                sending_rank = sending[tensor_name]
+
             assert len(sending_rank) == 1
             sending_rank = sending_rank[0]
             q = self.buffer_reuse_queues[sending_rank][self.rank]
@@ -104,8 +109,15 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                     self.send_shared_parameters[tensor_name] = set()
                     continue
 
-            dtype = self.tensor_dtypes[tensor_name]
-            shape = self.tensor_shapes[tensor_name]
+            if tensor_name.endswith(self.GRAD_UGLY_SHAMEFUL_NAME):
+                cname = tensor_name[:-(len(self.GRAD_UGLY_SHAMEFUL_NAME))]
+
+                dtype = self.tensor_dtypes[cname]
+                shape = self.tensor_shapes[cname]
+            else:
+
+                dtype = self.tensor_dtypes[tensor_name]
+                shape = self.tensor_shapes[tensor_name]
 
             d = {}
             for rank in tensor_send_ranks[tensor_name]:
@@ -205,6 +217,9 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
 
     def _send_tensors_p2p(self, x, batch_idx, ranks_dict_items, is_grad):
         request_objects = []
+
+        prev_work_event = torch.cuda.Event(blocking=True)
+        prev_work_event.record()
         with torch.no_grad():
             for tensor, (tensor_name, send_ranks) in zip(x, ranks_dict_items):
                 # tag for minibatch idx too
@@ -216,12 +231,14 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                                 tensor_name]:
                             stream = self.grad_send_stream if is_grad else self.acti_send_stream
                             with torch.cuda.stream(stream):
+                                prev_work_event.wait()
                                 out_q = self.rcv_queues[send_rank][self.rank]
                                 event = torch.cuda.Event(blocking=True)
                                 stream.record_event(event)
                                 request_objects.append(event)
-                                stream.wait_event(event)  # FIXME
+                                # stream.wait_event(event)  # FIXME
                                 # stream.synchronize()
+                                event.synchronize()
                                 out_q.put(tensor)
                             self.send_shared_parameters[tensor_name].add(
                                 send_rank)
@@ -237,6 +254,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
 
                     stream = self.grad_send_stream if is_grad else self.acti_send_stream
                     with torch.cuda.stream(stream):
+                        prev_work_event.wait()
                         # TODO: order of buffers
                         # NOTE: we waste some memory,
                         # can just write stright to the buffer in the partition
@@ -247,7 +265,8 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                         event = torch.cuda.Event(blocking=True)
                         stream.record_event(event)
                         request_objects.append(event)
-                        stream.wait_event(event)  # FIXME
+                        # stream.wait_event(event)  # FIXME
+                        event.synchronize()
                         # stream.synchronize()
                         out_q.put(buff)
 
