@@ -58,7 +58,7 @@ from transformers import (
 )
 
 from models.normal import GPT2LMHeadModel, GPT2Model
-from models.normal import StatelessGPT2LMHeadModel  
+from models.normal import StatelessGPT2LMHeadModel
 from models.normal import CTRLLMHeadModel, CTRLModel
 from models.normal import StatelessCTRLLMHeadModel
 from models.normal.NLP_models.modeling_t5 import T5Model, T5ForConditionalGeneration
@@ -70,7 +70,8 @@ from pytorch_Gpipe import PipelineConfig
 import functools
 from partition_async_pipe import AsyncPipePartitioner
 import math
-from pytorch_Gpipe.model_profiling.tracer import register_new_traced_function
+import operator
+from pytorch_Gpipe.model_profiling.tracer import register_new_traced_function, register_new_explicit_untraced_function
 
 MODEL_CLASSES_LM_HEAD = {
     'gpt2': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
@@ -113,8 +114,12 @@ class TextDataset(Dataset):
             with open(file_path, encoding="utf-8") as f:
                 text = f.read()
 
+            print("preparing text")
+            tokenized_text = tokenizer.tokenize(text)
+            print("tokenized text")
             tokenized_text = tokenizer.convert_tokens_to_ids(
-                tokenizer.tokenize(text))
+                tokenized_text)
+            print("converted tokens to ids")
 
             # Truncate in block of block_size
             for i in range(0,
@@ -122,6 +127,7 @@ class TextDataset(Dataset):
                 self.examples.append(
                     tokenizer.build_inputs_with_special_tokens(
                         tokenized_text[i:i + block_size]))
+                print(f"{i}/{len(tokenized_text) - block_size + 1}")
             # Note that we are loosing the last truncated example here for the sake of simplicity (no padding)
             # If your dataset is small, first you should loook for a bigger one :-) and second you
             # can change this behavior by adding (model specific) padding.
@@ -200,7 +206,7 @@ def partition_model(args,
 
     model_to_resize = model.module if hasattr(model, 'module') else model
     model_to_resize.resize_token_embeddings(len(tokenizer))
-
+    print("embedding resized")
     # Tie weights artificially using statless trick
     if args.stateless_tied:
         model_to_resize.make_stateless_after_loaded_tied_and_resized()
@@ -229,7 +235,10 @@ def partition_model(args,
 
     # so we could trace math.sqrt in gpt2 attention
     register_new_traced_function(math.sqrt, namespace=math)
-
+    register_new_explicit_untraced_function(operator.is_,
+                                            namespace=operator)
+    register_new_explicit_untraced_function(operator.is_not,
+                                            namespace=operator)
     # graph = pipe_model(model,
     #                    batch_dim,
     #                    sample,
@@ -619,6 +628,8 @@ def main():
         # Our input block size will be the max possible for the model
         args.block_size = tokenizer.max_len_single_sentence
     args.block_size = min(args.block_size, tokenizer.max_len_single_sentence)
+
+    print("tokenizer created")
     model = model_class.from_pretrained(
         args.model_name_or_path,
         from_tf=bool('.ckpt' in args.model_name_or_path),
@@ -627,9 +638,9 @@ def main():
 
     # TODO: if not args.save_memory_mode:
     model.to(args.device)
-
+    print("model built")
     train_dataset = load_and_cache_examples(args, tokenizer)
-
+    print("dataset created")
     partition_model(args,
                     train_dataset,
                     model,
@@ -653,3 +664,5 @@ if __name__ == "__main__":
     # ptvsd.wait_for_attach()
 
     main()
+
+# python partition_gpt2_models.py --use_graph_profiler --profile_ops --analysis_batch_size 1 --async_pipeline --auto_file_name --block_size -1 --bwd_to_fwd_ratio 3 --lmhead --model_name_or_path t5-small --train_data_file wikitext-2-raw/wiki.train.raw --model_type t5 --n_iter 50 --n_partitions 2 --output_file results/t5_p2/ --overwrite_cache --partitioning_batch_size 1 --seed 42 --train_data_file wikitext-2-raw/wiki.train.raw
