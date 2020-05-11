@@ -416,6 +416,7 @@ class T5Attention(nn.Module):
         # past_key_value_state[0] is (bs, n_heads, q_len - 1, dim_per_head)
         bs, qlen, dim = input.size()
 
+        real_qlen = qlen
         if is_not_None(past_key_value_state):
             assert self.is_decoder is True, "Encoder cannot cache past key value states"
             assert (
@@ -423,10 +424,11 @@ class T5Attention(nn.Module):
             ), "past_key_value_state should have 2 past states: keys and values. Got {} past states".format(
                 len(past_key_value_state)
             )
-            real_qlen = qlen + \
-                past_key_value_state[0].shape[2] if query_length is None else query_length
-        else:
-            real_qlen = qlen
+
+            if is_None(query_length):
+                real_qlen += past_key_value_state[0].shape[2]
+            else:
+                real_qlen += query_length
 
         if is_None(kv):
             klen = real_qlen
