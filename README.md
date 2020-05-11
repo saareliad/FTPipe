@@ -1,5 +1,44 @@
 # Asynchronous Pipeline
 
+## Available algorithms
+
+### Asynchronous pipeline
+
+- recomputation / no recomputation
+- stale
+- weight stashing (ws)
+- weight prediction (wp)
+
+  - sgd
+  - adam
+  - adamw
+
+- "scheduler aware prediction"
+
+- gap aware (ga)
+
+  - sgd, adam, adamw
+
+- gap aware just for lost (ga_jfl)
+
+- combinations {wp, ws, ga/ga_jfl}
+- gradient aggregation in pipeline (`step_every`)
+
+Note that there is difference between stale and weight prediction with recomputation and without.
+
+Weight predicion is often called `msnag` in code.
+
+### Synchronous
+
+- sequential (seq)
+
+  - single gpu
+  - model parallel
+
+- gpipe
+
+- DistributedDataParalle (DDP, SSGD)
+
 ## Setup env
 
 ### From source (new)
@@ -15,9 +54,9 @@ vim create_env.sh
 ```
 
 ### docker (experimental)
+
 need to edit it...
 [docker/Dockerfile_from_source](docker/Dockerfile_from_source)
-
 
 ### conda (deprecated)
 
@@ -63,6 +102,16 @@ Not supported. To be removed.
 ```bash
 python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_node 2 main.py --cpu --distributed_backend gloo
 ```
+
+## Pitfalls
+
+- **_recomputation and normalization layers_** For some normalization layers (e.g BatchNormalization) the recomputation does two forward passes (dummy, and during recomputation), therefore we monkey patch it during the dummy pass. Can do with with re-writing the layer too, which is slightly more efficient than monkey patching.
+
+- **_recomputation correct random seed_** We use the same random same seed for the two recomputation forward passes.
+
+- **_NLP_** check you overwrite cash when needed.
+
+- **_Sending large tensors with MPI_** takes extra memory due buffer allocations. should consider sharing the tensor (e.g for tied weights), or having a single copy of it. Currently gradeints are not shared, this causes extra memory.
 
 ## Adding a model
 
@@ -175,52 +224,17 @@ After talk with Amit Nadav
 
 - maybe do fork to share pinned memory. (need to be done before cuda)
 - `sudo ./pcm.x` to check data transfers between cpus. (git clone <https://github.com/opcm/pcm.git>)
-- use node 0 : `numactl --cpunodebind=0` (sudo apt install numactl) 
+- use node 0 : `numactl --cpunodebind=0` (sudo apt install numactl)
 
   - checking this: either `lstopo` or `lspci -vvv | less`.
 
 - `less /proc/$PID/maps` to check memory mapping
+
 - check allocated sutff with `strace -f python -v`
-- There was 
+- There was
 
   - `sudo apt install hwloc` for something.
   - `modprobe msr` for something.
-
-## Available algorithms
-
-### Asynchronous pipeline
-
-- recomputation / no recomputation
-- stale
-- weight stashing (ws)
-- weight prediction (wp)
-
-  - sgd
-  - adam
-  - adamw
-
-- "scheduler aware prediction"
-- gap aware (ga)
-
-  - sgd, adam, adamw
-
-- gap aware just for lost (ga_jfl)
-- combinations {wp, ws, ga/ga_jfl}
-- gradient aggregation in pipeline (`step_every`)
-
-Note that there is difference between stale and weight prediction with recomputation and without.
-
-Weight predicion is often called `msnag` in code.
-
-### Synchronous
-
-- sequential (seq)
-
-  - single gpu
-  - model parallel
-
-- gpipe
-- DistributedDataParalle (DDP, SSGD)
 
 ## cuda aware openmpi
 
