@@ -4,8 +4,6 @@ from torch import Tensor
 from .tracer import NodeTypes
 from ..utils import detach_tensors, flatten, move_tensors, set_grad_mode, inplace_arithmetic_ops, ExecTimes
 
-# TODO save_memory_mode
-
 
 class GraphProfiler():
     def __init__(self, recomputation=False, n_iter=10, force_no_recomp_scopes=None, profile_ops=True, save_memory_mode=False):
