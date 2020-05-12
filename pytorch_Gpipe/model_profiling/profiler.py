@@ -2,13 +2,13 @@ from collections import defaultdict
 import torch
 from torch import Tensor
 from .tracer import NodeTypes
-from ..utils import detach_tensors, flatten, set_grad_mode, inplace_arithmetic_ops, ExecTimes
+from ..utils import detach_tensors, flatten, move_tensors, set_grad_mode, inplace_arithmetic_ops, ExecTimes
 
 # TODO save_memory_mode
 
 
 class GraphProfiler():
-    def __init__(self, recomputation=False, n_iter=10, force_no_recomp_scopes=None, profile_ops=True):
+    def __init__(self, recomputation=False, n_iter=10, force_no_recomp_scopes=None, profile_ops=True, save_memory_mode=False):
         self.forward_times = defaultdict(list)
         self.backward_times = defaultdict(list)
         self.recomputation = recomputation
@@ -21,11 +21,17 @@ class GraphProfiler():
             self.force_no_recomp_scopes = force_no_recomp_scopes
 
         self.profile_ops = profile_ops
+        self.save_memory_mode = save_memory_mode
 
     def time_forward(self, node, function, args, kwargs):
+        if self.save_memory_mode:
+            function, args, kwargs = move_tensors((function, args, kwargs),
+                                                  'cuda')
+
         if self.should_profile(node, function, args, kwargs):
             recomputation = self.recomputation and (
                 not self.force_no_recomp_scopes(node.scope))
+
             for _ in range(self.n_iter):
                 args, kwargs = detach_tensors((args, kwargs))
                 with torch.set_grad_enabled(not recomputation):
@@ -39,6 +45,10 @@ class GraphProfiler():
 
                     torch.cuda.synchronize(device='cuda')
                     self.forward_times[node].append(start.elapsed_time(end))
+
+        # NOTE we do not move the the inputs to the cpu
+        # because the graph executor stores them on the cpu anyway
+        # using save_memory_mode = True should be used with the model and initial inputs on the cpu
 
             return detach_tensors((args, kwargs))
 
@@ -59,6 +69,13 @@ class GraphProfiler():
                 self.backward_recomputation(node, function,
                                             args, kwargs,
                                             output)
+
+        if self.save_memory_mode:
+            # NOTE we move the function and output to cpu
+            # in order to clear the gpu
+            # args and kwargs are just temporaries
+            # the graph executor saves the originals on the cpu
+            function, output = move_tensors((function, output), 'cpu')
 
         # detach output from history and start recording again for future operations
         return set_grad_mode(output, True)
@@ -82,11 +99,7 @@ class GraphProfiler():
 
             self.backward_times[node].append(start.elapsed_time(end))
 
-            if node.type is NodeTypes.LAYER:
-                for p in function.parameters():
-                    p.grad = None
-            for p in GraphProfiler.only_tensors_that_require_grad((args, kwargs)):
-                p.grad = None
+            GraphProfiler.delete_grads(node, function, (args, kwargs))
 
     def backward_recomputation(self, node, function, args, kwargs, output):
         for _ in range(self.n_iter):
@@ -108,11 +121,7 @@ class GraphProfiler():
                 torch.cuda.synchronize(device='cuda')
                 self.backward_times[node].append(start.elapsed_time(end))
 
-                if node.type is NodeTypes.LAYER:
-                    for p in function.parameters():
-                        p.grad = None
-                for p in GraphProfiler.only_tensors_that_require_grad((args, kwargs)):
-                    p.grad = None
+                GraphProfiler.delete_grads(node, function, (args, kwargs))
 
     def get_weights(self):
         weights = dict()
@@ -142,6 +151,14 @@ class GraphProfiler():
     @staticmethod
     def only_tensors_with_grad_fn(ts):
         return [t for t in flatten(ts) if isinstance(t, Tensor)and(t.grad_fn is not None)]
+
+    @staticmethod
+    def delete_grads(node, function, ts):
+        if node.type is NodeTypes.LAYER:
+            for p in function.parameters():
+                p.grad = None
+        for p in GraphProfiler.only_tensors_that_require_grad(ts):
+            p.grad = None
 
     @staticmethod
     def get_grads(ts):
