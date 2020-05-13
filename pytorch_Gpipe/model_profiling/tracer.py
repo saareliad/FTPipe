@@ -11,7 +11,7 @@ from torch._overrides import get_overridable_functions
 
 from pytorch_Gpipe.utils import traverse_model
 from .control_flow_graph import Node, NodeTypes, Graph
-from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops, nested_map
+from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops,logical_ops, nested_map
 ##############################
 # Tracing Metadata
 ##############################
@@ -655,7 +655,7 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
 
     CURRENT_SCOPE = ""
 
-    nodes = discard_unused_nodes(NODES)
+    nodes = discard_unused_nodes(NODES,output_id)
 
     nodes, output_id = set_node_indices(nodes, output_id)
     NODES.clear()
@@ -798,14 +798,28 @@ def reset_tracing_state():
     TracedValue.ID = 0
 
 
-def discard_unused_nodes(nodes):
+def discard_unused_nodes(nodes,output_id):
     new_nodes = []
 
     for node_id in reversed(range(len(nodes))):
         node = nodes[node_id]
-        if node.value_type is None or (node.type is NodeTypes.CONSTANT and (len(node.out_edges) == 0)):
-            # a,b=f() will actually invoke __getitem__ 3 times so we discard the last node
-            # also discar unused constants
+
+        if node_id == output_id:
+             new_nodes.append((node.id, node))
+        
+        # if a >1      a>1 will be traced but it has no meaning to us
+        # as we only record the branch that was taken
+        unused_branch = False
+        if node.type is NodeTypes.OP and (len(node.out_edges)== 0):
+            op_path = node.scope.rsplit("/", maxsplit=1)[1]
+            _, func_name = op_path.split("::")
+            unused_branch = func_name in logical_ops
+
+        # a,b=f() will actually invoke __getitem__ 3 times so we discard the last node
+        iter_sentinel = node.value_type is None
+        unused_constant = (node.type is NodeTypes.CONSTANT) and (len(node.out_edges) == 0)
+
+        if unused_branch or iter_sentinel or unused_constant: 
             assert len(
                 node.out_edges) == 0, "unused traced value should not have outgoing edges"
 
