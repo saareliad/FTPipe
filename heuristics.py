@@ -35,7 +35,7 @@ def edge_weight_function(bw_GBps, bwd_to_fwd_ratio=-1):
             return 1000 * MULT_FACTOR
         MB = 1e6
         assert isinstance(u.tensor_shape, torch.Size)
-        volume = reduce(operator.mul, u.tensor_shape, initial=1) / MB
+        volume = reduce(operator.mul, u.tensor_shape, 1) / MB
         # include dtype size
         volume *= torch.empty(1, dtype=u.tensor_dtype).element_size()
 

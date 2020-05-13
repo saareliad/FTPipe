@@ -11,7 +11,7 @@ from torch._overrides import get_overridable_functions
 
 from pytorch_Gpipe.utils import traverse_model
 from .control_flow_graph import Node, NodeTypes, Graph
-from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops, nested_map
+from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops,logical_ops, nested_map
 ##############################
 # Tracing Metadata
 ##############################
@@ -290,6 +290,10 @@ class TracedValue(object):
 
     ##############################
     # Magic Method delegation
+    #intentionaly explicit
+    #NOTE if the method requires specific syntax
+    #then it should be also added in utils.py
+    # and ensure correct code generation in compiler/partition_forward_method.generate_magic
     ##############################
 
     @delegate_to_traced_value
@@ -306,6 +310,24 @@ class TracedValue(object):
     def __setitem__(self, idx, value):
         pass
 
+    @delegate_to_traced_value
+    def __len__(self):
+        pass
+
+    @delegate_to_traced_value
+    def __iter__(self):
+        pass
+        
+    ##############################
+    # Conversions
+    ##############################
+    
+    #support for conditionals if statements while loops etc.
+    #NOTE this must return unwraped value
+    # it is prohibited to not return a converted value
+    def __bool__(self):
+        return bool(self._data)
+    
     ##############################
     # Arithmetic operations
     ##############################
@@ -315,23 +337,7 @@ class TracedValue(object):
         pass
 
     @delegate_to_traced_value
-    def __radd__(self, other):
-        pass
-
-    @delegate_to_traced_value
-    def __iadd__(self, other):
-        pass
-
-    @delegate_to_traced_value
     def __sub__(self, other):
-        pass
-
-    @delegate_to_traced_value
-    def __rsub__(self, other):
-        pass
-
-    @delegate_to_traced_value
-    def __isub__(self, other):
         pass
 
     @delegate_to_traced_value
@@ -339,35 +345,7 @@ class TracedValue(object):
         pass
 
     @delegate_to_traced_value
-    def __rmul__(self, other):
-        pass
-
-    @delegate_to_traced_value
-    def __imul__(self, other):
-        pass
-
-    @delegate_to_traced_value
-    def __div__(self, other):
-        pass
-
-    @delegate_to_traced_value
-    def __rdiv__(self, other):
-        pass
-
-    @delegate_to_traced_value
-    def __idiv__(self, other):
-        pass
-
-    @delegate_to_traced_value
-    def __mod__(self, other):
-        pass
-
-    @delegate_to_traced_value
     def __matmul__(self, other):
-        pass
-
-    @delegate_to_traced_value
-    def __pow__(self, other):
         pass
 
     @delegate_to_traced_value
@@ -379,7 +357,15 @@ class TracedValue(object):
         pass
 
     @delegate_to_traced_value
-    def __rfloordiv__(self, other):
+    def __mod__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __pow__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __lshift__(self, other):
         pass
 
     @delegate_to_traced_value
@@ -387,8 +373,131 @@ class TracedValue(object):
         pass
 
     @delegate_to_traced_value
-    def __lshift__(self, other):
+    def __and__(self, other):
         pass
+
+    @delegate_to_traced_value
+    def __xor__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __or__(self, other):
+        pass
+
+
+    ##############################
+    # Reflected Arithmetic operators
+    ##############################
+
+    @delegate_to_traced_value
+    def __radd__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __rsub__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __rmul__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __rmatmul__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __rtruediv__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __rfloordiv__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __rmod__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __rpow__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __rlshift__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __rrshift__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __rand__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __rxor__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __ror__(self, other):
+        pass
+
+    
+    ##############################
+    # Augmented  Assingment operators
+    ##############################
+
+    @delegate_to_traced_value
+    def __iadd__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __isub__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __imul__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __imatmul__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __itruediv__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __ifloordiv__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __imod__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __ipow__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __ilshift__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __irshift__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __iand__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __ixor__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __ior__(self, other):
+        pass
+
 
     ##############################
     # Logical operations
@@ -398,36 +507,24 @@ class TracedValue(object):
         pass
 
     @delegate_to_traced_value
-    def ne(self, other):
+    def __ne__(self, other):
         pass
 
-    @tracing_not_supported
-    def __and__(self, other):
-        return self.__and__(other)
-
-    @tracing_not_supported
+    @delegate_to_traced_value
     def __ge__(self, other):
-        return self.__ge__(other)
+        pass
 
-    @tracing_not_supported
+    @delegate_to_traced_value
     def __gt__(self, other):
-        return self.__gt__(other)
+        pass
 
-    @tracing_not_supported
+    @delegate_to_traced_value
     def __le__(self, other):
-        return self.__le__(other)
+        pass
 
-    @tracing_not_supported
+    @delegate_to_traced_value
     def __lt__(self, other):
-        return self.__lt__(other)
-
-    @tracing_not_supported
-    def __or__(self, other):
-        return self.__or__(other)
-
-    @tracing_not_supported
-    def __xor__(self, other):
-        return self.__xor__(other)
+        pass
 
 
 class TracedInstanceFunction(object):
@@ -558,7 +655,7 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
 
     CURRENT_SCOPE = ""
 
-    nodes = discard_unused_nodes(NODES)
+    nodes = discard_unused_nodes(NODES,output_id)
 
     nodes, output_id = set_node_indices(nodes, output_id)
     NODES.clear()
@@ -595,9 +692,10 @@ def prepare_args_and_kwargs(args=(), kwargs=None):
         v.set_data(a)
         wrapped_args.append(v)
 
+    n_args=len(args)
     wrapped_kwargs = dict()
     for i, (k, a) in enumerate(kwargs.items()):
-        v = TracedValue(NodeTypes.IN, f"input{idx+1+i}")
+        v = TracedValue(NodeTypes.IN, f"input{n_args+i}")
         v.set_data(a)
         wrapped_kwargs[k] = v
 
@@ -700,14 +798,28 @@ def reset_tracing_state():
     TracedValue.ID = 0
 
 
-def discard_unused_nodes(nodes):
+def discard_unused_nodes(nodes,output_id):
     new_nodes = []
 
     for node_id in reversed(range(len(nodes))):
         node = nodes[node_id]
-        if node.value_type is None or (node.type is NodeTypes.CONSTANT and (len(node.out_edges) == 0)):
-            # a,b=f() will actually invoke __getitem__ 3 times so we discard the last node
-            # also discar unused constants
+
+        if node_id == output_id:
+             new_nodes.append((node.id, node))
+        
+        # if a >1      a>1 will be traced but it has no meaning to us
+        # as we only record the branch that was taken
+        unused_branch = False
+        if node.type is NodeTypes.OP and (len(node.out_edges)== 0):
+            op_path = node.scope.rsplit("/", maxsplit=1)[1]
+            _, func_name = op_path.split("::")
+            unused_branch = func_name in logical_ops
+
+        # a,b=f() will actually invoke __getitem__ 3 times so we discard the last node
+        iter_sentinel = node.value_type is None
+        unused_constant = (node.type is NodeTypes.CONSTANT) and (len(node.out_edges) == 0)
+
+        if unused_branch or iter_sentinel or unused_constant: 
             assert len(
                 node.out_edges) == 0, "unused traced value should not have outgoing edges"
 
