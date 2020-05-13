@@ -595,9 +595,10 @@ def prepare_args_and_kwargs(args=(), kwargs=None):
         v.set_data(a)
         wrapped_args.append(v)
 
+    n_args=len(args)
     wrapped_kwargs = dict()
     for i, (k, a) in enumerate(kwargs.items()):
-        v = TracedValue(NodeTypes.IN, f"input{idx+1+i}")
+        v = TracedValue(NodeTypes.IN, f"input{n_args+i}")
         v.set_data(a)
         wrapped_kwargs[k] = v
 
