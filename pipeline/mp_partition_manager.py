@@ -607,7 +607,7 @@ class SinglePartitionManager:
                 for g, old_lr in zip(pgs, old_lrs):
                     g['lr'] = old_lr
 
-        request_objects.join()
+        # request_objects.join()
         return request_objects
 
     def run_batch_backward(self, batch_idx, num_batches):
@@ -710,8 +710,6 @@ class SinglePartitionManager:
             # Restore to previously saved parameters, so we can do the step on them.
             self.true_weights_storage.restore_if_needed()
             self.true_weights_storage.reset_on_step()
-            # if not (self.is_first_partition):
-            #     request_objects.join()
             trainer.non_last_partition_step()
 
             if old_lrs:
@@ -725,8 +723,8 @@ class SinglePartitionManager:
             if self.gap_aware_just_loss and self.weight_stasher:
                 weight_stasher.pop_stashed_buff(batch_idx)
 
-        if not (self.is_first_partition):
-            request_objects.join()
+        # if not (self.is_first_partition):
+        #     request_objects.join()
         return request_objects
 
     def expected_staleness(self, done_fwds, done_bwds):
@@ -780,9 +778,9 @@ class SinglePartitionManager:
             action_is_fwd = work_scheduler(stage, num_stages, num_batches,
                                            done_fwds, done_bwds)
             if action_is_fwd:
-                run_batch_forward(done_fwds, num_batches, done_bwds=done_bwds)
+                ro = run_batch_forward(done_fwds, num_batches, done_bwds=done_bwds)
             else:
-                run_batch_backward(done_bwds, num_batches)
+                ro = run_batch_backward(done_bwds, num_batches)
 
             # Increase counters
             if is_last_partition:
@@ -797,3 +795,5 @@ class SinglePartitionManager:
         # Do a scheduler step at the end of epoch if not already doing so each step.
         if not self.trainer.PER_STEP_SCHEDULER:
             self.lr_scheduler.step()
+        if ro is not None:
+            ro.join()
