@@ -193,7 +193,7 @@ arithmetic_ops = {"__add__": "+",
                   "__xor__":"^"
                   }
 
-inplace_arithmetic_ops = {f"__i{op_name[2:]}" : f"{symbol}+" for op_name,symbol in arithmetic_ops.items()}
+inplace_arithmetic_ops = {f"__i{op_name[2:]}" : f"{symbol}=" for op_name,symbol in arithmetic_ops.items()}
 
 r_arithmetic_ops = {f"__r{op_name[2:]}" : f"{symbol}" for op_name,symbol in arithmetic_ops.items()}
 

@@ -255,8 +255,9 @@ def generate_magic(variable_name, self_arg, func_name, param_list):
         statement = [
             f"{variable_name} = {self_arg} {arithmetic_ops[func_name]} {param_list[1]}"]
     elif func_name in inplace_arithmetic_ops:
-        statement = [f"{self_arg} {inplace_arithmetic_ops[func_name]} {param_list[1]}",
-                     f"{variable_name} = {self_arg}"]
+        statement = [f"{self_arg} {inplace_arithmetic_ops[func_name]} {param_list[1]}"]
+        if variable_name != self_arg:
+            statement.append(f"{variable_name} = {self_arg}")
     elif func_name in r_arithmetic_ops:
         statement = [
             f"{variable_name} = {param_list[1]} {r_arithmetic_ops[func_name]} {self_arg}"]
