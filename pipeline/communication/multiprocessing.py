@@ -287,14 +287,16 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         return request_objects
 
     def send_activations(self, x, batch_idx):
-        # threading.Thread(target=self._send_tensors_p2p, args=(x, batch_idx, self.send_ranks.items(), False)).run()
+        t = threading.Thread(target=self._send_tensors_p2p, args=(x, batch_idx, self.send_ranks.items(), False))
+        t.start()
+        return t
 
         # self.pool_send_act.apply_async(
         #     self._send_tensors_p2p,
         #     (x, batch_idx, self.send_ranks.items(), False))
 
-        return self._send_tensors_p2p(x, batch_idx, self.send_ranks.items(),
-                                      False)
+        # return self._send_tensors_p2p(x, batch_idx, self.send_ranks.items(),
+        #                               False)
 
     def send_gradients(self, x, batch_idx):
 

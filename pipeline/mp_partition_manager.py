@@ -749,7 +749,14 @@ class SinglePartitionManager:
         run_batch_forward = self.run_batch_forward
 
         for done_fwds in range(num_batches):
-            run_batch_forward(done_fwds, num_batches)
+            ro = run_batch_forward(done_fwds, num_batches)
+
+        # diffenret partitions behave differently..
+        if isinstance(ro, list):
+            for r in ro:
+                r.join()
+        elif ro is not None:
+            ro.join()
 
     def run_until_flush(self, num_batches):
         """
@@ -778,7 +785,9 @@ class SinglePartitionManager:
             action_is_fwd = work_scheduler(stage, num_stages, num_batches,
                                            done_fwds, done_bwds)
             if action_is_fwd:
-                ro = run_batch_forward(done_fwds, num_batches, done_bwds=done_bwds)
+                ro = run_batch_forward(done_fwds,
+                                       num_batches,
+                                       done_bwds=done_bwds)
             else:
                 ro = run_batch_backward(done_bwds, num_batches)
 
