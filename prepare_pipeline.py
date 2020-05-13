@@ -436,7 +436,6 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
 
     # set device
     local_rank_to_device_map = get_rank_to_device_map(args)
-    args.local_rank_to_device_map = local_rank_to_device_map
     device = local_rank_to_device_map[args.local_rank]
     if not args.cpu:
         torch.cuda.set_device(device)
