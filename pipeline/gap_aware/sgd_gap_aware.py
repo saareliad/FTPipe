@@ -99,8 +99,8 @@ class GapAware(GapAwareBase):
                  from_grad=True):
         """ Apply Gap Aware on computed gradients """
         super().__init__(optimizer)
-        if from_grad:
-            assert type(optimizer) == torch.optim.SGD
+        # if from_grad:
+        #     assert (type(optimizer) == torch.optim.SGD) or
 
         self.big_gamma = big_gamma  # FIXME can be of optimizer of given. e.g adam
 
@@ -174,8 +174,7 @@ class GapAware(GapAwareBase):
                     # so we do
                     #   d_p += z
                     # z =  p * weight_decay * ((1 - penalty) / penalty)
-                    p.grad += p.mul(weight_decay *
-                                              ((1 - penalty) / penalty))
+                    p.grad += p.mul(weight_decay * ((1 - penalty) / penalty))
 
     def apply_on_theta(self, real_theta):
         with torch.no_grad():
@@ -218,8 +217,7 @@ class GapAware(GapAwareBase):
                     # z =  p * weight_decay * ((1 - penalty) / penalty)
 
                     # NOTE: we apply the weight decay on the real parameter weight, rp.
-                    p.grad += rp.mul(weight_decay *
-                                               ((1 - penalty) / penalty))
+                    p.grad += rp.mul(weight_decay * ((1 - penalty) / penalty))
 
     def apply_on_stashed(self, stashed_theta):
         """ True weights are loaded into the model, and given a stashed theta """
@@ -263,8 +261,7 @@ class GapAware(GapAwareBase):
                     # z =  p * weight_decay * ((1 - penalty) / penalty)
 
                     # NOTE: we apply the weight decay on the real parameter weight, rp.
-                    p.grad += p.mul(weight_decay *
-                                              ((1 - penalty) / penalty))
+                    p.grad += p.mul(weight_decay * ((1 - penalty) / penalty))
 
 
 # FIXME: keys are hardcoded from optimizers...

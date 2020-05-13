@@ -157,7 +157,9 @@ may change in the future.
 
 ## TODOs
 
-- explictly check that recomputation overlaps with wait.
+- tied wieghts with wieght prediction: problem: we change the weight itself (this has advantage!)
+
+- explictly check that recomputation overlaps with wait for MPI.
 
 - Currently, we do some extra "reverts" (e.g in case of several backwards one after another and weight stashing) Check this. its very small optimization (not in steady state), and may be yucky to implement.
 

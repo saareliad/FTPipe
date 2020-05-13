@@ -3,6 +3,9 @@ from .common_simple_comm import SimpleCommBase
 import torch
 from collections import defaultdict
 
+# from multiprocessing.pool import ThreadPool
+import threading
+
 
 def is_shared_parameter(tensor_scope):
     return "Parameter" in tensor_scope
@@ -53,6 +56,9 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         self.send_buffers = dict()  # { tensor_name: { rank: buff } }
         self.send_buffers_versions = {}
 
+        # self.pool_send_act = ThreadPool(processes=1)
+        # self.pool_send_grad = ThreadPool(processes=1)
+
     def save_send_buffers(self, name):
         self.send_buffers_versions[name] = self.send_buffers
 
@@ -67,6 +73,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         # NOTE: checking lower priority for grad stream
         self.grad_send_stream = torch.cuda.Stream(self.device, priority=-2)
         self.acti_send_stream = torch.cuda.Stream(self.device, priority=-1)
+        self.main_stream = torch.cuda.current_stream()
 
     def _create_recv_buffers(self,
                              tensor_names,
@@ -216,6 +223,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         return self._recv_tensors_p2p(x, batch_idx, self.grad_rcv_items, False)
 
     def _send_tensors_p2p(self, x, batch_idx, ranks_dict_items, is_grad):
+        torch.cuda.set_device(self.device)  # needed for thread.
         request_objects = []
 
         prev_work_event = torch.cuda.Event(blocking=True)
@@ -264,8 +272,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                         # FIXME: can do it in a thread.
                         event = torch.cuda.Event(blocking=True)
                         stream.record_event(event)
-                        request_objects.append(event)
-                        # stream.wait_event(event)  # FIXME
+                        stream.wait_event(event)  # FIXME
                         event.synchronize()
                         # stream.synchronize()
                         out_q.put(buff)
@@ -280,8 +287,34 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         return request_objects
 
     def send_activations(self, x, batch_idx):
+        # threading.Thread(target=self._send_tensors_p2p, args=(x, batch_idx, self.send_ranks.items(), False)).run()
+
+        # self.pool_send_act.apply_async(
+        #     self._send_tensors_p2p,
+        #     (x, batch_idx, self.send_ranks.items(), False))
+
         return self._send_tensors_p2p(x, batch_idx, self.send_ranks.items(),
                                       False)
 
     def send_gradients(self, x, batch_idx):
-        return self._send_tensors_p2p(x, batch_idx, self.grad_send_items, True)
+
+        t = threading.Thread(target=self._send_tensors_p2p, args=(x, batch_idx, self.grad_send_items, True))
+        t.start()
+        # t.join()
+        return t
+
+
+        # class Fooo():
+        #     @staticmethod
+        #     def join():
+        #         pass
+        # t = Fooo
+        # self._send_tensors_p2p(x, batch_idx, self.grad_send_items, True)
+        # return t
+
+
+        # return self._send_tensors_p2p(x, batch_idx, self.grad_send_items, True)
+
+        # self.pool_send_grad.apply_async(
+        #     self._send_tensors_p2p, (x, batch_idx, self.grad_send_items, True))
+

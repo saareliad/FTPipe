@@ -45,6 +45,7 @@ class SGDWDClonedWeightPrediction(WeightPredictor):
                     momentum = pg['momentum']
                     for p in pg['params']:
                         p.add_(-lr * momentum, os_state[p]["momentum_buffer"])
+            return
 
         if not self.n_steps:
             return

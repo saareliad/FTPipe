@@ -570,6 +570,8 @@ class SinglePartitionManager:
             grads = partition.get_grad(batch_idx)
             request_objects = self.comm_handler.send_gradients(
                 grads, batch_idx)
+            # TODO: problem when sharing weights (sending nn.Parameters)
+            # TODO: with weight prediction, with weight stashing.
 
             self.true_weights_storage.restore_if_needed()  # check=False
 
@@ -578,6 +580,7 @@ class SinglePartitionManager:
                 trainer.grad_norm()
 
             # Step
+
             trainer.last_partition_step_and_statistics(x,
                                                        *ctx,
                                                        step_and_stats_ctx,
@@ -604,6 +607,7 @@ class SinglePartitionManager:
                 for g, old_lr in zip(pgs, old_lrs):
                     g['lr'] = old_lr
 
+        request_objects.join()
         return request_objects
 
     def run_batch_backward(self, batch_idx, num_batches):
@@ -645,10 +649,9 @@ class SinglePartitionManager:
         # recompute and send backward
         request_objects = None
         if not (self.is_first_partition):
-            g = self.partition.get_grad(batch_idx)
-            request_objects = self.comm_handler.send_gradients(g, batch_idx)
-
-        del g
+            # g = self.partition.get_grad(batch_idx)
+            request_objects = self.comm_handler.send_gradients(
+                self.partition.get_grad(batch_idx), batch_idx)
 
         # TODO: here we can send the next rcev buffer
 
@@ -707,6 +710,8 @@ class SinglePartitionManager:
             # Restore to previously saved parameters, so we can do the step on them.
             self.true_weights_storage.restore_if_needed()
             self.true_weights_storage.reset_on_step()
+            # if not (self.is_first_partition):
+            #     request_objects.join()
             trainer.non_last_partition_step()
 
             if old_lrs:
@@ -720,6 +725,8 @@ class SinglePartitionManager:
             if self.gap_aware_just_loss and self.weight_stasher:
                 weight_stasher.pop_stashed_buff(batch_idx)
 
+        if not (self.is_first_partition):
+            request_objects.join()
         return request_objects
 
     def expected_staleness(self, done_fwds, done_bwds):
