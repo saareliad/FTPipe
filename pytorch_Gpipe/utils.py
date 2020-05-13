@@ -122,6 +122,15 @@ def detach_tensors(ts):
     return nested_map(detach_if_tensor, ts)
 
 
+def move_tensors(ts, device):
+    def move(t):
+        if isinstance(t, (nn.Module, Tensor)):
+            return t.to(device)
+        return t
+
+    return nested_map(move, ts)
+
+
 def set_grad_mode(ts, require_grad):
     def grad_mode(t):
         if isinstance(t, Tensor):

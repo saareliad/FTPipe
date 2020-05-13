@@ -8,6 +8,7 @@ from .compiler import compile_partitioned_model
 from .model_profiling import Graph, profile_network, GraphProfiler, trace_module, ExecTimes, NodeWeightFunction, EdgeWeightFunction
 from .model_profiling.graph_executor import execute_graph
 from .pipeline import Pipeline, PipelineConfig, StageConfig, SyncBuffersMode
+from .utils import move_tensors
 
 __all__ = [
     'pipe_model', 'profile_network', 'trace_module', 'partition_model',
@@ -92,6 +93,10 @@ def pipe_model(model: nn.Module,
         default True
     profile_ops:
         weheter to also profile ops when using the GraphProfiler
+        default False
+    save_memory_mode:
+        minimize memory footprint during profiling
+        sacrifice speed for memory
         default False
     '''
 
@@ -250,6 +255,10 @@ def build_graph(model: nn.Module, args: tuple = (), kwargs: Optional[Dict] = Non
     profile_ops:
         weheter to also profile ops when using the GraphProfiler
         default False
+    save_memory_mode:
+        minimize memory footprint during profiling
+        sacrifice speed for memory
+        default False
     """
 
     if basic_blocks is None:
@@ -262,8 +271,12 @@ def build_graph(model: nn.Module, args: tuple = (), kwargs: Optional[Dict] = Non
     weights = None
     print("graph built")
     if use_graph_profiler:
-        print(f"using graph profiler with op profiling = {profile_ops}")
-        assert not save_memory_mode, "save memory mode is not supported for GraphProfiler"
+        print(
+            f"using graph profiler with op profiling = {profile_ops} save_memory_mode = {save_memory_mode}")
+
+        if save_memory_mode:
+            model, args, kwargs = move_tensors((model, args, kwargs), 'cpu')
+
         torch.cuda.reset_max_memory_allocated()
         profiler = GraphProfiler(recomputation=recomputation, n_iter=n_iter, profile_ops=profile_ops,
                                  force_no_recomp_scopes=force_no_recomp_scopes)
@@ -272,6 +285,8 @@ def build_graph(model: nn.Module, args: tuple = (), kwargs: Optional[Dict] = Non
         print(f"profiling mem {torch.cuda.max_memory_allocated()/1e9} GB")
         weights = profiler.get_weights()
     elif use_network_profiler:
+        print(
+            f"using network profiler with save_memory_mode = {save_memory_mode}")
         assert not profile_ops, "op profiling is not supported in the network profiler"
         weights = profile_network(model, args, kwargs=kwargs,
                                   basic_blocks=basic_blocks,

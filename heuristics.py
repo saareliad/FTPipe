@@ -10,20 +10,15 @@ MULT_FACTOR = 10000
 
 def node_weight_function(bwd_to_fwd_ratio=-1):
     def f(node: Node):
-        if isinstance(node.weight, ExecTimes):
-            if bwd_to_fwd_ratio < 0:
-                return int(MULT_FACTOR * (node.weight.backward_time))
-            else:
-                # TODO: it has to be consistent with communication times to work
-                return int(MULT_FACTOR *
-                           ((bwd_to_fwd_ratio * node.weight.backward_time +
-                             node.weight.forward_time) /
-                            (bwd_to_fwd_ratio + 1)))
-        if node.type is NodeTypes.CONSTANT:
-            return 0
-        if node.type is NodeTypes.OP:  # FIXME:
-            return 0
-        return 0
+        assert isinstance(node.weight, ExecTimes)
+        if bwd_to_fwd_ratio < 0:
+            return int(MULT_FACTOR * (node.weight.backward_time))
+        else:
+            # TODO: it has to be consistent with communication times to work
+            return int(MULT_FACTOR *
+                       ((bwd_to_fwd_ratio * node.weight.backward_time +
+                         node.weight.forward_time) /
+                        (bwd_to_fwd_ratio + 1)))
 
     return f
 
@@ -35,11 +30,12 @@ def edge_weight_function(bw_GBps, bwd_to_fwd_ratio=-1):
             # no constant or scalars on boundries
             return 1000 * MULT_FACTOR
 
-        if issubclass(u.value_type, (list, tuple, dict, set, slice, torch.Size)):
+        if u.value_type in [list, tuple, dict, set, slice, torch.Size]:
             # no nested iterables on boundries
             return 1000 * MULT_FACTOR
         MB = 1e6
-        volume = reduce(operator.mul, u.tensor_shape) / MB
+        assert isinstance(u.tensor_shape, torch.Size)
+        volume = reduce(operator.mul, u.tensor_shape, initial=1) / MB
         # include dtype size
         volume *= torch.empty(1, dtype=u.tensor_dtype).element_size()
 
