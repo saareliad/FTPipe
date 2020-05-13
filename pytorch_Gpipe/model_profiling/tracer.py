@@ -290,6 +290,10 @@ class TracedValue(object):
 
     ##############################
     # Magic Method delegation
+    #intentionaly explicit
+    #NOTE if the method requires specific syntax
+    #then it should be also added in utils.py
+    # and ensure correct code generation in compiler/partition_forward_method.generate_magic
     ##############################
 
     @delegate_to_traced_value
@@ -306,6 +310,24 @@ class TracedValue(object):
     def __setitem__(self, idx, value):
         pass
 
+    @delegate_to_traced_value
+    def __len__(self):
+        pass
+
+    @delegate_to_traced_value
+    def __iter__(self):
+        pass
+        
+    ##############################
+    # Conversions
+    ##############################
+    
+    #support for conditionals if statements while loops etc.
+    #NOTE this must return unwraped value
+    # it is prohibited to not return a converted value
+    def __bool__(self):
+        return bool(self._data)
+    
     ##############################
     # Arithmetic operations
     ##############################
@@ -315,23 +337,7 @@ class TracedValue(object):
         pass
 
     @delegate_to_traced_value
-    def __radd__(self, other):
-        pass
-
-    @delegate_to_traced_value
-    def __iadd__(self, other):
-        pass
-
-    @delegate_to_traced_value
     def __sub__(self, other):
-        pass
-
-    @delegate_to_traced_value
-    def __rsub__(self, other):
-        pass
-
-    @delegate_to_traced_value
-    def __isub__(self, other):
         pass
 
     @delegate_to_traced_value
@@ -339,35 +345,7 @@ class TracedValue(object):
         pass
 
     @delegate_to_traced_value
-    def __rmul__(self, other):
-        pass
-
-    @delegate_to_traced_value
-    def __imul__(self, other):
-        pass
-
-    @delegate_to_traced_value
-    def __div__(self, other):
-        pass
-
-    @delegate_to_traced_value
-    def __rdiv__(self, other):
-        pass
-
-    @delegate_to_traced_value
-    def __idiv__(self, other):
-        pass
-
-    @delegate_to_traced_value
-    def __mod__(self, other):
-        pass
-
-    @delegate_to_traced_value
     def __matmul__(self, other):
-        pass
-
-    @delegate_to_traced_value
-    def __pow__(self, other):
         pass
 
     @delegate_to_traced_value
@@ -379,7 +357,15 @@ class TracedValue(object):
         pass
 
     @delegate_to_traced_value
-    def __rfloordiv__(self, other):
+    def __mod__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __pow__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __lshift__(self, other):
         pass
 
     @delegate_to_traced_value
@@ -387,8 +373,131 @@ class TracedValue(object):
         pass
 
     @delegate_to_traced_value
-    def __lshift__(self, other):
+    def __and__(self, other):
         pass
+
+    @delegate_to_traced_value
+    def __xor__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __or__(self, other):
+        pass
+
+
+    ##############################
+    # Reflected Arithmetic operators
+    ##############################
+
+    @delegate_to_traced_value
+    def __radd__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __rsub__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __rmul__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __rmatmul__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __rtruediv__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __rfloordiv__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __rmod__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __rpow__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __rlshift__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __rrshift__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __rand__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __rxor__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __ror__(self, other):
+        pass
+
+    
+    ##############################
+    # Augmented  Assingment operators
+    ##############################
+
+    @delegate_to_traced_value
+    def __iadd__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __isub__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __imul__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __imatmul__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __itruediv__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __ifloordiv__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __imod__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __ipow__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __ilshift__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __irshift__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __iand__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __ixor__(self, other):
+        pass
+
+    @delegate_to_traced_value
+    def __ior__(self, other):
+        pass
+
 
     ##############################
     # Logical operations
@@ -398,36 +507,24 @@ class TracedValue(object):
         pass
 
     @delegate_to_traced_value
-    def ne(self, other):
+    def __ne__(self, other):
         pass
 
-    @tracing_not_supported
-    def __and__(self, other):
-        return self.__and__(other)
-
-    @tracing_not_supported
+    @delegate_to_traced_value
     def __ge__(self, other):
-        return self.__ge__(other)
+        pass
 
-    @tracing_not_supported
+    @delegate_to_traced_value
     def __gt__(self, other):
-        return self.__gt__(other)
+        pass
 
-    @tracing_not_supported
+    @delegate_to_traced_value
     def __le__(self, other):
-        return self.__le__(other)
+        pass
 
-    @tracing_not_supported
+    @delegate_to_traced_value
     def __lt__(self, other):
-        return self.__lt__(other)
-
-    @tracing_not_supported
-    def __or__(self, other):
-        return self.__or__(other)
-
-    @tracing_not_supported
-    def __xor__(self, other):
-        return self.__xor__(other)
+        pass
 
 
 class TracedInstanceFunction(object):

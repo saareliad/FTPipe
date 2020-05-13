@@ -166,23 +166,45 @@ def get_device(ts) -> torch.device:
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-inplace_arithmetic_ops = {"__iadd__": "+=",
-                          "__isub__": "-=",
-                          "__imul__": "*=",
-                          "__idiv__": "/=",
-                          "__itruediv__": "/=",
-                          "__ifloordiv__": "//=",
-                          "__imod__": "%=",
-                          "__imatmul__": "@=",
-                          "__ipow__": "**="}
 
-r_arithmetic_ops = {"__radd__": "+",
-                    "__rsub__": "-",
-                    "__rmul__": "*",
-                    "__rdiv__": "/",
-                    "__rtruediv__": "/",
-                    "__rfloordiv__": "//",
-                    "__rmod__": "%",
-                    "__rmatmul__": "@",
-                    "__rpow__": "**"
-                    }
+
+    ##############################
+    # Magic Method delegation
+    #intentionaly explicit
+    #NOTE if the method requires specific syntax
+    #then it should be also added in model_profiling/tracer.py
+    # and ensure correct code generation in compiler/partition_forward_method.generate_magic
+    ##############################
+
+
+arithmetic_ops = {"__add__": "+",
+                  "__sub__": "-",
+                  "__mul__": "*",
+                  "__div__": "/",
+                  "__truediv__": "/",
+                  "__floordiv__": "//",
+                  "__mod__": "%",
+                  "__matmul__": "@",
+                  "__pow__": "**",
+                  "__lshift__":"<<",
+                  "__rshift__":">>",
+                  "__and__":"&",
+                  "__or__":"|",
+                  "__xor__":"^"
+                  }
+
+inplace_arithmetic_ops = {f"__i{op_name[2:]}" : f"{symbol}+" for op_name,symbol in arithmetic_ops.items()}
+
+r_arithmetic_ops = {f"__r{op_name[2:]}" : f"{symbol}" for op_name,symbol in arithmetic_ops.items()}
+
+logical_ops = { "__eq__":"==",
+                "__ne__":"!=",
+                "__gt__":">",
+                "__ge__":">=",
+                "__lt__":"<",
+                "__le__":"<="}
+
+conversion_ops={"__bool__":"bool"}
+
+magics={"__len__":"len",
+"__iter__":"iter"}

@@ -3,25 +3,13 @@ from itertools import chain
 from typing import List, Tuple, Dict, Iterator, Set
 import re
 from ..model_profiling import used_namespaces, Node, NodeTypes
-from ..utils import inplace_arithmetic_ops, r_arithmetic_ops
+from ..utils import inplace_arithmetic_ops, r_arithmetic_ops,arithmetic_ops,logical_ops,conversion_ops,magics
 
 tab = '    '
 dtab = tab + tab
 
 
 __all__ = ['generate_forward_method']
-
-
-arithmetic_ops = {"__add__": "+",
-                  "__sub__": "-",
-                  "__mul__": "*",
-                  "__div__": "/",
-                  "__truediv__": "/",
-                  "__floordiv__": "//",
-                  "__mod__": "%",
-                  "__matmul__": "@",
-                  "__pow__": "**"
-                  }
 
 
 def generate_forward_method(
@@ -249,7 +237,13 @@ def generate_container_construct(ready_expressions, node, variable_name):
 
 
 def generate_magic(variable_name, self_arg, func_name, param_list):
-
+    ##############################
+    # Magic Method delegation
+    #intentionaly explicit
+    #NOTE if the method requires specific syntax
+    #then it should be also added in model_profiling/tracer.py
+    # and ensure correct code generation in utils
+    ##############################
     if func_name == "__getattribute__":
         statement = [f"{variable_name} = {self_arg}.{param_list[1]}"]
     elif func_name == "__getitem__":
@@ -266,6 +260,15 @@ def generate_magic(variable_name, self_arg, func_name, param_list):
     elif func_name in r_arithmetic_ops:
         statement = [
             f"{variable_name} = {param_list[1]} {r_arithmetic_ops[func_name]} {self_arg}"]
+    elif func_name in logical_ops:
+        statement = [
+            f"{variable_name} = {self_arg} {logical_ops[func_name]} {param_list[1]}"]
+    elif func_name in conversion_ops:
+        statement = [
+            f"{variable_name} = {conversion_ops[func_name]}({self_arg})"]
+    elif func_name in magics:
+        statement = [
+            f"{variable_name} = {magics[func_name]}({self_arg})"]
     else:
         statement = [
             f"{variable_name} = {self_arg}.{func_name}({', '.join(param_list[1:])})"]
