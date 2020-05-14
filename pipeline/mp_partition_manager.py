@@ -751,12 +751,12 @@ class SinglePartitionManager:
         for done_fwds in range(num_batches):
             ro = run_batch_forward(done_fwds, num_batches)
 
-        # diffenret partitions behave differently..
-        if isinstance(ro, list):
-            for r in ro:
-                r.join()
-        elif ro is not None:
-            ro.join()
+            # diffenret partitions behave differently..
+            if isinstance(ro, list):
+                for r in ro:
+                    r.join()
+            elif ro is not None:
+                ro.join()
 
     def run_until_flush(self, num_batches):
         """

@@ -206,9 +206,13 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             # give the next buffer
             # FIXME: un-optimized clones
             # NOTE: this happends on the main stream FIXME?
+            event = torch.cuda.Event(blocking=True)
             with torch.no_grad():
                 t = x.clone()
+                event.record()
+            
             reuse_q = self.buffer_reuse_queues[receive_rank][self.rank]
+            event.synchronize()
             reuse_q.put(None)  # TODO:
 
             request_objects.append(t)
