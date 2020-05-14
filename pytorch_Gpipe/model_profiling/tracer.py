@@ -608,6 +608,23 @@ class TracedLayer(nn.Module):
             out, TracedValue), f"expected layer output of type TracedValue got {type(out)}"
         return out
 
+    def __iter__(self):
+        return iter(self.module)
+
+    def __getitem__(self, key):
+        return self.module[key]
+
+    def __setitem__(self, key, value):
+        self.module[key] = value
+
+    def __delitem__(self, idx):
+        delattr(self.module, idx)
+
+    def __len__(self):
+        return len(self.module)
+
+    def __contains__(self, key):
+        return key in self.module
 
 def isTracedValue(data):
     """
