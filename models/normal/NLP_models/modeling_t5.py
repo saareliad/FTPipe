@@ -264,6 +264,13 @@ class T5RelativeAttentionBias(nn.Module):
         return ret
 
 
+class EinsumWrapper(nn.Module):
+    def __init__(self,equation):
+        super(EinsumWrapper,self).__init__()
+        self.equation = equation
+
+    def forward(self,*operands):
+        return torch.einsum(self.equation,*operands)
 
 class T5Attention(nn.Module):
     def __init__(self, config: T5Config, has_relative_attention_bias=False):
@@ -291,6 +298,9 @@ class T5Attention(nn.Module):
             self.relative_attention_bias = T5RelativeAttentionBias(self.relative_attention_num_buckets,
                                                                    self.n_heads,
                                                                    not self.is_decoder)
+        
+        self.einsum_wrapper = EinsumWrapper("bnqd,bnkd->bnqk")
+
         self.pruned_heads = set()
 
     def prune_heads(self, heads):
@@ -444,7 +454,9 @@ class T5Attention(nn.Module):
         else:
             present_key_value_state = (None,)
 
-        scores = torch.einsum("bnqd,bnkd->bnqk", q, k)  # (bs, n_heads, qlen, klen)
+        # scores = torch.einsum("bnqd,bnkd->bnqk", q, k)  # (bs, n_heads, qlen, klen)
+        #NOTE there is a bug in torch.einsum which does not allow tracing
+        scores = self.einsum_wrapper(q, k)
 
         if is_None(position_bias):
             if not self.has_relative_attention_bias:
