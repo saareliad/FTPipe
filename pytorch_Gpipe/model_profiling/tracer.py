@@ -325,6 +325,24 @@ class TracedValue(object):
     def __bool__(self):
         return bool(self._data)
     
+
+    ##############################
+    # Unary operations
+    ##############################
+    
+    @delegate_to_traced_value
+    def __neg__(self):
+        pass
+    @delegate_to_traced_value
+    def __pos__(self):
+        pass
+    @delegate_to_traced_value
+    def __abs__(self):
+        pass
+    @delegate_to_traced_value
+    def __invert__(self):
+        pass
+    
     ##############################
     # Arithmetic operations
     ##############################

@@ -206,5 +206,10 @@ logical_ops = { "__eq__":"==",
 
 conversion_ops={"__bool__":"bool"}
 
+unary_ops={"__neg__":"-",
+           "__pos__":"+",
+           "__invert__":"~"}
+
 magics={"__len__":"len",
-"__iter__":"iter"}
+        "__abs__":"abs",
+        "__iter__":"iter"}
