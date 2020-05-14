@@ -314,9 +314,6 @@ class TracedValue(object):
     def __len__(self):
         pass
 
-    @delegate_to_traced_value
-    def __iter__(self):
-        pass
         
     ##############################
     # Conversions
