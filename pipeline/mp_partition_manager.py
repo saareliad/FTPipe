@@ -611,7 +611,7 @@ class SinglePartitionManager:
                 for g, old_lr in zip(pgs, old_lrs):
                     g['lr'] = old_lr
 
-        # request_objects.join()
+        request_objects.join()
         return request_objects
 
     def run_batch_backward(self, batch_idx, num_batches):
@@ -727,8 +727,8 @@ class SinglePartitionManager:
             if self.gap_aware_just_loss and self.weight_stasher:
                 weight_stasher.pop_stashed_buff(batch_idx)
 
-        # if not (self.is_first_partition):
-        #     request_objects.join()
+        if not (self.is_first_partition):
+            request_objects.join()
         return request_objects
 
     def expected_staleness(self, done_fwds, done_bwds):
