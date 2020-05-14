@@ -198,7 +198,7 @@ class T5RelativeAttentionBias(nn.Module):
 
         self.embedding = nn.Embedding(num_buckets, n_heads)
 
-    def forward(self, qlen, klen):
+    def forward(self, qlen, klen,output_device):
         """ Compute binned relative position bias """
         context_position = torch.arange(qlen, dtype=torch.long)[:, None]
         memory_position = torch.arange(klen, dtype=torch.long)[None, :]
@@ -207,7 +207,7 @@ class T5RelativeAttentionBias(nn.Module):
         rp_bucket = self._relative_position_bucket(relative_position,  # shape (qlen, klen)
                                                    bidirectional=self.bidir,
                                                    num_buckets=self.num_buckets)
-        rp_bucket = rp_bucket.to(self.embedding.weight.device)
+        rp_bucket = rp_bucket.to(output_device)
         values = self.embedding(rp_bucket)  # shape (qlen, klen, num_heads)
         values = values.permute([2, 0, 1])
         values = values.unsqueeze(0)  # shape (1, num_heads, qlen, klen)
@@ -462,7 +462,7 @@ class T5Attention(nn.Module):
             if not self.has_relative_attention_bias:
                 raise ValueError("No position_bias provided and no weights to compute position_bias")
             # position_bias = self.compute_bias(real_qlen, klen)
-            position_bias = self.relative_attention_bias(real_qlen,klen)
+            position_bias = self.relative_attention_bias(real_qlen,klen,scores.device)
             # if key and values are already calculated
             # we want only the last query position bias
             if is_not_None(past_key_value_state):
