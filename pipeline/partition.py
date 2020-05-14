@@ -71,6 +71,7 @@ class Partition(nn.Module):
     """
     _REQ_GRAD = True
     _HAS_DUMMY_FORWARD = True
+    _CLONE_INPUTS = True
 
     def __init__(self,
                  layers,
@@ -123,17 +124,28 @@ class Partition(nn.Module):
                     # TODO: it could be done better if we use multiple input buffers instead of allocating
                     # (when #buffers==#max(len(input_buffer)))
                     # In pytorch it can happen auto matically with THCCashingAlocator.
-                    x = x.detach().clone().requires_grad_(
-                        self._REQ_GRAD and x.is_floating_point())
+                    if self._CLONE_INPUTS:
+                        x = x.detach().clone().requires_grad_(
+                            self._REQ_GRAD and x.is_floating_point())
+                    else:
+                        x = x.detach().requires_grad_(self._REQ_GRAD and x.is_floating_point())
                     self.input_buffer[micro_batch_idx] = x
                     self.rng_stasher.stash_rng_state(micro_batch_idx)
                     x = self.layers(x)
                 else:
-                    x = [
-                        tensor.detach().clone().requires_grad_(
-                            self._REQ_GRAD and tensor.is_floating_point())
-                        for tensor in x
-                    ]
+                    if self._CLONE_INPUTS:
+                        x = [
+                            tensor.detach().clone().requires_grad_(
+                                self._REQ_GRAD and tensor.is_floating_point())
+                            for tensor in x
+                        ]
+                    else:
+                        x = [
+                            tensor.detach().requires_grad_(
+                                self._REQ_GRAD and tensor.is_floating_point())
+                            for tensor in x
+                        ]
+
                     self.input_buffer[micro_batch_idx] = x
                     self.rng_stasher.stash_rng_state(micro_batch_idx)
                     x = self.layers(*x)
@@ -181,10 +193,11 @@ class Partition(nn.Module):
     def backward(self, g, **kw):
         raise NotImplementedError()
 
-
 class FirstPartition(Partition):
     """ The first partition does not need to record gradients of stashed inputs.
         This may save some memory.
+        We don't clone inputs.
+        We don't record gradients for inputs.
     """
     _REQ_GRAD = False
     _HAS_DUMMY_FORWARD = True
@@ -337,6 +350,7 @@ class LastPartitionWithLabelInput(LastPartition):
 class PartitionWithoutRecomputation(nn.Module):
     # _REQ_GRAD = True
     _HAS_DUMMY_FORWARD = False
+    _CLONE_INPUT = True
 
     def __init__(self, layers, device, to_device=True, _REQ_GRAD=True):
         """
@@ -386,17 +400,22 @@ class PartitionWithoutRecomputation(nn.Module):
                 # In pytorch it can happen automatically with THCCashingAlocator.
                 # Save activation only if gradient is needed.
                 if self._REQ_GRAD:
-                    x = x.detach().clone().requires_grad_(
-                        self._REQ_GRAD and x.is_floating_point())
+                    if self._CLONE_INPUT:
+                        x = x.detach().clone().requires_grad_(x.is_floating_point())
+                    else:
+                        x = x.detach().requires_grad_(x.is_floating_point())
+
                     self.input_buffer[micro_batch_idx] = x
                 x = self.layers(x)
             else:
                 if self._REQ_GRAD:
-                    x = [
-                        tensor.detach().clone().requires_grad_(
-                            self._REQ_GRAD and tensor.is_floating_point())
-                        for tensor in x
-                    ]
+                    if self._CLONE_INPUT:
+                        x = [
+                            tensor.detach().clone().requires_grad_(tensor.is_floating_point())
+                            for tensor in x
+                        ]
+                    else:
+                        x = [tensor.detach().requires_grad_(tensor.is_floating_point()) for tensor in x]
                     self.input_buffer[micro_batch_idx] = x
 
                 x = self.layers(*x)
@@ -433,6 +452,8 @@ class PartitionWithoutRecomputation(nn.Module):
 
 class FirstPartitionWithoutRecomputation(PartitionWithoutRecomputation):
     """ its Just a hack for GPIpe... """
+    _CLONE_INPUT = False  # won't be accesed anyway
+
     def __init__(self, *args, **kw):
         super().__init__(*args, _REQ_GRAD=False, **kw)
 

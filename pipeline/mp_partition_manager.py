@@ -177,6 +177,10 @@ class SinglePartitionManager:
                                                device,
                                                to_device=TO_DEVICE,
                                                _REQ_GRAD=True)
+        
+        # We do the clone ourself.
+        # if hasattr(partition_cls, "_CLONE_INPUTS"):
+        partition_cls._CLONE_INPUTS = False
 
         if not TO_DEVICE:
             self.partition.to(device)
