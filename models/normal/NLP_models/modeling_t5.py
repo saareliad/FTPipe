@@ -707,6 +707,27 @@ class T5PreTrainedModel(PreTrainedModel):
 
         return shifted_input_ids
 
+    def get_head_mask(self, head_mask, num_hidden_layers, is_attention_chunked=False):
+        """
+        # Prepare head mask if needed
+        # 1.0 in head_mask indicate we keep the head
+        attention_probs has shape bsz x n_heads x N x N
+        Arguments:
+            head_mask: torch.Tensor or None: has shape [num_heads] or [num_hidden_layers x num_heads]
+            num_hidden_layers: int
+        Returns:
+             Tensor of shape shape [num_hidden_layers x batch x num_heads x seq_length x seq_length]
+             or list with [None] for each layer
+        """
+        #NOTE changed from transformers/modeling_utils.py
+        if is_not_None(head_mask):
+            head_mask = self._convert_head_mask_to_5d(head_mask, num_hidden_layers)
+            if operator.is_(is_attention_chunked, True):
+                head_mask = head_mask.unsqueeze(-1)
+        else:
+            head_mask = [None] * num_hidden_layers
+
+        return head_mask
 
 class T5Stack(T5PreTrainedModel):
     def __init__(self, config, embed_tokens=None):
@@ -775,7 +796,6 @@ class T5Stack(T5PreTrainedModel):
             mask_seq_length = past_key_value_states[0][0].shape[2] + seq_length
         else:
             mask_seq_length = seq_length
-        print(self.dtype)
         if is_None(attention_mask):
             attention_mask = torch.ones(batch_size, mask_seq_length).to(inputs_embeds.device)
         if self.is_decoder and is_None(encoder_attention_mask) and is_not_None(encoder_hidden_states):
