@@ -2,6 +2,7 @@ from contextlib import contextmanager
 from functools import wraps
 from itertools import chain
 import operator
+import warnings
 
 
 import torch
@@ -333,16 +334,19 @@ class TracedValue(object):
     @delegate_to_traced_value
     def __neg__(self):
         pass
+
     @delegate_to_traced_value
     def __pos__(self):
         pass
+
     @delegate_to_traced_value
     def __abs__(self):
         pass
+
     @delegate_to_traced_value
     def __invert__(self):
         pass
-    
+
     ##############################
     # Arithmetic operations
     ##############################
@@ -587,20 +591,20 @@ class TracedLayer(nn.Module):
 
     def __init__(self, module: nn.Module, name, terminal):
         super(TracedLayer, self).__init__()
-        self.name = name
-        self.module = module
-        self.terminal = terminal
+        self._name = name
+        self._module = module
+        self._terminal = terminal
 
     def forward(self, *args, **kwargs):
         global CURRENT_SCOPE
         if CURRENT_SCOPE == "":
-            CURRENT_SCOPE = self.name
+            CURRENT_SCOPE = self._name
         else:
-            CURRENT_SCOPE += f"/{self.name}"
+            CURRENT_SCOPE += f"/{self._name}"
 
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
 
-        if self.terminal:
+        if self._terminal:
             # NOTE no need to set the creating operation
             # for terminal layer the layer itself is the creating operation
             out = TracedValue(NodeTypes.LAYER, "")
@@ -610,13 +614,13 @@ class TracedLayer(nn.Module):
             connect_inputs_to_output(out.id, args, kwargs)
             args, kwargs = unpack_traced_args_and_kwargs(*args, **kwargs)
 
-            out.set_data(self.module(*args, **kwargs))
+            out.set_data(self._module(*args, **kwargs))
 
             trace_registered_functions()
 
         else:
-            with record_free_floating_parameters_and_buffers(self.module):
-                out = self.module(*args, **kwargs)
+            with record_free_floating_parameters_and_buffers(self._module):
+                out = self._module(*args, **kwargs)
                 if not isinstance(out, TracedValue):
                     out = record_non_terminal_output(out)
 
@@ -626,23 +630,30 @@ class TracedLayer(nn.Module):
             out, TracedValue), f"expected layer output of type TracedValue got {type(out)}"
         return out
 
+    def __getattr__(self, name):
+        #NOTE this is different than what we did in TracedValue as layers store buffers/parameters/modules in separate dicts
+        try:
+            return super().__getattr__(name)
+        except Exception:
+            return getattr(self._module, name)
+
     def __iter__(self):
-        return iter(self.module)
+        return iter(self._module)
 
     def __getitem__(self, key):
-        return self.module[key]
+        return self._module[key]
 
     def __setitem__(self, key, value):
-        self.module[key] = value
+        self._module[key] = value
 
     def __delitem__(self, idx):
-        delattr(self.module, idx)
+        delattr(self._module, idx)
 
     def __len__(self):
-        return len(self.module)
+        return len(self._module)
 
     def __contains__(self, key):
-        return key in self.module
+        return key in self._module
 
 def isTracedValue(data):
     """
@@ -683,7 +694,7 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
         assert not isinstance(m, TracedLayer)
 
     global CURRENT_SCOPE
-    assert CURRENT_SCOPE == traced_module.name
+    assert CURRENT_SCOPE == traced_module._name
 
     CURRENT_SCOPE = ""
 
@@ -814,8 +825,8 @@ def _wrap_traced_layers(module: nn.Module, depth=1000, basic_blocks=()):
 def _unwrap_layers(module: nn.Module):
     for name, sub_module in module.named_children():
         if isinstance(sub_module, TracedLayer):
-            _unwrap_layers(sub_module.module)
-            module.add_module(name, sub_module.module)
+            _unwrap_layers(sub_module._module)
+            module.add_module(name, sub_module._module)
         else:
             module.add_module(name, sub_module)
 
@@ -1071,43 +1082,11 @@ def record_free_floating_parameters_and_buffers(module: nn.Module):
 
 
 def record_non_terminal_output(out):
-    # NOTE if a module returns a container
-    # it's possible that it contains a mix of traced values and nested containers
-    # here we ensure that all nested containers are recorded
-    # and only the primary container is actively wrapped
-    if not isinstance(out, TracedValue):
-        assert isinstance(out,
-                          (list, tuple, dict, set)), f"an untraced output of non terminal layer should be a container got {type(out)}"
+    #NOTE it is possible that a module returns unrecorded outputs
+    # like containers None etc. so we ensure that they are all recorded
 
-        if isinstance(out, dict):
-            children = dict()
-            for k, v in out.items():
-                traced_v = record_non_terminal_output(v)
-                children[k] = traced_v
-
-            traced_out = TracedValue(NodeTypes.PRIMITIVE,
-                                     "/" + container_construct_op_name(type(out)))
-            data = dict()
-            for k, v in children.items():
-                record_kwarg(traced_out.id, k, v.id)
-                data[k] = v._data
-        else:
-            children = []
-            for v in out:
-                traced_v = record_non_terminal_output(v)
-                children.append(traced_v)
-
-            traced_out = TracedValue(NodeTypes.PRIMITIVE,
-                                     "/" + container_construct_op_name(type(out)))
-            data = []
-            for v in children:
-                record_arg(traced_out.id, v.id)
-                data.append(v._data)
-
-        traced_out.set_data(type(out)(data))
-        return traced_out
-
-    return out
+    recorded_outs,_ = record_args((out,),top_level=True)
+    return recorded_outs[0]
 
 
 def record_kwarg(node_id, kwarg, kwarg_id):
