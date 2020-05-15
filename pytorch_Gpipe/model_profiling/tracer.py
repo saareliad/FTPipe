@@ -237,11 +237,17 @@ class TracedValue(object):
     def set_data(self, data):
         assert isTracedValue(
             data), f"TracedValue expects a basic type got {type(data)} scope {self.scope}"
+        self._ensure_no_hardcoded_device(data)
         self._data = data
         self.namespace = f"{type(self._data).__name__}"
         self.node.value_type = type(data)
         self.node.tensor_dtype = get_tensor_dtypes(data)
         self.node.tensor_shape = get_tensor_shapes(data)
+
+    def _ensure_no_hardcoded_device(self,data):
+        if self.node.type is NodeTypes.CONSTANT:
+            if isinstance(data,torch.device) or (data == "cpu") or (isinstance(data,str) and "cuda" in data):
+                warnings.warn(f"device {data} is hardcoded and cannot be generalized")
 
     def __repr__(self):
         return f"Node ID:{self.id}\nScope:{self.scope}\nvalue: {self._data}\n"
