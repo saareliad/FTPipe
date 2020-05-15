@@ -643,8 +643,8 @@ class TracedLayer(nn.Module):
         except Exception:
             return getattr(self._module, name)
 
-    def __iter__(self):
-        return iter(self._module)
+    # def __iter__(self):
+    #     return iter(self._module)
 
     def __getitem__(self, key):
         return self._module[key]
@@ -675,6 +675,8 @@ def isTracedValue(data):
 ##############################
 def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_blocks=()):
     reset_tracing_state()
+    #just to be sure
+    _unwrap_layers(module)
     args, kwargs = prepare_args_and_kwargs(args=args, kwargs=kwargs)
 
     layers_dict = _wrap_traced_layers(module, depth=depth,
