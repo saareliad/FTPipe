@@ -249,8 +249,11 @@ def generate_magic(variable_name, self_arg, func_name, param_list):
     elif func_name == "__getitem__":
         statement = [f"{variable_name} = {self_arg}[{param_list[1]}]"]
     elif func_name == "__setitem__":
-        statement = [f"{self_arg}[{param_list[1]}] = {param_list[2]}",
-                     f"{variable_name} = {self_arg}"]
+        statement = [f"{self_arg}[{param_list[1]}] = {param_list[2]}"]
+        if variable_name != self_arg:
+            statement.append(f"{variable_name} = {self_arg}")
+    elif func_name == "__call__":
+        statement = [f"{variable_name} = {self_arg}({', '.join(param_list[1:])})"]
     elif func_name in arithmetic_ops:
         statement = [
             f"{variable_name} = {self_arg} {arithmetic_ops[func_name]} {param_list[1]}"]
