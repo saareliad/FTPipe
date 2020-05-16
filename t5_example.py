@@ -4,7 +4,10 @@ import torch
 import operator
 import math
 from pytorch_Gpipe.model_profiling.tracer import trace_module,register_new_explicit_untraced_function,register_new_traced_function
-from pytorch_Gpipe import compile_partitioned_model
+from pytorch_Gpipe import pipe_model
+from heuristics import node_weight_function,edge_weight_function
+from pytorch_Gpipe.utils import layerDict
+import traceback
 
 if __name__ == "__main__":
     tokenizer = T5Tokenizer.from_pretrained('t5-small')
@@ -27,11 +30,31 @@ if __name__ == "__main__":
         register_new_explicit_untraced_function(operator.is_not,operator)
         register_new_traced_function(math.log,math)
         register_new_traced_function(torch.einsum,torch)
-        
+        max_d=0
         kwargs={"input_ids":input_ids,"decoder_input_ids":input_ids,"lm_labels":input_ids}
-        for d in range(6):
+        for d in reversed(range(max_d+1)):
+            print("depth ",d)
+            output_file=f"t5-small_depth{d}"
             print()
-            graph=trace_module(model,args=(),kwargs=kwargs,depth=d)
-            print(f"traced t5 depth {d}")
-            graph.save_as_pdf(f"t5-small_depth{d}",".")
-            compile_partitioned_model(graph,model,0,output_file=f"t5-small_depth{d}")
+            try:
+                graph=pipe_model(model, 0, kwargs=kwargs,
+                        nparts=4,
+                        depth=d,
+                        node_weight_function=node_weight_function(),
+                        edge_weight_function=edge_weight_function(
+                            12),
+                        use_network_profiler=not True,
+                        use_graph_profiler=True,
+                        recomputation=True,
+                        generate_explicit_del=True,
+                        save_memory_mode=False,
+                        profile_ops=True,
+                        output_file=output_file,
+                                           )
+                graph.save_as_pdf(output_file,".")
+            except Exception as e:
+                print()
+                print(f"failed depth {d}\n")
+                traceback.print_exc()
+                print()
+                print()

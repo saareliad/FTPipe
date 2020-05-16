@@ -598,7 +598,7 @@ class T5Block(nn.Module):
 
         #NOTE moduleList
         # self_attention_outputs = self.layer[0](
-        self_attention_outputs = getattr("0",self)(
+        self_attention_outputs = getattr(self,"0")(
             hidden_states,
             attention_mask=attention_mask,
             position_bias=position_bias,
@@ -619,7 +619,7 @@ class T5Block(nn.Module):
 
             #NOTE moduleList
             # cross_attention_outputs = self.layer[1](
-            cross_attention_outputs = getattr("1",self)(
+            cross_attention_outputs = getattr(self,"1")(
                 hidden_states,
                 kv=encoder_hidden_states,
                 attention_mask=encoder_attention_mask,
