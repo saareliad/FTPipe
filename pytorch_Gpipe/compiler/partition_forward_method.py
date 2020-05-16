@@ -4,6 +4,7 @@ from typing import List, Tuple, Dict, Iterator, Set
 import re
 from ..model_profiling import used_namespaces, Node, NodeTypes
 from ..utils import inplace_arithmetic_ops, r_arithmetic_ops,arithmetic_ops,logical_ops,conversion_ops,magics,unary_ops
+import torch
 
 tab = '    '
 dtab = tab + tab
@@ -128,7 +129,7 @@ def generate_statements(partition_nodes: List[Node],
         constants will be inlined, variable names will be reused
     '''
     statements = []
-    available_variable_names = deque()
+    available_names = deque()
     variable_name_generator = variableNameGenerator()
     namespaces = used_namespaces()
 
@@ -140,19 +141,10 @@ def generate_statements(partition_nodes: List[Node],
         node_type = node.type
 
         if node_type is NodeTypes.CONSTANT:
-
-            ready_expressions[node] = str(node.constant_value)
+            ready_expressions[node] = generate_constant(node)
             continue
 
-        # variable allocation
-        for i in node.in_edges:
-            uses[i] -= 1
-            if uses[i] == 0:
-                available_variable_names.append(ready_expressions[i])
-        if len(available_variable_names) > 0:
-            variable_name = available_variable_names.pop()
-        else:
-            variable_name = next(variable_name_generator)
+        variable_name = allocate_variable(node,ready_expressions,uses,available_names,variable_name_generator)
 
         if node_type is NodeTypes.LAYER:
 
@@ -197,6 +189,16 @@ def generate_statements(partition_nodes: List[Node],
 
     return statements
 
+def allocate_variable(node,ready_expressions,uses,available_names,variable_name_generator):
+    for i in node.in_edges:
+        uses[i] -= 1
+        if uses[i] == 0:
+            available_names.append(ready_expressions[i])
+    if len(available_names) > 0:
+        return available_names.pop()
+    else:
+        return next(variable_name_generator)
+
 
 def generate_container_construct(ready_expressions, node, variable_name):
     '''generate a dict/list/tuple/set/etc. object which has special syntax
@@ -235,6 +237,17 @@ def generate_container_construct(ready_expressions, node, variable_name):
 
     return statement
 
+
+def generate_constant(node):
+    assert node.type is NodeTypes.CONSTANT
+    v= node.constant_value
+    if isinstance(v,torch.device) or v == "cpu" or (isinstance(v,str) and "cuda" in v):
+        return "self.device"
+    elif isinstance(v,str) and ("__getattribute__" not in list(node.out_edges)[0].scope):
+        #this is a string argument and not a attribute access
+        return f"'{v}'"
+    else:
+        return str(v)
 
 def generate_magic(variable_name, self_arg, func_name, param_list):
     ##############################

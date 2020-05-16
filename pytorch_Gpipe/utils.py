@@ -73,7 +73,7 @@ def traverse_params_buffs(module: nn.Module, prefix: Optional[str] = None) -> It
         yield from traverse_params_buffs(sub_module, prefix + "/" + type(sub_module).__name__ + f"[{name}]")
 
 
-def layerDict(model: nn.Module, depth=1000, basic_blocks=None) -> Dict[str, nn.Module]:
+def layerDict(model: nn.Module, depth=1000, basic_blocks=()) -> Dict[str, nn.Module]:
     return {s: l for l, s, _ in traverse_model(model, depth, basic_blocks=basic_blocks)}
 
 
