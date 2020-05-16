@@ -859,7 +859,7 @@ def discard_unused_nodes(nodes,output_id):
         node = nodes[node_id]
 
         if node_id == output_id:
-             new_nodes.append((node.id, node))
+            new_nodes.append((node.id, node))
         
         # if a >1:      a>1 will be traced but it has no meaning to us
         # as we only record the branch that was taken
@@ -1024,8 +1024,8 @@ def record_kwargs(kwargs, top_level):
                                        "/" + container_construct_op_name(type(v)))
             traced_value.set_data(type(v)(traced_children))
 
-            for k, id in traced_ids.items():
-                record_kwarg(traced_value.id, k, id)
+            for key, id in traced_ids.items():
+                record_kwarg(traced_value.id, key, id)
 
         elif isinstance(v, TracedValue):
             traced_value = v
