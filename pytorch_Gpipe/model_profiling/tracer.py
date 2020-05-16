@@ -679,7 +679,7 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
     _unwrap_layers(module)
     args, kwargs = prepare_args_and_kwargs(args=args, kwargs=kwargs)
 
-    layers_dict = _wrap_traced_layers(module, depth=depth,
+    _wrap_traced_layers(module, depth=depth,
                                       basic_blocks=basic_blocks)
 
     trace_registered_functions()
@@ -821,6 +821,9 @@ def _wrap_traced_layers(module: nn.Module, depth=1000, basic_blocks=()):
                                                              full=True):
         name = scope[scope.rfind('[') + 1:-1]
 
+        if isinstance(sub_layer,(nn.ModuleList,nn.ModuleDict)):
+            raise TypeError(f"tracing nn.ModuleList/nn.ModuleDict is not supported got {scope} of type {type(sub_layer)}")
+
         wrapper = TracedLayer(sub_layer,
                               scope.rsplit('/', maxsplit=1)[1],
                               terminal)
@@ -856,9 +859,9 @@ def discard_unused_nodes(nodes,output_id):
         node = nodes[node_id]
 
         if node_id == output_id:
-             new_nodes.append((node.id, node))
+            new_nodes.append((node.id, node))
         
-        # if a >1      a>1 will be traced but it has no meaning to us
+        # if a >1:      a>1 will be traced but it has no meaning to us
         # as we only record the branch that was taken
         unused_branch = False
         if node.type is NodeTypes.OP and (len(node.out_edges)== 0):
@@ -1021,8 +1024,8 @@ def record_kwargs(kwargs, top_level):
                                        "/" + container_construct_op_name(type(v)))
             traced_value.set_data(type(v)(traced_children))
 
-            for k, id in traced_ids.items():
-                record_kwarg(traced_value.id, k, id)
+            for key, id in traced_ids.items():
+                record_kwarg(traced_value.id, key, id)
 
         elif isinstance(v, TracedValue):
             traced_value = v
