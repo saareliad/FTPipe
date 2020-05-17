@@ -1,4 +1,5 @@
 from models.normal.NLP_models.modeling_t5 import T5ForConditionalGeneration as ourT5, T5Model as ourBase
+from models.normal.NLP_models.modeling_T5_tied_weights import T5ForConditionalGeneration as TiedT5, T5Model as TiedBase
 from transformers import T5Tokenizer,T5ForConditionalGeneration as refT5 ,T5Model as refBase
 import torch
 import operator
@@ -34,7 +35,7 @@ def nested_print(ts,indent=""):
         print(f"{indent}{ts.shape}")
 
 
-def check_equivalance(ref,our,kws,training=True,prefix=""):
+def check_equivalance(ref,our,kws,training=True,exp_prefix=""):
     register_new_explicit_untraced_function(operator.is_,operator)
     register_new_explicit_untraced_function(operator.is_not,operator)
     register_new_traced_function(math.log,math)
@@ -50,8 +51,7 @@ def check_equivalance(ref,our,kws,training=True,prefix=""):
     torch.cuda.synchronize()
     assert len(out) == len(ref_out)
 
-    for i,(e,a) in enumerate(zip(ref_out,out)):
-        # print(i)
+    for e,a in zip(ref_out,out):
         assert torch.allclose(a,e),(e,a)
         
     tensors = tensorDict(our)
@@ -59,7 +59,7 @@ def check_equivalance(ref,our,kws,training=True,prefix=""):
     
     phase = "training" if training else "evalutation"
     for d in range(6):
-        output_file = f"{prefix}_depth{d}_{phase}"
+        output_file = f"{exp_prefix}_depth{d}_{phase}"
         if os.path.exists(output_file+".py"):
             os.remove(output_file+".py")
 
@@ -74,8 +74,7 @@ def check_equivalance(ref,our,kws,training=True,prefix=""):
         torch.cuda.synchronize()
         assert len(out) == len(ref_out)
 
-        for i,(e,a) in enumerate(zip(ref_out,out)):
-            # print(i)
+        for e,a in zip(ref_out,out):
             assert torch.allclose(a,e),(e,a)
         
         os.remove(output_file+".py")
@@ -83,20 +82,36 @@ def check_equivalance(ref,our,kws,training=True,prefix=""):
     print()
 
 
+def get_models_for_comparison(base=True,tied=False):
+    ref_cls = refBase if base else refT5
+
+    seed()
+    transformer_ref = ref_cls.from_pretrained('t5-small').cuda()
+
+    if base and tied:
+        our_cls = TiedBase
+    elif base and not tied:
+        our_cls = ourBase
+    elif not base and tied:
+        our_cls = TiedT5
+    else:
+        our_cls = ourT5
+    
+    seed()
+    our = our_cls.from_pretrained('t5-small').cuda()
+
+    if tied:
+        our.make_stateless()
+
+    print("models created")
+
+    return transformer_ref,our
 
 
 if __name__ == "__main__":
     tokenizer = T5Tokenizer.from_pretrained('t5-small')
     print("tokenizer created")
-    seed()
-    ref_full = refT5.from_pretrained('t5-small').cuda()
-    seed()
-    our_full = ourT5.from_pretrained('t5-small').cuda()
-    seed()
-    ref_base = refBase.from_pretrained('t5-small').cuda()
-    seed()
-    our_base = ourBase.from_pretrained('t5-small').cuda()
-    print("models created")
+    
     input_ids = tokenizer.encode(
         "Hello, my dog is cute", return_tensors="pt").cuda()  # Batch size 1
     
@@ -104,9 +119,21 @@ if __name__ == "__main__":
     kwargs = {"input_ids":input_ids,"decoder_input_ids":input_ids,"use_cache":True}
     print("tokenized input")
 
-    print("\nchecking base models")
-    check_equivalance(ref_base,our_base,kwargs,training=True,prefix="base")
-    check_equivalance(ref_base,our_base,kwargs,training=False,prefix="base")
-    print("\nchecking full models")
-    check_equivalance(ref_full,our_full,lm_kwargs,training=True,prefix="full")
-    check_equivalance(ref_full,our_full,lm_kwargs,training=False,prefix="full")
+
+    for base_transformer in [True,False]:
+        for tied_weights in [True,False]:
+            if base_transformer:
+                inputs = kwargs
+            else:
+                inputs = lm_kwargs
+            
+            ref_model,our_model = get_models_for_comparison(base=base_transformer,tied=tied_weights)
+            
+            prefix = "base_" if base_transformer else "full_"
+            prefix+= "tied" if tied_weights else "untied"
+            print(f"comparing {prefix}")
+            check_equivalance(ref_model,our_model,kwargs,training=True,exp_prefix=prefix)
+            check_equivalance(ref_model,our_model,kwargs,training=False,exp_prefix=prefix)
+    
+
+    
