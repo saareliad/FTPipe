@@ -10,6 +10,10 @@ tab = '    '
 dtab = tab + tab
 
 
+#TODO use model input keywords in generated code
+
+#TODO non tensor inputs cannot be moved or we should use nested map on them
+
 __all__ = ['generate_forward_method']
 
 
@@ -94,7 +98,7 @@ def generateDeclaration(input_ids: List[str], partition_fields: Dict[Node,
     lines.append(
         f"\n{dtab}# moving inputs to current device no op if already on the correct device\n")
     for input_id in input_ids:
-        lines.append(f"{dtab}{input_id} = {input_id}.to(self.device)\n")
+        lines.append(f"{dtab}{input_id} = {input_id}.to(self.device) if isinstance({input_id},Tensor) else {input_id}\n")
     return ''.join(lines)
 
 
@@ -374,6 +378,11 @@ def sortedPartitionInputs(partition: List[Node]) -> List[Node]:
     '''
     inputs = set()
     for node in partition:
+        
+        #NOTE this is for the edge case where we have unused input
+        if node.type is NodeTypes.IN:
+            inputs.add(node)
+        
         inputs.update([
             n for n in node.in_edges
             if n.part != node.part or n.type == NodeTypes.IN
