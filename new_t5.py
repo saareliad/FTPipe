@@ -526,9 +526,13 @@ class T5Block(nn.Module):
         use_cache=False,
     ):
 
-        if past_key_value_state is not None:
+        #NOTE is not None
+        # if past_key_value_state is not None:
+        if is_not_None(past_key_value_state):
             assert self.is_decoder, "Only decoder can use `past_key_value_states`"
-            expected_num_past_key_value_states = 2 if encoder_hidden_states is None else 4
+            #NOTE is none
+            # expected_num_past_key_value_states = 2 if encoder_hidden_states is None else 4
+            expected_num_past_key_value_states = 2 if is_None(encoder_hidden_states) else 4
 
             error_message = "There should be {} past states. 2 (past / key) for self attention.{} Got {} past key / value states".format(
                 expected_num_past_key_value_states,
@@ -555,10 +559,14 @@ class T5Block(nn.Module):
         hidden_states, present_key_value_state = self_attention_outputs[:2]
         attention_outputs = self_attention_outputs[2:]  # Keep self-attention outputs and relative position weights
 
-        if self.is_decoder and encoder_hidden_states is not None:
+        # NOTE is not None
+        # if self.is_decoder and encoder_hidden_states is not None:
+        if self.is_decoder and is_not_None(encoder_hidden_states):
             # the actual query length is unknown for cross attention
             # if using past key value states. Need to inject it here
-            if present_key_value_state is not None:
+            # NOTE is not None
+            # if present_key_value_state is not None:
+            if is_not_None(present_key_value_state):
                 query_length = present_key_value_state[0].shape[2]
             else:
                 query_length = None
@@ -577,7 +585,9 @@ class T5Block(nn.Module):
             )
             hidden_states = cross_attention_outputs[0]
             # Combine self attn and cross attn key value states
-            if present_key_value_state is not None:
+            # NOTE is not None
+            # if present_key_value_state is not None:
+            if is_not_None(present_key_value_state):
                 present_key_value_state = present_key_value_state + cross_attention_outputs[1]
 
             # Keep cross-attention outputs and relative position weights
