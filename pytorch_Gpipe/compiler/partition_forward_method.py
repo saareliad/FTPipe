@@ -2,7 +2,7 @@ from collections import defaultdict, deque
 from itertools import chain
 from typing import List, Tuple, Dict, Iterator, Set
 import re
-from ..model_profiling import used_namespaces, Node, NodeTypes
+from ..model_profiling import used_namespaces, Node, NodeTypes,Graph
 from ..utils import inplace_arithmetic_ops, r_arithmetic_ops,arithmetic_ops,logical_ops,conversion_ops,magics,unary_ops
 import torch
 
@@ -13,7 +13,7 @@ dtab = tab + tab
 __all__ = ['generate_forward_method']
 
 
-def generate_forward_method(
+def generate_forward_method(graph:Graph,
         partition_nodes: List[Node],
         model_outputs: List[Node],
         partition_fields: Dict[str, str],
@@ -28,8 +28,14 @@ def generate_forward_method(
     # function and layers are allocated temporary only if they have more than 1 use
 
     part_inputs = sortedPartitionInputs(partition_nodes)
-    num_inputs = len(part_inputs)
-    input_ids = [f'x{i}' for i in range(num_inputs)]
+    i=0
+    input_ids=[]
+    for n in part_inputs:
+        if n.id in graph.input_kw_ids:
+            input_ids.append(graph.input_kw_ids[n.id])
+        else:
+            input_ids.append(f"x{i}")
+            i+=1
 
     ready_expressions = dict()
     # partition buffers and params are also ready
@@ -41,7 +47,7 @@ def generate_forward_method(
     for k in remove_buffs_params:
         partition_fields.pop(k)
 
-    input_scopes = [node.scope for node in part_inputs]
+    input_scopes = [graph.input_kw_ids.get(node.id,node.scope) for node in part_inputs]
     ready_expressions.update(zip(part_inputs, input_ids))
 
     lines = []
@@ -91,10 +97,8 @@ def generateDeclaration(input_ids: List[str], partition_fields: Dict[Node,
                              input_args.items()):
         lines.append(f"{dtab}# {node.scope} <=> {field}\n")
 
-    lines.append(
-        f"\n{dtab}# moving inputs to current device no op if already on the correct device\n")
-    for input_id in input_ids:
-        lines.append(f"{dtab}{input_id} = {input_id}.to(self.device)\n")
+    lines.extend([f"\n{dtab}# moving inputs to current device no op if already on the correct device\n",
+                f"{dtab}{', '.join(input_ids)} = move_tensors(({', '.join(input_ids)}), self.device)"])
     return ''.join(lines)
 
 
@@ -374,6 +378,11 @@ def sortedPartitionInputs(partition: List[Node]) -> List[Node]:
     '''
     inputs = set()
     for node in partition:
+        
+        #NOTE this is for the edge case where we have unused input
+        if node.type is NodeTypes.IN:
+            inputs.add(node)
+        
         inputs.update([
             n for n in node.in_edges
             if n.part != node.part or n.type == NodeTypes.IN
