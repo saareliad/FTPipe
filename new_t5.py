@@ -662,7 +662,9 @@ class T5PreTrainedModel(PreTrainedModel):
         pad_token_id = self.config.pad_token_id
 
         assert (
-            decoder_start_token_id is not None
+            # NOTE is not None
+            # decoder_start_token_id is not None
+            is_not_None(decoder_start_token_id)
         ), "self.model.config.decoder_start_token_id has to be defined. In T5 it is usually set to the pad_token_id. See T5 docs for more information"
 
         # shift inputs to the right
@@ -670,7 +672,9 @@ class T5PreTrainedModel(PreTrainedModel):
         shifted_input_ids[..., 1:] = input_ids[..., :-1].clone()
         shifted_input_ids[..., 0] = decoder_start_token_id
 
-        assert pad_token_id is not None, "self.model.config.pad_token_id has to be defined."
+        #NOTE is not None
+        # assert pad_token_id is not None, "self.model.config.pad_token_id has to be defined."
+        assert is_not_None(pad_token_id),"self.model.config.pad_token_id has to be defined."
         # replace possible -100 values in lm_labels by `pad_token_id`
         shifted_input_ids.masked_fill_(shifted_input_ids == -100, pad_token_id)
 
@@ -1310,7 +1314,9 @@ class T5Model(T5PreTrainedModel):
         """
 
         # Encode if needed (training, first prediction pass)
-        if encoder_outputs is None:
+        #NOTE is None
+        # if encoder_outputs is None:
+        if is_None(encoder_outputs):
             encoder_outputs = self.encoder(
                 input_ids=input_ids, attention_mask=attention_mask, inputs_embeds=inputs_embeds, head_mask=head_mask
             )
@@ -1319,10 +1325,16 @@ class T5Model(T5PreTrainedModel):
 
         # If decoding with past key value states, only the last tokens
         # should be given as an input
-        if decoder_past_key_value_states is not None:
-            if decoder_input_ids is not None:
+        #NOTE is not None
+        # if decoder_past_key_value_states is not None:
+        if is_not_None(decoder_past_key_value_states):
+            #NOTE is not None
+            # if decoder_input_ids is not None:
+            if is_not_None(decoder_input_ids):
                 decoder_input_ids = decoder_input_ids[:, -1:]
-            if decoder_inputs_embeds is not None:
+            #NOTE is not None
+            # if decoder_inputs_embeds is not None:
+            if is_not_None(decoder_inputs_embeds):
                 decoder_inputs_embeds = decoder_inputs_embeds[:, -1:]
 
         # Decode
@@ -1337,7 +1349,8 @@ class T5Model(T5PreTrainedModel):
             use_cache=use_cache,
         )
 
-        if use_cache is True:
+        # if use_cache is True:
+        if use_cache:
             past = ((encoder_outputs, decoder_outputs[1]),)
             decoder_outputs = decoder_outputs[:1] + past + decoder_outputs[2:]
 
