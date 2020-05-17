@@ -633,10 +633,16 @@ class T5Stack(T5PreTrainedModel):
 
         self.embed_tokens = embed_tokens
         self.is_decoder = config.is_decoder
-
-        self.block = nn.ModuleList(
-            [T5Block(config, has_relative_attention_bias=bool(i == 0)) for i in range(config.num_layers)]
-        )
+        
+        #NOTE ModuleList
+        for i in range(config.num_layers):
+            self.add_module(str(i),
+            T5Block(config, has_relative_attention_bias=bool(i == 0)))
+        
+        # self.block = nn.ModuleList(
+        #     [T5Block(config, has_relative_attention_bias=bool(i == 0)) for i in range(config.num_layers)]
+        # )
+        self.num_layers=config.num_layers
         self.final_layer_norm = T5LayerNorm(config.d_model, eps=config.layer_norm_epsilon)
         self.dropout = nn.Dropout(config.dropout_rate)
 
@@ -700,7 +706,9 @@ class T5Stack(T5PreTrainedModel):
 
         # initialize past_key_value_states with `None` if past does not exist
         if past_key_value_states is None:
-            past_key_value_states = [None] * len(self.block)
+            #NOTE moduleList
+            past_key_value_states = [None] * self.num_layers
+            # past_key_value_states = [None] * len(self.block)
 
         # ourselves in which case we just need to make it broadcastable to all heads.
         extended_attention_mask = self.get_extended_attention_mask(attention_mask, input_shape, self.device)
@@ -720,7 +728,10 @@ class T5Stack(T5PreTrainedModel):
 
         hidden_states = self.dropout(inputs_embeds)
 
-        for i, (layer_module, past_key_value_state) in enumerate(zip(self.block, past_key_value_states)):
+        #NOTE moduleList
+        # for i, (layer_module, past_key_value_state) in enumerate(zip(self.block, past_key_value_states)):
+        for i,past_key_value_state in enumerate(past_key_value_states):
+            layer_module = getattr(self,str(i))
             if self.output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
