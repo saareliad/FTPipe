@@ -19,6 +19,7 @@ import copy
 import logging
 import math
 import os
+import operator
 
 import torch
 import torch.nn.functional as F
@@ -43,7 +44,12 @@ T5_PRETRAINED_MODEL_ARCHIVE_MAP = {
     "t5-11b": "https://cdn.huggingface.co/t5-11b-pytorch_model.bin",
 }
 
+def is_None(a):
+    return operator.is_(a, None)
 
+
+def is_not_None(a):
+    return operator.is_not(a, None)
 ####################################################
 # This is a conversion method from TF 1.0 to PyTorch
 # More details: https://medium.com/huggingface/from-tensorflow-to-pytorch-265f40ef2a28
@@ -312,18 +318,25 @@ class T5Attention(nn.Module):
         # past_key_value_state[0] is (bs, n_heads, q_len - 1, dim_per_head)
         bs, qlen, dim = input.size()
 
-        if past_key_value_state is not None:
-            assert self.is_decoder is True, "Encoder cannot cache past key value states"
+        # NOTE is_not_None
+        # if past_key_value_state is not None:
+        if is_not_None(past_key_value_state):
+            # assert self.is_decoder is True, "Encoder cannot cache past key value states"
+            assert self.is_decoder, "Encoder cannot cache past key value states"
             assert (
                 len(past_key_value_state) == 2
             ), "past_key_value_state should have 2 past states: keys and values. Got {} past states".format(
                 len(past_key_value_state)
             )
-            real_qlen = qlen + past_key_value_state[0].shape[2] if query_length is None else query_length
+            #NOTE is none
+            # real_qlen = qlen + past_key_value_state[0].shape[2] if query_length is None else query_length
+            real_qlen = qlen + past_key_value_state[0].shape[2] if is_None(query_length) else query_length
         else:
             real_qlen = qlen
 
-        if kv is None:
+        #NOTE is none
+        # if kv is None:
+        if is_None(kv):
             klen = real_qlen
         else:
             klen = kv.size(1)
@@ -338,40 +351,55 @@ class T5Attention(nn.Module):
 
         q = shape(self.q(input))  # (bs, n_heads, qlen, dim_per_head)
 
-        if kv is None:
+        #NOTE is none
+        # if kv is None:
+        if is_None(kv):
             k = shape(self.k(input))  # (bs, n_heads, qlen, dim_per_head)
             v = shape(self.v(input))  # (bs, n_heads, qlen, dim_per_head)
-        elif past_key_value_state is None:
+        #NOTE is none
+        # elif past_key_value_state is None:
+        elif is_None(past_key_value_state):
             k = v = kv
             k = shape(self.k(k))  # (bs, n_heads, qlen, dim_per_head)
             v = shape(self.v(v))  # (bs, n_heads, qlen, dim_per_head)
 
-        if past_key_value_state is not None:
-            if kv is None:
+        # NOTE is not none
+        # if past_key_value_state is not None:
+        if is_not_None(past_key_value_state):
+            #NOTE is none
+            # if kv is None:
+            if is_None(kv):
                 k_, v_ = past_key_value_state
                 k = torch.cat([k_, k], dim=2)  # (bs, n_heads, klen, dim_per_head)
                 v = torch.cat([v_, v], dim=2)  # (bs, n_heads, klen, dim_per_head)
             else:
                 k, v = past_key_value_state
 
-        if self.is_decoder and use_cache is True:
+        # if self.is_decoder and use_cache is True:
+        if self.is_decoder and use_cache:
             present_key_value_state = ((k, v),)
         else:
             present_key_value_state = (None,)
 
         scores = torch.einsum("bnqd,bnkd->bnqk", q, k)  # (bs, n_heads, qlen, klen)
 
-        if position_bias is None:
+        # NOTE is none
+        # if position_bias is None:
+        if is_None(position_bias):
             if not self.has_relative_attention_bias:
                 raise ValueError("No position_bias provided and no weights to compute position_bias")
             position_bias = self.compute_bias(real_qlen, klen)
 
             # if key and values are already calculated
             # we want only the last query position bias
-            if past_key_value_state is not None:
+            #NOTE is not none
+            # if past_key_value_state is not None:
+            if is_not_None(past_key_value_state):
                 position_bias = position_bias[:, :, -1:, :]
 
-            if mask is not None:
+            # NOTE is not none
+            # if mask is not None:
+            if is_not_None(mask):
                 position_bias = position_bias + mask  # (bs, n_heads, qlen, klen)
 
         scores += position_bias
@@ -381,7 +409,9 @@ class T5Attention(nn.Module):
         weights = self.dropout(weights)
 
         # Mask heads if we want to
-        if head_mask is not None:
+        #NOTE is not none
+        # if head_mask is not None:
+        if is_not_None(head_mask):
             weights = weights * head_mask
 
         context = torch.matmul(weights, v)  # (bs, n_heads, qlen, dim_per_head)
