@@ -1,7 +1,7 @@
 import torch
 from torch.nn import Module
 from ..model_profiling import Node, NodeTypes, Graph, used_namespaces
-from pytorch_Gpipe.utils import traverse_model, traverse_params_buffs, layerDict, tensorDict
+from pytorch_Gpipe.utils import traverse_model, traverse_params_buffs, layerDict, tensorDict,nested_map,move_tensors
 from .partition_forward_method import generate_forward_method
 from .partition_init_method import generate_init_method
 from .state_methods import get_state_methods, generate_partition_state_methods
@@ -68,7 +68,8 @@ def compile_partitioned_model(graph: Graph,
         class_decl, scope_to_class_field = generate_init_method(class_name, layers,
                                                                 is_param_dict, buffs_params)
         state_methods_functions = generate_partition_state_methods()
-        forward_function, io = generate_forward_method(part,
+        forward_function, io = generate_forward_method(graph,
+                                                       part,
                                                        graph.outputs,
                                                        scope_to_class_field,
                                                        generate_explicit_del=generate_explicit_del)
@@ -147,7 +148,7 @@ def generateHelpFunctions() -> str:
     lines = [
         inspect.getsource(f) for f in
         [traverse_model, layerDict, traverse_params_buffs,
-            tensorDict] + get_state_methods()
+            tensorDict,move_tensors,nested_map] + get_state_methods()
     ]
 
     return "\n\n".join(lines)
@@ -314,7 +315,7 @@ def create_model_in_out_config(graph: Graph, is_batched: Callable[[torch.Size], 
                 is_batched
     """
 
-    input_ids = [f"'input{idx}'" for idx in range(graph.num_inputs)]
+    input_ids = [f"'{graph.input_kw_ids.get(node.id,node.scope)}'" for node in graph.inputs]
     input_shapes = [n.tensor_shape for n in graph.inputs]
     input_dtypes = [n.tensor_dtype for n in graph.inputs]
     # TODO it is possible that if we have a single output
