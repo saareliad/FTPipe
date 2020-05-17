@@ -468,12 +468,20 @@ class T5Block(nn.Module):
     def __init__(self, config, has_relative_attention_bias=False):
         super().__init__()
         self.is_decoder = config.is_decoder
-        self.layer = nn.ModuleList()
-        self.layer.append(T5LayerSelfAttention(config, has_relative_attention_bias=has_relative_attention_bias))
+        #NOTE moduleList
+        # self.layer = nn.ModuleList()
+        # self.layer.append(T5LayerSelfAttention(config, has_relative_attention_bias=has_relative_attention_bias))
+        self.add_module("0",
+            T5LayerSelfAttention(config, has_relative_attention_bias=has_relative_attention_bias))
+        self.block_size = 1
         if self.is_decoder:
-            self.layer.append(T5LayerCrossAttention(config, has_relative_attention_bias=has_relative_attention_bias))
+            # self.layer.append(T5LayerCrossAttention(config, has_relative_attention_bias=has_relative_attention_bias))
+            self.add_module("1",
+                T5LayerCrossAttention(config, has_relative_attention_bias=has_relative_attention_bias))
+            self.block_size=2
 
-        self.layer.append(T5LayerFF(config))
+        self.add_module(str(self.block_size),T5LayerFF(config))
+        # self.layer.append(T5LayerFF(config))
 
     def forward(
         self,
@@ -504,7 +512,9 @@ class T5Block(nn.Module):
         else:
             self_attn_past_key_value_state, cross_attn_past_key_value_state = None, None
 
-        self_attention_outputs = self.layer[0](
+        #NOTE moduleList
+        # self_attention_outputs = self.layer[0](
+        self_attention_outputs = getattr(self,str(0))(
             hidden_states,
             attention_mask=attention_mask,
             position_bias=position_bias,
@@ -523,7 +533,9 @@ class T5Block(nn.Module):
             else:
                 query_length = None
 
-            cross_attention_outputs = self.layer[1](
+            #NOTE moduleList
+            cross_attention_outputs = getattr(self,str(1))(
+            # cross_attention_outputs = self.layer[1](
                 hidden_states,
                 kv=encoder_hidden_states,
                 attention_mask=encoder_attention_mask,
@@ -542,7 +554,9 @@ class T5Block(nn.Module):
             attention_outputs = attention_outputs + cross_attention_outputs[2:]
 
         # Apply Feed Forward layer
-        hidden_states = self.layer[-1](hidden_states)
+        #NOTE modulelist
+        # hidden_states = self.layer[-1](hidden_states)
+        hidden_states = getattr(self,str(self.block_size))(hidden_states)
         outputs = (hidden_states,)
 
         # Add attentions if we output them
@@ -834,13 +848,15 @@ class T5PreTrainedModel(PreTrainedModel):
                 cur_key=key
                 if "block." in cur_key:
                     cur_key = cur_key.replace("block.","")
+                if "layer." in cur_key:
+                    cur_key = cur_key.replace("layer.","")
                 if "gamma" in cur_key:
                     cur_key = cur_key.replace("gamma", "weight")
                 if "beta" in cur_key:
                     cur_key = cur_key.replace("beta", "bias")
-
-                old_keys.append(key)
-                new_keys.append(cur_key)
+                if key != cur_key:
+                    old_keys.append(key)
+                    new_keys.append(cur_key)
             for old_key, new_key in zip(old_keys, new_keys):
                 state_dict[new_key] = state_dict.pop(old_key)
 
