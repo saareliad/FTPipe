@@ -1019,27 +1019,37 @@ class T5Stack(T5PreTrainedModel):
         past_key_value_states=None,
         use_cache=False,
     ):
-
-        if input_ids is not None and inputs_embeds is not None:
+        # NOTE is not None
+        # if input_ids is not None and inputs_embeds is not None:
+        if is_not_None(input_ids) and is_not_None(inputs_embeds):
             raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
-        elif input_ids is not None:
+        # NOTE is not None
+        # elif input_ids is not None:
+        elif is_not_None(input_ids):
             input_shape = input_ids.size()
             input_ids = input_ids.view(-1, input_shape[-1])
-        elif inputs_embeds is not None:
+        # NOTE is not None
+        # elif inputs_embeds is not None:
+        elif is_not_None(inputs_embeds):
             input_shape = inputs_embeds.size()[:-1]
         else:
             if self.is_decoder:
                 raise ValueError("You have to specify either decoder_input_ids or decoder_inputs_embeds")
             else:
                 raise ValueError("You have to specify either input_ids or inputs_embeds")
-
-        if inputs_embeds is None:
-            assert self.embed_tokens is not None, "You have to intialize the model with valid token embeddings"
+        # NOTE is None
+        # if inputs_embeds is None:
+        if is_None(inputs_embeds):
+            # NOTE is not None
+            # assert self.embed_tokens is not None, "You have to intialize the model with valid token embeddings"
+            assert is_not_None(self.embed_tokens), "You have to intialize the model with valid token embeddings"
             inputs_embeds = self.embed_tokens(input_ids)
 
         batch_size, seq_length = input_shape
 
-        if past_key_value_states is not None:
+        # NOTE is not None
+        # if past_key_value_states is not None:
+        if is_not_None(past_key_value_states):
             assert seq_length == 1, "Input shape is {}, but should be {} when using past_key_value_sates".format(
                 input_shape, (batch_size, 1)
             )
@@ -1049,14 +1059,20 @@ class T5Stack(T5PreTrainedModel):
         else:
             mask_seq_length = seq_length
 
-        if attention_mask is None:
+        # NOTE is None
+        # if attention_mask is None:
+        if is_None(attention_mask):
             attention_mask = torch.ones(batch_size, mask_seq_length).to(inputs_embeds.device)
-        if self.is_decoder and encoder_attention_mask is None and encoder_hidden_states is not None:
+        # NOTE is None is not None
+        # if self.is_decoder and encoder_attention_mask is None and encoder_hidden_states is not None:
+        if self.is_decoder and is_None(encoder_attention_mask) and is_not_None(encoder_hidden_states):
             encoder_seq_length = encoder_hidden_states.shape[1]
             encoder_attention_mask = torch.ones(batch_size, encoder_seq_length).to(inputs_embeds.device)
 
         # initialize past_key_value_states with `None` if past does not exist
-        if past_key_value_states is None:
+        # NOTE is None
+        # if past_key_value_states is None:
+        if is_None(past_key_value_states):
             #NOTE moduleList
             past_key_value_states = [None] * self.num_layers
             # past_key_value_states = [None] * len(self.block)
@@ -1064,7 +1080,9 @@ class T5Stack(T5PreTrainedModel):
         # ourselves in which case we just need to make it broadcastable to all heads.
         extended_attention_mask = self.get_extended_attention_mask(attention_mask, input_shape, self.device)
 
-        if self.is_decoder and encoder_attention_mask is not None:
+        # NOTE is not None
+        # if self.is_decoder and encoder_attention_mask is not None:
+        if self.is_decoder and is_not_None(encoder_attention_mask):
             encoder_extended_attention_mask = self.invert_attention_mask(encoder_attention_mask)
         else:
             encoder_extended_attention_mask = None
@@ -1081,6 +1099,7 @@ class T5Stack(T5PreTrainedModel):
 
         #NOTE moduleList
         # for i, (layer_module, past_key_value_state) in enumerate(zip(self.block, past_key_value_states)):
+        # TODO what will happen if past_key_value_states is traced?
         for i,past_key_value_state in enumerate(past_key_value_states):
             layer_module = getattr(self,str(i))
             if self.output_hidden_states:
@@ -1104,7 +1123,9 @@ class T5Stack(T5PreTrainedModel):
                 # We share the position biases between the layers - the first layer store them
                 # layer_outputs = hidden-states, key-value-states (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
                 position_bias = layer_outputs[3 if self.output_attentions else 2]
-                if self.is_decoder and encoder_hidden_states is not None:
+                #NOTE is not None
+                # if self.is_decoder and encoder_hidden_states is not None:
+                if self.is_decoder and is_not_None(encoder_hidden_states):
                     encoder_decoder_position_bias = layer_outputs[4 if self.output_attentions else 3]
             # append next layer key value states
             present_key_value_states = present_key_value_states + (present_key_value_state,)
@@ -1120,7 +1141,8 @@ class T5Stack(T5PreTrainedModel):
             all_hidden_states = all_hidden_states + (hidden_states,)
 
         outputs = (hidden_states,)
-        if use_cache is True:
+        # if use_cache is True:
+        if use_cache:
             assert self.is_decoder, "`use_cache` can only be set to `True` if {} is used as a decoder".format(self)
             outputs = outputs + (present_key_value_states,)
         if self.output_hidden_states:
