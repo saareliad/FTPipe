@@ -1454,7 +1454,9 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         """
 
         # Encode if needed (training, first prediction pass)
-        if encoder_outputs is None:
+        #NOTE is none
+        # if encoder_outputs is None:
+        if is_None(encoder_outputs):
             # Convert encoder inputs in embeddings if needed
             encoder_outputs = self.encoder(
                 input_ids=input_ids, attention_mask=attention_mask, inputs_embeds=inputs_embeds, head_mask=head_mask
@@ -1462,17 +1464,27 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
 
         hidden_states = encoder_outputs[0]
 
-        if lm_labels is not None and decoder_input_ids is None and decoder_inputs_embeds is None:
+        #NOTE is not none, is none, is none
+        # if lm_labels is not None and decoder_input_ids is None and decoder_inputs_embeds is None:
+        if is_not_None(lm_labels) and is_None(decoder_input_ids) and is_None(decoder_inputs_embeds):
             # get decoder inputs from shifting lm labels to the right
             decoder_input_ids = self._shift_right(lm_labels)
 
         # If decoding with past key value states, only the last tokens
         # should be given as an input
-        if decoder_past_key_value_states is not None:
-            assert lm_labels is None, "Decoder should not use cached key value states when training."
-            if decoder_input_ids is not None:
+        #NOTE is not None
+        # if decoder_past_key_value_states is not None:
+        if is_not_None(decoder_past_key_value_states):
+            #NOTE is None
+            # assert lm_labels is None, "Decoder should not use cached key value states when training."
+            assert is_None(lm_labels), "Decoder should not use cached key value states when training."
+            #NOTE is not None
+            # if decoder_input_ids is not None:
+            if is_not_None(decoder_input_ids):
                 decoder_input_ids = decoder_input_ids[:, -1:]
-            if decoder_inputs_embeds is not None:
+            #NOTE is not None    
+            # if decoder_inputs_embeds is not None:
+            if is_not_None(decoder_inputs_embeds):
                 decoder_inputs_embeds = decoder_inputs_embeds[:, -1:]
 
         # Decode
@@ -1489,7 +1501,8 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
 
         # insert decoder past at right place
         # to speed up decoding
-        if use_cache is True:
+        # if use_cache is True:
+        if use_cache:
             past = ((encoder_outputs, decoder_outputs[1]),)
             decoder_outputs = decoder_outputs[:1] + past + decoder_outputs[2:]
 
@@ -1500,7 +1513,9 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         lm_logits = self.lm_head(sequence_output)
 
         decoder_outputs = (lm_logits,) + decoder_outputs[1:]  # Add hidden states and attention if they are here
-        if lm_labels is not None:
+        #NOTE is not None
+        # if lm_labels is not None:
+        if is_not_None(lm_labels):
             # loss_fct = CrossEntropyLoss(ignore_index=-100)
             loss_fct = self.lm_loss
             loss = loss_fct(lm_logits.view(-1, lm_logits.size(-1)), lm_labels.view(-1))
@@ -1510,8 +1525,10 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         return decoder_outputs + encoder_outputs
 
     def prepare_inputs_for_generation(self, input_ids, past, attention_mask, use_cache, **kwargs):
-        assert past is not None, "past has to be defined for encoder_outputs"
-
+        #NOTE is not None
+        # assert past is not None, "past has to be defined for encoder_outputs"
+        assert is_not_None(past), "past has to be defined for encoder_outputs"
+        
         # first step
         if len(past) < 2:
             encoder_outputs, decoder_past_key_value_states = past, None
