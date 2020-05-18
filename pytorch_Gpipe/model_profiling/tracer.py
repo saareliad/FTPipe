@@ -708,6 +708,11 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
 
     nodes = discard_unused_nodes(NODES,output_id)
 
+    # record input kwargs explicitly as they are not passed by position
+    # we only retain kwargs that are actually used
+    # for example a boolean input that was only used in if checks can be discarded
+    input_kw_ids = {v.id: k for k, v in kwargs.items() if v.id in nodes}
+
     nodes, output_id = set_node_indices(nodes, output_id)
     NODES.clear()
 
@@ -716,9 +721,6 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
     is_valid, errors = check_is_valid_graph(nodes)
     if not is_valid:
         raise RuntimeError(errors)
-
-    # record input kwargs explicitly as they are not passed by position
-    input_kw_ids = {v.id: k for k, v in kwargs.items()}
 
     return Graph(nodes, input_kw_ids, output_ids, depth, basic_blocks)
 
@@ -876,9 +878,10 @@ def discard_unused_nodes(nodes,output_id):
 
         # a,b=f() will actually invoke __getitem__ 3 times so we discard the last node
         iter_sentinel = node.value_type is None
-        unused_constant = (node.type is NodeTypes.CONSTANT) and (len(node.out_edges) == 0)
 
-        if unused_branch or iter_sentinel or unused_constant: 
+        unused_constant_or_input = (node.type in [NodeTypes.IN,NodeTypes.CONSTANT]) and (len(node.out_edges) == 0)
+
+        if unused_branch or iter_sentinel or unused_constant_or_input: 
             assert len(
                 node.out_edges) == 0, "unused traced value should not have outgoing edges"
 
