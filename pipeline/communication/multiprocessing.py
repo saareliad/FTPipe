@@ -153,12 +153,12 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                                          is_activations=False,
                                          requires_grad=requires_grad)
 
-    def create_activations_recv_buffers(self, requires_grad=False):
+    def create_activations_recv_buffers(self, *args, requires_grad=False):
         return self._create_recv_buffers(self.receive_ranks.keys(),
                                          is_activations=True,
                                          requires_grad=requires_grad)
 
-    def create_gradients_rcv_buffers(self, requires_grad=False):
+    def create_gradients_rcv_buffers(self, *args, requires_grad=False):
         tensor_names = self.grad_rcv_dict.keys()
         # print(40*"-")
         # print("create_gradients_rcv_buffers for", tensor_names)

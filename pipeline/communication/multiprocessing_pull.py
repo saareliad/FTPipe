@@ -22,7 +22,7 @@ class RecvGradPullerThread(threading.Thread):
     def run(self):
         cm = self.cm
         torch.cuda.set_device(cm.device)  # needed for thread.
-        ranks_dict_items = cm.grad_rcv_items
+        ranks_dict_items = self.ranks_dict_items
         while True:
             batch_idx, is_last_batch = cm.grad_rcv_tasks.get()
 
@@ -63,6 +63,63 @@ class RecvGradPullerThread(threading.Thread):
             # return request_objects
 
 
+class RecvActivationPullerThread(threading.Thread):
+    def __init__(self, cm, my_recv_rank=None, **thread_kw):
+        super().__init__(**thread_kw)
+
+        self.ranks_dict_items = cm.receive_ranks.items()  # change (1)
+        self.cm = cm
+        self.my_recv_rank = my_recv_rank
+        self.acti_rcv_stream = torch.cuda.Stream(cm.device,
+                                                 priority=-1)  # change (2)
+
+    def run(self):
+        cm = self.cm
+        torch.cuda.set_device(cm.device)  # needed for thread.
+        ranks_dict_items = self.ranks_dict_items
+        task_queue = cm.acti_rcv_tasks
+        done_queue = cm.acti_rcv_done_tasks
+        while True:
+            batch_idx, is_last_batch = task_queue.get(
+            )  # change(3)
+
+            request_objects = []
+            for (tensor_name, receive_ranks) in ranks_dict_items:
+                assert len(receive_ranks) == 1
+                receive_rank = receive_ranks[0]
+
+                # Option to do thread per rcv rank
+                if self.my_recv_rank is not None and receive_rank != self.my_recv_rank:
+                    continue
+
+                q = cm.rcv_queues[cm.rank][receive_rank]
+
+                if cm.verbose:
+                    tensor_tag = cm.tensor_tags[tensor_name] + \
+                        (cm.TOTAL_TAGS * batch_idx)
+                    cm.logger.info(
+                        f"q.get(), src={receive_rank}, tag={tensor_tag}, name={tensor_name}, rank={cm.local_rank}"
+                    )
+
+                with torch.cuda.stream(self.acti_rcv_stream):  # change (4)
+                    x = q.get()
+                    event = torch.cuda.Event(blocking=True)
+                    reuse_q = cm.buffer_reuse_queues[receive_rank][cm.rank]
+                    with torch.no_grad():
+                        t = x.to(cm.device)  # creates a new tensor!
+                        event.record()
+                event.synchronize()
+                if not is_last_batch:
+                    reuse_q.put(None)
+                request_objects.append(t)
+                # TODO: we expect request object os it has to be changed.
+
+            # self._result = request_objects
+            done_queue.put(request_objects)
+            # send it to
+            # return request_objects
+
+
 class MultiprocessingCommunicationHandler(SimpleCommBase):
     def __init__(self, share, stage_to_device_map, local_rank_to_device_map,
                  *args, **kw):
@@ -99,15 +156,30 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         self.grad_rcv_tasks = queue.Queue()
         self.grad_rcv_done_tasks = queue.Queue()
 
+        self.acti_rcv_tasks = queue.Queue()
+        self.acti_rcv_done_tasks = queue.Queue()
+
         self.start_threads()
         self.first_time_grads = False
+        self.first_time_activations = False
+
 
     def start_threads(self):
         self.grad_rcv_puller = RecvGradPullerThread(
             self,
             my_recv_rank=None,  # TODO: can do per target thread
             name="grad_rcv_puller")
+
+        self.acti_rcv_puller = RecvActivationPullerThread(
+            self,
+            my_recv_rank=None,  # TODO: can do per target thread
+            name="acti_rcv_puller")
+
         self.grad_rcv_puller.start()
+        self.acti_rcv_puller.start()
+
+    def stop_threads(self):
+        raise NotImplementedError()  # TODO
 
     def save_send_buffers(self, name):
         self.send_buffers_versions[name] = self.send_buffers
@@ -131,9 +203,15 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                              is_activations,
                              requires_grad=False):
         """ This is just sending None sender, signaling her she can send """
+        # TODO: make it nicer, its mostly no op.
         if (not is_activations) and (not self.first_time_grads):
             self.first_time_grads = True
         elif (not is_activations):
+            return
+
+        if (is_activations) and (not self.first_time_activations):
+            self.first_time_activations = True
+        elif (is_activations):
             return
 
         if is_activations:
@@ -165,6 +243,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                              requires_grad=False):
         """ the sender creates the buffers """
         tensor_names = tensor_send_ranks.keys()
+        device = self.device
         for tensor_name in tensor_names:
             if is_activations:
                 is_parameter = is_shared_parameter(tensor_name)
@@ -185,7 +264,6 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             d = {}
             for rank in tensor_send_ranks[tensor_name]:
                 # NOTE: we use own device:
-                device = self.device if not is_activations else self.local_rank_to_device_map[rank]
                 send_buffer = torch.zeros(shape,
                                           dtype=dtype,
                                           device=device,
@@ -204,7 +282,19 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                                          is_activations=False,
                                          requires_grad=requires_grad)
 
-    def create_activations_recv_buffers(self, requires_grad=False):
+    def create_activations_recv_buffers(self,
+                                        batch_idx,
+                                        is_last_batch,
+                                        requires_grad=False):
+
+        if batch_idx == 0:
+            self.acti_rcv_tasks.put((batch_idx, is_last_batch))
+        if not is_last_batch:
+            self.acti_rcv_tasks.put(
+                (batch_idx + 1, is_last_batch))  # start the wait for next
+        
+
+        # FIXME: first time
         return self._create_recv_buffers(self.receive_ranks.keys(),
                                          is_activations=True,
                                          requires_grad=requires_grad)
@@ -215,9 +305,11 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                                      requires_grad=False):
         if batch_idx == 0:
             self.grad_rcv_tasks.put((batch_idx, is_last_batch))
-        
         if not is_last_batch:
-            self.grad_rcv_tasks.put((batch_idx+1, is_last_batch)) # start the wait for next
+            self.grad_rcv_tasks.put(
+                (batch_idx + 1, is_last_batch))  # start the wait for next
+
+        # FIXME: first time
 
         tensor_names = self.grad_rcv_dict.keys()
         return self._create_recv_buffers(tensor_names,
@@ -278,8 +370,9 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         return request_objects
 
     def recv_activations(self, x, batch_idx, is_last_batch):
-        return self._recv_tensors_p2p(x, batch_idx, self.receive_ranks.items(),
-                                      True)
+        return self.acti_rcv_done_tasks.get()
+        # return self._recv_tensors_p2p(x, batch_idx, self.receive_ranks.items(),
+        #                               True)
 
     def recv_gradients(self, x, batch_idx, is_last_batch):
         # self.grad_rcv_tasks.put((batch_idx, is_last_batch))

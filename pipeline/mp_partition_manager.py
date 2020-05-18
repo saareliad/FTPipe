@@ -467,9 +467,9 @@ class SinglePartitionManager:
             Feature:
                 - Pre load Y to last partition if possible
         """
-
+        last_due_end = batch_idx + 1 == num_batches
         if not self.is_first_partition:
-            self.comm_handler.create_activations_recv_buffers()
+            self.comm_handler.create_activations_recv_buffers(batch_idx, last_due_end)
 
         partition = self.partition
         is_training = partition.training
