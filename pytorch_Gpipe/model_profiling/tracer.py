@@ -823,6 +823,8 @@ def _wrap_traced_layers(module: nn.Module, depth=1000, basic_blocks=()):
 
         if isinstance(sub_layer,(nn.ModuleList,nn.ModuleDict)):
             raise TypeError(f"tracing nn.ModuleList/nn.ModuleDict is not supported got {scope} of type {type(sub_layer)}")
+        if isinstance(sub_layer,(nn.ParameterList,nn.ParameterDict)):
+            raise TypeError(f"tracing nn.ParameterList/nn.ParameterDict is not supported got {scope} of type {type(sub_layer)}")
 
         wrapper = TracedLayer(sub_layer,
                               scope.rsplit('/', maxsplit=1)[1],
