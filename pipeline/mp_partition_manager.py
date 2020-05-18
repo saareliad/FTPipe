@@ -616,11 +616,11 @@ class SinglePartitionManager:
 
     def run_batch_backward(self, batch_idx, num_batches):
         """ Runs the backwards pass + step for all except the last partition """
+        last_due_end = batch_idx + 1 == num_batches
         if not self.is_last_partition:
-            self.comm_handler.create_gradients_rcv_buffers()
+            self.comm_handler.create_gradients_rcv_buffers(batch_idx, last_due_end)
         # TODO:
         # # Special case: Last batch with differnt size
-        last_due_end = batch_idx + 1 == num_batches
         self._ensure_bwd_send_buffers_size_set(last_due_end)
 
         weight_stasher = self.weight_stasher

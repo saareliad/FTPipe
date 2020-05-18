@@ -11,10 +11,7 @@ def is_shared_parameter(tensor_scope):
 
 
 class RecvGradPullerThread(threading.Thread):
-    def __init__(self,
-                 cm,
-                 my_recv_rank=None,
-                 **thread_kw):
+    def __init__(self, cm, my_recv_rank=None, **thread_kw):
         super().__init__(**thread_kw)
 
         self.ranks_dict_items = cm.grad_rcv_items
@@ -188,9 +185,10 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             d = {}
             for rank in tensor_send_ranks[tensor_name]:
                 # NOTE: we use own device:
+                device = self.device if not is_activations else self.local_rank_to_device_map[rank]
                 send_buffer = torch.zeros(shape,
                                           dtype=dtype,
-                                          device=self.device,
+                                          device=device,
                                           requires_grad=requires_grad)
                 send_buffer.share_memory_()
                 d[rank] = send_buffer
@@ -211,7 +209,16 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                                          is_activations=True,
                                          requires_grad=requires_grad)
 
-    def create_gradients_rcv_buffers(self, requires_grad=False):
+    def create_gradients_rcv_buffers(self,
+                                     batch_idx,
+                                     is_last_batch,
+                                     requires_grad=False):
+        if batch_idx == 0:
+            self.grad_rcv_tasks.put((batch_idx, is_last_batch))
+        
+        if not is_last_batch:
+            self.grad_rcv_tasks.put((batch_idx+1, is_last_batch)) # start the wait for next
+
         tensor_names = self.grad_rcv_dict.keys()
         return self._create_recv_buffers(tensor_names,
                                          is_activations=False,
@@ -275,7 +282,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                                       True)
 
     def recv_gradients(self, x, batch_idx, is_last_batch):
-        self.grad_rcv_tasks.put((batch_idx, is_last_batch))
+        # self.grad_rcv_tasks.put((batch_idx, is_last_batch))
         # grad_rcv_puller will do the job
         return self.grad_rcv_done_tasks.get()
 
