@@ -64,13 +64,21 @@ def check_equivalance(ref,our,kws,training=True,exp_prefix=""):
             os.remove(output_file+".py")
 
         graph = trace_module(our,kwargs=kws,depth=d)
+
         compile_partitioned_model(graph,our,0,output_file=output_file)
 
         layers = layerDict(our,depth=d)
 
         generated=importlib.import_module(output_file).Partition0(layers,tensors)
-        seed()
-        out = list(flatten(generated(*list(kws.values()))))
+        try:
+            seed()
+            out = list(flatten(generated(*list(kws.values()))))
+        except TypeError:
+            seed()
+            kws = dict(kws.items())
+            kws.pop("use_cache")
+            out = list(flatten(generated(*list(kws.values()))))
+
         torch.cuda.synchronize()
         assert len(out) == len(ref_out)
 
@@ -118,7 +126,6 @@ if __name__ == "__main__":
     lm_kwargs={"input_ids":input_ids,"decoder_input_ids":input_ids,"lm_labels":input_ids,"use_cache":True}
     kwargs = {"input_ids":input_ids,"decoder_input_ids":input_ids,"use_cache":True}
     print("tokenized input")
-
 
     for base_transformer in [True,False]:
         for tied_weights in [True,False]:
