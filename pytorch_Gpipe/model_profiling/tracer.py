@@ -708,6 +708,11 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
 
     nodes = discard_unused_nodes(NODES,output_id)
 
+    # record input kwargs explicitly as they are not passed by position
+    # we only retain kwargs that are actually used
+    # for example a boolean input that was only used in if checks can be discarded
+    input_kw_ids = {v.id: k for k, v in kwargs.items() if v.id in nodes}
+
     nodes, output_id = set_node_indices(nodes, output_id)
     NODES.clear()
 
@@ -716,9 +721,6 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
     is_valid, errors = check_is_valid_graph(nodes)
     if not is_valid:
         raise RuntimeError(errors)
-
-    # record input kwargs explicitly as they are not passed by position
-    input_kw_ids = {v.id: k for k, v in kwargs.items()}
 
     return Graph(nodes, input_kw_ids, output_ids, depth, basic_blocks)
 
@@ -823,6 +825,11 @@ def _wrap_traced_layers(module: nn.Module, depth=1000, basic_blocks=()):
 
         if isinstance(sub_layer,(nn.ModuleList,nn.ModuleDict)):
             raise TypeError(f"tracing nn.ModuleList/nn.ModuleDict is not supported got {scope} of type {type(sub_layer)}")
+        
+        if isinstance(sub_layer,(nn.ParameterList,nn.ParameterDict)):
+            # it does not have a forward method so there is nothing to trace
+            # we register the parameters for tracing in record_free_floating_parameters_and_buffers
+            continue
 
         wrapper = TracedLayer(sub_layer,
                               scope.rsplit('/', maxsplit=1)[1],
@@ -871,9 +878,10 @@ def discard_unused_nodes(nodes,output_id):
 
         # a,b=f() will actually invoke __getitem__ 3 times so we discard the last node
         iter_sentinel = node.value_type is None
-        unused_constant = (node.type is NodeTypes.CONSTANT) and (len(node.out_edges) == 0)
 
-        if unused_branch or iter_sentinel or unused_constant: 
+        unused_constant_or_input = (node.type in [NodeTypes.IN,NodeTypes.CONSTANT]) and (len(node.out_edges) == 0)
+
+        if unused_branch or iter_sentinel or unused_constant_or_input: 
             assert len(
                 node.out_edges) == 0, "unused traced value should not have outgoing edges"
 
@@ -1079,7 +1087,17 @@ def record_free_floating_parameters_and_buffers(module: nn.Module):
             module._parameters[name] = traced_t
         else:
             module._buffers[name] = traced_t
-
+    
+    #parameterList/Dict need a special case to ensure correct scope registration
+    # as they are modules but do not have a forward method
+    for name,c in module.named_children():
+        if isinstance(c,(nn.ParameterList,nn.ParameterDict)):
+            for p_name,p in c.named_parameters():
+                traced_p = TracedValue(NodeTypes.BUFF_PARAM,
+                               f"/{type(c).__name__}[{name}]/{type(p).__name__}[{p_name}]")
+                
+                traced_p.set_data(p)
+                c._parameters[p_name] = traced_p
     yield
 
     # NOTE TracedValue is currently unhashable so we cannot used named_parameters/buffers here
@@ -1090,6 +1108,12 @@ def record_free_floating_parameters_and_buffers(module: nn.Module):
             module._parameters[name] = t
         else:
             module._buffers[name] = t
+
+    #revert parameterList/Dict tracing
+    for name,c in module.named_children():
+        if isinstance(c,(nn.ParameterList,nn.ParameterDict)):
+            for p_name,p in c._parameters.items():
+                c._parameters[p_name] = p._data
 
 
 def record_non_terminal_output(out):
