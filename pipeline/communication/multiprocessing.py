@@ -4,6 +4,8 @@ import torch
 from collections import defaultdict
 
 # from multiprocessing.pool import ThreadPool
+import concurrent
+
 import threading
 
 
@@ -58,6 +60,11 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
 
         # self.pool_send_act = ThreadPool(processes=1)
         # self.pool_send_grad = ThreadPool(processes=1)
+        
+
+        self.pool_send_act = concurrent.futures.ThreadPoolExecutor(1, initializer=torch.cuda.set_device, initargs=(self.device,))
+        self.pool_send_grad = concurrent.futures.ThreadPoolExecutor(1)
+
 
     def save_send_buffers(self, name):
         self.send_buffers_versions[name] = self.send_buffers
@@ -139,6 +146,10 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             self.send_buffers[tensor_name] = d
 
     def create_activations_send_buffers(self, requires_grad=False):
+        tensor_names = self.send_ranks.keys()
+        print(40 * "-")
+        print("create_activations_send_buffers for", tensor_names)
+        print(40 * "-")
         return self._create_send_buffers(self.send_ranks,
                                          is_activations=True,
                                          requires_grad=requires_grad)
@@ -194,7 +205,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                         p = q.get()
                         self.rcv_shared_parameters[tensor_name] = p
                         request_objects.append(p)
-
+                continue
             if self.verbose:
                 tensor_tag = self.tensor_tags[tensor_name] + \
                     (self.TOTAL_TAGS * batch_idx)
@@ -203,6 +214,11 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                 )
 
             x = q.get()
+            if is_activations:
+
+                assert list(x.shape) == self.tensor_shapes[tensor_name], (tensor_name,x.shape,self.tensor_shapes[tensor_name])
+            
+            
             # give the next buffer
             # FIXME: un-optimized clones
             # NOTE: this happends on the main stream FIXME?
@@ -241,6 +257,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                     for send_rank in send_ranks:
                         if tensor_name not in self.send_shared_parameters or send_rank not in self.send_shared_parameters[
                                 tensor_name]:
+                            # print("sending parameter!", tensor)
                             stream = self.grad_send_stream if is_grad else self.acti_send_stream
                             with torch.cuda.stream(stream):
                                 prev_work_event.wait()
@@ -272,6 +289,8 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                         # can just write stright to the buffer in the partition
                         out_q = self.rcv_queues[send_rank][self.rank]
                         buff = send_buffers[send_rank]
+                        assert tensor.shape == buff.shape,(tensor.shape, buff.shape)
+
                         buff.copy_(tensor)
                         # FIXME: can do it in a thread.
                         event = torch.cuda.Event(blocking=True)
@@ -281,19 +300,35 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                         # stream.synchronize()
                         out_q.put(buff)
 
-                        if self.verbose:
-                            tensor_tag = self.tensor_tags[tensor_name] + (
-                                self.TOTAL_TAGS * batch_idx)
-                            self.logger.info(
-                                f"copy_(), dst={send_rank}, tag={tensor_tag}, name={tensor_name}, rank={self.rank}"
-                            )
+                    if self.verbose:
+                        tensor_tag = self.tensor_tags[tensor_name] + (
+                            self.TOTAL_TAGS * batch_idx)
+                        self.logger.info(
+                            f"copy_(), dst={send_rank}, tag={tensor_tag}, name={tensor_name}, rank={self.rank}"
+                        )
 
         return request_objects
 
     def send_activations(self, x, batch_idx):
-        t = threading.Thread(target=self._send_tensors_p2p, args=(x, batch_idx, self.send_ranks.items(), False))
-        t.start()
+
+        # t = threading.Thread(target=self._send_tensors_p2p, args=(x, batch_idx, self.send_ranks.items(), False))
+        # t.start()
+        # return t
+        # FIXME...
+        class Foo:
+            def __init__(self, future):
+                self.future = future
+
+            def join(self):
+                print(self.future.result())
+
+        future = self.pool_send_act.submit(self._send_tensors_p2p, x, batch_idx, self.send_ranks.items(), False)
+        t = Foo(future)
+        # t.join()
+
         return t
+        
+
 
         # self.pool_send_act.apply_async(
         #     self._send_tensors_p2p,

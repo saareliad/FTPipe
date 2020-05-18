@@ -66,8 +66,61 @@ def gpt2xl_tied():
                                   gpus_per_config=8)
 
 
+def multiprocessing_cv():
+    COMMAND = "python main.py"
+    cv_cfgs_dir = "configs/cv/cifar100/wrn28x10/"
+    gpus_per_config = 4
+    all_algs = ["stale", "msnag"]  # TODO
+    # cfgs_dir = "configs/lm/wt2/gpt2xl/tied/"
+    cfgs_dir = cv_cfgs_dir
+    param_grid = {
+        'config': [f"{cfgs_dir}{cfg}.json" for cfg in all_algs],
+        'seed': [42],
+        "pipeline_num_processes": [gpus_per_config],
+    }
+    run_grid_on_multi_gpu_per_run(COMMAND,
+                                  param_grid,
+                                  gpu_list=list(range(8)),
+                                  gpus_per_config=gpus_per_config)
+
+
+def mp_gpt2xl_untied():
+    COMMAND = "python main.py"
+    gpus_per_config = 8
+    all_algs = ["stale", "msnag"]  # TODO
+    cfgs_dir = "configs/lm/wt2/gpt2xl/untied/"
+    param_grid = {
+        'config': [f"{cfgs_dir}{cfg}.json" for cfg in all_algs],
+        'seed': [42],
+        "pipeline_num_processes": [gpus_per_config],
+    }
+    run_grid_on_multi_gpu_per_run(COMMAND,
+                                  param_grid,
+                                  gpu_list=list(range(8)),
+                                  gpus_per_config=gpus_per_config)
+
+
+def mp_gpt2_tied():
+    COMMAND = "python main.py"
+    gpus_per_config = 5
+    all_algs = ["stale", "msnag"]  # TODO
+    cfgs_dir = "configs/lm/wt2/gpt2/tied/"
+    param_grid = {
+        'config': [f"{cfgs_dir}{cfg}.json" for cfg in all_algs],
+        'seed': [42],
+        "pipeline_num_processes": [gpus_per_config],
+    }
+    run_grid_on_multi_gpu_per_run(COMMAND,
+                                  param_grid,
+                                  gpu_list=list(range(8)),
+                                  gpus_per_config=gpus_per_config)
+
+
+    # python main.py  --config "configs/lm/wt2/gpt2/tied/stale.json" --seed 42 --pipeline_num_processes 5 --debug -1
 if __name__ == "__main__":
     # gpt2xl_untied()
     # gpt2_tied()
     # gpt2xl_untied_gpipe()
-    gpt2xl_tied()
+    mp_gpt2_tied()
+    # mp_gpt2xl_untied()  # TODO: bug?
+    # gpt2xl_tied()

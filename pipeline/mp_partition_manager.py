@@ -231,6 +231,8 @@ class SinglePartitionManager:
                 self._fwd_send_buffers_eval()
                 self.comm_handler.save_send_buffers(name="eval")
                 self.comm_handler.use_send_buffers("train")
+        else:
+            self._fwd_send_buffers_train()
 
         self.dtypes_and_shapes_are_equal = dtypes_and_shapes_are_equal
 
