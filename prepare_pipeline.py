@@ -80,7 +80,7 @@ def create_comm_handler(args, comm_init_args,
 
 def create_comm_handler_v2(args, comm_init_args, device,
                            v2_args) -> CommunicationHandlerBase:
-    handler_cls = PullMultiprocessingCommunicationHandler
+    handler_cls = MultiprocessingCommunicationHandler
     comm_handler = handler_cls(
         *v2_args,
         args.rank,
