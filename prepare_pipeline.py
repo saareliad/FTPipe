@@ -15,6 +15,8 @@ import models
 from pipeline import CommunicationHandlerBase, get_auto_comm_handler_cls
 from pipeline.communication.multiprocessing import MultiprocessingCommunicationHandler
 
+from pipeline.communication.multiprocessing_pull import MultiprocessingCommunicationHandler as PullMultiprocessingCommunicationHandler
+
 from pipeline.partition_manager import SinglePartitionManager
 from pipeline.mp_partition_manager import SinglePartitionManager as MPSinglePartitionManager
 
@@ -78,7 +80,7 @@ def create_comm_handler(args, comm_init_args,
 
 def create_comm_handler_v2(args, comm_init_args, device,
                            v2_args) -> CommunicationHandlerBase:
-    handler_cls = MultiprocessingCommunicationHandler
+    handler_cls = PullMultiprocessingCommunicationHandler
     comm_handler = handler_cls(
         *v2_args,
         args.rank,

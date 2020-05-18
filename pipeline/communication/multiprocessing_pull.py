@@ -14,27 +14,13 @@ class RecvGradPullerThread(threading.Thread):
     def __init__(self,
                  cm,
                  my_recv_rank=None,
-                 group=None,
-                 target=None,
-                 name=None,
-                 args=(),
-                 kwargs=None,
-                 verbose=None):
-        super().__init__(group=group,
-                         target=target,
-                         name=name,
-                         verbose=verbose)
-
-        self.args = args
-        self.kwargs = kwargs
-        self.qs = kwargs.pop("rcv_queues")
-
-        # (cm, x, batch_idx, ranks_dict_items, is_activations)
+                 **thread_kw):
+        super().__init__(**thread_kw)
 
         self.ranks_dict_items = cm.grad_rcv_items
         self.cm = cm
         self.my_recv_rank = my_recv_rank
-        self.grad_rcv_stream = torch.cuda.Stream(self.device, priority=-2)
+        self.grad_rcv_stream = torch.cuda.Stream(cm.device, priority=-2)
 
     def run(self):
         cm = self.cm
@@ -117,18 +103,13 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         self.grad_rcv_done_tasks = queue.Queue()
 
         self.start_threads()
-        self.self.first_time_grads = False
+        self.first_time_grads = False
 
     def start_threads(self):
         self.grad_rcv_puller = RecvGradPullerThread(
             self,
             my_recv_rank=None,  # TODO: can do per target thread
-            group=None,
-            target=None,
-            name="grad_rcv_puller",
-            args=(),
-            kwargs=None,
-            verbose=None)
+            name="grad_rcv_puller")
         self.grad_rcv_puller.start()
 
     def save_send_buffers(self, name):
@@ -153,7 +134,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                              is_activations,
                              requires_grad=False):
         """ This is just sending None sender, signaling her she can send """
-        if (not is_activations) and (not self.first_time_grads)
+        if (not is_activations) and (not self.first_time_grads):
             self.first_time_grads = True
         elif (not is_activations):
             return
