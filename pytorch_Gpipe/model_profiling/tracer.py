@@ -823,8 +823,11 @@ def _wrap_traced_layers(module: nn.Module, depth=1000, basic_blocks=()):
 
         if isinstance(sub_layer,(nn.ModuleList,nn.ModuleDict)):
             raise TypeError(f"tracing nn.ModuleList/nn.ModuleDict is not supported got {scope} of type {type(sub_layer)}")
+        
         if isinstance(sub_layer,(nn.ParameterList,nn.ParameterDict)):
-            raise TypeError(f"tracing nn.ParameterList/nn.ParameterDict is not supported got {scope} of type {type(sub_layer)}")
+            # it does not have a forward method so there is nothing to trace
+            # we register the parameters for tracing in record_free_floating_parameters_and_buffers
+            continue
 
         wrapper = TracedLayer(sub_layer,
                               scope.rsplit('/', maxsplit=1)[1],
@@ -1081,7 +1084,17 @@ def record_free_floating_parameters_and_buffers(module: nn.Module):
             module._parameters[name] = traced_t
         else:
             module._buffers[name] = traced_t
-
+    
+    #parameterList/Dict need a special case to ensure correct scope registration
+    # as they are modules but do not have a forward method
+    for name,c in module.named_children():
+        if isinstance(c,(nn.ParameterList,nn.ParameterDict)):
+            for p_name,p in c.named_parameters():
+                traced_p = TracedValue(NodeTypes.BUFF_PARAM,
+                               f"/{type(c).__name__}[{name}]/{type(p).__name__}[{p_name}]")
+                
+                traced_p.set_data(p)
+                c._parameters[p_name] = traced_p
     yield
 
     # NOTE TracedValue is currently unhashable so we cannot used named_parameters/buffers here
@@ -1092,6 +1105,12 @@ def record_free_floating_parameters_and_buffers(module: nn.Module):
             module._parameters[name] = t
         else:
             module._buffers[name] = t
+
+    #revert parameterList/Dict tracing
+    for name,c in module.named_children():
+        if isinstance(c,(nn.ParameterList,nn.ParameterDict)):
+            for p_name,p in c._parameters.items():
+                c._parameters[p_name] = p._data
 
 
 def record_non_terminal_output(out):
