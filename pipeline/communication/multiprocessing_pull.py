@@ -41,7 +41,7 @@ class RecvGradPullerThread(threading.Thread):
         torch.cuda.set_device(cm.device)  # needed for thread.
         ranks_dict_items = cm.grad_rcv_items
         while True:
-            batch_idx = cm.grad_rcv_tasks.get()
+            batch_idx, is_last_batch = cm.grad_rcv_tasks.get()
 
             request_objects = []
             for (tensor_name, receive_ranks) in ranks_dict_items:
@@ -69,7 +69,8 @@ class RecvGradPullerThread(threading.Thread):
                         t = x.to(cm.device)  # creates a new tensor!
                         event.record()
                 event.synchronize()
-                reuse_q.put(None)
+                if not is_last_batch:
+                    reuse_q.put(None)
                 request_objects.append(t)
                 # TODO: we expect request object os it has to be changed.
 
@@ -116,6 +117,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         self.grad_rcv_done_tasks = queue.Queue()
 
         self.start_threads()
+        self.self.first_time_grads = False
 
     def start_threads(self):
         self.grad_rcv_puller = RecvGradPullerThread(
@@ -151,6 +153,11 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                              is_activations,
                              requires_grad=False):
         """ This is just sending None sender, signaling her she can send """
+        if (not is_activations) and (not self.first_time_grads)
+            self.first_time_grads = True
+        elif (not is_activations):
+            return
+
         if is_activations:
             sending = self.receive_ranks
         else:
@@ -270,6 +277,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             # NOTE: this happends on the main stream FIXME?
             event = torch.cuda.Event(blocking=True)
             with torch.no_grad():
+                # with torch.cuda.stream(self.grad_rcv_stream)
                 t = x.clone()
                 event.record()
 
@@ -281,12 +289,14 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             # TODO: we expect request object os it has to be changed.
         return request_objects
 
-    def recv_activations(self, x, batch_idx):
+    def recv_activations(self, x, batch_idx, is_last_batch):
         return self._recv_tensors_p2p(x, batch_idx, self.receive_ranks.items(),
                                       True)
 
-    def recv_gradients(self, x, batch_idx):
-        return self._recv_tensors_p2p(x, batch_idx, self.grad_rcv_items, False)
+    def recv_gradients(self, x, batch_idx, is_last_batch):
+        self.grad_rcv_tasks.put((batch_idx, is_last_batch))
+        # grad_rcv_puller will do the job
+        return self.grad_rcv_done_tasks.get()
 
     def _send_tensors_p2p(self, x, batch_idx, ranks_dict_items, is_grad):
         torch.cuda.set_device(self.device)  # needed for thread.

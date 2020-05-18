@@ -411,7 +411,7 @@ class SinglePartitionManager:
         # TODO:
         last_due_end = batch_idx + 1 == num_batches
         self._ensure_fwd_send_buffers_size_set(last_due_end)
-        x = self.comm_handler.recv_activations(None, batch_idx)
+        x = self.comm_handler.recv_activations(None, batch_idx, last_due_end)
         x = self.comm_handler.fix_after_recv(x)
         x, *ctx = self.task.unpack_data_for_partition(x)
 
@@ -628,14 +628,14 @@ class SinglePartitionManager:
         self.partition.recompute(batch_idx)
 
         # NOTE: in MPI version there was hacky zero and sync here,,,
-        g = self.comm_handler.recv_gradients(None, batch_idx)
+        g = self.comm_handler.recv_gradients(None, batch_idx, last_due_end)
         g = self.comm_handler.fix_after_recv(g)
 
         # Allow skiping steps (Gradient aggregation)
         do_step, old_lrs = self.should_do_step(batch_idx)
 
         # also do step for the last. (but with smaller LR)
-        if not do_step and (batch_idx == (num_batches - 1)):
+        if not do_step and last_due_end:
             do_step = True
             old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
 

@@ -219,11 +219,11 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             # TODO: we expect request object os it has to be changed.
         return request_objects
 
-    def recv_activations(self, x, batch_idx):
+    def recv_activations(self, x, batch_idx, is_last_batch):
         return self._recv_tensors_p2p(x, batch_idx, self.receive_ranks.items(),
                                       True)
 
-    def recv_gradients(self, x, batch_idx):
+    def recv_gradients(self, x, batch_idx, is_last_batch):
         return self._recv_tensors_p2p(x, batch_idx, self.grad_rcv_items, False)
 
     def _send_tensors_p2p(self, x, batch_idx, ranks_dict_items, is_grad):
