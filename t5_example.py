@@ -5,7 +5,7 @@ import torch
 import operator
 import math
 from pytorch_Gpipe.model_profiling.tracer import trace_module,register_new_explicit_untraced_function,register_new_traced_function
-from pytorch_Gpipe import pipe_model,compile_partitioned_model
+from pytorch_Gpipe import pipe_model,compile_partitioned_model,GraphProfiler,execute_graph
 from heuristics import node_weight_function,edge_weight_function
 from pytorch_Gpipe.utils import layerDict,tensorDict,flatten
 import traceback
@@ -35,7 +35,7 @@ def nested_print(ts,indent=""):
         print(f"{indent}{ts.shape}")
 
 
-def check_equivalance(ref,our,kws,training=True,exp_prefix=""):
+def ensure_tracing_semantics_and_profiling(ref,our,input_kws,training=True,exp_prefix=""):
     register_new_explicit_untraced_function(operator.is_,operator)
     register_new_explicit_untraced_function(operator.is_not,operator)
     register_new_traced_function(math.log,math)
@@ -44,10 +44,10 @@ def check_equivalance(ref,our,kws,training=True,exp_prefix=""):
     ref.train(training)
     our.train(training)
     seed()
-    ref_out = list(flatten(ref(**kws)))
+    ref_out = list(flatten(ref(**input_kws)))
     
     seed()
-    out = list(flatten(our(**kws)))
+    out = list(flatten(our(**input_kws)))
     torch.cuda.synchronize()
     assert len(out) == len(ref_out)
 
@@ -62,23 +62,26 @@ def check_equivalance(ref,our,kws,training=True,exp_prefix=""):
         output_file = f"{exp_prefix}_depth{d}_{phase}"
         if os.path.exists(output_file+".py"):
             os.remove(output_file+".py")
-
-        graph = trace_module(our,kwargs=kws,depth=d)
+        
+        graph = trace_module(our,kwargs=input_kws,depth=d)
 
         compile_partitioned_model(graph,our,0,output_file=output_file)
 
         layers = layerDict(our,depth=d)
 
         generated=importlib.import_module(output_file).Partition0(layers,tensors)
+
+       #for some depth configs the use_cache flag will be built in 
         try:
             seed()
-            out = list(flatten(generated(*list(kws.values()))))
+            out = list(flatten(generated(*list(input_kws.values()))))
+            kws = input_kws
         except TypeError:
             seed()
-            kws = dict(kws.items())
+            kws = dict(input_kws.items())
             kws.pop("use_cache")
             out = list(flatten(generated(*list(kws.values()))))
-
+        
         torch.cuda.synchronize()
         assert len(out) == len(ref_out)
 
@@ -87,6 +90,17 @@ def check_equivalance(ref,our,kws,training=True,exp_prefix=""):
         
         os.remove(output_file+".py")
         print(f"{output_file} equivalent")
+
+        #ensure all profiling options work
+        if training:
+            for recomputation in [True,False]:
+                for profile_ops in [True,False]:
+                    profiler = GraphProfiler(recomputation=recomputation, n_iter=2, profile_ops=profile_ops)
+                    execute_graph(our, graph, model_args=(), model_kwargs=kws,
+                                pre_hook=profiler.time_forward, post_hook=profiler.time_backward)
+                    assert len(profiler.get_weights()) > 0
+            print(f"{output_file} can be profiled")
+
     print()
 
 
@@ -126,7 +140,7 @@ if __name__ == "__main__":
     lm_kwargs={"input_ids":input_ids,"decoder_input_ids":input_ids,"lm_labels":input_ids,"use_cache":True}
     kwargs = {"input_ids":input_ids,"decoder_input_ids":input_ids,"use_cache":True}
     print("tokenized input")
-
+    print()
     for base_transformer in [True,False]:
         for tied_weights in [True,False]:
             if base_transformer:
@@ -139,8 +153,8 @@ if __name__ == "__main__":
             prefix = "base_" if base_transformer else "full_"
             prefix+= "tied" if tied_weights else "untied"
             print(f"comparing {prefix}")
-            check_equivalance(ref_model,our_model,kwargs,training=True,exp_prefix=prefix)
-            check_equivalance(ref_model,our_model,kwargs,training=False,exp_prefix=prefix)
+            ensure_tracing_semantics_and_profiling(ref_model,our_model,inputs,training=True,exp_prefix=prefix)
+            ensure_tracing_semantics_and_profiling(ref_model,our_model,inputs,training=False,exp_prefix=prefix)
     
 
     
