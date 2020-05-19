@@ -8,7 +8,7 @@ import importlib
 from misc import run_analysis, run_partitions
 import sys
 from heuristics import edge_weight_function, node_weight_function
-from partition_scripts_utils import ParseMetisOpts, ParsePartitioningOpts, record_cmdline, run_x_tries_until_no_fail
+from partition_scripts_utils import ParseMetisOpts, ParsePartitioningOpts, record_cmdline, run_x_tries_until_no_fail,choose_blocks
 import functools
 from partition_async_pipe import AsyncPipePartitioner
 
@@ -187,6 +187,7 @@ if __name__ == "__main__":
         model,
         batch_dim,
         sample,
+        basic_blocks = choose_blocks(model,args),
         depth=args.depth,
         kwargs=None,
         nparts=n_partitions,

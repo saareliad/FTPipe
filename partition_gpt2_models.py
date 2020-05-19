@@ -32,7 +32,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset, RandomSampler
 import warnings
 import sys
-from partition_scripts_utils import ParseMetisOpts, ParsePartitioningOpts, record_cmdline, run_x_tries_until_no_fail
+from partition_scripts_utils import ParseMetisOpts, ParsePartitioningOpts, record_cmdline, run_x_tries_until_no_fail,choose_blocks
 from heuristics import edge_weight_function, node_weight_function
 from transformers import (
     BertConfig,
@@ -267,6 +267,7 @@ def partition_model(args,
         model,
         batch_dim,
         sample,
+        basic_blocks=choose_blocks(model,args),
         depth=args.depth,
         n_iter=args.n_iter,
         nparts=args.n_partitions,
@@ -542,6 +543,7 @@ def parse_cli():
                         default=10000,
                         type=int,
                         help="the depth in which we will partition the model")
+    parser.add_argument('--basic_blocks', nargs='*')
     parser.add_argument(
         "--use_graph_profiler", default=False, action="store_true",
         help="wether to use the new graph based profiler or the old network_profiler,"

@@ -70,6 +70,7 @@ class ParsePartitioningOpts:
             default=10000,
             type=int,
             help="the depth in which we will partition the model")
+        parser.add_argument('--basic_blocks', nargs='*')
         parser.add_argument(
             "--use_graph_profiler", default=False, action="store_true",
             help="wether to use the new graph based profiler or the old network_profiler,"
@@ -196,6 +197,17 @@ class ParseMetisOpts:
         #  'ufactor': -1,
         #  '_dbglvl': -1,
         #  }
+
+
+
+def choose_blocks(model,args):
+    blocks=dict()
+
+    for m in model.modules():
+        block = type(m)
+        blocks[block.__name__] = block
+
+    return tuple([blocks[name] for name in args.basic_blocks])
 
 
 def prepend_line(filename, line):

@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader, RandomSampler
 
 from models.normal import BertForQuestionAnswering
 from models.normal.NLP_models.modeling_bert import SQUAD_loss
-from partition_scripts_utils import ParsePartitioningOpts, ParseMetisOpts, record_cmdline
+from partition_scripts_utils import ParsePartitioningOpts, ParseMetisOpts, record_cmdline,choose_blocks
 from heuristics import node_weight_function, edge_weight_function
 from misc import run_analysis
 from pytorch_Gpipe import PipelineConfig, pipe_model
@@ -386,6 +386,7 @@ def main():
     graph = pipe_model(model,
                        batch_dim,
                        sample,
+                       basic_blocks=choose_blocks(model,args),
                        depth=args.depth,
                        kwargs=None,
                        nparts=n_partitions,
