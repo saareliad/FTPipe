@@ -4,6 +4,8 @@ import os
 import logging
 import importlib
 import sys
+import math
+import operator
 from torch.utils.data import DataLoader, RandomSampler
 
 from models.normal import BertForQuestionAnswering
@@ -12,6 +14,7 @@ from partition_scripts_utils import ParsePartitioningOpts, ParseMetisOpts, recor
 from heuristics import node_weight_function, edge_weight_function
 from misc import run_analysis
 from pytorch_Gpipe import PipelineConfig, pipe_model
+from pytorch_Gpipe.model_profiling import register_new_traced_function,register_new_explicit_untraced_function
 from pytorch_Gpipe.utils import layerDict, tensorDict
 
 from transformers import (
@@ -375,6 +378,10 @@ def main():
     # Partition the model
     # partition_model(args, train_dataset, model, tokenizer, METIS_opt=METIS_opt)
     GET_PARTITIONS_ON_CPU = True
+    register_new_explicit_untraced_function(operator.is_,operator)
+    register_new_explicit_untraced_function(operator.is_not,operator)
+    register_new_traced_function(math.sqrt,math)
+    
 
     n_iter = args.n_iter
     recomputation = not args.no_recomputation
