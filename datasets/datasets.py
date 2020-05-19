@@ -127,7 +127,7 @@ class MyNewDistributedSampler(DistributedSampler):
         g = torch.Generator()
         # My only change
         g.manual_seed(
-            (self.epoch * self.experiment_manual_seed) % self.MAX_INT)
+            ((1 + self.epoch) * self.experiment_manual_seed) % self.MAX_INT)
         if self.shuffle:
             indices = torch.randperm(len(self.dataset), generator=g).tolist()
         else:
