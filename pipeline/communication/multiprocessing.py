@@ -205,7 +205,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                         p = q.get()
                         self.rcv_shared_parameters[tensor_name] = p
                         request_objects.append(p)
-                continue
+                    continue
             if self.verbose:
                 tensor_tag = self.tensor_tags[tensor_name] + \
                     (self.TOTAL_TAGS * batch_idx)
