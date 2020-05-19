@@ -613,25 +613,24 @@ def cuda_backward(partition,
     '''
     # now we move inputs to GPU
     # with torch.no_grad():
-    # explicit detach_ to not record the cpu->gpu transfer
+    # NOTE: we do not record the cpu->gpu transfer,
+    # after the detach() ops are not recorded.
     inputs = [
-        i.to('cuda').detach_().requires_grad_(inputs_requires_grad
-                                              and i.is_floating_point())
+        i.detach().to('cuda').requires_grad_(inputs_requires_grad
+                                             and i.is_floating_point())
         for i in inputs
     ]
     # Pre infer, so it won't get stuck in the the record.
     grad_tensors = infer_grad_tensors_for_partition(partition, inputs)
     # TODO: maybe clear GPU cache here?
     # However in re-computation it may be in cash alreay.
-
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
-    # synchronize to not transfer times
-    # and include infer_grad_tensors_for_partition
-    # in the measurement
-    torch.cuda.synchronize(device='cuda')
-
+    # Time measurement:
+    # sync --> compute --> sync
+    # for both options nothing extra is recorded.
     if recomputation:
+        torch.cuda.synchronize(device='cuda')
         start.record()
         outputs = partition(*inputs)
         flattened_outputs = flatten(outputs)
@@ -640,17 +639,13 @@ def cuda_backward(partition,
         flattened_outputs = flatten(outputs)
         torch.cuda.synchronize(device='cuda')
         start.record()
-
     # compute gradient only for outputs that require grad
     flattened_outputs = filter(lambda t: t.requires_grad, flattened_outputs)
-
     torch.autograd.backward(tensors=flattened_outputs,
                             grad_tensors=grad_tensors)
-
     end.record()
     torch.cuda.synchronize(device='cuda')
     b_time = (start.elapsed_time(end))
-
     return b_time
 
 
@@ -684,7 +679,6 @@ def cpu_time(partition,
     f_time, outputs = cpu_forward(partition,
                                   inputs,
                                   recomputation=recomputation)
-
     return f_time, b_time, outputs
 
 
@@ -695,7 +689,6 @@ def cpu_forward(partition, inputs, recomputation=True):
         outputs = partition(*inputs)
         end = time.time()
         f_time = 1000 * (end - start)
-
     return f_time, outputs
 
 
@@ -704,25 +697,22 @@ def cpu_backward(partition,
                  recomputation=True,
                  inputs_requires_grad=False):
     inputs = [
-        i.cpu().requires_grad_(inputs_requires_grad and i.is_floating_point())
+        i.detach().cpu().requires_grad_(inputs_requires_grad
+                                        and i.is_floating_point())
         for i in inputs
     ]
     grad_tensors = infer_grad_tensors_for_partition(partition, inputs)
-
     start = time.time()
     outputs = partition(*inputs)
     flattened_outputs = flatten(outputs)
     if not recomputation:
         start = time.time()
-
     # compute gradient only for outputs that require grad
     flattened_outputs = filter(lambda t: t.requires_grad, flattened_outputs)
-
     torch.autograd.backward(tensors=flattened_outputs,
                             grad_tensors=grad_tensors)
     end = time.time()
     b_time = 1000 * (end - start)
-
     return b_time
 
 
@@ -918,32 +908,24 @@ def expected_speedup_compared_to_seq(pipe_times, seq_times):
 
     # Unpack: pipe
     # NOTE: its a dict
-
     (fwd_times, bwd_times, fwd_times_wo_comm, bwd_times_wo_comm) = pipe_times
 
     # Unpack: seq
     # NOTE: its sum of values
-
     ((b_seq_no_recomp_no_comm_times, f_seq_no_recomp_no_comm_times),
      (b_seq_no_recomp_with_comm_times,
       f_seq_no_recomp_with_comm_times)) = seq_times
 
     # pipe:
-    n_partitions = len(fwd_times)
     worst_fwd = max(fwd_times.values())
     worst_bwd = max(bwd_times.values())
     pipe_fwd_plus_bwd = worst_fwd + worst_bwd
-    # pipe_fwd_plus_bwd /= n_partitions  # steady state.
 
     # seq:
     seq_fwd_plus_bwd = f_seq_no_recomp_no_comm_times + b_seq_no_recomp_no_comm_times
 
     expected_speedup = seq_fwd_plus_bwd / pipe_fwd_plus_bwd
-
     return expected_speedup
-
-    # worst_fwd = max(fwd_times.values())
-    # worst_bwd = max(bwd_times.values())
 
 
 def worst_balance(times):
