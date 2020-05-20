@@ -50,7 +50,10 @@ def parse_distributed_cli(parser):
 
 
 def parse_multiprocessing_cli(parser):
-    parser.add_argument("--pipeline_num_processes", type=int, default=4, help="Tells us how much processes do we want")
+    parser.add_argument("--pipeline_num_processes",
+                        type=int,
+                        default=4,
+                        help="Tells us how much processes do we want")
 
     # for Debug
     parser.add_argument("--verbose_comm", action="store_true")
@@ -107,12 +110,13 @@ def parse_cli():
                         default='./logs',
                         help="where logs and events go")
 
-    parser.add_argument('--out_dir',
-                        '-o',
-                        type=str,
-                        help='Output folder for results',
-                        default='./results',
-                        )
+    parser.add_argument(
+        '--out_dir',
+        '-o',
+        type=str,
+        help='Output folder for results',
+        default='./results',
+    )
 
     parser.add_argument('--data_dir',
                         type=str,
@@ -136,25 +140,27 @@ def parse_cli():
                         help='Number of workers to use for dataloading',
                         default=0)
 
-    parser.add_argument("--epochs",
-                        type=int,
-                        help="Training epochs to run",
-                        default=-1,
-                        )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        help="Training epochs to run",
+        default=-1,
+    )
 
-    parser.add_argument("--steps",
-                        type=int,
-                        help="Training steps to run",
-                        default=-1,
-                        )
-    parser.add_argument("--step_every",
-                        type=int,
-                        help="Aggregation steps",
-                        default=1,
-                        )
+    parser.add_argument(
+        "--steps",
+        type=int,
+        help="Training steps to run",
+        default=-1,
+    )
+    parser.add_argument(
+        "--step_every",
+        type=int,
+        help="Aggregation steps",
+        default=1,
+    )
 
-    parser.add_argument("--step_every_from_cmd",
-                        action="store_true")
+    parser.add_argument("--step_every_from_cmd", action="store_true")
 
     parser.add_argument("--num_chunks",
                         help="Number of chunks for Double Buffering",
@@ -251,31 +257,6 @@ def save_distributed_experiment(statistics, args, world_size, rank, local_rank,
         torch.distributed.barrier()
 
 
-def start_mutiprocessing():
-    args = parse_cli()
-    parse_json_config(args, args.config, first=True)
-
-    args.world_size = args.pipeline_num_processes
-
-    # TODO: create queus for communication
-    rcv_queues = mp_queue_matrix(args.world_size)
-    buffer_reuse_queues = mp_queue_matrix(args.world_size)
-
-    share = (rcv_queues, buffer_reuse_queues)
-    processes = []
-    for rank in range(args.pipeline_num_processes):
-        # TODO: for some cases - share parameters.
-        # TODO: support multiple nodes
-        local_rank = rank
-        p = mp.Process(target=multiprocessing_worker,
-                       args=(rank, local_rank, args, share))
-        # We first train the model across `num_processes` processes
-        p.start()
-        processes.append(p)
-    for p in processes:
-        p.join()
-
-
 def mp_queue_matrix(world_size):
     # create queues matrix.
     # rcv_queues[i][j] : proc i rcevs from proc j
@@ -289,7 +270,8 @@ def mp_queue_matrix(world_size):
     return queues
 
 
-def multiprocessing_worker(rank, local_rank, args, share):
+def multiprocessing_worker(rank, args, share):
+    local_rank = rank
     args.rank = rank
     args.local_rank = local_rank
     args.is_multiprocessing_worker = True
@@ -310,6 +292,8 @@ def multiprocessing_worker(rank, local_rank, args, share):
                                          world_size=args.world_size)
 
     main(args, share)
+    # import sys
+    # sys.exit(0)
 
 
 def start_distributed():
@@ -336,6 +320,7 @@ def main(args, shared_ctx=None):
         print(f"-I- rank {args.rank} waiting for attachment on {address}")
         ptvsd.enable_attach(address=address)
         ptvsd.wait_for_attach()
+
     else:
         delattr(args, "debug")
 
@@ -387,8 +372,27 @@ def main(args, shared_ctx=None):
     # Synchronize and save statistics from all partitions
     save_distributed_experiment(statistics, args, args.world_size, args.rank,
                                 args.local_rank, args.stage)
-    torch.distributed.destroy_process_group()
+    # torch.distributed.destroy_process_group()
 
+
+def start_mutiprocessing():
+    args = parse_cli()
+    parse_json_config(args, args.config, first=True)
+    args.world_size = args.pipeline_num_processes
+
+    # create queus for communication
+    rcv_queues = mp_queue_matrix(args.world_size)
+    buffer_reuse_queues = mp_queue_matrix(args.world_size)
+    share = (rcv_queues, buffer_reuse_queues)
+    
+    args.num_data_workers = 0
+
+    mp.start_processes(multiprocessing_worker,
+                       args=(args, share),
+                       nprocs=args.pipeline_num_processes,
+                       join=True,
+                       daemon=False,
+                       start_method='fork')
 
 if __name__ == "__main__":
     # TODO set OMP_NUM_THREADS automatically
