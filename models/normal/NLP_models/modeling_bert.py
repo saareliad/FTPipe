@@ -379,9 +379,10 @@ class BertEncoder(nn.Module):
     def forward(self, hidden_states, attention_mask=None, head_mask=None):
         for i in range(self.num_layers):
             layer_module = getattr(self, str(i))
+            cur_head_mask = None if is_None(head_mask) else head_mask[i]
             hidden_states = layer_module(hidden_states,
                                             attention_mask=attention_mask, 
-                                            head_mask=head_mask[i])
+                                            head_mask=cur_head_mask)
         return hidden_states
 
 
@@ -892,8 +893,6 @@ class BertModel(BertPreTrainedModel):
                 head_mask = head_mask.unsqueeze(1).unsqueeze(-1).unsqueeze(-1)
             # switch to fload if need + fp16 compatibility
             head_mask = head_mask.to(dtype=next(self.parameters()).dtype)
-        else:
-            head_mask = [None] * self.config.num_hidden_layers
 
         embedding_output = self.embeddings(
             input_ids, position_ids=position_ids, token_type_ids=token_type_ids)
