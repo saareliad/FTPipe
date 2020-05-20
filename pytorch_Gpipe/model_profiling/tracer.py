@@ -724,6 +724,28 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
 
     return Graph(nodes, input_kw_ids, output_ids, depth, basic_blocks)
 
+def find_reachable_nodes(nodes,output_id):
+    '''do a bfs from the output on the undirected graph to find all nodes that are 
+    reachable from the output node
+    '''
+    open = {nodes[output_id]}
+    reachable=set()
+
+    while open:
+        node = open.pop()
+
+        if node in reachable:
+            continue
+        
+        open.update(node.in_edges,node.out_edges)
+
+        reachable.add(node)
+
+
+    return reachable
+        
+        
+
 
 def prepare_args_and_kwargs(args=(), kwargs=None):
     # NOTE we cannot use record_args_and_kwargs
@@ -861,6 +883,8 @@ def reset_tracing_state():
 
 def discard_unused_nodes(nodes,output_id):
     new_nodes = []
+    
+    reachable_nodes = find_reachable_nodes(nodes,output_id)
 
     for node_id in reversed(range(len(nodes))):
         node = nodes[node_id]
@@ -881,7 +905,9 @@ def discard_unused_nodes(nodes,output_id):
 
         unused_constant_or_input = (node.type in [NodeTypes.IN,NodeTypes.CONSTANT]) and (len(node.out_edges) == 0)
 
-        if unused_branch or iter_sentinel or unused_constant_or_input: 
+        unreachable = node not in reachable_nodes
+
+        if unused_branch or iter_sentinel or unused_constant_or_input or unreachable: 
             assert len(
                 node.out_edges) == 0, "unused traced value should not have outgoing edges"
 
