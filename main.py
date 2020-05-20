@@ -385,8 +385,6 @@ def start_mutiprocessing():
     buffer_reuse_queues = mp_queue_matrix(args.world_size)
     share = (rcv_queues, buffer_reuse_queues)
     
-    args.num_data_workers = 0
-
     mp.start_processes(multiprocessing_worker,
                        args=(args, share),
                        nprocs=args.pipeline_num_processes,
