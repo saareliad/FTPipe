@@ -33,13 +33,14 @@ class BCASTCommunicationHandler(SimpleCommBase):
             # tensor.detach_()  # RuntimeError: Can't detach views in-place. Use detach() instead
             # FIXME: see https://github.com/pytorch/pytorch/issues/25814
             # (its problematic with the tensor.grad, which we plan to avoid anyway.)
-            if is_grad:
-                with torch.no_grad():
-                    # FIXME: what is this...
-                    tensor = tensor.clone().detach_()
-            else:
-                tensor.detach_()
+            # if is_grad:
+            #     with torch.no_grad():
+            #         # FIXME: what is this...
+            #         tensor = tensor.clone().detach_()
+            # else:
+            #     tensor.detach_()
 
+            tensor = tensor.detach()
             if self.verbose:
                 self.logger.info(
                     f"ibcast, (send) src={self.local_rank}, batch_idx={batch_idx}")
