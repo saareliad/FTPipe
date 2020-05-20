@@ -4,14 +4,19 @@ import os
 import logging
 import importlib
 import sys
+import math
+import operator
+import functools
 from torch.utils.data import DataLoader, RandomSampler
 
 from models.normal import BertForQuestionAnswering
 from models.normal.NLP_models.modeling_bert import SQUAD_loss
-from partition_scripts_utils import ParsePartitioningOpts, ParseMetisOpts, record_cmdline,choose_blocks
+from partition_scripts_utils import ParsePartitioningOpts, ParseMetisOpts, record_cmdline,choose_blocks,run_x_tries_until_no_fail
+from partition_async_pipe import AsyncPipePartitioner
 from heuristics import node_weight_function, edge_weight_function
 from misc import run_analysis
 from pytorch_Gpipe import PipelineConfig, pipe_model
+from pytorch_Gpipe.model_profiling import register_new_traced_function,register_new_explicit_untraced_function
 from pytorch_Gpipe.utils import layerDict, tensorDict
 
 from transformers import (
@@ -375,6 +380,10 @@ def main():
     # Partition the model
     # partition_model(args, train_dataset, model, tokenizer, METIS_opt=METIS_opt)
     GET_PARTITIONS_ON_CPU = True
+    register_new_explicit_untraced_function(operator.is_,operator)
+    register_new_explicit_untraced_function(operator.is_not,operator)
+    register_new_traced_function(math.sqrt,math)
+    
 
     n_iter = args.n_iter
     recomputation = not args.no_recomputation
@@ -382,30 +391,48 @@ def main():
     n_partitions = args.n_partitions
     batch_dim = 0
     bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
+    
     print("-I- partitioning...")
-    graph = pipe_model(model,
-                       batch_dim,
-                       sample,
-                       basic_blocks=choose_blocks(model,args),
-                       depth=args.depth,
-                       kwargs=None,
-                       nparts=n_partitions,
-                       output_file=args.output_file,
-                       generate_model_parallel=args.generate_model_parallel,
-                       use_layers_only_graph=True,
-                       use_graph_profiler=args.use_graph_profiler,
-                       use_network_profiler=not args.use_graph_profiler,
-                       profile_ops=args.profile_ops,
-                       generate_explicit_del=args.generate_explicit_del,
-                       node_weight_function=node_weight_function(
-                           bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-                       edge_weight_function=edge_weight_function(
-                           bw, bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-                       n_iter=n_iter,
-                       recomputation=recomputation,
-                       save_memory_mode=args.save_memory_mode,
-                       METIS_opt=METIS_opt)
+    partial_pipe_model = functools.partial(
+        pipe_model,
+        model,
+        batch_dim,
+        sample,
+        basic_blocks=choose_blocks(model,args),
+        depth=args.depth,
+        n_iter=args.n_iter,
+        nparts=args.n_partitions,
+        node_weight_function=node_weight_function(
+            bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+        edge_weight_function=edge_weight_function(
+            args.bw,
+            bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+        use_layers_only_graph=True,
+        use_graph_profiler=args.use_graph_profiler,
+        use_network_profiler=not args.use_graph_profiler,
+        profile_ops=args.profile_ops,
+        output_file=args.output_file,
+        generate_model_parallel=args.generate_model_parallel,
+        generate_explicit_del=args.generate_explicit_del,
+        save_memory_mode=args.save_memory_mode,
+        recomputation=recomputation,
+        METIS_opt=METIS_opt)
 
+    if args.async_pipeline and (not args.no_recomputation):
+        print("using async partitioner")
+        async_pipe_partitioner = AsyncPipePartitioner(model, args.output_file,
+                                                      partial_pipe_model)
+
+        graph = run_x_tries_until_no_fail(
+            async_pipe_partitioner.partition,
+            10,
+            # force_no_recomp_scopes=force_no_recomputation_fn,
+            allowed_mistakes=0)
+
+        # graph = async_pipe_partitioner.partition(
+        #     force_no_recomp_scopes=force_no_recomputation_fn, allowed_mistakes=0)
+    else:
+        graph = partial_pipe_model()
     if args.dot:
         graph.save_as_pdf(args.output_file, ".")
         graph.serialize(args.output_file)
