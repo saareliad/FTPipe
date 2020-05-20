@@ -1,12 +1,13 @@
 
 import os
 import torch
-from torch.utils.data import Dataset, DistributedSampler, RandomSampler, SequentialSampler, DataLoader
+from torch.utils.data import Dataset, RandomSampler, SequentialSampler, DataLoader  # DistributedSampler
 import pickle
 from transformers import PreTrainedTokenizer
 from torch.nn.utils.rnn import pad_sequence
 from typing import List, Tuple
 from .hardcoded_dirs import DEFAULT_DATA_DIR
+import functools
 
 
 class TextDataset(Dataset):
@@ -59,18 +60,16 @@ class TextDataset(Dataset):
     def __getitem__(self, item):
         return torch.tensor(self.examples[item])
 
-
-
 ################
 # Transforms
 ################
-
-
 # NOTE: This is like a "transform", Should be used straight in the dataset,
 # so the dataloader will handle this.
 # NOTE: we also provide 2 more functions just for inputs/labels
 # Adapted from https://github.com/huggingface/transformers/blob/master/examples/run_language_modeling.py
 # commit_id: f54a5bd37f99e3933a396836cb0be0b5a497c077
+
+
 def mask_tokens(inputs: torch.Tensor,
                 tokenizer: PreTrainedTokenizer,
                 mlm_probability=0.15,
@@ -221,11 +220,9 @@ def mask_tokens_just_labels(inputs: torch.Tensor,
     return labels  # NOTE: returning just labels.
 
 
-
 ################
 # Get DS
 ################
-
 def get_wikitext2_raw_train_valid_test_ds(
         model_name_or_path,
         tokenizer,
@@ -325,19 +322,17 @@ def get_wikitext2_raw_test_ds(model_name_or_path,
 ################
 # Get DL
 ################
+def lm_collate(tokenizer, examples: List[torch.Tensor]):
+    if tokenizer._pad_token is None:
+        return pad_sequence(examples, batch_first=True)
+    return pad_sequence(examples,
+                        batch_first=True,
+                        padding_value=tokenizer.pad_token_id)
 
 
 def lm_collate_factory(tokenizer):
     assert tokenizer is not None
-
-    def lm_collate(examples: List[torch.Tensor]):
-        if tokenizer._pad_token is None:
-            return pad_sequence(examples, batch_first=True)
-        return pad_sequence(examples,
-                            batch_first=True,
-                            padding_value=tokenizer.pad_token_id)
-
-    return lm_collate
+    return functools.partial(lm_collate, tokenizer)
 
 
 def get_lm_train_dl(ds_train,
