@@ -57,14 +57,15 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         # Buffer per target
         self.send_buffers = dict()  # { tensor_name: { rank: buff } }
         self.send_buffers_versions = {}
+        # self.send_buffers_on_the_fly = dict()
 
         # self.pool_send_act = ThreadPool(processes=1)
         # self.pool_send_grad = ThreadPool(processes=1)
-        
 
-        self.pool_send_act = concurrent.futures.ThreadPoolExecutor(1, initializer=torch.cuda.set_device, initargs=(self.device,))
-        self.pool_send_grad = concurrent.futures.ThreadPoolExecutor(1)
-
+        self.pool_send_act = concurrent.futures.ThreadPoolExecutor(
+            1, initializer=torch.cuda.set_device, initargs=(self.device, ))
+        self.pool_send_grad = concurrent.futures.ThreadPoolExecutor(
+            1, initializer=torch.cuda.set_device, initargs=(self.device, ))
 
     def save_send_buffers(self, name):
         self.send_buffers_versions[name] = self.send_buffers
@@ -96,6 +97,8 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             if is_activations:
                 is_parameter = is_shared_parameter(tensor_name)
                 if is_parameter:
+                    # if tensor_name not in self.send_shared_parameters:
+                    # TODO: avoid double send
                     self.send_shared_parameters[tensor_name] = set()
                     continue
 
@@ -120,6 +123,8 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             if is_activations:
                 is_parameter = is_shared_parameter(tensor_name)
                 if is_parameter:
+                    # if tensor_name not in self.send_shared_parameters:
+                    # TODO: avoid double send
                     self.send_shared_parameters[tensor_name] = set()
                     continue
 
@@ -146,20 +151,11 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             self.send_buffers[tensor_name] = d
 
     def create_activations_send_buffers(self, requires_grad=False):
-        tensor_names = self.send_ranks.keys()
-        print(40 * "-")
-        print("create_activations_send_buffers for", tensor_names)
-        print(40 * "-")
         return self._create_send_buffers(self.send_ranks,
                                          is_activations=True,
                                          requires_grad=requires_grad)
 
     def create_gradients_send_buffers(self, requires_grad=False):
-        tensor_names = self.grad_send_dict.keys()
-        print(40 * "-")
-        print("create_gradients_send_buffers for", tensor_names)
-        print(40 * "-")
-
         return self._create_send_buffers(self.grad_send_dict,
                                          is_activations=False,
                                          requires_grad=requires_grad)
@@ -170,11 +166,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                                          requires_grad=requires_grad)
 
     def create_gradients_rcv_buffers(self, *args, requires_grad=False):
-        tensor_names = self.grad_rcv_dict.keys()
-        # print(40*"-")
-        # print("create_gradients_rcv_buffers for", tensor_names)
-        # print(40*"-")
-        return self._create_recv_buffers(tensor_names,
+        return self._create_recv_buffers(self.grad_rcv_dict.keys(),
                                          is_activations=False,
                                          requires_grad=requires_grad)
 
@@ -195,30 +187,28 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             if is_activations:
                 is_parameter = is_shared_parameter(tensor_name)
                 if is_parameter:
+                    # we don't use a reuse queue.
                     if tensor_name in self.rcv_shared_parameters:
-                        # read from dict
-                        request_objects.append(
-                            self.rcv_shared_parameters[tensor_name])
+                        # from dict
+                        p = self.rcv_shared_parameters[tensor_name]
                     else:
                         # recv first time
-                        # save in dict
                         p = q.get()
                         self.rcv_shared_parameters[tensor_name] = p
-                        request_objects.append(p)
+                    request_objects.append(p)
                     continue
             if self.verbose:
                 tensor_tag = self.tensor_tags[tensor_name] + \
                     (self.TOTAL_TAGS * batch_idx)
                 self.logger.info(
-                    f"q.get(), src={receive_rank}, tag={tensor_tag}, name={tensor_name}, rank={self.local_rank}"
+                    f"rank={self.local_rank}: q.get(), src={receive_rank}, tag={tensor_tag}, name={tensor_name}"
                 )
 
             x = q.get()
             if is_activations:
+                assert list(x.shape) == self.tensor_shapes[tensor_name], (
+                    tensor_name, x.shape, self.tensor_shapes[tensor_name])
 
-                assert list(x.shape) == self.tensor_shapes[tensor_name], (tensor_name,x.shape,self.tensor_shapes[tensor_name])
-            
-            
             # give the next buffer
             # FIXME: un-optimized clones
             # NOTE: this happends on the main stream FIXME?
@@ -226,8 +216,9 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             with torch.no_grad():
                 t = x.clone()
                 event.record()
-            
+
             reuse_q = self.buffer_reuse_queues[receive_rank][self.rank]
+            # sync clone event
             event.synchronize()
             reuse_q.put(None)  # TODO:
 
@@ -248,27 +239,20 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
 
         prev_work_event = torch.cuda.Event(blocking=True)
         prev_work_event.record()
+        stream = self.grad_send_stream if is_grad else self.acti_send_stream
+        with torch.cuda.stream(stream):
+            prev_work_event.wait()
         with torch.no_grad():
             for tensor, (tensor_name, send_ranks) in zip(x, ranks_dict_items):
                 # tag for minibatch idx too
 
                 if isinstance(tensor, torch.nn.Parameter):
-                    tensor.share_memory_()
                     for send_rank in send_ranks:
                         if tensor_name not in self.send_shared_parameters or send_rank not in self.send_shared_parameters[
                                 tensor_name]:
-                            # print("sending parameter!", tensor)
-                            stream = self.grad_send_stream if is_grad else self.acti_send_stream
-                            with torch.cuda.stream(stream):
-                                prev_work_event.wait()
-                                out_q = self.rcv_queues[send_rank][self.rank]
-                                event = torch.cuda.Event(blocking=True)
-                                stream.record_event(event)
-                                request_objects.append(event)
-                                # stream.wait_event(event)  # FIXME
-                                # stream.synchronize()
-                                event.synchronize()
-                                out_q.put(tensor)
+                            tensor.share_memory_()
+                            out_q = self.rcv_queues[send_rank][self.rank]
+                            out_q.put(tensor)
                             self.send_shared_parameters[tensor_name].add(
                                 send_rank)
                     continue
@@ -280,82 +264,112 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                 for send_rank in send_ranks:
                     buff_q = my_buff_reuse_queues[send_rank]
                     buff_q.get()  # Synch with reciever we can use it.
-
-                    stream = self.grad_send_stream if is_grad else self.acti_send_stream
                     with torch.cuda.stream(stream):
-                        prev_work_event.wait()
-                        # TODO: order of buffers
-                        # NOTE: we waste some memory,
-                        # can just write stright to the buffer in the partition
                         out_q = self.rcv_queues[send_rank][self.rank]
                         buff = send_buffers[send_rank]
-                        assert tensor.shape == buff.shape,(tensor.shape, buff.shape)
+                        buff = tensor.to(buff.device)
+                        send_buffers[send_rank] = buff
+                        # if tensor.is_contiguous() and tensor.shape == buff.shape:
+                        #     buff.copy_(tensor)
+                        # else:
+                        #     buff = tensor.to(buff.device)
+                        #     # TODO: maybe save to avoid this later
+                        #     # send_buffers[send_rank] = buff
 
-                        buff.copy_(tensor)
-                        # FIXME: can do it in a thread.
+                        
+                        # assert tensor.shape == buff.shape, (tensor.shape,
+                        #                                     buff.shape)
+                        # buff.copy_(tensor)  # FIXME contigous
+
+                        # pass to next process only when the copy is done
                         event = torch.cuda.Event(blocking=True)
                         stream.record_event(event)
-                        stream.wait_event(event)  # FIXME
                         event.synchronize()
-                        # stream.synchronize()
                         out_q.put(buff)
 
                     if self.verbose:
                         tensor_tag = self.tensor_tags[tensor_name] + (
                             self.TOTAL_TAGS * batch_idx)
                         self.logger.info(
-                            f"copy_(), dst={send_rank}, tag={tensor_tag}, name={tensor_name}, rank={self.rank}"
+                            f"rank={self.rank}: done copy_(), dst={send_rank}, tag={tensor_tag}, name={tensor_name}"
                         )
 
         return request_objects
 
     def send_activations(self, x, batch_idx):
 
+        ########## Thread for each ##########
         # t = threading.Thread(target=self._send_tensors_p2p, args=(x, batch_idx, self.send_ranks.items(), False))
         # t.start()
         # return t
-        # FIXME...
+        ####################################
+
+        ########## pool ##########
+        # # FIXME...
         class Foo:
             def __init__(self, future):
                 self.future = future
 
             def join(self):
-                print(self.future.result())
+                self.future.result()
 
-        future = self.pool_send_act.submit(self._send_tensors_p2p, x, batch_idx, self.send_ranks.items(), False)
+        future = self.pool_send_act.submit(self._send_tensors_p2p, x,
+                                           batch_idx, self.send_ranks.items(),
+                                           False)
         t = Foo(future)
         # t.join()
 
         return t
-        
 
-
-        # self.pool_send_act.apply_async(
-        #     self._send_tensors_p2p,
-        #     (x, batch_idx, self.send_ranks.items(), False))
-
-        # return self._send_tensors_p2p(x, batch_idx, self.send_ranks.items(),
-        #                               False)
-
-    def send_gradients(self, x, batch_idx):
-
-        t = threading.Thread(target=self._send_tensors_p2p, args=(x, batch_idx, self.grad_send_items, True))
-        t.start()
-        # t.join()
-        return t
-
+        # ####################################
+        # # sequential:
 
         # class Fooo():
         #     @staticmethod
         #     def join():
         #         pass
-        # t = Fooo
-        # self._send_tensors_p2p(x, batch_idx, self.grad_send_items, True)
+
+        # self._send_tensors_p2p(x, batch_idx, self.send_ranks.items(), False)
+        # return Fooo
+        # ####################################
+
+        # self.pool_send_act.apply_async(
+        #     self._send_tensors_p2p,
+        #     (x, batch_idx, self.send_ranks.items(), False))
+        ####################################
+
+    def send_gradients(self, x, batch_idx):
+
+        # t = threading.Thread(target=self._send_tensors_p2p, args=(x, batch_idx, self.grad_send_items, True))
+        # t.start()
+        # # t.join()
         # return t
 
+        class Foo:
+            def __init__(self, future):
+                self.future = future
+
+            def join(self):
+                self.future.result()
+
+        future = self.pool_send_grad.submit(self._send_tensors_p2p, x,
+                                            batch_idx, self.grad_send_items,
+                                            True)
+        t = Foo(future)
+        # t.join()
+
+        return t
+        ############################### seq
+        # class Fooo():
+        #     @staticmethod
+        #     def join():
+        #         pass
+
+        # self._send_tensors_p2p(x, batch_idx, self.grad_send_items, True)
+        # return Fooo
+        #################################
 
         # return self._send_tensors_p2p(x, batch_idx, self.grad_send_items, True)
 
         # self.pool_send_grad.apply_async(
         #     self._send_tensors_p2p, (x, batch_idx, self.grad_send_items, True))
-
