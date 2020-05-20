@@ -255,6 +255,7 @@ def save_distributed_experiment(statistics, args, world_size, rank, local_rank,
                                 fit_res)
 
         torch.distributed.barrier()
+    print(f"rank{rank}: save_distributed_experiment - Done")
 
 
 def mp_queue_matrix(world_size):
@@ -391,6 +392,7 @@ def start_mutiprocessing():
                        join=True,
                        daemon=False,
                        start_method='fork')
+
 
 if __name__ == "__main__":
     # TODO set OMP_NUM_THREADS automatically

@@ -140,6 +140,8 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
 
             d = {}
             for rank in tensor_send_ranks[tensor_name]:
+                d[rank] = None  # FIXME
+                continue  # FIXME
                 # Target device:
                 device = self.local_rank_to_device_map[rank]
                 send_buffer = torch.zeros(shape,
@@ -148,6 +150,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                                           requires_grad=requires_grad)
                 send_buffer.share_memory_()
                 d[rank] = send_buffer
+
             self.send_buffers[tensor_name] = d
 
     def create_activations_send_buffers(self, requires_grad=False):
@@ -266,20 +269,20 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                     buff_q.get()  # Synch with reciever we can use it.
                     with torch.cuda.stream(stream):
                         out_q = self.rcv_queues[send_rank][self.rank]
-                        buff = send_buffers[send_rank]
-                        buff = tensor.to(buff.device)
-                        send_buffers[send_rank] = buff
-                        # if tensor.is_contiguous() and tensor.shape == buff.shape:
-                        #     buff.copy_(tensor)
-                        # else:
-                        #     buff = tensor.to(buff.device)
-                        #     # TODO: maybe save to avoid this later
-                        #     # send_buffers[send_rank] = buff
 
-                        
-                        # assert tensor.shape == buff.shape, (tensor.shape,
-                        #                                     buff.shape)
-                        # buff.copy_(tensor)  # FIXME contigous
+                        buff = tensor.to(self.local_rank_to_device_map[send_rank])
+                        send_buffers[send_rank] = buff
+
+                        # buff = send_buffers[send_rank]
+                        # if buff is not None and tensor.size() == buff.size() and tensor.storage_offset() == buff.storage_offset() and tensor.stride() == buff.stride() and buff.is_contiguous() and tensor.is_contiguous():
+                        #     # print(f"{self.rank}: changing!!!!")
+                        #     # buff.as_strided_(tensor.size(), tensor.stride(), tensor.storage_offset())
+                        #     buff.copy_(tensor)
+                        #     # send_buffers[send_rank] = buff
+                        # else:
+                        #     buff = tensor.to(self.local_rank_to_device_map[send_rank])
+                        #     send_buffers[send_rank] = buff
+
 
                         # pass to next process only when the copy is done
                         event = torch.cuda.Event(blocking=True)
