@@ -304,22 +304,11 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         # return t
         ####################################
 
-        ########## pool ##########
-        # # FIXME...
-        class Foo:
-            def __init__(self, future):
-                self.future = future
-
-            def join(self):
-                self.future.result()
-
+        ########## pool ########## 
         future = self.pool_send_act.submit(self._send_tensors_p2p, x,
                                            batch_idx, self.send_ranks.items(),
                                            False)
-        t = Foo(future)
-        # t.join()
-
-        return t
+        return future
 
         # ####################################
         # # sequential:
@@ -344,21 +333,12 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         # t.start()
         # # t.join()
         # return t
-
-        class Foo:
-            def __init__(self, future):
-                self.future = future
-
-            def join(self):
-                self.future.result()
-
         future = self.pool_send_grad.submit(self._send_tensors_p2p, x,
                                             batch_idx, self.grad_send_items,
                                             True)
-        t = Foo(future)
-        # t.join()
 
-        return t
+        return future
+
         ############################### seq
         # class Fooo():
         #     @staticmethod
