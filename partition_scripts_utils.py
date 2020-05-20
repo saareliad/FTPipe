@@ -206,6 +206,9 @@ def choose_blocks(model,args):
     for m in model.modules():
         block = type(m)
         blocks[block.__name__] = block
+    
+    if args.basic_blocks is None:
+        args.basic_blocks=[]
 
     return tuple([blocks[name] for name in args.basic_blocks])
 
