@@ -311,7 +311,7 @@ class SinglePartitionManager:
         # TODO:
         se = self.step_every
         do_step = (batch_idx % se) == (se - 1)
-        return do_step, None
+        return do_step
 
     def set_task(self, task: DLTask):
         self.task = task
@@ -557,7 +557,8 @@ class SinglePartitionManager:
             trainer = self.trainer
 
             # NOTE: for last partition- batch idx is the same as num backwards.
-            do_step, old_lrs = self.should_do_step(batch_idx)
+            old_lrs = None
+            do_step = self.should_do_step(batch_idx)
             # Backprop
             # For the last batch, we must scale down the learning rate, and then restore.
             if (not do_step) and (batch_idx == (num_batches - 1)):
@@ -638,7 +639,8 @@ class SinglePartitionManager:
         g = self.comm_handler.fix_after_recv(g)
 
         # Allow skiping steps (Gradient aggregation)
-        do_step, old_lrs = self.should_do_step(batch_idx)
+        old_lrs = None
+        do_step = self.should_do_step(batch_idx)
 
         # also do step for the last. (but with smaller LR)
         if not do_step and last_due_end:
@@ -742,7 +744,7 @@ class SinglePartitionManager:
         # I don't care too much about the formula, there is probably a nice one.
         # FIXME: for step_every > roundtrip. <----------------
         return sum(
-            [self.should_do_step(x)[0] for x in range(done_bwds, done_fwds)])
+            [self.should_do_step(x) for x in range(done_bwds, done_fwds)])
 
     def run_forward_until_flush(self, num_batches):
         """

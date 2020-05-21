@@ -351,13 +351,14 @@ class SinglePartitionManager:
 
     def set_true_weights_storage(self, true_weights_storage):
         self.true_weights_storage = true_weights_storage
+        se = self.step_every
 
-        def get_micro_batch(self, batch_index):
+        def _get_micro_batch(self, batch_index):
             if batch_index <= se:
                 return batch_index
             return (batch_index + 1) % se
 
-        self.get_micro_batch = types.MethodType(get_micro_batch, self)
+        self.get_micro_batch = types.MethodType(_get_micro_batch, self)
 
     def get_micro_batch(self, batch_index):
         return batch_index % self.step_every
@@ -384,10 +385,9 @@ class SinglePartitionManager:
 
     def should_do_step(self, batch_idx):
         # Returns: bool, old_lrs to restore if needed
-        # TODO:
         se = self.step_every
         do_step = (batch_idx % se) == (se - 1)
-        return do_step, None
+        return do_step
 
     def set_task(self, task: DLTask):
         self.task = task
@@ -696,7 +696,8 @@ class SinglePartitionManager:
             trainer = self.trainer
 
             # NOTE: for last partition- batch idx is the same as num backwards.
-            do_step, old_lrs = self.should_do_step(batch_idx)
+            old_lrs = None
+            do_step = self.should_do_step(batch_idx)
             # Backprop
             # For the last batch, we must scale down the learning rate, and then restore.
             if (not do_step) and (batch_idx == (num_batches - 1)):
@@ -776,10 +777,11 @@ class SinglePartitionManager:
         g = self.comm_handler.fix_after_recv(g)
 
         # Allow skiping steps (Gradient aggregation)
-        do_step, old_lrs = self.should_do_step(batch_idx)
+        old_lrs = None
+        do_step = self.should_do_step(batch_idx)
 
         # also do step for the last. (but with smaller LR)
-        if not do_step and (batch_idx == (num_batches - 1)):
+        if not do_step and last_due_end:
             do_step = True
             old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
 
@@ -836,6 +838,7 @@ class SinglePartitionManager:
                 # Get delay and modify gradients.
                 if self.is_problematic:
                     # Average delays
+                    # FIXME
                     mb = self.get_micro_batch(batch_idx)
                     delay = np.mean([
                         self.delay_at_batch.pop(batch_idx - i)
@@ -882,7 +885,7 @@ class SinglePartitionManager:
         # I don't care too much about the formula, there is probably a nice one.
         # FIXME: for step_every > roundtrip. <----------------
         return sum(
-            [self.should_do_step(x)[0] for x in range(done_bwds, done_fwds)])
+            [self.should_do_step(x) for x in range(done_bwds, done_fwds)])
 
     def run_forward_until_flush(self, num_batches):
         """
