@@ -922,16 +922,16 @@ def discard_unused_nodes(nodes,output_id):
 
 
 def set_node_indices(nodes, output_id):
-    if len(nodes) == TracedValue.ID:
-        # no nodes were discarded
-        return nodes, output_id
-
     new_nodes = dict()
 
     for idx, node in enumerate(nodes.values()):
         assert idx <= node.id
 
         node.id = idx
+        
+        if node.type in [NodeTypes.OP,NodeTypes.PRIMITIVE]:
+            node.scope+=f"_{node.id}"
+        
         new_nodes[idx] = node
 
     return new_nodes, nodes[output_id].id

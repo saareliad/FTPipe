@@ -164,7 +164,7 @@ def generate_statements(partition_nodes: List[Node],
             statements.append(statement)
 
         else:
-            op_path = scope.rsplit("/", maxsplit=1)[1]
+            op_path = scope.rsplit("/", maxsplit=1)[1].rsplit("_",maxsplit=1)[0]
             namespace, func_name = op_path.split("::")
             # function call
             if namespace in namespaces:

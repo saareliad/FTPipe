@@ -20,7 +20,7 @@ __all__ = [
 
 def pipe_model(model: nn.Module,
                batch_dim: int,
-               sample_batch: tuple = (),
+               args: tuple = (),
                kwargs: Optional[Dict] = None,
                n_iter=10,
                nparts: int = 4,
@@ -51,7 +51,7 @@ def pipe_model(model: nn.Module,
         the network we wish to model
      batch_dim:
         the batch dimention of the sample batch
-    sample_batch:
+    args:
         a sample input to use for tracing
     kwargs:
         aditional kwargs dictionary to pass to the model
@@ -104,7 +104,7 @@ def pipe_model(model: nn.Module,
         basic_blocks = ()
 
     graph = partition_model(model,
-                            sample_batch,
+                            args=args,
                             kwargs=kwargs,
                             max_depth=depth,
                             n_iter=n_iter,
@@ -133,7 +133,7 @@ def pipe_model(model: nn.Module,
 
 
 def partition_model(model: nn.Module,
-                    sample_batch: tuple = (),
+                    args: tuple = (),
                     kwargs: Optional[Dict] = None,
                     n_iter=10,
                     nparts=4,
@@ -156,7 +156,7 @@ def partition_model(model: nn.Module,
     -------------
     model:
         the network we wish to model
-    sample_batch:
+    args:
         a sample input to use for tracing
     kwargs:
         aditional kwargs dictionary to pass to the model
@@ -191,7 +191,7 @@ def partition_model(model: nn.Module,
     if basic_blocks is None:
         basic_blocks = ()
     graph = build_graph(model,
-                        args=sample_batch,
+                        args=args,
                         kwargs=kwargs,
                         max_depth=max_depth,
                         basic_blocks=basic_blocks,

@@ -428,7 +428,8 @@ class Graph():
 
     def layers_graph(self) -> Tuple["Graph", Dict[int, int]]:
         '''
-        creates a graph g with nodes of type CONSTANT removed
+        creates a graph g with nodes of type CONSTANT 
+        or nodes who soley depend on constants are removed
         leaving only inputs layers and params/buffers
 
         returns the created graph and a map between g's indices and self indices
@@ -442,7 +443,7 @@ class Graph():
         num_removed = 0
         lookup = dict()
         for node in new_graph._nodes.values():
-            if node.type is NodeTypes.CONSTANT:
+            if node.type is NodeTypes.CONSTANT or ((node.type != NodeTypes.IN) and (len(node.in_edges) == 0)):
                 for o in node.out_edges:
                     o.kwargs.pop(node, None)
                     o.args = [n for n in o.args if n is not node]

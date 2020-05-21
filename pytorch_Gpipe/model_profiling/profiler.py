@@ -177,7 +177,7 @@ class GraphProfiler():
 
         if node.type is NodeTypes.OP:
             # we cannot profile inplace ops
-            op_path = node.scope.rsplit("/", maxsplit=1)[1]
+            op_path = node.scope.rsplit("/", maxsplit=1)[1].rsplit("_",maxsplit=1)[0]
             namespace, func_name = op_path.split("::")
             if func_name in inplace_arithmetic_ops:
                 return False

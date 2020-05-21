@@ -4,7 +4,6 @@ from copy import copy
 import os
 from ..model_profiling import Graph, NodeTypes, Node
 import torch
-
 __all__ = ["post_process_partition"]
 
 
@@ -23,6 +22,10 @@ def post_process_partition(graph: Graph, verbose_on_error=True) -> Graph:
 
     cannonize_partition_indices(graph)
     if has_cycles(graph):
+        if os.environ.get("DEBUG", False):
+            graph.save_as_pdf(f"{graph.model_name}_before_fix",
+                              ".", show_profiles=True)
+
         break_partition_cycles(graph)
 
         # possibly redundent
