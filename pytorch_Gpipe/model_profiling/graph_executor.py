@@ -141,7 +141,7 @@ def create_container_construct(node, args, kwargs):
 
 
 def call_function(namespaces, node, args, kwargs, pre_hook, post_hook):
-    op_path = node.scope.rsplit("/", maxsplit=1)[1]
+    op_path = node.scope.rsplit("/", maxsplit=1)[1].rsplit("_",maxsplit=1)[0]
     namespace, func_name = op_path.split("::")
     # function call
     if namespace in namespaces:
