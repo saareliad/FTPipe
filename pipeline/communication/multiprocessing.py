@@ -2,36 +2,25 @@
 from .common_simple_comm import SimpleCommBase
 import torch
 from collections import defaultdict
-
-# from multiprocessing.pool import ThreadPool
 import concurrent
-
-import threading
 
 
 def is_shared_parameter(tensor_scope):
     return "Parameter" in tensor_scope
-    # t2 = isinstance(tensor, torch.nn.Parameter)
-    # if t1 and not t2:
-    #     print(f"t1 and not t2 for {tensor_scope}")
-    # elif t2 and not t1:
-    #     print(f"t2 and not t1 for {tensor_scope}")
-    # return t1 or t2
-
-
-# For finding who we send too:
-# self.send_ranks.items()
-# self.grad_send_items
 
 
 class MultiprocessingCommunicationHandler(SimpleCommBase):
+    # NOTE:
+    # to send ack, USE:
+    # comm_handler.create_activations_recv_buffers()
+    # comm_handler.create_gradients_rcv_buffers()
+    # For finding who we send too:
+    # self.send_ranks.items()
+    # self.grad_send_items
     def __init__(self, share, stage_to_device_map, local_rank_to_device_map,
                  *args, **kw):
-        # kw.pop("GRAD_UGLY_SHAMEFUL_NAME")
-        # FIXME
         kw["GRAD_UGLY_SHAMEFUL_NAME"] = "_grad"
         super().__init__(*args, **kw)
-        # TODO (shared) prameters
 
         rcv_queues, buffer_reuse_queues = share
         self.rcv_queues = rcv_queues
@@ -56,16 +45,60 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
 
         # Buffer per target
         self.send_buffers = dict()  # { tensor_name: { rank: buff } }
-        self.send_buffers_versions = {}
-        # self.send_buffers_on_the_fly = dict()
-
-        # self.pool_send_act = ThreadPool(processes=1)
-        # self.pool_send_grad = ThreadPool(processes=1)
+        self.send_buffers_versions = {
+        }  # TODO: not needed in the clone version
 
         self.pool_send_act = concurrent.futures.ThreadPoolExecutor(
             1, initializer=torch.cuda.set_device, initargs=(self.device, ))
         self.pool_send_grad = concurrent.futures.ThreadPoolExecutor(
             1, initializer=torch.cuda.set_device, initargs=(self.device, ))
+
+    def init_buffers(self):
+        training_tensor_shapes = self.training_tensor_shapes
+        eval_tensor_shapes = self.eval_tensor_shapes
+        training_tensor_dtypes = self.training_tensor_dtypes
+        eval_tensor_dtypes = self.eval_tensor_dtypes
+        last_batch_train_shapes = self.last_batch_train_shapes
+        last_batch_test_shapes = self.last_batch_test_shapes
+        # max_buffers = self.max_buffers
+        keep_buffers_alive = self.keep_buffers_alive
+
+        shapes_are_equal = eval_tensor_shapes == training_tensor_shapes
+        dtypes_are_equal = eval_tensor_dtypes == training_tensor_dtypes
+        dtypes_and_shapes_are_equal = shapes_are_equal and dtypes_are_equal
+
+        # HACK: if same shapes and datatypes, the buffers can remain!
+
+        no_different_last_batch_shapes = (last_batch_train_shapes is
+                                          None) and (last_batch_test_shapes is
+                                                     None)
+        if dtypes_and_shapes_are_equal and no_different_last_batch_shapes:
+            keep_buffers_alive = True
+        elif keep_buffers_alive and dtypes_and_shapes_are_equal:
+            raise ValueError(
+                f"got keep_buffers_alive=True, but can't because last batch has different size."
+            )  # TODO: maybe more fine grained
+
+        self.keep_buffers_alive = keep_buffers_alive
+
+        self._bwd_send_buffers()
+
+        if keep_buffers_alive:
+            self._fwd_send_buffers_train()
+            if not dtypes_and_shapes_are_equal:
+                self.save_send_buffers(name="train")
+                self.clear_send_buffers()
+                self._fwd_send_buffers_eval()
+                self.save_send_buffers(name="eval")
+                self.use_send_buffers("train")
+        else:
+            self._fwd_send_buffers_train()
+
+        self.dtypes_and_shapes_are_equal = dtypes_and_shapes_are_equal
+        # Its just "Ack on start", nothing more.
+        # can spase some according to partition.
+        self.create_activations_recv_buffers()
+        self.create_gradients_rcv_buffers()
 
     def save_send_buffers(self, name):
         self.send_buffers_versions[name] = self.send_buffers
@@ -223,7 +256,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             reuse_q = self.buffer_reuse_queues[receive_rank][self.rank]
             # sync clone event
             event.synchronize()
-            reuse_q.put(None)  # TODO:
+            reuse_q.put(None)  # TODO: better happen in callback
 
             request_objects.append(t)
             # TODO: we expect request object os it has to be changed.
@@ -266,11 +299,11 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                 my_buff_reuse_queues = self.buffer_reuse_queues[self.rank]
                 for send_rank in send_ranks:
                     buff_q = my_buff_reuse_queues[send_rank]
-                    buff_q.get()  # Synch with reciever we can use it.
+                    buff_q.get()  # sync with sender we can use the buffer
                     with torch.cuda.stream(stream):
                         out_q = self.rcv_queues[send_rank][self.rank]
-
-                        buff = tensor.to(self.local_rank_to_device_map[send_rank])
+                        buff = tensor.to(
+                            self.local_rank_to_device_map[send_rank])
                         send_buffers[send_rank] = buff
 
                         # buff = send_buffers[send_rank]
@@ -282,7 +315,6 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                         # else:
                         #     buff = tensor.to(self.local_rank_to_device_map[send_rank])
                         #     send_buffers[send_rank] = buff
-
 
                         # pass to next process only when the copy is done
                         event = torch.cuda.Event(blocking=True)
@@ -300,59 +332,133 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         return request_objects
 
     def send_activations(self, x, batch_idx):
-
-        ########## Thread for each ##########
-        # t = threading.Thread(target=self._send_tensors_p2p, args=(x, batch_idx, self.send_ranks.items(), False))
-        # t.start()
-        # return t
-        ####################################
-
-        ########## pool ########## 
         future = self.pool_send_act.submit(self._send_tensors_p2p, x,
                                            batch_idx, self.send_ranks.items(),
                                            False)
         return future
 
-        # ####################################
-        # # sequential:
-
-        # class Fooo():
-        #     @staticmethod
-        #     def join():
-        #         pass
-
-        # self._send_tensors_p2p(x, batch_idx, self.send_ranks.items(), False)
-        # return Fooo
-        # ####################################
-
-        # self.pool_send_act.apply_async(
-        #     self._send_tensors_p2p,
-        #     (x, batch_idx, self.send_ranks.items(), False))
-        ####################################
-
     def send_gradients(self, x, batch_idx):
-
-        # t = threading.Thread(target=self._send_tensors_p2p, args=(x, batch_idx, self.grad_send_items, True))
-        # t.start()
-        # # t.join()
-        # return t
         future = self.pool_send_grad.submit(self._send_tensors_p2p, x,
                                             batch_idx, self.grad_send_items,
                                             True)
-
         return future
 
-        ############################### seq
-        # class Fooo():
-        #     @staticmethod
-        #     def join():
-        #         pass
+    def _fwd_send_buffers_train(self):
+        self.set_tensor_shapes(self.training_tensor_shapes)
+        self.set_tensor_dtypes(self.training_tensor_dtypes)
+        self.create_activations_send_buffers()
 
-        # self._send_tensors_p2p(x, batch_idx, self.grad_send_items, True)
-        # return Fooo
-        #################################
+    def _fwd_send_buffers_eval(self):
+        self.set_tensor_shapes(self.eval_tensor_shapes)
+        self.set_tensor_dtypes(self.eval_tensor_dtypes)
+        self.create_activations_send_buffers()
 
-        # return self._send_tensors_p2p(x, batch_idx, self.grad_send_items, True)
+    def _bwd_send_buffers(self):
 
-        # self.pool_send_grad.apply_async(
-        #     self._send_tensors_p2p, (x, batch_idx, self.grad_send_items, True))
+        self.set_tensor_shapes(self.training_tensor_shapes)
+        self.set_tensor_dtypes(self.training_tensor_dtypes)
+        self.create_gradients_send_buffers()
+
+    def _ensure_bwd_send_buffers_size_set(self, last_due_end):
+        # TODO: re-write, currently its inefficient
+        # Special case: Last batch with differnt size
+        if last_due_end and self.last_batch_train_shapes:
+            # Delete previous buffers
+            print(
+                f"rank: {self.rank} replacing buffers for last batch, backward"
+            )
+            self.changed_shapes_last_batch_bwd = True
+
+            # Create a new buffer with the new size
+            self.set_tensor_shapes(self.last_batch_train_shapes)
+            self.set_tensor_dtypes(self.training_tensor_dtypes)
+            self.create_gradients_send_buffers()
+
+        elif self.changed_shapes_last_batch_bwd:
+            # NOTE: this is a special case for gpipe as bwd is LIFO.
+            # already change, replace:
+            self.changed_shapes_last_batch_bwd = False
+            self._bwd_send_buffers()
+
+    def _ensure_fwd_send_buffers_size_set(self, last_due_end):
+        # TODO: re-write, currently its inefficient
+        if last_due_end and (
+            (self.training and self.last_batch_train_shapes) or
+            (not self.training and self.last_batch_test_shapes)):
+            # Delete previous buffers
+            print(
+                f"stage: {self.stage} replacing buffers for last batch, forward"
+            )
+            self.changed_shapes_last_batch_fwd = True
+
+            # Create a new buffer with the new size
+            shapes = self.last_batch_train_shapes if self.training else self.last_batch_test_shapes
+
+            dtypes = self.training_tensor_dtypes if self.training else self.eval_tensor_dtypes
+
+            # self make_send_buff
+            self.set_tensor_shapes(shapes)
+            self.set_tensor_dtypes(dtypes)
+            self.create_activations_send_buffers()
+
+    def train(self):
+        """Sets training mode.
+            Also Handles the transition : eval -> train
+        """
+        # TODO: create() should get them as parameter, instead of this set_...
+        self.training = True
+        self.set_tensor_shapes(self.training_tensor_shapes)
+        self.set_tensor_dtypes(self.training_tensor_dtypes)
+
+        if self.keep_buffers_alive and not self.dtypes_and_shapes_are_equal:
+            self.use_send_buffers("train")
+        else:
+            # Forward buffers:
+            # re-create if needed.
+            if self.changed_shapes_last_batch_fwd:
+                self.changed_shapes_last_batch_fwd = False
+                self._fwd_send_buffers_train()
+
+            # Backward buffers:
+            if self.changed_shapes_last_batch_bwd:
+                self.changed_shapes_last_batch_fwd = False
+                self._bwd_send_buffers()  # create=True
+
+    def eval(self):
+        """Sets evaluation mode.
+            Also handles the transition : train -> eval
+            Also handles buffer sync in case stage is replicated
+        """
+        self.training = False
+        # TODO: create() should get them as parameter, instead of this set_...
+        self.set_tensor_shapes(self.eval_tensor_shapes)
+        self.set_tensor_dtypes(self.eval_tensor_dtypes)
+
+        if self.keep_buffers_alive and not self.dtypes_and_shapes_are_equal:
+            self.use_send_buffers("eval")
+        else:
+            if self.changed_shapes_last_batch_fwd:
+                self.changed_shapes_last_batch_fwd = False
+                self._fwd_send_buffers_eval()
+
+    def get_data_forward(self, batch_idx, num_batches):
+        last_due_end = batch_idx + 1 == num_batches
+
+        self._ensure_fwd_send_buffers_size_set(last_due_end)
+        x = self.recv_activations(None, batch_idx, last_due_end)
+        x = self.fix_after_recv(x)
+        return x
+
+    def pre_recv_gradients(self, batch_idx, num_batches):
+        last_due_end = batch_idx + 1 == num_batches
+        self._ensure_bwd_send_buffers_size_set(last_due_end)
+    
+    def post_recv_gradients(self, *args):
+        pass
+
+    def wait_recv_gradients(self, *args):
+        # TODO: args are design mistake.
+        # None is probably design mistake too.
+        g = self.recv_gradients(None, *args)
+        g = self.fix_after_recv(g)
+        return g

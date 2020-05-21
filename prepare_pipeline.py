@@ -61,19 +61,18 @@ def create_comm_handler(args, comm_init_args,
 
     # get the parameters to create the comm handler
     handler_cls = get_auto_comm_handler_cls(args.distributed_backend, args.cpu)
-    comm_handler = handler_cls(
-        args.rank,
-        args.local_rank,
-        args.distributed_backend,
-        args.world_size,
-        args.num_stages,
-        args.stage,
-        *comm_init_args,
-        args.cpu,
-        args.num_chunks,
-        device,
-        GRAD_UGLY_SHAMEFUL_NAME="_grad",
-        verbose=getattr(args, "verbose_comm", False))
+    comm_handler = handler_cls(args.rank,
+                               args.local_rank,
+                               args.distributed_backend,
+                               args.world_size,
+                               args.num_stages,
+                               args.stage,
+                               *comm_init_args,
+                               args.cpu,
+                               args.num_chunks,
+                               device,
+                               GRAD_UGLY_SHAMEFUL_NAME="_grad",
+                               verbose=getattr(args, "verbose_comm", False))
 
     return comm_handler
 
@@ -353,7 +352,10 @@ def get_device(args, local_rank):
 
 
 def get_rank_to_device_map(args):
-    return {rank: get_device(args, local_rank=rank) for rank in range(args.world_size)}
+    return {
+        rank: get_device(args, local_rank=rank)
+        for rank in range(args.world_size)
+    }
 
 
 def hack_trainer_type_to_gap_aware(args):
@@ -483,6 +485,8 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
                         world_size=args.world_size,
                         name_prefix=args.out_filename)  # FIXME: real name
 
+    eval_tensor_dtypes = training_tensor_dtypes  # HACK, FIXME
+
     # Comm handler
     if COMM_VERSION == 1:
         comm_handler = create_comm_handler(args, comm_init_args, device)
@@ -491,7 +495,8 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         # Multiprocessing
         stage_to_device_map = []  # TODO
         v2_args = (shared_ctx, stage_to_device_map, local_rank_to_device_map)
-        comm_handler = create_comm_handler_v2(args, comm_init_args, device, v2_args)
+        comm_handler = create_comm_handler_v2(args, comm_init_args, device,
+                                              v2_args)
     else:
         raise NotImplementedError("In progress")
 
@@ -562,6 +567,19 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     args.steps_per_epoch = steps_per_epoch
     args.expected_training_steps = expected_training_steps
 
+    buffers_ctx = (
+        training_tensor_shapes,
+        eval_tensor_shapes,
+        training_tensor_dtypes,
+        eval_tensor_dtypes,
+        last_batch_train_shapes,
+        last_batch_test_shapes,
+        args.max_buffers,
+        args.keep_buffers_alive,
+    )
+
+    comm_handler.init_buffers_ctx(buffers_ctx)
+
     ##############################
     # Until here its common,
     # To GPipe too.
@@ -601,17 +619,11 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         model,
         comm_handler,
         work_scheduler,
-        training_tensor_shapes,
-        eval_tensor_shapes,
-        training_tensor_dtypes,
-        training_tensor_dtypes,  # HACK, FIXME
         device,
         is_last_partition,
         is_first_partition,
         log_frequency=args.log_frequency,
-        max_buffers=args.max_buffers,
         step_every=args.step_every,
-        keep_buffers_alive=args.keep_buffers_alive,
         use_recomputation=(not args.no_recomputation),
         gap_aware_just_loss=gap_aware_just_loss,
         use_pre_loaded_label_input=getattr(args, "use_pre_loaded_label_input",
@@ -619,8 +631,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         weight_stashing_just_for_stats=getattr(
             args, "weight_stashing_just_for_stats", False),
         stateless_tied=getattr(args, "stateless_tied", False),
-        last_batch_train_shapes=last_batch_train_shapes,
-        last_batch_test_shapes=last_batch_test_shapes)
+    )
 
     # support for simulating stage replication (dev)
     if hasattr(args, "ddp_sim_num_gpus") and args.ddp_sim_num_gpus > 1:

@@ -3,9 +3,13 @@ import logging
 import torch.distributed as dist
 
 from .interface import CommunicationHandlerBase
+from .buffer import make_buff
 
 
 class SimpleCommBase(CommunicationHandlerBase):
+    """ common for all MPI based.
+    TODO: some functions in the end should be moved to lower class
+    """
     def __init__(
             self,
             rank,
@@ -118,8 +122,7 @@ class SimpleCommBase(CommunicationHandlerBase):
                 # Alocate for double buffering
                 for chunk in rcv_buffer.chunk(self.num_chunks):
                     # buffers.append(chunk.pin_memory().to(device))
-                    buffers.append(
-                        chunk.requires_grad_(requires_grad))
+                    buffers.append(chunk.requires_grad_(requires_grad))
         return buffers
 
     def create_activations_recv_buffers(self, requires_grad=False):
@@ -134,3 +137,262 @@ class SimpleCommBase(CommunicationHandlerBase):
         ]
         return self._create_recv_buffers(tensor_names,
                                          requires_grad=requires_grad)
+
+    def init_buffers_ctx(self, buffers_ctx):
+        (
+            training_tensor_shapes,
+            eval_tensor_shapes,
+            training_tensor_dtypes,
+            eval_tensor_dtypes,
+            last_batch_train_shapes,
+            last_batch_test_shapes,
+            max_buffers,
+            keep_buffers_alive,
+        ) = buffers_ctx
+
+        self.training_tensor_shapes = training_tensor_shapes
+        self.eval_tensor_shapes = eval_tensor_shapes
+        self.training_tensor_dtypes = training_tensor_dtypes
+        self.eval_tensor_dtypes = eval_tensor_dtypes
+        self.last_batch_train_shapes = last_batch_train_shapes
+        self.last_batch_test_shapes = last_batch_test_shapes
+        self.max_buffers = max_buffers
+        self.keep_buffers_alive = keep_buffers_alive
+
+        self.changed_shapes_last_batch_fwd = False
+        self.changed_shapes_last_batch_bwd = False
+
+    def init_buffers(self):
+        training_tensor_shapes = self.training_tensor_shapes
+        eval_tensor_shapes = self.eval_tensor_shapes
+        training_tensor_dtypes = self.training_tensor_dtypes
+        eval_tensor_dtypes = self.eval_tensor_dtypes
+        last_batch_train_shapes = self.last_batch_train_shapes
+        last_batch_test_shapes = self.last_batch_test_shapes
+        # max_buffers = self.max_buffers
+        keep_buffers_alive = self.keep_buffers_alive
+
+        shapes_are_equal = eval_tensor_shapes == training_tensor_shapes
+        dtypes_are_equal = eval_tensor_dtypes == training_tensor_dtypes
+        dtypes_and_shapes_are_equal = shapes_are_equal and dtypes_are_equal
+
+        no_different_last_batch_shapes = (last_batch_train_shapes is
+                                          None) and (last_batch_test_shapes is
+                                                     None)
+
+        if dtypes_and_shapes_are_equal and no_different_last_batch_shapes:
+            # HACK: if same shapes and datatypes, the buffers can remain!
+            keep_buffers_alive = True
+        # TODO: else maybe through if got true keep_buffers_alive and can't
+
+        self.keep_buffers_alive = keep_buffers_alive
+
+        # NOTE: we don't create the fwd buffers, they are created on the fly.
+        fwd_recv_buffers_train = self._fwd_recv_buffers_train(create=False)
+        bwd_recv_buffers = self._bwd_recv_buffers()
+
+        if keep_buffers_alive:
+            # Create once.
+            self.fwd_recv_buffers_train = fwd_recv_buffers_train
+            self.bwd_recv_buffers = bwd_recv_buffers
+
+            if not dtypes_and_shapes_are_equal:
+                self.fwd_recv_buffers_eval = self._fwd_recv_buffers_eval(
+                    create=False)
+            else:
+                # HACK: use same buffer!
+                self.fwd_recv_buffers_eval = self.fwd_recv_buffers_train
+        else:
+            self.fwd_recv_buffers = fwd_recv_buffers_train
+            self.bwd_recv_buffers = bwd_recv_buffers
+
+    def get_data_forward(self, batch_idx, num_batches):
+        last_due_end = batch_idx + 1 == num_batches
+        self._ensure_fwd_recv_buffers_size_set(last_due_end)
+        fwd_recv_buffers = self.fwd_recv_buffers
+
+        recved_all = False
+        if fwd_recv_buffers.first_rcv_after_created or fwd_recv_buffers.max_buffers == 1:
+            fwd_recv_buffers.recv_all(batch_idx, num_batches)
+            recved_all = True
+
+        x = fwd_recv_buffers.wait_first()
+        x = self.fix_after_recv(x)
+
+        # pre-Start the next fwd Irecv:
+        # TODO: decide if this is the best place to do it
+
+        # This makes sure we don't overrun the buffer.
+        # actually, many times we clone the input anyway inside the partition (for re-computation)
+        # and if so, we can use less recv buffers for forward to save memory,
+        # while still getting the same speed/parallelism.
+        if (not recved_all) and (batch_idx - 1 + fwd_recv_buffers.max_buffers <
+                                 num_batches):
+            fwd_recv_buffers.recv_next(batch_idx - 1)
+
+        return x
+
+    def pre_recv_gradients(self, batch_idx, num_batches):
+        """ can be used to start the recv before recomputation.
+        Call at the beggining of "backward"
+        
+        TODO: what do we recomand for non recomputing partitions?
+        just call it.
+        """
+        last_due_end = batch_idx + 1 == num_batches
+        # Special case: Last batch with differnt size
+        self._ensure_bwd_recv_buffers_size_set(last_due_end)
+
+        bwd_recv_buffers = self.bwd_recv_buffers
+        recved_all = False
+        if bwd_recv_buffers.first_rcv_after_created or bwd_recv_buffers.max_buffers == 1:
+            bwd_recv_buffers.recv_all(batch_idx, num_batches)
+            recved_all = True
+
+        self.recved_all = recved_all
+
+    def wait_recv_gradients(self, *args):
+        # TODO: the *args are design mistake.
+        # its due to multiprocessing comm handler
+        g = self.bwd_recv_buffers.wait_first()
+        g = self.fix_after_recv(g)
+        return g
+
+    def post_recv_gradients(self, batch_idx, num_batches):
+        # Wait for next if appropriate
+        if (not self.recved_all) and (
+                batch_idx - 1 + self.bwd_recv_buffers.max_buffers <
+                num_batches):
+            self.bwd_recv_buffers.recv_next(batch_idx - 1)
+
+    def train(self):
+        self.training = True
+        self.set_tensor_shapes(self.training_tensor_shapes)
+        self.set_tensor_dtypes(self.training_tensor_dtypes)
+
+        if self.keep_buffers_alive:
+            self.fwd_recv_buffers = self.fwd_recv_buffers_train.reset_state()
+            self.bwd_recv_buffers.reset_state()
+        else:
+            # Forward buffers:
+            # re-create if needed.
+            if self.changed_shapes_last_batch_fwd:
+                self.changed_shapes_last_batch_fwd = False
+                self.fwd_recv_buffers = self._fwd_recv_buffers_train(
+                    create=True)
+            elif self.fwd_recv_buffers.is_initialized():
+                self.fwd_recv_buffers.create()
+
+            # Backward buffers:
+            if self.changed_shapes_last_batch_bwd:
+                self.changed_shapes_last_batch_fwd = False
+                self.bwd_recv_buffers = self._bwd_recv_buffers()  # create=True
+            else:
+                self.bwd_recv_buffers.reset_state()
+
+    def eval(self):
+        """Sets evaluation mode.
+            Also handles the transition : train -> eval
+        """
+        self.training = False
+        self.set_tensor_shapes(self.eval_tensor_shapes)
+        self.set_tensor_dtypes(self.eval_tensor_dtypes)
+
+        if self.keep_buffers_alive:
+            self.fwd_recv_buffers = self.fwd_recv_buffers_eval.reset_state()
+        else:
+            if self.changed_shapes_last_batch_fwd:
+                self.changed_shapes_last_batch_fwd = False
+                self.fwd_recv_buffers = self._fwd_recv_buffers_eval(
+                    create=True)
+            elif self.fwd_recv_buffers.is_initialized():
+                self.fwd_recv_buffers.create()
+
+    def _ensure_fwd_recv_buffers_size_set(self, last_due_end):
+        if last_due_end and (
+            (self.training and self.last_batch_train_shapes) or
+            (not self.training and self.last_batch_test_shapes)):
+            # Delete previous buffers
+            print(
+                f"rank: {self.rank} replacing buffers for last batch, forward")
+            self.changed_shapes_last_batch_fwd = True
+            del self.fwd_recv_buffers
+
+            # Create a new buffer with the new size
+            shapes = self.last_batch_train_shapes if self.training else self.last_batch_test_shapes
+            dtypes = self.training_tensor_dtypes if self.training else self.eval_tensor_dtypes
+
+            fwd_recv_buffers = make_buff(self,
+                                         dtypes=dtypes,
+                                         max_buffers=1,
+                                         shapes=shapes,
+                                         is_bwd=False,
+                                         create=False)
+
+            # Overrride
+            self.fwd_recv_buffers = fwd_recv_buffers
+        else:
+            fwd_recv_buffers = self.fwd_recv_buffers
+
+        if not fwd_recv_buffers.is_initialized():
+            fwd_recv_buffers.create()
+
+    def _ensure_bwd_recv_buffers_size_set(self, last_due_end):
+        # Special case: Last batch with differnt size
+        if last_due_end and self.last_batch_train_shapes:
+            # Delete previous buffers
+            print(
+                f"stage: {self.stage} replacing buffers for last batch, backward"
+            )
+            self.changed_shapes_last_batch_bwd = True
+            del self.bwd_recv_buffers
+
+            # Create a new buffer with the new size
+            shapes = self.last_batch_train_shapes
+            self.set_tensor_shapes(shapes)
+            dtypes = self.training_tensor_dtypes
+
+            bwd_recv_buffers = make_buff(self,
+                                         dtypes=dtypes,
+                                         max_buffers=1,
+                                         shapes=shapes,
+                                         is_bwd=True,
+                                         create=False)
+
+            # Overrride
+            self.bwd_recv_buffers = bwd_recv_buffers
+        elif self.changed_shapes_last_batch_bwd:
+            # NOTE: this is a special case for gpipe as bwd is LIFO.
+            # already change, replace:
+            self.changed_shapes_last_batch_bwd = False
+            bwd_recv_buffers = self._bwd_recv_buffers()
+            self.bwd_recv_buffers = bwd_recv_buffers
+        else:
+            bwd_recv_buffers = self.bwd_recv_buffers
+
+        if not bwd_recv_buffers.is_initialized():
+            bwd_recv_buffers.create()
+
+    def _fwd_recv_buffers_train(self, create=False):
+        return make_buff(self,
+                         dtypes=self.training_tensor_dtypes,
+                         max_buffers=self.max_buffers,
+                         shapes=self.training_tensor_shapes,
+                         is_bwd=False,
+                         create=create)
+
+    def _fwd_recv_buffers_eval(self, create=False):
+        return make_buff(self,
+                         dtypes=self.eval_tensor_dtypes,
+                         max_buffers=self.max_buffers,
+                         shapes=self.eval_tensor_shapes,
+                         is_bwd=False,
+                         create=create)
+
+    def _bwd_recv_buffers(self):
+        return make_buff(self,
+                         dtypes=self.training_tensor_dtypes,
+                         max_buffers=self.max_buffers,
+                         shapes=self.training_tensor_shapes,
+                         is_bwd=True,
+                         create=True)
