@@ -240,7 +240,7 @@ def run_x_tries_until_no_fail(func, number_of_tries, *args, **kw):
             success = True
             count += 1
             break
-        except Exception as e:
+        except (Exception,AssertionError) as e:
             print()
             print(e)
             count += 1
