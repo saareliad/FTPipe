@@ -17,73 +17,44 @@ from .weight_prediction.interface import WeightPredictor
 from .gap_aware import GapAwareBase
 from .work_schedulers import WorkScheduler, get_fwds_between_first_and_seconds_step_for_stage
 from .weight_stashing import WeightStasher
-from .buffer import Buffers
 import numpy as np
 import types
 from .true_weights_storage import TrueWeightsStorage
 
+# TODO: remove
+from .communication.buffer import make_buff
+
 DEBUG_FAKE_DRAW = False
-
-
-def make_buff(comm_handler,
-              is_bwd,
-              shapes,
-              dtypes=None,
-              max_buffers=1,
-              create=False):
-    """Create recv buffer.
-        TODO: This should be moved to comm handler
-    """
-    comm_handler.set_tensor_shapes(shapes)
-    comm_handler.set_tensor_dtypes(dtypes)
-
-    if is_bwd:
-        b = Buffers(max_buffers,
-                    comm_handler.create_gradients_rcv_buffers,
-                    comm_handler.recv_gradients,
-                    is_grad=True)
-
-    else:
-        b = Buffers(max_buffers,
-                    comm_handler.create_activations_recv_buffers,
-                    comm_handler.recv_activations,
-                    is_grad=False)
-
-    if create:
-        b.create()
-    return b
 
 
 class SinglePartitionManager:
     PROBLEMATIC_POLICY = 'SAME'
-    # PROBLEMATIC_POLICY = 'SKIP'
 
-    def __init__(
-            self,
-            stage,
-            num_stages,
-            partition: torch.nn.Module,
-            comm_handler: CommunicationHandlerBase,
-            work_scheduler: WorkScheduler,
-            training_tensor_shapes,
-            eval_tensor_shapes,
-            training_tensor_dtypes,
-            eval_tensor_dtypes,
-            device,
-            is_last_partition,
-            is_first_partition,
-            log_frequency=100,
-            max_buffers=2,
-            step_every=1,
-            keep_buffers_alive=False,
-            use_recomputation=True,
-            gap_aware_just_loss=False,
-            sync_buffers=False,
-            use_pre_loaded_label_input=False,
-            weight_stashing_just_for_stats=False,
-            stateless_tied=False,
-            last_batch_train_shapes=None,
-            last_batch_test_shapes=None):
+    def __init__(self,
+                 stage,
+                 num_stages,
+                 partition: torch.nn.Module,
+                 comm_handler: CommunicationHandlerBase,
+                 work_scheduler: WorkScheduler,
+                 training_tensor_shapes,
+                 eval_tensor_shapes,
+                 training_tensor_dtypes,
+                 eval_tensor_dtypes,
+                 device,
+                 is_last_partition,
+                 is_first_partition,
+                 log_frequency=100,
+                 max_buffers=2,
+                 step_every=1,
+                 keep_buffers_alive=False,
+                 use_recomputation=True,
+                 gap_aware_just_loss=False,
+                 sync_buffers=False,
+                 use_pre_loaded_label_input=False,
+                 weight_stashing_just_for_stats=False,
+                 stateless_tied=False,
+                 last_batch_train_shapes=None,
+                 last_batch_test_shapes=None):
         # FIXME: this is ugly solution for freeing send buffers in tied weights trick. its a waste of memory.
         if stateless_tied and (is_first_partition or is_last_partition):
             self.sent_obejct_patience = num_stages - 2
@@ -137,16 +108,14 @@ class SinglePartitionManager:
             )
 
         # Initialize buffers
-        self._init_buffers(
-            last_batch_test_shapes=last_batch_test_shapes,
-            last_batch_train_shapes=last_batch_train_shapes,
-            max_buffers=max_buffers,
-            keep_buffers_alive=keep_buffers_alive,
-            training_tensor_shapes=training_tensor_shapes,
-            eval_tensor_shapes=eval_tensor_shapes,
-            training_tensor_dtypes=training_tensor_dtypes,
-            eval_tensor_dtypes=eval_tensor_dtypes
-        )
+        self._init_buffers(last_batch_test_shapes=last_batch_test_shapes,
+                           last_batch_train_shapes=last_batch_train_shapes,
+                           max_buffers=max_buffers,
+                           keep_buffers_alive=keep_buffers_alive,
+                           training_tensor_shapes=training_tensor_shapes,
+                           eval_tensor_shapes=eval_tensor_shapes,
+                           training_tensor_dtypes=training_tensor_dtypes,
+                           eval_tensor_dtypes=eval_tensor_dtypes)
 
         self.weight_predictor = None
         self.gap_aware = None
@@ -299,12 +268,14 @@ class SinglePartitionManager:
             # Create a new buffer with the new size
             shapes = self.last_batch_train_shapes
             self.comm_handler.set_tensor_shapes(shapes)
+            dtypes = self.training_tensor_dtypes
 
-            bwd_recv_buffers = Buffers(
-                1,  # max buffers is 1
-                self.comm_handler.create_gradients_rcv_buffers,
-                self.comm_handler.recv_gradients,
-                is_grad=True)
+            bwd_recv_buffers = make_buff(self.comm_handler,
+                                         dtypes=dtypes,
+                                         max_buffers=1,
+                                         shapes=shapes,
+                                         is_bwd=True,
+                                         create=False)
 
             # Overrride
             self.bwd_recv_buffers = bwd_recv_buffers
@@ -333,13 +304,14 @@ class SinglePartitionManager:
 
             # Create a new buffer with the new size
             shapes = self.last_batch_train_shapes if self.partition.training else self.last_batch_test_shapes
-            self.comm_handler.set_tensor_shapes(shapes)
+            dtypes = self.training_tensor_dtypes if self.partition.training else self.eval_tensor_dtypes
 
-            fwd_recv_buffers = Buffers(
-                1,  # max buffers is 1
-                self.comm_handler.create_activations_recv_buffers,
-                self.comm_handler.recv_activations,
-                is_grad=False)
+            fwd_recv_buffers = make_buff(self.comm_handler,
+                                         dtypes=dtypes,
+                                         max_buffers=1,
+                                         shapes=shapes,
+                                         is_bwd=False,
+                                         create=False)
 
             # Overrride
             self.fwd_recv_buffers = fwd_recv_buffers
@@ -1073,7 +1045,7 @@ class GPipePartitionManager(SinglePartitionManager):
                 # Save the out for later, when we don't do recomputation
                 # TODO: can ask trainer what exactly is neccesary from the output to save space, but its very minor.
 
-                # NOTE: for the micro batch (no recomputation), we have x as root of the computation graph. 
+                # NOTE: for the micro batch (no recomputation), we have x as root of the computation graph.
                 # otherwise, it can be saved just for stats, and we need to do recomputation.
 
                 # NOTE: when we do recomputation -  this is not needed.
