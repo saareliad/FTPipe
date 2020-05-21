@@ -302,19 +302,54 @@ def bert_p4():
     find_best(OUT_DIR)
 
 
+#######################
+# WRN [WIP]
+#######################
+
+
+def wrn_p4_async():
+    COMMAND = "python partition_vision_models.py"
+    OUT_DIR = "results/async/cv/rambo3/"
+    os.makedirs(OUT_DIR, exist_ok=True)
+    param_grid = dict(
+        # metis_seed=[42],
+        model=["wrn_28x10_c100_dr03"],
+        async_pipeline=[""],
+        dataset=['cifar100'],
+        generate_model_parallel=[""],
+        use_graph_profiler=[""],  # TODO: not supported
+        # generate_explicit_del=[""],
+        profile_ops=[""],  # TODO: does not work
+        n_partitions=[4],
+        partitioning_batch_size=[1],
+        analysis_batch_size=[1],
+        n_iter=[30],
+        # no_auto_file_name=[""],
+        bwd_to_fwd_ratio=[2],  # BWD_TO_FWD_RATIO_FULL_EXP,  # TODO: change it to full exp once it works
+        bw=[12],
+        # output_file=[OUT_DIR + "w"],
+    )
+    run_grid_on_multi_gpu_per_run(COMMAND,
+                                  param_grid,
+                                  gpu_list=list(range(8)),
+                                  gpus_per_config=1)
+    find_best(OUT_DIR)
+
+
 if __name__ == "__main__":
 
     # Async pipeline
-
     # gpt2_tied_p4()
     # gpt2_untied_p4()
     # gpt2xl_tied_p8()
     # gpt2xl_untied_p8()
 
     # GPipe
-    gpt2_tied_p4_gpipe()
-    gpt2_untied_p4_gpipe()
-    gpt2xl_tied_p8_gpipe()
-    gpt2xl_untied_p8_gpipe()
+    # gpt2_tied_p4_gpipe()
+    # gpt2_untied_p4_gpipe()
+    # gpt2xl_tied_p8_gpipe()
+    # gpt2xl_untied_p8_gpipe()
+
+    wrn_p4_async()
 
     # gpt2xl_untied_p8()
