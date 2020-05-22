@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from itertools import chain
+from contextlib import contextmanager
 
 __all__ = ["traverse_model", "traverse_params_buffs",
            "layerDict", "tensorDict"]
@@ -134,7 +135,7 @@ def move_tensors(ts, device):
 def set_grad_mode(ts, require_grad):
     def grad_mode(t):
         if isinstance(t, Tensor):
-            return t.detach().requires_grad_(require_grad and t.is_floating_point())
+            return t.detach().requires_grad_(isinstance(t,nn.Parameter) or (require_grad and t.is_floating_point()))
         return t
     return nested_map(grad_mode, ts)
 
@@ -165,6 +166,19 @@ def get_device(ts) -> torch.device:
     # default device
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+@contextmanager
+def force_out_of_place(func):
+    prev_state=None
+    modified=False
+    if hasattr(func,"inplace") and isinstance(func.inplace,bool):
+        prev_state = func.inplace
+        modified=True
+        setattr(func,"inplace",False)
+    
+    yield
+
+    if modified:
+        setattr(func,"inplace",prev_state)
 
 
 

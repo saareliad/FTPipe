@@ -3,7 +3,7 @@ from typing import Dict, List, Optional
 import torch
 import torch.nn as nn
 
-from ..utils import flatten, detach_tensors, traverse_model, get_device, ExecTimes
+from ..utils import flatten, nested_map, traverse_model, get_device, ExecTimes
 
 __all__ = ['profile_network']
 
@@ -193,7 +193,7 @@ class Wrapper(nn.Module):
         # detach inputs from previous history enabling us to measure execution time
         # only for this layer
 
-        detached_inputs = detach_tensors(inputs)
+        detached_inputs = set_grad_for_parameters(inputs)
         # TODO: we  the input as requires grad, as this is mostly the case,
         #  the grad has to be passed backward.
         # However, then gradient creation will be computed for all
@@ -332,3 +332,15 @@ def avg_time(times):
 
     return sum([t for t in times if t < max_v
                 ]) / (len(times) - 1)
+
+
+
+
+def set_grad_for_parameters(ts):
+    def f(t):
+        if not isinstance(t,torch.Tensor):
+            return t
+        req_grad = t.requires_grad if isinstance(t, torch.nn.Parameter) else False
+        return t.detach().requires_grad_(req_grad)
+    
+    return nested_map(f,ts)
