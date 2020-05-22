@@ -12,7 +12,7 @@ import traceback
 import os
 import importlib
 import numpy as np
-
+from collections import Counter
 
 
 def seed():
@@ -35,12 +35,37 @@ def nested_print(ts,indent=""):
         print(f"{indent}{ts.shape}")
 
 
-def ensure_tracing_semantics_and_profiling(ref,our,input_kws,training=True,exp_prefix=""):
+def get_blocks(model):
+    blocks=dict()
+
+    for m in model.modules():
+        block = type(m)
+        blocks[block.__name__] = block
+
+    return blocks
+
+def count_blocks(model):
+    blocks=Counter()
+
+    for m in model.modules():
+        block = type(m)
+        blocks[block.__name__] +=1
+
+    return blocks
+    
+
+MAX_DEPTH=6
+
+def register_functions():
     register_new_explicit_untraced_function(operator.is_,operator)
     register_new_explicit_untraced_function(operator.is_not,operator)
     register_new_traced_function(math.log,math)
     register_new_traced_function(torch.einsum,torch)
     
+
+
+def ensure_tracing_semantics_and_profiling(ref,our,input_kws,training=True,exp_prefix=""):
+    register_functions()
     ref.train(training)
     our.train(training)
     seed()
@@ -56,18 +81,21 @@ def ensure_tracing_semantics_and_profiling(ref,our,input_kws,training=True,exp_p
         
     tensors = tensorDict(our)
 
+    basic_blocks = get_blocks(our)
+    blocks = [basic_blocks[b] for b in ['T5Attention']]
+
     
     phase = "training" if training else "evalutation"
-    for d in range(6):
+    for d in range(MAX_DEPTH):
         output_file = f"{exp_prefix}_depth{d}_{phase}"
         if os.path.exists(output_file+".py"):
             os.remove(output_file+".py")
         
-        graph = trace_module(our,kwargs=input_kws,depth=d)
+        graph = trace_module(our,kwargs=input_kws,depth=d,basic_blocks=blocks)
 
         compile_partitioned_model(graph,our,0,output_file=output_file)
 
-        layers = layerDict(our,depth=d)
+        layers = layerDict(our,depth=d,basic_blocks=blocks)
 
         generated=importlib.import_module(output_file).Partition0(layers,tensors)
 
@@ -108,7 +136,7 @@ def get_models_for_comparison(base=True,tied=False):
     ref_cls = refBase if base else refT5
 
     seed()
-    transformer_ref = ref_cls.from_pretrained('t5-small').cuda()
+    transformer_ref = ref_cls.from_pretrained('t5-small').cuda().train()
 
     if base and tied:
         our_cls = TiedBase
@@ -120,7 +148,7 @@ def get_models_for_comparison(base=True,tied=False):
         our_cls = ourT5
     
     seed()
-    our = our_cls.from_pretrained('t5-small').cuda()
+    our = our_cls.from_pretrained('t5-small').cuda().train()
 
     if tied:
         our.make_stateless()
@@ -129,6 +157,26 @@ def get_models_for_comparison(base=True,tied=False):
 
     return transformer_ref,our
 
+
+
+def compare_models(lm_args,args):
+    for base_transformer in [True,False]:
+        for tied_weights in [True,False]:
+            if base_transformer:
+                inputs = args
+            else:
+                inputs = lm_args
+            
+            ref_model,our_model = get_models_for_comparison(base=base_transformer,tied=tied_weights)
+            
+            prefix = "base_" if base_transformer else "full_"
+            prefix+= "tied" if tied_weights else "untied"
+            print(f"comparing {prefix}")
+            ensure_tracing_semantics_and_profiling(ref_model,our_model,inputs,training=True,exp_prefix=prefix)
+            ensure_tracing_semantics_and_profiling(ref_model,our_model,inputs,training=False,exp_prefix=prefix)
+
+
+COMPARE_MODELS=True
 
 if __name__ == "__main__":
     tokenizer = T5Tokenizer.from_pretrained('t5-small')
@@ -141,20 +189,24 @@ if __name__ == "__main__":
     kwargs = {"input_ids":input_ids,"decoder_input_ids":input_ids,"use_cache":True}
     print("tokenized input")
     print()
-    for base_transformer in [True,False]:
-        for tied_weights in [True,False]:
-            if base_transformer:
-                inputs = kwargs
-            else:
-                inputs = lm_kwargs
-            
-            ref_model,our_model = get_models_for_comparison(base=base_transformer,tied=tied_weights)
-            
-            prefix = "base_" if base_transformer else "full_"
-            prefix+= "tied" if tied_weights else "untied"
-            print(f"comparing {prefix}")
-            ensure_tracing_semantics_and_profiling(ref_model,our_model,inputs,training=True,exp_prefix=prefix)
-            ensure_tracing_semantics_and_profiling(ref_model,our_model,inputs,training=False,exp_prefix=prefix)
-    
 
-    
+    if COMPARE_MODELS:
+        compare_models(lm_kwargs,kwargs)
+    else:
+        register_functions()
+        ref,our = get_models_for_comparison(base=False,tied=False)
+
+        c_ref = count_blocks(ref)
+        c_our = count_blocks(our)
+
+        for e,n in c_ref.items():
+            print(e,n)
+        print()
+        for e,n in c_our.items():
+            print(e,n)
+
+        basic_blocks = get_blocks(our)
+        blocks = [basic_blocks[b] for b in ['T5Attention']]
+
+        graph = trace_module(our,kwargs=lm_kwargs,basic_blocks=blocks)
+        graph.save_as_pdf("T5_Full_untied_T5Attention",".")
