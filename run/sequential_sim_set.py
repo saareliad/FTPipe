@@ -1,13 +1,13 @@
 import os
 from sklearn.model_selection import ParameterGrid
-from .gpu_queue import map_to_limited_gpus, map_to_several_limited_gpus
+from .gpu_queue import map_to_limited_gpus, map_to_several_limited_gpus, flexible_map_to_several_limited_gpus
 from functools import partial
 
 import shlex
 import subprocess
 
 
-def call_function(COMMAND, *args, **kw):
+def call_function(COMMAND, *args, _verbose=True, _test=False, **kw):
     """
     Example:
         The following:
@@ -19,7 +19,12 @@ def call_function(COMMAND, *args, **kw):
 
     """
     sargs = "--" + " --".join([f"{i} {v}" for i, v in kw.items()])
-    os.system(f"{COMMAND} {sargs}")
+    cmd = f"{COMMAND} {sargs}"
+    if _verbose:
+        print(cmd)
+    if _test:
+        return
+    os.system(cmd)
 
 
 def subprocess_func(COMMAND, *args, **kw):
@@ -53,6 +58,37 @@ def run_grid_on_multi_gpu_per_run(COMMAND, param_grid, gpu_list, gpus_per_config
     func = partial(call_function, COMMAND)
     map_to_several_limited_gpus(func, configs, gpus_per_config, len(gpu_list),
                                 CUDA_VISIBLE_DEVICES=gpu_list)
+
+
+class RunGridHelper:
+    def __init__(self, verbose=True, test=False, gpu_list=None):
+        self.grids = []
+        self.gpu_list = gpu_list if gpu_list else []
+        self.verbose = verbose
+        self.test = test
+
+    def add(self, COMMAND, param_grid, gpus_per_config):
+        func = partial(call_function, COMMAND, _verbose=self.verbose, _test=self.test)
+        assert isinstance(gpus_per_config, int)
+
+        def pack_single(g):
+            g['FUNC'] = [func]
+            g['REQUIRED_GPUS'] = [gpus_per_config]
+
+        if isinstance(param_grid, dict):
+            pack_single(param_grid)
+            self.grids.append(param_grid)
+        else:
+            assert isinstance(param_grid, list)
+            for g in param_grid:
+                pack_single(g)
+            self.grids.extend(param_grid)
+
+    def run(self):
+        param_grid = self.grids
+        configs = ParameterGrid(param_grid)
+        gpu_list = self.gpu_list
+        flexible_map_to_several_limited_gpus(configs, len(gpu_list), CUDA_VISIBLE_DEVICES=gpu_list)
 
 
 def infer_number_of_gpus(COMMAND):

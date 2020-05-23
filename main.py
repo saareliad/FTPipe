@@ -55,6 +55,10 @@ def parse_multiprocessing_cli(parser):
                         default=4,
                         help="Tells us how much processes do we want")
 
+    parser.add_argument("--master_port",
+                        type=int,
+                        default=29500)
+
     # for Debug
     parser.add_argument("--verbose_comm", action="store_true")
     parser.add_argument("--verbose_comm_from_cmd", action="store_true")
@@ -71,6 +75,10 @@ def parse_cli():
 
     parse_distributed_cli(parser)
     parse_multiprocessing_cli(parser)
+    
+    parser.add_argument('--model', type=str, required=False)
+    parser.add_argument('--model_from_cmd', action="store_true")
+
 
     parser.add_argument(
         '--debug',
@@ -89,6 +97,8 @@ def parse_cli():
                         help='Train batch size',
                         default=128,
                         metavar='B')
+        
+    parser.add_argument("--bs_train_from_cmd", action="store_true")
 
     parser.add_argument('--bs_test',
                         type=int,
@@ -116,6 +126,10 @@ def parse_cli():
         type=str,
         help='Output folder for results',
         default='./results',
+    )
+    parser.add_argument(
+        '--out_dir_from_cmd',
+        action="store_true"
     )
 
     parser.add_argument('--data_dir',
@@ -281,7 +295,7 @@ def multiprocessing_worker(rank, args, share):
     backend = "gloo"
     current_env = os.environ
     current_env["MASTER_ADDR"] = "127.0.0.1"  # args.master_addr
-    current_env["MASTER_PORT"] = str(29500)  # str(args.master_port)
+    current_env["MASTER_PORT"] = str(args.master_port)  # str(args.master_port)
     current_env["WORLD_SIZE"] = str(args.world_size)  # str(dist_world_size)
     current_env["RANK"] = str(rank)
     current_env["LOCAL_RANK"] = str(local_rank)
@@ -385,7 +399,7 @@ def start_mutiprocessing():
     rcv_queues = mp_queue_matrix(args.world_size)
     buffer_reuse_queues = mp_queue_matrix(args.world_size)
     share = (rcv_queues, buffer_reuse_queues)
-    
+
     mp.start_processes(multiprocessing_worker,
                        args=(args, share),
                        nprocs=args.pipeline_num_processes,
