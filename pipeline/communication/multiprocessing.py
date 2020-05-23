@@ -280,8 +280,6 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             prev_work_event.wait()
         with torch.no_grad():
             for tensor, (tensor_name, send_ranks) in zip(x, ranks_dict_items):
-                # tag for minibatch idx too
-
                 if isinstance(tensor, torch.nn.Parameter):
                     for send_rank in send_ranks:
                         if tensor_name not in self.send_shared_parameters or send_rank not in self.send_shared_parameters[
@@ -294,7 +292,6 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                     continue
 
                 tensor = tensor.detach()
-
                 send_buffers = self.send_buffers[tensor_name]
                 my_buff_reuse_queues = self.buffer_reuse_queues[self.rank]
                 for send_rank in send_ranks:
@@ -302,19 +299,12 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                     buff_q.get()  # sync with sender we can use the buffer
                     with torch.cuda.stream(stream):
                         out_q = self.rcv_queues[send_rank][self.rank]
-                        buff = tensor.to(
-                            self.local_rank_to_device_map[send_rank])
-                        send_buffers[send_rank] = buff
-
-                        # buff = send_buffers[send_rank]
-                        # if buff is not None and tensor.size() == buff.size() and tensor.storage_offset() == buff.storage_offset() and tensor.stride() == buff.stride() and buff.is_contiguous() and tensor.is_contiguous():
-                        #     # print(f"{self.rank}: changing!!!!")
-                        #     # buff.as_strided_(tensor.size(), tensor.stride(), tensor.storage_offset())
-                        #     buff.copy_(tensor)
-                        #     # send_buffers[send_rank] = buff
-                        # else:
-                        #     buff = tensor.to(self.local_rank_to_device_map[send_rank])
-                        #     send_buffers[send_rank] = buff
+                        buff = send_buffers[send_rank]
+                        if buff is not None and tensor.size() == buff.size():
+                            buff.copy_(tensor)
+                        else:
+                            buff = tensor.to(self.local_rank_to_device_map[send_rank])
+                            send_buffers[send_rank] = buff
 
                         # pass to next process only when the copy is done
                         event = torch.cuda.Event(blocking=True)
@@ -387,7 +377,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             (not self.training and self.last_batch_test_shapes)):
             # Delete previous buffers
             print(
-                f"stage: {self.stage} replacing buffers for last batch, forward"
+                f"rank: {self.rank} replacing buffers for last batch, forward"
             )
             self.changed_shapes_last_batch_fwd = True
 
