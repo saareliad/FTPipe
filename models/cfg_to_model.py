@@ -1,5 +1,6 @@
 import importlib
 
+from .normal.WideResNet_GN import WideResNet as WideResNet_GN
 from .normal import WideResNet, Bottleneck, ResNet
 from .simple_partitioning_config import PipelineConfig
 from inspect import signature
@@ -43,6 +44,13 @@ _WIDE_RESNETS = dict(
     # wrn_28x10_c100=dict(depth=28, num_classes=100, widen_factor=10, drop_rate=0),
 )
 
+_WIDE_RESNETS_GN = dict(
+    wrn_28x10_c100_dr03_p4_group_norm=dict(depth=28,
+                                           num_classes=100,
+                                           widen_factor=10,
+                                           drop_rate=0.3),
+
+        )
 # MODEL_CFG_TO_SAMPLE_MODEL = {
 #     **{k: WideResNet
 #        for k in _WIDE_RESNETS.keys()},
@@ -71,6 +79,7 @@ def _register_model(dict_params, model_cls):
 
 
 _register_model(_WIDE_RESNETS, WideResNet)
+_register_model(_WIDE_RESNETS_GN, WideResNet_GN)
 _register_model(_RESENETS, ResNet)
 # HACK: called with a ready model instance.
 _register_model(_TRANSFORMERS, None)
