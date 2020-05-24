@@ -135,7 +135,7 @@ def move_tensors(ts, device):
 def set_grad_mode(ts, require_grad):
     def grad_mode(t):
         if isinstance(t, Tensor):
-            return t.detach().requires_grad_(require_grad and t.is_floating_point())
+            return t.detach().requires_grad_(isinstance(t,nn.Parameter) or (require_grad and t.is_floating_point()))
         return t
     return nested_map(grad_mode, ts)
 

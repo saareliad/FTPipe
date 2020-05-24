@@ -192,7 +192,6 @@ class Wrapper(nn.Module):
 
         # detach inputs from previous history enabling us to measure execution time
         # only for this layer
-
         detached_inputs = set_req_grad_for_parameters(inputs)
         # TODO: we  the input as requires grad, as this is mostly the case,
         #  the grad has to be passed backward.

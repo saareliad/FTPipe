@@ -2,7 +2,7 @@ from collections import defaultdict
 import torch
 from torch import Tensor
 from .tracer import NodeTypes
-from ..utils import detach_tensors, flatten, move_tensors, set_grad_mode, inplace_arithmetic_ops, ExecTimes
+from ..utils import detach_tensors, flatten, move_tensors, set_grad_mode, inplace_arithmetic_ops, ExecTimes,force_out_of_place
 
 
 class GraphProfiler():
@@ -26,57 +26,57 @@ class GraphProfiler():
             function, args, kwargs = move_tensors((function, args, kwargs),
                                                   'cuda')
 
-        if self.should_profile(node, function, args, kwargs):
-            recomputation = self.recomputation and (
-                not self.force_no_recomp_scopes(node.scope))
+        with force_out_of_place(function):
+            if self.should_profile(node, function, args, kwargs):
+                recomputation = self.recomputation and (
+                    not self.force_no_recomp_scopes(node.scope))
 
-            for _ in range(self.n_iter):
-                args, kwargs = detach_tensors((args, kwargs))
-                with torch.set_grad_enabled(not recomputation):
-                    start = torch.cuda.Event(enable_timing=True)
-                    end = torch.cuda.Event(enable_timing=True)
-                    torch.cuda.synchronize(device='cuda')
+                for _ in range(self.n_iter):
+                    args, kwargs = detach_tensors((args, kwargs))
+                    with torch.set_grad_enabled(not recomputation):
+                        start = torch.cuda.Event(enable_timing=True)
+                        end = torch.cuda.Event(enable_timing=True)
+                        torch.cuda.synchronize(device='cuda')
 
-                    start.record()
-                    function(*args, **kwargs)
-                    end.record()
+                        start.record()
+                        function(*args, **kwargs)
+                        end.record()
 
-                    torch.cuda.synchronize(device='cuda')
-                    self.forward_times[node].append(start.elapsed_time(end))
+                        torch.cuda.synchronize(device='cuda')
+                        self.forward_times[node].append(start.elapsed_time(end))
 
-        # NOTE we do not move the the inputs to the cpu
-        # because the graph executor stores them on the cpu anyway
-        # using save_memory_mode = True should be used with the model and initial inputs on the cpu
+                # NOTE we do not move the the inputs to the cpu
+                # because the graph executor stores them on the cpu anyway
+                # using save_memory_mode = True should be used with the model and initial inputs on the cpu
 
-            return detach_tensors((args, kwargs))
 
-        # if forward was not profiled than this op either does not produce tensors or it's inplace
-        # so we explicilty set grad to False to avoid inplace operations to leaf tensors
-        return set_grad_mode((args, kwargs), False)
+            # so we explicilty set grad to False to avoid inplace operations to leaf tensors
+            return set_grad_mode((args, kwargs), False)
 
     def time_backward(self, node, function, args, kwargs, output):
-        if self.should_profile(node, function, args, kwargs, output=output):
-            recomputation = not self.force_no_recomp_scopes(node.scope)
-            recomputation = recomputation and self.recomputation
+        with force_out_of_place(function):
+            if self.should_profile(node, function, args, kwargs, output=output):
+                recomputation = not self.force_no_recomp_scopes(node.scope)
+                recomputation = recomputation and self.recomputation
 
-            if not recomputation:
-                self.backward_no_recomputation(node, function,
-                                               args, kwargs,
-                                               output)
-            else:
-                self.backward_recomputation(node, function,
-                                            args, kwargs,
-                                            output)
+                if not recomputation:
+                    self.backward_no_recomputation(node, function,
+                                                args, kwargs,
+                                                output)
+                else:
+                    self.backward_recomputation(node, function,
+                                                args, kwargs,
+                                                output)
 
-        if self.save_memory_mode:
-            # NOTE we move the function and output to cpu
-            # in order to clear the gpu
-            # args and kwargs are just temporaries
-            # the graph executor saves the originals on the cpu
-            function, output = move_tensors((function, output), 'cpu')
+            if self.save_memory_mode:
+                # NOTE we move the function and output to cpu
+                # in order to clear the gpu
+                # args and kwargs are just temporaries
+                # the graph executor saves the originals on the cpu
+                function, output = move_tensors((function, output), 'cpu')
 
-        # detach output from history and start recording again for future operations
-        return set_grad_mode(output, True)
+            # detach output from history and start recording again for future operations
+            return set_grad_mode(output, True)
 
     def backward_no_recomputation(self, node, function, args, kwargs, output):
         for _ in range(self.n_iter):
