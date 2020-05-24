@@ -7,7 +7,7 @@ import torch
 __all__ = ["post_process_partition"]
 
 
-def post_process_partition(graph: Graph, verbose_on_error=True) -> Graph:
+def post_process_partition(graph: Graph,edge_weight_function, verbose_on_error=True) -> Graph:
     '''
     process the partition and optimize it
     called as part of partition_graph method
@@ -54,7 +54,7 @@ def post_process_partition(graph: Graph, verbose_on_error=True) -> Graph:
         error = "error cycle detected mutual dependecy between partitions"
         raise AssertionError(error)
 
-    is_valid, error = is_valid_partitioning(graph)
+    is_valid, error = is_valid_partitioning(graph,edge_weight_function)
     assert is_valid, error
 
     return graph
@@ -163,7 +163,7 @@ def find_subtree(roots: Set[Node], graph_size: int):
     return nodes
 
 
-def is_valid_partitioning(graph: Graph):
+def is_valid_partitioning(graph: Graph,edge_weight_function):
     """
     check if we only send tensors between partitions
     """
@@ -172,7 +172,7 @@ def is_valid_partitioning(graph: Graph):
             for o in n.out_edges:
                 if n.part != o.part:
                     msg = f"invalid output type at partition boundary {n.part}=>{o.part}"
-                    msg += f"\noutput is {n.scope} of type {n.value_type}"
+                    msg += f"\noutput is {n.scope} of type {n.value_type}, weight {edge_weight_function(n,o)}"
                     return False, msg
 
     return True, ""

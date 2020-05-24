@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from itertools import chain
+from contextlib import contextmanager
 
 __all__ = ["traverse_model", "traverse_params_buffs",
            "layerDict", "tensorDict"]
@@ -165,6 +166,18 @@ def get_device(ts) -> torch.device:
     # default device
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+@contextmanager
+def force_out_of_place(func):
+    prev_state=None
+    modified=False
+    if hasattr(func,"inplace") and isinstance(func.inplace,bool):
+        prev_state = func.inplace
+        modified=True
+        setattr(func,"inplace",False)
+    yield
+
+    if modified:
+        setattr(func,"inplace",prev_state)
 
 
 
