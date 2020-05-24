@@ -883,41 +883,47 @@ def reset_tracing_state():
 
 def discard_unused_nodes(nodes,output_id):
     new_nodes = []
+    while True:
+        changed=False
+        reachable_nodes = find_reachable_nodes(nodes,output_id)
+
+        for node in reversed(list(nodes.values())):
+            if node.id == output_id:
+                new_nodes.append((node.id, node))
+            
+            # if a >1:      a>1 will be traced but it has no meaning to us
+            # as we only record the branch that was taken
+            unused_branch = False
+            if node.type is NodeTypes.OP and (len(node.out_edges)== 0):
+                op_path = node.scope.rsplit("/", maxsplit=1)[1]
+                _, func_name = op_path.split("::")
+                unused_branch = func_name in logical_ops
+
+            # a,b=f() will actually invoke __getitem__ 3 times so we discard the last node
+            iter_sentinel = node.value_type is None
+
+            unused_constant_or_input = (node.type in [NodeTypes.IN,NodeTypes.CONSTANT]) and (len(node.out_edges) == 0)
+
+            unreachable = node not in reachable_nodes
+
+            if unused_branch or iter_sentinel or unused_constant_or_input or unreachable: 
+                assert len(
+                    node.out_edges) == 0, "unused traced value should not have outgoing edges"
+
+                for u in node.in_edges:
+                    u.remove_output(node)
+                
+                changed=True
+            else:
+                new_nodes.append((node.id, node))
+
+        if not changed:
+            break
+
+        nodes=dict(reversed(new_nodes))
+        new_nodes=[]
     
-    reachable_nodes = find_reachable_nodes(nodes,output_id)
-
-    for node_id in reversed(range(len(nodes))):
-        node = nodes[node_id]
-
-        if node_id == output_id:
-            new_nodes.append((node.id, node))
-        
-        # if a >1:      a>1 will be traced but it has no meaning to us
-        # as we only record the branch that was taken
-        unused_branch = False
-        if node.type is NodeTypes.OP and (len(node.out_edges)== 0):
-            op_path = node.scope.rsplit("/", maxsplit=1)[1]
-            _, func_name = op_path.split("::")
-            unused_branch = func_name in logical_ops
-
-        # a,b=f() will actually invoke __getitem__ 3 times so we discard the last node
-        iter_sentinel = node.value_type is None
-
-        unused_constant_or_input = (node.type in [NodeTypes.IN,NodeTypes.CONSTANT]) and (len(node.out_edges) == 0)
-
-        unreachable = node not in reachable_nodes
-
-        if unused_branch or iter_sentinel or unused_constant_or_input or unreachable: 
-            assert len(
-                node.out_edges) == 0, "unused traced value should not have outgoing edges"
-
-            for u in node.in_edges:
-                u.remove_output(node)
-        else:
-            new_nodes.append((node.id, node))
-
     # reverse dict_order
-
     return dict(reversed(new_nodes))
 
 
