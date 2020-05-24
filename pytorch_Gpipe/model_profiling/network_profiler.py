@@ -192,8 +192,7 @@ class Wrapper(nn.Module):
 
         # detach inputs from previous history enabling us to measure execution time
         # only for this layer
-
-        detached_inputs = set_grad_for_parameters(inputs)
+        detached_inputs = set_req_grad_for_parameters(inputs)
         # TODO: we  the input as requires grad, as this is mostly the case,
         #  the grad has to be passed backward.
         # However, then gradient creation will be computed for all
@@ -336,7 +335,7 @@ def avg_time(times):
 
 
 
-def set_grad_for_parameters(ts):
+def set_req_grad_for_parameters(ts):
     def f(t):
         if not isinstance(t,torch.Tensor):
             return t

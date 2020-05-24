@@ -174,7 +174,6 @@ def force_out_of_place(func):
         prev_state = func.inplace
         modified=True
         setattr(func,"inplace",False)
-    
     yield
 
     if modified:

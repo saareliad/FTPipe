@@ -3,11 +3,11 @@ import operator
 from functools import wraps
 from importlib import import_module
 from typing import Any, Callable, Dict, List, Optional, Tuple
-
+from contextlib import nullcontext
 from torch import nn
 from pytorch_Gpipe.model_profiling import (Graph, Node, NodeTypes,
                                            used_namespaces)
-from pytorch_Gpipe.utils import layerDict, tensorDict
+from pytorch_Gpipe.utils import layerDict, tensorDict,force_out_of_place
 
 
 class PreHook(abc.ABC):
@@ -36,7 +36,7 @@ class PostHook(abc.ABC):
         pass
 
 
-def execute_graph(model: nn.Module, graph: Graph, model_args=(), model_kwargs=None, pre_hook: Optional[PreHook] = None, post_hook: Optional[PostHook] = None):
+def execute_graph(model: nn.Module, graph: Graph, model_args=(), model_kwargs=None, pre_hook: Optional[PreHook] = None, post_hook: Optional[PostHook] = None,enforce_out_of_place=True):
     if model_kwargs is None:
         model_kwargs = dict()
     if not isinstance(model_args, tuple):
@@ -88,11 +88,11 @@ def execute_graph(model: nn.Module, graph: Graph, model_args=(), model_kwargs=No
         args, kwargs = fetch_args_kwargs(node, ready_expressions)
 
         if node.type is NodeTypes.LAYER:
-
             l = layers[node.scope]
-            args, kwargs = pre_hook(node, l, args, kwargs)
-            outputs = l(*args, **kwargs)
-            outputs = post_hook(node, l, args, kwargs, outputs)
+            with force_out_of_place(l) if enforce_out_of_place else nullcontext():
+                args, kwargs = pre_hook(node, l, args, kwargs)
+                outputs = l(*args, **kwargs)
+                outputs = post_hook(node, l, args, kwargs, outputs)
 
             ready_expressions[node] = outputs
 

@@ -1,0 +1,431 @@
+{
+    "batch_dim": 0,
+    "depth": 10000,
+    "basic_blocks": [
+        "torch.nn.modules.activation.Tanh",
+        "torch.nn.modules.dropout.Dropout",
+        "models.normal.NLP_models.modeling_bert.BertSelfAttention",
+        "torch.nn.modules.normalization.LayerNorm",
+        "torch.nn.modules.sparse.Embedding",
+        "models.normal.NLP_models.modeling_bert.Gelu",
+        "torch.nn.modules.linear.Linear"
+    ],
+    "model_inputs": {
+        "input_ids": {
+            "shape": [
+                16,
+                384
+            ],
+            "dtype": "torch.int64",
+            "is_batched": true
+        },
+        "attention_mask": {
+            "shape": [
+                16,
+                384
+            ],
+            "dtype": "torch.int64",
+            "is_batched": true
+        },
+        "token_type_ids": {
+            "shape": [
+                16,
+                384
+            ],
+            "dtype": "torch.int64",
+            "is_batched": true
+        }
+    },
+    "model_outputs": {
+        "BertForQuestionAnswering/Linear[qa_outputs]": {
+            "shape": [
+                16,
+                384,
+                2
+            ],
+            "dtype": "torch.float32",
+            "is_batched": true
+        }
+    },
+    "stages": {
+        "0": {
+            "inputs": {
+                "input_ids": {
+                    "shape": [
+                        16,
+                        384
+                    ],
+                    "dtype": "torch.int64",
+                    "is_batched": true
+                },
+                "attention_mask": {
+                    "shape": [
+                        16,
+                        384
+                    ],
+                    "dtype": "torch.int64",
+                    "is_batched": true
+                },
+                "token_type_ids": {
+                    "shape": [
+                        16,
+                        384
+                    ],
+                    "dtype": "torch.int64",
+                    "is_batched": true
+                }
+            },
+            "outputs": {
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___62": {
+                    "shape": [
+                        16,
+                        1,
+                        1,
+                        384
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertOutput[output]/Tensor::__add___73": {
+                    "shape": [
+                        16,
+                        384,
+                        1024
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "stage_cls": "bert_8p.Partition0",
+            "devices": [
+                "cpu"
+            ]
+        },
+        "1": {
+            "inputs": {
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___62": {
+                    "shape": [
+                        16,
+                        1,
+                        1,
+                        384
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertOutput[output]/Tensor::__add___73": {
+                    "shape": [
+                        16,
+                        384,
+                        1024
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "outputs": {
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___113": {
+                    "shape": [
+                        16,
+                        1,
+                        1,
+                        384
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertOutput[output]/LayerNorm[LayerNorm]": {
+                    "shape": [
+                        16,
+                        384,
+                        1024
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "stage_cls": "bert_8p.Partition1",
+            "devices": [
+                "cpu"
+            ]
+        },
+        "2": {
+            "inputs": {
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___113": {
+                    "shape": [
+                        16,
+                        1,
+                        1,
+                        384
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertOutput[output]/LayerNorm[LayerNorm]": {
+                    "shape": [
+                        16,
+                        384,
+                        1024
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "outputs": {
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___164": {
+                    "shape": [
+                        16,
+                        1,
+                        1,
+                        384
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertOutput[output]/LayerNorm[LayerNorm]": {
+                    "shape": [
+                        16,
+                        384,
+                        1024
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "stage_cls": "bert_8p.Partition2",
+            "devices": [
+                "cpu"
+            ]
+        },
+        "3": {
+            "inputs": {
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___164": {
+                    "shape": [
+                        16,
+                        1,
+                        1,
+                        384
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertOutput[output]/LayerNorm[LayerNorm]": {
+                    "shape": [
+                        16,
+                        384,
+                        1024
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "outputs": {
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___230": {
+                    "shape": [
+                        16,
+                        384,
+                        1024
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___232": {
+                    "shape": [
+                        16,
+                        1,
+                        1,
+                        384
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "stage_cls": "bert_8p.Partition3",
+            "devices": [
+                "cpu"
+            ]
+        },
+        "4": {
+            "inputs": {
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___230": {
+                    "shape": [
+                        16,
+                        384,
+                        1024
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___232": {
+                    "shape": [
+                        16,
+                        1,
+                        1,
+                        384
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "outputs": {
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___266": {
+                    "shape": [
+                        16,
+                        1,
+                        1,
+                        384
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertOutput[output]/LayerNorm[LayerNorm]": {
+                    "shape": [
+                        16,
+                        384,
+                        1024
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "stage_cls": "bert_8p.Partition4",
+            "devices": [
+                "cpu"
+            ]
+        },
+        "5": {
+            "inputs": {
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___266": {
+                    "shape": [
+                        16,
+                        1,
+                        1,
+                        384
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertOutput[output]/LayerNorm[LayerNorm]": {
+                    "shape": [
+                        16,
+                        384,
+                        1024
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "outputs": {
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___317": {
+                    "shape": [
+                        16,
+                        1,
+                        1,
+                        384
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertOutput[output]/Tensor::__add___328": {
+                    "shape": [
+                        16,
+                        384,
+                        1024
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "stage_cls": "bert_8p.Partition5",
+            "devices": [
+                "cpu"
+            ]
+        },
+        "6": {
+            "inputs": {
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___317": {
+                    "shape": [
+                        16,
+                        1,
+                        1,
+                        384
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertOutput[output]/Tensor::__add___328": {
+                    "shape": [
+                        16,
+                        384,
+                        1024
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "outputs": {
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___368": {
+                    "shape": [
+                        16,
+                        1,
+                        1,
+                        384
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertOutput[output]/LayerNorm[LayerNorm]": {
+                    "shape": [
+                        16,
+                        384,
+                        1024
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "stage_cls": "bert_8p.Partition6",
+            "devices": [
+                "cpu"
+            ]
+        },
+        "7": {
+            "inputs": {
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___368": {
+                    "shape": [
+                        16,
+                        1,
+                        1,
+                        384
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                },
+                "BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertOutput[output]/LayerNorm[LayerNorm]": {
+                    "shape": [
+                        16,
+                        384,
+                        1024
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "outputs": {
+                "BertForQuestionAnswering/Linear[qa_outputs]": {
+                    "shape": [
+                        16,
+                        384,
+                        2
+                    ],
+                    "dtype": "torch.float32",
+                    "is_batched": true
+                }
+            },
+            "stage_cls": "bert_8p.Partition7",
+            "devices": [
+                "cpu"
+            ]
+        }
+    }
+}
