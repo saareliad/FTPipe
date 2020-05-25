@@ -76,7 +76,7 @@ def multiprocessing_cv():
     param_grid = {
         'config': [f"{cfgs_dir}{cfg}.json" for cfg in all_algs],
         'seed': [42],
-        "pipeline_num_processes": [gpus_per_config],
+        "nprocs": [gpus_per_config],
     }
     run_grid_on_multi_gpu_per_run(COMMAND,
                                   param_grid,
@@ -94,7 +94,7 @@ def multiprocessing_cv_debug_step_every(alg="stale_nr", model="wrn_28x10_c100_dr
     common = {
         'config': [f"{cfgs_dir}{cfg}.json" for cfg in all_algs],
         'seed': [seed],
-        "pipeline_num_processes": [gpus_per_config],
+        "nprocs": [gpus_per_config],
         "step_every_from_cmd": [""],
         "bs_train_from_cmd": [""],
         "out_dir_from_cmd": [""],
@@ -141,7 +141,7 @@ def mp_gpt2xl_untied():
     param_grid = {
         'config': [f"{cfgs_dir}{cfg}.json" for cfg in all_algs],
         'seed': [42],
-        "pipeline_num_processes": [gpus_per_config],
+        "nprocs": [gpus_per_config],
     }
     run_grid_on_multi_gpu_per_run(COMMAND,
                                   param_grid,
@@ -157,14 +157,14 @@ def mp_gpt2_tied():
     param_grid = {
         'config': [f"{cfgs_dir}{cfg}.json" for cfg in all_algs],
         'seed': [42],
-        "pipeline_num_processes": [gpus_per_config],
+        "nprocs": [gpus_per_config],
     }
     run_grid_on_multi_gpu_per_run(COMMAND,
                                   param_grid,
                                   gpu_list=list(range(8)),
                                   gpus_per_config=gpus_per_config)
 
-    # python main.py  --config "configs/lm/wt2/gpt2/tied/stale.json" --seed 42 --pipeline_num_processes 5 --debug -1
+    # python main.py  --config "configs/lm/wt2/gpt2/tied/stale.json" --seed 42 --nprocs 5 --debug -1
 
 
 if __name__ == "__main__":

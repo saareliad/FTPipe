@@ -60,5 +60,5 @@
     "keep_buffers_alive": false,
     "dont_drop_last": true,
     "stateless_tied": true,
-    "pipeline_num_processes": 5
+    "nprocs": 5
 }

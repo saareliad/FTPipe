@@ -471,6 +471,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     args.num_stages = parsed_config.num_stages
     args.stage = parsed_config.stage
     model = parsed_config.model
+    model.device = device
 
     is_first_partition = args.stage == 0
     is_last_partition = args.stage == args.num_stages - 1

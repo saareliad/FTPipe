@@ -50,7 +50,7 @@ def parse_distributed_cli(parser):
 
 
 def parse_multiprocessing_cli(parser):
-    parser.add_argument("--pipeline_num_processes",
+    parser.add_argument("--nprocs",
                         type=int,
                         default=4,
                         help="Tells us how much processes do we want")
@@ -393,7 +393,7 @@ def main(args, shared_ctx=None):
 def start_mutiprocessing():
     args = parse_cli()
     parse_json_config(args, args.config, first=True)
-    args.world_size = args.pipeline_num_processes
+    args.world_size = args.nprocs
 
     # create queus for communication
     rcv_queues = mp_queue_matrix(args.world_size)
@@ -402,7 +402,7 @@ def start_mutiprocessing():
 
     mp.start_processes(multiprocessing_worker,
                        args=(args, share),
-                       nprocs=args.pipeline_num_processes,
+                       nprocs=args.nprocs,
                        join=True,
                        daemon=False,
                        start_method='fork')

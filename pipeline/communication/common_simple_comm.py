@@ -37,6 +37,7 @@ class SimpleCommBase(CommunicationHandlerBase):
         self.local_rank = local_rank
         self.backend = backend
         self.logger = logging.getLogger('msnag')
+        self.stage = stage
 
         self.receive_ranks = receive_ranks
         self.send_ranks = send_ranks
