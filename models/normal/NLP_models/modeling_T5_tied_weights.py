@@ -132,7 +132,7 @@ class T5Stack(T5PreTrainedModel):
             # past_key_value_states = [None] * len(self.block)
 
         # ourselves in which case we just need to make it broadcastable to all heads.
-        extended_attention_mask = self.get_extended_attention_mask(attention_mask, input_shape, self.device)
+        extended_attention_mask = self.get_extended_attention_mask(attention_mask, input_shape, attention_mask.device)
 
         # NOTE is not None
         # if self.is_decoder and encoder_attention_mask is not None:
@@ -159,7 +159,7 @@ class T5Stack(T5PreTrainedModel):
             if self.output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
-            layer_outputs = layer_module(
+            layer_outputs,use_cache = layer_module(
                 hidden_states,
                 attention_mask=extended_attention_mask,
                 position_bias=position_bias,

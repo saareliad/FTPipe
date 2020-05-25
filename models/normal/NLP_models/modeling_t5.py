@@ -425,7 +425,7 @@ class T5Attention(nn.Module):
             outputs = outputs + (weights,)
         if self.has_relative_attention_bias:
             outputs = outputs + (position_bias,)
-        return outputs
+        return outputs,use_cache
 
 
 class T5LayerSelfAttention(nn.Module):
@@ -445,7 +445,7 @@ class T5LayerSelfAttention(nn.Module):
         use_cache=False,
     ):
         norm_x = self.layer_norm(hidden_states)
-        attention_output = self.SelfAttention(
+        attention_output,use_cache = self.SelfAttention(
             norm_x,
             mask=attention_mask,
             position_bias=position_bias,
@@ -456,7 +456,7 @@ class T5LayerSelfAttention(nn.Module):
         y = attention_output[0]
         layer_output = hidden_states + self.dropout(y)
         outputs = (layer_output,) + attention_output[1:]  # add attentions if we output them
-        return outputs
+        return outputs,use_cache
 
 
 class T5LayerCrossAttention(nn.Module):
@@ -478,7 +478,7 @@ class T5LayerCrossAttention(nn.Module):
         query_length=None,
     ):
         norm_x = self.layer_norm(hidden_states)
-        attention_output = self.EncDecAttention(
+        attention_output,use_cache = self.EncDecAttention(
             norm_x,
             mask=attention_mask,
             kv=kv,
@@ -491,7 +491,7 @@ class T5LayerCrossAttention(nn.Module):
         y = attention_output[0]
         layer_output = hidden_states + self.dropout(y)
         outputs = (layer_output,) + attention_output[1:]  # add attentions if we output them
-        return outputs
+        return outputs,use_cache
 
 
 class T5Block(nn.Module):
@@ -548,7 +548,7 @@ class T5Block(nn.Module):
 
         #NOTE moduleList
         # self_attention_outputs = self.layer[0](
-        self_attention_outputs = getattr(self,str(0))(
+        self_attention_outputs,use_cache = getattr(self,str(0))(
             hidden_states,
             attention_mask=attention_mask,
             position_bias=position_bias,
@@ -572,7 +572,7 @@ class T5Block(nn.Module):
                 query_length = None
 
             #NOTE moduleList
-            cross_attention_outputs = getattr(self,str(1))(
+            cross_attention_outputs,use_cache = getattr(self,str(1))(
             # cross_attention_outputs = self.layer[1](
                 hidden_states,
                 kv=encoder_hidden_states,
@@ -601,7 +601,7 @@ class T5Block(nn.Module):
 
         # Add attentions if we output them
         outputs = outputs + (present_key_value_state,) + attention_outputs
-        return outputs  # hidden-states, present_key_value_states, (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
+        return outputs,use_cache  # hidden-states, present_key_value_states, (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
 
 
 class T5PreTrainedModel(PreTrainedModel):
@@ -1133,7 +1133,7 @@ class T5Stack(T5PreTrainedModel):
             if self.output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
-            layer_outputs = layer_module(
+            layer_outputs,use_cache = layer_module(
                 hidden_states,
                 attention_mask=extended_attention_mask,
                 position_bias=position_bias,
