@@ -447,18 +447,18 @@ def deserialize_python_class_or_function(path: str):
 # model_inputs
     # id
     # shape
-    #    dtype
+    # dtype
     # is_batched
 # model_outputs
     # id
     # shape
-    #    dtype
+    # dtype
     # is_batched
 
 # stages:
 #   id
     # model_inputs
-    #   id
+    #    id
     #    shape
     #    dtype
     #    is_batched

@@ -12,6 +12,9 @@ from train import training_loop
 from experiments import save_experiment, load_experiment_for_update
 from prepare_pipeline import prepare_pipeline
 import torch.multiprocessing as mp
+
+from models.cfg_to_model import get_pipe_config
+
 # TODO: support multiple servers,
 # TODO heterogenous servers
 # TODO: support mix precision, in the future
@@ -55,9 +58,7 @@ def parse_multiprocessing_cli(parser):
                         default=4,
                         help="Tells us how much processes do we want")
 
-    parser.add_argument("--master_port",
-                        type=int,
-                        default=29500)
+    parser.add_argument("--master_port", type=int, default=29500)
 
     # for Debug
     parser.add_argument("--verbose_comm", action="store_true")
@@ -75,10 +76,9 @@ def parse_cli():
 
     parse_distributed_cli(parser)
     parse_multiprocessing_cli(parser)
-    
+
     parser.add_argument('--model', type=str, required=False)
     parser.add_argument('--model_from_cmd', action="store_true")
-
 
     parser.add_argument(
         '--debug',
@@ -97,7 +97,7 @@ def parse_cli():
                         help='Train batch size',
                         default=128,
                         metavar='B')
-        
+
     parser.add_argument("--bs_train_from_cmd", action="store_true")
 
     parser.add_argument('--bs_test',
@@ -127,10 +127,7 @@ def parse_cli():
         help='Output folder for results',
         default='./results',
     )
-    parser.add_argument(
-        '--out_dir_from_cmd',
-        action="store_true"
-    )
+    parser.add_argument('--out_dir_from_cmd', action="store_true")
 
     parser.add_argument('--data_dir',
                         type=str,
@@ -285,6 +282,25 @@ def mp_queue_matrix(world_size):
     return queues
 
 
+def mp_recv_queue_per_tensor(args_model, world_size, ushn="_grad"):
+    pc = get_pipe_config(args_model)
+    d = {}
+    for i, s in pc.stages.items():
+        recv_inputs = [
+            name for name in s.inputs if not name in pc.model_inputs
+        ]
+        rcv_grads = [
+            name for name in s.outputs if not name in pc.model_outputs
+        ]
+        rcv_grads = [j + ushn for j in rcv_grads]
+
+        comb = recv_inputs + rcv_grads
+        dd = {name: mp.Queue() for name in comb}
+
+        d[i] = dd
+    return d
+
+
 def multiprocessing_worker(rank, args, share):
     local_rank = rank
     args.rank = rank
@@ -398,6 +414,7 @@ def start_mutiprocessing():
     # create queus for communication
     rcv_queues = mp_queue_matrix(args.world_size)
     buffer_reuse_queues = mp_queue_matrix(args.world_size)
+    # TODO: change to normal q
     share = (rcv_queues, buffer_reuse_queues)
 
     mp.start_processes(multiprocessing_worker,
