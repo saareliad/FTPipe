@@ -5,6 +5,8 @@ from collections import defaultdict
 import threading
 import queue
 
+# DEPRECATED!!!!!!!!!!!
+
 
 def is_shared_parameter(tensor_scope):
     return "Parameter" in tensor_scope
