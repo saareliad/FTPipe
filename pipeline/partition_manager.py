@@ -628,7 +628,7 @@ class SinglePartitionManager:
 
             else:
                 ro = run_batch_backward(done_bwds, num_batches)
-                futures_handler.after_backward(ro, done_fwds)
+                futures_handler.after_backward(ro, done_bwds)
 
             # Increase counters
             if is_last_partition:

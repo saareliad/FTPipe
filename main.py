@@ -74,6 +74,7 @@ def parse_cli():
     parser = argparse.ArgumentParser(
         description='PyTorch partition as part of Async Pipeline')
 
+    parser.add_argument("--mode", choices=["mp", "dist"], default="dist", help="Running mode")
     parse_distributed_cli(parser)
     parse_multiprocessing_cli(parser)
 
@@ -428,6 +429,10 @@ def start_mutiprocessing():
 if __name__ == "__main__":
     # TODO set OMP_NUM_THREADS automatically
     print(f"Using {torch.get_num_threads()} Threads")
-    # start_distributed()
-    start_mutiprocessing()
-    # main(args)
+    args = parse_cli()
+    if args.mode == "mp":
+        print("Running in multiprocessing mode")
+        start_mutiprocessing()
+    else:
+        print("Running in distributed mode")
+        start_distributed()

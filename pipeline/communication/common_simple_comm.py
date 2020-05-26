@@ -351,9 +351,7 @@ class SimpleCommBase(CommunicationHandlerBase):
 
             # Create a new buffer with the new size
             shapes = self.last_batch_train_shapes
-            self.set_tensor_shapes(shapes)
             dtypes = self.training_tensor_dtypes
-
             bwd_recv_buffers = make_buff(self,
                                          dtypes=dtypes,
                                          max_buffers=1,
