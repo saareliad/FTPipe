@@ -1,5 +1,6 @@
 # from .interface import CommunicationHandlerBase
 from .common_simple_comm import SimpleCommBase
+from .interface import FuturesHandlerBase
 import torch
 from collections import defaultdict
 import concurrent
@@ -81,24 +82,25 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
 
         self.keep_buffers_alive = keep_buffers_alive
 
-        self._bwd_send_buffers()
-
-        if keep_buffers_alive:
-            self._fwd_send_buffers_train()
-            if not dtypes_and_shapes_are_equal:
-                self.save_send_buffers(name="train")
-                self.clear_send_buffers()
-                self._fwd_send_buffers_eval()
-                self.save_send_buffers(name="eval")
-                self.use_send_buffers("train")
-        else:
-            self._fwd_send_buffers_train()
+        # if keep_buffers_alive:
+        #     self._fwd_send_buffers_train()
+        #     if not dtypes_and_shapes_are_equal:
+        #         self.save_send_buffers(name="train")
+        #         self.clear_send_buffers()
+        #         self._fwd_send_buffers_eval()
+        #         self.save_send_buffers(name="eval")
+        #         self.use_send_buffers("train")
+        # else:
+        #     self._fwd_send_buffers_train()
 
         self.dtypes_and_shapes_are_equal = dtypes_and_shapes_are_equal
         # Its just "Ack on start", nothing more.
         # can spase some according to partition.
         self.create_activations_recv_buffers()
         self.create_gradients_rcv_buffers()
+
+        self.create_activations_send_buffers()
+        self.create_gradients_send_buffers()
 
     def save_send_buffers(self, name):
         self.send_buffers_versions[name] = self.send_buffers
@@ -153,36 +155,14 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         """ the sender creates the buffers """
         tensor_names = tensor_send_ranks.keys()
         for tensor_name in tensor_names:
-            if is_activations:
-                is_parameter = is_shared_parameter(tensor_name)
-                if is_parameter:
-                    # if tensor_name not in self.send_shared_parameters:
-                    # TODO: avoid double send
-                    self.send_shared_parameters[tensor_name] = set()
-                    continue
-
-            if tensor_name.endswith(self.GRAD_UGLY_SHAMEFUL_NAME):
-                cname = tensor_name[:-(len(self.GRAD_UGLY_SHAMEFUL_NAME))]
-
-                dtype = self.tensor_dtypes[cname]
-                shape = self.tensor_shapes[cname]
-            else:
-
-                dtype = self.tensor_dtypes[tensor_name]
-                shape = self.tensor_shapes[tensor_name]
+            if is_activations and is_shared_parameter(tensor_name):
+                self.send_shared_parameters[tensor_name] = set()
+                continue
 
             d = {}
             for rank in tensor_send_ranks[tensor_name]:
                 d[rank] = None  # FIXME
                 continue  # FIXME
-                # Target device:
-                device = self.local_rank_to_device_map[rank]
-                send_buffer = torch.zeros(shape,
-                                          dtype=dtype,
-                                          device=device,
-                                          requires_grad=requires_grad)
-                send_buffer.share_memory_()
-                d[rank] = send_buffer
 
             self.send_buffers[tensor_name] = d
 
@@ -241,9 +221,6 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                 )
 
             x = q.get()
-            if is_activations:
-                assert list(x.shape) == self.tensor_shapes[tensor_name], (
-                    tensor_name, x.shape, self.tensor_shapes[tensor_name])
 
             # give the next buffer
             # FIXME: un-optimized clones
@@ -300,7 +277,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                     with torch.cuda.stream(stream):
                         out_q = self.rcv_queues[send_rank][self.rank]
                         buff = send_buffers[send_rank]
-                        if buff is not None and tensor.size() == buff.size():
+                        if False and buff is not None and tensor.size() == buff.size():
                             buff.copy_(tensor)
                         else:
                             buff = tensor.to(self.local_rank_to_device_map[send_rank])
@@ -334,19 +311,19 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         return future
 
     def _fwd_send_buffers_train(self):
-        self.set_tensor_shapes(self.training_tensor_shapes)
-        self.set_tensor_dtypes(self.training_tensor_dtypes)
+        # self.set_tensor_shapes(self.training_tensor_shapes)
+        # self.set_tensor_dtypes(self.training_tensor_dtypes)
         self.create_activations_send_buffers()
 
     def _fwd_send_buffers_eval(self):
-        self.set_tensor_shapes(self.eval_tensor_shapes)
-        self.set_tensor_dtypes(self.eval_tensor_dtypes)
+        # self.set_tensor_shapes(self.eval_tensor_shapes)
+        # self.set_tensor_dtypes(self.eval_tensor_dtypes)
         self.create_activations_send_buffers()
 
     def _bwd_send_buffers(self):
 
-        self.set_tensor_shapes(self.training_tensor_shapes)
-        self.set_tensor_dtypes(self.training_tensor_dtypes)
+        # self.set_tensor_shapes(self.training_tensor_shapes)
+        # self.set_tensor_dtypes(self.training_tensor_dtypes)
         self.create_gradients_send_buffers()
 
     def _ensure_bwd_send_buffers_size_set(self, last_due_end):
@@ -359,16 +336,16 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             )
             self.changed_shapes_last_batch_bwd = True
 
-            # Create a new buffer with the new size
-            self.set_tensor_shapes(self.last_batch_train_shapes)
-            self.set_tensor_dtypes(self.training_tensor_dtypes)
-            self.create_gradients_send_buffers()
+            # # Create a new buffer with the new size
+            # self.set_tensor_shapes(self.last_batch_train_shapes)
+            # self.set_tensor_dtypes(self.training_tensor_dtypes)
+            # self.create_gradients_send_buffers()
 
         elif self.changed_shapes_last_batch_bwd:
             # NOTE: this is a special case for gpipe as bwd is LIFO.
             # already change, replace:
             self.changed_shapes_last_batch_bwd = False
-            self._bwd_send_buffers()
+            # self._bwd_send_buffers()
 
     def _ensure_fwd_send_buffers_size_set(self, last_due_end):
         # TODO: re-write, currently its inefficient
@@ -381,15 +358,15 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             )
             self.changed_shapes_last_batch_fwd = True
 
-            # Create a new buffer with the new size
-            shapes = self.last_batch_train_shapes if self.training else self.last_batch_test_shapes
+            # # Create a new buffer with the new size
+            # shapes = self.last_batch_train_shapes if self.training else self.last_batch_test_shapes
 
-            dtypes = self.training_tensor_dtypes if self.training else self.eval_tensor_dtypes
+            # dtypes = self.training_tensor_dtypes if self.training else self.eval_tensor_dtypes
 
-            # self make_send_buff
-            self.set_tensor_shapes(shapes)
-            self.set_tensor_dtypes(dtypes)
-            self.create_activations_send_buffers()
+            # # self make_send_buff
+            # self.set_tensor_shapes(shapes)
+            # self.set_tensor_dtypes(dtypes)
+            # self.create_activations_send_buffers()
 
     def train(self):
         """Sets training mode.
@@ -400,19 +377,19 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         self.set_tensor_shapes(self.training_tensor_shapes)
         self.set_tensor_dtypes(self.training_tensor_dtypes)
 
-        if self.keep_buffers_alive and not self.dtypes_and_shapes_are_equal:
-            self.use_send_buffers("train")
-        else:
-            # Forward buffers:
-            # re-create if needed.
-            if self.changed_shapes_last_batch_fwd:
-                self.changed_shapes_last_batch_fwd = False
-                self._fwd_send_buffers_train()
+        # if self.keep_buffers_alive and not self.dtypes_and_shapes_are_equal:
+        #     self.use_send_buffers("train")
+        # else:
+        #     # Forward buffers:
+        #     # re-create if needed.
+        #     if self.changed_shapes_last_batch_fwd:
+        #         self.changed_shapes_last_batch_fwd = False
+        #         self._fwd_send_buffers_train()
 
-            # Backward buffers:
-            if self.changed_shapes_last_batch_bwd:
-                self.changed_shapes_last_batch_fwd = False
-                self._bwd_send_buffers()  # create=True
+        #     # Backward buffers:
+        #     if self.changed_shapes_last_batch_bwd:
+        #         self.changed_shapes_last_batch_fwd = False
+        #         self._bwd_send_buffers()  # create=True
 
     def eval(self):
         """Sets evaluation mode.
@@ -424,19 +401,19 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         self.set_tensor_shapes(self.eval_tensor_shapes)
         self.set_tensor_dtypes(self.eval_tensor_dtypes)
 
-        if self.keep_buffers_alive and not self.dtypes_and_shapes_are_equal:
-            self.use_send_buffers("eval")
-        else:
-            if self.changed_shapes_last_batch_fwd:
-                self.changed_shapes_last_batch_fwd = False
-                self._fwd_send_buffers_eval()
+        # if self.keep_buffers_alive and not self.dtypes_and_shapes_are_equal:
+        #     self.use_send_buffers("eval")
+        # else:
+        #     if self.changed_shapes_last_batch_fwd:
+        #         self.changed_shapes_last_batch_fwd = False
+        #         self._fwd_send_buffers_eval()
 
     def get_data_forward(self, batch_idx, num_batches):
         last_due_end = batch_idx + 1 == num_batches
 
         self._ensure_fwd_send_buffers_size_set(last_due_end)
         x = self.recv_activations(None, batch_idx, last_due_end)
-        x = self.fix_after_recv(x)
+        # x = self.fix_after_recv(x)
         return x
 
     def pre_recv_gradients(self, batch_idx, num_batches):
@@ -450,5 +427,55 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         # TODO: args are design mistake.
         # None is probably design mistake too.
         g = self.recv_gradients(None, *args)
-        g = self.fix_after_recv(g)
+        # g = self.fix_after_recv(g)
         return g
+
+
+    @staticmethod
+    def futures_handler(is_first_partition, is_last_partition, stateless_tied, num_stages):
+        return FuturesHandler(is_first_partition, is_last_partition, stateless_tied, num_stages)
+
+
+class FuturesHandler(FuturesHandlerBase):
+    """ Handle sent object futures """
+    def __init__(self, is_first_partition, is_last_partition, stateless_tied, num_stages):
+        self.is_first_partition = is_first_partition
+        self.is_last_partition = is_last_partition
+
+        self.last_fwd_result = []
+        self.last_bwd_result = []
+        pass
+
+    def after_forward(self, ro, done_fwds, training):
+        self.last_fwd_result.append(ro)
+        if not training:
+            # Avoiod memory explotion due super fast forward.
+            self.clean_eval()
+
+    def after_backward(self, ro, done_bwds):
+        self.last_bwd_result.append(ro)
+
+        # if not (self.is_first_partition):
+        #     sent_request_objects.result()
+
+    def clean_train(self):
+        for ll in [self.last_fwd_result, self.last_bwd_result]:
+            for ro in ll:
+                if isinstance(ro, list):
+                    for r in ro:
+                        r.result()
+                elif ro is not None:
+                    ro.result()
+
+        self.last_bwd_result.clear()
+        self.last_fwd_result.clear()
+
+    def clean_eval(self):
+        ll = self.last_fwd_result
+        for ro in ll:
+            if isinstance(ro, list):
+                for r in ro:
+                    r.result()
+            elif ro is not None:
+                ro.result()
+        self.last_fwd_result.clear()

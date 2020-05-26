@@ -421,19 +421,16 @@ def get_optimizer(args, optimizer_cls, parameters):
 def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
 
     is_gpipe = "gpipe" == args.work_scheduler.lower()
-    if not args.is_multiprocessing_worker:
-        # select a partition manager
-        if is_gpipe:
-            print("Preparing pipeline for GPipe")
-            partition_cls = GPipePartitionManager
-        else:
-            partition_cls = SinglePartitionManager
+    # select a partition manager
+    if is_gpipe:
+        print("Preparing pipeline for GPipe")
+        partition_cls = GPipePartitionManager
     else:
-        # Partition manger for multiprocessing
-        partition_cls = MPSinglePartitionManager
+        partition_cls = SinglePartitionManager
+        
+    if args.is_multiprocessing_worker:
+        # multiprocessing communication handler
         COMM_VERSION = 2
-        if is_gpipe:
-            raise NotImplementedError()
 
     # get work scheduler
     work_scheduler = AVAILABLE_WORK_SCHEDULERS.get(args.work_scheduler)
@@ -632,6 +629,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         weight_stashing_just_for_stats=getattr(
             args, "weight_stashing_just_for_stats", False),
         stateless_tied=getattr(args, "stateless_tied", False),
+        is_mp=args.is_multiprocessing_worker
     )
 
     # support for simulating stage replication (dev)

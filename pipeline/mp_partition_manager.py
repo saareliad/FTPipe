@@ -16,9 +16,14 @@ from .gap_aware import GapAwareBase
 from .work_schedulers import WorkScheduler, get_fwds_between_first_and_seconds_step_for_stage
 from .weight_stashing import WeightStasher
 import numpy as np
+import types
 from .true_weights_storage import TrueWeightsStorage
 
 DEBUG_FAKE_DRAW = False
+
+# For mp:
+# TODO: problem when sharing weights (sending nn.Parameters)
+# TODO: with weight prediction, with weight stashing.
 
 
 class SinglePartitionManager:
@@ -42,13 +47,12 @@ class SinglePartitionManager:
         use_pre_loaded_label_input=False,
         weight_stashing_just_for_stats=False,
         stateless_tied=False,
+        is_mp=False,
     ):
 
         if (gap_aware_just_loss and (not use_recomputation)):
             raise NotImplementedError(
                 "gap_aware_just_loss works only with recomputation on")
-
-        self.sent_obejct_patience = 1
         self.use_pre_loaded_label_input = use_pre_loaded_label_input
         self.logger = logging.getLogger("msnag")  # FIXME
         self.gap_aware_just_loss = gap_aware_just_loss
@@ -63,7 +67,7 @@ class SinglePartitionManager:
         self.num_stages = num_stages
         self.step_every = step_every
         self.work_scheduler = work_scheduler(step_every)
-        self._init_partition(partition, use_recomputation)
+        self._init_partition(partition, use_recomputation, is_mp)
         if hasattr(comm_handler, "init_ddp_context"):
             ddp = comm_handler.init_ddp_context(self.partition.layers)
             self.partition.layers = ddp
@@ -99,6 +103,9 @@ class SinglePartitionManager:
 
         self.delay_at_batch = {}
 
+        self.futures_handler = self.comm_handler.futures_handler(
+            is_first_partition, is_last_partition, stateless_tied, num_stages)
+
         # Hints,May be set later.
         # self.dl_iter = None
         self.task: DLTask
@@ -108,7 +115,7 @@ class SinglePartitionManager:
         self.weight_stasher: WeightStasher
         self.true_weights_storage: TrueWeightsStorage
 
-    def _init_partition(self, partition, use_recomputation):
+    def _init_partition(self, partition, use_recomputation, is_mp):
         TO_DEVICE = False
         is_last_partition = self.is_last_partition
         is_first_partition = self.is_first_partition
@@ -145,16 +152,23 @@ class SinglePartitionManager:
                                                device,
                                                to_device=TO_DEVICE,
                                                _REQ_GRAD=True)
-
-        # We do the clone ourself.
-        # if hasattr(partition_cls, "_CLONE_INPUTS"):
-        partition_cls._CLONE_INPUTS = False
-
+        if is_mp:
+            # We do the clone ourself.
+            # if hasattr(partition_cls, "_CLONE_INPUTS"):
+            partition_cls._CLONE_INPUTS = False
         if not TO_DEVICE:
             self.partition.to(device)
 
     def set_true_weights_storage(self, true_weights_storage):
         self.true_weights_storage = true_weights_storage
+        se = self.step_every
+
+        def _get_micro_batch(self, batch_index):
+            if batch_index <= se:
+                return batch_index
+            return (batch_index + 1) % se
+
+        self.get_micro_batch = types.MethodType(_get_micro_batch, self)
 
     def get_micro_batch(self, batch_index):
         return batch_index % self.step_every
@@ -176,7 +190,6 @@ class SinglePartitionManager:
 
     def should_do_step(self, batch_idx):
         # Returns: bool, old_lrs to restore if needed
-        # TODO:
         se = self.step_every
         do_step = (batch_idx % se) == (se - 1)
         return do_step
@@ -222,9 +235,6 @@ class SinglePartitionManager:
                 else:
                     weight_stasher.set_problematic(forward=True,
                                                    policy='EVERY_BATCH')
-        elif self.PROBLEMATIC_POLICY == 'SKIP':
-            raise NotImplementedError()
-            # weight_stasher.set_problematic(forward=False, policy='CHANGE')
 
         self.weight_stasher = weight_stasher
 
@@ -246,7 +256,7 @@ class SinglePartitionManager:
             self.comm_handler.sync_buffers(self.buffers_to_sync)
 
     def get_input_data_forward(self, batch_idx, num_batches):
-        # Get the data to do forward on
+        """ Get the data to do forward on """
         if self.is_first_partition:
             # this also handle getting y with separate dataloader.
             x, *ctx = self.task.unpack_data_for_partition(next(self.dl_iter))
@@ -301,8 +311,6 @@ class SinglePartitionManager:
             Feature:
                 - Pre load Y to last partition if possible
         """
-        # NOTE: use to let "create recv buffers here, its ack for the sender. its useless. we can just it on the start and automatically instead of explicitly every call...
-
         partition = self.partition
         is_training = partition.training
         if is_training:
@@ -407,8 +415,6 @@ class SinglePartitionManager:
             grads = partition.get_grad(batch_idx)
             request_objects = self.comm_handler.send_gradients(
                 grads, batch_idx)
-            # TODO: problem when sharing weights (sending nn.Parameters)
-            # TODO: with weight prediction, with weight stashing.
 
             self.true_weights_storage.restore_if_needed()  # check=False
 
@@ -417,7 +423,6 @@ class SinglePartitionManager:
                 trainer.grad_norm()
 
             # Step
-
             trainer.last_partition_step_and_statistics(x,
                                                        *ctx,
                                                        step_and_stats_ctx,
@@ -444,7 +449,6 @@ class SinglePartitionManager:
                 for g, old_lr in zip(pgs, old_lrs):
                     g['lr'] = old_lr
 
-        request_objects.result()
         return request_objects
 
     def run_batch_backward(self, batch_idx, num_batches):
@@ -461,11 +465,11 @@ class SinglePartitionManager:
         self.partition.recompute(batch_idx)
         # NOTE: in MPI version there was hacky zero and sync here
         g = self.comm_handler.wait_recv_gradients(batch_idx, last_due_end)
+        self.comm_handler.post_recv_gradients(batch_idx, num_batches)
 
         # Allow skiping steps (Gradient aggregation)
         old_lrs = None
         do_step = self.should_do_step(batch_idx)
-
         # also do step for the last. (but with smaller LR)
         if not do_step and last_due_end:
             do_step = True
@@ -481,12 +485,12 @@ class SinglePartitionManager:
         # recompute and send backward
         request_objects = None
         if not (self.is_first_partition):
-            # g = self.partition.get_grad(batch_idx)
             request_objects = self.comm_handler.send_gradients(
                 self.partition.get_grad(batch_idx), batch_idx)
 
-        # TODO: here we can send the next rcev buffer
+        # NOTE: we can start the next recv here
 
+        # TODO: just make it a STEP funciton
         if do_step:
             trainer = self.trainer
             weight_stasher = self.weight_stasher
@@ -520,6 +524,8 @@ class SinglePartitionManager:
                 # Get delay and modify gradients.
                 if self.is_problematic:
                     # Average delays
+                    # FIXME:
+                    raise NotImplementedError()
                     mb = self.get_micro_batch(batch_idx)
                     delay = np.mean([
                         self.delay_at_batch.pop(batch_idx - i)
@@ -555,8 +561,6 @@ class SinglePartitionManager:
             if self.gap_aware_just_loss and self.weight_stasher:
                 weight_stasher.pop_stashed_buff(batch_idx)
 
-        if not (self.is_first_partition):
-            request_objects.result()
         return request_objects
 
     def expected_staleness(self, done_fwds, done_bwds):
@@ -579,16 +583,12 @@ class SinglePartitionManager:
         """
 
         run_batch_forward = self.run_batch_forward
+        futures_handler = self.futures_handler
 
         for done_fwds in range(num_batches):
             ro = run_batch_forward(done_fwds, num_batches)
-
-            # diffenret partitions behave differently..
-            if isinstance(ro, list):
-                for r in ro:
-                    r.result()
-            elif ro is not None:
-                ro.result()
+            futures_handler.after_forward(ro, done_fwds, False)
+        futures_handler.clean_eval()
 
     def run_until_flush(self, num_batches):
         """
@@ -607,10 +607,10 @@ class SinglePartitionManager:
         stage = self.stage
         num_stages = self.num_stages
         work_scheduler = self.work_scheduler
-        # is_first_partition = self.is_first_partition
         is_last_partition = self.is_last_partition
         run_batch_backward = self.run_batch_backward
         run_batch_forward = self.run_batch_forward
+        futures_handler = self.futures_handler
 
         while done_bwds < num_batches:
             # Act according to some policy
@@ -620,8 +620,14 @@ class SinglePartitionManager:
                 ro = run_batch_forward(done_fwds,
                                        num_batches,
                                        done_bwds=done_bwds)
+                if is_last_partition:
+                    futures_handler.after_backward(ro, done_fwds)
+                else:
+                    futures_handler.after_forward(ro, done_fwds, True)
+
             else:
                 ro = run_batch_backward(done_bwds, num_batches)
+                futures_handler.after_backward(ro, done_fwds)
 
             # Increase counters
             if is_last_partition:
@@ -636,5 +642,4 @@ class SinglePartitionManager:
         # Do a scheduler step at the end of epoch if not already doing so each step.
         if not self.trainer.PER_STEP_SCHEDULER:
             self.lr_scheduler.step()
-        if ro is not None:
-            ro.result()
+        futures_handler.clean_train()

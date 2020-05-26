@@ -1,11 +1,31 @@
 import abc
 
 
+class FuturesHandlerBase(abc.ABC):
+    def __init__(self):
+        pass
+
+    @abc.abstractmethod
+    def after_forward(self, sent_request_objects, done_fwds, training):
+        pass
+
+    @abc.abstractmethod
+    def after_backward(self, sent_request_objects, done_bwds):
+        pass
+
+    @abc.abstractmethod
+    def clean_train(self):
+        pass
+
+    @abc.abstractmethod
+    def clean_eval(self):
+        pass
+
+
 class CommunicationHandlerBase(abc.ABC):
     """ Base class for all communication handlers.
             Handles communication between stages.
     """
-
     def __init__(self):
         pass
 
@@ -80,5 +100,10 @@ class CommunicationHandlerBase(abc.ABC):
         pass
 
     def get_data_forward(self, batch_idx, num_batches):
+        pass
+
+    @staticmethod
+    @abc.abstractmethod
+    def futures_handler(*args, **kw) -> FuturesHandlerBase:
         pass
 

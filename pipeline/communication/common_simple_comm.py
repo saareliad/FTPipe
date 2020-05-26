@@ -2,8 +2,9 @@ import torch
 import logging
 import torch.distributed as dist
 
-from .interface import CommunicationHandlerBase
+from .interface import CommunicationHandlerBase, FuturesHandlerBase
 from .buffer import make_buff
+from collections import OrderedDict
 
 
 class SimpleCommBase(CommunicationHandlerBase):
@@ -397,3 +398,91 @@ class SimpleCommBase(CommunicationHandlerBase):
                          shapes=self.training_tensor_shapes,
                          is_bwd=True,
                          create=True)
+
+    @staticmethod
+    def futures_handler(is_first_partition, is_last_partition, stateless_tied, num_stages):
+        return FuturesHandler(is_first_partition, is_last_partition, stateless_tied, num_stages)
+
+
+class FuturesHandler(FuturesHandlerBase):
+    """ This is mostly for MPI, where sent objects are problematic - currently not deleted automatically """
+    def __init__(self, is_first_partition, is_last_partition, stateless_tied, num_stages):
+
+        # FIXME: this is ugly solution for freeing send buffers in tied weights trick. its a waste of memory.
+        if stateless_tied and (is_first_partition or is_last_partition):
+            self.sent_obejct_patience = num_stages - 2
+        else:
+            self.sent_obejct_patience = 1
+        # Holds Async handle objects (for isends)
+        self.async_fwd_objects = OrderedDict()
+        self.async_bwd_objects = OrderedDict()
+
+        self.is_first_partition = is_first_partition
+    
+    def after_forward(self, sent_request_objects, done_fwds, training):
+        # NOTE: Last partition inserts its gradients into async_fwd_objects,
+        # wait on prev send
+        if sent_request_objects:   # last partition returns empty list.
+            if self.async_fwd_objects:
+                self.wait_on_sent_object(is_fwd=True)
+            self.async_fwd_objects[done_fwds] = sent_request_objects
+    
+    def after_backward(self, sent_request_objects, done_bwds):
+        # NOTE: its actually after the step too
+        # HACK: in GPIPE we laizly insert at wrong index to to avoid ordering issues
+        if not (self.is_first_partition):
+            # wait on prev send
+            if self.async_bwd_objects:
+                self.wait_on_sent_object(is_fwd=False)
+            self.async_bwd_objects[done_bwds] = sent_request_objects
+
+    def clean_train(self):
+        async_fwd_objects = self.async_fwd_objects
+        async_bwd_objects = self.async_bwd_objects
+        wait_on_sent_object = self.wait_on_sent_object
+
+        while len(async_fwd_objects) > 0:
+            wait_on_sent_object(is_fwd=True, fin=True)
+
+        while len(async_bwd_objects) > 0:
+            wait_on_sent_object(is_fwd=False, fin=True)
+    
+    def clean_eval(self):
+        async_fwd_objects = self.async_fwd_objects
+        wait_on_sent_object = self.wait_on_sent_object
+        while len(async_fwd_objects) > 0:
+            wait_on_sent_object(is_fwd=True, fin=True)
+
+    def wait_on_sent_object(self, is_fwd, fin=False, clean_first=True):
+        obj_holder = self.async_fwd_objects if is_fwd else self.async_bwd_objects
+        # Attempt to clean all done object for saving memory
+        # NOTE: this should be removed when this is supported by pytorch.
+        if clean_first:
+            self.clean_sent_requests(obj_holder)
+            if not obj_holder:
+                return
+
+        if not fin and (len(obj_holder) <= self.sent_obejct_patience):
+            return
+        
+        # Pop the item that was increased first.
+        _, (sent_request_objects,
+            tmp_sent_items) = obj_holder.popitem(last=False)
+        for i in sent_request_objects:
+            i.wait()
+
+    def clean_sent_requests(self, obj_holder):
+        to_del = []
+        for i in obj_holder:
+            a, b = obj_holder[i]
+            to_remove = [i for i, r in enumerate(a) if r.is_completed()]
+            for x in sorted(to_remove, reverse=True):
+                del a[x]
+            # break early for simplicity
+            if not a:
+                to_del.append(i)
+            else:
+                break
+
+        for i in sorted(to_del, reverse=True):
+            del obj_holder[i]
