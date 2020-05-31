@@ -7,7 +7,7 @@ import argparse
 import importlib
 from misc import run_analysis, run_partitions
 import sys
-from heuristics import edge_weight_function, node_weight_function
+from heuristics import EdgeWeightFunction, NodeWeightFunction
 from partition_scripts_utils import ParseMetisOpts, ParsePartitioningOpts, record_cmdline, run_x_tries_until_no_fail,choose_blocks
 import functools
 from partition_async_pipe import AsyncPipePartitioner
@@ -198,9 +198,9 @@ if __name__ == "__main__":
         use_graph_profiler=args.use_graph_profiler,
         use_network_profiler=not args.use_graph_profiler,
         profile_ops=args.profile_ops,
-        node_weight_function=node_weight_function(
+        node_weight_function=NodeWeightFunction(
             bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-        edge_weight_function=edge_weight_function(
+        edge_weight_function=EdgeWeightFunction(
             bw, bwd_to_fwd_ratio=bwd_to_fwd_ratio),
         n_iter=n_iter,
         recomputation=recomputation,
@@ -231,9 +231,9 @@ if __name__ == "__main__":
             use_graph_profiler=args.use_graph_profiler,
             use_network_profiler=not args.use_graph_profiler,
             profile_ops=args.profile_ops,
-            node_weight_function=node_weight_function(
+            node_weight_function=NodeWeightFunction(
                 bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-            edge_weight_function=edge_weight_function(
+            edge_weight_function=EdgeWeightFunction(
                 bw, bwd_to_fwd_ratio=bwd_to_fwd_ratio),
             n_iter=n_iter,
             recomputation=recomputation,
