@@ -5,15 +5,17 @@ import torch
 import operator
 import math
 from pytorch_Gpipe.model_profiling.tracer import trace_module,register_new_explicit_untraced_function,register_new_traced_function
-from pytorch_Gpipe import pipe_model,compile_partitioned_model,GraphProfiler,execute_graph
-from heuristics import NodeWeightFunction,EdgeWeightFunction
+from pytorch_Gpipe import pipe_model,compile_partitioned_model,GraphProfiler,execute_graph,build_graph
 from pytorch_Gpipe.utils import layerDict,tensorDict,flatten
 import traceback
 import os
 import importlib
 import numpy as np
 from collections import Counter
-
+import random
+from pytorch_Gpipe.model_partitioning.acyclic_partitioning import partition_graph
+from collections import defaultdict
+from heuristics import NodeWeightFunction,EdgeWeightFunction
 
 def seed():
     torch.cuda.synchronize()
@@ -176,15 +178,32 @@ def compare_models(lm_args,args):
             ensure_tracing_semantics_and_profiling(ref_model,our_model,inputs,training=False,exp_prefix=prefix)
 
 
-COMPARE_MODELS=True
+
+def display_most_used_nodes(graph,threshold=5):
+    nodes = list(graph.nodes)
+    nodes = sorted(nodes,key=lambda n: len(n.out_edges),reverse=True)
+    print()
+    print(f"total graph size: {len(nodes)} nodes")
+    for n in nodes:
+        if len(n.out_edges) >=threshold: 
+            print(n.scope,n.id,len(n.out_edges))
+            for o in sorted(n.out_edges,key=lambda u:u.id-n.id):
+                if n in o.kwargs:
+                    print(f"    kwarg:{o.kwargs[n]} of",o.scope,f"diff:{o.id-n.id} diff_percent:{(o.id-n.id)/len(nodes):.2f}")
+                else:
+                    print(f"    arg:{o.args.index(n)} of",o.scope,f"diff:{o.id-n.id} diff_percent:{(o.id-n.id)/len(nodes):.2f}")
+    print()
+
+
+COMPARE_MODELS=False
 
 if __name__ == "__main__":
     tokenizer = T5Tokenizer.from_pretrained('t5-small')
     print("tokenizer created")
     
     input_ids = tokenizer.encode(
-        "Hello, my dog is cute", return_tensors="pt").cuda()  # Batch size 1
-    
+        "Hello, my dog is cute", return_tensors="pt").cuda()  # Batch (1,6)
+    input_ids=input_ids.repeat(32,20).contiguous() #Batch (32,120)
     lm_kwargs={"input_ids":input_ids,"decoder_input_ids":input_ids,"lm_labels":input_ids,"use_cache":True}
     kwargs = {"input_ids":input_ids,"decoder_input_ids":input_ids,"use_cache":True}
     print("tokenized input")
@@ -205,8 +224,14 @@ if __name__ == "__main__":
         for e,n in c_our.items():
             print(e,n)
 
-        basic_blocks = get_blocks(our)
-        blocks = [basic_blocks[b] for b in ['T5Attention']]
+        del ref
 
-        graph = trace_module(our,kwargs=lm_kwargs,basic_blocks=blocks)
-        graph.save_as_pdf("T5_Full_untied_T5Attention",".")
+        basic_blocks = get_blocks(our)
+        blocks = [basic_blocks[b] for b in ["T5Attention"]]
+
+
+        graph = build_graph(our,kwargs=lm_kwargs,use_graph_profiler=True,profile_ops=True,use_network_profiler=False,
+        save_memory_mode=False,basic_blocks=blocks,force_no_recomp_scopes=None)
+
+        partition_graph(graph,4,node_weight_function=NodeWeightFunction(3),epsilon=0.1,
+                    edge_weight_function=EdgeWeightFunction(12,3),rounds=10,allocated_seconds=10,use_layers_graph=True)
