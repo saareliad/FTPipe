@@ -1,6 +1,6 @@
 from enum import IntEnum
 import pickle
-from typing import Tuple, Optional, Callable, Dict, Iterable, List
+from typing import Tuple, Optional, Callable, Dict, Iterable, List,Set
 from itertools import chain
 from torch import Tensor, nn as nn
 
@@ -29,7 +29,7 @@ class Node():
         self.part = 0
         self.weight = None
 
-        self.out_edges = set()
+        self.out_edges:Set[Node] = set()
         self.args = []
         self.kwargs = dict()
         self.value_type = None
@@ -52,9 +52,16 @@ class Node():
         self.out_edges.remove(out_node)
 
     @property
-    def in_edges(self):
+    def in_edges(self)->List["Node"]:
         return list(chain(self.args, self.kwargs.keys()))
 
+    def replace_input(self,original,new):
+        try:
+            self.args[self.args.index(original)]=new
+        except:
+            pass
+        if original in self.kwargs:
+            self.kwargs[new]=self.kwargs.pop(original)
 
 GraphNodes = Dict[int, Node]
 NodeWeightFunction = Callable[[Node], int]
@@ -461,3 +468,6 @@ class Graph():
         new_graph.output_ids = output_ids
 
         return new_graph, lookup
+
+    def __getitem__(self,idx):
+        return self._nodes[idx]
