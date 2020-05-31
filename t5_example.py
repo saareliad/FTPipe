@@ -7,14 +7,11 @@ import math
 from pytorch_Gpipe.model_profiling.tracer import trace_module,register_new_explicit_untraced_function,register_new_traced_function
 from pytorch_Gpipe import pipe_model,compile_partitioned_model,GraphProfiler,execute_graph,build_graph
 from pytorch_Gpipe.utils import layerDict,tensorDict,flatten
-import traceback
 import os
 import importlib
 import numpy as np
 from collections import Counter
-import random
 from pytorch_Gpipe.model_partitioning.acyclic_partitioning import partition_graph
-from collections import defaultdict
 from heuristics import NodeWeightFunction,EdgeWeightFunction
 
 def seed():
@@ -229,9 +226,8 @@ if __name__ == "__main__":
         basic_blocks = get_blocks(our)
         blocks = [basic_blocks[b] for b in ["T5Attention"]]
 
-
         graph = build_graph(our,kwargs=lm_kwargs,use_graph_profiler=True,profile_ops=True,use_network_profiler=False,
         save_memory_mode=False,basic_blocks=blocks,force_no_recomp_scopes=None)
 
-        partition_graph(graph,4,node_weight_function=NodeWeightFunction(3),epsilon=0.1,
-                    edge_weight_function=EdgeWeightFunction(12,3),rounds=10,allocated_seconds=10,use_layers_graph=True)
+        partition_graph(graph,4,node_weight_function=NodeWeightFunction(3,1),epsilon=0.1,
+                    edge_weight_function=EdgeWeightFunction(12,3,1),rounds=10,allocated_seconds=10,use_layers_graph=True)
