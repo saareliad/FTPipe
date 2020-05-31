@@ -6,7 +6,7 @@ import operator
 import math
 from pytorch_Gpipe.model_profiling.tracer import trace_module,register_new_explicit_untraced_function,register_new_traced_function
 from pytorch_Gpipe import pipe_model,compile_partitioned_model,GraphProfiler,execute_graph
-from heuristics import node_weight_function,edge_weight_function
+from heuristics import NodeWeightFunction,EdgeWeightFunction
 from pytorch_Gpipe.utils import layerDict,tensorDict,flatten
 import traceback
 import os

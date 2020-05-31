@@ -3,6 +3,7 @@ from functools import wraps
 from itertools import chain
 import operator
 import warnings
+from copy import deepcopy
 
 
 import torch
@@ -706,7 +707,8 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
 
     CURRENT_SCOPE = ""
 
-    nodes = discard_unused_nodes(NODES,output_id)
+    nodes = duplicate_constants(NODES)
+    nodes = discard_unused_nodes(nodes,output_id)
 
     # record input kwargs explicitly as they are not passed by position
     # we only retain kwargs that are actually used
@@ -880,6 +882,27 @@ def reset_tracing_state():
     FUNCTION_NAMESPACE.clear()
     TracedValue.ID = 0
 
+
+def duplicate_constants(nodes):
+    new_nodes=dict()
+    offset=0
+    for idx in range(len(nodes)):
+        node = nodes[idx]
+        node.id+=offset
+        
+        if node.type is NodeTypes.CONSTANT and len(node.out_edges) > 1:
+            for n_copy,o in enumerate(node.out_edges):
+                copy_node = deepcopy(node)
+                copy_node.id+=(n_copy)
+                o.replace_input(node,copy_node)
+                copy_node.out_edges={o}
+                new_nodes[copy_node.id] = copy_node
+                offset+=1
+        else:
+            assert node.id not in new_nodes
+            new_nodes[node.id]=node
+    
+    return new_nodes
 
 def discard_unused_nodes(nodes,output_id):
     new_nodes = []

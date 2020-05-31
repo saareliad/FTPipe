@@ -33,7 +33,7 @@ from torch.utils.data import DataLoader, Dataset, RandomSampler
 import warnings
 import sys
 from partition_scripts_utils import ParseMetisOpts, ParsePartitioningOpts, record_cmdline, run_x_tries_until_no_fail,choose_blocks
-from heuristics import edge_weight_function, node_weight_function
+from heuristics import NodeWeightFunction, EdgeWeightFunction
 from transformers import (
     BertConfig,
     BertForMaskedLM,
@@ -70,8 +70,8 @@ from pytorch_Gpipe import PipelineConfig
 import functools
 from partition_async_pipe import AsyncPipePartitioner
 import math
+from pytorch_Gpipe.model_profiling.tracer import register_new_traced_function,register_new_explicit_untraced_function
 import operator
-from pytorch_Gpipe.model_profiling.tracer import register_new_traced_function, register_new_explicit_untraced_function
 
 MODEL_CLASSES_LM_HEAD = {
     'gpt2': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
@@ -239,28 +239,6 @@ def partition_model(args,
                                             namespace=operator)
     register_new_explicit_untraced_function(operator.is_not,
                                             namespace=operator)
-    # graph = pipe_model(model,
-    #                    batch_dim,
-    #                    sample,
-    #                    depth=args.depth,
-    #                    n_iter=args.n_iter,
-    #                    nparts=args.n_partitions,
-    #                    node_weight_function=node_weight_function(
-    #                        bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-    #                    edge_weight_function=edge_weight_function(
-    #                        args.bandwidth_gps,
-    #                        bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-    #                    use_layers_only_graph=True,
-    #                    use_graph_profiler=args.use_graph_profiler,
-    #                   use_network_profiler=not args.use_graph_profiler,
-    #                    profile_ops =args.profile_ops,
-    #                    output_file=args.output_file,
-    #                    generate_model_parallel=args.generate_model_parallel,
-    #                    generate_explicit_del=args.generate_explicit_del,
-    #                    save_memory_mode=args.save_memory_mode,
-    #                    recomputation=recomputation,
-    #                    METIS_opt=METIS_opt,
-    #                    force_no_recomp_scopes=force_no_recomputation_fn)
 
     partial_pipe_model = functools.partial(
         pipe_model,
@@ -271,9 +249,9 @@ def partition_model(args,
         depth=args.depth,
         n_iter=args.n_iter,
         nparts=args.n_partitions,
-        node_weight_function=node_weight_function(
+        node_weight_function=NodeWeightFunction(
             bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-        edge_weight_function=edge_weight_function(
+        edge_weight_function=EdgeWeightFunction(
             args.bandwidth_gps,
             bwd_to_fwd_ratio=bwd_to_fwd_ratio),
         use_layers_only_graph=True,
