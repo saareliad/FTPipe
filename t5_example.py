@@ -12,6 +12,7 @@ import importlib
 import numpy as np
 from collections import Counter
 from pytorch_Gpipe.model_partitioning.acyclic_partitioning import partition_graph
+from pytorch_Gpipe.model_partitioning.acyclic_partitioning.gpa import visualize_matching,find_max_matching
 from heuristics import NodeWeightFunction,EdgeWeightFunction
 
 def seed():
@@ -229,5 +230,15 @@ if __name__ == "__main__":
         graph = build_graph(our,kwargs=lm_kwargs,use_graph_profiler=True,profile_ops=True,use_network_profiler=False,
         save_memory_mode=False,basic_blocks=blocks,force_no_recomp_scopes=None)
 
-        partition_graph(graph,4,node_weight_function=NodeWeightFunction(3,1),epsilon=0.1,
-                    edge_weight_function=EdgeWeightFunction(12,3,1),rounds=10,allocated_seconds=10,use_layers_graph=True)
+        nwf = NodeWeightFunction(3,MULT_FACTOR=1)
+        ewf = EdgeWeightFunction(12,3,MULT_FACTOR=1)
+        partition_graph(graph,4,node_weight_function=nwf,epsilon=0.1,
+                    edge_weight_function=ewf,rounds=10,allocated_seconds=10,use_layers_graph=True)
+
+
+        layers_graph,_ = graph.layers_graph()
+
+        matching,_ = find_max_matching(layers_graph,nwf,ewf,seed=0)
+
+        visualize_matching(layers_graph.nodes,matching,"matching",".")
+

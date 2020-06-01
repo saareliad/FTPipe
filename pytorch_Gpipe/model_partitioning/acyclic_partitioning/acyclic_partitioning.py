@@ -326,7 +326,7 @@ def Fiduccia_Mattheyses_moves(partition_volumes:Dict[int,float],edge_weights:Dic
 
 #assumes W(u,v) > 0
 
-def calculate_gain(v:Node,dest:int,edge_weights:Dict[Tuple[Node,Node],float]):
+def calculate_gain(v:Node,dest:int,edge_weights:Dict[Tuple[Node,Node],float])->float:
     return C_in(v,dest,edge_weights) - C_out(v,v.part,edge_weights) + C_out(v,dest,edge_weights) - C_in(v,v.part,edge_weights)
 
 
@@ -364,7 +364,6 @@ ALGORITHMS = {
 
 def partition_graph(graph:Graph,k:int,epsilon:float=0.1,node_weight_function:Optional[NodeWeightFunction]=None,
                     edge_weight_function:Optional[EdgeWeightFunction]=None,rounds:int=10,allocated_seconds:int=10,use_layers_graph:bool=True)->Tuple[Graph,float,Dict[int,float]]:
-    #TODO buggy for maximal depth very unbalanced
     worker_args=[dict(graph = graph.state(),
                         k=k,
                         algorithm=alg,
@@ -399,7 +398,7 @@ def partition_graph(graph:Graph,k:int,epsilon:float=0.1,node_weight_function:Opt
     return graph,edge_cut,volumes
         
 
-def worker(kwargs):
+def worker(kwargs)->Tuple[Dict[int,int],float,Dict[int,float],ALGORITHM]:
     kwargs['graph'] = Graph(None, None, None, None,None).load_state(kwargs['graph'])
     seed = kwargs.pop("seed")
     allocated_seconds = kwargs.pop("allocated_seconds")

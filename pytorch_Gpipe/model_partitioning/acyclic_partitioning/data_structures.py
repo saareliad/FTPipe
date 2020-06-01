@@ -1,9 +1,8 @@
 from collections import defaultdict
 from pytorch_Gpipe.model_profiling import Node
-from typing import Dict,Iterable,Set,Iterator,List,Tuple,Any
+from typing import Dict,Iterable,Set,Iterator,List,Tuple,Any,Optional
 import random
 import heapq
-
 
 class PriorityQueue():
     #heapq is a min heap and we need a max heap
@@ -326,3 +325,135 @@ class QuotientGraph():
                 assert idx in self._nodes[o].in_edges,(idx,o)
 
         assert not self.has_cycles()
+
+
+class Path():
+    def __init__(self,v):
+        self.start = self.end = v
+        self.length=0
+        self.active=True
+    
+    def is_cycle(self)->bool:
+        return (self.start is self.end) and (self.length > 0)
+
+
+class PathSet():
+    def __init__(self,graph_nodes:Iterable[Node]):
+        self.paths = {v:Path(v) for v in graph_nodes}
+
+        self.next:Dict[Node,Node] = {v:v for v in graph_nodes}
+        self.prev:Dict[Node,Node] = {v:v for v in graph_nodes}
+
+        self.next_edge:Dict[Node,Optional[Tuple[Node,Node]]] = {v:None for v in graph_nodes}
+        self.prev_edge:Dict[Node,Optional[Tuple[Node,Node]]] = {v:None for v in graph_nodes}
+
+        self.n_active_paths = len(self.paths)
+
+
+    def is_endpoint(self,v):
+        return (self.next[v] is v) or (self.prev[v] is v)
+    
+    def next_vertex(self,v):
+        return self.next[v]
+    
+    def prev_vertex(self,v):
+        return self.prev[v]
+    
+    def edge_to_next(self,v):
+        return self.next_edge[v]
+    
+    def edge_to_prev(self,v):
+        return self.prev_edge[v]
+    
+    def add_if_eligible(self,edge):
+        src,dst = edge
+
+        src_path = self.paths[src]
+        dst_path = self.paths[dst]
+
+        assert src is not dst
+
+        #edges between partitions are not eligible
+        if src.part != dst.part:
+            return False
+
+        # both vertices must be endpoints in order for the edge to be eligible
+        if not (self.is_endpoint(src) and self.is_endpoint(dst)):
+            return False
+        
+        assert src_path.active and dst_path.active
+
+        # edge to/from cycle is not eligible
+        if (src_path.is_cycle() or dst_path.is_cycle()):
+            return False
+        
+        if src_path is not dst_path:
+            #we do not close a cycle so we merge paths
+            self.n_active_paths-=1
+            src_path.length += (dst_path.length + 1)
+
+            #update paths basically handle the 4 possible direction combinations
+            if (src_path.start is src and dst_path.start is dst):
+                self.paths[dst_path.end] = src_path
+                src_path.start = dst_path.end
+            elif (src_path.start is src and dst_path.end is dst):
+                self.paths[dst_path.start] = src_path
+                src_path.start = dst_path.start
+            elif (src_path.end is src and dst_path.start is dst):
+                self.paths[dst_path.end] = src_path
+                src_path.end = dst_path.end
+            elif (src_path.end is src and dst_path.end is dst):
+                self.paths[dst_path.start] = src_path
+                src_path.end = dst_path.start
+
+            #update the doubly linked list
+            if self.next[src] is src:
+                assert self.next_edge[src] is None
+                self.next[src] = dst
+                self.next_edge[src] = edge
+            else:
+                assert self.prev_edge[src] is None
+                self.prev[src] = dst
+                self.prev_edge[src] = edge
+            
+            if self.next[dst] is dst:
+                assert self.next_edge[dst] is None
+                self.next[dst] = src
+                self.next_edge[dst] = edge
+            else:
+                assert self.prev_edge[dst] is None
+                self.prev[dst] = src
+                self.prev_edge[dst] = edge
+            
+            #deactivate the path as it has been merged
+            dst_path.active = False
+
+        elif (src_path.length % 2) == 1:
+            # close even length cycle
+            src_path.length += 1
+
+            # close the cycle by updateing the doubly linked list
+            if self.next[src_path.start] is src_path.start:
+                self.next[src_path.start] = src_path.end
+                self.next_edge[src_path.start] = edge 
+            else:
+                self.prev[src_path.start] = src_path.end
+                self.prev_edge[src_path.start] = edge
+            
+
+            if self.next[src_path.end] is src_path.end:
+                self.next[src_path.end] = src_path.start
+                self.next_edge[src_path.end] = edge
+            else:
+                self.prev[src_path.end] = src_path.start
+                self.prev_edge[src_path.end] = edge
+
+            src_path.end = src_path.start
+            return True
+
+        return False
+
+    def active_paths(self):
+        paths = [p for p in self.paths.values() if p.active]
+        return set(paths)
+
