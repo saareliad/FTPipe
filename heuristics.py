@@ -14,12 +14,12 @@ class NodeWeightFunction():
     def __call__(self,node: Node):
         assert isinstance(node.weight, ExecTimes)
         if self.ratio < 0:
-            return int(self.MULT_FACTOR * (node.weight.backward_time))
+            return int(self.MULT_FACTOR * (max(1,node.weight.backward_time)))
         else:
             # TODO: it has to be consistent with communication times to work
             return int(self.MULT_FACTOR *
-                    ((self.ratio * node.weight.backward_time +
-                        node.weight.forward_time) /
+                    ((self.ratio * max(1,node.weight.backward_time +
+                        node.weight.forward_time)) /
                         (self.ratio + 1)))
 
 

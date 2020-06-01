@@ -95,7 +95,7 @@ def random_Khan_algorithm(graph:Graph):
 #move nodes between adjacent partitions as long as edge cut improves and constraints are enforced
 # aka i=>i+1 or i=>i+1
 # a move is aligible as long as it does not overload the target partition and does not create a cycle
-def simple_moves(partition_volumes:Dict[int,float],edge_weights:Dict[Tuple[int,int],float],node_weights:Dict[Node,float],L_max:float,rounds:int=1):
+def simple_moves(partition_volumes:Dict[int,float],edge_weights:Dict[Tuple[Node,Node],float],node_weights:Dict[Node,float],L_max:float,rounds:int=1):
     #we use 0 based indexing
     k=len(partition_volumes)-1
     for _ in range(rounds):
@@ -135,7 +135,7 @@ def simple_moves(partition_volumes:Dict[int,float],edge_weights:Dict[Tuple[int,i
 #uses a sufficient condition for enforcing acyclicicity not a necessary condition
 # as such some options are skipped
 # a move is aligible as long as it does not overload the target partition and does not create a cycle
-def advanced_moves(partition_volumes:Dict[int,float],edge_weights:Dict[Tuple[int,int],float],node_weights:Dict[Node,float],L_max:float,rounds:int=1):
+def advanced_moves(partition_volumes:Dict[int,float],edge_weights:Dict[Tuple[Node,Node],float],node_weights:Dict[Node,float],L_max:float,rounds:int=1):
     for _ in range(rounds):
         changed=False
 
@@ -178,7 +178,7 @@ def advanced_moves(partition_volumes:Dict[int,float],edge_weights:Dict[Tuple[int
 #move nodes between all partitions as long as edge cut improves and constraints are enforced
 #uses Khan's algorithm to ensure we do not create cycles in the quotient graph
 # a move is aligible as long as it does not overload the target partition and does not create a cycle
-def global_moves(partition_volumes:Dict[int,float],edge_weights:Dict[Tuple[int,int],float],node_weights:Dict[Node,float],L_max:float,rounds:int=1):
+def global_moves(partition_volumes:Dict[int,float],edge_weights:Dict[Tuple[Node,Node],float],node_weights:Dict[Node,float],L_max:float,rounds:int=1):
     quotient_graph = QuotientGraph(node_weights.keys())
 
     for _ in range(rounds):
@@ -216,7 +216,7 @@ def global_moves(partition_volumes:Dict[int,float],edge_weights:Dict[Tuple[int,i
 # move nodes between partitions
 # moves with negative gain are also eligible in order to escape local minima
 # the partitioning with the best objective will be returned
-def Fiduccia_Mattheyses_moves(partition_volumes:Dict[int,float],edge_weights:Dict[Tuple[int,int],float],node_weights:Dict[Node,float],L_max:float,rounds:int=1):
+def Fiduccia_Mattheyses_moves(partition_volumes:Dict[int,float],edge_weights:Dict[Tuple[Node,Node],float],node_weights:Dict[Node,float],L_max:float,rounds:int=1):
     quotient_graph = QuotientGraph(node_weights.keys())
 
     best_objective = calculate_edge_cut(node_weights.keys(),edge_weights)
@@ -326,24 +326,24 @@ def Fiduccia_Mattheyses_moves(partition_volumes:Dict[int,float],edge_weights:Dic
 
 #assumes W(u,v) > 0
 
-def calculate_gain(v:Node,dest:int,edge_weights:Dict[Tuple[int,int],float]):
+def calculate_gain(v:Node,dest:int,edge_weights:Dict[Tuple[Node,Node],float]):
     return C_in(v,dest,edge_weights) - C_out(v,v.part,edge_weights) + C_out(v,dest,edge_weights) - C_in(v,v.part,edge_weights)
 
 
-def C_in(v:Node,i:int,edge_weights:Dict[Tuple[int,int],float])->float:
-    return sum(edge_weights[(u.id,v.id)] for u in v.in_edges if u.part == i)
+def C_in(v:Node,i:int,edge_weights:Dict[Tuple[Node,Node],float])->float:
+    return sum(edge_weights[(u,v)] for u in v.in_edges if u.part == i)
 
 
-def C_out(v:Node,i:int,edge_weights:Dict[Tuple[int,int],float])->float:
-    return sum(edge_weights[(v.id,u.id)] for u in v.out_edges if u.part == i)
+def C_out(v:Node,i:int,edge_weights:Dict[Tuple[Node,Node],float])->float:
+    return sum(edge_weights[(v,u)] for u in v.out_edges if u.part == i)
 
 
-def calculate_edge_cut(nodes:Iterator[Node],edge_weights:Dict[Tuple[int,int],float])->float:
+def calculate_edge_cut(nodes:Iterator[Node],edge_weights:Dict[Tuple[Node,Node],float])->float:
     edge_cut=0
     for n in nodes:
         for o in n.out_edges:
             if n.part != o.part:
-                edge_cut += edge_weights[(n.id,o.id)]
+                edge_cut += edge_weights[(n,o)]
     return edge_cut
 
 
@@ -363,9 +363,9 @@ ALGORITHMS = {
 }
 
 def partition_graph(graph:Graph,k:int,epsilon:float=0.1,node_weight_function:Optional[NodeWeightFunction]=None,
-                    edge_weight_function:Optional[EdgeWeightFunction]=None,rounds:int=10,allocated_seconds:int=10,seed:Optional[int]=None,use_layers_graph:bool=True)->Tuple[Graph,float,Dict[int,float]]:
-    
-    worker_args=[dict(graph=Graph(None, None, None, None,None).load_state(graph.state()),
+                    edge_weight_function:Optional[EdgeWeightFunction]=None,rounds:int=10,allocated_seconds:int=10,use_layers_graph:bool=True)->Tuple[Graph,float,Dict[int,float]]:
+    #TODO buggy for maximal depth very unbalanced
+    worker_args=[dict(graph = graph.state(),
                         k=k,
                         algorithm=alg,
                         epsilon=epsilon,
@@ -373,7 +373,7 @@ def partition_graph(graph:Graph,k:int,epsilon:float=0.1,node_weight_function:Opt
                         edge_weight_function=edge_weight_function,
                         rounds=rounds,
                         allocated_seconds=allocated_seconds,
-                        seed=seed,
+                        seed=random.randint(0,2**32),
                         use_layers_graph=use_layers_graph) for alg in ALGORITHM]
 
     with Pool(len(ALGORITHMS)) as pool:
@@ -400,11 +400,12 @@ def partition_graph(graph:Graph,k:int,epsilon:float=0.1,node_weight_function:Opt
         
 
 def worker(kwargs):
+    kwargs['graph'] = Graph(None, None, None, None,None).load_state(kwargs['graph'])
     seed = kwargs.pop("seed")
     allocated_seconds = kwargs.pop("allocated_seconds")
     random.seed(seed)
     start = time.time()
-    bp,be,bv = None,1e20,None
+    bp,be,bv = None,np.inf,None
     steps=0
     while (time.time() - start) < allocated_seconds:
         p,e,v=_acyclic_partition(**kwargs)
@@ -441,7 +442,7 @@ def _acyclic_partition(graph:Graph,algorithm:ALGORITHM=ALGORITHM.FIDUCCIA_MATTHE
     for n in work_graph.nodes:
         node_weights[n] = node_weight_function(n)
         for o in n.out_edges:
-            edge_weights[(n.id,o.id)] = edge_weight_function(n,o)
+            edge_weights[(n,o)] = edge_weight_function(n,o)
 
     initial_divide(work_graph,k,node_weights)
 
@@ -462,7 +463,7 @@ def _acyclic_partition(graph:Graph,algorithm:ALGORITHM=ALGORITHM.FIDUCCIA_MATTHE
         for n in graph.nodes:
             node_weights[n] = node_weight_function(n)
             for o in n.out_edges:
-                edge_weights[(n.id,o.id)] = edge_weight_function(n,o)
+                edge_weights[(n,o)] = edge_weight_function(n,o)
         partition_volumes = calculate_partition_volumes(k,node_weights)
 
     QuotientGraph(graph.nodes).selfcheck()

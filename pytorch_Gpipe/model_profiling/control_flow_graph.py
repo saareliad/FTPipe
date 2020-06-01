@@ -364,16 +364,19 @@ class Graph():
 
         node_states = []
         for node in self.nodes:
-            state = dict(id=node.id, scope=node.scope, type=node.type,
-                         part=node.part, weight=node.weight,
-                         out_edges=[n.id for n in node.out_edges],
-                         args=[n.id for n in node.args],
-                         kwargs={n.id: kw for n,
-                                 kw in node.kwargs.items()},
-                         value_type=node.value_type,
-                         constant_value=node.constant_value,
-                         tensor_dtype=node.tensor_dtype,
-                         tensor_shape=node.tensor_shape)
+            state = dict(id=node.id,
+                        scope=node.scope,
+                        type=node.type,
+                        part=node.part,
+                        weight=node.weight,
+                        out_edges=[n.id for n in node.out_edges],
+                        args=[n.id for n in node.args],
+                        kwargs={n.id: kw for n,
+                                kw in node.kwargs.items()},
+                        value_type=node.value_type,
+                        constant_value=node.constant_value,
+                        tensor_dtype=node.tensor_dtype,
+                        tensor_shape=node.tensor_shape)
             node_states.append(state)
 
         return{"node_data": node_states,

@@ -273,7 +273,7 @@ class QuotientGraph():
         dot.render(file_name, directory=directory, cleanup=True)
         return self
     
-    def print_stats(self,node_weights:Dict[Node,float],edge_weights:Dict[Tuple[int,int],float]):
+    def print_stats(self,node_weights:Dict[Node,float],edge_weights:Dict[Tuple[Node,Node],float]):
         volumes = defaultdict(lambda: 0)
         edge_cut=0
         number_of_cutting_edges=0
@@ -282,12 +282,12 @@ class QuotientGraph():
                 volumes[partition.idx]+=node_weights[n]
                 for o in n.out_edges:
                     if n.part != o.part:
-                        if edge_weights[(n.id,o.id)] >= 1000:
+                        if edge_weights[(n,o)] >= 1000:
                             print(f"{n.id}=>{o.id}")
                             print(f"{n.part}=>{o.part}")
                             print(f"{n.value_type}")
-                            print(f"weight:{edge_weights[(n.id,o.id)]:.2f}\n")
-                        edge_cut+=edge_weights[(n.id,o.id)]
+                            print(f"weight:{edge_weights[(n,o)]:.2f}\n")
+                        edge_cut+=edge_weights[(n,o)]
                         number_of_cutting_edges+=1
 
         total_volume = sum(volumes.values())
