@@ -977,8 +977,8 @@ def prepare_graph_outputs(nodes, output_id):
 
     is_layer_or_tuple = output_node.value_type in {list, tuple}
     is_primitive = output_node.type is NodeTypes.PRIMITIVE
-
-    if not (is_layer_or_tuple and is_primitive):
+    is_tuple_add =( output_node.type is NodeTypes.OP) and ("tuple::__add__" in output_node.scope)
+    if not (is_layer_or_tuple and (is_primitive or is_tuple_add)):
         return nodes, [output_id]
 
     # remove the node from the graph

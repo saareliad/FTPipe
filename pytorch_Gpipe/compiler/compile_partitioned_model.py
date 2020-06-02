@@ -286,14 +286,14 @@ def stages_in_out_config(ios: Dict, is_batched: Callable[[torch.Size], bool]) ->
         stage_inputs = dict()
         for i, s, d in zip(inputs, input_shapes, input_dtypes):
             stage_inputs[i] = {"shape": s,
-                               "dtype": str(d),
+                               "dtype": d,
                                "is_batched": is_batched(s)}
         # TODO it is possible that if we have a single output
         # it's still a list/tuple for example return l(x) where l returns multiple outputs
         stage_outputs = dict()
         for o, s, d in zip(outputs, output_shapes, output_dtypes):
             stage_outputs[o] = {"shape": s,
-                                "dtype": str(d),
+                                "dtype": d,
                                 "is_batched": is_batched(s)}
 
         config[idx] = {"inputs": stage_inputs,
@@ -327,13 +327,13 @@ def create_model_in_out_config(graph: Graph, is_batched: Callable[[torch.Size], 
     model_inputs = dict()
     for i, s, d in zip(input_ids, input_shapes, input_dtypes):
         model_inputs[i] = {"shape": s,
-                           "dtype": f"'{d}'",
+                           "dtype": d,
                            "is_batched": is_batched(s)}
 
     model_outputs = dict()
     for o, s, d in zip(output_ids, output_shapes, output_dtypes):
         model_outputs[o] = {"shape": s,
-                            "dtype": f"'{d}'",
+                            "dtype": d,
                             "is_batched": is_batched(s)}
 
     return model_inputs, model_outputs

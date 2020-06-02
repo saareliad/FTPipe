@@ -1,6 +1,6 @@
 import torch
 import math
-
+from pytorch_Gpipe.utils import move_tensors,flatten
 # NOTE: can so simillar anaysis for ZerOs,
 # (multiply communication by x1.5 according to what they claim)
 
@@ -46,14 +46,14 @@ def cuda_computation_times(model, inputs):
         inputs = (inputs,)
     model.cuda()
     # now we move inputs to GPU
-    inputs = [i.to('cuda') for i in inputs]
+    inputs = move_tensors(inputs,'cuda')
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
 
     torch.cuda.synchronize(device='cuda')
     start.record()
     outputs = model(*inputs)
-    loss = sum(o.norm() for o in outputs)  # FIXME: just use real loss.
+    loss = sum((o.norm() for o in filter(lambda t: isinstance(t,torch.Tensor) and t.requires_grad,flatten(outputs))))  # FIXME: just use real loss.
     loss.backward()
     end.record()
     torch.cuda.synchronize(device='cuda')
