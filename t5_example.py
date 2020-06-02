@@ -240,5 +240,17 @@ if __name__ == "__main__":
 
         matching,_ = find_max_matching(layers_graph,nwf,ewf,seed=0)
 
+        matched_edges = [e for match in matching for e in match]
+        edges = [(u,n) for n in layers_graph.nodes for u in n.in_edges]
+        for u,v in matched_edges:
+            assert u.part == v.part
+        matched_vertices = {v for e in matched_edges for v in e}
+        print()
+        print("-I- matching stats:")
+        print(f"total edges: {len(edges)}")
+        print(f"matched edged: {len(matched_edges)}")
+        print(f"total edge weight: {sum((ewf(*e) for e in edges)):.2f}")
+        print(f"matched edge weight: {sum((ewf(*e) for e in matched_edges)):.2f}")
+        print(f"matched vertices: {len(matched_vertices)}/{len(graph.nodes)}")
         visualize_matching(layers_graph.nodes,matching,"matching",".")
 

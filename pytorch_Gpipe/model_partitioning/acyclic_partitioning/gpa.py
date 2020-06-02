@@ -219,10 +219,15 @@ def visualize_matching(nodes,matching,file_name: str,directory: str):
         16: 'tan'
     }
 
+    def random_color():
+        return "#"+''.join([random.choice('0123456789ABCDEF') for j in range(6)])
 
-    matching_colors = ["#"+''.join([random.choice('0123456789ABCDEF') for j in range(6)])
-             for _ in matching]
-    
+    matching_colors = set()
+    while len(matching_colors) < len(matching):
+        c = random_color()
+        if c not in partition_color:
+            matching_colors.add(c)
+
     edge_colors={e:c for c,m in zip(matching_colors,matching) for e in m}
 
     # add nodes

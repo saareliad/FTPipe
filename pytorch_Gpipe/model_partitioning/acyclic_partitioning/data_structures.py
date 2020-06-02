@@ -36,7 +36,7 @@ class PartitionNode():
         self.nodes:Set[Node] = set(nodes)
         self._out_edges = defaultdict(lambda : 0)
         self._in_edges = defaultdict(lambda : 0)
-        self.idx=idx
+        self.id = idx
 
         for n in self.nodes:
             for i in n.in_edges:
@@ -44,8 +44,8 @@ class PartitionNode():
             for o in n.out_edges:
                 self._out_edges[o.part]+=1
         
-        self._out_edges.pop(self.idx,None)
-        self._in_edges.pop(self.idx,None)
+        self._out_edges.pop(self.id,None)
+        self._in_edges.pop(self.id,None)
     
     @property
     def in_edges(self)->List[int]:
@@ -132,8 +132,8 @@ class QuotientGraph():
         #remove self edges
         #faster than using if statements in the for loops
         for p in self.nodes:
-            p._in_edges.pop(p.idx,None)
-            p._out_edges.pop(p.idx,None)
+            p._in_edges.pop(p.id,None)
+            p._out_edges.pop(p.id,None)
 
         if self.DEBUG:
             self.selfcheck()
@@ -157,7 +157,7 @@ class QuotientGraph():
         for n in self.nodes:
             assert isinstance(n,PartitionNode)
             if len(n.in_edges)==0:
-                S.append(n.idx)
+                S.append(n.id)
             else:
                 degs[n]=len(n.in_edges)
 
@@ -246,10 +246,10 @@ class QuotientGraph():
 
         # add nodes
         for node in self.nodes:
-            dot.node(str(node.idx), label=f"partition:{node.idx}",
-                        fillcolor=colors[node.idx])
+            dot.node(str(node.id), label=f"partition:{node.id}",
+                        fillcolor=colors[node.id])
             for i in node.in_edges:
-                dot.edge(str(i), str(node.idx))
+                dot.edge(str(i), str(node.id))
 
         return dot
 
@@ -278,7 +278,7 @@ class QuotientGraph():
         number_of_cutting_edges=0
         for partition in self.nodes:
             for n in partition:
-                volumes[partition.idx]+=node_weights[n]
+                volumes[partition.id]+=node_weights[n]
                 for o in n.out_edges:
                     if n.part != o.part:
                         if edge_weights[(n,o)] >= 1000:
@@ -306,7 +306,7 @@ class QuotientGraph():
     def selfcheck(self):
         visited = set()
         for idx,n in self._nodes.items():
-            assert idx == n.idx
+            assert idx == n.id
             for u in n.nodes:
                 assert u.part == idx
                 assert u not in visited
@@ -349,23 +349,22 @@ class PathSet():
 
         self.n_active_paths = len(self.paths)
 
-
-    def is_endpoint(self,v):
+    def is_endpoint(self,v:Node)->bool:
         return (self.next[v] is v) or (self.prev[v] is v)
     
-    def next_vertex(self,v):
+    def next_vertex(self,v:Node)->Node:
         return self.next[v]
     
-    def prev_vertex(self,v):
+    def prev_vertex(self,v:Node)->Node:
         return self.prev[v]
     
-    def edge_to_next(self,v):
+    def edge_to_next(self,v:Node)->Optional[Tuple[Node,Node]]:
         return self.next_edge[v]
     
-    def edge_to_prev(self,v):
+    def edge_to_prev(self,v:Node)->Optional[Tuple[Node,Node]]:
         return self.prev_edge[v]
     
-    def add_if_eligible(self,edge):
+    def add_if_eligible(self,edge:Tuple[Node,Node])->bool:
         src,dst = edge
 
         src_path = self.paths[src]
@@ -453,7 +452,7 @@ class PathSet():
 
         return False
 
-    def active_paths(self):
+    def active_paths(self)->Set[Path]:
         paths = [p for p in self.paths.values() if p.active]
         return set(paths)
 
