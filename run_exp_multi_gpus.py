@@ -1,6 +1,7 @@
 from run.sequential_sim_set import run_grid_on_multi_gpu_per_run
 import os
 import subprocess
+import torch
 
 BWD_TO_FWD_RATIO_FULL_EXP = [1, 2, 3, 4, 5, -1]
 BWD_TO_FWD_RATIO_BEST_TRANSFORMER = [2]

@@ -9,7 +9,6 @@ import torch
 tab = '    '
 dtab = tab + tab
 
-
 __all__ = ['generate_forward_method']
 
 

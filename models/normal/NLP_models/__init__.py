@@ -12,3 +12,6 @@ from .modeling_gpt2 import (GPT2PreTrainedModel, GPT2Model, GPT2LMHeadModel,
 from .modeling_gpt2_tied_weights import (GPT2Model as StatelessGPT2Model,
                                          GPT2LMHeadModel as StatelessGPT2LMHeadModel,
                                          GPT2DoubleHeadsModel as StatelessGPT2DoubleHeadsModel)
+
+from .modeling_ctrl import CTRLModel,CTRLLMHeadModel
+from .modeling_ctrl_tied_weights import CTRLModel as StatelessCTRLModel,CTRLLMHeadModel as StatelessCTRLLMHeadModel

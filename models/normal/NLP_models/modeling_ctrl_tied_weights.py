@@ -30,6 +30,8 @@ import os
 
 from transformers.file_utils import cached_path, WEIGHTS_NAME, TF_WEIGHTS_NAME, TF2_WEIGHTS_NAME
 
+from .stateless import StatelessLinear, StatelessEmbedding
+import types
 
 logger = logging.getLogger(__name__)
 
@@ -503,10 +505,28 @@ class CTRLModel(CTRLPreTrainedModel):
         for layer, heads in heads_to_prune.items():
             self.h[layer].attn.prune_heads(heads)
 
+    def make_stateless_after_loaded_tied_and_resized(self):
+        """ Patch to create stateless layers with shared tied embedding """
+        stateless_w = StatelessEmbedding(self.w)
+        w_w = stateless_w.pop_weight()
+
+        self.stateless_w = stateless_w
+
+        del self.w
+
+        def _resize_token_embeddings(self, new_num_tokens):
+            raise NotImplementedError(
+                "Can't call this after creating Stateless embedding")
+        self._resize_token_embeddings = types.MethodType(
+            _resize_token_embeddings, self)
+
+        return w_w
+
     @add_start_docstrings_to_callable(CTRL_INPUTS_DOCSTRING)
     def forward(
         self,
         input_ids,
+        w_w
     ):
         r"""
     Return:
@@ -548,7 +568,7 @@ class CTRLModel(CTRLPreTrainedModel):
         token_type_embeds = 0
         position_ids = position_ids.view(-1, input_shape[-1])
 
-        inputs_embeds = self.w(input_ids)
+        inputs_embeds = self.stateless_w(w_w, input_ids)
         seq_len = input_shape[-1]
         mask = torch.triu(torch.ones(seq_len + self.num_layers,
                                      seq_len + self.num_layers), 1).to(inputs_embeds.device)
@@ -610,6 +630,30 @@ class CTRLLMHeadModel(CTRLPreTrainedModel):
 
         self.init_weights()
 
+    def make_stateless_after_loaded_tied_and_resized(self):
+        """ Patch to create stateless layers with shared tied embedding """
+
+        self.w_w = self.transformer.make_stateless_after_loaded_tied_and_resized()
+
+        stateless_lm_head = StatelessLinear(self.lm_head)
+        stateless_lm_head.pop_weight()
+
+        self.stateless_lm_head = stateless_lm_head
+
+        del self.lm_head
+
+        def tie_weights(self):
+            raise NotImplementedError(
+                "Can't call this after stateless version")
+        self.tie_weights = types.MethodType(tie_weights, self)
+
+    def tie_weights(self):
+        """ Make sure we are sharing the input and output embeddings.
+            Export to TorchScript can't handle parameter sharing so we are cloning them instead.
+        """
+        self._tie_or_clone_weights(self.lm_head,
+                                   self.transformer.w)
+
     def get_output_embeddings(self):
         return self.lm_head
 
@@ -661,8 +705,8 @@ class CTRLLMHeadModel(CTRLPreTrainedModel):
         outputs = model(input_ids, labels=input_ids)
         loss, logits = outputs[:2]
         """
-        hidden_states = self.transformer(input_ids)
+        hidden_states = self.transformer(input_ids, self.w_w)
 
-        lm_logits = self.lm_head(hidden_states)
+        lm_logits = self.stateless_lm_head(self.w_w, hidden_states)
 
         return self.lm_output(lm_logits, labels=labels)
