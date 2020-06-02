@@ -696,7 +696,6 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
     ExplicitUntracedFunctions.disable()
 
     output_id = output.id
-
     _unwrap_layers(module)
 
     for m in module.modules():
@@ -707,7 +706,8 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
 
     CURRENT_SCOPE = ""
 
-    nodes = duplicate_constants(NODES)
+    nodes,output_id = duplicate_constants(NODES,output_id)
+
     nodes = discard_unused_nodes(nodes,output_id)
 
     # record input kwargs explicitly as they are not passed by position
@@ -883,11 +883,14 @@ def reset_tracing_state():
     TracedValue.ID = 0
 
 
-def duplicate_constants(nodes):
+def duplicate_constants(nodes,output_id):
     new_nodes=dict()
     offset=0
+    new_output_id=0
     for idx in range(len(nodes)):
         node = nodes[idx]
+        if node.id == output_id:
+            new_output_id = node.id+offset
         node.id+=offset
         
         if node.type is NodeTypes.CONSTANT and len(node.out_edges) > 1:
@@ -902,7 +905,7 @@ def duplicate_constants(nodes):
             assert node.id not in new_nodes
             new_nodes[node.id]=node
     
-    return new_nodes
+    return new_nodes,new_output_id
 
 def discard_unused_nodes(nodes,output_id):
     new_nodes = []
