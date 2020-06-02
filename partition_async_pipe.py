@@ -35,8 +35,7 @@ class AutoReLoader:
         return cls.load_or_reload_module(module_path)
 
 
-def get_generated_last_stage_scopes(model,
-                                    output_file,
+def get_generated_last_stage_scopes(output_file,
                                     GET_PARTITIONS_ON_CPU=True):
     module_path = output_file.replace("/", ".")
     generated = AutoReLoader.import_module(module_path)
@@ -48,18 +47,12 @@ def get_generated_last_stage_scopes(model,
     last_stage = n_stages - 1
     last_stage_cls = getattr(generated, f"Partition{last_stage}")
 
-    # TODO: this could be spared if the last partition would have scops as class attr
-    tensor_dict = tensorDict(model)
-    layer_dict = layerDict(model,
-                           depth=config['depth'],
-                           basic_blocks=pipe_config.basic_blocks)
-    last_stage_scopes = last_stage_cls(layer_dict, tensor_dict).scopes
+    last_stage_scopes = last_stage_cls.LAYER_SCOPES
 
     return last_stage_scopes
 
 
-def get_all_generated_stage_scopes(model,
-                                   output_file,
+def get_all_generated_stage_scopes(output_file,
                                    GET_PARTITIONS_ON_CPU=True):
 
     module_path = output_file.replace("/", ".")
@@ -74,14 +67,7 @@ def get_all_generated_stage_scopes(model,
     for stage_id in range(n_stages):
         stage_cls = getattr(generated, f"Partition{stage_id}")
 
-        # TODO: this could be spared if the last partition would have scops as class attr
-        tensor_dict = tensorDict(model)
-        layer_dict = layerDict(model,
-                               depth=config['depth'],
-                               basic_blocks=pipe_config.basic_blocks)
-        stage_scopes = stage_cls(layer_dict, tensor_dict).scopes
-
-        all_scopes.extend(stage_scopes)
+        all_scopes.extend(stage_cls.LAYER_SCOPES)
     return all_scopes
 
 
@@ -158,15 +144,15 @@ class AsyncPipePartitioner:
             self.n_runs += 1
 
             # Load last partition last stage scopes
-            generated_last_stage_scopes = get_generated_last_stage_scopes(
-                self.model, self.output_file, GET_PARTITIONS_ON_CPU=True)
+            generated_last_stage_scopes = get_generated_last_stage_scopes(self.output_file,
+                                                                          GET_PARTITIONS_ON_CPU=True)
 
             if start_with_fn:
                 start_with_fn = False
                 # For stats, we record for which scopes our function returns True
                 # (that is, predicts its in the last stage)
-                all_scopes = get_all_generated_stage_scopes(
-                    self.model, self.output_file, GET_PARTITIONS_ON_CPU=True)
+                all_scopes = get_all_generated_stage_scopes(self.output_file,
+                                                            GET_PARTITIONS_ON_CPU=True)
                 last_partition_scopes = [s for s in all_scopes if f(s)]
                 # del all_scopes
 
@@ -197,6 +183,7 @@ class AsyncPipePartitioner:
         self.scopes = scopes
         self.graphs = graphs
 
-        print(f"Success! got {current_mistakes} mistakes after {self.n_runs} runs")
+        print(
+            f"Success! got {current_mistakes} mistakes after {self.n_runs} runs")
 
         return graph

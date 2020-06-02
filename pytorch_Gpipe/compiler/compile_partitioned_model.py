@@ -1,7 +1,7 @@
 import torch
 from torch.nn import Module
-from pytorch_Gpipe.model_profiling.control_flow_graph import Node, NodeTypes, Graph
-from pytorch_Gpipe.utils import traverse_model, traverse_params_buffs, layerDict, tensorDict
+from ..model_profiling import Node, NodeTypes, Graph, used_namespaces
+from pytorch_Gpipe.utils import traverse_model, traverse_params_buffs, layerDict, tensorDict,nested_map,move_tensors
 from .partition_forward_method import generate_forward_method
 from .partition_init_method import generate_init_method
 from .state_methods import get_state_methods, generate_partition_state_methods
@@ -11,16 +11,16 @@ from collections import OrderedDict
 import inspect
 import os
 import pathlib
-from .utils import format_shape_or_dtype
 tab = '    '
 dtab = tab + tab
 
 
-def compile_partitoned_model(graph: Graph,
-                             model: Module,
-                             batch_dim: int,
-                             generate_model_parallel: bool = False,
-                             output_file: Optional[str] = None):
+def compile_partitioned_model(graph: Graph,
+                              model: Module,
+                              batch_dim: int,
+                              generate_model_parallel: bool = False,
+                              generate_explicit_del=False,
+                              output_file: Optional[str] = None):
     '''generates the code for the partitioned model.
        The partitions can be consumed using the `create_pipeline_configuration` method in the generated code
 
@@ -33,6 +33,9 @@ def compile_partitoned_model(graph: Graph,
         the batch dimention of the input
     generate_model_parallel:
         whether to generate a model parallel version of the partition in the addition to the partitions themselves
+    generate_explicit_del:
+        whether to generate del statements to explicitly delete variables when they are no longer used
+        default False
     output_file:
         optional path to the generated code. if None uses generated_{model_name}{numberOfPatitions}.py
     '''
@@ -57,20 +60,22 @@ def compile_partitoned_model(graph: Graph,
     ios = dict()
     for idx, part in parts:
         class_name = f'Partition{idx}'
-        layer_names = [n.scope for n in part if n.type == NodeTypes.LAYER]
-        buff_param_names = {
-            n.scope
+        layers = [n for n in part if n.type == NodeTypes.LAYER]
+        buffs_params = [
+            n
             for n in part if n.type == NodeTypes.BUFF_PARAM
-        }
-        class_decl, scope_to_class_field = generate_init_method(
-            class_name, layer_names, layer_classes, is_param_dict,
-            buff_param_names)
+        ]
+        class_decl, scope_to_class_field = generate_init_method(class_name, layers,
+                                                                is_param_dict, buffs_params)
         state_methods_functions = generate_partition_state_methods()
-        forward_function, io = generate_forward_method(part,
-                                                       graph.output_scopes,
-                                                       scope_to_class_field)
+        forward_function, io = generate_forward_method(graph,
+                                                       part,
+                                                       graph.outputs,
+                                                       scope_to_class_field,
+                                                       generate_explicit_del=generate_explicit_del)
         partitions_code.append(class_decl)
         partitions_code.extend(forward_function)
+        partitions_code.append("")
         partitions_code.append(state_methods_functions)
         ios[idx] = io
 
@@ -80,10 +85,10 @@ def compile_partitoned_model(graph: Graph,
         output_file = output_file[:-3]
 
     lines.append(
-        create_pipeline_configuration(graph, ios, layer_classes, batch_dim, output_file))
+        create_pipeline_configuration(graph, ios, layer_classes, batch_dim))
     if generate_model_parallel:
         lines.append(
-            create_model_parallel_module(graph, batch_dim, graph.model_name, ios, graph.num_inputs,
+            create_model_parallel_module(graph, batch_dim, ios, graph.num_inputs,
                                          graph.output_scopes))
     lines += partitions_code
     lines.append(generateHelpFunctions())
@@ -114,21 +119,24 @@ def generateImports(layer_classes: Dict[str, Module]) -> List[str]:
     '''generates imports to torch torch.nn, torch.nn.functionl as F and torch.Tensor,
        and to every layer used and various other small things
     '''
-    imports = 'import torch\nfrom torch import Tensor\nimport torch.nn as nn\nimport torch.nn.functional as F\n'
-    imports += 'from itertools import chain\n'
-    imports += 'import operator\n'
-    imports += 'from typing import Optional, Tuple, Iterator, Iterable, OrderedDict, Dict\n'
-    imports += 'import collections\n'
-    imports += 'import os'
-    imports += '\n'
+    imports = [f'import {namespace}' for namespace in used_namespaces()]
+    imports.extend(['from torch import Tensor',
+                    'import torch.nn as nn',
+                    'from itertools import chain',
+                    'from typing import Optional, Tuple, Iterator, Iterable, OrderedDict, Dict',
+                    'import collections',
+                    'import os'
+                    ''])
     unique_classes = set(layer_classes.values())
 
     for cls in unique_classes:
-        imports += f'from {inspect.getmodule(cls).__name__} import {cls.__name__}\n'
+        imports.append(
+            f'from {inspect.getmodule(cls).__name__} import {cls.__name__}')
 
     disclaimer = '# this is an auto generated file do not edit unless you know what you are doing\n\n'
+    imports.append(disclaimer)
 
-    return imports.splitlines() + [disclaimer]
+    return imports
 
 
 def generateHelpFunctions() -> str:
@@ -140,7 +148,7 @@ def generateHelpFunctions() -> str:
     lines = [
         inspect.getsource(f) for f in
         [traverse_model, layerDict, traverse_params_buffs,
-            tensorDict] + get_state_methods()
+            tensorDict,move_tensors,nested_map] + get_state_methods()
     ]
 
     return "\n\n".join(lines)
@@ -151,17 +159,16 @@ def create_pipeline_configuration(graph: Graph,
                                             Dict[str,
                                                  List[str]]],
                                   model_blocks: Dict[str, Module],
-                                  batch_dim: int,
-                                  output_file: str) -> str:
+                                  batch_dim: int) -> str:
     '''generates the create_pipeline_configuration method which given a model creates his partitioned counterpart
     '''
     # TODO assumption the first input is batched
-    batch_size = graph.nodes[0].shape[0][batch_dim]
+    batch_size = graph._nodes[0].tensor_shape[batch_dim]
 
     # TODO better logic for is_batched
     # currently we assume that if a tensor has enough dimentions and the relevant dim size equals the batch_size
     def is_batched(s):
-        return (len(s) > (batch_dim + 1)) and (s[batch_dim] == batch_size)
+        return (s is not None) and(len(s) > (batch_dim + 1)) and (s[batch_dim] == batch_size)
 
     module_path = 'os.path.relpath(__file__).replace("/",".")[:-3]'
     basic_blocks = ",".join(
@@ -229,17 +236,15 @@ def connections(graph: Graph) -> str:
 
     for node in graph.nodes:
         if node.type is NodeTypes.IN:
-            for n in node.out_nodes:
+            for n in node.out_edges:
                 adj_matrix[n.part + 1]["inputs"].add(node.scope)
                 adj_matrix[0]["outputs"].add(n.part)
 
-        idx = graph.output_scopes.indexOf(node.scope)
-
-        if idx >= 0:
+        if node in graph.outputs:
             adj_matrix[num_partitions + 1]["inputs"].add(node.part)
-            adj_matrix[node.part + 1]["outputs"].add(f"output{idx}")
+            adj_matrix[node.part + 1]["outputs"].add(f"output")
 
-        for n in node.out_nodes:
+        for n in node.out_edges:
             if n.part != node.part:
                 adj_matrix[node.part + 1]["outputs"].add(n.part)
                 adj_matrix[n.part + 1]["inputs"].add(node.part)
@@ -283,7 +288,8 @@ def stages_in_out_config(ios: Dict, is_batched: Callable[[torch.Size], bool]) ->
             stage_inputs[i] = {"shape": s,
                                "dtype": str(d),
                                "is_batched": is_batched(s)}
-
+        # TODO it is possible that if we have a single output
+        # it's still a list/tuple for example return l(x) where l returns multiple outputs
         stage_outputs = dict()
         for o, s, d in zip(outputs, output_shapes, output_dtypes):
             stage_outputs[o] = {"shape": s,
@@ -308,13 +314,15 @@ def create_model_in_out_config(graph: Graph, is_batched: Callable[[torch.Size], 
                 dtype
                 is_batched
     """
-    input_ids = [f"'input{idx}'" for idx in range(graph.num_inputs)]
-    input_shapes = [format_shape_or_dtype(n.shape)[0] for n in graph.inputs]
-    input_dtypes = [format_shape_or_dtype(n.dtype)[0] for n in graph.inputs]
 
-    output_shapes = [format_shape_or_dtype(n.shape)[0] for n in graph.outputs]
+    input_ids = [f"'{graph.input_kw_ids.get(node.id,node.scope)}'" for node in graph.inputs]
+    input_shapes = [n.tensor_shape for n in graph.inputs]
+    input_dtypes = [n.tensor_dtype for n in graph.inputs]
+    # TODO it is possible that if we have a single output
+    # it's still a list/tuple for example return l(x) where l returns multiple outputs
+    output_shapes = [n.tensor_shape for n in graph.outputs]
     output_ids = graph.output_scopes
-    output_dtypes = [format_shape_or_dtype(n.dtype)[0] for n in graph.outputs]
+    output_dtypes = [n.tensor_dtype for n in graph.outputs]
 
     model_inputs = dict()
     for i, s, d in zip(input_ids, input_shapes, input_dtypes):

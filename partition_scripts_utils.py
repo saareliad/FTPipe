@@ -38,8 +38,7 @@ class ParsePartitioningOpts:
             '--model_too_big',
             action='store_true',
             default=False,
-            help=
-            "if the model is too big run the whole partitioning process on CPU, "
+            help="if the model is too big run the whole partitioning process on CPU, "
             "and drink a cup of coffee in the meantime")
         parser.add_argument('-p', '--n_partitions', type=int, default=4)
         parser.add_argument('-o', '--output_file', default='wrn_16x4')
@@ -50,15 +49,13 @@ class ParsePartitioningOpts:
         parser.add_argument(
             '--n_iter',
             type=int,
-            help=
-            "number of iteration used in order to profile the network and run analysis"
+            help="number of iteration used in order to profile the network and run analysis"
         )
         parser.add_argument(
             '--bw',
             type=float,
             default=12,
-            help=
-            "data transfer rate between gpus in GBps (Gigabytes per second)")
+            help="data transfer rate between gpus in GBps (Gigabytes per second)")
         parser.add_argument(
             '--no_recomputation',
             action='store_true',
@@ -73,17 +70,25 @@ class ParsePartitioningOpts:
             default=10000,
             type=int,
             help="the depth in which we will partition the model")
+        parser.add_argument('--basic_blocks', nargs='*')
         parser.add_argument(
-            "--partition_layer_graph",
-            action="store_true",
-            default=False,
-            help="whether to partition a graph containing only layers")
+            "--use_network_profiler", default=False, action="store_true",
+            help="wether to use the old network_profiler instead of the newer graph based profiler"
+        )
+        parser.add_argument(
+            "--disable_op_profiling", default=False, action="store_true",
+            help="weheter to not profile ops when using the GraphProfiler"
+        )
         parser.add_argument(
             "--generate_model_parallel",
             action="store_true",
             default=False,
-            help=
-            "wether to generate a modelParallel version of the partitioning")
+            help="wether to generate a modelParallel version of the partitioning")
+        parser.add_argument(
+            "--generate_explicit_del",
+            action="store_true",
+            default=False,
+            help="wether to generate del statements in partitioned code")
 
         parser.add_argument("-a",
                             "--async_pipeline",
@@ -129,21 +134,18 @@ class ParseMetisOpts:
         metis_opts.add_argument(
             '--metis_niter',
             type=int,
-            help=
-            "Specifies the number of iterations for the refinement algorithms at each stage of the uncoarsening process."
+            help="Specifies the number of iterations for the refinement algorithms at each stage of the uncoarsening process."
             "Default is 10.")
         metis_opts.add_argument(
             '--nseps',
             type=int,
-            help=
-            "Specifies the number of different separators that it will compute at each level of nested dissection."
+            help="Specifies the number of different separators that it will compute at each level of nested dissection."
             "The final separator that is used is the smallest one. Default is 1."
         )
         metis_opts.add_argument(
             "--ncuts",
             type=int,
-            help=
-            "Specifies the number of different partitionings that it will compute."
+            help="Specifies the number of different partitionings that it will compute."
             " The final partitioning is the one that achieves the best edgecut or communication volume."
             "Default is 1.")
         metis_opts.add_argument(
@@ -153,8 +155,7 @@ class ParseMetisOpts:
         metis_opts.add_argument(
             '--objtype',
             type=int,
-            help=
-            "Extra objective type to miminize (0: edgecut, 1: vol, default: edgecut)"
+            help="Extra objective type to miminize (0: edgecut, 1: vol, default: edgecut)"
         )
 
     @staticmethod
@@ -198,6 +199,20 @@ class ParseMetisOpts:
         #  }
 
 
+
+def choose_blocks(model,args):
+    blocks=dict()
+
+    for m in model.modules():
+        block = type(m)
+        blocks[block.__name__] = block
+    
+    if args.basic_blocks is None:
+        args.basic_blocks=[]
+
+    return tuple([blocks[name] for name in args.basic_blocks])
+
+
 def prepend_line(filename, line):
     with open(filename, 'r+') as f:
         content = f.read()
@@ -225,8 +240,11 @@ def run_x_tries_until_no_fail(func, number_of_tries, *args, **kw):
             success = True
             count += 1
             break
-        except:
+        except (Exception,AssertionError) as e:
+            print()
+            print(e)
             count += 1
+            print()
 
     print(f"running function got succcess={success} after {count} attempts")
     return res

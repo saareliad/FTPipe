@@ -7,8 +7,8 @@ import argparse
 import importlib
 from misc import run_analysis, run_partitions
 import sys
-from heuristics import edge_weight_function, node_weight_function
-from partition_scripts_utils import ParseMetisOpts, ParsePartitioningOpts, record_cmdline, run_x_tries_until_no_fail
+from heuristics import EdgeWeightFunction, NodeWeightFunction
+from partition_scripts_utils import ParseMetisOpts, ParsePartitioningOpts, record_cmdline, run_x_tries_until_no_fail,choose_blocks
 import functools
 from partition_async_pipe import AsyncPipePartitioner
 
@@ -187,15 +187,20 @@ if __name__ == "__main__":
         model,
         batch_dim,
         sample,
+        basic_blocks = choose_blocks(model,args),
         depth=args.depth,
         kwargs=None,
         nparts=n_partitions,
         output_file=args.output_file,
         generate_model_parallel=args.generate_model_parallel,
-        use_layers_only_graph=args.partition_layer_graph,
-        node_weight_function=node_weight_function(
+        generate_explicit_del=args.generate_explicit_del,
+        use_layers_only_graph=True,
+        use_graph_profiler=not args.use_network_profiler,
+        use_network_profiler=args.use_network_profiler,
+        profile_ops=not args.disable_op_profiling,
+        node_weight_function=NodeWeightFunction(
             bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-        edge_weight_function=edge_weight_function(
+        edge_weight_function=EdgeWeightFunction(
             bw, bwd_to_fwd_ratio=bwd_to_fwd_ratio),
         n_iter=n_iter,
         recomputation=recomputation,
@@ -221,10 +226,14 @@ if __name__ == "__main__":
             nparts=n_partitions,
             output_file=args.output_file,
             generate_model_parallel=args.generate_model_parallel,
-            use_layers_only_graph=args.partition_layer_graph,
-            node_weight_function=node_weight_function(
+            generate_explicit_del=args.generate_explicit_del,
+            use_layers_only_graph=True,
+            use_graph_profiler=not args.use_network_profiler,
+            use_network_profiler=args.use_network_profiler,
+            profile_ops=not args.disable_op_profiling,
+            node_weight_function=NodeWeightFunction(
                 bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-            edge_weight_function=edge_weight_function(
+            edge_weight_function=EdgeWeightFunction(
                 bw, bwd_to_fwd_ratio=bwd_to_fwd_ratio),
             n_iter=n_iter,
             recomputation=recomputation,

@@ -25,6 +25,7 @@ import logging
 import math
 import os
 import sys
+import operator
 
 import torch
 from torch import nn
@@ -54,6 +55,13 @@ BERT_PRETRAINED_MODEL_ARCHIVE_MAP = {
     'bert-base-german-dbmdz-uncased': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-german-dbmdz-uncased-pytorch_model.bin",
 }
 
+
+def is_None(a):
+    return operator.is_(a, None)
+
+
+def is_not_None(a):
+    return operator.is_not(a, None)
 
 def load_tf_weights_in_bert(model, config, tf_checkpoint_path):
     """ Load tf checkpoints in a pytorch model.
@@ -177,11 +185,11 @@ class BertEmbeddings(nn.Module):
 
     def forward(self, input_ids, token_type_ids=None, position_ids=None):
         seq_length = input_ids.size(1)
-        if position_ids is None:
+        if is_None(position_ids):# is None:
             position_ids = torch.arange(
                 seq_length, dtype=torch.long, device=input_ids.device)
             position_ids = position_ids.unsqueeze(0).expand_as(input_ids)
-        if token_type_ids is None:
+        if is_None(token_type_ids):# is None:
             token_type_ids = torch.zeros_like(input_ids)
 
         words_embeddings = self.word_embeddings(input_ids)
@@ -233,7 +241,7 @@ class BertSelfAttention(nn.Module):
             query_layer, key_layer.transpose(-1, -2))
         attention_scores = attention_scores / \
             math.sqrt(self.attention_head_size)
-        if attention_mask is not None:
+        if is_not_None(attention_mask):# is not None:
             # Apply the attention mask is (precomputed for all layers in BertModel forward() function)
             attention_scores = attention_scores + attention_mask
 
@@ -245,7 +253,7 @@ class BertSelfAttention(nn.Module):
         attention_probs = self.dropout(attention_probs)
 
         # Mask heads if we want to
-        if head_mask is not None:
+        if is_not_None(head_mask):# is not None:
             attention_probs = attention_probs * head_mask
 
         context_layer = torch.matmul(attention_probs, value_layer)
@@ -356,7 +364,7 @@ class BertLayer(nn.Module):
                                             head_mask=head_mask)
         intermediate_output = self.intermediate(attention_output)
         layer_output = self.output(intermediate_output, attention_output)
-        return layer_output
+        return layer_output,attention_mask
 
 
 class BertEncoder(nn.Module):
@@ -369,11 +377,14 @@ class BertEncoder(nn.Module):
             self.add_module(str(i), BertLayer(config))
 
     def forward(self, hidden_states, attention_mask=None, head_mask=None):
-        for i in range(self.num_layers):
+        if is_None(head_mask):
+            head_mask = [None]*self.num_layers
+
+        for i,cur_head_mask in enumerate(head_mask):
             layer_module = getattr(self, str(i))
-            hidden_states = layer_module(hidden_states,
+            hidden_states,attention_mask = layer_module(hidden_states,
                                             attention_mask=attention_mask, 
-                                            head_mask=head_mask[i])
+                                            head_mask=cur_head_mask)
         return hidden_states
 
 
@@ -788,6 +799,8 @@ BERT_INPUTS_DOCSTRING = r"""
             ``1`` indicates the head is **not masked**, ``0`` indicates the head is **masked**.
 """
 
+#TODO tied weights for bert models
+
 @add_start_docstrings("The bare Bert Model transformer outputting raw hidden-states without any specific head on top.",
                       BERT_START_DOCSTRING, BERT_INPUTS_DOCSTRING)
 class BertModel(BertPreTrainedModel):
@@ -845,9 +858,9 @@ class BertModel(BertPreTrainedModel):
             self.encoder.layer[layer].attention.prune_heads(heads)
 
     def forward(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None):
-        if attention_mask is None:
+        if is_None(attention_mask):# is None:
             attention_mask = torch.ones_like(input_ids)
-        if token_type_ids is None:
+        if is_None(token_type_ids):# is None:
             token_type_ids = torch.zeros_like(input_ids)
 
         # We create a 3D attention mask from a 2D tensor mask.
@@ -871,7 +884,7 @@ class BertModel(BertPreTrainedModel):
         # attention_probs has shape bsz x n_heads x N x N
         # input head_mask has shape [num_heads] or [num_hidden_layers x num_heads]
         # and head_mask is converted to shape [num_hidden_layers x batch x num_heads x seq_length x seq_length]
-        if head_mask is not None:
+        if is_not_None(head_mask):# is not None:
             if head_mask.dim() == 1:
                 head_mask = head_mask.unsqueeze(0).unsqueeze(
                     0).unsqueeze(-1).unsqueeze(-1)
@@ -882,8 +895,6 @@ class BertModel(BertPreTrainedModel):
                 head_mask = head_mask.unsqueeze(1).unsqueeze(-1).unsqueeze(-1)
             # switch to fload if need + fp16 compatibility
             head_mask = head_mask.to(dtype=next(self.parameters()).dtype)
-        else:
-            head_mask = [None] * self.config.num_hidden_layers
 
         embedding_output = self.embeddings(
             input_ids, position_ids=position_ids, token_type_ids=token_type_ids)
@@ -971,7 +982,7 @@ class BertForPreTraining(BertPreTrainedModel):
         # add hidden states and attention if they are here
         outputs = (prediction_scores, seq_relationship_score)
 
-        if masked_lm_labels is not None and next_sentence_label is not None:
+        if is_not_None(masked_lm_labels) and is_not_None(next_sentence_label):
             masked_lm_loss = self.masked_lm_loss(
                 prediction_scores.view(-1, self.config.vocab_size), masked_lm_labels.view(-1))
             next_sentence_loss = self.next_sentence_loss(
@@ -1046,7 +1057,7 @@ class BertForMaskedLM(BertPreTrainedModel):
 
         # Add hidden states and attention if they are here
         outputs = (prediction_scores,)
-        if masked_lm_labels is not None:
+        if is_not_None(masked_lm_labels):# is not None:
             masked_lm_loss = self.masked_lm_loss(
                 prediction_scores.view(-1, self.config.vocab_size), masked_lm_labels.view(-1))
             outputs = (masked_lm_loss,)
@@ -1112,7 +1123,7 @@ class BertForNextSentencePrediction(BertPreTrainedModel):
 
         # add hidden states and attention if they are here
         outputs = (seq_relationship_score,)
-        if next_sentence_label is not None:
+        if is_not_None(next_sentence_label):# is not None:
             next_sentence_loss = self.next_sentence_loss(
                 seq_relationship_score.view(-1, 2), next_sentence_label.view(-1))
             outputs = (next_sentence_loss,)
@@ -1188,7 +1199,7 @@ class BertForSequenceClassification(BertPreTrainedModel):
         # add hidden states and attention if they are here
         outputs = (logits,)
 
-        if labels is not None:
+        if is_not_None(labels):# is not None:
             if self.num_labels == 1:
                 #  We are doing regression
                 loss = self.loss(logits.view(-1), labels.view(-1))
@@ -1252,11 +1263,11 @@ class BertForMultipleChoice(BertPreTrainedModel):
 
         input_ids = input_ids.view(-1, input_ids.size(-1))
         attention_mask = attention_mask.view(
-            -1, attention_mask.size(-1)) if attention_mask is not None else None
+            -1, attention_mask.size(-1)) if is_not_None(attention_mask) else None#: is not None else None
         token_type_ids = token_type_ids.view(
-            -1, token_type_ids.size(-1)) if token_type_ids is not None else None
+            -1, token_type_ids.size(-1)) if is_not_None(token_type_ids) else None# is not None else None
         position_ids = position_ids.view(-1, position_ids.size(-1)
-                                         ) if position_ids is not None else None
+                                         ) if is_not_None(position_ids) else None# is not None else None
 
         outputs = self.bert(input_ids,
                             attention_mask=attention_mask,
@@ -1272,7 +1283,7 @@ class BertForMultipleChoice(BertPreTrainedModel):
 
         outputs = (reshaped_logits,)
 
-        if labels is not None:
+        if is_not_None(labels):# is not None:
             loss = self.loss(reshaped_logits, labels)
             outputs = (loss,)
 
@@ -1339,9 +1350,9 @@ class BertForTokenClassification(BertPreTrainedModel):
         logits = self.classifier(sequence_output)
 
         outputs = (logits,)
-        if labels is not None:
+        if is_not_None(labels):# is not None:
             # Only keep active parts of the loss
-            if attention_mask is not None:
+            if is_not_None(attention_mask):# is not None:
                 active_loss = attention_mask.view(-1) == 1
                 active_logits = logits.view(-1, self.num_labels)[active_loss]
                 active_labels = labels.view(-1)[active_loss]
