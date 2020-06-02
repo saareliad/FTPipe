@@ -11,6 +11,7 @@ import json
 import os
 import importlib
 from itertools import chain
+from pytorch_Gpipe.utils import nested_map
 
 
 class PipelineConfig():
@@ -38,7 +39,8 @@ class PipelineConfig():
 
     def add_input(self, input_name: str, shape: Tuple[int, ...], is_batched: bool = True, dtype: torch.dtype = torch.float32) -> "PipelineConfig":
         self.model_inputs.append(input_name)
-        shape = list(shape)
+        if is_batched:
+            shape = list(shape)
         self.model_input_shapes.append(shape)
         self.is_batched[input_name] = is_batched
         self.dtypes[input_name] = dtype
@@ -46,7 +48,8 @@ class PipelineConfig():
 
     def add_output(self, output_name: str, shape: Tuple[int, ...], is_batched: bool = True, dtype: torch.dtype = torch.float32) -> "PipelineConfig":
         self.model_outputs.append(output_name)
-        shape = list(shape)
+        if is_batched:
+            shape = list(shape)
         self.model_output_shapes.append(shape)
         self.is_batched[output_name] = is_batched
         self.dtypes[output_name] = dtype
@@ -291,19 +294,18 @@ class PipelineConfig():
         state = dict()
         state["batch_dim"] = self.batch_dim
         state["depth"] = self.depth
-        state["basic_blocks"] = [serialize_python_class_or_function(block)
-                                 for block in self.basic_blocks]
+        state["basic_blocks"] = nested_serialize(self.basic_blocks)
 
         model_inputs = dict()
         for i, s in zip(self.model_inputs, self.model_input_shapes):
-            model_inputs[i] = {"shape": list(s),
-                               "dtype": serialize_python_class_or_function(self.dtypes[i]),
+            model_inputs[i] = {"shape": s,
+                               "dtype": nested_serialize(self.dtypes[i]),
                                "is_batched": self.is_batched[i]}
 
         model_outputs = dict()
         for o, s in zip(self.model_outputs, self.model_output_shapes):
-            model_outputs[o] = {"shape": list(s),
-                                "dtype": serialize_python_class_or_function(self.dtypes[o]),
+            model_outputs[o] = {"shape": s,
+                                "dtype": nested_serialize(self.dtypes[o]),
                                 "is_batched": self.is_batched[o]}
 
         state["model_inputs"] = model_inputs
@@ -331,19 +333,18 @@ class PipelineConfig():
         stages = {int(idx): StageConfig.fromDict(s)
                   for idx, s in state['stages'].items()}
         depth = state['depth']
-        basic_blocks = [deserialize_python_class_or_function(p)
-                        for p in state['basic_blocks']]
+        
+        basic_blocks = nested_deserialize(state['basic_blocks'])
         batch_dim = state['batch_dim']
         config = cls(batch_dim, depth, basic_blocks)
 
         for i, d in state['model_inputs'].items():
             config.add_input(i, d['shape'], d['is_batched'],
-                             deserialize_python_class_or_function(d['dtype']))
+                             nested_deserialize(d['dtype']))
 
         for o, d in state['model_outputs'].items():
             config.add_output(o, d['shape'], d['is_batched'],
-                              deserialize_python_class_or_function(d['dtype']))
-
+                              nested_deserialize(d['dtype']))
         config.stages = stages
 
         assert config.isValid()
@@ -387,7 +388,8 @@ class StageConfig():
 
     def add_input(self, input_name: str, shape: Tuple[int, ...], is_batched: bool = True, dtype: torch.dtype = torch.float32) -> "StageConfig":
         self.inputs.append(input_name)
-        shape = list(shape)
+        if is_batched:
+            shape = list(shape)
         self.input_shapes.append(shape)
         self.is_batched[input_name] = is_batched
         self.dtypes[input_name] = dtype
@@ -395,7 +397,8 @@ class StageConfig():
 
     def add_output(self, output_name: str, shape: Tuple[int, ...], is_batched: bool = True, dtype: torch.dtype = torch.float32) -> "StageConfig":
         self.outputs.append(output_name)
-        shape = list(shape)
+        if is_batched:
+            shape = list(shape)
         self.output_shapes.append(shape)
         self.is_batched[output_name] = is_batched
         self.dtypes[output_name] = dtype
@@ -480,14 +483,14 @@ class StageConfig():
 
         inputs = dict()
         for i, s in zip(self.inputs, self.input_shapes):
-            inputs[i] = {"shape": list(s),
-                         "dtype": serialize_python_class_or_function(self.dtypes[i]),
+            inputs[i] = {"shape": s,
+                         "dtype": nested_serialize(self.dtypes[i]),
                          "is_batched": self.is_batched[i]}
 
         outputs = dict()
         for o, s in zip(self.outputs, self.output_shapes):
-            outputs[o] = {"shape": list(s),
-                          "dtype": serialize_python_class_or_function(self.dtypes[o]),
+            outputs[o] = {"shape": s,
+                          "dtype": nested_serialize(self.dtypes[o]),
                           "is_batched": self.is_batched[o]}
 
         state["inputs"] = inputs
@@ -548,11 +551,11 @@ class StageConfig():
 
         for i, d in state['inputs'].items():
             config.add_input(i, d['shape'], d['is_batched'],
-                             deserialize_python_class_or_function(d['dtype']))
+                             nested_deserialize(d['dtype']))
 
         for o, d in state['outputs'].items():
             config.add_output(o, d['shape'], d['is_batched'],
-                              deserialize_python_class_or_function(d['dtype']))
+                             nested_deserialize(d['dtype']))
 
         config.add_devices(*state['devices'])
 
@@ -560,6 +563,15 @@ class StageConfig():
 
         return config
 
+def nested_serialize(obj):
+    return nested_map(serialize_python_class_or_function,obj)
+
+def nested_deserialize(obj):
+    def f(o):
+        if isinstance(o,str):
+            return deserialize_python_class_or_function(o)
+        return o
+    return nested_map(f,obj)
 
 def serialize_python_class_or_function(class_or_function):
     if class_or_function is None:
