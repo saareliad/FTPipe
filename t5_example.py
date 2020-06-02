@@ -254,3 +254,23 @@ if __name__ == "__main__":
         print(f"matched vertices: {len(matched_vertices)}/{len(graph.nodes)}")
         visualize_matching(layers_graph.nodes,matching,"matching",".")
 
+
+        compile_partitioned_model(graph,our,0,output_file="cfg.py")
+
+        from cfg import create_pipeline_configuration
+        from pytorch_Gpipe import PipelineConfig
+        from misc import run_analysis
+        dict_cfg = create_pipeline_configuration(DEBUG=True)
+        PipelineConfig.fromDict(dict_cfg).toJson("cfg.json")
+        old_cfg = PipelineConfig.fromJson("cfg.json")._to_old_format(layerDict(our,basic_blocks=blocks),tensorDict(our))
+        run_analysis(lm_kwargs,
+                 graph,
+                 old_cfg,
+                 1,
+                 recomputation=True,
+                 bw_GBps=12,
+                 verbose=True,
+                 async_pipeline=True,
+                 add_comm_times_to_balance=True,
+                 sequential_model=None,
+                 analyze_traced_model=False)
