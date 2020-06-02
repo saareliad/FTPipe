@@ -195,9 +195,9 @@ if __name__ == "__main__":
         generate_model_parallel=args.generate_model_parallel,
         generate_explicit_del=args.generate_explicit_del,
         use_layers_only_graph=True,
-        use_graph_profiler=args.use_graph_profiler,
-        use_network_profiler=not args.use_graph_profiler,
-        profile_ops=args.profile_ops,
+        use_graph_profiler=not args.use_network_profiler,
+        use_network_profiler=args.use_network_profiler,
+        profile_ops=not args.disable_op_profiling,
         node_weight_function=NodeWeightFunction(
             bwd_to_fwd_ratio=bwd_to_fwd_ratio),
         edge_weight_function=EdgeWeightFunction(
@@ -228,9 +228,9 @@ if __name__ == "__main__":
             generate_model_parallel=args.generate_model_parallel,
             generate_explicit_del=args.generate_explicit_del,
             use_layers_only_graph=True,
-            use_graph_profiler=args.use_graph_profiler,
-            use_network_profiler=not args.use_graph_profiler,
-            profile_ops=args.profile_ops,
+            use_graph_profiler=not args.use_network_profiler,
+            use_network_profiler=args.use_network_profiler,
+            profile_ops=not args.disable_op_profiling,
             node_weight_function=NodeWeightFunction(
                 bwd_to_fwd_ratio=bwd_to_fwd_ratio),
             edge_weight_function=EdgeWeightFunction(

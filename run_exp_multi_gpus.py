@@ -318,9 +318,7 @@ def wrn_p4_async():
         async_pipeline=[""],
         dataset=['cifar100'],
         generate_model_parallel=[""],
-        use_graph_profiler=[""],  # TODO: not supported
         # generate_explicit_del=[""],
-        profile_ops=[""],  # TODO: does not work
         n_partitions=[4],
         partitioning_batch_size=[1],
         analysis_batch_size=[1],

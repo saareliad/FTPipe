@@ -72,12 +72,12 @@ class ParsePartitioningOpts:
             help="the depth in which we will partition the model")
         parser.add_argument('--basic_blocks', nargs='*')
         parser.add_argument(
-            "--use_graph_profiler", default=False, action="store_true",
-            help="wether to use the new graph based profiler or the old network_profiler,"
+            "--use_network_profiler", default=False, action="store_true",
+            help="wether to use the old network_profiler instead of the newer graph based profiler"
         )
         parser.add_argument(
-            "--profile_ops", default=False, action="store_true",
-            help="weheter to also profile ops when using the GraphProfiler"
+            "--disable_op_profiling", default=False, action="store_true",
+            help="weheter to not profile ops when using the GraphProfiler"
         )
         parser.add_argument(
             "--generate_model_parallel",

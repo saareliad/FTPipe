@@ -36,9 +36,9 @@ def pipe_model(model: nn.Module,
                METIS_opt=dict(),
                force_no_recomp_scopes=lambda s: False,
                save_memory_mode=False,
-               use_graph_profiler=False,
-               use_network_profiler=True,
-               profile_ops=False) -> Graph:
+               use_graph_profiler=True,
+               use_network_profiler=False,
+               profile_ops=True) -> Graph:
     '''attemps to partition a model to given number of parts using our profiler
        this will produce a python file with the partition config
 
@@ -87,13 +87,13 @@ def pipe_model(model: nn.Module,
         defaut is lambda x: False
     use_graph_profiler:
         whether to use the new graph based profiler
-        default False
+        default True
     use_network_profiler:
         whether to use the older model based network_profiler
-        default True
+        default False
     profile_ops:
         weheter to also profile ops when using the GraphProfiler
-        default False
+        default True
     save_memory_mode:
         minimize memory footprint during profiling
         sacrifice speed for memory
@@ -145,9 +145,9 @@ def partition_model(model: nn.Module,
                     recomputation: bool = False,
                     METIS_opt=dict(),
                     force_no_recomp_scopes=lambda s: False,
-                    use_graph_profiler=False,
-                    use_network_profiler=True,
-                    profile_ops=False,
+                    use_graph_profiler=True,
+                    use_network_profiler=False,
+                    profile_ops=True,
                     save_memory_mode=False) -> Graph:
     '''
     profiles the network and return a graph representing the partition
@@ -180,13 +180,13 @@ def partition_model(model: nn.Module,
         dict of additional kwargs to pass to the METIS partitioning algorithm
     use_graph_profiler:
         whether to use the new graph based profiler
-        default False
+        default True
     use_network_profiler:
         whether to use the older model based network_profiler
-        default True
+        default False
     profile_ops:
         weheter to also profile ops when using the GraphProfiler
-        default False
+        default True
     '''
     if basic_blocks is None:
         basic_blocks = ()
@@ -214,11 +214,17 @@ def partition_model(model: nn.Module,
     return graph
 
 
-def build_graph(model: nn.Module, args: tuple = (), kwargs: Optional[Dict] = None,
-                use_network_profiler: bool = True, use_graph_profiler: bool = False,
-                save_memory_mode: bool = False, profile_ops: bool = False,
-                recomputation: bool = False, n_iter: int = 10,
-                max_depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None,
+def build_graph(model: nn.Module, 
+                args: tuple = (),
+                kwargs: Optional[Dict] = None,
+                use_network_profiler: bool = False,
+                use_graph_profiler: bool = True,
+                save_memory_mode: bool = False, 
+                profile_ops: bool = True,
+                recomputation: bool = False,
+                n_iter: int = 10,
+                max_depth: int = 1000, 
+                basic_blocks: Optional[List[nn.Module]] = None,
                 force_no_recomp_scopes: Optional[Callable[[str], bool]] = None) -> Graph:
     """
     builds a graph representation of the model which is semantically identical to the forward pass
@@ -248,13 +254,13 @@ def build_graph(model: nn.Module, args: tuple = (), kwargs: Optional[Dict] = Non
         whether to partition a smaller version of the graph containing only the layers (usefull fo big models with lots of unprofiled ops)
     use_graph_profiler:
         whether to use the new graph based profiler
-        default False
+        default True
     use_network_profiler:
         whether to use the older model based network_profiler
-        default True
+        default False
     profile_ops:
         weheter to also profile ops when using the GraphProfiler
-        default False
+        default True
     save_memory_mode:
         minimize memory footprint during profiling
         sacrifice speed for memory
