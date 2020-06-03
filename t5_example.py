@@ -251,22 +251,24 @@ if __name__ == "__main__":
         use_layers_only_graph=True,
         use_graph_profiler=True,
         use_network_profiler=False,
+        generate_model_parallel=False,
+        generate_explicit_del=True,
         profile_ops=True,
-        output_file="async_partitioner_T5",
+        output_file="T5_full_tied",
         recomputation=True)
 
     
         print("using async partitioner")
-        async_pipe_partitioner = AsyncPipePartitioner(our, "async_partitioner_T5",
-                                                    partial_pipe_model)
 
+        async_pipe_partitioner = AsyncPipePartitioner(our, "T5_full_tied",
+                                                partial_pipe_model)
         graph = run_x_tries_until_no_fail(
             async_pipe_partitioner.partition,
             10,
             force_no_recomp_scopes=None,
             allowed_mistakes=0)
 
-        from async_partitioner_T5 import create_pipeline_configuration
+        from T5_full_tied import create_pipeline_configuration
         from pytorch_Gpipe import PipelineConfig
         from misc import run_analysis
         dict_cfg = create_pipeline_configuration(DEBUG=True)
