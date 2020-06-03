@@ -1,6 +1,6 @@
 from pytorch_Gpipe.model_profiling import Graph,Node,NodeWeightFunction,EdgeWeightFunction
 from .data_structures import QuotientGraph,PartitionNode,PriorityQueue
-from pytorch_Gpipe.model_partitioning.partition_graph import induce_layer_partition
+from ..METIS_partitioning.partition_graph import induce_layer_partition
 import random
 import math
 import numpy as np
@@ -362,7 +362,7 @@ ALGORITHMS = {
     ALGORITHM.FIDUCCIA_MATTHEYSES_MOVES:Fiduccia_Mattheyses_moves
 }
 
-def partition_graph(graph:Graph,k:int,epsilon:float=0.1,node_weight_function:Optional[NodeWeightFunction]=None,
+def acyclic_partition(graph:Graph,k:int,epsilon:float=0.1,node_weight_function:Optional[NodeWeightFunction]=None,
                     edge_weight_function:Optional[EdgeWeightFunction]=None,rounds:int=10,allocated_seconds:int=10,use_layers_graph:bool=True)->Tuple[Graph,float,Dict[int,float]]:
     worker_args=[dict(graph = graph.state(),
                         k=k,

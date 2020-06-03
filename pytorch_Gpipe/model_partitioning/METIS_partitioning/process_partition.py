@@ -2,7 +2,7 @@ from collections import defaultdict
 from typing import List, Dict, Set
 from copy import copy
 import os
-from ..model_profiling import Graph, NodeTypes, Node
+from ...model_profiling import Graph, NodeTypes, Node
 import torch
 __all__ = ["post_process_partition"]
 

@@ -1,6 +1,6 @@
 from typing import Optional, Dict, List
 
-from ..model_profiling import Graph, NodeWeightFunction, EdgeWeightFunction
+from ...model_profiling import Graph, NodeWeightFunction, EdgeWeightFunction
 from .process_partition import post_process_partition
 
 __all__ = ["METIS_partition"]
