@@ -208,6 +208,8 @@ def global_moves(partition_volumes:Dict[int,float],edge_weights:Dict[Tuple[Node,
             partition_volumes[dst] += node_weights[n]
             
             quotient_graph.move_node(n,dst)
+            if DEBUG:
+                quotient_graph.selfcheck()
 
         if not changed:
             break
@@ -273,6 +275,8 @@ def Fiduccia_Mattheyses_moves(partition_volumes:Dict[int,float],edge_weights:Dic
                 
                 src = node.part
                 quotient_graph.move_node(node,dst)
+                if DEBUG:
+                    quotient_graph.selfcheck()
 
                 if current_objective < best_objective:
                     best_objective = current_objective
@@ -296,32 +300,13 @@ def Fiduccia_Mattheyses_moves(partition_volumes:Dict[int,float],edge_weights:Dic
                             gain = calculate_gain(o,A,edge_weights)
                             candidate_moves.push_task(gain,(o,A))
 
-            #sanity check
-            # at the end of the pass all nodes should be either locked or disabled or overloading
-            if DEBUG:
-                for n in quotient_graph[A]:
-                    locked = n in locked_nodes
-                    disabled = any(o.part < B for o in n.out_edges)
-                    overload = (partition_volumes[B] + node_weights[n]) > L_max
-                    move_msg = f"can move to {B}" if (not (locked or disabled or overload)) else f"cannot be moved to {B}"
-                
-                    msg = f"{n.id} locked:{locked} disabled:{disabled} overload:{overload} {move_msg}"
-                    assert locked or disabled or overload,msg
-
-                for n in quotient_graph[B]:
-                    locked = n in locked_nodes
-                    disabled = any(i.part > A for i in n.in_edges)
-                    overload = (partition_volumes[A] + node_weights[n]) > L_max
-                    move_msg = f"can move to {A}" if (not (locked or disabled or overload)) else f"cannot be moved to {A}"
-                
-                    msg = f"{n.id} locked:{locked} disabled:{disabled} overload:{overload} {move_msg}"
-                    assert locked or disabled or overload ,msg
-
             #end of inner pass revert partition to best partition
             for n,dst in moves_to_best.items():
                 partition_volumes[n.part]-=node_weights[n]
                 partition_volumes[dst]+=node_weights[n]
                 quotient_graph.move_node(n,dst)
+            if DEBUG:
+                quotient_graph.selfcheck()
 
 
 #assumes W(u,v) > 0
@@ -375,8 +360,10 @@ def acyclic_partition(graph:Graph,k:int,epsilon:float=0.1,node_weight_function:O
                         seed=random.randint(0,2**32),
                         use_layers_graph=use_layers_graph) for alg in ALGORITHM]
 
-    with Pool(len(ALGORITHMS)) as pool:
+    with Pool(len(worker_args)) as pool:
         results=pool.map(worker, worker_args)
+
+    assert len(results) == len(ALGORITHMS)
 
     best_partition = results[0]
     for r in results:
@@ -390,8 +377,23 @@ def acyclic_partition(graph:Graph,k:int,epsilon:float=0.1,node_weight_function:O
     for n in graph.nodes:
         n.part = partition[n.id]
     
+    regular_edges=0
+    penalty_edges=0
+    penalty_scopes=[]
+    for n in graph.nodes:
+        for u in n.out_edges:
+            if u.part != n.part:
+                if edge_weight_function(n,u) >= 1000:
+                    penalty_edges+=1
+                    penalty_scopes.append(n.scope)
+                else:
+                    regular_edges+=1
+    print()
     print("-I- Printing Partitioning Report")
-    print(f"    best algorithm:{algorithm}")
+    print(f"    best algorithm:{algorithm.name}")
+    print(f"    number of cutting edges: {regular_edges+penalty_edges}")
+    print(f"    number of regular edges: {regular_edges}")
+    print(f"    number of penalty edges: {penalty_edges}")
     print(f"    edge cut:{edge_cut:.2f}")
     print(f"    volumes:{volumes}")
 

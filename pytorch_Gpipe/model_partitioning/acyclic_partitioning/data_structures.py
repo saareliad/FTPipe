@@ -84,18 +84,14 @@ class PartitionNode():
 
 
 class QuotientGraph():
-    DEBUG=False
     def __init__(self,nodes:Iterable[Node]):
         groups = defaultdict(list)
         for n in nodes:
             groups[n.part].append(n)
         
         self._nodes:Dict[int,PartitionNode] = {idx:PartitionNode(group,idx) for idx,group in groups.items()}
+
         
-        if self.DEBUG:
-            assert not self.has_cycles()
-            self.selfcheck()
-    
     def __getitem__(self,idx:int)->PartitionNode:
         return self._nodes[idx]
 
@@ -135,9 +131,6 @@ class QuotientGraph():
             p._in_edges.pop(p.id,None)
             p._out_edges.pop(p.id,None)
 
-        if self.DEBUG:
-            self.selfcheck()
-    
     def move_creates_cycle(self,node:Node,dest:int)->bool:
         orig_part=node.part
         self.move_node(node,dest)

@@ -26,19 +26,20 @@ class NodeWeightFunction():
 
 
 class EdgeWeightFunction():
-    def __init__(self,bw_GBps, bwd_to_fwd_ratio=-1,MULT_FACTOR=1000):
+    def __init__(self,bw_GBps, bwd_to_fwd_ratio=-1,MULT_FACTOR=1000,penalty=1e4):
         self.bw=bw_GBps
         self.ratio = bwd_to_fwd_ratio
         self.MULT_FACTOR=MULT_FACTOR
+        self.penalty = penalty
 
     def __call__(self,u: Node, v: Node):
         if u.type is NodeTypes.CONSTANT or (u.value_type in [float, str, bool, int, type(None),torch.device,torch.Size,torch.dtype]
                                             or u.tensor_shape is None):
             # no constant or scalars on boundries
-            w = 1e4 * self.MULT_FACTOR
+            w = self.penalty * self.MULT_FACTOR
         elif u.value_type in [list, tuple, dict, set, slice, torch.Size]:
             # no nested iterables on boundries
-            w = 1e4 * self.MULT_FACTOR
+            w = self.penalty * self.MULT_FACTOR
         else:
             MB = 1e6
             assert isinstance(u.tensor_shape, torch.Size)
