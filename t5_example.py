@@ -75,7 +75,7 @@ def ensure_tracing_semantics_and_profiling(ref,our,input_kws,training=True,exp_p
     assert len(out) == len(ref_out)
 
     for e,a in zip(ref_out,out):
-        assert torch.allclose(a,e),(e,a)
+        assert torch.allclose(a,e),(training,type(ref),type(our))
         
     tensors = tensorDict(our)
 
@@ -96,24 +96,22 @@ def ensure_tracing_semantics_and_profiling(ref,our,input_kws,training=True,exp_p
         layers = layerDict(our,depth=d,basic_blocks=blocks)
 
         generated=importlib.import_module(output_file).Partition0(layers,tensors)
-
        #for some depth configs the use_cache flag will be built in 
         try:
             seed()
-            out = list(flatten(generated(*list(input_kws.values()))))
+            out = list(flatten(generated(**input_kws)))
             kws = input_kws
         except TypeError:
             seed()
             kws = dict(input_kws.items())
             kws.pop("use_cache")
-            out = list(flatten(generated(*list(kws.values()))))
+            out = list(flatten(generated(**kws)))
         
         torch.cuda.synchronize()
         assert len(out) == len(ref_out)
 
         for e,a in zip(ref_out,out):
-            assert torch.allclose(a,e),(e,a)
-        
+            assert torch.allclose(a,e),(training,type(ref),type(our))        
         os.remove(output_file+".py")
         print(f"{output_file} equivalent")
 
@@ -191,7 +189,7 @@ def display_most_used_nodes(graph,threshold=5):
     print()
 
 
-COMPARE_MODELS=False
+COMPARE_MODELS=True
 
 if __name__ == "__main__":
     tokenizer = T5Tokenizer.from_pretrained('t5-small')
@@ -199,17 +197,21 @@ if __name__ == "__main__":
     
     input_ids = tokenizer.encode(
         "Hello, my dog is cute", return_tensors="pt").cuda()  # Batch (1,6)
-    input_ids=input_ids.repeat(32,20).contiguous() #Batch (32,120)
-    lm_kwargs={"input_ids":input_ids,"decoder_input_ids":input_ids,"lm_labels":input_ids,"use_cache":True}
-    kwargs = {"input_ids":input_ids,"decoder_input_ids":input_ids,"use_cache":True}
     print("tokenized input")
     print()
+    if not COMPARE_MODELS:
+        input_ids=input_ids.repeat(32,20).contiguous() #Batch (32,120)
+    else:
+        input_ids=input_ids.repeat(8,4).contiguous()# Batch (8,24)
+    lm_kwargs={"input_ids":input_ids,"decoder_input_ids":input_ids,"lm_labels":input_ids,"use_cache":True}
+    kwargs = {"input_ids":input_ids,"decoder_input_ids":input_ids,"use_cache":True}
+    
 
     if COMPARE_MODELS:
         compare_models(lm_kwargs,kwargs)
     else:
         register_functions()
-        ref,our = get_models_for_comparison(base=False,tied=False)
+        ref,our = get_models_for_comparison(base=False,tied=True)
 
         c_ref = count_blocks(ref)
         c_our = count_blocks(our)
