@@ -1,5 +1,4 @@
 from typing import Optional, Dict, List
-
 from ..model_profiling import Graph, NodeWeightFunction, EdgeWeightFunction
 from .process_partition import post_process_partition
 
@@ -82,13 +81,16 @@ def METIS_partition(graph: Graph,
 def induce_layer_partition(original_graph: Graph,layers_graph:Graph,
                            layers_to_original: Dict[int, int]) -> Graph:
     old_to_new = {v: k for k, v in layers_to_original.items()}
-
-    for node in reversed(list(original_graph.nodes)):
+    N = len(original_graph)
+    #iterate in reverse order
+    for idx in range(len(original_graph.nodes)):
+        node = original_graph[N-idx-1]
         if node.id in old_to_new:
             node.part = layers_graph[old_to_new[node.id]].part
         else:
             # as we iterate in reverse topological order we've already handled this node's outupts
-            node.part = next(iter(node.out_edges)).part
+            #select the lowest partition index to ensure no cycles are created
+            node.part = sorted(node.out_edges,key=lambda n: n.part)[0].part
         assert node.part >= 0
 
     return original_graph
