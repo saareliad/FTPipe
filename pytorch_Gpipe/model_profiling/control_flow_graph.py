@@ -76,6 +76,9 @@ class Graph():
         self.depth = depth
         self.basic_blocks = basic_blocks
 
+    def __len__(self)->int:
+        return len(self._nodes)
+        
     @property
     def nodes(self) -> Iterable[Node]:
         return self._nodes.values()
@@ -453,7 +456,7 @@ class Graph():
         num_removed = 0
         lookup = dict()
         for node in new_graph._nodes.values():
-            if node.type is NodeTypes.CONSTANT or ((node.type != NodeTypes.IN) and (len(node.in_edges) == 0)):
+            if node.type is NodeTypes.CONSTANT or ((node.type in [NodeTypes.PRIMITIVE,NodeTypes.OP]) and (len(node.in_edges) == 0)):
                 for o in node.out_edges:
                     o.kwargs.pop(node, None)
                     o.args = [n for n in o.args if n is not node]
