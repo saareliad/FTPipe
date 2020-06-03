@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader, RandomSampler
 
 from models.normal import BertForQuestionAnswering
 from models.normal.NLP_models.modeling_bert import SQUAD_loss
-from partition_scripts_utils import ParsePartitioningOpts, ParseMetisOpts, record_cmdline,choose_blocks,run_x_tries_until_no_fail
+from partition_scripts_utils import ParsePartitioningOpts,ParseAcyclicPartitionerOpts ,ParseMetisOpts, record_cmdline,choose_blocks,run_x_tries_until_no_fail
 from partition_async_pipe import AsyncPipePartitioner
 from heuristics import NodeWeightFunction, EdgeWeightFunction
 from misc import run_analysis
@@ -274,6 +274,7 @@ def parse_cli():
 
     ParsePartitioningOptsSquad().add_partitioning_arguments(parser)
     ParseMetisOpts.add_metis_arguments(parser)
+    ParseAcyclicPartitionerOpts.add_acyclic_partitioner_arguments(parser)
 
     args = parser.parse_args()
 
@@ -286,7 +287,7 @@ def parse_cli():
 def main():
     args = parse_cli()
     METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
-
+    acyclic_opt = ParseAcyclicPartitionerOpts.acyclic_opts_dict_from_parsed_args(args)
     args.model_type = args.model_type.lower()
 
     if args.auto_file_name:
@@ -378,7 +379,6 @@ def main():
     sample = tuple(inputs[i] for i in signature_order)
 
     # Partition the model
-    # partition_model(args, train_dataset, model, tokenizer, METIS_opt=METIS_opt)
     GET_PARTITIONS_ON_CPU = True
     register_new_explicit_untraced_function(operator.is_,operator)
     register_new_explicit_untraced_function(operator.is_not,operator)
@@ -417,6 +417,8 @@ def main():
         generate_explicit_del=args.generate_explicit_del,
         save_memory_mode=args.save_memory_mode,
         recomputation=recomputation,
+        use_METIS=args.use_METIS,
+        acyclic_opt=acyclic_opt,
         METIS_opt=METIS_opt)
 
     if args.async_pipeline and (not args.no_recomputation):

@@ -79,6 +79,8 @@ class ParsePartitioningOpts:
             "--disable_op_profiling", default=False, action="store_true",
             help="weheter to not profile ops when using the GraphProfiler"
         )
+        parser.add_argument("--use_METIS",default=False,action="store_true",
+        help="wether to use METIS partitioning instead of the acyclic partitioner")
         parser.add_argument(
             "--generate_model_parallel",
             action="store_true",
@@ -197,6 +199,29 @@ class ParseMetisOpts:
         #  'ufactor': -1,
         #  '_dbglvl': -1,
         #  }
+
+
+
+class ParseAcyclicPartitionerOpts:
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def add_acyclic_partitioner_arguments(parser):
+        opts = parser.add_argument_group("AcyclicPartitioner options")
+        opts.add_argument("--epsilon",default=0.1,help="imbalance factor")
+        opts.add_argument("--rounds",default=10,help="number of optimization rounds default is 10")
+        opts.add_argument("--allocated_seconds",default=10,help="run time allocated to the partitioning algorithm default is 10 seconds")
+
+
+    @staticmethod
+    def acyclic_opts_dict_from_parsed_args(args):
+        """ build acyclic partitioner options """
+
+        return {"epsilon":args.epsilon,
+                "rounds":args.rounds,
+                "allocated_seconds":args.allocated_seconds}
+
 
 
 

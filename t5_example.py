@@ -11,7 +11,7 @@ import os
 import importlib
 import numpy as np
 from collections import Counter
-from pytorch_Gpipe.model_partitioning.acyclic_partitioning import partition_graph
+from pytorch_Gpipe import acyclic_partition
 from pytorch_Gpipe.model_partitioning.acyclic_partitioning.gpa import visualize_matching,find_max_matching
 from heuristics import NodeWeightFunction,EdgeWeightFunction
 
@@ -232,7 +232,7 @@ if __name__ == "__main__":
 
         nwf = NodeWeightFunction(3,MULT_FACTOR=1)
         ewf = EdgeWeightFunction(12,3,MULT_FACTOR=1)
-        partition_graph(graph,4,node_weight_function=nwf,epsilon=0.1,
+        acyclic_partition(graph,4,node_weight_function=nwf,epsilon=0.1,
                     edge_weight_function=ewf,rounds=10,allocated_seconds=10,use_layers_graph=True)
 
 

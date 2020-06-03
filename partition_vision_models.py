@@ -8,7 +8,7 @@ import importlib
 from misc import run_analysis, run_partitions
 import sys
 from heuristics import EdgeWeightFunction, NodeWeightFunction
-from partition_scripts_utils import ParseMetisOpts, ParsePartitioningOpts, record_cmdline, run_x_tries_until_no_fail,choose_blocks
+from partition_scripts_utils import ParseMetisOpts,ParseAcyclicPartitionerOpts, ParsePartitioningOpts, record_cmdline, run_x_tries_until_no_fail,choose_blocks
 import functools
 from partition_async_pipe import AsyncPipePartitioner
 
@@ -138,6 +138,7 @@ def parse_cli():
 
     ParsePartitioningOptsVision().add_partitioning_arguments(parser)
     ParseMetisOpts.add_metis_arguments(parser)
+    ParseAcyclicPartitionerOpts.add_acyclic_partitioner_arguments(parser)
 
     args = parser.parse_args()
     args.auto_file_name = not args.no_auto_file_name
@@ -148,12 +149,13 @@ def parse_cli():
         args.output_file = args.output_file[:-3]
 
     METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
-    return args, METIS_opt
+    acyclic_opt = ParseAcyclicPartitionerOpts.acyclic_opts_dict_from_parsed_args(args)
+    return args, METIS_opt,acyclic_opt
 
 
 if __name__ == "__main__":
 
-    args, METIS_opt = parse_cli()
+    args, METIS_opt,acyclic_opt = parse_cli()
     GET_PARTITIONS_ON_CPU = True
 
     # if the model is too big run the whole partitioning process on CPU
@@ -205,6 +207,8 @@ if __name__ == "__main__":
         n_iter=n_iter,
         recomputation=recomputation,
         save_memory_mode=args.save_memory_mode,
+        use_METIS= args.use_METIS,
+        acyclic_opt=acyclic_opt,
         METIS_opt=METIS_opt)
 
     if args.async_pipeline and (not args.no_recomputation):
@@ -217,28 +221,7 @@ if __name__ == "__main__":
             # force_no_recomp_scopes=force_no_recomputation_fn,
             allowed_mistakes=0)
     else:
-        graph = pipe_model(
-            model,
-            batch_dim,
-            sample,
-            depth=args.depth,
-            kwargs=None,
-            nparts=n_partitions,
-            output_file=args.output_file,
-            generate_model_parallel=args.generate_model_parallel,
-            generate_explicit_del=args.generate_explicit_del,
-            use_layers_only_graph=True,
-            use_graph_profiler=not args.use_network_profiler,
-            use_network_profiler=args.use_network_profiler,
-            profile_ops=not args.disable_op_profiling,
-            node_weight_function=NodeWeightFunction(
-                bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-            edge_weight_function=EdgeWeightFunction(
-                bw, bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-            n_iter=n_iter,
-            recomputation=recomputation,
-            save_memory_mode=args.save_memory_mode,
-            METIS_opt=METIS_opt)
+        graph = partial_pipe_model()
 
     if args.dot:
         graph.save_as_pdf(args.output_file, ".")

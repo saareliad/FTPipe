@@ -32,7 +32,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset, RandomSampler
 import warnings
 import sys
-from partition_scripts_utils import ParseMetisOpts, ParsePartitioningOpts, record_cmdline, run_x_tries_until_no_fail,choose_blocks
+from partition_scripts_utils import ParseMetisOpts,ParseAcyclicPartitionerOpts, ParsePartitioningOpts, record_cmdline, run_x_tries_until_no_fail,choose_blocks
 from heuristics import NodeWeightFunction, EdgeWeightFunction
 from transformers import (
     BertConfig,
@@ -198,7 +198,8 @@ def partition_model(args,
                     model,
                     tokenizer,
                     lm=True,
-                    METIS_opt=dict()):
+                    METIS_opt=dict(),
+                    acyclic_opt=dict()):
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset,
                                   sampler=train_sampler,
@@ -263,6 +264,8 @@ def partition_model(args,
         generate_explicit_del=args.generate_explicit_del,
         save_memory_mode=args.save_memory_mode,
         recomputation=recomputation,
+        use_METIS=args.use_METIS,
+        acyclic_opt=acyclic_opt,
         METIS_opt=METIS_opt)
 
     if args.async_pipeline and (not args.no_recomputation):
@@ -476,6 +479,8 @@ def parse_cli():
         default=False,
         help="if the model is too big run the whole partitioning process on CPU, and drink a cup of coffee in the meantime"
     )
+    parser.add_argument("--use_METIS",default=False,action="store_true",
+        help="wether to use METIS partitioning instead of the acyclic partitioner")
     parser.add_argument('--n_partitions', type=int, default=4)
     parser.add_argument('--output_file', default='gpt2')
     parser.add_argument(
@@ -549,6 +554,7 @@ def parse_cli():
                         help="Do analysis and partitioning for async pipeline")
 
     ParseMetisOpts.add_metis_arguments(parser)
+    ParseAcyclicPartitionerOpts.add_acyclic_partitioner_arguments(parser)
 
     args = parser.parse_args()
 
@@ -565,6 +571,7 @@ def main():
 
     args = parse_cli()
     METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
+    acyclic_opt = ParseAcyclicPartitionerOpts.acyclic_opts_dict_from_parsed_args(args)
 
     if args.model_type in ["bert", "roberta", "distilbert", "camembert"
                            ] and not args.mlm:
@@ -626,7 +633,8 @@ def main():
                     model,
                     tokenizer,
                     lm=args.lmhead,
-                    METIS_opt=METIS_opt)
+                    METIS_opt=METIS_opt,
+                    acyclic_opt=acyclic_opt)
 
 
 # download dataset from https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip
