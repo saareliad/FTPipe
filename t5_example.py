@@ -191,7 +191,7 @@ def display_most_used_nodes(graph,threshold=5):
     print()
 
 
-COMPARE_MODELS=True
+COMPARE_MODELS=False
 
 if __name__ == "__main__":
     tokenizer = T5Tokenizer.from_pretrained('t5-small')
@@ -254,17 +254,17 @@ if __name__ == "__main__":
         print(f"total edge weight: {sum((ewf(*e) for e in edges)):.2f}")
         print(f"matched edge weight: {sum((ewf(*e) for e in matched_edges)):.2f}")
         print(f"matched vertices: {len(matched_vertices)}/{len(graph.nodes)}")
-        visualize_matching(layers_graph.nodes,matching,"matching",".")
+        # visualize_matching(layers_graph.nodes,matching,"matching",".")
 
 
-        compile_partitioned_model(graph,our,0,output_file="cfg.py")
+        compile_partitioned_model(graph,our,0,output_file="T5_full_tied.py")
 
         from cfg import create_pipeline_configuration
         from pytorch_Gpipe import PipelineConfig
         from misc import run_analysis
         dict_cfg = create_pipeline_configuration(DEBUG=True)
-        PipelineConfig.fromDict(dict_cfg).toJson("cfg.json")
-        old_cfg = PipelineConfig.fromJson("cfg.json")._to_old_format(layerDict(our,basic_blocks=blocks),tensorDict(our))
+        # PipelineConfig.fromDict(dict_cfg).toJson("cfg.json")
+        old_cfg = PipelineConfig.fromDict(dict_cfg)._to_old_format(layerDict(our,basic_blocks=blocks),tensorDict(our))
         run_analysis(lm_kwargs,
                  graph,
                  old_cfg,
