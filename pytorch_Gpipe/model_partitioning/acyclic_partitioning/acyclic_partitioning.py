@@ -391,9 +391,9 @@ def acyclic_partition(graph:Graph,k:int,epsilon:float=0.1,node_weight_function:O
         n.part = partition[n.id]
     
     print("-I- Printing Partitioning Report")
-    print(f"best algorithm:{algorithm}")
-    print(f"edge cut:{edge_cut:.2f}")
-    print(f"volumes:{volumes}")
+    print(f"    best algorithm:{algorithm}")
+    print(f"    edge cut:{edge_cut:.2f}")
+    print(f"    volumes:{volumes}")
 
     return graph,edge_cut,volumes
         

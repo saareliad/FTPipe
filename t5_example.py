@@ -14,6 +14,10 @@ from collections import Counter
 from pytorch_Gpipe import acyclic_partition
 from pytorch_Gpipe.model_partitioning.acyclic_partitioning.gpa import visualize_matching,find_max_matching
 from heuristics import NodeWeightFunction,EdgeWeightFunction
+import functools
+from partition_async_pipe import AsyncPipePartitioner
+from partition_scripts_utils import run_x_tries_until_no_fail
+
 
 def seed():
     torch.cuda.synchronize()
@@ -229,37 +233,40 @@ if __name__ == "__main__":
         basic_blocks = get_blocks(our)
         blocks = [basic_blocks[b] for b in ["T5Attention"]]
 
-        graph = build_graph(our,kwargs=lm_kwargs,use_graph_profiler=True,profile_ops=True,use_network_profiler=False,
-        save_memory_mode=False,basic_blocks=blocks,force_no_recomp_scopes=None)
 
         nwf = NodeWeightFunction(3,MULT_FACTOR=1)
         ewf = EdgeWeightFunction(12,3,MULT_FACTOR=1)
-        acyclic_partition(graph,4,node_weight_function=nwf,epsilon=0.1,
-                    edge_weight_function=ewf,rounds=10,allocated_seconds=10,use_layers_graph=True)
 
 
-        layers_graph,_ = graph.layers_graph()
+        partial_pipe_model = functools.partial(
+        pipe_model,
+        our,
+        0,
+        kwargs=lm_kwargs,
+        basic_blocks=blocks,
+        n_iter=10,
+        nparts=4,
+        node_weight_function=nwf,
+        edge_weight_function=ewf,
+        use_layers_only_graph=True,
+        use_graph_profiler=True,
+        use_network_profiler=False,
+        profile_ops=True,
+        output_file="async_partitioner_T5",
+        recomputation=True)
 
-        matching,_ = find_max_matching(layers_graph,nwf,ewf,seed=0)
+    
+        print("using async partitioner")
+        async_pipe_partitioner = AsyncPipePartitioner(our, "async_partitioner_T5",
+                                                    partial_pipe_model)
 
-        matched_edges = [e for match in matching for e in match]
-        edges = [(u,n) for n in layers_graph.nodes for u in n.in_edges]
-        for u,v in matched_edges:
-            assert u.part == v.part
-        matched_vertices = {v for e in matched_edges for v in e}
-        print()
-        print("-I- matching stats:")
-        print(f"total edges: {len(edges)}")
-        print(f"matched edged: {len(matched_edges)}")
-        print(f"total edge weight: {sum((ewf(*e) for e in edges)):.2f}")
-        print(f"matched edge weight: {sum((ewf(*e) for e in matched_edges)):.2f}")
-        print(f"matched vertices: {len(matched_vertices)}/{len(graph.nodes)}")
-        # visualize_matching(layers_graph.nodes,matching,"matching",".")
+        graph = run_x_tries_until_no_fail(
+            async_pipe_partitioner.partition,
+            10,
+            force_no_recomp_scopes=None,
+            allowed_mistakes=0)
 
-
-        compile_partitioned_model(graph,our,0,output_file="T5_full_tied.py")
-
-        from cfg import create_pipeline_configuration
+        from async_partitioner_T5 import create_pipeline_configuration
         from pytorch_Gpipe import PipelineConfig
         from misc import run_analysis
         dict_cfg = create_pipeline_configuration(DEBUG=True)
