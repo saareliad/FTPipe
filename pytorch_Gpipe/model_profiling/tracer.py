@@ -3,7 +3,6 @@ from functools import wraps
 from itertools import chain
 import operator
 import warnings
-from copy import deepcopy
 
 
 import torch
@@ -895,7 +894,7 @@ def duplicate_constants(nodes,output_id):
         
         if node.type is NodeTypes.CONSTANT and len(node.out_edges) > 1:
             for n_copy,o in enumerate(node.out_edges):
-                copy_node = deepcopy(node)
+                copy_node = Node.from_other(node)
                 copy_node.id+=(n_copy)
                 o.replace_input(node,copy_node)
                 copy_node.out_edges={o}

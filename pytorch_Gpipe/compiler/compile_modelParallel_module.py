@@ -231,7 +231,6 @@ def forward_statements(ios: Dict[int, Dict[str, List[str]]],
         for a in d['inputs']:
             assert a in visited,(a,visited)
         visited |= set(d['outputs'])
-    print("no cycles")
 
     n_partitions = len(ios)
     arg_gen = variableNameGenerator()

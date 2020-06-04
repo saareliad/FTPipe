@@ -62,6 +62,24 @@ class Node():
             pass
         if original in self.kwargs:
             self.kwargs[new]=self.kwargs.pop(original)
+    
+    @classmethod
+    def from_other(cls,other):
+        node = cls(other.type,other.id,other.scope)
+        node.part = other.part
+        node.weight = other.weight
+
+        node.out_edges = {n for n in other.out_edges}
+        node.args = [n for n in other.in_edges]
+        node.kwargs = {n:k for n,k in other.kwargs.items()}
+        node.value_type = other.value_type
+
+        node.tensor_dtype = other.tensor_dtype
+        node.tensor_shape = other.tensor_shape
+
+        node.constant_value = other.constant_value
+        
+        return node
 
 GraphNodes = Dict[int, Node]
 NodeWeightFunction = Callable[[Node], int]
