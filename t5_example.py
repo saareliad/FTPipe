@@ -208,7 +208,7 @@ if __name__ == "__main__":
     if not COMPARE_MODELS:
         input_ids=input_ids.repeat(32,20).contiguous() #Batch (32,120)
     else:
-        input_ids=input_ids.repeat(8,4).contiguous()# Batch (8,24)
+        input_ids=input_ids.repeat(32,16).contiguous()# Batch (32,96)
     lm_kwargs={"input_ids":input_ids,"decoder_input_ids":input_ids,"lm_labels":input_ids,"use_cache":True}
     kwargs = {"input_ids":input_ids,"decoder_input_ids":input_ids,"use_cache":True}
     
@@ -218,15 +218,6 @@ if __name__ == "__main__":
     else:
         register_functions()
         ref,our = get_models_for_comparison(base=False,tied=True)
-
-        c_ref = count_blocks(ref)
-        c_our = count_blocks(our)
-
-        for e,n in c_ref.items():
-            print(e,n)
-        print()
-        for e,n in c_our.items():
-            print(e,n)
 
         del ref
 
@@ -244,7 +235,7 @@ if __name__ == "__main__":
         0,
         kwargs=lm_kwargs,
         basic_blocks=blocks,
-        n_iter=10,
+        n_iter=50,
         nparts=4,
         node_weight_function=nwf,
         edge_weight_function=ewf,
@@ -274,10 +265,10 @@ if __name__ == "__main__":
         dict_cfg = create_pipeline_configuration(DEBUG=True)
         # PipelineConfig.fromDict(dict_cfg).toJson("cfg.json")
         old_cfg = PipelineConfig.fromDict(dict_cfg)._to_old_format(layerDict(our,basic_blocks=blocks),tensorDict(our))
-        run_analysis(lm_kwargs,
+        _, summary = run_analysis(lm_kwargs,
                  graph,
                  old_cfg,
-                 1,
+                 50,
                  recomputation=True,
                  bw_GBps=12,
                  verbose=True,
@@ -285,3 +276,7 @@ if __name__ == "__main__":
                  add_comm_times_to_balance=True,
                  sequential_model=None,
                  analyze_traced_model=False)
+        
+        with open(f"T5_full_tied.py", "a") as f:
+            f.write("\n")
+            f.write('"""analysis summary\n' + summary + "\n" + '"""')
