@@ -114,12 +114,9 @@ class TextDataset(Dataset):
             with open(file_path, encoding="utf-8") as f:
                 text = f.read()
 
-            print("preparing text")
             tokenized_text = tokenizer.tokenize(text)
-            print("tokenized text")
             tokenized_text = tokenizer.convert_tokens_to_ids(
                 tokenized_text)
-            print("converted tokens to ids")
 
             # Truncate in block of block_size
             for i in range(0,
@@ -127,7 +124,6 @@ class TextDataset(Dataset):
                 self.examples.append(
                     tokenizer.build_inputs_with_special_tokens(
                         tokenized_text[i:i + block_size]))
-                print(f"{i}/{len(tokenized_text) - block_size + 1}")
             # Note that we are loosing the last truncated example here for the sake of simplicity (no padding)
             # If your dataset is small, first you should loook for a bigger one :-) and second you
             # can change this behavior by adding (model specific) padding.
@@ -207,7 +203,7 @@ def partition_model(args,
 
     model_to_resize = model.module if hasattr(model, 'module') else model
     model_to_resize.resize_token_embeddings(len(tokenizer))
-    print("embedding resized")
+
     # Tie weights artificially using statless trick
     if args.stateless_tied:
         model_to_resize.make_stateless_after_loaded_tied_and_resized()
@@ -616,7 +612,6 @@ def main():
         args.block_size = tokenizer.max_len_single_sentence
     args.block_size = min(args.block_size, tokenizer.max_len_single_sentence)
 
-    print("tokenizer created")
     model = model_class.from_pretrained(
         args.model_name_or_path,
         from_tf=bool('.ckpt' in args.model_name_or_path),
@@ -625,9 +620,7 @@ def main():
 
     # TODO: if not args.save_memory_mode:
     model.to(args.device)
-    print("model built")
     train_dataset = load_and_cache_examples(args, tokenizer)
-    print("dataset created")
     partition_model(args,
                     train_dataset,
                     model,

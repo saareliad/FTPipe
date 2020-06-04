@@ -59,6 +59,7 @@ def count_blocks(model):
     
 
 MAX_DEPTH=6
+MODEL_NAME = "t5-large"
 
 def register_functions():
     register_new_explicit_untraced_function(operator.is_,operator)
@@ -138,7 +139,7 @@ def get_models_for_comparison(base=True,tied=False):
     ref_cls = refBase if base else refT5
 
     seed()
-    transformer_ref = ref_cls.from_pretrained('t5-small').cuda().train()
+    transformer_ref = ref_cls.from_pretrained(MODEL_NAME).cuda().train()
 
     if base and tied:
         our_cls = TiedBase
@@ -150,7 +151,7 @@ def get_models_for_comparison(base=True,tied=False):
         our_cls = ourT5
     
     seed()
-    our = our_cls.from_pretrained('t5-small').cuda().train()
+    our = our_cls.from_pretrained(MODEL_NAME).cuda().train()
 
     if tied:
         our.make_stateless()
@@ -198,7 +199,7 @@ def display_most_used_nodes(graph,threshold=5):
 COMPARE_MODELS=False
 
 if __name__ == "__main__":
-    tokenizer = T5Tokenizer.from_pretrained('t5-small')
+    tokenizer = T5Tokenizer.from_pretrained(MODEL_NAME)
     print("tokenizer created")
     
     input_ids = tokenizer.encode(
@@ -206,7 +207,7 @@ if __name__ == "__main__":
     print("tokenized input")
     print()
     if not COMPARE_MODELS:
-        input_ids=input_ids.repeat(32,20).contiguous() #Batch (32,120)
+        input_ids=input_ids.repeat(4,10).contiguous() #Batch (4,60)
     else:
         input_ids=input_ids.repeat(32,16).contiguous()# Batch (32,96)
     lm_kwargs={"input_ids":input_ids,"decoder_input_ids":input_ids,"lm_labels":input_ids,"use_cache":True}
@@ -235,7 +236,7 @@ if __name__ == "__main__":
         kwargs=lm_kwargs,
         basic_blocks=blocks,
         n_iter=20,
-        nparts=4,
+        nparts=8,
         node_weight_function=nwf,
         edge_weight_function=ewf,
         use_layers_only_graph=True,
