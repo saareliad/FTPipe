@@ -228,21 +228,20 @@ if __name__ == "__main__":
         nwf = NodeWeightFunction(3,MULT_FACTOR=1)
         ewf = EdgeWeightFunction(12,3,MULT_FACTOR=1)
 
-
         partial_pipe_model = functools.partial(
         pipe_model,
         our,
         0,
         kwargs=lm_kwargs,
         basic_blocks=blocks,
-        n_iter=50,
+        n_iter=20,
         nparts=4,
         node_weight_function=nwf,
         edge_weight_function=ewf,
         use_layers_only_graph=True,
         use_graph_profiler=True,
         use_network_profiler=False,
-        generate_model_parallel=False,
+        generate_model_parallel=True,
         generate_explicit_del=True,
         profile_ops=True,
         output_file="T5_full_tied",
@@ -268,7 +267,7 @@ if __name__ == "__main__":
         _, summary = run_analysis(lm_kwargs,
                  graph,
                  old_cfg,
-                 50,
+                 20,
                  recomputation=True,
                  bw_GBps=12,
                  verbose=True,

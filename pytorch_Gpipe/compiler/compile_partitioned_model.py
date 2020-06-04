@@ -88,7 +88,7 @@ def compile_partitioned_model(graph: Graph,
         create_pipeline_configuration(graph, ios, layer_classes, batch_dim))
     if generate_model_parallel:
         lines.append(
-            create_model_parallel_module(graph, batch_dim, ios, graph.num_inputs,
+            create_model_parallel_module(graph, batch_dim, ios,
                                          graph.output_scopes))
     lines += partitions_code
     lines.append(generateHelpFunctions())

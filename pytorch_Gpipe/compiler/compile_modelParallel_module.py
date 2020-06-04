@@ -9,7 +9,6 @@ dtab = tab + tab
 
 def create_model_parallel_module(graph: Graph, batch_dim: int, ios: Dict[int, Dict[str,
                                                                                    List[str]]],
-                                 num_inputs: int,
                                  model_outputs: List[str]) -> str:
     '''create a modelParallel version of the partition config
     '''
@@ -27,7 +26,7 @@ def create_model_parallel_module(graph: Graph, batch_dim: int, ios: Dict[int, Di
         dtab + f"\n{dtab}".join(f"self.stage{i} = Partition{i}(layers,tensors).to('cpu' if CPU else 'cuda:{i}')"
                                 for i in ios)
     ])
-    model_inputs = [f'input{idx}' for idx in range(num_inputs)]
+    model_inputs  = [graph.input_kw_ids.get(node.id,node.scope) for node in graph.inputs]
     forwards = model_parallel_forward(graph, ios,
                                       model_inputs, model_outputs)
 
@@ -227,6 +226,13 @@ def forward_statements(ios: Dict[int, Dict[str, List[str]]],
                        model_inputs: List[str]) -> Tuple[List[str], Dict[str, str]]:
     '''generates the forward nethod of the model parallel version of the config
     '''
+    visited=set(model_inputs)
+    for i,d in ios.items():
+        for a in d['inputs']:
+            assert a in visited,(a,visited)
+        visited |= set(d['outputs'])
+    print("no cycles")
+
     n_partitions = len(ios)
     arg_gen = variableNameGenerator()
 
@@ -235,10 +241,7 @@ def forward_statements(ios: Dict[int, Dict[str, List[str]]],
     parts = deque(range(n_partitions))
 
     body = []
-    cnt = 0
     while len(parts) > 0:
-        if cnt > 3 * n_partitions:
-            assert False, "error cycle detected mutual dependecy between generated partitions"
         idx = parts.popleft()
 
         if all(tensor in activations for tensor in ios[idx]['inputs']):
@@ -255,7 +258,6 @@ def forward_statements(ios: Dict[int, Dict[str, List[str]]],
             if len(ios[idx]['outputs']) == 1:
                 body[-1] += '[0]'
         else:
-            cnt += 1
             parts.append(idx)
 
     return body, activations
