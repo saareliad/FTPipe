@@ -25,7 +25,6 @@ class ALGORITHM(enum.Enum):
 #the blocks are consecutive blocks of nodes acquired by a Khan's algorithm
 def initial_divide(graph:Graph,k:int,node_weights:Dict[Node,float])->QuotientGraph:
     random_topo_sort=random_Khan_algorithm(graph)
-
     node_weights = np.asarray([node_weights[n] for n in random_topo_sort])
     cumulative_node_weights = np.cumsum(node_weights)
 
@@ -33,18 +32,19 @@ def initial_divide(graph:Graph,k:int,node_weights:Dict[Node,float])->QuotientGra
     avg_weight = total_weight/k
 
     Vs=[]
-  
+
     options = [math.floor(avg_weight),math.ceil(avg_weight)]
+    acc = 0
     #k partitions require k-1 seperators
     while len(Vs) < k-1:
         stage_weight = options[random.randint(0,1)]
-        cumulative_node_weights-=stage_weight
-        Vs.append(np.searchsorted(cumulative_node_weights,0))
+        acc+=stage_weight
+        Vs.append(np.searchsorted(cumulative_node_weights,acc))
 
     idxs=[-1]+Vs+[len(cumulative_node_weights)-1]
 
     idxs=list(zip(map(lambda i: i+1,idxs),idxs[1:]))
-
+    
     #set partitioning
     for i,(start,end) in enumerate(idxs):
         for n in random_topo_sort[start:end+1]:
@@ -449,6 +449,13 @@ def _acyclic_partition(graph:Graph,algorithm:ALGORITHM=ALGORITHM.FIDUCCIA_MATTHE
 
     partition_volumes = calculate_partition_volumes(k,node_weights)
     L_max = (1+epsilon)*math.ceil(sum(partition_volumes.values())/k)
+    
+    msg = "\n".join(["-I- balanced partitioning is not possible",
+    f"   max allowed weight: {L_max:.2f}",
+    f"   max node weight: {max(node_weights.values()):.2f}"])
+
+    assert all((v <= L_max for v in node_weights.values())),msg  
+    
     ALGORITHMS[algorithm](partition_volumes,edge_weights,node_weights,L_max,rounds=rounds)
     
     #refine partition in a greedy fashion
