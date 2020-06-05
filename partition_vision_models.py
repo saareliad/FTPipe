@@ -6,11 +6,10 @@ from pytorch_Gpipe import PipelineConfig, pipe_model
 import argparse
 import importlib
 from misc import run_analysis, run_partitions
-import sys
 from heuristics import EdgeWeightFunction, NodeWeightFunction
-from partition_scripts_utils import ParseMetisOpts,ParseAcyclicPartitionerOpts, ParsePartitioningOpts, record_cmdline, run_x_tries_until_no_fail,choose_blocks
+from partition_scripts_utils import ParseMetisOpts,ParseAcyclicPartitionerOpts, ParsePartitioningOpts, record_cmdline,choose_blocks
 import functools
-from partition_async_pipe import AsyncPipePartitioner
+from partition_async_pipe import partition_async_pipe
 
 _VGG16_BN = dict(vgg16_bn=dict())
 
@@ -148,14 +147,13 @@ def parse_cli():
     if args.output_file.endswith(".py"):
         args.output_file = args.output_file[:-3]
 
-    METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
-    acyclic_opt = ParseAcyclicPartitionerOpts.acyclic_opts_dict_from_parsed_args(args)
-    return args, METIS_opt,acyclic_opt
+    args.METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
+    args.acyclic_opt = ParseAcyclicPartitionerOpts.acyclic_opts_dict_from_parsed_args(args)
+    return args
 
 
 if __name__ == "__main__":
-
-    args, METIS_opt,acyclic_opt = parse_cli()
+    args= parse_cli()
     GET_PARTITIONS_ON_CPU = True
 
     # if the model is too big run the whole partitioning process on CPU
@@ -183,13 +181,13 @@ if __name__ == "__main__":
     n_partitions = args.n_partitions
     batch_dim = 0
     bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
-
+    args.basic_blocks = choose_blocks(model,args)
     partial_pipe_model = functools.partial(
         pipe_model,
         model,
         batch_dim,
         sample,
-        basic_blocks = choose_blocks(model,args),
+        basic_blocks = args.basic_blocks,
         depth=args.depth,
         kwargs=None,
         nparts=n_partitions,
@@ -208,18 +206,12 @@ if __name__ == "__main__":
         recomputation=recomputation,
         save_memory_mode=args.save_memory_mode,
         use_METIS= args.use_METIS,
-        acyclic_opt=acyclic_opt,
-        METIS_opt=METIS_opt)
+        acyclic_opt=args.acyclic_opt,
+        METIS_opt=args.METIS_opt)
 
     if args.async_pipeline and (not args.no_recomputation):
-        async_pipe_partitioner = AsyncPipePartitioner(model, args.output_file,
-                                                      partial_pipe_model)
-
-        graph = run_x_tries_until_no_fail(
-            async_pipe_partitioner.partition,
-            10,
-            # force_no_recomp_scopes=force_no_recomputation_fn,
-            allowed_mistakes=0)
+        print("using async partitioner")
+        graph=partition_async_pipe(args,model,0,sample)
     else:
         graph = partial_pipe_model()
 

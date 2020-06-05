@@ -377,23 +377,18 @@ def acyclic_partition(graph:Graph,k:int,epsilon:float=0.1,node_weight_function:O
     for n in graph.nodes:
         n.part = partition[n.id]
     
-    regular_edges=0
-    penalty_edges=0
-    penalty_scopes=[]
+    cutting_edges=0
+    cutting_scopes=[]
     for n in graph.nodes:
         for u in n.out_edges:
             if u.part != n.part:
-                if edge_weight_function(n,u) >= 1000:
-                    penalty_edges+=1
-                    penalty_scopes.append(n.scope)
-                else:
-                    regular_edges+=1
+                cutting_edges +=1
+                cutting_scopes.append(n.scope)
+                
     print()
     print("-I- Printing Partitioning Report")
     print(f"    best algorithm:{algorithm.name}")
-    print(f"    number of cutting edges: {regular_edges+penalty_edges}")
-    print(f"    number of regular edges: {regular_edges}")
-    print(f"    number of penalty edges: {penalty_edges}")
+    print(f"    number of cutting edges: {cutting_edges}")
     print(f"    edge cut:{edge_cut:.2f}")
     print(f"    volumes:{volumes}")
 

@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader, RandomSampler
 from models.normal import BertForQuestionAnswering
 from models.normal.NLP_models.modeling_bert import SQUAD_loss
 from partition_scripts_utils import ParsePartitioningOpts,ParseAcyclicPartitionerOpts ,ParseMetisOpts, record_cmdline,choose_blocks,run_x_tries_until_no_fail
-from partition_async_pipe import AsyncPipePartitioner
+from partition_async_pipe import partition_async_pipe
 from heuristics import NodeWeightFunction, EdgeWeightFunction
 from misc import run_analysis
 from pytorch_Gpipe import PipelineConfig, pipe_model
@@ -286,8 +286,8 @@ def parse_cli():
 
 def main():
     args = parse_cli()
-    METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
-    acyclic_opt = ParseAcyclicPartitionerOpts.acyclic_opts_dict_from_parsed_args(args)
+    args.METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
+    args.acyclic_opt = ParseAcyclicPartitionerOpts.acyclic_opts_dict_from_parsed_args(args)
     args.model_type = args.model_type.lower()
 
     if args.auto_file_name:
@@ -391,15 +391,14 @@ def main():
     n_partitions = args.n_partitions
     batch_dim = 0
     bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
-    
+    args.basic_blocks = choose_blocks(model,args)
     print("-I- partitioning...")
     partial_pipe_model = functools.partial(
         pipe_model,
         model,
         batch_dim,
-        args=(),
-        kwargs=inputs,
-        basic_blocks=choose_blocks(model,args),
+        args=sample,
+        basic_blocks=args.basic_blocks,
         depth=args.depth,
         n_iter=args.n_iter,
         nparts=args.n_partitions,
@@ -418,22 +417,12 @@ def main():
         save_memory_mode=args.save_memory_mode,
         recomputation=recomputation,
         use_METIS=args.use_METIS,
-        acyclic_opt=acyclic_opt,
-        METIS_opt=METIS_opt)
+        acyclic_opt=args.acyclic_opt,
+        METIS_opt=args.METIS_opt)
 
     if args.async_pipeline and (not args.no_recomputation):
         print("using async partitioner")
-        async_pipe_partitioner = AsyncPipePartitioner(model, args.output_file,
-                                                      partial_pipe_model)
-
-        graph = run_x_tries_until_no_fail(
-            async_pipe_partitioner.partition,
-            10,
-            # force_no_recomp_scopes=force_no_recomputation_fn,
-            allowed_mistakes=0)
-
-        # graph = async_pipe_partitioner.partition(
-        #     force_no_recomp_scopes=force_no_recomputation_fn, allowed_mistakes=0)
+        graph=partition_async_pipe(args,model,0,sample)
     else:
         graph = partial_pipe_model()
     if args.dot:
@@ -459,12 +448,7 @@ def main():
             layerDict(model, depth=depth, basic_blocks=blocks),
             tensorDict(model))
 
-    # # Test # TODO: can do it on GPU...
-    # if not args.no_test_run:
-    #     _ = run_partitions(sample, analysis_config)
-
     if not args.no_analysis:
-        # sample = create_random_sample(args, analysis=True)
         analysis_result, summary = run_analysis(sample,
                                                 graph,
                                                 analysis_config,

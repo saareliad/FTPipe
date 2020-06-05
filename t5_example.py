@@ -199,6 +199,7 @@ def display_most_used_nodes(graph,threshold=5):
 COMPARE_MODELS=False
 
 if __name__ == "__main__":
+    raise NotImplementedError("currently not working")
     tokenizer = T5Tokenizer.from_pretrained(MODEL_NAME)
     print("tokenizer created")
     

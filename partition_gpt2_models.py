@@ -32,7 +32,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset, RandomSampler
 import warnings
 import sys
-from partition_scripts_utils import ParseMetisOpts,ParseAcyclicPartitionerOpts, ParsePartitioningOpts, record_cmdline, run_x_tries_until_no_fail,choose_blocks
+from partition_scripts_utils import ParseMetisOpts,ParseAcyclicPartitionerOpts, ParsePartitioningOpts, record_cmdline,choose_blocks
 from heuristics import NodeWeightFunction, EdgeWeightFunction
 from transformers import (
     BertConfig,
@@ -68,7 +68,7 @@ from misc import run_analysis  # , run_partitions
 from pytorch_Gpipe.utils import layerDict, tensorDict
 from pytorch_Gpipe import PipelineConfig
 import functools
-from partition_async_pipe import AsyncPipePartitioner
+from partition_async_pipe import partition_async_pipe
 import math
 from pytorch_Gpipe.model_profiling.tracer import register_new_traced_function,register_new_explicit_untraced_function
 import operator
@@ -193,9 +193,7 @@ def partition_model(args,
                     train_dataset,
                     model,
                     tokenizer,
-                    lm=True,
-                    METIS_opt=dict(),
-                    acyclic_opt=dict()):
+                    lm=True):
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset,
                                   sampler=train_sampler,
@@ -226,30 +224,30 @@ def partition_model(args,
     # TODO assumes batch_dim is 0
     recomputation = not args.no_recomputation
 
-    def force_no_recomputation_fn(scope):
-        if "stateless_lm_head" in scope or "lm_head" in scope:
-            return True
-
     # so we could trace math.sqrt in gpt2 attention
     register_new_traced_function(math.sqrt, namespace=math)
     register_new_explicit_untraced_function(operator.is_,
                                             namespace=operator)
     register_new_explicit_untraced_function(operator.is_not,
                                             namespace=operator)
-
+    
+    def force_no_recomputation_fn(scope):
+        if "stateless_lm_head" in scope or "lm_head" in scope:
+            return True
+    args.basic_blocks = choose_blocks(model,args)
     partial_pipe_model = functools.partial(
         pipe_model,
         model,
         batch_dim,
         sample,
-        basic_blocks=choose_blocks(model,args),
+        basic_blocks=args.basic_blocks,
         depth=args.depth,
         n_iter=args.n_iter,
         nparts=args.n_partitions,
         node_weight_function=NodeWeightFunction(
             bwd_to_fwd_ratio=bwd_to_fwd_ratio),
         edge_weight_function=EdgeWeightFunction(
-            args.bandwidth_gps,
+            args.bw,
             bwd_to_fwd_ratio=bwd_to_fwd_ratio),
         use_layers_only_graph=True,
         use_graph_profiler=not args.use_network_profiler,
@@ -261,22 +259,12 @@ def partition_model(args,
         save_memory_mode=args.save_memory_mode,
         recomputation=recomputation,
         use_METIS=args.use_METIS,
-        acyclic_opt=acyclic_opt,
-        METIS_opt=METIS_opt)
+        acyclic_opt=args.acyclic_opt,
+        METIS_opt=args.METIS_opt)
 
     if args.async_pipeline and (not args.no_recomputation):
         print("using async partitioner")
-        async_pipe_partitioner = AsyncPipePartitioner(model, args.output_file,
-                                                      partial_pipe_model)
-
-        graph = run_x_tries_until_no_fail(
-            async_pipe_partitioner.partition,
-            10,
-            force_no_recomp_scopes=force_no_recomputation_fn,
-            allowed_mistakes=0)
-
-        # graph = async_pipe_partitioner.partition(
-        #     force_no_recomp_scopes=force_no_recomputation_fn, allowed_mistakes=0)
+        graph=partition_async_pipe(args,model,0,sample)
     else:
         graph = partial_pipe_model(
             force_no_recomp_scopes=force_no_recomputation_fn)
@@ -309,7 +297,7 @@ def partition_model(args,
     pipe_config = PipelineConfig.fromDict(config)
     pipe_config.toJson(f"{args.output_file}.json")
 
-    bandwidth_gps = args.bandwidth_gps
+    bw = args.bw
 
     if not args.no_analysis:
         depth = pipe_config.depth
@@ -336,7 +324,7 @@ def partition_model(args,
                                   analysis_config,
                                   args.n_iter,
                                   recomputation=recomputation,
-                                  bw_GBps=bandwidth_gps,
+                                  bw_GBps=bw,
                                   async_pipeline=args.async_pipeline,
                                   sequential_model=model,
                                   stages_on_same_gpu=stages_on_same_gpu)
@@ -500,7 +488,7 @@ def parse_cli():
         help="number of iteration used in order to profile the network and run analysis"
     )
     parser.add_argument(
-        '--bandwidth_gps',
+        '--bw',
         type=float,
         default=12,
         help="data transfer rate between gpus in gigabaytes per second")
@@ -566,8 +554,8 @@ def parse_cli():
 def main():
 
     args = parse_cli()
-    METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
-    acyclic_opt = ParseAcyclicPartitionerOpts.acyclic_opts_dict_from_parsed_args(args)
+    args.METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
+    args.acyclic_opt = ParseAcyclicPartitionerOpts.acyclic_opts_dict_from_parsed_args(args)
 
     if args.model_type in ["bert", "roberta", "distilbert", "camembert"
                            ] and not args.mlm:
@@ -625,9 +613,7 @@ def main():
                     train_dataset,
                     model,
                     tokenizer,
-                    lm=args.lmhead,
-                    METIS_opt=METIS_opt,
-                    acyclic_opt=acyclic_opt)
+                    lm=args.lmhead)
 
 
 # download dataset from https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip
