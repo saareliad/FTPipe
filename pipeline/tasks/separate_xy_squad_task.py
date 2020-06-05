@@ -4,6 +4,8 @@ import torch
 from .interface import DLTask
 import types
 
+# TODO: loading
+
 
 # TODO: support different behavior for train and eval
 # NOTE: Not much change from CV task, outputing the batch

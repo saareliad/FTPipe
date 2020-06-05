@@ -82,19 +82,19 @@ def make_examples(DATA_DIR, train_file, predict_file, evaluate,
 
 
 def load_and_cache_examples_just_x_or_y(
-        just,
-        model_name_or_path,  # NOTE: this is just for cache file name
-        max_seq_length,
-        doc_stride,
-        max_query_length,
-        threads,
-        tokenizer,
-        DATA_DIR,
-        evaluate=False,
-        output_examples=False,
-        overwrite_cache=True,
-        save=False,  # Ranks
-        version_2_with_negative=False,
+    just,
+    model_name_or_path,  # NOTE: this is just for cache file name
+    max_seq_length,
+    doc_stride,
+    max_query_length,
+    threads,
+    tokenizer,
+    DATA_DIR,
+    evaluate=False,
+    output_examples=False,
+    overwrite_cache=True,
+    save=False,  # Ranks
+    version_2_with_negative=False,
 ):
 
     # Load data features from cache or dataset file
@@ -422,3 +422,30 @@ def evaluate(
     # Compute the F1 and exact scores.
     results = squad_evaluate(examples, predictions)
     return results
+
+
+if __name__ == "__main__":
+    from transformers import AutoTokenizer
+
+    model_name_or_path = "bert-large-uncased"
+    tokenizer = AutoTokenizer.from_pretrained(
+        "bert-large-uncased",
+        do_lower_case=False,
+        cache_dir=None,
+    )
+
+    load_and_cache_examples_just_x_or_y(
+        just='x',
+        model_name_or_path=model_name_or_path,
+        max_seq_length=384,
+        doc_stride=128,
+        max_query_length=64,
+        threads=80,
+        tokenizer=tokenizer,
+        DATA_DIR="/home_local/saareliad/data",
+        evaluate=False,
+        output_examples=False,
+        overwrite_cache=True,
+        save=False,  # Ranks
+        version_2_with_negative=False,
+    )

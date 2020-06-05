@@ -3,7 +3,27 @@ from .gap_aware_trainer import GapAwareTrainerBase
 from collections import defaultdict
 from transformers.data.processors.squad import SquadResult
 # TODO: typehint for statistics. maybe it should actually sit under stats
+import torch
 
+
+def SQUAD_loss(logits, start_positions, end_positions):
+    start_logits, end_logits = logits.split(1, dim=-1)
+    start_logits = start_logits.squeeze(-1)
+    end_logits = end_logits.squeeze(-1)
+
+    ignored_index = start_logits.size(1)
+    start_positions.clamp_(0, ignored_index)
+    end_positions.clamp_(0, ignored_index)
+
+    def loss_fct(logits, targets):
+        return torch.nn.functional.cross_entropy(logits, targets, ignore_index=ignored_index)
+
+    start_loss = loss_fct(start_logits, start_positions)
+    end_loss = loss_fct(end_logits, end_positions)
+
+    total_loss = (start_loss + end_loss) / 2
+
+    return total_loss
 
 def to_list(tensor):
     return tensor.detach().cpu().tolist()
@@ -57,7 +77,10 @@ class SquadTrainer(BaseOutPutIsLossTrainer):
     def calc_test_stats(self, x, batch_size, example_indices):
         # FIXME: arguments: check correct order
         raise NotImplementedError()
-        loss = x[0].item()
+        # loss = x[0].item()
+        logits = x
+
+        SQUAD_loss(logits, batch[3], batch[4])  # FIXME...
         self.statistics.update_on_batch("loss", loss, batch_size)
         self.advanced_test_stats(x, example_indices)
 

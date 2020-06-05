@@ -2,7 +2,10 @@
 # GPT2_NAMES_OR_PATHES = {'gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'}
 # TODO: replace with auto config & tokenizers
 from transformers import (GPT2Config, GPT2Tokenizer)
+from transformers import (BertConfig, BertTokenizer)
+
 from .normal import GPT2LMHeadModel, GPT2Model, StatelessGPT2LMHeadModel
+from .normal.NLP_models.modeling_bert import BertForQuestionAnswering
 
 import sys
 from inspect import getmembers, isfunction
@@ -12,6 +15,7 @@ MODEL_TYPES = {
     'gpt2': (GPT2Config, GPT2Model, GPT2Tokenizer),
     'gpt2_lm': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
     'gpt2_lm_stateless': (GPT2Config, StatelessGPT2LMHeadModel, GPT2Tokenizer),
+    'bert_squad': (BertConfig, BertForQuestionAnswering, BertTokenizer),
 }
 
 # NOTE: some of these configs are just for this repo, see
@@ -58,17 +62,25 @@ def gpt2_xl_p8_lm_tied():
                 stateless_tied=True)
 
 
+def bert_large_uncased_squad_8p():
+    return dict(model_type='bert_squad',
+                model_name_or_path='bert-large-uncased',
+                do_lower_case=False,
+                output_past=False,
+                stateless_tied=False)
+
+
 # GPipe version for the functions, as it has different balance.
 def gpt2_p4_lm_tied_gpipe():
-    return gpt2_4p_lm_tied()
+    return gpt2_p4_lm_tied()
 
 
 def gpt2_p4_lm_untied_gpipe():
-    return gpt2_4p_lm_untied()
+    return gpt2_p4_lm_untied()
 
 
 def gpt2_xl_p8_lm_tied_gpipe():
-    return gpt2_xl_8p_lm_tied()
+    return gpt2_xl_p8_lm_tied()
 
 
 def gpt2_xl_p8_lm_untied_gpipe():
