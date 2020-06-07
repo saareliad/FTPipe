@@ -1,4 +1,4 @@
-from .interface import BaseOutPutIsLossTrainer
+from .interface import BaseOutPutIsLossTrainer, BaseLossTrainer
 from .gap_aware_trainer import GapAwareTrainerBase
 from collections import defaultdict
 from transformers.data.processors.squad import SquadResult
@@ -16,7 +16,9 @@ def SQUAD_loss(logits, start_positions, end_positions):
     end_positions.clamp_(0, ignored_index)
 
     def loss_fct(logits, targets):
-        return torch.nn.functional.cross_entropy(logits, targets, ignore_index=ignored_index)
+        return torch.nn.functional.cross_entropy(logits,
+                                                 targets,
+                                                 ignore_index=ignored_index)
 
     start_loss = loss_fct(start_logits, start_positions)
     end_loss = loss_fct(end_logits, end_positions)
@@ -24,6 +26,7 @@ def SQUAD_loss(logits, start_positions, end_positions):
     total_loss = (start_loss + end_loss) / 2
 
     return total_loss
+
 
 def to_list(tensor):
     return tensor.detach().cpu().tolist()
@@ -77,16 +80,15 @@ class SquadTrainer(BaseOutPutIsLossTrainer):
     def calc_test_stats(self, x, batch_size, example_indices):
         # FIXME: arguments: check correct order
         raise NotImplementedError()
-        # loss = x[0].item()
         logits = x
-
         SQUAD_loss(logits, batch[3], batch[4])  # FIXME...
         self.statistics.update_on_batch("loss", loss, batch_size)
         self.advanced_test_stats(x, example_indices)
 
-    def backprop_last_partition(self, x, *args, **kw):
-        # loss = x[0]  # loss is first output
-        return super().backprop_last_partition(x[0], *args, **kw)
+    def backprop_last_partition(self, x, start_positions, end_positions, batch_size):
+        # logits = x[0]
+        loss = SQUAD_loss(x, start_positions, end_positions)  # FIXME...
+        return super().backprop_last_partition(loss)
         # if self.step_every > 1:
         #     loss /= self.step_every
         # loss.backward()

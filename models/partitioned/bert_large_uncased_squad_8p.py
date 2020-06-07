@@ -259,7 +259,7 @@ class Partition0(nn.Module):
         # input2 <=> token_type_ids
 
         # moving inputs to current device no op if already on the correct device
-        input_ids, attention_mask, token_type_ids = move_tensors((input_ids, attention_mask, token_type_ids), self.device)
+        # input_ids, attention_mask, token_type_ids = move_tensors((input_ids, attention_mask, token_type_ids), self.device)
         t_0 = attention_mask.unsqueeze(1)
         t_0 = t_0.unsqueeze(2)
         t_0 = t_0.to(dtype=torch.float32)
@@ -466,7 +466,7 @@ class Partition1(nn.Module):
         # BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertOutput[output]/Tensor::__add___73 <=> x1
 
         # moving inputs to current device no op if already on the correct device
-        x0, x1 = move_tensors((x0, x1), self.device)
+        # x0, x1 = move_tensors((x0, x1), self.device)
         t_0 = self.l_0(x1)
         t_0 = (t_0, x0)
         t_1 = t_0[0]
@@ -658,7 +658,7 @@ class Partition2(nn.Module):
         # BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertOutput[output]/LayerNorm[LayerNorm] <=> x1
 
         # moving inputs to current device no op if already on the correct device
-        x0, x1 = move_tensors((x0, x1), self.device)
+        # x0, x1 = move_tensors((x0, x1), self.device)
         t_0 = (x1, x0)
         t_1 = t_0[0]
         t_0 = t_0[1]
@@ -849,7 +849,7 @@ class Partition3(nn.Module):
         # BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertOutput[output]/LayerNorm[LayerNorm] <=> x1
 
         # moving inputs to current device no op if already on the correct device
-        x0, x1 = move_tensors((x0, x1), self.device)
+        # x0, x1 = move_tensors((x0, x1), self.device)
         t_0 = (x1, x0)
         t_1 = t_0[0]
         t_0 = t_0[1]
@@ -1043,7 +1043,7 @@ class Partition4(nn.Module):
         # BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___232 <=> x1
 
         # moving inputs to current device no op if already on the correct device
-        x0, x1 = move_tensors((x0, x1), self.device)
+        # x0, x1 = move_tensors((x0, x1), self.device)
         t_0 = self.l_0(x0, attention_mask=x1, head_mask=None)
         t_0 = self.l_1(t_0)
         t_0 = self.l_2(t_0)
@@ -1228,7 +1228,7 @@ class Partition5(nn.Module):
         # BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertOutput[output]/LayerNorm[LayerNorm] <=> x1
 
         # moving inputs to current device no op if already on the correct device
-        x0, x1 = move_tensors((x0, x1), self.device)
+        # x0, x1 = move_tensors((x0, x1), self.device)
         t_0 = (x1, x0)
         t_1 = t_0[0]
         t_0 = t_0[1]
@@ -1421,7 +1421,7 @@ class Partition6(nn.Module):
         # BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertOutput[output]/Tensor::__add___328 <=> x1
 
         # moving inputs to current device no op if already on the correct device
-        x0, x1 = move_tensors((x0, x1), self.device)
+        # x0, x1 = move_tensors((x0, x1), self.device)
         t_0 = self.l_0(x1)
         t_0 = (t_0, x0)
         t_1 = t_0[0]
@@ -1623,7 +1623,7 @@ class Partition7(nn.Module):
         # BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertOutput[output]/LayerNorm[LayerNorm] <=> x1
 
         # moving inputs to current device no op if already on the correct device
-        x0, x1 = move_tensors((x0, x1), self.device)
+        # x0, x1 = move_tensors((x0, x1), self.device)
         t_0 = (x1, x0)
         t_1 = t_0[0]
         t_0 = t_0[1]

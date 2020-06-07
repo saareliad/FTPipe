@@ -1,11 +1,14 @@
 import torch
+from torch._six import inf
+
 
 def calc_norm(parameters, norm_type=2):
-    """ Exactly like clip_grad_norm_, but without the clip. """
+    """ Exactly like clip_grad_norm_, but without the clip.
+        # See https://github.com/pytorch/pytorch/blob/master/torch/nn/utils/clip_grad.py
+     """
     if isinstance(parameters, torch.Tensor):
         parameters = [parameters]
     parameters = list(filter(lambda p: p.grad is not None, parameters))
-    max_norm = float(max_norm)
     norm_type = float(norm_type)
     if norm_type == inf:
         total_norm = max(p.grad.detach().abs().max() for p in parameters)

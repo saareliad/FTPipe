@@ -30,7 +30,7 @@ class SquadTask(DLTask):
                     x, list)  # TODO remvove after first use..
                 with torch.no_grad():
                     x = tuple(t.to(device, non_blocking=True) for t in x)
-                return x
+                return x,
         else:
             # Mid partition
             def unpack_cls(self, x):

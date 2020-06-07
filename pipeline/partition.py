@@ -193,6 +193,7 @@ class Partition(nn.Module):
     def backward(self, g, **kw):
         raise NotImplementedError()
 
+
 class FirstPartition(Partition):
     """ The first partition does not need to record gradients of stashed inputs.
         This may save some memory.

@@ -260,92 +260,92 @@ def squad_convert_examples_to_features_just_x_or_y(just,
         example_index += 1
     features = new_features
     del new_features
-    if return_dataset == "pt":
-        # Convert to Tensors and build dataset
-        all_input_ids = torch.tensor([f.input_ids for f in features],
-                                     dtype=torch.long)
-        all_attention_masks = torch.tensor(
-            [f.attention_mask for f in features], dtype=torch.long)
-        all_token_type_ids = torch.tensor([f.token_type_ids for f in features],
-                                          dtype=torch.long)
+    if return_dataset != "pt":
+        raise NotImplementedError()
+    # if return_dataset == "pt":
+    # Convert to Tensors and build dataset
+    all_input_ids = torch.tensor([f.input_ids for f in features],
+                                    dtype=torch.long)
+    all_attention_masks = torch.tensor(
+        [f.attention_mask for f in features], dtype=torch.long)
+    all_token_type_ids = torch.tensor([f.token_type_ids for f in features],
+                                        dtype=torch.long)
 
-        all_cls_index = torch.tensor(
-            [f.cls_index for f in features],
-            dtype=torch.long) if do_all_cls_index else None
-        all_p_mask = torch.tensor([f.p_mask for f in features],
-                                  dtype=torch.float) if do_all_p_mask else None
-        all_is_impossible = torch.tensor(
-            [f.is_impossible for f in features],
-            dtype=torch.float) if do_all_is_impossible else None
+    all_cls_index = torch.tensor(
+        [f.cls_index for f in features],
+        dtype=torch.long) if do_all_cls_index else None
+    all_p_mask = torch.tensor([f.p_mask for f in features],
+                                dtype=torch.float) if do_all_p_mask else None
+    all_is_impossible = torch.tensor(
+        [f.is_impossible for f in features],
+        dtype=torch.float) if do_all_is_impossible else None
 
-        if not is_training:
-            if just == 'x':
-                # We load just the model inputs
-                # TODO: also adds lang for XLM and etc..
-                dataset = TensorDataset(*filter(
-                    lambda x: x is not None,
-                    [
-                        all_input_ids,
-                        all_attention_masks,
-                        all_token_type_ids,
-                        # all_example_index,
-                        all_cls_index,
-                        all_p_mask
-                    ]))
-            elif just == 'y':
-                #  we load just example indices.
-                # Then during eval:
-                #   (1) we accumulate all results in the last partition
-                #   (2) afterwards:
-                #       we do the full eval with compute_predictions_logits
-                # TODO: use transformers.data.processors.squad.compute_predictions_logits after eval epoch
-                # and output_examples=True in last partition
-                # see:  squad_convert_examples_to_features_just_x_or_y...
-                all_example_index = torch.arange(all_input_ids.size(0),
-                                                 dtype=torch.long)
+    if not is_training:
+        if just == 'x':
+            # We load just the model inputs
+            # TODO: also adds lang for XLM and etc..
+            dataset = TensorDataset(*filter(
+                lambda x: x is not None,
+                [
+                    all_input_ids,
+                    all_attention_masks,
+                    all_token_type_ids,
+                    # all_example_index,
+                    all_cls_index,
+                    all_p_mask
+                ]))
+        elif just == 'y':
+            #  we load just example indices.
+            # Then during eval:
+            #   (1) we accumulate all results in the last partition
+            #   (2) afterwards:
+            #       we do the full eval with compute_predictions_logits
+            # TODO: use transformers.data.processors.squad.compute_predictions_logits after eval epoch
+            # and output_examples=True in last partition
+            # see:  squad_convert_examples_to_features_just_x_or_y...
+            all_example_index = torch.arange(all_input_ids.size(0),
+                                                dtype=torch.long)
 
-                dataset = TensorDataset(all_example_index)
-                # TODO: solve the fact that we use jit therefore the model may be differnt in train and eval..
+            dataset = TensorDataset(all_example_index)
+            # TODO: solve the fact that we use jit therefore the model may be differnt in train and eval..
 
-                #
-                # dataset = TensorDataset(*filter(None, [
-                #     all_input_ids, all_attention_masks, all_token_type_ids,
-                #     all_example_index, all_cls_index, all_p_mask
-                # ]))
-            else:
-                raise ValueError(f"just should be x or y, got {just}")
+            #
+            # dataset = TensorDataset(*filter(None, [
+            #     all_input_ids, all_attention_masks, all_token_type_ids,
+            #     all_example_index, all_cls_index, all_p_mask
+            # ]))
+        else:
+            raise ValueError(f"just should be x or y, got {just}")
+
+    else:
+        if just == 'x':
+            dataset = TensorDataset(*filter(
+                lambda x: x is not None,
+                [
+                    all_input_ids,
+                    all_attention_masks,
+                    all_token_type_ids,
+                    # NOTE: intentionaly deleted
+                    # all_start_positions,
+                    # all_end_positions,
+                    all_cls_index,
+                    all_p_mask,
+                    all_is_impossible,
+                ]))
+        elif just == 'y':
+            all_start_positions = torch.tensor(
+                [f.start_position for f in features], dtype=torch.long)
+            all_end_positions = torch.tensor(
+                [f.end_position for f in features], dtype=torch.long)
+            dataset = TensorDataset(
+                all_start_positions,
+                all_end_positions,
+            )
 
         else:
-            if just == 'x':
-                dataset = TensorDataset(*filter(
-                    lambda x: x is not None,
-                    [
-                        all_input_ids,
-                        all_attention_masks,
-                        all_token_type_ids,
-                        # NOTE: intentionaly deleted
-                        # all_start_positions,
-                        # all_end_positions,
-                        all_cls_index,
-                        all_p_mask,
-                        all_is_impossible,
-                    ]))
-            elif just == 'y':
-                all_start_positions = torch.tensor(
-                    [f.start_position for f in features], dtype=torch.long)
-                all_end_positions = torch.tensor(
-                    [f.end_position for f in features], dtype=torch.long)
-                dataset = TensorDataset(
-                    all_start_positions,
-                    all_end_positions,
-                )
+            raise ValueError(f"just should be x or y, got {just}")
 
-            else:
-                raise ValueError(f"just should be x or y, got {just}")
-
-        return features, dataset
-
-    return features
+    return features, dataset
 
 
 #########################################
@@ -441,7 +441,7 @@ if __name__ == "__main__":
         cache_dir=None,
     )
 
-    load_and_cache_examples_just_x_or_y(
+    train_ds = load_and_cache_examples_just_x_or_y(
         just='x',
         model_name_or_path=model_name_or_path,
         max_seq_length=384,
@@ -452,7 +452,8 @@ if __name__ == "__main__":
         DATA_DIR="/home_local/saareliad/data",
         evaluate=False,
         output_examples=False,
-        overwrite_cache=True,
+        overwrite_cache=False,
         save=False,  # Ranks
         version_2_with_negative=False,
     )
+
