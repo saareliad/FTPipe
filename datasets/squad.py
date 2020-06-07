@@ -283,7 +283,7 @@ def squad_convert_examples_to_features_just_x_or_y(just,
                 # We load just the model inputs
                 # TODO: also adds lang for XLM and etc..
                 dataset = TensorDataset(*filter(
-                    None,
+                    lambda x: x is not None,
                     [
                         all_input_ids,
                         all_attention_masks,
@@ -318,7 +318,7 @@ def squad_convert_examples_to_features_just_x_or_y(just,
         else:
             if just == 'x':
                 dataset = TensorDataset(*filter(
-                    None,
+                    lambda x: x is not None,
                     [
                         all_input_ids,
                         all_attention_masks,
@@ -426,6 +426,13 @@ def evaluate(
 
 if __name__ == "__main__":
     from transformers import AutoTokenizer
+    # import ptvsd
+    # port = 3000 + 0
+    # # args.num_data_workers = 0  # NOTE: it does not work without this.
+    # address = ('127.0.0.1', port)
+    # print(f"-I- rank {0} waiting for attachment on {address}")
+    # ptvsd.enable_attach(address=address)
+    # ptvsd.wait_for_attach()
 
     model_name_or_path = "bert-large-uncased"
     tokenizer = AutoTokenizer.from_pretrained(
