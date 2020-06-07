@@ -4,7 +4,7 @@ from collections import defaultdict
 from transformers.data.processors.squad import SquadResult
 # TODO: typehint for statistics. maybe it should actually sit under stats
 import torch
-
+import torch.nn.functional as F
 
 def SQUAD_loss(logits, start_positions, end_positions):
     start_logits, end_logits = logits.split(1, dim=-1)
@@ -15,13 +15,9 @@ def SQUAD_loss(logits, start_positions, end_positions):
     start_positions.clamp_(0, ignored_index)
     end_positions.clamp_(0, ignored_index)
 
-    def loss_fct(logits, targets):
-        return torch.nn.functional.cross_entropy(logits,
-                                                 targets,
-                                                 ignore_index=ignored_index)
+    start_loss = F.cross_entropy(start_logits, start_positions, ignore_index=ignored_index)
 
-    start_loss = loss_fct(start_logits, start_positions)
-    end_loss = loss_fct(end_logits, end_positions)
+    end_loss = F.cross_entropy(end_logits, end_positions, ignore_index=ignored_index)
 
     total_loss = (start_loss + end_loss) / 2
 
@@ -95,8 +91,7 @@ class SquadTrainer(BaseOutPutIsLossTrainer):
         # return loss
 
     def last_partition_step_and_statistics(self,
-                                           x,
-                                           batch_size,
+                                           x, start_positions, end_positions, batch_size,
                                            loss,
                                            step=True):
         """

@@ -20,7 +20,6 @@ from models.normal.NLP_models.modeling_bert import Gelu
 from torch.nn.modules.linear import Linear
 # this is an auto generated file do not edit unless you know what you are doing
 
-
 # partition adjacency
 # model inputs {0}
 # partition 0 {'inputs': {'input2', 'input0', 'input1'}, 'outputs': {1}}
@@ -36,191 +35,419 @@ from torch.nn.modules.linear import Linear
 
 def create_pipeline_configuration(DEBUG=False):
     depth = 10000
-    basic_blocks = (Tanh,Dropout,BertSelfAttention,LayerNorm,Embedding,Gelu,Linear)
-    blocks_path = [ 'torch.nn.modules.activation.Tanh',
-            'torch.nn.modules.dropout.Dropout',
-            'models.normal.NLP_models.modeling_bert.BertSelfAttention',
-            'torch.nn.modules.normalization.LayerNorm',
-            'torch.nn.modules.sparse.Embedding',
-            'models.normal.NLP_models.modeling_bert.Gelu',
-            'torch.nn.modules.linear.Linear']
-    module_path = os.path.relpath(__file__).replace("/",".")[:-3]
-    
+    basic_blocks = (Tanh, Dropout, BertSelfAttention, LayerNorm, Embedding,
+                    Gelu, Linear)
+    blocks_path = [
+        'torch.nn.modules.activation.Tanh', 'torch.nn.modules.dropout.Dropout',
+        'models.normal.NLP_models.modeling_bert.BertSelfAttention',
+        'torch.nn.modules.normalization.LayerNorm',
+        'torch.nn.modules.sparse.Embedding',
+        'models.normal.NLP_models.modeling_bert.Gelu',
+        'torch.nn.modules.linear.Linear'
+    ]
+    module_path = os.path.relpath(__file__).replace("/", ".")[:-3]
 
     # creating configuration
-    stages = {0: {"inputs": {'input_ids': {'shape': torch.Size([16, 384]), 'dtype': 'torch.int64', 'is_batched': True}, 'attention_mask': {'shape': torch.Size([16, 384]), 'dtype': 'torch.int64', 'is_batched': True}, 'token_type_ids': {'shape': torch.Size([16, 384]), 'dtype': 'torch.int64', 'is_batched': True}},
-        "outputs": {'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___62': {'shape': torch.Size([16, 1, 1, 384]), 'dtype': 'torch.float32', 'is_batched': True}, 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertOutput[output]/Tensor::__add___73': {'shape': torch.Size([16, 384, 1024]), 'dtype': 'torch.float32', 'is_batched': True}}},
-            1: {"inputs": {'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___62': {'shape': torch.Size([16, 1, 1, 384]), 'dtype': 'torch.float32', 'is_batched': True}, 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertOutput[output]/Tensor::__add___73': {'shape': torch.Size([16, 384, 1024]), 'dtype': 'torch.float32', 'is_batched': True}},
-        "outputs": {'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___113': {'shape': torch.Size([16, 1, 1, 384]), 'dtype': 'torch.float32', 'is_batched': True}, 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertOutput[output]/LayerNorm[LayerNorm]': {'shape': torch.Size([16, 384, 1024]), 'dtype': 'torch.float32', 'is_batched': True}}},
-            2: {"inputs": {'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___113': {'shape': torch.Size([16, 1, 1, 384]), 'dtype': 'torch.float32', 'is_batched': True}, 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertOutput[output]/LayerNorm[LayerNorm]': {'shape': torch.Size([16, 384, 1024]), 'dtype': 'torch.float32', 'is_batched': True}},
-        "outputs": {'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___164': {'shape': torch.Size([16, 1, 1, 384]), 'dtype': 'torch.float32', 'is_batched': True}, 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertOutput[output]/LayerNorm[LayerNorm]': {'shape': torch.Size([16, 384, 1024]), 'dtype': 'torch.float32', 'is_batched': True}}},
-            3: {"inputs": {'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___164': {'shape': torch.Size([16, 1, 1, 384]), 'dtype': 'torch.float32', 'is_batched': True}, 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertOutput[output]/LayerNorm[LayerNorm]': {'shape': torch.Size([16, 384, 1024]), 'dtype': 'torch.float32', 'is_batched': True}},
-        "outputs": {'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___230': {'shape': torch.Size([16, 384, 1024]), 'dtype': 'torch.float32', 'is_batched': True}, 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___232': {'shape': torch.Size([16, 1, 1, 384]), 'dtype': 'torch.float32', 'is_batched': True}}},
-            4: {"inputs": {'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___230': {'shape': torch.Size([16, 384, 1024]), 'dtype': 'torch.float32', 'is_batched': True}, 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___232': {'shape': torch.Size([16, 1, 1, 384]), 'dtype': 'torch.float32', 'is_batched': True}},
-        "outputs": {'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___266': {'shape': torch.Size([16, 1, 1, 384]), 'dtype': 'torch.float32', 'is_batched': True}, 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertOutput[output]/LayerNorm[LayerNorm]': {'shape': torch.Size([16, 384, 1024]), 'dtype': 'torch.float32', 'is_batched': True}}},
-            5: {"inputs": {'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___266': {'shape': torch.Size([16, 1, 1, 384]), 'dtype': 'torch.float32', 'is_batched': True}, 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertOutput[output]/LayerNorm[LayerNorm]': {'shape': torch.Size([16, 384, 1024]), 'dtype': 'torch.float32', 'is_batched': True}},
-        "outputs": {'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___317': {'shape': torch.Size([16, 1, 1, 384]), 'dtype': 'torch.float32', 'is_batched': True}, 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertOutput[output]/Tensor::__add___328': {'shape': torch.Size([16, 384, 1024]), 'dtype': 'torch.float32', 'is_batched': True}}},
-            6: {"inputs": {'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___317': {'shape': torch.Size([16, 1, 1, 384]), 'dtype': 'torch.float32', 'is_batched': True}, 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertOutput[output]/Tensor::__add___328': {'shape': torch.Size([16, 384, 1024]), 'dtype': 'torch.float32', 'is_batched': True}},
-        "outputs": {'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___368': {'shape': torch.Size([16, 1, 1, 384]), 'dtype': 'torch.float32', 'is_batched': True}, 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertOutput[output]/LayerNorm[LayerNorm]': {'shape': torch.Size([16, 384, 1024]), 'dtype': 'torch.float32', 'is_batched': True}}},
-            7: {"inputs": {'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___368': {'shape': torch.Size([16, 1, 1, 384]), 'dtype': 'torch.float32', 'is_batched': True}, 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertOutput[output]/LayerNorm[LayerNorm]': {'shape': torch.Size([16, 384, 1024]), 'dtype': 'torch.float32', 'is_batched': True}},
-        "outputs": {'BertForQuestionAnswering/Linear[qa_outputs]': {'shape': torch.Size([16, 384, 2]), 'dtype': 'torch.float32', 'is_batched': True}}}
+    stages = {
+        0: {
+            "inputs": {
+                'input_ids': {
+                    'shape': torch.Size([16, 384]),
+                    'dtype': 'torch.int64',
+                    'is_batched': True
+                },
+                'attention_mask': {
+                    'shape': torch.Size([16, 384]),
+                    'dtype': 'torch.int64',
+                    'is_batched': True
+                },
+                'token_type_ids': {
+                    'shape': torch.Size([16, 384]),
+                    'dtype': 'torch.int64',
+                    'is_batched': True
+                }
+            },
+            "outputs": {
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___62':
+                {
+                    'shape': torch.Size([16, 1, 1, 384]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                },
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertOutput[output]/Tensor::__add___73':
+                {
+                    'shape': torch.Size([16, 384, 1024]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                }
             }
-    
+        },
+        1: {
+            "inputs": {
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___62':
+                {
+                    'shape': torch.Size([16, 1, 1, 384]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                },
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertOutput[output]/Tensor::__add___73':
+                {
+                    'shape': torch.Size([16, 384, 1024]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                }
+            },
+            "outputs": {
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___113':
+                {
+                    'shape': torch.Size([16, 1, 1, 384]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                },
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertOutput[output]/LayerNorm[LayerNorm]':
+                {
+                    'shape': torch.Size([16, 384, 1024]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                }
+            }
+        },
+        2: {
+            "inputs": {
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___113':
+                {
+                    'shape': torch.Size([16, 1, 1, 384]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                },
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertOutput[output]/LayerNorm[LayerNorm]':
+                {
+                    'shape': torch.Size([16, 384, 1024]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                }
+            },
+            "outputs": {
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___164':
+                {
+                    'shape': torch.Size([16, 1, 1, 384]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                },
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertOutput[output]/LayerNorm[LayerNorm]':
+                {
+                    'shape': torch.Size([16, 384, 1024]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                }
+            }
+        },
+        3: {
+            "inputs": {
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___164':
+                {
+                    'shape': torch.Size([16, 1, 1, 384]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                },
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertOutput[output]/LayerNorm[LayerNorm]':
+                {
+                    'shape': torch.Size([16, 384, 1024]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                }
+            },
+            "outputs": {
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___230':
+                {
+                    'shape': torch.Size([16, 384, 1024]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                },
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___232':
+                {
+                    'shape': torch.Size([16, 1, 1, 384]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                }
+            }
+        },
+        4: {
+            "inputs": {
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___230':
+                {
+                    'shape': torch.Size([16, 384, 1024]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                },
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___232':
+                {
+                    'shape': torch.Size([16, 1, 1, 384]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                }
+            },
+            "outputs": {
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___266':
+                {
+                    'shape': torch.Size([16, 1, 1, 384]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                },
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertOutput[output]/LayerNorm[LayerNorm]':
+                {
+                    'shape': torch.Size([16, 384, 1024]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                }
+            }
+        },
+        5: {
+            "inputs": {
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___266':
+                {
+                    'shape': torch.Size([16, 1, 1, 384]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                },
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertOutput[output]/LayerNorm[LayerNorm]':
+                {
+                    'shape': torch.Size([16, 384, 1024]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                }
+            },
+            "outputs": {
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___317':
+                {
+                    'shape': torch.Size([16, 1, 1, 384]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                },
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertOutput[output]/Tensor::__add___328':
+                {
+                    'shape': torch.Size([16, 384, 1024]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                }
+            }
+        },
+        6: {
+            "inputs": {
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___317':
+                {
+                    'shape': torch.Size([16, 1, 1, 384]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                },
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertOutput[output]/Tensor::__add___328':
+                {
+                    'shape': torch.Size([16, 384, 1024]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                }
+            },
+            "outputs": {
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___368':
+                {
+                    'shape': torch.Size([16, 1, 1, 384]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                },
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertOutput[output]/LayerNorm[LayerNorm]':
+                {
+                    'shape': torch.Size([16, 384, 1024]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                }
+            }
+        },
+        7: {
+            "inputs": {
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___368':
+                {
+                    'shape': torch.Size([16, 1, 1, 384]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                },
+                'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertOutput[output]/LayerNorm[LayerNorm]':
+                {
+                    'shape': torch.Size([16, 384, 1024]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                }
+            },
+            "outputs": {
+                'BertForQuestionAnswering/Linear[qa_outputs]': {
+                    'shape': torch.Size([16, 384, 2]),
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                }
+            }
+        }
+    }
 
     stages[0]['stage_cls'] = module_path + '.Partition0'
     device = 'cpu' if DEBUG else 'cuda:0'
     stages[0]['devices'] = [device]
-    
 
     stages[1]['stage_cls'] = module_path + '.Partition1'
     device = 'cpu' if DEBUG else 'cuda:1'
     stages[1]['devices'] = [device]
-    
 
     stages[2]['stage_cls'] = module_path + '.Partition2'
     device = 'cpu' if DEBUG else 'cuda:2'
     stages[2]['devices'] = [device]
-    
 
     stages[3]['stage_cls'] = module_path + '.Partition3'
     device = 'cpu' if DEBUG else 'cuda:3'
     stages[3]['devices'] = [device]
-    
 
     stages[4]['stage_cls'] = module_path + '.Partition4'
     device = 'cpu' if DEBUG else 'cuda:4'
     stages[4]['devices'] = [device]
-    
 
     stages[5]['stage_cls'] = module_path + '.Partition5'
     device = 'cpu' if DEBUG else 'cuda:5'
     stages[5]['devices'] = [device]
-    
 
     stages[6]['stage_cls'] = module_path + '.Partition6'
     device = 'cpu' if DEBUG else 'cuda:6'
     stages[6]['devices'] = [device]
-    
 
     stages[7]['stage_cls'] = module_path + '.Partition7'
     device = 'cpu' if DEBUG else 'cuda:7'
     stages[7]['devices'] = [device]
-    
 
     config = dict()
     config['batch_dim'] = 0
     config['depth'] = depth
     config['basic_blocks'] = blocks_path
-    config['model_inputs'] = {'input_ids': {"shape": torch.Size([16, 384]),
-        "dtype": 'torch.int64',
-        "is_batched": True},
-            'attention_mask': {"shape": torch.Size([16, 384]),
-        "dtype": 'torch.int64',
-        "is_batched": True},
-            'token_type_ids': {"shape": torch.Size([16, 384]),
-        "dtype": 'torch.int64',
-        "is_batched": True}}
-    config['model_outputs'] = {'BertForQuestionAnswering/Linear[qa_outputs]': {"shape": torch.Size([16, 384, 2]),
-        "dtype": 'torch.float32',
-        "is_batched": True}}
+    config['model_inputs'] = {
+        'input_ids': {
+            "shape": torch.Size([16, 384]),
+            "dtype": 'torch.int64',
+            "is_batched": True
+        },
+        'attention_mask': {
+            "shape": torch.Size([16, 384]),
+            "dtype": 'torch.int64',
+            "is_batched": True
+        },
+        'token_type_ids': {
+            "shape": torch.Size([16, 384]),
+            "dtype": 'torch.int64',
+            "is_batched": True
+        }
+    }
+    config['model_outputs'] = {
+        'BertForQuestionAnswering/Linear[qa_outputs]': {
+            "shape": torch.Size([16, 384, 2]),
+            "dtype": 'torch.float32',
+            "is_batched": True
+        }
+    }
     config['stages'] = stages
-    
+
     return config
 
+
 class Partition0(nn.Module):
-    BASIC_BLOCKS=(
-            LayerNorm,
-            Linear,
-            Embedding,
-            Gelu,
-            BertSelfAttention,
-            Dropout,
-        )
-    LAYER_SCOPES=[
-            'BertForQuestionAnswering/BertModel[bert]/BertEmbeddings[embeddings]/Embedding[word_embeddings]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEmbeddings[embeddings]/Embedding[position_embeddings]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEmbeddings[embeddings]/Embedding[token_type_embeddings]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEmbeddings[embeddings]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEmbeddings[embeddings]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[0]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[0]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[0]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[0]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[0]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[0]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[0]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[0]/BertOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[0]/BertOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[1]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[1]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[1]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[1]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[1]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[1]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[1]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[1]/BertOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[1]/BertOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertOutput[output]/Dropout[dropout]',
-        ]
-    TENSORS=[
-        ]
+    BASIC_BLOCKS = (
+        LayerNorm,
+        Linear,
+        Embedding,
+        Gelu,
+        BertSelfAttention,
+        Dropout,
+    )
+    LAYER_SCOPES = [
+        'BertForQuestionAnswering/BertModel[bert]/BertEmbeddings[embeddings]/Embedding[word_embeddings]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEmbeddings[embeddings]/Embedding[position_embeddings]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEmbeddings[embeddings]/Embedding[token_type_embeddings]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEmbeddings[embeddings]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEmbeddings[embeddings]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[0]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[0]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[0]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[0]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[0]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[0]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[0]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[0]/BertOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[0]/BertOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[1]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[1]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[1]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[1]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[1]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[1]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[1]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[1]/BertOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[1]/BertOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertOutput[output]/Dropout[dropout]',
+    ]
+    TENSORS = []
+
     def __init__(self, layers, tensors):
         super(Partition0, self).__init__()
 
         #initialize partition layers
-        for idx,layer_scope in enumerate(self.LAYER_SCOPES):
-            self.add_module(f'l_{idx}',layers[layer_scope])
+        for idx, layer_scope in enumerate(self.LAYER_SCOPES):
+            self.add_module(f'l_{idx}', layers[layer_scope])
 
         #initialize partition tensors
-        b=p=0
+        b = p = 0
         for tensor_scope in self.TENSORS:
-            tensor=tensors[tensor_scope]
-            if isinstance(tensor,nn.Parameter):
-                self.register_parameter(f'p_{p}',tensor)
-                p+=1
+            tensor = tensors[tensor_scope]
+            if isinstance(tensor, nn.Parameter):
+                self.register_parameter(f'p_{p}', tensor)
+                p += 1
             else:
-                self.register_buffer(f'b_{b}',tensor)
-                b+=1
+                self.register_buffer(f'b_{b}', tensor)
+                b += 1
 
         self.device = torch.device('cuda:0')
-        self.lookup = { 'l_0': 'bert.embeddings.word_embeddings',
-                        'l_1': 'bert.embeddings.position_embeddings',
-                        'l_2': 'bert.embeddings.token_type_embeddings',
-                        'l_3': 'bert.embeddings.LayerNorm',
-                        'l_4': 'bert.embeddings.dropout',
-                        'l_5': 'bert.encoder.0.attention.self',
-                        'l_6': 'bert.encoder.0.attention.output.dense',
-                        'l_7': 'bert.encoder.0.attention.output.dropout',
-                        'l_8': 'bert.encoder.0.attention.output.LayerNorm',
-                        'l_9': 'bert.encoder.0.intermediate.dense',
-                        'l_10': 'bert.encoder.0.intermediate.intermediate_act_fn',
-                        'l_11': 'bert.encoder.0.output.dense',
-                        'l_12': 'bert.encoder.0.output.dropout',
-                        'l_13': 'bert.encoder.0.output.LayerNorm',
-                        'l_14': 'bert.encoder.1.attention.self',
-                        'l_15': 'bert.encoder.1.attention.output.dense',
-                        'l_16': 'bert.encoder.1.attention.output.dropout',
-                        'l_17': 'bert.encoder.1.attention.output.LayerNorm',
-                        'l_18': 'bert.encoder.1.intermediate.dense',
-                        'l_19': 'bert.encoder.1.intermediate.intermediate_act_fn',
-                        'l_20': 'bert.encoder.1.output.dense',
-                        'l_21': 'bert.encoder.1.output.dropout',
-                        'l_22': 'bert.encoder.1.output.LayerNorm',
-                        'l_23': 'bert.encoder.2.attention.self',
-                        'l_24': 'bert.encoder.2.attention.output.dense',
-                        'l_25': 'bert.encoder.2.attention.output.dropout',
-                        'l_26': 'bert.encoder.2.attention.output.LayerNorm',
-                        'l_27': 'bert.encoder.2.intermediate.dense',
-                        'l_28': 'bert.encoder.2.intermediate.intermediate_act_fn',
-                        'l_29': 'bert.encoder.2.output.dense',
-                        'l_30': 'bert.encoder.2.output.dropout'}
+        self.lookup = {
+            'l_0': 'bert.embeddings.word_embeddings',
+            'l_1': 'bert.embeddings.position_embeddings',
+            'l_2': 'bert.embeddings.token_type_embeddings',
+            'l_3': 'bert.embeddings.LayerNorm',
+            'l_4': 'bert.embeddings.dropout',
+            'l_5': 'bert.encoder.0.attention.self',
+            'l_6': 'bert.encoder.0.attention.output.dense',
+            'l_7': 'bert.encoder.0.attention.output.dropout',
+            'l_8': 'bert.encoder.0.attention.output.LayerNorm',
+            'l_9': 'bert.encoder.0.intermediate.dense',
+            'l_10': 'bert.encoder.0.intermediate.intermediate_act_fn',
+            'l_11': 'bert.encoder.0.output.dense',
+            'l_12': 'bert.encoder.0.output.dropout',
+            'l_13': 'bert.encoder.0.output.LayerNorm',
+            'l_14': 'bert.encoder.1.attention.self',
+            'l_15': 'bert.encoder.1.attention.output.dense',
+            'l_16': 'bert.encoder.1.attention.output.dropout',
+            'l_17': 'bert.encoder.1.attention.output.LayerNorm',
+            'l_18': 'bert.encoder.1.intermediate.dense',
+            'l_19': 'bert.encoder.1.intermediate.intermediate_act_fn',
+            'l_20': 'bert.encoder.1.output.dense',
+            'l_21': 'bert.encoder.1.output.dropout',
+            'l_22': 'bert.encoder.1.output.LayerNorm',
+            'l_23': 'bert.encoder.2.attention.self',
+            'l_24': 'bert.encoder.2.attention.output.dense',
+            'l_25': 'bert.encoder.2.attention.output.dropout',
+            'l_26': 'bert.encoder.2.attention.output.LayerNorm',
+            'l_27': 'bert.encoder.2.intermediate.dense',
+            'l_28': 'bert.encoder.2.intermediate.intermediate_act_fn',
+            'l_29': 'bert.encoder.2.output.dense',
+            'l_30': 'bert.encoder.2.output.dropout'
+        }
 
     def forward(self, input_ids, attention_mask, token_type_ids):
         # BertForQuestionAnswering/BertModel[bert]/BertEmbeddings[embeddings]/Embedding[word_embeddings] <=> self.l_0
@@ -320,118 +547,120 @@ class Partition0(nn.Module):
         # BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertOutput[output]/Tensor::__add___73
         return (t_0, t_3)
 
-    def state_dict(self,device=None):
+    def state_dict(self, device=None):
         # we return the state dict of this part as it should be in the original model
-        return state_dict(self,device=device)
+        return state_dict(self, device=device)
 
     def load_state_dict(self, state):
-        return load_state_dict(self,state)
+        return load_state_dict(self, state)
 
-    def named_parameters(self,recurse=True):
+    def named_parameters(self, recurse=True):
         # we return the named parameters of this part as it should be in the original model
-        return named_parameters(self,recurse=recurse)
+        return named_parameters(self, recurse=recurse)
 
-    def named_buffers(self,recurse=True):
+    def named_buffers(self, recurse=True):
         # we return the named buffers of this part as it should be in the original model
-        return named_buffers(self,recurse=recurse)
+        return named_buffers(self, recurse=recurse)
 
     def cpu(self):
         return cpu(self)
 
-    def cuda(self,device=None):
-        return cuda(self,device=device)
+    def cuda(self, device=None):
+        return cuda(self, device=device)
 
     def to(self, *args, **kwargs):
-        return to(self,*args,**kwargs)
+        return to(self, *args, **kwargs)
 
 
 class Partition1(nn.Module):
-    BASIC_BLOCKS=(
-            LayerNorm,
-            Linear,
-            Gelu,
-            BertSelfAttention,
-            Dropout,
-        )
-    LAYER_SCOPES=[
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[3]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[3]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[3]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[3]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[3]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[3]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[3]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[3]/BertOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[3]/BertOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[4]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[4]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[4]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[4]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[4]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[4]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[4]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[4]/BertOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[4]/BertOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertOutput[output]/LayerNorm[LayerNorm]',
-        ]
-    TENSORS=[
-        ]
+    BASIC_BLOCKS = (
+        LayerNorm,
+        Linear,
+        Gelu,
+        BertSelfAttention,
+        Dropout,
+    )
+    LAYER_SCOPES = [
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[3]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[3]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[3]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[3]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[3]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[3]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[3]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[3]/BertOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[3]/BertOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[4]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[4]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[4]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[4]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[4]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[4]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[4]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[4]/BertOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[4]/BertOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertOutput[output]/LayerNorm[LayerNorm]',
+    ]
+    TENSORS = []
+
     def __init__(self, layers, tensors):
         super(Partition1, self).__init__()
 
         #initialize partition layers
-        for idx,layer_scope in enumerate(self.LAYER_SCOPES):
-            self.add_module(f'l_{idx}',layers[layer_scope])
+        for idx, layer_scope in enumerate(self.LAYER_SCOPES):
+            self.add_module(f'l_{idx}', layers[layer_scope])
 
         #initialize partition tensors
-        b=p=0
+        b = p = 0
         for tensor_scope in self.TENSORS:
-            tensor=tensors[tensor_scope]
-            if isinstance(tensor,nn.Parameter):
-                self.register_parameter(f'p_{p}',tensor)
-                p+=1
+            tensor = tensors[tensor_scope]
+            if isinstance(tensor, nn.Parameter):
+                self.register_parameter(f'p_{p}', tensor)
+                p += 1
             else:
-                self.register_buffer(f'b_{b}',tensor)
-                b+=1
+                self.register_buffer(f'b_{b}', tensor)
+                b += 1
 
         self.device = torch.device('cuda:1')
-        self.lookup = { 'l_0': 'bert.encoder.2.output.LayerNorm',
-                        'l_1': 'bert.encoder.3.attention.self',
-                        'l_2': 'bert.encoder.3.attention.output.dense',
-                        'l_3': 'bert.encoder.3.attention.output.dropout',
-                        'l_4': 'bert.encoder.3.attention.output.LayerNorm',
-                        'l_5': 'bert.encoder.3.intermediate.dense',
-                        'l_6': 'bert.encoder.3.intermediate.intermediate_act_fn',
-                        'l_7': 'bert.encoder.3.output.dense',
-                        'l_8': 'bert.encoder.3.output.dropout',
-                        'l_9': 'bert.encoder.3.output.LayerNorm',
-                        'l_10': 'bert.encoder.4.attention.self',
-                        'l_11': 'bert.encoder.4.attention.output.dense',
-                        'l_12': 'bert.encoder.4.attention.output.dropout',
-                        'l_13': 'bert.encoder.4.attention.output.LayerNorm',
-                        'l_14': 'bert.encoder.4.intermediate.dense',
-                        'l_15': 'bert.encoder.4.intermediate.intermediate_act_fn',
-                        'l_16': 'bert.encoder.4.output.dense',
-                        'l_17': 'bert.encoder.4.output.dropout',
-                        'l_18': 'bert.encoder.4.output.LayerNorm',
-                        'l_19': 'bert.encoder.5.attention.self',
-                        'l_20': 'bert.encoder.5.attention.output.dense',
-                        'l_21': 'bert.encoder.5.attention.output.dropout',
-                        'l_22': 'bert.encoder.5.attention.output.LayerNorm',
-                        'l_23': 'bert.encoder.5.intermediate.dense',
-                        'l_24': 'bert.encoder.5.intermediate.intermediate_act_fn',
-                        'l_25': 'bert.encoder.5.output.dense',
-                        'l_26': 'bert.encoder.5.output.dropout',
-                        'l_27': 'bert.encoder.5.output.LayerNorm'}
+        self.lookup = {
+            'l_0': 'bert.encoder.2.output.LayerNorm',
+            'l_1': 'bert.encoder.3.attention.self',
+            'l_2': 'bert.encoder.3.attention.output.dense',
+            'l_3': 'bert.encoder.3.attention.output.dropout',
+            'l_4': 'bert.encoder.3.attention.output.LayerNorm',
+            'l_5': 'bert.encoder.3.intermediate.dense',
+            'l_6': 'bert.encoder.3.intermediate.intermediate_act_fn',
+            'l_7': 'bert.encoder.3.output.dense',
+            'l_8': 'bert.encoder.3.output.dropout',
+            'l_9': 'bert.encoder.3.output.LayerNorm',
+            'l_10': 'bert.encoder.4.attention.self',
+            'l_11': 'bert.encoder.4.attention.output.dense',
+            'l_12': 'bert.encoder.4.attention.output.dropout',
+            'l_13': 'bert.encoder.4.attention.output.LayerNorm',
+            'l_14': 'bert.encoder.4.intermediate.dense',
+            'l_15': 'bert.encoder.4.intermediate.intermediate_act_fn',
+            'l_16': 'bert.encoder.4.output.dense',
+            'l_17': 'bert.encoder.4.output.dropout',
+            'l_18': 'bert.encoder.4.output.LayerNorm',
+            'l_19': 'bert.encoder.5.attention.self',
+            'l_20': 'bert.encoder.5.attention.output.dense',
+            'l_21': 'bert.encoder.5.attention.output.dropout',
+            'l_22': 'bert.encoder.5.attention.output.LayerNorm',
+            'l_23': 'bert.encoder.5.intermediate.dense',
+            'l_24': 'bert.encoder.5.intermediate.intermediate_act_fn',
+            'l_25': 'bert.encoder.5.output.dense',
+            'l_26': 'bert.encoder.5.output.dropout',
+            'l_27': 'bert.encoder.5.output.LayerNorm'
+        }
 
     def forward(self, x0, x1):
         # BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertOutput[output]/LayerNorm[LayerNorm] <=> self.l_0
@@ -515,116 +744,118 @@ class Partition1(nn.Module):
         # BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertOutput[output]/LayerNorm[LayerNorm]
         return (t_0, t_1)
 
-    def state_dict(self,device=None):
+    def state_dict(self, device=None):
         # we return the state dict of this part as it should be in the original model
-        return state_dict(self,device=device)
+        return state_dict(self, device=device)
 
     def load_state_dict(self, state):
-        return load_state_dict(self,state)
+        return load_state_dict(self, state)
 
-    def named_parameters(self,recurse=True):
+    def named_parameters(self, recurse=True):
         # we return the named parameters of this part as it should be in the original model
-        return named_parameters(self,recurse=recurse)
+        return named_parameters(self, recurse=recurse)
 
-    def named_buffers(self,recurse=True):
+    def named_buffers(self, recurse=True):
         # we return the named buffers of this part as it should be in the original model
-        return named_buffers(self,recurse=recurse)
+        return named_buffers(self, recurse=recurse)
 
     def cpu(self):
         return cpu(self)
 
-    def cuda(self,device=None):
-        return cuda(self,device=device)
+    def cuda(self, device=None):
+        return cuda(self, device=device)
 
     def to(self, *args, **kwargs):
-        return to(self,*args,**kwargs)
+        return to(self, *args, **kwargs)
 
 
 class Partition2(nn.Module):
-    BASIC_BLOCKS=(
-            LayerNorm,
-            Linear,
-            Gelu,
-            BertSelfAttention,
-            Dropout,
-        )
-    LAYER_SCOPES=[
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[6]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[6]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[6]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[6]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[6]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[6]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[6]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[6]/BertOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[6]/BertOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[7]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[7]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[7]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[7]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[7]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[7]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[7]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[7]/BertOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[7]/BertOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertOutput[output]/LayerNorm[LayerNorm]',
-        ]
-    TENSORS=[
-        ]
+    BASIC_BLOCKS = (
+        LayerNorm,
+        Linear,
+        Gelu,
+        BertSelfAttention,
+        Dropout,
+    )
+    LAYER_SCOPES = [
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[6]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[6]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[6]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[6]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[6]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[6]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[6]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[6]/BertOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[6]/BertOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[7]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[7]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[7]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[7]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[7]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[7]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[7]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[7]/BertOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[7]/BertOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertOutput[output]/LayerNorm[LayerNorm]',
+    ]
+    TENSORS = []
+
     def __init__(self, layers, tensors):
         super(Partition2, self).__init__()
 
         #initialize partition layers
-        for idx,layer_scope in enumerate(self.LAYER_SCOPES):
-            self.add_module(f'l_{idx}',layers[layer_scope])
+        for idx, layer_scope in enumerate(self.LAYER_SCOPES):
+            self.add_module(f'l_{idx}', layers[layer_scope])
 
         #initialize partition tensors
-        b=p=0
+        b = p = 0
         for tensor_scope in self.TENSORS:
-            tensor=tensors[tensor_scope]
-            if isinstance(tensor,nn.Parameter):
-                self.register_parameter(f'p_{p}',tensor)
-                p+=1
+            tensor = tensors[tensor_scope]
+            if isinstance(tensor, nn.Parameter):
+                self.register_parameter(f'p_{p}', tensor)
+                p += 1
             else:
-                self.register_buffer(f'b_{b}',tensor)
-                b+=1
+                self.register_buffer(f'b_{b}', tensor)
+                b += 1
 
         self.device = torch.device('cuda:2')
-        self.lookup = { 'l_0': 'bert.encoder.6.attention.self',
-                        'l_1': 'bert.encoder.6.attention.output.dense',
-                        'l_2': 'bert.encoder.6.attention.output.dropout',
-                        'l_3': 'bert.encoder.6.attention.output.LayerNorm',
-                        'l_4': 'bert.encoder.6.intermediate.dense',
-                        'l_5': 'bert.encoder.6.intermediate.intermediate_act_fn',
-                        'l_6': 'bert.encoder.6.output.dense',
-                        'l_7': 'bert.encoder.6.output.dropout',
-                        'l_8': 'bert.encoder.6.output.LayerNorm',
-                        'l_9': 'bert.encoder.7.attention.self',
-                        'l_10': 'bert.encoder.7.attention.output.dense',
-                        'l_11': 'bert.encoder.7.attention.output.dropout',
-                        'l_12': 'bert.encoder.7.attention.output.LayerNorm',
-                        'l_13': 'bert.encoder.7.intermediate.dense',
-                        'l_14': 'bert.encoder.7.intermediate.intermediate_act_fn',
-                        'l_15': 'bert.encoder.7.output.dense',
-                        'l_16': 'bert.encoder.7.output.dropout',
-                        'l_17': 'bert.encoder.7.output.LayerNorm',
-                        'l_18': 'bert.encoder.8.attention.self',
-                        'l_19': 'bert.encoder.8.attention.output.dense',
-                        'l_20': 'bert.encoder.8.attention.output.dropout',
-                        'l_21': 'bert.encoder.8.attention.output.LayerNorm',
-                        'l_22': 'bert.encoder.8.intermediate.dense',
-                        'l_23': 'bert.encoder.8.intermediate.intermediate_act_fn',
-                        'l_24': 'bert.encoder.8.output.dense',
-                        'l_25': 'bert.encoder.8.output.dropout',
-                        'l_26': 'bert.encoder.8.output.LayerNorm'}
+        self.lookup = {
+            'l_0': 'bert.encoder.6.attention.self',
+            'l_1': 'bert.encoder.6.attention.output.dense',
+            'l_2': 'bert.encoder.6.attention.output.dropout',
+            'l_3': 'bert.encoder.6.attention.output.LayerNorm',
+            'l_4': 'bert.encoder.6.intermediate.dense',
+            'l_5': 'bert.encoder.6.intermediate.intermediate_act_fn',
+            'l_6': 'bert.encoder.6.output.dense',
+            'l_7': 'bert.encoder.6.output.dropout',
+            'l_8': 'bert.encoder.6.output.LayerNorm',
+            'l_9': 'bert.encoder.7.attention.self',
+            'l_10': 'bert.encoder.7.attention.output.dense',
+            'l_11': 'bert.encoder.7.attention.output.dropout',
+            'l_12': 'bert.encoder.7.attention.output.LayerNorm',
+            'l_13': 'bert.encoder.7.intermediate.dense',
+            'l_14': 'bert.encoder.7.intermediate.intermediate_act_fn',
+            'l_15': 'bert.encoder.7.output.dense',
+            'l_16': 'bert.encoder.7.output.dropout',
+            'l_17': 'bert.encoder.7.output.LayerNorm',
+            'l_18': 'bert.encoder.8.attention.self',
+            'l_19': 'bert.encoder.8.attention.output.dense',
+            'l_20': 'bert.encoder.8.attention.output.dropout',
+            'l_21': 'bert.encoder.8.attention.output.LayerNorm',
+            'l_22': 'bert.encoder.8.intermediate.dense',
+            'l_23': 'bert.encoder.8.intermediate.intermediate_act_fn',
+            'l_24': 'bert.encoder.8.output.dense',
+            'l_25': 'bert.encoder.8.output.dropout',
+            'l_26': 'bert.encoder.8.output.LayerNorm'
+        }
 
     def forward(self, x0, x1):
         # BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[6]/BertAttention[attention]/BertSelfAttention[self] <=> self.l_0
@@ -706,116 +937,118 @@ class Partition2(nn.Module):
         # BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertOutput[output]/LayerNorm[LayerNorm]
         return (t_0, t_1)
 
-    def state_dict(self,device=None):
+    def state_dict(self, device=None):
         # we return the state dict of this part as it should be in the original model
-        return state_dict(self,device=device)
+        return state_dict(self, device=device)
 
     def load_state_dict(self, state):
-        return load_state_dict(self,state)
+        return load_state_dict(self, state)
 
-    def named_parameters(self,recurse=True):
+    def named_parameters(self, recurse=True):
         # we return the named parameters of this part as it should be in the original model
-        return named_parameters(self,recurse=recurse)
+        return named_parameters(self, recurse=recurse)
 
-    def named_buffers(self,recurse=True):
+    def named_buffers(self, recurse=True):
         # we return the named buffers of this part as it should be in the original model
-        return named_buffers(self,recurse=recurse)
+        return named_buffers(self, recurse=recurse)
 
     def cpu(self):
         return cpu(self)
 
-    def cuda(self,device=None):
-        return cuda(self,device=device)
+    def cuda(self, device=None):
+        return cuda(self, device=device)
 
     def to(self, *args, **kwargs):
-        return to(self,*args,**kwargs)
+        return to(self, *args, **kwargs)
 
 
 class Partition3(nn.Module):
-    BASIC_BLOCKS=(
-            LayerNorm,
-            Linear,
-            Gelu,
-            BertSelfAttention,
-            Dropout,
-        )
-    LAYER_SCOPES=[
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[9]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[9]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[9]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[9]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[9]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[9]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[9]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[9]/BertOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[9]/BertOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[10]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[10]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[10]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[10]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[10]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[10]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[10]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[10]/BertOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[10]/BertOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[11]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[11]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[11]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[11]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[11]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[11]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[11]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[11]/BertOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[11]/BertOutput[output]/LayerNorm[LayerNorm]',
-        ]
-    TENSORS=[
-        ]
+    BASIC_BLOCKS = (
+        LayerNorm,
+        Linear,
+        Gelu,
+        BertSelfAttention,
+        Dropout,
+    )
+    LAYER_SCOPES = [
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[9]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[9]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[9]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[9]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[9]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[9]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[9]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[9]/BertOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[9]/BertOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[10]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[10]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[10]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[10]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[10]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[10]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[10]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[10]/BertOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[10]/BertOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[11]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[11]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[11]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[11]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[11]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[11]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[11]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[11]/BertOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[11]/BertOutput[output]/LayerNorm[LayerNorm]',
+    ]
+    TENSORS = []
+
     def __init__(self, layers, tensors):
         super(Partition3, self).__init__()
 
         #initialize partition layers
-        for idx,layer_scope in enumerate(self.LAYER_SCOPES):
-            self.add_module(f'l_{idx}',layers[layer_scope])
+        for idx, layer_scope in enumerate(self.LAYER_SCOPES):
+            self.add_module(f'l_{idx}', layers[layer_scope])
 
         #initialize partition tensors
-        b=p=0
+        b = p = 0
         for tensor_scope in self.TENSORS:
-            tensor=tensors[tensor_scope]
-            if isinstance(tensor,nn.Parameter):
-                self.register_parameter(f'p_{p}',tensor)
-                p+=1
+            tensor = tensors[tensor_scope]
+            if isinstance(tensor, nn.Parameter):
+                self.register_parameter(f'p_{p}', tensor)
+                p += 1
             else:
-                self.register_buffer(f'b_{b}',tensor)
-                b+=1
+                self.register_buffer(f'b_{b}', tensor)
+                b += 1
 
         self.device = torch.device('cuda:3')
-        self.lookup = { 'l_0': 'bert.encoder.9.attention.self',
-                        'l_1': 'bert.encoder.9.attention.output.dense',
-                        'l_2': 'bert.encoder.9.attention.output.dropout',
-                        'l_3': 'bert.encoder.9.attention.output.LayerNorm',
-                        'l_4': 'bert.encoder.9.intermediate.dense',
-                        'l_5': 'bert.encoder.9.intermediate.intermediate_act_fn',
-                        'l_6': 'bert.encoder.9.output.dense',
-                        'l_7': 'bert.encoder.9.output.dropout',
-                        'l_8': 'bert.encoder.9.output.LayerNorm',
-                        'l_9': 'bert.encoder.10.attention.self',
-                        'l_10': 'bert.encoder.10.attention.output.dense',
-                        'l_11': 'bert.encoder.10.attention.output.dropout',
-                        'l_12': 'bert.encoder.10.attention.output.LayerNorm',
-                        'l_13': 'bert.encoder.10.intermediate.dense',
-                        'l_14': 'bert.encoder.10.intermediate.intermediate_act_fn',
-                        'l_15': 'bert.encoder.10.output.dense',
-                        'l_16': 'bert.encoder.10.output.dropout',
-                        'l_17': 'bert.encoder.10.output.LayerNorm',
-                        'l_18': 'bert.encoder.11.attention.self',
-                        'l_19': 'bert.encoder.11.attention.output.dense',
-                        'l_20': 'bert.encoder.11.attention.output.dropout',
-                        'l_21': 'bert.encoder.11.attention.output.LayerNorm',
-                        'l_22': 'bert.encoder.11.intermediate.dense',
-                        'l_23': 'bert.encoder.11.intermediate.intermediate_act_fn',
-                        'l_24': 'bert.encoder.11.output.dense',
-                        'l_25': 'bert.encoder.11.output.dropout',
-                        'l_26': 'bert.encoder.11.output.LayerNorm'}
+        self.lookup = {
+            'l_0': 'bert.encoder.9.attention.self',
+            'l_1': 'bert.encoder.9.attention.output.dense',
+            'l_2': 'bert.encoder.9.attention.output.dropout',
+            'l_3': 'bert.encoder.9.attention.output.LayerNorm',
+            'l_4': 'bert.encoder.9.intermediate.dense',
+            'l_5': 'bert.encoder.9.intermediate.intermediate_act_fn',
+            'l_6': 'bert.encoder.9.output.dense',
+            'l_7': 'bert.encoder.9.output.dropout',
+            'l_8': 'bert.encoder.9.output.LayerNorm',
+            'l_9': 'bert.encoder.10.attention.self',
+            'l_10': 'bert.encoder.10.attention.output.dense',
+            'l_11': 'bert.encoder.10.attention.output.dropout',
+            'l_12': 'bert.encoder.10.attention.output.LayerNorm',
+            'l_13': 'bert.encoder.10.intermediate.dense',
+            'l_14': 'bert.encoder.10.intermediate.intermediate_act_fn',
+            'l_15': 'bert.encoder.10.output.dense',
+            'l_16': 'bert.encoder.10.output.dropout',
+            'l_17': 'bert.encoder.10.output.LayerNorm',
+            'l_18': 'bert.encoder.11.attention.self',
+            'l_19': 'bert.encoder.11.attention.output.dense',
+            'l_20': 'bert.encoder.11.attention.output.dropout',
+            'l_21': 'bert.encoder.11.attention.output.LayerNorm',
+            'l_22': 'bert.encoder.11.intermediate.dense',
+            'l_23': 'bert.encoder.11.intermediate.intermediate_act_fn',
+            'l_24': 'bert.encoder.11.output.dense',
+            'l_25': 'bert.encoder.11.output.dropout',
+            'l_26': 'bert.encoder.11.output.LayerNorm'
+        }
 
     def forward(self, x0, x1):
         # BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[9]/BertAttention[attention]/BertSelfAttention[self] <=> self.l_0
@@ -900,116 +1133,118 @@ class Partition3(nn.Module):
         # BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___232
         return (t_1, t_0)
 
-    def state_dict(self,device=None):
+    def state_dict(self, device=None):
         # we return the state dict of this part as it should be in the original model
-        return state_dict(self,device=device)
+        return state_dict(self, device=device)
 
     def load_state_dict(self, state):
-        return load_state_dict(self,state)
+        return load_state_dict(self, state)
 
-    def named_parameters(self,recurse=True):
+    def named_parameters(self, recurse=True):
         # we return the named parameters of this part as it should be in the original model
-        return named_parameters(self,recurse=recurse)
+        return named_parameters(self, recurse=recurse)
 
-    def named_buffers(self,recurse=True):
+    def named_buffers(self, recurse=True):
         # we return the named buffers of this part as it should be in the original model
-        return named_buffers(self,recurse=recurse)
+        return named_buffers(self, recurse=recurse)
 
     def cpu(self):
         return cpu(self)
 
-    def cuda(self,device=None):
-        return cuda(self,device=device)
+    def cuda(self, device=None):
+        return cuda(self, device=device)
 
     def to(self, *args, **kwargs):
-        return to(self,*args,**kwargs)
+        return to(self, *args, **kwargs)
 
 
 class Partition4(nn.Module):
-    BASIC_BLOCKS=(
-            LayerNorm,
-            Linear,
-            Gelu,
-            BertSelfAttention,
-            Dropout,
-        )
-    LAYER_SCOPES=[
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[12]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[12]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[12]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[12]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[12]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[12]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[12]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[12]/BertOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[12]/BertOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[13]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[13]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[13]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[13]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[13]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[13]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[13]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[13]/BertOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[13]/BertOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertOutput[output]/LayerNorm[LayerNorm]',
-        ]
-    TENSORS=[
-        ]
+    BASIC_BLOCKS = (
+        LayerNorm,
+        Linear,
+        Gelu,
+        BertSelfAttention,
+        Dropout,
+    )
+    LAYER_SCOPES = [
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[12]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[12]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[12]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[12]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[12]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[12]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[12]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[12]/BertOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[12]/BertOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[13]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[13]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[13]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[13]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[13]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[13]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[13]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[13]/BertOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[13]/BertOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertOutput[output]/LayerNorm[LayerNorm]',
+    ]
+    TENSORS = []
+
     def __init__(self, layers, tensors):
         super(Partition4, self).__init__()
 
         #initialize partition layers
-        for idx,layer_scope in enumerate(self.LAYER_SCOPES):
-            self.add_module(f'l_{idx}',layers[layer_scope])
+        for idx, layer_scope in enumerate(self.LAYER_SCOPES):
+            self.add_module(f'l_{idx}', layers[layer_scope])
 
         #initialize partition tensors
-        b=p=0
+        b = p = 0
         for tensor_scope in self.TENSORS:
-            tensor=tensors[tensor_scope]
-            if isinstance(tensor,nn.Parameter):
-                self.register_parameter(f'p_{p}',tensor)
-                p+=1
+            tensor = tensors[tensor_scope]
+            if isinstance(tensor, nn.Parameter):
+                self.register_parameter(f'p_{p}', tensor)
+                p += 1
             else:
-                self.register_buffer(f'b_{b}',tensor)
-                b+=1
+                self.register_buffer(f'b_{b}', tensor)
+                b += 1
 
         self.device = torch.device('cuda:4')
-        self.lookup = { 'l_0': 'bert.encoder.12.attention.self',
-                        'l_1': 'bert.encoder.12.attention.output.dense',
-                        'l_2': 'bert.encoder.12.attention.output.dropout',
-                        'l_3': 'bert.encoder.12.attention.output.LayerNorm',
-                        'l_4': 'bert.encoder.12.intermediate.dense',
-                        'l_5': 'bert.encoder.12.intermediate.intermediate_act_fn',
-                        'l_6': 'bert.encoder.12.output.dense',
-                        'l_7': 'bert.encoder.12.output.dropout',
-                        'l_8': 'bert.encoder.12.output.LayerNorm',
-                        'l_9': 'bert.encoder.13.attention.self',
-                        'l_10': 'bert.encoder.13.attention.output.dense',
-                        'l_11': 'bert.encoder.13.attention.output.dropout',
-                        'l_12': 'bert.encoder.13.attention.output.LayerNorm',
-                        'l_13': 'bert.encoder.13.intermediate.dense',
-                        'l_14': 'bert.encoder.13.intermediate.intermediate_act_fn',
-                        'l_15': 'bert.encoder.13.output.dense',
-                        'l_16': 'bert.encoder.13.output.dropout',
-                        'l_17': 'bert.encoder.13.output.LayerNorm',
-                        'l_18': 'bert.encoder.14.attention.self',
-                        'l_19': 'bert.encoder.14.attention.output.dense',
-                        'l_20': 'bert.encoder.14.attention.output.dropout',
-                        'l_21': 'bert.encoder.14.attention.output.LayerNorm',
-                        'l_22': 'bert.encoder.14.intermediate.dense',
-                        'l_23': 'bert.encoder.14.intermediate.intermediate_act_fn',
-                        'l_24': 'bert.encoder.14.output.dense',
-                        'l_25': 'bert.encoder.14.output.dropout',
-                        'l_26': 'bert.encoder.14.output.LayerNorm'}
+        self.lookup = {
+            'l_0': 'bert.encoder.12.attention.self',
+            'l_1': 'bert.encoder.12.attention.output.dense',
+            'l_2': 'bert.encoder.12.attention.output.dropout',
+            'l_3': 'bert.encoder.12.attention.output.LayerNorm',
+            'l_4': 'bert.encoder.12.intermediate.dense',
+            'l_5': 'bert.encoder.12.intermediate.intermediate_act_fn',
+            'l_6': 'bert.encoder.12.output.dense',
+            'l_7': 'bert.encoder.12.output.dropout',
+            'l_8': 'bert.encoder.12.output.LayerNorm',
+            'l_9': 'bert.encoder.13.attention.self',
+            'l_10': 'bert.encoder.13.attention.output.dense',
+            'l_11': 'bert.encoder.13.attention.output.dropout',
+            'l_12': 'bert.encoder.13.attention.output.LayerNorm',
+            'l_13': 'bert.encoder.13.intermediate.dense',
+            'l_14': 'bert.encoder.13.intermediate.intermediate_act_fn',
+            'l_15': 'bert.encoder.13.output.dense',
+            'l_16': 'bert.encoder.13.output.dropout',
+            'l_17': 'bert.encoder.13.output.LayerNorm',
+            'l_18': 'bert.encoder.14.attention.self',
+            'l_19': 'bert.encoder.14.attention.output.dense',
+            'l_20': 'bert.encoder.14.attention.output.dropout',
+            'l_21': 'bert.encoder.14.attention.output.LayerNorm',
+            'l_22': 'bert.encoder.14.intermediate.dense',
+            'l_23': 'bert.encoder.14.intermediate.intermediate_act_fn',
+            'l_24': 'bert.encoder.14.output.dense',
+            'l_25': 'bert.encoder.14.output.dropout',
+            'l_26': 'bert.encoder.14.output.LayerNorm'
+        }
 
     def forward(self, x0, x1):
         # BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[12]/BertAttention[attention]/BertSelfAttention[self] <=> self.l_0
@@ -1088,114 +1323,116 @@ class Partition4(nn.Module):
         # BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertOutput[output]/LayerNorm[LayerNorm]
         return (t_0, t_1)
 
-    def state_dict(self,device=None):
+    def state_dict(self, device=None):
         # we return the state dict of this part as it should be in the original model
-        return state_dict(self,device=device)
+        return state_dict(self, device=device)
 
     def load_state_dict(self, state):
-        return load_state_dict(self,state)
+        return load_state_dict(self, state)
 
-    def named_parameters(self,recurse=True):
+    def named_parameters(self, recurse=True):
         # we return the named parameters of this part as it should be in the original model
-        return named_parameters(self,recurse=recurse)
+        return named_parameters(self, recurse=recurse)
 
-    def named_buffers(self,recurse=True):
+    def named_buffers(self, recurse=True):
         # we return the named buffers of this part as it should be in the original model
-        return named_buffers(self,recurse=recurse)
+        return named_buffers(self, recurse=recurse)
 
     def cpu(self):
         return cpu(self)
 
-    def cuda(self,device=None):
-        return cuda(self,device=device)
+    def cuda(self, device=None):
+        return cuda(self, device=device)
 
     def to(self, *args, **kwargs):
-        return to(self,*args,**kwargs)
+        return to(self, *args, **kwargs)
 
 
 class Partition5(nn.Module):
-    BASIC_BLOCKS=(
-            LayerNorm,
-            Linear,
-            Gelu,
-            BertSelfAttention,
-            Dropout,
-        )
-    LAYER_SCOPES=[
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[15]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[15]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[15]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[15]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[15]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[15]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[15]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[15]/BertOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[15]/BertOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[16]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[16]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[16]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[16]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[16]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[16]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[16]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[16]/BertOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[16]/BertOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertOutput[output]/Dropout[dropout]',
-        ]
-    TENSORS=[
-        ]
+    BASIC_BLOCKS = (
+        LayerNorm,
+        Linear,
+        Gelu,
+        BertSelfAttention,
+        Dropout,
+    )
+    LAYER_SCOPES = [
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[15]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[15]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[15]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[15]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[15]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[15]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[15]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[15]/BertOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[15]/BertOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[16]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[16]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[16]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[16]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[16]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[16]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[16]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[16]/BertOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[16]/BertOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertOutput[output]/Dropout[dropout]',
+    ]
+    TENSORS = []
+
     def __init__(self, layers, tensors):
         super(Partition5, self).__init__()
 
         #initialize partition layers
-        for idx,layer_scope in enumerate(self.LAYER_SCOPES):
-            self.add_module(f'l_{idx}',layers[layer_scope])
+        for idx, layer_scope in enumerate(self.LAYER_SCOPES):
+            self.add_module(f'l_{idx}', layers[layer_scope])
 
         #initialize partition tensors
-        b=p=0
+        b = p = 0
         for tensor_scope in self.TENSORS:
-            tensor=tensors[tensor_scope]
-            if isinstance(tensor,nn.Parameter):
-                self.register_parameter(f'p_{p}',tensor)
-                p+=1
+            tensor = tensors[tensor_scope]
+            if isinstance(tensor, nn.Parameter):
+                self.register_parameter(f'p_{p}', tensor)
+                p += 1
             else:
-                self.register_buffer(f'b_{b}',tensor)
-                b+=1
+                self.register_buffer(f'b_{b}', tensor)
+                b += 1
 
         self.device = torch.device('cuda:5')
-        self.lookup = { 'l_0': 'bert.encoder.15.attention.self',
-                        'l_1': 'bert.encoder.15.attention.output.dense',
-                        'l_2': 'bert.encoder.15.attention.output.dropout',
-                        'l_3': 'bert.encoder.15.attention.output.LayerNorm',
-                        'l_4': 'bert.encoder.15.intermediate.dense',
-                        'l_5': 'bert.encoder.15.intermediate.intermediate_act_fn',
-                        'l_6': 'bert.encoder.15.output.dense',
-                        'l_7': 'bert.encoder.15.output.dropout',
-                        'l_8': 'bert.encoder.15.output.LayerNorm',
-                        'l_9': 'bert.encoder.16.attention.self',
-                        'l_10': 'bert.encoder.16.attention.output.dense',
-                        'l_11': 'bert.encoder.16.attention.output.dropout',
-                        'l_12': 'bert.encoder.16.attention.output.LayerNorm',
-                        'l_13': 'bert.encoder.16.intermediate.dense',
-                        'l_14': 'bert.encoder.16.intermediate.intermediate_act_fn',
-                        'l_15': 'bert.encoder.16.output.dense',
-                        'l_16': 'bert.encoder.16.output.dropout',
-                        'l_17': 'bert.encoder.16.output.LayerNorm',
-                        'l_18': 'bert.encoder.17.attention.self',
-                        'l_19': 'bert.encoder.17.attention.output.dense',
-                        'l_20': 'bert.encoder.17.attention.output.dropout',
-                        'l_21': 'bert.encoder.17.attention.output.LayerNorm',
-                        'l_22': 'bert.encoder.17.intermediate.dense',
-                        'l_23': 'bert.encoder.17.intermediate.intermediate_act_fn',
-                        'l_24': 'bert.encoder.17.output.dense',
-                        'l_25': 'bert.encoder.17.output.dropout'}
+        self.lookup = {
+            'l_0': 'bert.encoder.15.attention.self',
+            'l_1': 'bert.encoder.15.attention.output.dense',
+            'l_2': 'bert.encoder.15.attention.output.dropout',
+            'l_3': 'bert.encoder.15.attention.output.LayerNorm',
+            'l_4': 'bert.encoder.15.intermediate.dense',
+            'l_5': 'bert.encoder.15.intermediate.intermediate_act_fn',
+            'l_6': 'bert.encoder.15.output.dense',
+            'l_7': 'bert.encoder.15.output.dropout',
+            'l_8': 'bert.encoder.15.output.LayerNorm',
+            'l_9': 'bert.encoder.16.attention.self',
+            'l_10': 'bert.encoder.16.attention.output.dense',
+            'l_11': 'bert.encoder.16.attention.output.dropout',
+            'l_12': 'bert.encoder.16.attention.output.LayerNorm',
+            'l_13': 'bert.encoder.16.intermediate.dense',
+            'l_14': 'bert.encoder.16.intermediate.intermediate_act_fn',
+            'l_15': 'bert.encoder.16.output.dense',
+            'l_16': 'bert.encoder.16.output.dropout',
+            'l_17': 'bert.encoder.16.output.LayerNorm',
+            'l_18': 'bert.encoder.17.attention.self',
+            'l_19': 'bert.encoder.17.attention.output.dense',
+            'l_20': 'bert.encoder.17.attention.output.dropout',
+            'l_21': 'bert.encoder.17.attention.output.LayerNorm',
+            'l_22': 'bert.encoder.17.intermediate.dense',
+            'l_23': 'bert.encoder.17.intermediate.intermediate_act_fn',
+            'l_24': 'bert.encoder.17.output.dense',
+            'l_25': 'bert.encoder.17.output.dropout'
+        }
 
     def forward(self, x0, x1):
         # BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[15]/BertAttention[attention]/BertSelfAttention[self] <=> self.l_0
@@ -1275,118 +1512,120 @@ class Partition5(nn.Module):
         # BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertOutput[output]/Tensor::__add___328
         return (t_0, t_1)
 
-    def state_dict(self,device=None):
+    def state_dict(self, device=None):
         # we return the state dict of this part as it should be in the original model
-        return state_dict(self,device=device)
+        return state_dict(self, device=device)
 
     def load_state_dict(self, state):
-        return load_state_dict(self,state)
+        return load_state_dict(self, state)
 
-    def named_parameters(self,recurse=True):
+    def named_parameters(self, recurse=True):
         # we return the named parameters of this part as it should be in the original model
-        return named_parameters(self,recurse=recurse)
+        return named_parameters(self, recurse=recurse)
 
-    def named_buffers(self,recurse=True):
+    def named_buffers(self, recurse=True):
         # we return the named buffers of this part as it should be in the original model
-        return named_buffers(self,recurse=recurse)
+        return named_buffers(self, recurse=recurse)
 
     def cpu(self):
         return cpu(self)
 
-    def cuda(self,device=None):
-        return cuda(self,device=device)
+    def cuda(self, device=None):
+        return cuda(self, device=device)
 
     def to(self, *args, **kwargs):
-        return to(self,*args,**kwargs)
+        return to(self, *args, **kwargs)
 
 
 class Partition6(nn.Module):
-    BASIC_BLOCKS=(
-            LayerNorm,
-            Linear,
-            Gelu,
-            BertSelfAttention,
-            Dropout,
-        )
-    LAYER_SCOPES=[
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[18]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[18]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[18]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[18]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[18]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[18]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[18]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[18]/BertOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[18]/BertOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[19]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[19]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[19]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[19]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[19]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[19]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[19]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[19]/BertOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[19]/BertOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertOutput[output]/LayerNorm[LayerNorm]',
-        ]
-    TENSORS=[
-        ]
+    BASIC_BLOCKS = (
+        LayerNorm,
+        Linear,
+        Gelu,
+        BertSelfAttention,
+        Dropout,
+    )
+    LAYER_SCOPES = [
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[18]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[18]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[18]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[18]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[18]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[18]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[18]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[18]/BertOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[18]/BertOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[19]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[19]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[19]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[19]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[19]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[19]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[19]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[19]/BertOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[19]/BertOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertOutput[output]/LayerNorm[LayerNorm]',
+    ]
+    TENSORS = []
+
     def __init__(self, layers, tensors):
         super(Partition6, self).__init__()
 
         #initialize partition layers
-        for idx,layer_scope in enumerate(self.LAYER_SCOPES):
-            self.add_module(f'l_{idx}',layers[layer_scope])
+        for idx, layer_scope in enumerate(self.LAYER_SCOPES):
+            self.add_module(f'l_{idx}', layers[layer_scope])
 
         #initialize partition tensors
-        b=p=0
+        b = p = 0
         for tensor_scope in self.TENSORS:
-            tensor=tensors[tensor_scope]
-            if isinstance(tensor,nn.Parameter):
-                self.register_parameter(f'p_{p}',tensor)
-                p+=1
+            tensor = tensors[tensor_scope]
+            if isinstance(tensor, nn.Parameter):
+                self.register_parameter(f'p_{p}', tensor)
+                p += 1
             else:
-                self.register_buffer(f'b_{b}',tensor)
-                b+=1
+                self.register_buffer(f'b_{b}', tensor)
+                b += 1
 
         self.device = torch.device('cuda:6')
-        self.lookup = { 'l_0': 'bert.encoder.17.output.LayerNorm',
-                        'l_1': 'bert.encoder.18.attention.self',
-                        'l_2': 'bert.encoder.18.attention.output.dense',
-                        'l_3': 'bert.encoder.18.attention.output.dropout',
-                        'l_4': 'bert.encoder.18.attention.output.LayerNorm',
-                        'l_5': 'bert.encoder.18.intermediate.dense',
-                        'l_6': 'bert.encoder.18.intermediate.intermediate_act_fn',
-                        'l_7': 'bert.encoder.18.output.dense',
-                        'l_8': 'bert.encoder.18.output.dropout',
-                        'l_9': 'bert.encoder.18.output.LayerNorm',
-                        'l_10': 'bert.encoder.19.attention.self',
-                        'l_11': 'bert.encoder.19.attention.output.dense',
-                        'l_12': 'bert.encoder.19.attention.output.dropout',
-                        'l_13': 'bert.encoder.19.attention.output.LayerNorm',
-                        'l_14': 'bert.encoder.19.intermediate.dense',
-                        'l_15': 'bert.encoder.19.intermediate.intermediate_act_fn',
-                        'l_16': 'bert.encoder.19.output.dense',
-                        'l_17': 'bert.encoder.19.output.dropout',
-                        'l_18': 'bert.encoder.19.output.LayerNorm',
-                        'l_19': 'bert.encoder.20.attention.self',
-                        'l_20': 'bert.encoder.20.attention.output.dense',
-                        'l_21': 'bert.encoder.20.attention.output.dropout',
-                        'l_22': 'bert.encoder.20.attention.output.LayerNorm',
-                        'l_23': 'bert.encoder.20.intermediate.dense',
-                        'l_24': 'bert.encoder.20.intermediate.intermediate_act_fn',
-                        'l_25': 'bert.encoder.20.output.dense',
-                        'l_26': 'bert.encoder.20.output.dropout',
-                        'l_27': 'bert.encoder.20.output.LayerNorm'}
+        self.lookup = {
+            'l_0': 'bert.encoder.17.output.LayerNorm',
+            'l_1': 'bert.encoder.18.attention.self',
+            'l_2': 'bert.encoder.18.attention.output.dense',
+            'l_3': 'bert.encoder.18.attention.output.dropout',
+            'l_4': 'bert.encoder.18.attention.output.LayerNorm',
+            'l_5': 'bert.encoder.18.intermediate.dense',
+            'l_6': 'bert.encoder.18.intermediate.intermediate_act_fn',
+            'l_7': 'bert.encoder.18.output.dense',
+            'l_8': 'bert.encoder.18.output.dropout',
+            'l_9': 'bert.encoder.18.output.LayerNorm',
+            'l_10': 'bert.encoder.19.attention.self',
+            'l_11': 'bert.encoder.19.attention.output.dense',
+            'l_12': 'bert.encoder.19.attention.output.dropout',
+            'l_13': 'bert.encoder.19.attention.output.LayerNorm',
+            'l_14': 'bert.encoder.19.intermediate.dense',
+            'l_15': 'bert.encoder.19.intermediate.intermediate_act_fn',
+            'l_16': 'bert.encoder.19.output.dense',
+            'l_17': 'bert.encoder.19.output.dropout',
+            'l_18': 'bert.encoder.19.output.LayerNorm',
+            'l_19': 'bert.encoder.20.attention.self',
+            'l_20': 'bert.encoder.20.attention.output.dense',
+            'l_21': 'bert.encoder.20.attention.output.dropout',
+            'l_22': 'bert.encoder.20.attention.output.LayerNorm',
+            'l_23': 'bert.encoder.20.intermediate.dense',
+            'l_24': 'bert.encoder.20.intermediate.intermediate_act_fn',
+            'l_25': 'bert.encoder.20.output.dense',
+            'l_26': 'bert.encoder.20.output.dropout',
+            'l_27': 'bert.encoder.20.output.LayerNorm'
+        }
 
     def forward(self, x0, x1):
         # BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertOutput[output]/LayerNorm[LayerNorm] <=> self.l_0
@@ -1470,123 +1709,125 @@ class Partition6(nn.Module):
         # BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertOutput[output]/LayerNorm[LayerNorm]
         return (t_0, t_1)
 
-    def state_dict(self,device=None):
+    def state_dict(self, device=None):
         # we return the state dict of this part as it should be in the original model
-        return state_dict(self,device=device)
+        return state_dict(self, device=device)
 
     def load_state_dict(self, state):
-        return load_state_dict(self,state)
+        return load_state_dict(self, state)
 
-    def named_parameters(self,recurse=True):
+    def named_parameters(self, recurse=True):
         # we return the named parameters of this part as it should be in the original model
-        return named_parameters(self,recurse=recurse)
+        return named_parameters(self, recurse=recurse)
 
-    def named_buffers(self,recurse=True):
+    def named_buffers(self, recurse=True):
         # we return the named buffers of this part as it should be in the original model
-        return named_buffers(self,recurse=recurse)
+        return named_buffers(self, recurse=recurse)
 
     def cpu(self):
         return cpu(self)
 
-    def cuda(self,device=None):
-        return cuda(self,device=device)
+    def cuda(self, device=None):
+        return cuda(self, device=device)
 
     def to(self, *args, **kwargs):
-        return to(self,*args,**kwargs)
+        return to(self, *args, **kwargs)
 
 
 class Partition7(nn.Module):
-    BASIC_BLOCKS=(
-            Tanh,
-            LayerNorm,
-            Linear,
-            Gelu,
-            BertSelfAttention,
-            Dropout,
-        )
-    LAYER_SCOPES=[
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[21]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[21]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[21]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[21]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[21]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[21]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[21]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[21]/BertOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[21]/BertOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[22]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[22]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[22]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[22]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[22]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[22]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[22]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[22]/BertOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[22]/BertOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[23]/BertAttention[attention]/BertSelfAttention[self]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[23]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[23]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[23]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[23]/BertIntermediate[intermediate]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[23]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[23]/BertOutput[output]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[23]/BertOutput[output]/Dropout[dropout]',
-            'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[23]/BertOutput[output]/LayerNorm[LayerNorm]',
-            'BertForQuestionAnswering/BertModel[bert]/BertPooler[pooler]/Linear[dense]',
-            'BertForQuestionAnswering/BertModel[bert]/BertPooler[pooler]/Tanh[activation]',
-            'BertForQuestionAnswering/Linear[qa_outputs]',
-        ]
-    TENSORS=[
-        ]
+    BASIC_BLOCKS = (
+        Tanh,
+        LayerNorm,
+        Linear,
+        Gelu,
+        BertSelfAttention,
+        Dropout,
+    )
+    LAYER_SCOPES = [
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[21]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[21]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[21]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[21]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[21]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[21]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[21]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[21]/BertOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[21]/BertOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[22]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[22]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[22]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[22]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[22]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[22]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[22]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[22]/BertOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[22]/BertOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[23]/BertAttention[attention]/BertSelfAttention[self]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[23]/BertAttention[attention]/BertSelfOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[23]/BertAttention[attention]/BertSelfOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[23]/BertAttention[attention]/BertSelfOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[23]/BertIntermediate[intermediate]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[23]/BertIntermediate[intermediate]/Gelu[intermediate_act_fn]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[23]/BertOutput[output]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[23]/BertOutput[output]/Dropout[dropout]',
+        'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[23]/BertOutput[output]/LayerNorm[LayerNorm]',
+        'BertForQuestionAnswering/BertModel[bert]/BertPooler[pooler]/Linear[dense]',
+        'BertForQuestionAnswering/BertModel[bert]/BertPooler[pooler]/Tanh[activation]',
+        'BertForQuestionAnswering/Linear[qa_outputs]',
+    ]
+    TENSORS = []
+
     def __init__(self, layers, tensors):
         super(Partition7, self).__init__()
 
         #initialize partition layers
-        for idx,layer_scope in enumerate(self.LAYER_SCOPES):
-            self.add_module(f'l_{idx}',layers[layer_scope])
+        for idx, layer_scope in enumerate(self.LAYER_SCOPES):
+            self.add_module(f'l_{idx}', layers[layer_scope])
 
         #initialize partition tensors
-        b=p=0
+        b = p = 0
         for tensor_scope in self.TENSORS:
-            tensor=tensors[tensor_scope]
-            if isinstance(tensor,nn.Parameter):
-                self.register_parameter(f'p_{p}',tensor)
-                p+=1
+            tensor = tensors[tensor_scope]
+            if isinstance(tensor, nn.Parameter):
+                self.register_parameter(f'p_{p}', tensor)
+                p += 1
             else:
-                self.register_buffer(f'b_{b}',tensor)
-                b+=1
+                self.register_buffer(f'b_{b}', tensor)
+                b += 1
 
         self.device = torch.device('cuda:7')
-        self.lookup = { 'l_0': 'bert.encoder.21.attention.self',
-                        'l_1': 'bert.encoder.21.attention.output.dense',
-                        'l_2': 'bert.encoder.21.attention.output.dropout',
-                        'l_3': 'bert.encoder.21.attention.output.LayerNorm',
-                        'l_4': 'bert.encoder.21.intermediate.dense',
-                        'l_5': 'bert.encoder.21.intermediate.intermediate_act_fn',
-                        'l_6': 'bert.encoder.21.output.dense',
-                        'l_7': 'bert.encoder.21.output.dropout',
-                        'l_8': 'bert.encoder.21.output.LayerNorm',
-                        'l_9': 'bert.encoder.22.attention.self',
-                        'l_10': 'bert.encoder.22.attention.output.dense',
-                        'l_11': 'bert.encoder.22.attention.output.dropout',
-                        'l_12': 'bert.encoder.22.attention.output.LayerNorm',
-                        'l_13': 'bert.encoder.22.intermediate.dense',
-                        'l_14': 'bert.encoder.22.intermediate.intermediate_act_fn',
-                        'l_15': 'bert.encoder.22.output.dense',
-                        'l_16': 'bert.encoder.22.output.dropout',
-                        'l_17': 'bert.encoder.22.output.LayerNorm',
-                        'l_18': 'bert.encoder.23.attention.self',
-                        'l_19': 'bert.encoder.23.attention.output.dense',
-                        'l_20': 'bert.encoder.23.attention.output.dropout',
-                        'l_21': 'bert.encoder.23.attention.output.LayerNorm',
-                        'l_22': 'bert.encoder.23.intermediate.dense',
-                        'l_23': 'bert.encoder.23.intermediate.intermediate_act_fn',
-                        'l_24': 'bert.encoder.23.output.dense',
-                        'l_25': 'bert.encoder.23.output.dropout',
-                        'l_26': 'bert.encoder.23.output.LayerNorm',
-                        'l_27': 'bert.pooler.dense',
-                        'l_28': 'bert.pooler.activation',
-                        'l_29': 'qa_outputs'}
+        self.lookup = {
+            'l_0': 'bert.encoder.21.attention.self',
+            'l_1': 'bert.encoder.21.attention.output.dense',
+            'l_2': 'bert.encoder.21.attention.output.dropout',
+            'l_3': 'bert.encoder.21.attention.output.LayerNorm',
+            'l_4': 'bert.encoder.21.intermediate.dense',
+            'l_5': 'bert.encoder.21.intermediate.intermediate_act_fn',
+            'l_6': 'bert.encoder.21.output.dense',
+            'l_7': 'bert.encoder.21.output.dropout',
+            'l_8': 'bert.encoder.21.output.LayerNorm',
+            'l_9': 'bert.encoder.22.attention.self',
+            'l_10': 'bert.encoder.22.attention.output.dense',
+            'l_11': 'bert.encoder.22.attention.output.dropout',
+            'l_12': 'bert.encoder.22.attention.output.LayerNorm',
+            'l_13': 'bert.encoder.22.intermediate.dense',
+            'l_14': 'bert.encoder.22.intermediate.intermediate_act_fn',
+            'l_15': 'bert.encoder.22.output.dense',
+            'l_16': 'bert.encoder.22.output.dropout',
+            'l_17': 'bert.encoder.22.output.LayerNorm',
+            'l_18': 'bert.encoder.23.attention.self',
+            'l_19': 'bert.encoder.23.attention.output.dense',
+            'l_20': 'bert.encoder.23.attention.output.dropout',
+            'l_21': 'bert.encoder.23.attention.output.LayerNorm',
+            'l_22': 'bert.encoder.23.intermediate.dense',
+            'l_23': 'bert.encoder.23.intermediate.intermediate_act_fn',
+            'l_24': 'bert.encoder.23.output.dense',
+            'l_25': 'bert.encoder.23.output.dropout',
+            'l_26': 'bert.encoder.23.output.LayerNorm',
+            'l_27': 'bert.pooler.dense',
+            'l_28': 'bert.pooler.activation',
+            'l_29': 'qa_outputs'
+        }
 
     def forward(self, x0, x1):
         # BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[21]/BertAttention[attention]/BertSelfAttention[self] <=> self.l_0
@@ -1679,35 +1920,39 @@ class Partition7(nn.Module):
         t_2 = self.l_29(t_2)
         # returning:
         # BertForQuestionAnswering/Linear[qa_outputs]
-        return (t_2,)
+        return (t_2, )
 
-    def state_dict(self,device=None):
+    def state_dict(self, device=None):
         # we return the state dict of this part as it should be in the original model
-        return state_dict(self,device=device)
+        return state_dict(self, device=device)
 
     def load_state_dict(self, state):
-        return load_state_dict(self,state)
+        return load_state_dict(self, state)
 
-    def named_parameters(self,recurse=True):
+    def named_parameters(self, recurse=True):
         # we return the named parameters of this part as it should be in the original model
-        return named_parameters(self,recurse=recurse)
+        return named_parameters(self, recurse=recurse)
 
-    def named_buffers(self,recurse=True):
+    def named_buffers(self, recurse=True):
         # we return the named buffers of this part as it should be in the original model
-        return named_buffers(self,recurse=recurse)
+        return named_buffers(self, recurse=recurse)
 
     def cpu(self):
         return cpu(self)
 
-    def cuda(self,device=None):
-        return cuda(self,device=device)
+    def cuda(self, device=None):
+        return cuda(self, device=device)
 
     def to(self, *args, **kwargs):
-        return to(self,*args,**kwargs)
+        return to(self, *args, **kwargs)
 
 
-def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
-                   basic_blocks: Tuple[nn.Module] = (), full: bool = False) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
+def traverse_model(
+        module: nn.Module,
+        depth: int,
+        prefix: Optional[str] = None,
+        basic_blocks: Tuple[nn.Module] = (),
+        full: bool = False) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
     '''
     iterate over model layers yielding the layer,layer_scope,encasing_module
     Parameters:
@@ -1726,7 +1971,8 @@ def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
 
     for name, sub_module in module.named_children():
         scope = prefix + "/" + type(sub_module).__name__ + f"[{name}]"
-        if len(list(sub_module.children())) == 0 or isinstance(sub_module, tuple(basic_blocks)) or depth == 0:
+        if len(list(sub_module.children())) == 0 or isinstance(
+                sub_module, tuple(basic_blocks)) or depth == 0:
             if full:
                 yield sub_module, scope, module, True
             else:
@@ -1734,14 +1980,22 @@ def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
         else:
             if full:
                 yield sub_module, scope, module, False
-            yield from traverse_model(sub_module, depth - 1, scope, basic_blocks, full)
+            yield from traverse_model(sub_module, depth - 1, scope,
+                                      basic_blocks, full)
 
 
-def layerDict(model: nn.Module, depth=1000, basic_blocks=()) -> Dict[str, nn.Module]:
-    return {s: l for l, s, _ in traverse_model(model, depth, basic_blocks=basic_blocks)}
+def layerDict(model: nn.Module,
+              depth=1000,
+              basic_blocks=()) -> Dict[str, nn.Module]:
+    return {
+        s: l
+        for l, s, _ in traverse_model(model, depth, basic_blocks=basic_blocks)
+    }
 
 
-def traverse_params_buffs(module: nn.Module, prefix: Optional[str] = None) -> Iterator[Tuple[torch.tensor, str]]:
+def traverse_params_buffs(
+        module: nn.Module,
+        prefix: Optional[str] = None) -> Iterator[Tuple[torch.tensor, str]]:
     '''
     iterate over model's buffers and parameters yielding obj,obj_scope
 
@@ -1765,11 +2019,13 @@ def traverse_params_buffs(module: nn.Module, prefix: Optional[str] = None) -> It
 
     # recurse
     for name, sub_module in module.named_children():
-        yield from traverse_params_buffs(sub_module, prefix + "/" + type(sub_module).__name__ + f"[{name}]")
+        yield from traverse_params_buffs(
+            sub_module, prefix + "/" + type(sub_module).__name__ + f"[{name}]")
 
 
 def tensorDict(model: nn.Module) -> OrderedDict[str, Tensor]:
-    return collections.OrderedDict((s, t)for t, s in traverse_params_buffs(model))
+    return collections.OrderedDict(
+        (s, t) for t, s in traverse_params_buffs(model))
 
 
 def move_tensors(ts, device):
@@ -1884,6 +2140,7 @@ def to(partition, *args, **kwargs):
     if not (device is None):
         partition.device = torch.device(device)
     return nn.Module.to(partition, *args, **kwargs)
+
 
 """analysis summary
 -I- Printing Report

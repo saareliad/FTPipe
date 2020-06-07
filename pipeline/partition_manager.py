@@ -384,7 +384,9 @@ class SinglePartitionManager:
             if is_training:
                 self.true_weights_storage.restore_if_needed()
             return request_objects
-
+        ############################
+        # Last partition backward
+        ############################
         else:
             # Last partition - also do backward.
             ctx = (*preload_ctx, *ctx)
