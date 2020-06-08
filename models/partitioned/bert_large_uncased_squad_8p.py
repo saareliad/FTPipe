@@ -54,17 +54,20 @@ def create_pipeline_configuration(DEBUG=False):
                 'input_ids': {
                     'shape': torch.Size([16, 384]),
                     'dtype': 'torch.int64',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': False
                 },
                 'attention_mask': {
                     'shape': torch.Size([16, 384]),
                     'dtype': 'torch.int64',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': False
                 },
                 'token_type_ids': {
                     'shape': torch.Size([16, 384]),
                     'dtype': 'torch.int64',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': False
                 }
             },
             "outputs": {
@@ -72,13 +75,15 @@ def create_pipeline_configuration(DEBUG=False):
                 {
                     'shape': torch.Size([16, 1, 1, 384]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': False
                 },
                 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertOutput[output]/Tensor::__add___73':
                 {
                     'shape': torch.Size([16, 384, 1024]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': True
                 }
             }
         },
@@ -88,13 +93,15 @@ def create_pipeline_configuration(DEBUG=False):
                 {
                     'shape': torch.Size([16, 1, 1, 384]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': False
                 },
                 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[2]/BertOutput[output]/Tensor::__add___73':
                 {
                     'shape': torch.Size([16, 384, 1024]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': True
                 }
             },
             "outputs": {
@@ -102,13 +109,15 @@ def create_pipeline_configuration(DEBUG=False):
                 {
                     'shape': torch.Size([16, 1, 1, 384]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': False
                 },
                 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertOutput[output]/LayerNorm[LayerNorm]':
                 {
                     'shape': torch.Size([16, 384, 1024]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': True
                 }
             }
         },
@@ -118,13 +127,15 @@ def create_pipeline_configuration(DEBUG=False):
                 {
                     'shape': torch.Size([16, 1, 1, 384]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': False
                 },
                 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[5]/BertOutput[output]/LayerNorm[LayerNorm]':
                 {
                     'shape': torch.Size([16, 384, 1024]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': True
                 }
             },
             "outputs": {
@@ -132,13 +143,15 @@ def create_pipeline_configuration(DEBUG=False):
                 {
                     'shape': torch.Size([16, 1, 1, 384]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': False
                 },
                 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertOutput[output]/LayerNorm[LayerNorm]':
                 {
                     'shape': torch.Size([16, 384, 1024]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': True
                 }
             }
         },
@@ -148,13 +161,15 @@ def create_pipeline_configuration(DEBUG=False):
                 {
                     'shape': torch.Size([16, 1, 1, 384]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': False
                 },
                 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[8]/BertOutput[output]/LayerNorm[LayerNorm]':
                 {
                     'shape': torch.Size([16, 384, 1024]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': True
                 }
             },
             "outputs": {
@@ -162,13 +177,15 @@ def create_pipeline_configuration(DEBUG=False):
                 {
                     'shape': torch.Size([16, 384, 1024]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': True
                 },
                 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___232':
                 {
                     'shape': torch.Size([16, 1, 1, 384]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': False
                 }
             }
         },
@@ -178,13 +195,15 @@ def create_pipeline_configuration(DEBUG=False):
                 {
                     'shape': torch.Size([16, 384, 1024]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': True
                 },
                 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___232':
                 {
                     'shape': torch.Size([16, 1, 1, 384]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': False
                 }
             },
             "outputs": {
@@ -192,13 +211,15 @@ def create_pipeline_configuration(DEBUG=False):
                 {
                     'shape': torch.Size([16, 1, 1, 384]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': False
                 },
                 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertOutput[output]/LayerNorm[LayerNorm]':
                 {
                     'shape': torch.Size([16, 384, 1024]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': True
                 }
             }
         },
@@ -208,13 +229,15 @@ def create_pipeline_configuration(DEBUG=False):
                 {
                     'shape': torch.Size([16, 1, 1, 384]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': False
                 },
                 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[14]/BertOutput[output]/LayerNorm[LayerNorm]':
                 {
                     'shape': torch.Size([16, 384, 1024]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': True
                 }
             },
             "outputs": {
@@ -222,13 +245,15 @@ def create_pipeline_configuration(DEBUG=False):
                 {
                     'shape': torch.Size([16, 1, 1, 384]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': False
                 },
                 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertOutput[output]/Tensor::__add___328':
                 {
                     'shape': torch.Size([16, 384, 1024]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': True
                 }
             }
         },
@@ -238,13 +263,15 @@ def create_pipeline_configuration(DEBUG=False):
                 {
                     'shape': torch.Size([16, 1, 1, 384]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': False
                 },
                 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[17]/BertOutput[output]/Tensor::__add___328':
                 {
                     'shape': torch.Size([16, 384, 1024]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': True
                 }
             },
             "outputs": {
@@ -252,13 +279,15 @@ def create_pipeline_configuration(DEBUG=False):
                 {
                     'shape': torch.Size([16, 1, 1, 384]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': False
                 },
                 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertOutput[output]/LayerNorm[LayerNorm]':
                 {
                     'shape': torch.Size([16, 384, 1024]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': True
                 }
             }
         },
@@ -268,20 +297,23 @@ def create_pipeline_configuration(DEBUG=False):
                 {
                     'shape': torch.Size([16, 1, 1, 384]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': False
                 },
                 'BertForQuestionAnswering/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertOutput[output]/LayerNorm[LayerNorm]':
                 {
                     'shape': torch.Size([16, 384, 1024]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': True
                 }
             },
             "outputs": {
                 'BertForQuestionAnswering/Linear[qa_outputs]': {
                     'shape': torch.Size([16, 384, 2]),
                     'dtype': 'torch.float32',
-                    'is_batched': True
+                    'is_batched': True,
+                    'req_grad': True
                 }
             }
         }
