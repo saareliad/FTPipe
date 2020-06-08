@@ -73,12 +73,14 @@ def generate_forward_method(graph:Graph,
     output_shapes = [n.tensor_shape for n in outputs]
     input_dtypes = [n.tensor_dtype for n in part_inputs]
     output_dtypes = [n.tensor_dtype for n in outputs]
+    inputs_req_grad = [n.req_grad for n in part_inputs]
     io = {"inputs": input_scopes,
           "outputs": out_scopes,
           "input_shapes": input_shapes,
           "output_shapes": output_shapes,
           "input_dtypes": input_dtypes,
-          "output_dtypes": output_dtypes}
+          "output_dtypes": output_dtypes,
+          "inputs_req_grad":inputs_req_grad}
 
     return lines, io
 
