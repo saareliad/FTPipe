@@ -42,6 +42,7 @@ DEFAULT_CLASSES_LIST_TO_PATCH = [
 #         return x[0]
 #     return x
 
+
 def get_buffers_for_ddp_sync(model,
                              classes_to_patch=DEFAULT_CLASSES_LIST_TO_PATCH):
     # This function should be used once.
@@ -59,6 +60,7 @@ def get_buffers_for_ddp_sync(model,
     return buffers
 
 
+# TODO: input req_grad reqirements.
 class Partition(nn.Module):
     """
     Partition with recomputation.
@@ -128,7 +130,8 @@ class Partition(nn.Module):
                         x = x.detach().clone().requires_grad_(
                             self._REQ_GRAD and x.is_floating_point())
                     else:
-                        x = x.detach().requires_grad_(self._REQ_GRAD and x.is_floating_point())
+                        x = x.detach().requires_grad_(
+                            self._REQ_GRAD and x.is_floating_point())
                     self.input_buffer[micro_batch_idx] = x
                     self.rng_stasher.stash_rng_state(micro_batch_idx)
                     x = self.layers(x)
@@ -180,6 +183,7 @@ class Partition(nn.Module):
 
     def backward_from_recomputed(self, g, micro_batch_idx):
         x = self.bwd_graph_head_buffer.pop(micro_batch_idx)
+        x,g = filter_for_backward(x,g)
         torch.autograd.backward(x, g)
 
     def get_grad(self, micro_batch_idx):
@@ -402,7 +406,8 @@ class PartitionWithoutRecomputation(nn.Module):
                 # Save activation only if gradient is needed.
                 if self._REQ_GRAD:
                     if self._CLONE_INPUT:
-                        x = x.detach().clone().requires_grad_(x.is_floating_point())
+                        x = x.detach().clone().requires_grad_(
+                            x.is_floating_point())
                     else:
                         x = x.detach().requires_grad_(x.is_floating_point())
 
@@ -412,11 +417,14 @@ class PartitionWithoutRecomputation(nn.Module):
                 if self._REQ_GRAD:
                     if self._CLONE_INPUT:
                         x = [
-                            tensor.detach().clone().requires_grad_(tensor.is_floating_point())
-                            for tensor in x
+                            tensor.detach().clone().requires_grad_(
+                                tensor.is_floating_point()) for tensor in x
                         ]
                     else:
-                        x = [tensor.detach().requires_grad_(tensor.is_floating_point()) for tensor in x]
+                        x = [
+                            tensor.detach().requires_grad_(
+                                tensor.is_floating_point()) for tensor in x
+                        ]
                     self.input_buffer[micro_batch_idx] = x
 
                 x = self.layers(*x)
@@ -439,6 +447,7 @@ class PartitionWithoutRecomputation(nn.Module):
     def backward_from_recomputed(self, g, micro_batch_idx):
         # HACK: misleading name, so we don't have to change the code in partition manager.
         x = self.bwd_graph_head_buffer.pop(micro_batch_idx)
+        x,g = filter_for_backward(x,g)
         torch.autograd.backward(x, g)
 
     def get_grad(self, micro_batch_idx):
@@ -563,3 +572,18 @@ class GPipeLastPartitionWithLabelInput(GPipeLastPartition):
 #     # TODO: it is very stupied that we calculate loss for all micro batches in the dummy forward, but its very anoying to fix this.
 #     RECOMP_PARTITION_CLS = Partition
 #     NO_RECOMP_PARTITION_CLS = PartitionWithoutRecomputation  # NOTE: its a
+
+
+def filter_for_backward(x, g):
+    # TODO: remove this compeltly
+    tensors = []
+    grad_tensors = []
+    for t, gt in zip(x, g):
+        if t.grad_fn is not None:
+            tensors.append(t)
+            grad_tensors.append(gt)
+        else:
+            if g is not None:
+                print("-W- calculated and sent un-needed grad")
+    return tensors, grad_tensors
+    # torch.autograd.backward(tensors, grad_tensors)
