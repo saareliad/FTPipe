@@ -281,7 +281,7 @@ class PipelineConfig():
 
         for i, d in state['model_inputs'].items():
             config.add_input(i, d['shape'], d['is_batched'],
-                             deserialize_python_class_or_function(d['dtype']))
+                             deserialize_python_class_or_function(d['dtype']), req_grad=False)
 
         for o, d in state['model_outputs'].items():
             config.add_output(o, d['shape'], d['is_batched'],
@@ -311,15 +311,17 @@ class StageConfig():
         self.is_batched = dict()
         self.dtypes = dict()
         self.devices = []
+        self.req_grad = dict()
         self._stage_class = stage_class
 
     def add_input(self, input_name: str,
-                  shape: Tuple[int, ...], is_batched: bool, dtype: torch.dtype) -> "StageConfig":
+                  shape: Tuple[int, ...], is_batched: bool, dtype: torch.dtype, req_grad: bool) -> "StageConfig":
         self.inputs.append(input_name)
         shape = list(shape)
         self.input_shapes.append(shape)
         self.is_batched[input_name] = is_batched
         self.dtypes[input_name] = dtype
+        self.req_grad[input_name] = req_grad
         return self
 
     def add_output(self, output_name: str,
@@ -408,7 +410,7 @@ class StageConfig():
 
         for i, d in state['inputs'].items():
             config.add_input(i, d['shape'], d['is_batched'],
-                             deserialize_python_class_or_function(d['dtype']))
+                             deserialize_python_class_or_function(d['dtype']), req_grad=d['req_grad'])
 
         for o, d in state['outputs'].items():
             config.add_output(o, d['shape'], d['is_batched'],
