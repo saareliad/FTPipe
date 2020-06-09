@@ -10,11 +10,11 @@ import importlib
 from itertools import chain
 from copy import deepcopy
 
+
 class PipelineConfig():
     """
     Config to handle basic partitioning.
     """
-
     def __init__(self, batch_dim: int, depth: int,
                  basic_blocks: Tuple[nn.Module, ...]):
         self.batch_dim = batch_dim
@@ -28,8 +28,8 @@ class PipelineConfig():
         self.dtypes = dict()
         self.stages: Dict[int, StageConfig] = dict()
 
-    def add_input(self, input_name: str,
-                  shape: Tuple[int, ...], is_batched: bool, dtype: torch.dtype) -> "PipelineConfig":
+    def add_input(self, input_name: str, shape: Tuple[int, ...],
+                  is_batched: bool, dtype: torch.dtype) -> "PipelineConfig":
         self.model_inputs.append(input_name)
         shape = list(shape)
         self.model_input_shapes.append(shape)
@@ -37,8 +37,8 @@ class PipelineConfig():
         self.dtypes[input_name] = dtype
         return self
 
-    def add_output(self, output_name: str,
-                   shape: Tuple[int, ...], is_batched: bool, dtype: torch.dtype) -> "PipelineConfig":
+    def add_output(self, output_name: str, shape: Tuple[int, ...],
+                   is_batched: bool, dtype: torch.dtype) -> "PipelineConfig":
         self.model_outputs.append(output_name)
         shape = list(shape)
         self.model_output_shapes.append(shape)
@@ -148,7 +148,8 @@ class PipelineConfig():
                 shape[self.batch_dim] = batch_size
 
         for stage in self.stages.values():
-            stage.change_batch(self.batch_dim, batch_size,
+            stage.change_batch(self.batch_dim,
+                               batch_size,
                                for_replicated=for_replicated)
 
     def isValid(self) -> bool:
@@ -216,13 +217,19 @@ class PipelineConfig():
         return (no_duplicates and has_in_out and disjoint and has_stages
                 and stages_valid and all_inputs_used and all_outputs_used)
 
-    def realize_stage_for_rank(self, layers: Dict[str, Tensor],
-                               tensors: Dict[str, Tensor], batch_size: int,
+    def realize_stage_for_rank(self,
+                               layers: Dict[str, Tensor],
+                               tensors: Dict[str, Tensor],
+                               batch_size: int,
                                my_rank: int,
                                for_replicated=True):
         stage_id = self.rank_to_stage_idx(my_rank)
-        return self.stages[stage_id].simple_realize(layers, tensors, self.batch_dim,
-                                                    batch_size, for_replicated=for_replicated)
+        return self.stages[stage_id].simple_realize(
+            layers,
+            tensors,
+            self.batch_dim,
+            batch_size,
+            for_replicated=for_replicated)
 
     def state_dict(self) -> Dict:
         state = dict()
@@ -235,15 +242,19 @@ class PipelineConfig():
 
         model_inputs = dict()
         for i, s in zip(self.model_inputs, self.model_input_shapes):
-            model_inputs[i] = {"shape": list(s),
-                               "dtype": serialize_python_class_or_function(self.dtypes[i]),
-                               "is_batched": self.is_batched[i]}
+            model_inputs[i] = {
+                "shape": list(s),
+                "dtype": serialize_python_class_or_function(self.dtypes[i]),
+                "is_batched": self.is_batched[i]
+            }
 
         model_outputs = dict()
         for o, s in zip(self.model_outputs, self.model_output_shapes):
-            model_outputs[o] = {"shape": list(s),
-                                "dtype": serialize_python_class_or_function(self.dtypes[o]),
-                                "is_batched": self.is_batched[o]}
+            model_outputs[o] = {
+                "shape": list(s),
+                "dtype": serialize_python_class_or_function(self.dtypes[o]),
+                "is_batched": self.is_batched[o]
+            }
 
         state["model_inputs"] = model_inputs
         state["model_outputs"] = model_outputs
@@ -272,6 +283,7 @@ class PipelineConfig():
             int(idx): StageConfig.fromDict(s)
             for idx, s in state['stages'].items()
         }
+
         depth = state['depth']
         basic_blocks = [
             deserialize_python_class_or_function(p)
@@ -281,7 +293,7 @@ class PipelineConfig():
 
         for i, d in state['model_inputs'].items():
             config.add_input(i, d['shape'], d['is_batched'],
-                             deserialize_python_class_or_function(d['dtype']), req_grad=False)
+                             deserialize_python_class_or_function(d['dtype']))
 
         for o, d in state['model_outputs'].items():
             config.add_output(o, d['shape'], d['is_batched'],
@@ -314,8 +326,9 @@ class StageConfig():
         self.req_grad = dict()
         self._stage_class = stage_class
 
-    def add_input(self, input_name: str,
-                  shape: Tuple[int, ...], is_batched: bool, dtype: torch.dtype, req_grad: bool) -> "StageConfig":
+    def add_input(self, input_name: str, shape: Tuple[int,
+                                                      ...], is_batched: bool,
+                  dtype: torch.dtype, req_grad: bool) -> "StageConfig":
         self.inputs.append(input_name)
         shape = list(shape)
         self.input_shapes.append(shape)
@@ -324,8 +337,8 @@ class StageConfig():
         self.req_grad[input_name] = req_grad
         return self
 
-    def add_output(self, output_name: str,
-                   shape: Tuple[int, ...], is_batched: bool, dtype: torch.dtype) -> "StageConfig":
+    def add_output(self, output_name: str, shape: Tuple[int, ...],
+                   is_batched: bool, dtype: torch.dtype) -> "StageConfig":
         self.outputs.append(output_name)
         shape = list(shape)
         self.output_shapes.append(shape)
@@ -351,7 +364,8 @@ class StageConfig():
 
         return no_duplicates and has_in_out and disjoint and has_ranks
 
-    def simple_realize(self, layers: Dict[str, Tensor],
+    def simple_realize(self,
+                       layers: Dict[str, Tensor],
                        tensors: Dict[str, Tensor],
                        batch_dim: int,
                        batch_size: int,
@@ -380,15 +394,19 @@ class StageConfig():
         state = dict()
         inputs = dict()
         for i, s in zip(self.inputs, self.input_shapes):
-            inputs[i] = {"shape": list(s),
-                         "dtype": serialize_python_class_or_function(self.dtypes[i]),
-                         "is_batched": self.is_batched[i]}
+            inputs[i] = {
+                "shape": list(s),
+                "dtype": serialize_python_class_or_function(self.dtypes[i]),
+                "is_batched": self.is_batched[i]
+            }
 
         outputs = dict()
         for o, s in zip(self.outputs, self.output_shapes):
-            outputs[o] = {"shape": list(s),
-                          "dtype": serialize_python_class_or_function(self.dtypes[o]),
-                          "is_batched": self.is_batched[o]}
+            outputs[o] = {
+                "shape": list(s),
+                "dtype": serialize_python_class_or_function(self.dtypes[o]),
+                "is_batched": self.is_batched[o]
+            }
 
         state["inputs"] = inputs
         state["outputs"] = outputs
@@ -409,8 +427,11 @@ class StageConfig():
         config = cls(stage_cls)
 
         for i, d in state['inputs'].items():
-            config.add_input(i, d['shape'], d['is_batched'],
-                             deserialize_python_class_or_function(d['dtype']), req_grad=d['req_grad'])
+            config.add_input(i,
+                             d['shape'],
+                             d['is_batched'],
+                             deserialize_python_class_or_function(d['dtype']),
+                             req_grad=d['req_grad'])
 
         for o, d in state['outputs'].items():
             config.add_output(o, d['shape'], d['is_batched'],
@@ -442,32 +463,34 @@ def deserialize_python_class_or_function(path: str):
     module = importlib.import_module(module_path)
     return getattr(module, obj_name)
 
+
 # config structure
 # batch_dim
 # depth
 # basic_blocks
 # model_inputs
-    # id
-    # shape
-    # dtype
-    # is_batched
+#   id
+#   shape
+#   dtype
+#   is_batched
 # model_outputs
-    # id
-    # shape
-    # dtype
-    # is_batched
+#   id
+#   shape
+#   dtype
+#   is_batched
 
 # stages:
 #   id
-    # model_inputs
-    #    id
-    #    shape
-    #    dtype
-    #    is_batched
-    # model_outputs
-    #    id
-    #    shape
-    #    dtype
-    #    is_batched
-    # stage_cls convention is package.path.cls
-    # devices list of devices
+# model_inputs
+#    id
+#    shape
+#    dtype
+#    is_batched
+#    req_grad
+# model_outputs
+#    id
+#    shape
+#    dtype
+#    is_batched
+# stage_cls convention is package.path.cls
+# devices list of devices
