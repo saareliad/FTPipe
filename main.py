@@ -288,10 +288,10 @@ def mp_recv_queue_per_tensor(args_model, world_size, ushn="_grad"):
     d = {}
     for i, s in pc.stages.items():
         recv_inputs = [
-            name for name in s.inputs if not name in pc.model_inputs
+            name for name in s.inputs if name not in pc.model_inputs
         ]
         rcv_grads = [
-            name for name in s.outputs if not name in pc.model_outputs
+            name for name in s.outputs if name not in pc.model_outputs
         ]
         rcv_grads = [j + ushn for j in rcv_grads]
 
@@ -338,12 +338,6 @@ def start_distributed():
 
 
 def main(args, shared_ctx=None):
-    # # TODO: some way to allow multiprocessing instead distributed.
-    # args = parse_cli()
-    # parse_json_config(args, args.config, first=True)
-    # parse_mpi_env_vars(args)
-    # args.world_size = get_world_size(args.distributed_backend)
-
     if args.debug and ((args.rank in args.debug) or (-1 in args.debug)):
         import ptvsd
         port = 3000 + args.local_rank
@@ -371,6 +365,9 @@ def main(args, shared_ctx=None):
     if getattr(args, "cudnn_benchmark", True):
         torch.backends.cudnn.benchmark = True
 
+    if getattr(args, "cudnn_deterministic", False):
+        torch.backends.cudnn.deterministic = True
+
     ###############################
     # Prepare for pipeline
     ###############################
@@ -384,13 +381,10 @@ def main(args, shared_ctx=None):
      samplers) = prepare_pipeline(args, shared_ctx=shared_ctx)
 
     # Main Training Loop
-
     exp_start_time = time.time()
-
     times_res = training_loop(args, logger, train_dl, test_dl,
                               is_first_partition, is_last_partition, partition,
                               statistics, train_dl_len, test_dl_len, samplers)
-
     exp_total_time = time.time() - exp_start_time
 
     # Save
