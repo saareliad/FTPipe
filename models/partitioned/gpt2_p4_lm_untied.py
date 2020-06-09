@@ -17,7 +17,6 @@ from torch.nn.modules.sparse import Embedding
 from torch.nn.modules.normalization import LayerNorm
 # this is an auto generated file do not edit unless you know what you are doing
 
-
 # partition adjacency
 # model inputs {0, 3}
 # partition 0 {'inputs': {'input0'}, 'outputs': {1}}
@@ -29,201 +28,412 @@ from torch.nn.modules.normalization import LayerNorm
 
 def create_pipeline_configuration(DEBUG=False):
     depth = 10000
-    basic_blocks = (Dropout,Conv1D,Linear,Embedding,LayerNorm)
-    blocks_path = [ 'torch.nn.modules.dropout.Dropout',
-            'transformers.modeling_utils.Conv1D',
-            'torch.nn.modules.linear.Linear',
-            'torch.nn.modules.sparse.Embedding',
-            'torch.nn.modules.normalization.LayerNorm']
-    module_path = os.path.relpath(__file__).replace("/",".")[:-3]
-    
+    basic_blocks = (Dropout, Conv1D, Linear, Embedding, LayerNorm)
+    blocks_path = [
+        'torch.nn.modules.dropout.Dropout',
+        'transformers.modeling_utils.Conv1D', 'torch.nn.modules.linear.Linear',
+        'torch.nn.modules.sparse.Embedding',
+        'torch.nn.modules.normalization.LayerNorm'
+    ]
+    module_path = os.path.relpath(__file__).replace("/", ".")[:-3]
 
     # creating configuration
-    stages = {0: {"inputs": {'input0': {'shape': [4, 1024], 'dtype': 'torch.int64', 'is_batched': True}},
-        "outputs": {'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Dropout[dropout]': {'shape': [4, 1024, 768], 'dtype': 'torch.float32', 'is_batched': True}, 'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/aten::add5387': {'shape': [4, 1024, 768], 'dtype': 'torch.float32', 'is_batched': True}}},
-            1: {"inputs": {'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Dropout[dropout]': {'shape': [4, 1024, 768], 'dtype': 'torch.float32', 'is_batched': True}, 'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/aten::add5387': {'shape': [4, 1024, 768], 'dtype': 'torch.float32', 'is_batched': True}},
-        "outputs": {'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_2]': {'shape': [4, 1024, 768], 'dtype': 'torch.float32', 'is_batched': True}, 'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/aten::add6123': {'shape': [4, 1024, 768], 'dtype': 'torch.float32', 'is_batched': True}}},
-            2: {"inputs": {'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_2]': {'shape': [4, 1024, 768], 'dtype': 'torch.float32', 'is_batched': True}, 'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/aten::add6123': {'shape': [4, 1024, 768], 'dtype': 'torch.float32', 'is_batched': True}},
-        "outputs": {'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Dropout[dropout]': {'shape': [4, 1024, 768], 'dtype': 'torch.float32', 'is_batched': True}, 'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/aten::add6675': {'shape': [4, 1024, 768], 'dtype': 'torch.float32', 'is_batched': True}}},
-            3: {"inputs": {'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Dropout[dropout]': {'shape': [4, 1024, 768], 'dtype': 'torch.float32', 'is_batched': True}, 'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/aten::add6675': {'shape': [4, 1024, 768], 'dtype': 'torch.float32', 'is_batched': True}, 'input1': {'shape': [4, 1024], 'dtype': 'torch.int64', 'is_batched': True}},
-        "outputs": {'GPT2LMHeadModel/aten::nll_loss4194': {'shape': [1], 'dtype': 'torch.float32', 'is_batched': False}}}
+    stages = {
+        0: {
+            "inputs": {
+                'input0': {
+                    'shape': [4, 1024],
+                    'dtype': 'torch.int64',
+                    'is_batched': True,
+                    'req_grad': False
+                }
+            },
+            "outputs": {
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Dropout[dropout]':
+                {
+                    'shape': [4, 1024, 768],
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                },
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/aten::add5387':
+                {
+                    'shape': [4, 1024, 768],
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                }
             }
-    
+        },
+        1: {
+            "inputs": {
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Dropout[dropout]':
+                {
+                    'shape': [4, 1024, 768],
+                    'dtype': 'torch.float32',
+                    'is_batched': True,
+                    'req_grad': True
+                },
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/aten::add5387':
+                {
+                    'shape': [4, 1024, 768],
+                    'dtype': 'torch.float32',
+                    'is_batched': True,
+                    'req_grad': True
+                }
+            },
+            "outputs": {
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_2]':
+                {
+                    'shape': [4, 1024, 768],
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                },
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/aten::add6123':
+                {
+                    'shape': [4, 1024, 768],
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                }
+            }
+        },
+        2: {
+            "inputs": {
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_2]':
+                {
+                    'shape': [4, 1024, 768],
+                    'dtype': 'torch.float32',
+                    'is_batched': True,
+                    'req_grad': True
+                },
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/aten::add6123':
+                {
+                    'shape': [4, 1024, 768],
+                    'dtype': 'torch.float32',
+                    'is_batched': True,
+                    'req_grad': True
+                }
+            },
+            "outputs": {
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Dropout[dropout]':
+                {
+                    'shape': [4, 1024, 768],
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                },
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/aten::add6675':
+                {
+                    'shape': [4, 1024, 768],
+                    'dtype': 'torch.float32',
+                    'is_batched': True
+                }
+            }
+        },
+        3: {
+            "inputs": {
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Dropout[dropout]':
+                {
+                    'shape': [4, 1024, 768],
+                    'dtype': 'torch.float32',
+                    'is_batched': True,
+                    'req_grad': True
+                },
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/aten::add6675':
+                {
+                    'shape': [4, 1024, 768],
+                    'dtype': 'torch.float32',
+                    'is_batched': True,
+                    'req_grad': True
+                },
+                'input1': {
+                    'shape': [4, 1024],
+                    'dtype': 'torch.int64',
+                    'is_batched': True,
+                    'req_grad': False
+                }
+            },
+            "outputs": {
+                'GPT2LMHeadModel/aten::nll_loss4194': {
+                    'shape': [1],
+                    'dtype': 'torch.float32',
+                    'is_batched': False
+                }
+            }
+        }
+    }
 
     stages[0]['stage_cls'] = module_path + '.Partition0'
     device = 'cpu' if DEBUG else 'cuda:0'
     stages[0]['devices'] = [device]
-    
 
     stages[1]['stage_cls'] = module_path + '.Partition1'
     device = 'cpu' if DEBUG else 'cuda:1'
     stages[1]['devices'] = [device]
-    
 
     stages[2]['stage_cls'] = module_path + '.Partition2'
     device = 'cpu' if DEBUG else 'cuda:2'
     stages[2]['devices'] = [device]
-    
 
     stages[3]['stage_cls'] = module_path + '.Partition3'
     device = 'cpu' if DEBUG else 'cuda:3'
     stages[3]['devices'] = [device]
-    
 
     config = dict()
     config['batch_dim'] = 0
     config['depth'] = depth
     config['basic_blocks'] = blocks_path
-    config['model_inputs'] = {'input0': {"shape": [4, 1024],
-        "dtype": 'torch.int64',
-        "is_batched": True},
-            'input1': {"shape": [4, 1024],
-        "dtype": 'torch.int64',
-        "is_batched": True}}
-    config['model_outputs'] = {'GPT2LMHeadModel/aten::nll_loss4194': {"shape": [1],
-        "dtype": 'torch.float32',
-        "is_batched": False}}
+    config['model_inputs'] = {
+        'input0': {
+            "shape": [4, 1024],
+            "dtype": 'torch.int64',
+            "is_batched": True
+        },
+        'input1': {
+            "shape": [4, 1024],
+            "dtype": 'torch.int64',
+            "is_batched": True
+        }
+    }
+    config['model_outputs'] = {
+        'GPT2LMHeadModel/aten::nll_loss4194': {
+            "shape": [1],
+            "dtype": 'torch.float32',
+            "is_batched": False
+        }
+    }
     config['stages'] = stages
-    
+
     return config
 
+
 class Partition0(nn.Module):
-    SCOPES={
-            'GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wte]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wpe]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Dropout[drop]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_1]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_attn]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[attn_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[resid_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_2]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_fc]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Dropout[dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_1]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_attn]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[attn_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[resid_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_2]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_fc]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Dropout[dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_1]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_attn]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[attn_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[resid_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_2]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_fc]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Dropout[dropout]',
-        }
+    SCOPES = {
+        'GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wte]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wpe]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Dropout[drop]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_2]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Dropout[dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_2]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Dropout[dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_2]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Dropout[dropout]',
+    }
+
     def __init__(self, layers, tensors):
         super(Partition0, self).__init__()
         # initializing partition layers
-        self.scopes=[]
-        self.l_0 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wte]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wte]')
-        self.l_1 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wpe]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wpe]')
-        self.l_2 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Dropout[drop]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Dropout[drop]')
-        self.l_3 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_1]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_1]')
-        self.l_4 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_attn]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_attn]')
-        self.l_5 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[attn_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[attn_dropout]')
-        self.l_6 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_proj]')
-        self.l_7 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[resid_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[resid_dropout]')
-        self.l_8 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_2]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_2]')
-        self.l_9 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_fc]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_fc]')
-        self.l_10 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_proj]')
-        self.l_11 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Dropout[dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Dropout[dropout]')
-        self.l_12 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_1]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_1]')
-        self.l_13 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_attn]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_attn]')
-        self.l_14 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[attn_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[attn_dropout]')
-        self.l_15 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_proj]')
-        self.l_16 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[resid_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[resid_dropout]')
-        self.l_17 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_2]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_2]')
-        self.l_18 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_fc]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_fc]')
-        self.l_19 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_proj]')
-        self.l_20 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Dropout[dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Dropout[dropout]')
-        self.l_21 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_1]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_1]')
-        self.l_22 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_attn]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_attn]')
-        self.l_23 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[attn_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[attn_dropout]')
-        self.l_24 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_proj]')
-        self.l_25 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[resid_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[resid_dropout]')
-        self.l_26 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_2]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_2]')
-        self.l_27 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_fc]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_fc]')
-        self.l_28 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_proj]')
-        self.l_29 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Dropout[dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Dropout[dropout]')
+        self.scopes = []
+        self.l_0 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wte]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wte]')
+        self.l_1 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wpe]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wpe]')
+        self.l_2 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Dropout[drop]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Dropout[drop]')
+        self.l_3 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_1]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_1]')
+        self.l_4 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_attn]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_attn]'
+        )
+        self.l_5 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[attn_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[attn_dropout]'
+        )
+        self.l_6 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_proj]'
+        )
+        self.l_7 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[resid_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[resid_dropout]'
+        )
+        self.l_8 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_2]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_2]')
+        self.l_9 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_fc]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_fc]'
+        )
+        self.l_10 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_proj]'
+        )
+        self.l_11 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Dropout[dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Dropout[dropout]'
+        )
+        self.l_12 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_1]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_1]')
+        self.l_13 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_attn]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_attn]'
+        )
+        self.l_14 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[attn_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[attn_dropout]'
+        )
+        self.l_15 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_proj]'
+        )
+        self.l_16 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[resid_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[resid_dropout]'
+        )
+        self.l_17 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_2]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_2]')
+        self.l_18 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_fc]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_fc]'
+        )
+        self.l_19 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_proj]'
+        )
+        self.l_20 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Dropout[dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Dropout[dropout]'
+        )
+        self.l_21 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_1]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_1]')
+        self.l_22 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_attn]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_attn]'
+        )
+        self.l_23 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[attn_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[attn_dropout]'
+        )
+        self.l_24 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_proj]'
+        )
+        self.l_25 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[resid_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[resid_dropout]'
+        )
+        self.l_26 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_2]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_2]')
+        self.l_27 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_fc]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_fc]'
+        )
+        self.l_28 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_proj]'
+        )
+        self.l_29 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Dropout[dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Dropout[dropout]'
+        )
 
         # initializing partition buffers
-        self.register_buffer('b_0',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Tensor[bias]'])
-        self.register_buffer('b_1',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Tensor[bias]'])
-        self.register_buffer('b_2',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Tensor[bias]'])
+        self.register_buffer(
+            'b_0', tensors[
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Tensor[bias]']
+        )
+        self.register_buffer(
+            'b_1', tensors[
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Tensor[bias]']
+        )
+        self.register_buffer(
+            'b_2', tensors[
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Tensor[bias]']
+        )
 
         self.device = torch.device('cuda:0')
-        self.lookup = { 'l_0': 'transformer.wte',
-                        'l_1': 'transformer.wpe',
-                        'l_2': 'transformer.drop',
-                        'l_3': 'transformer.0.ln_1',
-                        'l_4': 'transformer.0.attn.c_attn',
-                        'l_5': 'transformer.0.attn.attn_dropout',
-                        'l_6': 'transformer.0.attn.c_proj',
-                        'l_7': 'transformer.0.attn.resid_dropout',
-                        'l_8': 'transformer.0.ln_2',
-                        'l_9': 'transformer.0.mlp.c_fc',
-                        'l_10': 'transformer.0.mlp.c_proj',
-                        'l_11': 'transformer.0.mlp.dropout',
-                        'l_12': 'transformer.1.ln_1',
-                        'l_13': 'transformer.1.attn.c_attn',
-                        'l_14': 'transformer.1.attn.attn_dropout',
-                        'l_15': 'transformer.1.attn.c_proj',
-                        'l_16': 'transformer.1.attn.resid_dropout',
-                        'l_17': 'transformer.1.ln_2',
-                        'l_18': 'transformer.1.mlp.c_fc',
-                        'l_19': 'transformer.1.mlp.c_proj',
-                        'l_20': 'transformer.1.mlp.dropout',
-                        'l_21': 'transformer.2.ln_1',
-                        'l_22': 'transformer.2.attn.c_attn',
-                        'l_23': 'transformer.2.attn.attn_dropout',
-                        'l_24': 'transformer.2.attn.c_proj',
-                        'l_25': 'transformer.2.attn.resid_dropout',
-                        'l_26': 'transformer.2.ln_2',
-                        'l_27': 'transformer.2.mlp.c_fc',
-                        'l_28': 'transformer.2.mlp.c_proj',
-                        'l_29': 'transformer.2.mlp.dropout',
-                        'b_0': 'transformer.0.attn.bias',
-                        'b_1': 'transformer.1.attn.bias',
-                        'b_2': 'transformer.2.attn.bias'}
+        self.lookup = {
+            'l_0': 'transformer.wte',
+            'l_1': 'transformer.wpe',
+            'l_2': 'transformer.drop',
+            'l_3': 'transformer.0.ln_1',
+            'l_4': 'transformer.0.attn.c_attn',
+            'l_5': 'transformer.0.attn.attn_dropout',
+            'l_6': 'transformer.0.attn.c_proj',
+            'l_7': 'transformer.0.attn.resid_dropout',
+            'l_8': 'transformer.0.ln_2',
+            'l_9': 'transformer.0.mlp.c_fc',
+            'l_10': 'transformer.0.mlp.c_proj',
+            'l_11': 'transformer.0.mlp.dropout',
+            'l_12': 'transformer.1.ln_1',
+            'l_13': 'transformer.1.attn.c_attn',
+            'l_14': 'transformer.1.attn.attn_dropout',
+            'l_15': 'transformer.1.attn.c_proj',
+            'l_16': 'transformer.1.attn.resid_dropout',
+            'l_17': 'transformer.1.ln_2',
+            'l_18': 'transformer.1.mlp.c_fc',
+            'l_19': 'transformer.1.mlp.c_proj',
+            'l_20': 'transformer.1.mlp.dropout',
+            'l_21': 'transformer.2.ln_1',
+            'l_22': 'transformer.2.attn.c_attn',
+            'l_23': 'transformer.2.attn.attn_dropout',
+            'l_24': 'transformer.2.attn.c_proj',
+            'l_25': 'transformer.2.attn.resid_dropout',
+            'l_26': 'transformer.2.ln_2',
+            'l_27': 'transformer.2.mlp.c_fc',
+            'l_28': 'transformer.2.mlp.c_proj',
+            'l_29': 'transformer.2.mlp.dropout',
+            'b_0': 'transformer.0.attn.bias',
+            'b_1': 'transformer.1.attn.bias',
+            'b_2': 'transformer.2.attn.bias'
+        }
 
     def forward(self, x0):
         # GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wte] <=> self.l_0
@@ -289,7 +499,12 @@ class Partition0(nn.Module):
         # GPT2LMHeadModel/GPT2Model[transformer]/prim::Constant4844
         # GPT2LMHeadModel/GPT2Model[transformer]/prim::Constant4846
         # GPT2LMHeadModel/GPT2Model[transformer]/prim::Constant4847
-        t_2 = torch.arange(start=0, end=t_2, step=1, dtype=torch.int64, device=self.device, requires_grad=False)
+        t_2 = torch.arange(start=0,
+                           end=t_2,
+                           step=1,
+                           dtype=torch.int64,
+                           device=self.device,
+                           requires_grad=False)
         # calling torch.unsqueeze with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/aten::arange4848
         # GPT2LMHeadModel/GPT2Model[transformer]/prim::Constant4849
@@ -331,15 +546,15 @@ class Partition0(nn.Module):
         t_5 = t_1[1]
         t_1 = t_1[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48740 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48740
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4877
         t_6 = t_4.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48740 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48740
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4881
         t_7 = t_4.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48740 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48740
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4885
         t_8 = t_4.size(dim=-1)
         # calling torch.div with arguments:
@@ -350,7 +565,7 @@ class Partition0(nn.Module):
         del t_7
         del t_6
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48740 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48740
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListConstruct4892
         t_8 = t_4.view(size=t_8)
         del t_4
@@ -361,15 +576,15 @@ class Partition0(nn.Module):
         t_4 = t_8.permute(dims=t_4)
         del t_8
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48741 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48741
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4900
         t_8 = t_5.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48741 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48741
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4904
         t_7 = t_5.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48741 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48741
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4908
         t_6 = t_5.size(dim=-1)
         # calling torch.div with arguments:
@@ -380,7 +595,7 @@ class Partition0(nn.Module):
         del t_7
         del t_8
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48741 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48741
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListConstruct4915
         t_6 = t_5.view(size=t_6)
         del t_5
@@ -391,15 +606,15 @@ class Partition0(nn.Module):
         t_5 = t_6.permute(dims=t_5)
         del t_6
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48742 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48742
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4923
         t_6 = t_1.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48742 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48742
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4927
         t_7 = t_1.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48742 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48742
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4931
         t_8 = t_1.size(dim=-1)
         # calling torch.div with arguments:
@@ -410,7 +625,7 @@ class Partition0(nn.Module):
         del t_7
         del t_6
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48742 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48742
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListConstruct4938
         t_8 = t_1.view(size=t_8)
         del t_1
@@ -616,15 +831,15 @@ class Partition0(nn.Module):
         t_1 = t_7[1]
         t_7 = t_7[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50580 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50580
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5061
         t_4 = t_2.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50580 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50580
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5065
         t_6 = t_2.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50580 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50580
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5069
         t_9 = t_2.size(dim=-1)
         # calling torch.div with arguments:
@@ -635,7 +850,7 @@ class Partition0(nn.Module):
         del t_6
         del t_4
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50580 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50580
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListConstruct5076
         t_9 = t_2.view(size=t_9)
         del t_2
@@ -646,15 +861,15 @@ class Partition0(nn.Module):
         t_2 = t_9.permute(dims=t_2)
         del t_9
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50581 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50581
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5084
         t_9 = t_1.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50581 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50581
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5088
         t_6 = t_1.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50581 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50581
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5092
         t_4 = t_1.size(dim=-1)
         # calling torch.div with arguments:
@@ -665,7 +880,7 @@ class Partition0(nn.Module):
         del t_6
         del t_9
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50581 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50581
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListConstruct5099
         t_4 = t_1.view(size=t_4)
         del t_1
@@ -676,15 +891,15 @@ class Partition0(nn.Module):
         t_1 = t_4.permute(dims=t_1)
         del t_4
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50582 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50582
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5107
         t_4 = t_7.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50582 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50582
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5111
         t_6 = t_7.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50582 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50582
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5115
         t_9 = t_7.size(dim=-1)
         # calling torch.div with arguments:
@@ -695,7 +910,7 @@ class Partition0(nn.Module):
         del t_6
         del t_4
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50582 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50582
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListConstruct5122
         t_9 = t_7.view(size=t_9)
         del t_7
@@ -901,15 +1116,15 @@ class Partition0(nn.Module):
         t_7 = t_6[1]
         t_6 = t_6[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52420 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52420
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5245
         t_2 = t_5.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52420 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52420
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5249
         t_4 = t_5.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52420 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52420
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5253
         t_10 = t_5.size(dim=-1)
         # calling torch.div with arguments:
@@ -920,7 +1135,7 @@ class Partition0(nn.Module):
         del t_4
         del t_2
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52420 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52420
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListConstruct5260
         t_10 = t_5.view(size=t_10)
         del t_5
@@ -931,15 +1146,15 @@ class Partition0(nn.Module):
         t_5 = t_10.permute(dims=t_5)
         del t_10
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52421 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52421
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5268
         t_10 = t_7.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52421 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52421
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5272
         t_4 = t_7.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52421 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52421
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5276
         t_2 = t_7.size(dim=-1)
         # calling torch.div with arguments:
@@ -950,7 +1165,7 @@ class Partition0(nn.Module):
         del t_4
         del t_10
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52421 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52421
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListConstruct5283
         t_2 = t_7.view(size=t_2)
         del t_7
@@ -961,15 +1176,15 @@ class Partition0(nn.Module):
         t_7 = t_2.permute(dims=t_7)
         del t_2
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52422 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52422
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5291
         t_2 = t_6.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52422 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52422
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5295
         t_4 = t_6.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52422 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52422
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5299
         t_10 = t_6.size(dim=-1)
         # calling torch.div with arguments:
@@ -980,7 +1195,7 @@ class Partition0(nn.Module):
         del t_4
         del t_2
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52422 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52422
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListConstruct5306
         t_10 = t_6.view(size=t_10)
         del t_6
@@ -1166,188 +1381,294 @@ class Partition0(nn.Module):
         # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Dropout[dropout] with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_proj]
         t_7 = self.l_29(t_7)
-                
+
         # returning:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Dropout[dropout]
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/aten::add5387
         return (t_7, t_4)
 
-    def state_dict(self,device=None):
+    def state_dict(self, device=None):
         # we return the state dict of this part as it should be in the original model
-        return state_dict(self,device=device)
+        return state_dict(self, device=device)
 
     def load_state_dict(self, state):
-        return load_state_dict(self,state)
+        return load_state_dict(self, state)
 
-    def named_parameters(self,recurse=True):
+    def named_parameters(self, recurse=True):
         # we return the named parameters of this part as it should be in the original model
-        return named_parameters(self,recurse=recurse)
+        return named_parameters(self, recurse=recurse)
 
-    def named_buffers(self,recurse=True):
+    def named_buffers(self, recurse=True):
         # we return the named buffers of this part as it should be in the original model
-        return named_buffers(self,recurse=recurse)
+        return named_buffers(self, recurse=recurse)
 
     def cpu(self):
         return cpu(self)
 
-    def cuda(self,device=None):
-        return cuda(self,device=device)
+    def cuda(self, device=None):
+        return cuda(self, device=device)
 
     def to(self, *args, **kwargs):
-        return to(self,*args,**kwargs)
+        return to(self, *args, **kwargs)
 
 
 class Partition1(nn.Module):
-    SCOPES={
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_1]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_attn]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[attn_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[resid_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_2]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_fc]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Dropout[dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_1]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_attn]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[attn_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[resid_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_2]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_fc]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Dropout[dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_1]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_attn]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[attn_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[resid_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_2]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_fc]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Dropout[dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_1]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_attn]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[attn_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[resid_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_2]',
-        }
+    SCOPES = {
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_2]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Dropout[dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_2]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Dropout[dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_2]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Dropout[dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_2]',
+    }
+
     def __init__(self, layers, tensors):
         super(Partition1, self).__init__()
         # initializing partition layers
-        self.scopes=[]
-        self.l_0 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_1]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_1]')
-        self.l_1 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_attn]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_attn]')
-        self.l_2 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[attn_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[attn_dropout]')
-        self.l_3 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_proj]')
-        self.l_4 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[resid_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[resid_dropout]')
-        self.l_5 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_2]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_2]')
-        self.l_6 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_fc]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_fc]')
-        self.l_7 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_proj]')
-        self.l_8 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Dropout[dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Dropout[dropout]')
-        self.l_9 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_1]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_1]')
-        self.l_10 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_attn]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_attn]')
-        self.l_11 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[attn_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[attn_dropout]')
-        self.l_12 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_proj]')
-        self.l_13 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[resid_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[resid_dropout]')
-        self.l_14 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_2]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_2]')
-        self.l_15 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_fc]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_fc]')
-        self.l_16 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_proj]')
-        self.l_17 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Dropout[dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Dropout[dropout]')
-        self.l_18 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_1]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_1]')
-        self.l_19 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_attn]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_attn]')
-        self.l_20 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[attn_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[attn_dropout]')
-        self.l_21 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_proj]')
-        self.l_22 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[resid_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[resid_dropout]')
-        self.l_23 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_2]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_2]')
-        self.l_24 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_fc]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_fc]')
-        self.l_25 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_proj]')
-        self.l_26 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Dropout[dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Dropout[dropout]')
-        self.l_27 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_1]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_1]')
-        self.l_28 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_attn]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_attn]')
-        self.l_29 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[attn_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[attn_dropout]')
-        self.l_30 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_proj]')
-        self.l_31 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[resid_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[resid_dropout]')
-        self.l_32 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_2]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_2]')
+        self.scopes = []
+        self.l_0 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_1]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_1]')
+        self.l_1 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_attn]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_attn]'
+        )
+        self.l_2 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[attn_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[attn_dropout]'
+        )
+        self.l_3 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_proj]'
+        )
+        self.l_4 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[resid_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[resid_dropout]'
+        )
+        self.l_5 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_2]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_2]')
+        self.l_6 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_fc]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_fc]'
+        )
+        self.l_7 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_proj]'
+        )
+        self.l_8 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Dropout[dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Dropout[dropout]'
+        )
+        self.l_9 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_1]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_1]')
+        self.l_10 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_attn]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_attn]'
+        )
+        self.l_11 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[attn_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[attn_dropout]'
+        )
+        self.l_12 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_proj]'
+        )
+        self.l_13 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[resid_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[resid_dropout]'
+        )
+        self.l_14 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_2]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_2]')
+        self.l_15 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_fc]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_fc]'
+        )
+        self.l_16 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_proj]'
+        )
+        self.l_17 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Dropout[dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Dropout[dropout]'
+        )
+        self.l_18 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_1]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_1]')
+        self.l_19 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_attn]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_attn]'
+        )
+        self.l_20 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[attn_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[attn_dropout]'
+        )
+        self.l_21 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_proj]'
+        )
+        self.l_22 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[resid_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[resid_dropout]'
+        )
+        self.l_23 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_2]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_2]')
+        self.l_24 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_fc]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_fc]'
+        )
+        self.l_25 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_proj]'
+        )
+        self.l_26 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Dropout[dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Dropout[dropout]'
+        )
+        self.l_27 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_1]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_1]')
+        self.l_28 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_attn]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_attn]'
+        )
+        self.l_29 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[attn_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[attn_dropout]'
+        )
+        self.l_30 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_proj]'
+        )
+        self.l_31 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[resid_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[resid_dropout]'
+        )
+        self.l_32 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_2]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_2]')
 
         # initializing partition buffers
-        self.register_buffer('b_0',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Tensor[bias]'])
-        self.register_buffer('b_1',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Tensor[bias]'])
-        self.register_buffer('b_2',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Tensor[bias]'])
-        self.register_buffer('b_3',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Tensor[bias]'])
+        self.register_buffer(
+            'b_0', tensors[
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Tensor[bias]']
+        )
+        self.register_buffer(
+            'b_1', tensors[
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Tensor[bias]']
+        )
+        self.register_buffer(
+            'b_2', tensors[
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Tensor[bias]']
+        )
+        self.register_buffer(
+            'b_3', tensors[
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Tensor[bias]']
+        )
 
         self.device = torch.device('cuda:1')
-        self.lookup = { 'l_0': 'transformer.3.ln_1',
-                        'l_1': 'transformer.3.attn.c_attn',
-                        'l_2': 'transformer.3.attn.attn_dropout',
-                        'l_3': 'transformer.3.attn.c_proj',
-                        'l_4': 'transformer.3.attn.resid_dropout',
-                        'l_5': 'transformer.3.ln_2',
-                        'l_6': 'transformer.3.mlp.c_fc',
-                        'l_7': 'transformer.3.mlp.c_proj',
-                        'l_8': 'transformer.3.mlp.dropout',
-                        'l_9': 'transformer.4.ln_1',
-                        'l_10': 'transformer.4.attn.c_attn',
-                        'l_11': 'transformer.4.attn.attn_dropout',
-                        'l_12': 'transformer.4.attn.c_proj',
-                        'l_13': 'transformer.4.attn.resid_dropout',
-                        'l_14': 'transformer.4.ln_2',
-                        'l_15': 'transformer.4.mlp.c_fc',
-                        'l_16': 'transformer.4.mlp.c_proj',
-                        'l_17': 'transformer.4.mlp.dropout',
-                        'l_18': 'transformer.5.ln_1',
-                        'l_19': 'transformer.5.attn.c_attn',
-                        'l_20': 'transformer.5.attn.attn_dropout',
-                        'l_21': 'transformer.5.attn.c_proj',
-                        'l_22': 'transformer.5.attn.resid_dropout',
-                        'l_23': 'transformer.5.ln_2',
-                        'l_24': 'transformer.5.mlp.c_fc',
-                        'l_25': 'transformer.5.mlp.c_proj',
-                        'l_26': 'transformer.5.mlp.dropout',
-                        'l_27': 'transformer.6.ln_1',
-                        'l_28': 'transformer.6.attn.c_attn',
-                        'l_29': 'transformer.6.attn.attn_dropout',
-                        'l_30': 'transformer.6.attn.c_proj',
-                        'l_31': 'transformer.6.attn.resid_dropout',
-                        'l_32': 'transformer.6.ln_2',
-                        'b_0': 'transformer.3.attn.bias',
-                        'b_1': 'transformer.4.attn.bias',
-                        'b_2': 'transformer.5.attn.bias',
-                        'b_3': 'transformer.6.attn.bias'}
+        self.lookup = {
+            'l_0': 'transformer.3.ln_1',
+            'l_1': 'transformer.3.attn.c_attn',
+            'l_2': 'transformer.3.attn.attn_dropout',
+            'l_3': 'transformer.3.attn.c_proj',
+            'l_4': 'transformer.3.attn.resid_dropout',
+            'l_5': 'transformer.3.ln_2',
+            'l_6': 'transformer.3.mlp.c_fc',
+            'l_7': 'transformer.3.mlp.c_proj',
+            'l_8': 'transformer.3.mlp.dropout',
+            'l_9': 'transformer.4.ln_1',
+            'l_10': 'transformer.4.attn.c_attn',
+            'l_11': 'transformer.4.attn.attn_dropout',
+            'l_12': 'transformer.4.attn.c_proj',
+            'l_13': 'transformer.4.attn.resid_dropout',
+            'l_14': 'transformer.4.ln_2',
+            'l_15': 'transformer.4.mlp.c_fc',
+            'l_16': 'transformer.4.mlp.c_proj',
+            'l_17': 'transformer.4.mlp.dropout',
+            'l_18': 'transformer.5.ln_1',
+            'l_19': 'transformer.5.attn.c_attn',
+            'l_20': 'transformer.5.attn.attn_dropout',
+            'l_21': 'transformer.5.attn.c_proj',
+            'l_22': 'transformer.5.attn.resid_dropout',
+            'l_23': 'transformer.5.ln_2',
+            'l_24': 'transformer.5.mlp.c_fc',
+            'l_25': 'transformer.5.mlp.c_proj',
+            'l_26': 'transformer.5.mlp.dropout',
+            'l_27': 'transformer.6.ln_1',
+            'l_28': 'transformer.6.attn.c_attn',
+            'l_29': 'transformer.6.attn.attn_dropout',
+            'l_30': 'transformer.6.attn.c_proj',
+            'l_31': 'transformer.6.attn.resid_dropout',
+            'l_32': 'transformer.6.ln_2',
+            'b_0': 'transformer.3.attn.bias',
+            'b_1': 'transformer.4.attn.bias',
+            'b_2': 'transformer.5.attn.bias',
+            'b_3': 'transformer.6.attn.bias'
+        }
 
     def forward(self, x0, x1):
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_1] <=> self.l_0
@@ -1415,15 +1736,15 @@ class Partition1(nn.Module):
         t_4 = t_1[1]
         t_1 = t_1[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54260 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54260
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5429
         t_5 = t_3.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54260 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54260
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5433
         t_6 = t_3.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54260 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54260
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5437
         t_7 = t_3.size(dim=-1)
         # calling torch.div with arguments:
@@ -1434,7 +1755,7 @@ class Partition1(nn.Module):
         del t_6
         del t_5
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54260 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54260
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListConstruct5444
         t_7 = t_3.view(size=t_7)
         del t_3
@@ -1445,15 +1766,15 @@ class Partition1(nn.Module):
         t_3 = t_7.permute(dims=t_3)
         del t_7
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54261 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54261
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5452
         t_7 = t_4.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54261 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54261
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5456
         t_6 = t_4.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54261 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54261
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5460
         t_5 = t_4.size(dim=-1)
         # calling torch.div with arguments:
@@ -1464,7 +1785,7 @@ class Partition1(nn.Module):
         del t_6
         del t_7
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54261 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54261
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListConstruct5467
         t_5 = t_4.view(size=t_5)
         del t_4
@@ -1475,15 +1796,15 @@ class Partition1(nn.Module):
         t_4 = t_5.permute(dims=t_4)
         del t_5
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54262 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54262
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5475
         t_5 = t_1.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54262 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54262
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5479
         t_6 = t_1.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54262 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54262
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5483
         t_7 = t_1.size(dim=-1)
         # calling torch.div with arguments:
@@ -1494,7 +1815,7 @@ class Partition1(nn.Module):
         del t_6
         del t_5
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54262 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54262
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListConstruct5490
         t_7 = t_1.view(size=t_7)
         del t_1
@@ -1700,15 +2021,15 @@ class Partition1(nn.Module):
         t_1 = t_6[1]
         t_6 = t_6[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56100 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56100
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5613
         t_3 = t_0.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56100 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56100
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5617
         t_5 = t_0.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56100 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56100
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5621
         t_8 = t_0.size(dim=-1)
         # calling torch.div with arguments:
@@ -1719,7 +2040,7 @@ class Partition1(nn.Module):
         del t_5
         del t_3
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56100 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56100
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListConstruct5628
         t_8 = t_0.view(size=t_8)
         del t_0
@@ -1730,15 +2051,15 @@ class Partition1(nn.Module):
         t_0 = t_8.permute(dims=t_0)
         del t_8
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56101 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56101
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5636
         t_8 = t_1.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56101 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56101
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5640
         t_5 = t_1.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56101 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56101
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5644
         t_3 = t_1.size(dim=-1)
         # calling torch.div with arguments:
@@ -1749,7 +2070,7 @@ class Partition1(nn.Module):
         del t_5
         del t_8
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56101 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56101
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListConstruct5651
         t_3 = t_1.view(size=t_3)
         del t_1
@@ -1760,15 +2081,15 @@ class Partition1(nn.Module):
         t_1 = t_3.permute(dims=t_1)
         del t_3
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56102 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56102
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5659
         t_3 = t_6.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56102 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56102
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5663
         t_5 = t_6.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56102 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56102
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5667
         t_8 = t_6.size(dim=-1)
         # calling torch.div with arguments:
@@ -1779,7 +2100,7 @@ class Partition1(nn.Module):
         del t_5
         del t_3
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56102 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56102
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListConstruct5674
         t_8 = t_6.view(size=t_8)
         del t_6
@@ -1985,15 +2306,15 @@ class Partition1(nn.Module):
         t_6 = t_5[1]
         t_5 = t_5[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57940 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57940
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5797
         t_0 = t_4.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57940 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57940
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5801
         t_3 = t_4.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57940 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57940
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5805
         t_9 = t_4.size(dim=-1)
         # calling torch.div with arguments:
@@ -2004,7 +2325,7 @@ class Partition1(nn.Module):
         del t_3
         del t_0
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57940 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57940
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListConstruct5812
         t_9 = t_4.view(size=t_9)
         del t_4
@@ -2015,15 +2336,15 @@ class Partition1(nn.Module):
         t_4 = t_9.permute(dims=t_4)
         del t_9
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57941 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57941
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5820
         t_9 = t_6.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57941 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57941
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5824
         t_3 = t_6.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57941 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57941
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5828
         t_0 = t_6.size(dim=-1)
         # calling torch.div with arguments:
@@ -2034,7 +2355,7 @@ class Partition1(nn.Module):
         del t_3
         del t_9
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57941 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57941
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListConstruct5835
         t_0 = t_6.view(size=t_0)
         del t_6
@@ -2045,15 +2366,15 @@ class Partition1(nn.Module):
         t_6 = t_0.permute(dims=t_6)
         del t_0
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57942 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57942
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5843
         t_0 = t_5.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57942 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57942
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5847
         t_3 = t_5.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57942 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57942
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5851
         t_9 = t_5.size(dim=-1)
         # calling torch.div with arguments:
@@ -2064,7 +2385,7 @@ class Partition1(nn.Module):
         del t_3
         del t_0
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57942 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57942
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListConstruct5858
         t_9 = t_5.view(size=t_9)
         del t_5
@@ -2270,15 +2591,15 @@ class Partition1(nn.Module):
         t_5 = t_3[1]
         t_3 = t_3[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59780 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59780
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant5981
         t_4 = t_1.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59780 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59780
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant5985
         t_0 = t_1.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59780 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59780
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant5989
         t_10 = t_1.size(dim=-1)
         # calling torch.div with arguments:
@@ -2289,7 +2610,7 @@ class Partition1(nn.Module):
         del t_0
         del t_4
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59780 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59780
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListConstruct5996
         t_10 = t_1.view(size=t_10)
         del t_1
@@ -2300,15 +2621,15 @@ class Partition1(nn.Module):
         t_1 = t_10.permute(dims=t_1)
         del t_10
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59781 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59781
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6004
         t_10 = t_5.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59781 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59781
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6008
         t_0 = t_5.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59781 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59781
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6012
         t_4 = t_5.size(dim=-1)
         # calling torch.div with arguments:
@@ -2319,7 +2640,7 @@ class Partition1(nn.Module):
         del t_0
         del t_10
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59781 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59781
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListConstruct6019
         t_4 = t_5.view(size=t_4)
         del t_5
@@ -2330,15 +2651,15 @@ class Partition1(nn.Module):
         t_5 = t_4.permute(dims=t_5)
         del t_4
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59782 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59782
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6027
         t_4 = t_3.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59782 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59782
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6031
         t_0 = t_3.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59782 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59782
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6035
         t_10 = t_3.size(dim=-1)
         # calling torch.div with arguments:
@@ -2349,7 +2670,7 @@ class Partition1(nn.Module):
         del t_0
         del t_4
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59782 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59782
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListConstruct6042
         t_10 = t_3.view(size=t_10)
         del t_3
@@ -2493,174 +2814,270 @@ class Partition1(nn.Module):
         # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_2] with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/aten::add6123
         t_6 = self.l_32(t_0)
-                
+
         # returning:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_2]
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/aten::add6123
         return (t_6, t_0)
 
-    def state_dict(self,device=None):
+    def state_dict(self, device=None):
         # we return the state dict of this part as it should be in the original model
-        return state_dict(self,device=device)
+        return state_dict(self, device=device)
 
     def load_state_dict(self, state):
-        return load_state_dict(self,state)
+        return load_state_dict(self, state)
 
-    def named_parameters(self,recurse=True):
+    def named_parameters(self, recurse=True):
         # we return the named parameters of this part as it should be in the original model
-        return named_parameters(self,recurse=recurse)
+        return named_parameters(self, recurse=recurse)
 
-    def named_buffers(self,recurse=True):
+    def named_buffers(self, recurse=True):
         # we return the named buffers of this part as it should be in the original model
-        return named_buffers(self,recurse=recurse)
+        return named_buffers(self, recurse=recurse)
 
     def cpu(self):
         return cpu(self)
 
-    def cuda(self,device=None):
-        return cuda(self,device=device)
+    def cuda(self, device=None):
+        return cuda(self, device=device)
 
     def to(self, *args, **kwargs):
-        return to(self,*args,**kwargs)
+        return to(self, *args, **kwargs)
 
 
 class Partition2(nn.Module):
-    SCOPES={
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_fc]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Dropout[dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_1]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_attn]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[attn_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[resid_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_2]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_fc]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Dropout[dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_1]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_attn]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[attn_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[resid_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_2]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_fc]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Dropout[dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_1]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_attn]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[attn_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[resid_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_2]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_fc]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Dropout[dropout]',
-        }
+    SCOPES = {
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Dropout[dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_2]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Dropout[dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_2]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Dropout[dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_2]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Dropout[dropout]',
+    }
+
     def __init__(self, layers, tensors):
         super(Partition2, self).__init__()
         # initializing partition layers
-        self.scopes=[]
-        self.l_0 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_fc]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_fc]')
-        self.l_1 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_proj]')
-        self.l_2 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Dropout[dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Dropout[dropout]')
-        self.l_3 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_1]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_1]')
-        self.l_4 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_attn]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_attn]')
-        self.l_5 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[attn_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[attn_dropout]')
-        self.l_6 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_proj]')
-        self.l_7 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[resid_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[resid_dropout]')
-        self.l_8 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_2]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_2]')
-        self.l_9 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_fc]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_fc]')
-        self.l_10 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_proj]')
-        self.l_11 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Dropout[dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Dropout[dropout]')
-        self.l_12 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_1]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_1]')
-        self.l_13 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_attn]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_attn]')
-        self.l_14 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[attn_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[attn_dropout]')
-        self.l_15 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_proj]')
-        self.l_16 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[resid_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[resid_dropout]')
-        self.l_17 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_2]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_2]')
-        self.l_18 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_fc]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_fc]')
-        self.l_19 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_proj]')
-        self.l_20 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Dropout[dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Dropout[dropout]')
-        self.l_21 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_1]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_1]')
-        self.l_22 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_attn]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_attn]')
-        self.l_23 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[attn_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[attn_dropout]')
-        self.l_24 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_proj]')
-        self.l_25 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[resid_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[resid_dropout]')
-        self.l_26 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_2]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_2]')
-        self.l_27 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_fc]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_fc]')
-        self.l_28 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_proj]')
-        self.l_29 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Dropout[dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Dropout[dropout]')
+        self.scopes = []
+        self.l_0 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_fc]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_fc]'
+        )
+        self.l_1 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_proj]'
+        )
+        self.l_2 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Dropout[dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Dropout[dropout]'
+        )
+        self.l_3 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_1]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_1]')
+        self.l_4 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_attn]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_attn]'
+        )
+        self.l_5 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[attn_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[attn_dropout]'
+        )
+        self.l_6 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_proj]'
+        )
+        self.l_7 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[resid_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[resid_dropout]'
+        )
+        self.l_8 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_2]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_2]')
+        self.l_9 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_fc]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_fc]'
+        )
+        self.l_10 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_proj]'
+        )
+        self.l_11 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Dropout[dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Dropout[dropout]'
+        )
+        self.l_12 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_1]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_1]')
+        self.l_13 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_attn]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_attn]'
+        )
+        self.l_14 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[attn_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[attn_dropout]'
+        )
+        self.l_15 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_proj]'
+        )
+        self.l_16 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[resid_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[resid_dropout]'
+        )
+        self.l_17 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_2]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_2]')
+        self.l_18 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_fc]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_fc]'
+        )
+        self.l_19 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_proj]'
+        )
+        self.l_20 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Dropout[dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Dropout[dropout]'
+        )
+        self.l_21 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_1]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_1]')
+        self.l_22 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_attn]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_attn]'
+        )
+        self.l_23 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[attn_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[attn_dropout]'
+        )
+        self.l_24 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_proj]'
+        )
+        self.l_25 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[resid_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[resid_dropout]'
+        )
+        self.l_26 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_2]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_2]')
+        self.l_27 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_fc]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_fc]'
+        )
+        self.l_28 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_proj]'
+        )
+        self.l_29 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Dropout[dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Dropout[dropout]'
+        )
 
         # initializing partition buffers
-        self.register_buffer('b_0',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Tensor[bias]'])
-        self.register_buffer('b_1',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Tensor[bias]'])
-        self.register_buffer('b_2',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Tensor[bias]'])
+        self.register_buffer(
+            'b_0', tensors[
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Tensor[bias]']
+        )
+        self.register_buffer(
+            'b_1', tensors[
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Tensor[bias]']
+        )
+        self.register_buffer(
+            'b_2', tensors[
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Tensor[bias]']
+        )
 
         self.device = torch.device('cuda:2')
-        self.lookup = { 'l_0': 'transformer.6.mlp.c_fc',
-                        'l_1': 'transformer.6.mlp.c_proj',
-                        'l_2': 'transformer.6.mlp.dropout',
-                        'l_3': 'transformer.7.ln_1',
-                        'l_4': 'transformer.7.attn.c_attn',
-                        'l_5': 'transformer.7.attn.attn_dropout',
-                        'l_6': 'transformer.7.attn.c_proj',
-                        'l_7': 'transformer.7.attn.resid_dropout',
-                        'l_8': 'transformer.7.ln_2',
-                        'l_9': 'transformer.7.mlp.c_fc',
-                        'l_10': 'transformer.7.mlp.c_proj',
-                        'l_11': 'transformer.7.mlp.dropout',
-                        'l_12': 'transformer.8.ln_1',
-                        'l_13': 'transformer.8.attn.c_attn',
-                        'l_14': 'transformer.8.attn.attn_dropout',
-                        'l_15': 'transformer.8.attn.c_proj',
-                        'l_16': 'transformer.8.attn.resid_dropout',
-                        'l_17': 'transformer.8.ln_2',
-                        'l_18': 'transformer.8.mlp.c_fc',
-                        'l_19': 'transformer.8.mlp.c_proj',
-                        'l_20': 'transformer.8.mlp.dropout',
-                        'l_21': 'transformer.9.ln_1',
-                        'l_22': 'transformer.9.attn.c_attn',
-                        'l_23': 'transformer.9.attn.attn_dropout',
-                        'l_24': 'transformer.9.attn.c_proj',
-                        'l_25': 'transformer.9.attn.resid_dropout',
-                        'l_26': 'transformer.9.ln_2',
-                        'l_27': 'transformer.9.mlp.c_fc',
-                        'l_28': 'transformer.9.mlp.c_proj',
-                        'l_29': 'transformer.9.mlp.dropout',
-                        'b_0': 'transformer.7.attn.bias',
-                        'b_1': 'transformer.8.attn.bias',
-                        'b_2': 'transformer.9.attn.bias'}
+        self.lookup = {
+            'l_0': 'transformer.6.mlp.c_fc',
+            'l_1': 'transformer.6.mlp.c_proj',
+            'l_2': 'transformer.6.mlp.dropout',
+            'l_3': 'transformer.7.ln_1',
+            'l_4': 'transformer.7.attn.c_attn',
+            'l_5': 'transformer.7.attn.attn_dropout',
+            'l_6': 'transformer.7.attn.c_proj',
+            'l_7': 'transformer.7.attn.resid_dropout',
+            'l_8': 'transformer.7.ln_2',
+            'l_9': 'transformer.7.mlp.c_fc',
+            'l_10': 'transformer.7.mlp.c_proj',
+            'l_11': 'transformer.7.mlp.dropout',
+            'l_12': 'transformer.8.ln_1',
+            'l_13': 'transformer.8.attn.c_attn',
+            'l_14': 'transformer.8.attn.attn_dropout',
+            'l_15': 'transformer.8.attn.c_proj',
+            'l_16': 'transformer.8.attn.resid_dropout',
+            'l_17': 'transformer.8.ln_2',
+            'l_18': 'transformer.8.mlp.c_fc',
+            'l_19': 'transformer.8.mlp.c_proj',
+            'l_20': 'transformer.8.mlp.dropout',
+            'l_21': 'transformer.9.ln_1',
+            'l_22': 'transformer.9.attn.c_attn',
+            'l_23': 'transformer.9.attn.attn_dropout',
+            'l_24': 'transformer.9.attn.c_proj',
+            'l_25': 'transformer.9.attn.resid_dropout',
+            'l_26': 'transformer.9.ln_2',
+            'l_27': 'transformer.9.mlp.c_fc',
+            'l_28': 'transformer.9.mlp.c_proj',
+            'l_29': 'transformer.9.mlp.dropout',
+            'b_0': 'transformer.7.attn.bias',
+            'b_1': 'transformer.8.attn.bias',
+            'b_2': 'transformer.9.attn.bias'
+        }
 
     def forward(self, x0, x1):
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_fc] <=> self.l_0
@@ -2766,15 +3183,15 @@ class Partition2(nn.Module):
         t_4 = t_1[1]
         t_1 = t_1[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61620 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61620
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6165
         t_5 = t_3.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61620 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61620
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6169
         t_6 = t_3.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61620 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61620
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6173
         t_7 = t_3.size(dim=-1)
         # calling torch.div with arguments:
@@ -2785,7 +3202,7 @@ class Partition2(nn.Module):
         del t_6
         del t_5
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61620 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61620
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListConstruct6180
         t_7 = t_3.view(size=t_7)
         del t_3
@@ -2796,15 +3213,15 @@ class Partition2(nn.Module):
         t_3 = t_7.permute(dims=t_3)
         del t_7
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61621 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61621
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6188
         t_7 = t_4.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61621 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61621
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6192
         t_6 = t_4.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61621 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61621
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6196
         t_5 = t_4.size(dim=-1)
         # calling torch.div with arguments:
@@ -2815,7 +3232,7 @@ class Partition2(nn.Module):
         del t_6
         del t_7
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61621 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61621
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListConstruct6203
         t_5 = t_4.view(size=t_5)
         del t_4
@@ -2826,15 +3243,15 @@ class Partition2(nn.Module):
         t_4 = t_5.permute(dims=t_4)
         del t_5
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61622 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61622
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6211
         t_5 = t_1.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61622 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61622
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6215
         t_6 = t_1.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61622 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61622
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6219
         t_7 = t_1.size(dim=-1)
         # calling torch.div with arguments:
@@ -2845,7 +3262,7 @@ class Partition2(nn.Module):
         del t_6
         del t_5
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61622 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61622
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListConstruct6226
         t_7 = t_1.view(size=t_7)
         del t_1
@@ -3051,15 +3468,15 @@ class Partition2(nn.Module):
         t_1 = t_6[1]
         t_6 = t_6[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63460 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63460
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6349
         t_3 = t_2.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63460 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63460
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6353
         t_5 = t_2.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63460 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63460
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6357
         t_8 = t_2.size(dim=-1)
         # calling torch.div with arguments:
@@ -3070,7 +3487,7 @@ class Partition2(nn.Module):
         del t_5
         del t_3
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63460 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63460
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListConstruct6364
         t_8 = t_2.view(size=t_8)
         del t_2
@@ -3081,15 +3498,15 @@ class Partition2(nn.Module):
         t_2 = t_8.permute(dims=t_2)
         del t_8
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63461 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63461
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6372
         t_8 = t_1.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63461 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63461
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6376
         t_5 = t_1.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63461 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63461
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6380
         t_3 = t_1.size(dim=-1)
         # calling torch.div with arguments:
@@ -3100,7 +3517,7 @@ class Partition2(nn.Module):
         del t_5
         del t_8
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63461 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63461
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListConstruct6387
         t_3 = t_1.view(size=t_3)
         del t_1
@@ -3111,15 +3528,15 @@ class Partition2(nn.Module):
         t_1 = t_3.permute(dims=t_1)
         del t_3
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63462 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63462
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6395
         t_3 = t_6.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63462 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63462
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6399
         t_5 = t_6.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63462 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63462
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6403
         t_8 = t_6.size(dim=-1)
         # calling torch.div with arguments:
@@ -3130,7 +3547,7 @@ class Partition2(nn.Module):
         del t_5
         del t_3
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63462 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63462
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListConstruct6410
         t_8 = t_6.view(size=t_8)
         del t_6
@@ -3336,15 +3753,15 @@ class Partition2(nn.Module):
         t_6 = t_5[1]
         t_5 = t_5[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65300 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65300
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6533
         t_2 = t_4.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65300 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65300
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6537
         t_3 = t_4.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65300 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65300
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6541
         t_9 = t_4.size(dim=-1)
         # calling torch.div with arguments:
@@ -3355,7 +3772,7 @@ class Partition2(nn.Module):
         del t_3
         del t_2
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65300 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65300
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListConstruct6548
         t_9 = t_4.view(size=t_9)
         del t_4
@@ -3366,15 +3783,15 @@ class Partition2(nn.Module):
         t_4 = t_9.permute(dims=t_4)
         del t_9
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65301 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65301
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6556
         t_9 = t_6.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65301 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65301
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6560
         t_3 = t_6.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65301 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65301
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6564
         t_2 = t_6.size(dim=-1)
         # calling torch.div with arguments:
@@ -3385,7 +3802,7 @@ class Partition2(nn.Module):
         del t_3
         del t_9
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65301 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65301
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListConstruct6571
         t_2 = t_6.view(size=t_2)
         del t_6
@@ -3396,15 +3813,15 @@ class Partition2(nn.Module):
         t_6 = t_2.permute(dims=t_6)
         del t_2
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65302 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65302
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6579
         t_2 = t_5.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65302 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65302
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6583
         t_3 = t_5.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65302 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65302
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6587
         t_9 = t_5.size(dim=-1)
         # calling torch.div with arguments:
@@ -3415,7 +3832,7 @@ class Partition2(nn.Module):
         del t_3
         del t_2
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65302 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65302
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListConstruct6594
         t_9 = t_5.view(size=t_9)
         del t_5
@@ -3601,132 +4018,193 @@ class Partition2(nn.Module):
         # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Dropout[dropout] with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_proj]
         t_6 = self.l_29(t_6)
-                
+
         # returning:
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Dropout[dropout]
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/aten::add6675
         return (t_6, t_3)
 
-    def state_dict(self,device=None):
+    def state_dict(self, device=None):
         # we return the state dict of this part as it should be in the original model
-        return state_dict(self,device=device)
+        return state_dict(self, device=device)
 
     def load_state_dict(self, state):
-        return load_state_dict(self,state)
+        return load_state_dict(self, state)
 
-    def named_parameters(self,recurse=True):
+    def named_parameters(self, recurse=True):
         # we return the named parameters of this part as it should be in the original model
-        return named_parameters(self,recurse=recurse)
+        return named_parameters(self, recurse=recurse)
 
-    def named_buffers(self,recurse=True):
+    def named_buffers(self, recurse=True):
         # we return the named buffers of this part as it should be in the original model
-        return named_buffers(self,recurse=recurse)
+        return named_buffers(self, recurse=recurse)
 
     def cpu(self):
         return cpu(self)
 
-    def cuda(self,device=None):
-        return cuda(self,device=device)
+    def cuda(self, device=None):
+        return cuda(self, device=device)
 
     def to(self, *args, **kwargs):
-        return to(self,*args,**kwargs)
+        return to(self, *args, **kwargs)
 
 
 class Partition3(nn.Module):
-    SCOPES={
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_1]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_attn]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[attn_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[resid_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_2]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_fc]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Dropout[dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_1]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_attn]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[attn_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[resid_dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_2]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_fc]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_proj]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Dropout[dropout]',
-            'GPT2LMHeadModel/GPT2Model[transformer]/LayerNorm[ln_f]',
-            'GPT2LMHeadModel/Linear[lm_head]',
-        }
+    SCOPES = {
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_2]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Dropout[dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_2]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Dropout[dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/LayerNorm[ln_f]',
+        'GPT2LMHeadModel/Linear[lm_head]',
+    }
+
     def __init__(self, layers, tensors):
         super(Partition3, self).__init__()
         # initializing partition layers
-        self.scopes=[]
-        self.l_0 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_1]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_1]')
-        self.l_1 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_attn]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_attn]')
-        self.l_2 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[attn_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[attn_dropout]')
-        self.l_3 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_proj]')
-        self.l_4 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[resid_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[resid_dropout]')
-        self.l_5 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_2]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_2]')
-        self.l_6 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_fc]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_fc]')
-        self.l_7 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_proj]')
-        self.l_8 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Dropout[dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Dropout[dropout]')
-        self.l_9 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_1]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_1]')
-        self.l_10 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_attn]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_attn]')
-        self.l_11 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[attn_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[attn_dropout]')
-        self.l_12 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_proj]')
-        self.l_13 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[resid_dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[resid_dropout]')
-        self.l_14 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_2]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_2]')
-        self.l_15 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_fc]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_fc]')
-        self.l_16 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_proj]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_proj]')
-        self.l_17 = layers['GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Dropout[dropout]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Dropout[dropout]')
-        self.l_18 = layers['GPT2LMHeadModel/GPT2Model[transformer]/LayerNorm[ln_f]']
-        self.scopes.append('GPT2LMHeadModel/GPT2Model[transformer]/LayerNorm[ln_f]')
+        self.scopes = []
+        self.l_0 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_1]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_1]')
+        self.l_1 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_attn]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_attn]'
+        )
+        self.l_2 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[attn_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[attn_dropout]'
+        )
+        self.l_3 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_proj]'
+        )
+        self.l_4 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[resid_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[resid_dropout]'
+        )
+        self.l_5 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_2]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_2]')
+        self.l_6 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_fc]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_fc]'
+        )
+        self.l_7 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_proj]'
+        )
+        self.l_8 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Dropout[dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Dropout[dropout]'
+        )
+        self.l_9 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_1]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_1]')
+        self.l_10 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_attn]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_attn]'
+        )
+        self.l_11 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[attn_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[attn_dropout]'
+        )
+        self.l_12 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_proj]'
+        )
+        self.l_13 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[resid_dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[resid_dropout]'
+        )
+        self.l_14 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_2]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_2]')
+        self.l_15 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_fc]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_fc]'
+        )
+        self.l_16 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_proj]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_proj]'
+        )
+        self.l_17 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Dropout[dropout]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Dropout[dropout]'
+        )
+        self.l_18 = layers[
+            'GPT2LMHeadModel/GPT2Model[transformer]/LayerNorm[ln_f]']
+        self.scopes.append(
+            'GPT2LMHeadModel/GPT2Model[transformer]/LayerNorm[ln_f]')
         self.l_19 = layers['GPT2LMHeadModel/Linear[lm_head]']
         self.scopes.append('GPT2LMHeadModel/Linear[lm_head]')
 
         # initializing partition buffers
-        self.register_buffer('b_0',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Tensor[bias]'])
-        self.register_buffer('b_1',tensors['GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Tensor[bias]'])
+        self.register_buffer(
+            'b_0', tensors[
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Tensor[bias]']
+        )
+        self.register_buffer(
+            'b_1', tensors[
+                'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Tensor[bias]']
+        )
 
         self.device = torch.device('cuda:3')
-        self.lookup = { 'l_0': 'transformer.10.ln_1',
-                        'l_1': 'transformer.10.attn.c_attn',
-                        'l_2': 'transformer.10.attn.attn_dropout',
-                        'l_3': 'transformer.10.attn.c_proj',
-                        'l_4': 'transformer.10.attn.resid_dropout',
-                        'l_5': 'transformer.10.ln_2',
-                        'l_6': 'transformer.10.mlp.c_fc',
-                        'l_7': 'transformer.10.mlp.c_proj',
-                        'l_8': 'transformer.10.mlp.dropout',
-                        'l_9': 'transformer.11.ln_1',
-                        'l_10': 'transformer.11.attn.c_attn',
-                        'l_11': 'transformer.11.attn.attn_dropout',
-                        'l_12': 'transformer.11.attn.c_proj',
-                        'l_13': 'transformer.11.attn.resid_dropout',
-                        'l_14': 'transformer.11.ln_2',
-                        'l_15': 'transformer.11.mlp.c_fc',
-                        'l_16': 'transformer.11.mlp.c_proj',
-                        'l_17': 'transformer.11.mlp.dropout',
-                        'l_18': 'transformer.ln_f',
-                        'l_19': 'lm_head',
-                        'b_0': 'transformer.10.attn.bias',
-                        'b_1': 'transformer.11.attn.bias'}
+        self.lookup = {
+            'l_0': 'transformer.10.ln_1',
+            'l_1': 'transformer.10.attn.c_attn',
+            'l_2': 'transformer.10.attn.attn_dropout',
+            'l_3': 'transformer.10.attn.c_proj',
+            'l_4': 'transformer.10.attn.resid_dropout',
+            'l_5': 'transformer.10.ln_2',
+            'l_6': 'transformer.10.mlp.c_fc',
+            'l_7': 'transformer.10.mlp.c_proj',
+            'l_8': 'transformer.10.mlp.dropout',
+            'l_9': 'transformer.11.ln_1',
+            'l_10': 'transformer.11.attn.c_attn',
+            'l_11': 'transformer.11.attn.attn_dropout',
+            'l_12': 'transformer.11.attn.c_proj',
+            'l_13': 'transformer.11.attn.resid_dropout',
+            'l_14': 'transformer.11.ln_2',
+            'l_15': 'transformer.11.mlp.c_fc',
+            'l_16': 'transformer.11.mlp.c_proj',
+            'l_17': 'transformer.11.mlp.dropout',
+            'l_18': 'transformer.ln_f',
+            'l_19': 'lm_head',
+            'b_0': 'transformer.10.attn.bias',
+            'b_1': 'transformer.11.attn.bias'
+        }
 
     def forward(self, x0, x1, x2):
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_1] <=> self.l_0
@@ -3781,15 +4259,15 @@ class Partition3(nn.Module):
         t_5 = t_2[1]
         t_2 = t_2[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67140 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67140
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6717
         t_6 = t_4.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67140 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67140
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6721
         t_7 = t_4.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67140 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67140
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6725
         t_8 = t_4.size(dim=-1)
         # calling torch.div with arguments:
@@ -3800,7 +4278,7 @@ class Partition3(nn.Module):
         del t_7
         del t_6
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67140 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67140
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListConstruct6732
         t_8 = t_4.view(size=t_8)
         del t_4
@@ -3811,15 +4289,15 @@ class Partition3(nn.Module):
         t_4 = t_8.permute(dims=t_4)
         del t_8
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67141 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67141
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6740
         t_8 = t_5.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67141 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67141
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6744
         t_7 = t_5.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67141 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67141
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6748
         t_6 = t_5.size(dim=-1)
         # calling torch.div with arguments:
@@ -3830,7 +4308,7 @@ class Partition3(nn.Module):
         del t_7
         del t_8
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67141 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67141
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListConstruct6755
         t_6 = t_5.view(size=t_6)
         del t_5
@@ -3841,15 +4319,15 @@ class Partition3(nn.Module):
         t_5 = t_6.permute(dims=t_5)
         del t_6
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67142 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67142
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6763
         t_6 = t_2.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67142 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67142
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6767
         t_7 = t_2.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67142 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67142
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6771
         t_8 = t_2.size(dim=-1)
         # calling torch.div with arguments:
@@ -3860,7 +4338,7 @@ class Partition3(nn.Module):
         del t_7
         del t_6
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67142 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67142
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListConstruct6778
         t_8 = t_2.view(size=t_8)
         del t_2
@@ -4066,15 +4544,15 @@ class Partition3(nn.Module):
         t_2 = t_7[1]
         t_7 = t_7[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68980 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68980
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6901
         t_4 = t_1.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68980 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68980
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6905
         t_6 = t_1.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68980 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68980
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6909
         t_9 = t_1.size(dim=-1)
         # calling torch.div with arguments:
@@ -4085,7 +4563,7 @@ class Partition3(nn.Module):
         del t_6
         del t_4
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68980 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68980
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListConstruct6916
         t_9 = t_1.view(size=t_9)
         del t_1
@@ -4096,15 +4574,15 @@ class Partition3(nn.Module):
         t_1 = t_9.permute(dims=t_1)
         del t_9
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68981 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68981
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6924
         t_9 = t_2.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68981 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68981
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6928
         t_6 = t_2.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68981 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68981
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6932
         t_4 = t_2.size(dim=-1)
         # calling torch.div with arguments:
@@ -4115,7 +4593,7 @@ class Partition3(nn.Module):
         del t_6
         del t_9
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68981 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68981
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListConstruct6939
         t_4 = t_2.view(size=t_4)
         del t_2
@@ -4126,15 +4604,15 @@ class Partition3(nn.Module):
         t_2 = t_4.permute(dims=t_2)
         del t_4
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68982 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68982
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6947
         t_4 = t_7.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68982 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68982
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6951
         t_6 = t_7.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68982 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68982
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6955
         t_9 = t_7.size(dim=-1)
         # calling torch.div with arguments:
@@ -4145,7 +4623,7 @@ class Partition3(nn.Module):
         del t_6
         del t_4
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68982 
+        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68982
         # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListConstruct6962
         t_9 = t_7.view(size=t_9)
         del t_7
@@ -4397,40 +4875,48 @@ class Partition3(nn.Module):
         # GPT2LMHeadModel/prim::Constant4191
         # GPT2LMHeadModel/prim::Constant4192
         # GPT2LMHeadModel/prim::Constant4193
-        t_2 = F.nll_loss(input=t_9, target=t_2, weight=None, reduction = 'mean', ignore_index=-100)
+        t_2 = F.nll_loss(input=t_9,
+                         target=t_2,
+                         weight=None,
+                         reduction='mean',
+                         ignore_index=-100)
         del t_9
-                
+
         # returning:
         # GPT2LMHeadModel/aten::nll_loss4194
-        return (t_2,)
+        return (t_2, )
 
-    def state_dict(self,device=None):
+    def state_dict(self, device=None):
         # we return the state dict of this part as it should be in the original model
-        return state_dict(self,device=device)
+        return state_dict(self, device=device)
 
     def load_state_dict(self, state):
-        return load_state_dict(self,state)
+        return load_state_dict(self, state)
 
-    def named_parameters(self,recurse=True):
+    def named_parameters(self, recurse=True):
         # we return the named parameters of this part as it should be in the original model
-        return named_parameters(self,recurse=recurse)
+        return named_parameters(self, recurse=recurse)
 
-    def named_buffers(self,recurse=True):
+    def named_buffers(self, recurse=True):
         # we return the named buffers of this part as it should be in the original model
-        return named_buffers(self,recurse=recurse)
+        return named_buffers(self, recurse=recurse)
 
     def cpu(self):
         return cpu(self)
 
-    def cuda(self,device=None):
-        return cuda(self,device=device)
+    def cuda(self, device=None):
+        return cuda(self, device=device)
 
     def to(self, *args, **kwargs):
-        return to(self,*args,**kwargs)
+        return to(self, *args, **kwargs)
 
 
-def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
-                   basic_blocks: Tuple[nn.Module] = (), full: bool = False) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
+def traverse_model(
+        module: nn.Module,
+        depth: int,
+        prefix: Optional[str] = None,
+        basic_blocks: Tuple[nn.Module] = (),
+        full: bool = False) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
     '''
     iterate over model layers yielding the layer,layer_scope,encasing_module
     Parameters:
@@ -4449,19 +4935,28 @@ def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
 
     for name, sub_module in module.named_children():
         scope = prefix + "/" + type(sub_module).__name__ + f"[{name}]"
-        if len(list(sub_module.children())) == 0 or isinstance(sub_module, tuple(basic_blocks)) or depth == 0:
+        if len(list(sub_module.children())) == 0 or isinstance(
+                sub_module, tuple(basic_blocks)) or depth == 0:
             yield sub_module, scope, module
         else:
             if full:
                 yield sub_module, scope, module
-            yield from traverse_model(sub_module, depth - 1, scope, basic_blocks, full)
+            yield from traverse_model(sub_module, depth - 1, scope,
+                                      basic_blocks, full)
 
 
-def layerDict(model: nn.Module, depth=1000, basic_blocks=None) -> Dict[str, nn.Module]:
-    return {s: l for l, s, _ in traverse_model(model, depth, basic_blocks=basic_blocks)}
+def layerDict(model: nn.Module,
+              depth=1000,
+              basic_blocks=None) -> Dict[str, nn.Module]:
+    return {
+        s: l
+        for l, s, _ in traverse_model(model, depth, basic_blocks=basic_blocks)
+    }
 
 
-def traverse_params_buffs(module: nn.Module, prefix: Optional[str] = None) -> Iterator[Tuple[torch.tensor, str]]:
+def traverse_params_buffs(
+        module: nn.Module,
+        prefix: Optional[str] = None) -> Iterator[Tuple[torch.tensor, str]]:
     '''
     iterate over model's buffers and parameters yielding obj,obj_scope
 
@@ -4485,11 +4980,13 @@ def traverse_params_buffs(module: nn.Module, prefix: Optional[str] = None) -> It
 
     # recurse
     for name, sub_module in module.named_children():
-        yield from traverse_params_buffs(sub_module, prefix + "/" + type(sub_module).__name__ + f"[{name}]")
+        yield from traverse_params_buffs(
+            sub_module, prefix + "/" + type(sub_module).__name__ + f"[{name}]")
 
 
 def tensorDict(model: nn.Module) -> OrderedDict[str, Tensor]:
-    return collections.OrderedDict((s, t)for t, s in traverse_params_buffs(model))
+    return collections.OrderedDict(
+        (s, t) for t, s in traverse_params_buffs(model))
 
 
 def state_dict(partition, device=None):
@@ -4579,6 +5076,7 @@ def to(partition, *args, **kwargs):
     if not (device is None):
         partition.device = torch.device(device)
     return nn.Module.to(partition, *args, **kwargs)
+
 
 """analysis summary
 -I- Printing Report
