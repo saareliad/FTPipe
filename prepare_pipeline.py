@@ -427,7 +427,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         partition_cls = GPipePartitionManager
     else:
         partition_cls = SinglePartitionManager
-        
+
     if args.is_multiprocessing_worker:
         # multiprocessing communication handler
         COMM_VERSION = 2
@@ -611,26 +611,28 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
                         "gap_aware_just_loss works only with recomputation on")
 
     # Init the partition manager itself, warping the model and loading it to device.
-    partition = partition_cls(
-        args.stage,
-        args.num_stages,
-        model,
-        comm_handler,
-        work_scheduler,
-        device,
-        is_last_partition,
-        is_first_partition,
-        log_frequency=args.log_frequency,
-        step_every=args.step_every,
-        use_recomputation=(not args.no_recomputation),
-        gap_aware_just_loss=gap_aware_just_loss,
-        use_pre_loaded_label_input=getattr(args, "use_pre_loaded_label_input",
-                                           False),
-        weight_stashing_just_for_stats=getattr(
-            args, "weight_stashing_just_for_stats", False),
-        stateless_tied=getattr(args, "stateless_tied", False),
-        is_mp=args.is_multiprocessing_worker
-    )
+    partition = partition_cls(args.stage,
+                              args.num_stages,
+                              model,
+                              comm_handler,
+                              work_scheduler,
+                              device,
+                              is_last_partition,
+                              is_first_partition,
+                              log_frequency=args.log_frequency,
+                              step_every=args.step_every,
+                              use_recomputation=(not args.no_recomputation),
+                              gap_aware_just_loss=gap_aware_just_loss,
+                              use_pre_loaded_label_input=getattr(
+                                  args, "use_pre_loaded_label_input", False),
+                              weight_stashing_just_for_stats=getattr(
+                                  args, "weight_stashing_just_for_stats",
+                                  False),
+                              stateless_tied=getattr(args, "stateless_tied",
+                                                     False),
+                              is_mp=args.is_multiprocessing_worker,
+                              req_grad=parsed_config.req_grad,
+                              outputs_req_grad=parsed_config.outputs_req_grad)
 
     # support for simulating stage replication (dev)
     if hasattr(args, "ddp_sim_num_gpus") and args.ddp_sim_num_gpus > 1:

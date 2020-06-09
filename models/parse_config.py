@@ -173,10 +173,24 @@ class PartitioningConfigParser:
         self.training_tensor_dtypes = self.eval_tensor_dtypes = pipe_config.all_dtypes(
         )
 
+        # Grad requirements for input tensors
+        self.req_grad = pipe_config.stages[self.stage].req_grad
+
+        # Grad requirements for input tensors (infer)
+        outputs_req_grad = dict()
+        my_outputs = pipe_config.stages[self.stage].outputs
+        for i, stage in pipe_config.stages.items():
+            for name, r in stage.req_grad.items():
+                if name in my_outputs:
+                    outputs_req_grad[name] = r
+
+        self.outputs_req_grad = outputs_req_grad
+
     def comm_init_args(self):
         return (self.receive_ranks, self.send_ranks, self.tensor_tags,
                 self.target_tensor_names, self.ranks_in_previous_stage,
-                self.ranks_in_next_stage, self.TOTAL_TAGS)
+                self.ranks_in_next_stage, self.TOTAL_TAGS, self.req_grad,
+                self.outputs_req_grad)
 
     def get_shapes(self, batch_size):
         pipe_config = self.pipe_config

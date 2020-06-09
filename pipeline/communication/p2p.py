@@ -2,6 +2,9 @@ import torch
 import torch.distributed as dist
 from .grouper import grouper
 from .common_simple_comm import SimpleCommBase
+from functools import partial
+
+filter_none = partial(filter, lambda t: t is not None)
 
 
 class P2PCommunicationHandler(SimpleCommBase):
@@ -80,6 +83,7 @@ class P2PCommunicationHandler(SimpleCommBase):
                                       False)
 
     def send_gradients(self, x, batch_idx):
+        x = filter_none(x)
         return self._send_tensors_p2p(x, batch_idx, self.grad_send_items, True)
 
     def fix_after_recv(self, x):

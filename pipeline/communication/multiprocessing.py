@@ -4,6 +4,9 @@ from .interface import FuturesHandlerBase
 import torch
 from collections import defaultdict
 import concurrent
+from functools import partial
+
+filter_none = partial(filter, lambda t: t is not None)
 
 
 def is_shared_parameter(tensor_scope):
@@ -305,6 +308,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         return future
 
     def send_gradients(self, x, batch_idx):
+        x = filter_none(x)
         future = self.pool_send_grad.submit(self._send_tensors_p2p, x,
                                             batch_idx, self.grad_send_items,
                                             True)

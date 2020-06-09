@@ -30,26 +30,26 @@ DEBUG_FAKE_DRAW = False
 class SinglePartitionManager:
     PROBLEMATIC_POLICY = 'SAME'
 
-    def __init__(
-        self,
-        stage,
-        num_stages,
-        partition: torch.nn.Module,
-        comm_handler: CommunicationHandlerBase,
-        work_scheduler: WorkScheduler,
-        device,
-        is_last_partition,
-        is_first_partition,
-        log_frequency=100,
-        step_every=1,
-        use_recomputation=True,
-        gap_aware_just_loss=False,
-        sync_buffers=False,
-        use_pre_loaded_label_input=False,
-        weight_stashing_just_for_stats=False,
-        stateless_tied=False,
-        is_mp=False,
-    ):
+    def __init__(self,
+                 stage,
+                 num_stages,
+                 partition: torch.nn.Module,
+                 comm_handler: CommunicationHandlerBase,
+                 work_scheduler: WorkScheduler,
+                 device,
+                 is_last_partition,
+                 is_first_partition,
+                 log_frequency=100,
+                 step_every=1,
+                 use_recomputation=True,
+                 gap_aware_just_loss=False,
+                 sync_buffers=False,
+                 use_pre_loaded_label_input=False,
+                 weight_stashing_just_for_stats=False,
+                 stateless_tied=False,
+                 is_mp=False,
+                 req_grad=None,
+                 outputs_req_grad=None):
 
         if (gap_aware_just_loss and (not use_recomputation)):
             raise NotImplementedError(
@@ -68,7 +68,8 @@ class SinglePartitionManager:
         self.num_stages = num_stages
         self.step_every = step_every
         self.work_scheduler = work_scheduler(step_every)
-        self._init_partition(partition, use_recomputation, is_mp)
+        self._init_partition(partition, use_recomputation, is_mp, req_grad,
+                             outputs_req_grad)
         if hasattr(comm_handler, "init_ddp_context"):
             ddp = comm_handler.init_ddp_context(self.partition.layers)
             self.partition.layers = ddp
@@ -116,7 +117,8 @@ class SinglePartitionManager:
         self.weight_stasher: WeightStasher
         self.true_weights_storage: TrueWeightsStorage
 
-    def _init_partition(self, partition, use_recomputation, is_mp):
+    def _init_partition(self, partition, use_recomputation, is_mp, req_grad,
+                        outputs_req_grad):
         TO_DEVICE = False
         is_last_partition = self.is_last_partition
         is_first_partition = self.is_first_partition
@@ -133,26 +135,37 @@ class SinglePartitionManager:
                 partition_cls = Partition
             self.partition = partition_cls(partition,
                                            device,
-                                           to_device=TO_DEVICE)
+                                           to_device=TO_DEVICE,
+                                           req_grad=req_grad,
+                                           outputs_req_grad=outputs_req_grad)
         else:
             # Partition without recomputation
             if is_last_partition:
                 partition_cls = LastPartition if not use_pre_loaded_label_input else LastPartitionWithLabelInput
-                self.partition = partition_cls(partition,
-                                               device,
-                                               to_device=TO_DEVICE)
+                self.partition = partition_cls(
+                    partition,
+                    device,
+                    to_device=TO_DEVICE,
+                    req_grad=req_grad,
+                    outputs_req_grad=outputs_req_grad)
             elif is_first_partition:
                 partition_cls = PartitionWithoutRecomputation
-                self.partition = partition_cls(partition,
-                                               device,
-                                               to_device=TO_DEVICE,
-                                               _REQ_GRAD=False)
+                self.partition = partition_cls(
+                    partition,
+                    device,
+                    to_device=TO_DEVICE,
+                    _REQ_GRAD=False,
+                    req_grad=req_grad,
+                    outputs_req_grad=outputs_req_grad)
             else:
                 partition_cls = PartitionWithoutRecomputation
-                self.partition = partition_cls(partition,
-                                               device,
-                                               to_device=TO_DEVICE,
-                                               _REQ_GRAD=True)
+                self.partition = partition_cls(
+                    partition,
+                    device,
+                    to_device=TO_DEVICE,
+                    _REQ_GRAD=True,
+                    req_grad=req_grad,
+                    outputs_req_grad=outputs_req_grad)
         if is_mp:
             # We do the clone ourself.
             # if hasattr(partition_cls, "_CLONE_INPUTS"):
@@ -662,7 +675,8 @@ class GPipePartitionManager(SinglePartitionManager):
         # assert "GPIPE" in self.work_scheduler
         # step_every
 
-    def _init_partition(self, partition, use_recomputation):
+    def _init_partition(self, partition, use_recomputation, req_grad,
+                        outputs_req_grad):
         # NOTE: it will be called from super().__init__
         TO_DEVICE = False
         is_last_partition = self.is_last_partition
@@ -683,7 +697,9 @@ class GPipePartitionManager(SinglePartitionManager):
                 partition_cls = GPipePartition
             self.partition = partition_cls(partition,
                                            device,
-                                           to_device=TO_DEVICE)
+                                           to_device=TO_DEVICE,
+                                           req_grad=req_grad,
+                                           outputs_req_grad=outputs_req_grad)
         else:
             # Partition without recomputation
             # NOTE: its pretty stupied to use GPIPE in this case.
@@ -948,8 +964,7 @@ class GPipePartitionManager(SinglePartitionManager):
                 micro_batch_to_run = done_fwds - 1 - done_bwds
                 batch_idx_to_run = mark_bwd_start + micro_batch_to_run
 
-                ro = run_batch_backward(
-                    batch_idx_to_run, num_batches)
+                ro = run_batch_backward(batch_idx_to_run, num_batches)
                 futures_handler.after_backward(ro, done_fwds)
 
                 done_bwds += 1

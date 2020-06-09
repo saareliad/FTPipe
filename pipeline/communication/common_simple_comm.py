@@ -26,6 +26,8 @@ class SimpleCommBase(CommunicationHandlerBase):
             ranks_in_previous_stage,  # TODO: Remove these
             ranks_in_next_stage,  # TODO: Remove these
             TOTAL_TAGS,
+            req_grad,
+            outputs_req_grad,
             cpu,
             num_chunks,
             device,
@@ -44,8 +46,23 @@ class SimpleCommBase(CommunicationHandlerBase):
         self.send_ranks = send_ranks
         self.tensor_tags = tensor_tags
         self.TOTAL_TAGS = TOTAL_TAGS
+        # self.req_grad = req_grad  # inputs require grads
 
+        # Do not calculate and send gradients for tensors which do not req grad.
         self.tensors_names_with_no_grad = set()
+        for i, v in req_grad.items():
+            if not v:
+                self.tensors_names_with_no_grad.add(i)
+        # Do not receive gradients for tensors which do not req grad.
+        for i, v in outputs_req_grad.items():
+            if not v:
+                self.tensors_names_with_no_grad.add(i)
+
+        # Assert intersection is empty
+        A = set(outputs_req_grad.keys())
+        B = set(req_grad.keys())
+        intersection = A & B
+        assert not intersection
 
         # Optional
         if target_tensor_names:
