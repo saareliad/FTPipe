@@ -258,7 +258,7 @@ def get_separate_just_x_or_y_train_test_dl(dataset,
         # 'wt2': get_wt2_just_x_or_y_train_valid_ds
     }
 
-    ds_train, ds_test = DICT_DATASET_JUST_XY_FUNC.get(dataset)(
+    ds_train, ds_test, *extra = DICT_DATASET_JUST_XY_FUNC.get(dataset)(
         just=just, DATA_DIR=DATA_DIR, **dataset_keywords)
 
     # Note: choosing None will infer these args from torch.distributed calls.
@@ -294,4 +294,8 @@ def get_separate_just_x_or_y_train_test_dl(dataset,
             f'Test: {len(dl_test) * bs_test  if dl_test is not None else 0} samples'
         )
 
-    return dl_train, dl_test, list(filter(None, [train_sampler, test_sampler]))
+    if extra:
+        assert len(extra) == 1
+        extra = extra[0]
+    
+    return dl_train, dl_test, list(filter(None, [train_sampler, test_sampler])), extra

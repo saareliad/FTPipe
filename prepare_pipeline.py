@@ -272,6 +272,9 @@ def get_dataloaders(args, explicit_separated_dataset=False, **kw):
     elif 'squad' in args.task:
         tokenizer = kw.pop('tokenizer')
         overwrite_cache = getattr(args, 'overwrite_cache', False)
+
+        version_2_with_negative = args.task == 'squad2' 
+
         dataset_keywords = dict(
             model_name_or_path=args.model_name_or_path,
             tokenizer=tokenizer,
@@ -279,24 +282,51 @@ def get_dataloaders(args, explicit_separated_dataset=False, **kw):
             doc_stride=args.doc_stride,
             max_query_length=args.max_query_length,
             threads=args.threads,
-            version_2_with_negative=args.task == 'squad2',
+            version_2_with_negative=version_2_with_negative,
             save=True,  # TODO: according to Ranks for stage replication
             # NOTE: deleted
             # train_seq_len=args.train_seq_len,
             # test_seq_len=args.test_seq_len,
             overwrite_cache=overwrite_cache)
+
+        # For evaluate
+        n_best_size = getattr(args, "n_best_size", 20)
+        max_answer_length = getattr(args, "max_answer_length", 30)
+        do_lower_case = getattr(args, "do_lower_case", False)
+        verbose_logging = getattr(args, "verbose_logging", False)
+        # FIXME: using version_2_with_negative to check for squad2
+        # version_2_with_negative = getattr(args, "version_2_with_negative",
+        #                                   False)
+        null_score_diff_threshold = getattr(args, "null_score_diff_threshold",
+                                            0.0)
+        model_type = getattr(args, "model_type")
+        output_dir = getattr(args, "output_dir")
+        d = dict(n_best_size=n_best_size,
+                 max_answer_length=max_answer_length,
+                 do_lower_case=do_lower_case,
+                 verbose_logging=verbose_logging,
+                 version_2_with_negative=version_2_with_negative,
+                 null_score_diff_threshold=null_score_diff_threshold,
+                 model_type=model_type,
+                 output_dir=output_dir
+                 )
+
+        dataset_keywords.update(d)
+
     else:
         dataset_keywords = {}
 
     if explicit_separated_dataset:
-        train_dl, test_dl, samplers = get_separate_just_x_or_y_train_test_dl_from_args(
+        train_dl, test_dl, samplers, extra = get_separate_just_x_or_y_train_test_dl_from_args(
             args, verbose=False, dataset_keywords=dataset_keywords, **dl_kw)
     else:
         # Note: sometimes used to infer all parameters, (by all partitions).
         train_dl, test_dl, *samplers = simplified_get_train_valid_dl_from_args(
             args, verbose=False, dataset_keywords=dataset_keywords, **dl_kw)
+        # TODO: support extra
+        extra = None
 
-    return train_dl, test_dl, samplers
+    return train_dl, test_dl, samplers, extra
 
 
 def get_just_test_dataloader(args, explicit_separated_dataset=False, **kw):
@@ -502,12 +532,12 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     if is_first_partition or is_last_partition:
         explicit_separated_dataset = "_sep" in args.task
 
-        train_dl, test_dl, samplers = get_dataloaders(
+        train_dl, test_dl, samplers, extra = get_dataloaders(
             args,
             explicit_separated_dataset=explicit_separated_dataset,
             **dataset_keywords)
     else:
-        train_dl, test_dl, samplers = None, None, []
+        train_dl, test_dl, samplers, extra = None, None, [], None
     del dataset_keywords
 
     # instead of loading dl on every device,
@@ -713,6 +743,9 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     else:
         gap_aware = None
         trainer = trainer_cls(**trainer_kwds)
+
+    if extra:
+        extra(trainer)
 
     partition.set_trainer(trainer)
     partition.set_lr_scheduler(scheduler)

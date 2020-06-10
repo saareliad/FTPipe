@@ -5,6 +5,7 @@ from multiprocessing import Pool, cpu_count
 
 from tqdm import tqdm
 
+import types
 import torch
 from torch.utils.data import TensorDataset
 
@@ -18,6 +19,26 @@ from transformers.data.metrics.squad_metrics import (
     compute_predictions_logits,
     squad_evaluate,
 )
+from types import SimpleNamespace
+
+
+def train_just(just, DATA_DIR, **kw):
+    train_ds = load_and_cache_examples_just_x_or_y(just=just,
+                                                   DATA_DIR=DATA_DIR,
+                                                   evaluate=False,
+                                                   output_examples=False,
+                                                   **kw)
+    return train_ds
+
+
+def dev_just(just, DATA_DIR, **kw):
+    dev_ds, examples, features = load_and_cache_examples_just_x_or_y(
+        just=just,
+        DATA_DIR=DATA_DIR,
+        evaluate=True,
+        output_examples=True,
+        **kw)
+    return dev_ds, examples, features
 
 
 def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
@@ -35,12 +56,35 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
         evaluate=True,
         output_examples=True,
         **kw)
-    # TODO: find a way to also return (examples, features)
-    # withut breaking the code. they will be needed for evaluation
-    # see: evaluate(...)
-    return train_ds, dev_ds
+
+    # extra = (examples, features)
+
+    tokenizer = kw['tokenizer']
+    # TODO: config = kw['config']
+    args = SimpleNamespace(**kw)
+
+    partial_evaluate = partial(evaluate, examples, features, tokenizer, args)
+
+    def evaluate_squad(self):
+        global_step = self.fit_res.num_epochs  # TODO
+        result = partial_evaluate(self.all_results, prefix=global_step)
+        result = dict(
+            (k + ("_{}".format(global_step) if global_step else ""), v)
+            for k, v in result.items())
+        if 'results' not in self.fit_res:
+            self.fit_res['results'] = dict()
+        self.fit_res['results'].update(result)
+
+    def set_features(trainer):
+        trainer.features = features
+        trainer.statistics.evaluate_squad = types.MethodType(
+            evaluate_squad, trainer.statistics)
+
+    # NOTE: (examples, features) are needed for evaluation
+    return train_ds, dev_ds, set_features
 
 
+# FIXME: using version_2_with_negative to check for squad2
 def get_squad_dir(DATA_DIR, version_2_with_negative: bool):
     # See downaload_dataset.py script.
     if version_2_with_negative:
@@ -50,6 +94,7 @@ def get_squad_dir(DATA_DIR, version_2_with_negative: bool):
     return res
 
 
+# FIXME: using version_2_with_negative to check for squad2
 def get_train_file(squad_dir, version_2_with_negative):
     # See downaload_dataset.py script.
     if version_2_with_negative:
@@ -59,6 +104,7 @@ def get_train_file(squad_dir, version_2_with_negative):
     return res
 
 
+# FIXME: using version_2_with_negative to check for squad2
 def get_predict_file(squad_dir, version_2_with_negative):
     # See downaload_dataset.py script.
     if version_2_with_negative:
@@ -68,6 +114,7 @@ def get_predict_file(squad_dir, version_2_with_negative):
     return res
 
 
+# FIXME: using version_2_with_negative to check for squad2
 def make_examples(DATA_DIR, train_file, predict_file, evaluate,
                   version_2_with_negative):
     """ In case we not loading them """
@@ -82,19 +129,20 @@ def make_examples(DATA_DIR, train_file, predict_file, evaluate,
 
 
 def load_and_cache_examples_just_x_or_y(
-    just,
-    model_name_or_path,  # NOTE: this is just for cache file name
-    max_seq_length,
-    doc_stride,
-    max_query_length,
-    threads,
-    tokenizer,
-    DATA_DIR,
-    evaluate=False,
-    output_examples=False,
-    overwrite_cache=True,
-    save=False,  # Ranks
-    version_2_with_negative=False,
+        just,
+        model_name_or_path,  # NOTE: this is just for cache file name
+        max_seq_length,
+        doc_stride,
+        max_query_length,
+        threads,
+        tokenizer,
+        DATA_DIR,
+        evaluate=False,
+        output_examples=False,
+        overwrite_cache=True,
+        save=False,  # Ranks
+        version_2_with_negative=False,
+        **kw  # hacky and uneeeded but whatever
 ):
 
     # Load data features from cache or dataset file
@@ -125,6 +173,7 @@ def load_and_cache_examples_just_x_or_y(
             features_and_dataset["dataset"],
             features_and_dataset["examples"],
         )
+        save = False
     else:
         # generate them ourselves.
         examples = make_examples(DATA_DIR, train_file, predict_file, evaluate,
@@ -265,21 +314,23 @@ def squad_convert_examples_to_features_just_x_or_y(just,
     # if return_dataset == "pt":
     # Convert to Tensors and build dataset
     all_input_ids = torch.tensor([f.input_ids for f in features],
-                                    dtype=torch.long)
-    all_attention_masks = torch.tensor(
-        [f.attention_mask for f in features], dtype=torch.long)
+                                 dtype=torch.long)
+    all_attention_masks = torch.tensor([f.attention_mask for f in features],
+                                       dtype=torch.long)
     all_token_type_ids = torch.tensor([f.token_type_ids for f in features],
-                                        dtype=torch.long)
+                                      dtype=torch.long)
 
     all_cls_index = torch.tensor(
-        [f.cls_index for f in features],
-        dtype=torch.long) if do_all_cls_index else None
+        [f.cls_index
+         for f in features], dtype=torch.long) if do_all_cls_index else None
     all_p_mask = torch.tensor([f.p_mask for f in features],
-                                dtype=torch.float) if do_all_p_mask else None
+                              dtype=torch.float) if do_all_p_mask else None
     all_is_impossible = torch.tensor(
         [f.is_impossible for f in features],
         dtype=torch.float) if do_all_is_impossible else None
 
+    # TODO: better dtypes can help..
+    all_example_index = torch.arange(all_input_ids.size(0), dtype=torch.long)
     if not is_training:
         if just == 'x':
             # We load just the model inputs
@@ -291,8 +342,8 @@ def squad_convert_examples_to_features_just_x_or_y(just,
                     all_attention_masks,
                     all_token_type_ids,
                     # all_example_index,
-                    all_cls_index,
-                    all_p_mask
+                    all_cls_index,  # its None for bert
+                    all_p_mask  # its None for bert
                 ]))
         elif just == 'y':
             #  we load just example indices.
@@ -303,10 +354,17 @@ def squad_convert_examples_to_features_just_x_or_y(just,
             # TODO: use transformers.data.processors.squad.compute_predictions_logits after eval epoch
             # and output_examples=True in last partition
             # see:  squad_convert_examples_to_features_just_x_or_y...
-            all_example_index = torch.arange(all_input_ids.size(0),
-                                                dtype=torch.long)
 
-            dataset = TensorDataset(all_example_index)
+            all_start_positions = torch.tensor(
+                [f.start_position for f in features], dtype=torch.long)
+            all_end_positions = torch.tensor(
+                [f.end_position for f in features], dtype=torch.long)
+
+            all_example_index = torch.arange(all_input_ids.size(0),
+                                             dtype=torch.long)
+
+            dataset = TensorDataset(all_start_positions, all_end_positions,
+                                    all_example_index)
             # TODO: solve the fact that we use jit therefore the model may be differnt in train and eval..
 
             #
@@ -354,9 +412,9 @@ def squad_convert_examples_to_features_just_x_or_y(just,
 def evaluate(
         examples,
         features,
-        all_results,
-        args,
         tokenizer,
+        args,
+        all_results,
         config=None,  # TODO: its transformers.config...
         prefix=""):
     """ Called after we have all results
@@ -442,7 +500,7 @@ if __name__ == "__main__":
     )
 
     train_ds = load_and_cache_examples_just_x_or_y(
-        just='x',
+        just='y',
         model_name_or_path=model_name_or_path,
         max_seq_length=384,
         doc_stride=128,
@@ -450,10 +508,9 @@ if __name__ == "__main__":
         threads=80,
         tokenizer=tokenizer,
         DATA_DIR="/home_local/saareliad/data",
-        evaluate=False,
+        evaluate=True,
         output_examples=False,
         overwrite_cache=False,
         save=False,  # Ranks
         version_2_with_negative=False,
     )
-

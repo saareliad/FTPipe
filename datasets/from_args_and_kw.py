@@ -25,7 +25,8 @@ def get_separate_just_x_or_y_train_test_dl_from_args(args, **kw):
     DATA_DIR = DATA_DIR if DATA_DIR else DEFAULT_DATA_DIR
 
     # Just:
-    # HACK: avoid asking "is last partition?"
+    # HACK: avoid asking "is last partition?"  
+    # FIXME: need to ask that for comined IntraLayer and Pipeline.
     just = 'x' if args.stage == 0 else 'y'
 
     # num_replicas=None, rank=None

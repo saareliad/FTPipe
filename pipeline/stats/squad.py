@@ -18,6 +18,14 @@ class SquadStats(Stats):
 
         self.record_loss_per_batch = record_loss_per_batch
 
+        # Squad results
+        self.all_results = []
+
+    def last_partition_on_epoch_end(self):
+        super().last_partition_on_epoch_end()
+        if not self.training:
+            self.evaluate_squad()  # FIXME: set by dataset
+
     def get_epoch_info_str(self, is_train):
         # FIXME: in per-batch-loss it returns value for the last batch instead of for epoch!
         if is_train:
