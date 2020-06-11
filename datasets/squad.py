@@ -65,15 +65,22 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
 
     partial_evaluate = partial(evaluate, examples, features, tokenizer, args)
 
+    def getitem(t):
+        try:
+            res = t.item()
+        except:
+            res = t
+        return res
+
     def evaluate_squad(self):
         global_step = self.fit_res.num_epochs  # TODO
         result = partial_evaluate(self.all_results, prefix=global_step)
         result = dict(
-            (k + ("_{}".format(global_step) if global_step else ""), v)
+            (k + ("_{}".format(global_step) if global_step else ""), getitem(v))
             for k, v in result.items())
-        if 'results' not in self.fit_res:
-            self.fit_res['results'] = dict()
-        self.fit_res['results'].update(result)
+        if not hasattr(self.fit_res, 'squad_results'):
+            self.fit_res.squad_results = dict()
+        self.fit_res.squad_results.update(result)
 
     def set_features(trainer):
         trainer.features = features
@@ -420,6 +427,7 @@ def evaluate(
     """ Called after we have all results
         TODO: replace args?
     """
+    print("Evaluating Squad on CPU")
 
     # dataset, examples, features = load_and_cache_examples(args, tokenizer, evaluate=True, output_examples=True)
 
