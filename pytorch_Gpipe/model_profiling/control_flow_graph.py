@@ -36,8 +36,10 @@ class Node():
 
         self.tensor_dtype = None
         self.tensor_shape = None
+        self.req_grad = False
 
         self.constant_value = None
+
 
     def add_kwarg(self, kwarg, kwarg_node):
         self.kwargs[kwarg_node] = kwarg

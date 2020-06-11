@@ -231,7 +231,6 @@ if __name__ == "__main__":
     config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
 
     pipe_config = PipelineConfig.fromDict(config)
-    pipe_config.toJson(f"{args.output_file}.json")
 
     if not (args.no_test_run and args.no_analysis):
         depth = pipe_config.depth

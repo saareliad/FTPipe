@@ -295,7 +295,6 @@ def partition_model(args,
     config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
 
     pipe_config = PipelineConfig.fromDict(config)
-    pipe_config.toJson(f"{args.output_file}.json")
 
     bw = args.bw
 
