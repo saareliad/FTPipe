@@ -41,6 +41,17 @@ def dev_just(just, DATA_DIR, **kw):
     return dev_ds, examples, features
 
 
+def getitem(t):
+    if isinstance(t, dict):
+        res = {i: getitem(v) for i, v in t.items()}
+    else:
+        try:
+            res = t.item()
+        except:
+            res = t
+    return res
+
+
 def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
     """ get x or y datset. """
     # NOTE: called with just=just, DATA_DIR=DATA_DIR, **dataset_keywords
@@ -65,22 +76,16 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
 
     partial_evaluate = partial(evaluate, examples, features, tokenizer, args)
 
-    def getitem(t):
-        try:
-            res = t.item()
-        except:
-            res = t
-        return res
-
     def evaluate_squad(self):
         global_step = self.fit_res.num_epochs  # TODO
         result = partial_evaluate(self.all_results, prefix=global_step)
-        result = dict(
+        print(dict(
             (k + ("_{}".format(global_step) if global_step else ""), getitem(v))
-            for k, v in result.items())
+            for k, v in result.items()))
         if not hasattr(self.fit_res, 'squad_results'):
             self.fit_res.squad_results = dict()
-        self.fit_res.squad_results.update(result)
+
+        self.fit_res.squad_results[global_step] = getitem(result)
 
     def set_features(trainer):
         trainer.features = features

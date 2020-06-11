@@ -88,7 +88,7 @@ class SquadTrainer(BaseOutPutIsLossTrainer):
 
         # NOTE: we include loss for dev, huggingface does not
         loss = SQUAD_loss(x, start_positions, end_positions)
-        self.statistics.update_on_batch("loss", loss, batch_size)
+        self.statistics.update_on_batch("loss", loss.item(), batch_size)
 
         # TODO: this happens in eval only.
         if example_indices is not None:
