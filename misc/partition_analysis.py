@@ -12,6 +12,7 @@ from contextlib import redirect_stdout
 import warnings
 from typing import List, Set
 from functools import wraps
+from contextlib import contextmanager
 from pytorch_Gpipe.utils import flatten, move_tensors, nested_map
 # TODO: compare expected speedup to execution without recomputation,
 # as async pipe partitioning will put many layers without recompuatation, therefore making it hard to understand which is the best partitioning.
@@ -468,18 +469,19 @@ def profile_execution(model_inputs,
                 recv_time = in_size_mb / bw_GBps
 
                 # time measurement
-                if torch.cuda.is_available():
-                    f_time, b_time, outputs = cuda_time(
-                        partition_config[idx]['model'],
-                        inputs,
-                        recomputation=partition_specific_recomputation,
-                        inputs_requires_grad=inputs_requires_grad)
-                else:
-                    f_time, b_time, outputs = cpu_time(
-                        partition_config[idx]['model'],
-                        inputs,
-                        recomputation=partition_specific_recomputation,
-                        inputs_requires_grad=inputs_requires_grad)
+                with force_out_of_place(partition_config[idx]['model']):
+                    if torch.cuda.is_available():
+                        f_time, b_time, outputs = cuda_time(
+                            partition_config[idx]['model'],
+                            inputs,
+                            recomputation=partition_specific_recomputation,
+                            inputs_requires_grad=inputs_requires_grad)
+                    else:
+                        f_time, b_time, outputs = cpu_time(
+                            partition_config[idx]['model'],
+                            inputs,
+                            recomputation=partition_specific_recomputation,
+                            inputs_requires_grad=inputs_requires_grad)
 
                 # output statistics
                 out_size_mb = 0
@@ -568,6 +570,20 @@ def profile_execution(model_inputs,
     # calculate mean and variance
     return mean_var(f_times), mean_var(b_times), communication_stats, mean_var(
         nocommf_times)[0], mean_var(nocommb_times)[0], warnings_list
+
+
+@contextmanager
+def force_out_of_place(model:torch.nn.Module):
+    state=dict()
+    for m in model.modules():
+        if hasattr(m,"inplace") and isinstance(m.inplace,bool):
+            state[m]=m.inplace
+            m.inplace=False
+    
+    yield
+
+    for m,s in state.items():
+        m.inplace = s
 
 
 def mean_var(times):
