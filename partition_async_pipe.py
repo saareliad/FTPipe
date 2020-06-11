@@ -3,7 +3,7 @@ from collections import namedtuple
 from typing import Dict,Optional
 import functools
 
-from pytorch_Gpipe import trace_module,Graph,GraphProfiler,execute_graph,ExecTimes,acyclic_partition,compile_partitioned_model,METIS_partition,profile_network
+from pytorch_Gpipe import trace_module,Graph,GraphProfiler,execute_graph,ExecTimes,acyclic_partition,infer_req_grad,compile_partitioned_model,METIS_partition,profile_network
 from pytorch_Gpipe.model_profiling import Node
 from pytorch_Gpipe.utils import move_tensors
 from heuristics import NodeWeightFunction,EdgeWeightFunction
@@ -73,7 +73,9 @@ def partition_async_pipe(cmd_args,model,batch_dim:int=0,args:tuple=None,kwargs:D
 
     print(
         f"Success! got {current_mistakes} mistakes after {n_runs} runs")
-
+    
+    infer_req_grad(graph,model,args=args,kwargs=kwargs)
+    
     compile_partitioned_model(graph,model,batch_dim,generate_explicit_del=cmd_args.generate_explicit_del,generate_model_parallel=cmd_args.generate_model_parallel,output_file=cmd_args.output_file)
     
     return graph
