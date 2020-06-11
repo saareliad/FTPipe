@@ -1,6 +1,6 @@
 import shlex
 import sys
-
+from pytorch_Gpipe.model_partitioning.acyclic_partitioning import Objective
 
 class ParsePartitioningOpts:
     def __init__(self):
@@ -212,6 +212,7 @@ class ParseAcyclicPartitionerOpts:
         opts.add_argument("--epsilon",default=0.1,help="imbalance factor")
         opts.add_argument("--rounds",default=10,help="number of optimization rounds default is 10")
         opts.add_argument("--allocated_seconds",default=10,help="run time allocated to the partitioning algorithm default is 10 seconds")
+        opts.add_argument("--objective",choices=["edge_cut","stage_time"],default="edge_cut",help="partitioning optimization objective")
 
 
     @staticmethod
@@ -220,7 +221,8 @@ class ParseAcyclicPartitionerOpts:
 
         return {"epsilon":args.epsilon,
                 "rounds":args.rounds,
-                "allocated_seconds":args.allocated_seconds}
+                "allocated_seconds":args.allocated_seconds,
+                "objective":{"edge_cut":Objective.EDGE_CUT,"stage_time":Objective.STAGE_TIME}[args.objective]}
 
 
 

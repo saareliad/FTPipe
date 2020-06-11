@@ -2,7 +2,7 @@ import torch
 from functools import reduce
 import operator
 from pytorch_Gpipe.model_profiling import Node, NodeTypes, ExecTimes
-
+from pytorch_Gpipe.utils import flatten
 __all__ = ["NodeWeightFunction", "EdgeWeightFunction"]
 
 
@@ -33,20 +33,22 @@ class EdgeWeightFunction():
         self.penalty = penalty
 
     def __call__(self,u: Node, v: Node):
-        if u.type is NodeTypes.CONSTANT or (u.value_type in [float, str, bool, int, type(None),torch.device,torch.Size,torch.dtype]
-                                            or u.tensor_shape is None):
+        if u.type is NodeTypes.CONSTANT:
             # no constant or scalars on boundries
-            w = self.penalty * self.MULT_FACTOR
-        elif u.value_type in [list, tuple, dict, set, slice, torch.Size]:
-            # no nested iterables on boundries
             w = self.penalty * self.MULT_FACTOR
         else:
             MB = 1e6
-            assert isinstance(u.tensor_shape, torch.Size)
-            volume = reduce(operator.mul, u.tensor_shape, 1) / MB
-            # include dtype size
-            volume *= torch.empty(1, dtype=u.tensor_dtype).element_size()
+            volume = 0
+            for shape,dtype in zip(flatten(u.tensor_shape),flatten(u.tensor_dtype)):
+                if isinstance(shape,torch.Size):
+                    v = reduce(operator.mul, shape, 1)
+                    # include dtype size
+                    v *= torch.empty(1, dtype=dtype).element_size()
+                else:
+                    v = 4
+                volume += v
 
+            volume/=MB
             # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
             w = max(1, (self.MULT_FACTOR * (volume / self.bw)))
 
