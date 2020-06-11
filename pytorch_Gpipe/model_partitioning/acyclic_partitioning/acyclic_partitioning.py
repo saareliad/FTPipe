@@ -423,11 +423,7 @@ def calculate_stage_time_gain(v:Node,dest:int,state:PartitionState)->DoublePrior
 
 
 def update_stage_times(v:Node,dest:int,node_weights:Dict[Node,float],
-                                edge_weights:Dict[Tuple[Node,Node],float],stage_times:Dict[int,float])->float:
-    #TODO right now we if we have u->v and u->w
-    # and v,w are in the same partition
-    # we count the comm twice
-    
+                                edge_weights:Dict[Tuple[Node,Node],float],stage_times:Dict[int,float])->float:    
     stage_times[v.part] -= node_weights[v]
     stage_times[dest] += node_weights[v]
 
@@ -439,23 +435,27 @@ def update_stage_times(v:Node,dest:int,node_weights:Dict[Node,float],
         else:
             w = edge_weights[(v,u)]
         
+        #record destinations so we won't overcount comm
+        # only once per destination stage
+        comms = set()
         if u.part == v.part:
             # u and v were at same partition
             # move adds comm less gain
-            stage_times[u.part] += w
-            stage_times[dest] += w
+            comms.add((v.part,w,dest,w))
             edge_gain -= w
         elif u.part == dest:
             # u and v will be at same partition
             # move reduces comm more gain
-            stage_times[v.part] -= w
-            stage_times[dest] -= w
+            comms.add((v.part,-w,dest,-w))
             edge_gain += w
         else:
             # u and v were and will be at different partitions
             # move comm from src to dst no gain
-            stage_times[v.part] -= w
-            stage_times[dest] += w
+            comms.add((v.part,-w,dest,w))
+        
+        for p0,comm0,p1,comm1 in comms:
+            stage_times[p0]+=comm0
+            stage_times[p1]+=comm1
     
     return edge_gain
 
@@ -506,18 +506,23 @@ def calculate_partition_volumes(k:int,node_weights:Dict[Node,float])->Dict[int,f
 
 
 def calculate_stage_times(node_weights:Dict[Node,float],edge_weights:Dict[Tuple[Node,Node],float])->Dict[int,float]:
-    #TODO right now we if we have u->v and u->w
-    # and v,w are in the same partition
-    # we count the comm twice
     stage_times = defaultdict(lambda : 0)
 
     for n,w in node_weights.items():
         stage_times[n.part]+=w
+
+        #record destinations so we won't overcount comm
+        # only once per destination stage
+        destinations=set()
         for u in chain(n.in_edges,n.out_edges):
             if u.part < n.part:
-                stage_times[n.part]+=edge_weights[(u,n)]
+                destinations.add((n.part,edge_weights[(u,n)]))
             elif u.part > n.part:
-                stage_times[n.part]+=edge_weights[(n,u)]
+                destinations.add((n.part,edge_weights[(n,u)]))
+        
+        for dst,comm in destinations:
+            stage_times[dst] += comm
+            stage_times[n.part] += comm
 
     return dict(stage_times)
 
