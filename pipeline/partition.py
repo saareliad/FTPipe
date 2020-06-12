@@ -35,7 +35,7 @@ DEFAULT_CLASSES_LIST_TO_PATCH = [
     dp_sim.BatchNorm1d, dp_sim.BatchNorm2d, dp_sim.BatchNorm3d
 ]
 
-# TODO: LayerNorm?
+# TODO: LayerNorm? GroupNorm?
 
 # def single_tensor(x):
 #     if not isinstance(x, Tensor):
@@ -355,7 +355,7 @@ class LastPartitionWithLabelInput(LastPartition):
 class PartitionWithoutRecomputation(nn.Module):
     # _REQ_GRAD = True
     _HAS_DUMMY_FORWARD = False
-    _CLONE_INPUT = True
+    _CLONE_INPUTS = True
 
     def __init__(self,
                  layers,
@@ -412,7 +412,7 @@ class PartitionWithoutRecomputation(nn.Module):
                 # In pytorch it can happen automatically with THCCashingAlocator.
                 # Save activation only if gradient is needed.
                 if self._REQ_GRAD:
-                    if self._CLONE_INPUT:
+                    if self._CLONE_INPUTS:
                         x = x.detach().clone().requires_grad_(self.req_grad)
                     else:
                         x = x.detach().requires_grad_(self.req_grad)
@@ -421,7 +421,7 @@ class PartitionWithoutRecomputation(nn.Module):
                 x = self.layers(x)
             else:
                 if self._REQ_GRAD:
-                    if self._CLONE_INPUT:
+                    if self._CLONE_INPUTS:
                         x = [
                             tensor.detach().clone().requires_grad_(rg)
                             for tensor, rg in zip(x, self.req_grad)
@@ -468,7 +468,7 @@ class PartitionWithoutRecomputation(nn.Module):
 
 class FirstPartitionWithoutRecomputation(PartitionWithoutRecomputation):
     """ its Just a hack for GPIpe... """
-    _CLONE_INPUT = False  # won't be accesed anyway
+    _CLONE_INPUTS = False  # won't be accesed anyway
 
     def __init__(self, *args, **kw):
         super().__init__(*args, _REQ_GRAD=False, **kw)
@@ -487,6 +487,7 @@ class GPipePartition(nn.Module):
      """
     RECOMP_PARTITION_CLS = Partition
     NO_RECOMP_PARTITION_CLS = PartitionWithoutRecomputation
+    _CLONE_INPUTS = True
 
     def __init__(self, *args, **kw):
         super().__init__()
@@ -495,6 +496,8 @@ class GPipePartition(nn.Module):
         self.recomputation_partition = self.RECOMP_PARTITION_CLS(*args, **kw)
         self.no_recomputation_partition = self.NO_RECOMP_PARTITION_CLS(
             *args, **kw)
+        self.recomputation_partition._CLONE_INPUTS.self._CLONE_INPUTS
+        self.no_recomputation_partition._CLONE_INPUTS.self._CLONE_INPUTS
 
     def forward(self, *args, **kw):
         if self.is_last_micro_batch:
@@ -543,6 +546,7 @@ class GPipeFirstPartition(GPipePartition):
     """ Do not do recomputation on the last micro batch """
     RECOMP_PARTITION_CLS = FirstPartition
     NO_RECOMP_PARTITION_CLS = FirstPartitionWithoutRecomputation
+    _CLONE_INPUTS = False
 
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
@@ -552,6 +556,7 @@ class GPipeLastPartition(GPipePartition):
     """ NOTE: for doing backward_fro_recomputed,just pass (NONE) as grad_tensor """
     RECOMP_PARTITION_CLS = Partition
     NO_RECOMP_PARTITION_CLS = LastPartition
+    _CLONE_INPUTS = True
 
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
@@ -567,17 +572,12 @@ class GPipeLastPartition(GPipePartition):
 class GPipeLastPartitionWithLabelInput(GPipeLastPartition):
     RECOMP_PARTITION_CLS = Partition
     NO_RECOMP_PARTITION_CLS = LastPartitionWithLabelInput
+    _CLONE_INPUTS = True
 
+    # TODO: it is very stupied that we calculate loss for all micro batches in the dummy forward,
+    # but its very anoying to fix this.
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
-
-
-# Exactly like normal last partition, but its worth the comment.
-# class GPipeLastPartitionWithLabelInput(GPipeLastPartition):
-#     """ unlike async pipeline, here we don't drop and the first bwd """
-#     # TODO: it is very stupied that we calculate loss for all micro batches in the dummy forward, but its very anoying to fix this.
-#     RECOMP_PARTITION_CLS = Partition
-#     NO_RECOMP_PARTITION_CLS = PartitionWithoutRecomputation  # NOTE: its a
 
 
 filter_req_grad_tensors = partial(filter, lambda a: isinstance(a, Tensor) and a.requires_grad)

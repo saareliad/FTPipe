@@ -64,10 +64,11 @@ def gpt2_xl_p8_lm_tied():
 
 def bert_large_uncased_squad_8p():
     return dict(model_type='bert_squad',
-                model_name_or_path='bert-large-uncased',
-                do_lower_case=False,
+                model_name_or_path='bert-large-uncased-whole-word-masking',
+                do_lower_case=True,
                 output_past=False,
                 stateless_tied=False)
+
 
 
 # GPipe version for the functions, as it has different balance.

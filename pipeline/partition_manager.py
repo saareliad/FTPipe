@@ -675,7 +675,7 @@ class GPipePartitionManager(SinglePartitionManager):
         # assert "GPIPE" in self.work_scheduler
         # step_every
 
-    def _init_partition(self, partition, use_recomputation, req_grad,
+    def _init_partition(self, partition, use_recomputation, is_mp, req_grad,
                         outputs_req_grad):
         # NOTE: it will be called from super().__init__
         TO_DEVICE = False
@@ -695,6 +695,10 @@ class GPipePartitionManager(SinglePartitionManager):
                 partition_cls = GPipeFirstPartition
             else:
                 partition_cls = GPipePartition
+            
+            if is_mp:
+                # We do the clone ourself.
+                partition_cls._CLONE_INPUTS = False
             self.partition = partition_cls(partition,
                                            device,
                                            to_device=TO_DEVICE,
