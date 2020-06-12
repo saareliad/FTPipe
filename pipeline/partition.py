@@ -496,8 +496,8 @@ class GPipePartition(nn.Module):
         self.recomputation_partition = self.RECOMP_PARTITION_CLS(*args, **kw)
         self.no_recomputation_partition = self.NO_RECOMP_PARTITION_CLS(
             *args, **kw)
-        self.recomputation_partition._CLONE_INPUTS.self._CLONE_INPUTS
-        self.no_recomputation_partition._CLONE_INPUTS.self._CLONE_INPUTS
+        self.recomputation_partition._CLONE_INPUTS = self._CLONE_INPUTS
+        self.no_recomputation_partition._CLONE_INPUTS = self._CLONE_INPUTS
 
     def forward(self, *args, **kw):
         if self.is_last_micro_batch:
