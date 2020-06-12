@@ -111,13 +111,18 @@ class GradNormStepper:
     #     self.max_grad_norm = max_grad_norm
     #     self.always_calc_grad_norm = always_calc_grad_norm
     #     self.statistics = statistics
-    def non_last_partition_step(self):
-        self.step_on_computed_grads()
+    def non_last_partition_step(self, old_lrs=None):
+        self.step_on_computed_grads(old_lrs=old_lrs)
 
-    def step_on_computed_grads(self):
+    def step_on_computed_grads(self, old_lrs=None):
         self.optimizer.step()
         self.optimizer.zero_grad()
-        # TODO: per step scheduler
+
+        # Restore old LRs, to avoid messing up scheduler.
+        if old_lrs:
+            pgs = self.optimizer.param_groups
+            for g, old_lr in zip(pgs, old_lrs):
+                g['lr'] = old_lr
 
         if self.PER_STEP_SCHEDULER:
             self.scheduler.step()
