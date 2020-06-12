@@ -879,7 +879,7 @@ class GPipePartitionManager(SinglePartitionManager):
         # TODO: consider switching order.
         if not is_last_micro_batch:
             self.partition.recompute(batch_idx)
-        g = self.comm_handler.wait_recv_gradients()
+        g = self.comm_handler.wait_recv_gradients(batch_idx, last_due_end)
         self.comm_handler.post_recv_gradients(batch_idx, num_batches)
 
         # Compute gradients
