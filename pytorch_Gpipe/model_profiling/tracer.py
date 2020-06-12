@@ -738,7 +738,11 @@ def find_reachable_nodes(nodes,output_id):
         if node in reachable:
             continue
         
-        open.update(node.in_edges,node.out_edges)
+        open.update(node.in_edges)
+        for n in node.out_edges:
+            if ("__i" in n.scope) or (n.value_type is torch.Tensor):
+                open.add(n)
+
 
         reachable.add(node)
 
