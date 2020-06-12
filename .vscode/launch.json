@@ -38,7 +38,6 @@
                 "main.py",
                 "--config",
                 "configs/gloo.json"
-
             ],
             "justMyCode": true,
             "subProcess": true
@@ -93,21 +92,36 @@
             // "secret": "my_secret",
             "host": "localhost"
         },
-        { 
-            "name": "GDB Attach proc 0",
-            "type": "cppdbg",
+        {
+            "name": "Python Attach (local) proc 5",
+            "type": "python",
             "request": "attach",
-            "program": "python",
-            "processId": "${command:pickProcess}",
-            "MIMode": "gdb"
+            "localRoot": "${workspaceRoot}",
+            "remoteRoot": "${workspaceRoot}",
+            "port": 3005,
+            // "secret": "my_secret",
+            "host": "localhost"
         },
-        { 
-            "name": "GDB Attach proc 1",
-            "type": "cppdbg",
+        {
+            "name": "Python Attach (local) proc 6",
+            "type": "python",
             "request": "attach",
-            "program": "python",
-            "processId": "${command:pickProcess}",
-            "MIMode": "gdb"
-        }
+            "localRoot": "${workspaceRoot}",
+            "remoteRoot": "${workspaceRoot}",
+            "port": 3006,
+            // "secret": "my_secret",
+            "host": "localhost"
+        },
+        {
+            "name": "Python Attach (local) proc 7",
+            "type": "python",
+            "request": "attach",
+            "localRoot": "${workspaceRoot}",
+            "remoteRoot": "${workspaceRoot}",
+            "port": 3007,
+            // "secret": "my_secret",
+            "host": "localhost"
+        },                
+
     ]
 }
