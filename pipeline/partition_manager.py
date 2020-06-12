@@ -442,7 +442,8 @@ class SinglePartitionManager:
             trainer.last_partition_step_and_statistics(x,
                                                        *ctx,
                                                        step_and_stats_ctx,
-                                                       step=do_step)
+                                                       step=do_step,
+                                                       old_lrs=old_lrs)
 
             if do_step:
                 self.true_weights_storage.reset_on_step()
@@ -458,12 +459,6 @@ class SinglePartitionManager:
 
                 # TODO: add more stats. e.g can print here time, ' ms/batch {:5.2f} | ' ,...
                 self.logger.info(batch_log_str)
-
-            if old_lrs:
-                # return to previous LRs.
-                pgs = trainer.optimizer.param_groups
-                for g, old_lr in zip(pgs, old_lrs):
-                    g['lr'] = old_lr
 
         return request_objects
 
@@ -564,13 +559,8 @@ class SinglePartitionManager:
             # Restore to previously saved parameters, so we can do the step on them.
             self.true_weights_storage.restore_if_needed()
             self.true_weights_storage.reset_on_step()
-            trainer.non_last_partition_step()
+            trainer.non_last_partition_step(old_lrs)
 
-            if old_lrs:
-                # Note that sometimes its not defined locally.
-                pgs = trainer.optimizer.param_groups
-                for g, old_lr in zip(pgs, old_lrs):
-                    g['lr'] = old_lr
         else:
             self.true_weights_storage.restore_if_needed()
             # FIXME: probably should be removed...
@@ -834,7 +824,8 @@ class GPipePartitionManager(SinglePartitionManager):
         trainer.last_partition_step_and_statistics(x,
                                                    *ctx,
                                                    step_and_stats_ctx,
-                                                   step=do_step)
+                                                   step=do_step,
+                                                   old_lrs=old_lrs)
 
         # Print training statistics.
         self.batches += 1
@@ -847,14 +838,6 @@ class GPipePartitionManager(SinglePartitionManager):
 
             # TODO: add more stats. e.g can print here time, ' ms/batch {:5.2f} | ' ,...
             self.logger.info(batch_log_str)
-
-        if old_lrs:
-            # return to previous LRs.
-            pgs = trainer.optimizer.param_groups
-            for g, old_lr in zip(pgs, old_lrs):
-                g['lr'] = old_lr
-
-        return request_objects
 
     def run_batch_backward(self, batch_idx, num_batches):
         """ Runs the backwards pass + step for all partitions except the last partition """
@@ -911,13 +894,7 @@ class GPipePartitionManager(SinglePartitionManager):
                 trainer.grad_norm()
 
             # Do the actual step.
-            trainer.non_last_partition_step()
-
-            if old_lrs:
-                # Note that sometimes its not defined locally.
-                pgs = trainer.optimizer.param_groups
-                for g, old_lr in zip(pgs, old_lrs):
-                    g['lr'] = old_lr
+            trainer.non_last_partition_step(old_lrs)
 
         return request_objects
 

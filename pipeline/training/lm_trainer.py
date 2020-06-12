@@ -20,7 +20,8 @@ class LMTrainer(BaseOutPutIsLossTrainer):
                                            x,
                                            batch_size,
                                            loss,
-                                           step=True):
+                                           step=True,
+                                           old_lrs=None):
         """
         x: is model output.
         
@@ -30,7 +31,7 @@ class LMTrainer(BaseOutPutIsLossTrainer):
         step can be used later for grad accumulations
         """
         if step:
-            self.step_on_computed_grads()
+            self.step_on_computed_grads(old_lrs)
 
         loss = loss.item()
         self.statistics.update_on_batch("loss", loss, batch_size)

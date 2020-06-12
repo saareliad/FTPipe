@@ -65,7 +65,7 @@
     "doc_stride": 128,
     "max_query_length": 64,
     "threads": 60,
-    "overwrite_cache": true,
+    "overwrite_cache": false,
     "use_pre_loaded_label_input": false,
     "dont_drop_last": true,
     "model_type": "bert",

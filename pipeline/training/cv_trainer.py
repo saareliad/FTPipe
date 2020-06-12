@@ -20,7 +20,7 @@ class CVTrainer(BaseLossTrainer):
         self.statistics.update_on_batch("loss", loss.item(), batch_size)
         self.statistics.update_on_batch("acc", num_correct, batch_size)
 
-    def last_partition_step_and_statistics(self, x, y, loss, step=True):
+    def last_partition_step_and_statistics(self, x, y, loss, step=True, old_lrs=None):
         """
         step
         stats
@@ -33,7 +33,7 @@ class CVTrainer(BaseLossTrainer):
         num_correct = torch.sum(y == y_pred).item()
 
         if step:
-            self.step_on_computed_grads()
+            self.step_on_computed_grads(old_lrs)
 
         self.statistics.update_on_batch("loss", loss.item(), batch_size)
         self.statistics.update_on_batch("acc", num_correct, batch_size)
