@@ -25,9 +25,18 @@ class DoublePriority():
     def __isub__(self,other):
         self.a -= other.a
         self.b -= other.b
-
         return self
 
+    def __le__(self,other):
+        return not (self > other)
+
+    def __str__(self):
+        return f"(a:{self.a},b:{self.b})"
+        
+    def __repr__(self):
+        return str(self)
+
+        
 class PriorityQueue():
     #heapq is a min heap and we need a max heap
     #so we push the negative gain

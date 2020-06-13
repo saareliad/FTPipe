@@ -656,8 +656,12 @@ def _acyclic_partition(graph:Graph,algorithm:ALGORITHM=ALGORITHM.FIDUCCIA_MATTHE
 
     ALGORITHMS[algorithm](partition_volumes,edge_weights,node_weights,L_max,rounds=rounds,objective=objective)
     
+    if DEBUG:
+        work_graph.save_as_pdf(f"{algorithm.name}_before_refinmemt",".",node_weight_function=node_weight_function,edge_weight_function=edge_weight_function)
     #refine partition in a greedy fashion
     global_moves(partition_volumes,edge_weights,node_weights,L_max,rounds=1,objective=objective)
+    if DEBUG:
+        work_graph.save_as_pdf(f"{algorithm.name}_after_refinmemt",".",node_weight_function=node_weight_function,edge_weight_function=edge_weight_function)
     
     # induce partition from the layers graph to the original graph
     # recalculate partition metrics

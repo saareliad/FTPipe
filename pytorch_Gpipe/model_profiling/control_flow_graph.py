@@ -479,7 +479,15 @@ class Graph():
         num_removed = 0
         lookup = dict()
         for node in new_graph._nodes.values():
-            if node.type is NodeTypes.CONSTANT or ((node.type in [NodeTypes.PRIMITIVE,NodeTypes.OP]) and (len(node.in_edges) == 0)):
+            is_constant = node.type is NodeTypes.CONSTANT
+            op_without_inputs = (node.type in [NodeTypes.PRIMITIVE,NodeTypes.OP]) and (len(node.in_edges) == 0)
+
+            #NOTE i hate this but it handles passing labels which are used only at last partiton
+            input_or_buff_param_with_one_use_at_end = (node.type in [NodeTypes.IN,NodeTypes.BUFF_PARAM]) and (len(node.out_edges) == 1)
+            if input_or_buff_param_with_one_use_at_end:
+                input_or_buff_param_with_one_use_at_end &= (list(node.out_edges)[0].id - node.id) >= (len(self) / 2)
+            
+            if is_constant or op_without_inputs or input_or_buff_param_with_one_use_at_end:
                 for o in node.out_edges:
                     o.kwargs.pop(node, None)
                     o.args = [n for n in o.args if n is not node]
