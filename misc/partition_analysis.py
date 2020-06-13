@@ -36,7 +36,7 @@ def run_analysis(sample,
                  analyze_traced_model=False):
     #kwarg input
     if isinstance(sample, dict):
-        sample = [sample[i] for i in config['model inputs']]
+        sample = tuple([sample[i] for i in config['model inputs']])
 
     # NOTE: setting add_comm_times_to_balance, is for only debug porpuses
 
@@ -1039,6 +1039,10 @@ def topology_aware_balance(f_times, b_times, cutting_edges):
 
 
 def run_partitions(model_inputs, partition_config):
+    #kwarg input
+    if isinstance(model_inputs, dict):
+        model_inputs = tuple([model_inputs[i] for i in partition_config['model inputs']])
+
     n_partitions = sum(1 for k in partition_config if isinstance(k, int))
 
     if not isinstance(model_inputs, tuple):
