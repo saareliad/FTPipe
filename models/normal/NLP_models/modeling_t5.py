@@ -1265,6 +1265,8 @@ class T5Model(T5PreTrainedModel):
         decoder_config.is_decoder = True
         self.decoder = T5Stack(decoder_config, self.shared)
 
+        self.output_only = getattr(config,"output_only",False)
+
         self.init_weights()
 
     def get_input_embeddings(self):
@@ -1377,7 +1379,9 @@ class T5Model(T5PreTrainedModel):
         if use_cache:
             past = ((encoder_outputs, decoder_outputs[1]),)
             decoder_outputs = decoder_outputs[:1] + past + decoder_outputs[2:]
-
+        
+        if self.output_only:
+            return decoder_outputs[0]
         return decoder_outputs + encoder_outputs
 
 
@@ -1399,6 +1403,8 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         self.lm_head = nn.Linear(config.d_model, config.vocab_size, bias=False)
 
         self.lm_loss = nn.CrossEntropyLoss(ignore_index=-100)
+        
+        self.output_only = getattr(config,"output_only",False)
 
         self.init_weights()
 
@@ -1545,7 +1551,9 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
             loss = loss_fct(lm_logits.view(-1, lm_logits.size(-1)), lm_labels.view(-1))
             # TODO(thom): Add z_loss https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/layers.py#L666
             decoder_outputs = (loss,) + decoder_outputs
-
+        
+        if self.output_only:
+            return decoder_outputs[0]
         return decoder_outputs + encoder_outputs
 
     def prepare_inputs_for_generation(self, input_ids, past, attention_mask, use_cache, **kwargs):
