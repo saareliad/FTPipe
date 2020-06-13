@@ -26,7 +26,7 @@ class Node():
         self.id = idx
         self.scope = scope
 
-        self.part = 0
+        self.part = -1
         self.weight = None
 
         self.out_edges:Set[Node] = set()
@@ -237,6 +237,7 @@ class Graph():
         # TODO split big graphs to multiple pdfs
 
         colors = {
+            -1:'grey',
             0: 'grey',
             1: 'green',
             2: 'red',
@@ -399,7 +400,8 @@ class Graph():
                         value_type=node.value_type,
                         constant_value=node.constant_value,
                         tensor_dtype=node.tensor_dtype,
-                        tensor_shape=node.tensor_shape)
+                        tensor_shape=node.tensor_shape,
+                        req_grad=node.req_grad)
             node_states.append(state)
 
         return{"node_data": node_states,
@@ -430,6 +432,7 @@ class Graph():
             node.value_type = state['value_type']
             node.tensor_dtype = state['tensor_dtype']
             node.tensor_shape = state['tensor_shape']
+            node.req_grad = state['req_grad']
 
         for node in nodes.values():
             node.out_edges = {nodes[n] for n in states[node.id]['out_edges']}
