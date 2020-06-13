@@ -99,7 +99,10 @@ def nested_map(func, ts):
 
 
 def flatten(ts):
-    if isinstance(ts, (list, tuple, set)):
+    if isinstance(ts,torch.Size):
+        # size is inheriting from tuple which is stupid
+        yield ts
+    elif isinstance(ts, (list, tuple, set)):
         yield from chain(*[flatten(t) for t in ts])
     elif isinstance(ts, dict):
         yield from chain(*[flatten(t) for t in ts.values()])
