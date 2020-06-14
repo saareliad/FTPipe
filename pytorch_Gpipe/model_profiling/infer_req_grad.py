@@ -2,7 +2,7 @@ from typing import Callable,Dict
 import torch
 from .graph_executor import execute_graph
 from .control_flow_graph import Node,NodeTypes,Graph
-from ..utils import nested_map
+from ..utils import nested_map,detach_tensors
 
 
 def infer_req_grad(graph:Graph,model:torch.nn.Module,args=None,kwargs=None):
@@ -26,7 +26,7 @@ class Visitor():
             v = kwargs[k]
             n.req_grad = Visitor.req_grad(v)
 
-        return None,None
+        return detach_tensors(args),detach_tensors(kwargs)
 
 
     @staticmethod
