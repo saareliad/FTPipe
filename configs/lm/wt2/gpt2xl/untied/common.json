@@ -1,7 +1,7 @@
 {
     "logdir": "logs/debug/",
     "data_dir": "/home_local/saareliad/data",
-    "out_dir": "results/lm/gpt2xl/untied/wd",
+    "out_dir": "results/DEBUG1/lm/gpt2xl/untied/wd",
     "statistics": "lm_loss_per_batch",
     "auto_file_name": true,
     "out_filename": "wd",
@@ -42,7 +42,7 @@
             "last_epoch": -1
         }
     },
-    "epochs": 3,
+    "epochs": 1,
     "steps": -1,
     "seed_from_cmd": true,
     "num_chunks": 1,

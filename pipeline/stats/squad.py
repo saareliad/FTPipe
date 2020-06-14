@@ -25,6 +25,7 @@ class SquadStats(Stats):
         super().last_partition_on_epoch_end()
         if not self.training:
             self.evaluate_squad()  # FIXME: set by dataset
+        self.all_results.clear()  # Clear results for next time
 
     def get_epoch_info_str(self, is_train):
         # FIXME: in per-batch-loss it returns value for the last batch instead of for epoch!

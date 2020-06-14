@@ -7,5 +7,6 @@
     "train_batches_limit": -1,
     "bs_train": 1,
     "bs_test": 4,
-    "epochs": 3
+    "epochs": 1
+    
 }

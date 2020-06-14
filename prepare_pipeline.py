@@ -270,10 +270,18 @@ def get_dataloaders(args, explicit_separated_dataset=False, **kw):
         collate = lm_collate_factory(tokenizer)
         dl_kw['collate_fn'] = collate
     elif 'squad' in args.task:
+        print(f"args.dataset: {args.dataset}")
+        print(f"args.task: {args.task}")
         tokenizer = kw.pop('tokenizer')
         overwrite_cache = getattr(args, 'overwrite_cache', False)
 
-        version_2_with_negative = args.task == 'squad2' 
+        version_2_with_negative = args.dataset == 'squad2'
+        # version_2_with_negative = args.version_2_with_negative
+
+        if hasattr(args, "version_2_with_negative"):
+            assert version_2_with_negative == args.version_2_with_negative, (version_2_with_negative, args.version_2_with_negative)
+        else:
+            print(f"-W- version_2_with_negative infered automaticaly as {version_2_with_negative}")
 
         dataset_keywords = dict(
             model_name_or_path=args.model_name_or_path,
@@ -317,6 +325,7 @@ def get_dataloaders(args, explicit_separated_dataset=False, **kw):
         dataset_keywords = {}
 
     if explicit_separated_dataset:
+        print("dataset_keywords", dataset_keywords)
         train_dl, test_dl, samplers, extra = get_separate_just_x_or_y_train_test_dl_from_args(
             args, verbose=False, dataset_keywords=dataset_keywords, **dl_kw)
     else:

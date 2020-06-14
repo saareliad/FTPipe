@@ -60,7 +60,7 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
                                                    evaluate=False,
                                                    output_examples=False,
                                                    **kw)
-
+    print("squad", "version_2_with_negative", kw["version_2_with_negative"])
     dev_ds, examples, features = load_and_cache_examples_just_x_or_y(
         just=just,
         DATA_DIR=DATA_DIR,
