@@ -17,7 +17,8 @@ class NodeWeightFunction():
             return int(self.MULT_FACTOR * (max(1,node.weight.backward_time)))
         else:
             # TODO: it has to be consistent with communication times to work
-            return int(self.MULT_FACTOR * max(1, self.ratio * node.weight.backward_time + node.weight.forward_time) / (self.ratio + 1))
+            # NOTE: / (ratio + 1) is removed, as we do in edge.
+            return int(self.MULT_FACTOR * max(1, self.ratio * node.weight.backward_time + node.weight.forward_time))
 
 
 class EdgeWeightFunction():
@@ -74,4 +75,7 @@ class NodeWeightFunctionAutoInfer():
         assert(self.ratio == "infer")
         bwd = node.weight.backward_time
         fwd = node.weight.forward_time
+        # NOTE: TODO: as we do normalize the here, 
+        # ratio for edge weight should be just -1 or 0 (one direction)
+        # or use a "guess" for the ratio of the entire stage
         return int(self.MULT_FACTOR * max(1, bwd * bwd + fwd * fwd) / (bwd + fwd))
