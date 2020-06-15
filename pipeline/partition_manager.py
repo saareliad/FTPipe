@@ -536,11 +536,9 @@ class SinglePartitionManager:
             if self.gap_aware:
                 # Get delay and modify gradients.
                 if self.is_problematic:
-                    # Average delays
-                    # FIXME:
-                    raise NotImplementedError()
+                    # Take the maximal delay
                     mb = self.get_micro_batch(batch_idx)
-                    delay = np.mean([
+                    delay = max([
                         self.delay_at_batch.pop(batch_idx - i)
                         for i in range(0, mb + 1)
                     ])
