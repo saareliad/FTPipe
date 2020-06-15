@@ -17,12 +17,7 @@ class NodeWeightFunction():
             return int(self.MULT_FACTOR * (max(1,node.weight.backward_time)))
         else:
             # TODO: it has to be consistent with communication times to work
-            return int(self.MULT_FACTOR *
-                    ((self.ratio * max(1,node.weight.backward_time +
-                        node.weight.forward_time)) /
-                        (self.ratio + 1)))
-
-
+            return int(self.MULT_FACTOR * max(1, self.ratio * node.weight.backward_time + node.weight.forward_time) / (self.ratio + 1))
 
 
 class EdgeWeightFunction():
@@ -64,4 +59,19 @@ class EdgeWeightFunction():
         
         return int(w)
 
+##############
+# Auto infer
+#############
 
+
+class NodeWeightFunctionAutoInfer():
+    def __init__(self, MULT_FACTOR=1000):
+        self.ratio = "infer"
+        self.MULT_FACTOR = MULT_FACTOR
+ 
+    def __call__(self, node: Node):
+        assert isinstance(node.weight, ExecTimes)
+        assert(self.ratio == "infer")
+        bwd = node.weight.backward_time
+        fwd = node.weight.forward_time
+        return int(self.MULT_FACTOR * max(1, bwd * bwd + fwd * fwd) / (bwd + fwd))
