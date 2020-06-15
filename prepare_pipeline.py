@@ -239,6 +239,7 @@ def get_weight_predictor(args,
         true_weights_storage=true_weights_storage,
         sched_predictor=sched_predictor)
 
+    assert weight_predictor is not None
     return weight_predictor, nag_with_predictor
 
 
@@ -270,8 +271,6 @@ def get_dataloaders(args, explicit_separated_dataset=False, **kw):
         collate = lm_collate_factory(tokenizer)
         dl_kw['collate_fn'] = collate
     elif 'squad' in args.task:
-        print(f"args.dataset: {args.dataset}")
-        print(f"args.task: {args.task}")
         tokenizer = kw.pop('tokenizer')
         overwrite_cache = getattr(args, 'overwrite_cache', False)
 
@@ -281,7 +280,7 @@ def get_dataloaders(args, explicit_separated_dataset=False, **kw):
         if hasattr(args, "version_2_with_negative"):
             assert version_2_with_negative == args.version_2_with_negative, (version_2_with_negative, args.version_2_with_negative)
         else:
-            print(f"-W- version_2_with_negative infered automaticaly as {version_2_with_negative}")
+            print(f"-W- version_2_with_negative infered automaticaly as {version_2_with_negative}. args.dataset: {args.dataset}. args.task: {args.task}")
 
         dataset_keywords = dict(
             model_name_or_path=args.model_name_or_path,
@@ -302,9 +301,7 @@ def get_dataloaders(args, explicit_separated_dataset=False, **kw):
         max_answer_length = getattr(args, "max_answer_length", 30)
         do_lower_case = getattr(args, "do_lower_case", False)
         verbose_logging = getattr(args, "verbose_logging", False)
-        # FIXME: using version_2_with_negative to check for squad2
-        # version_2_with_negative = getattr(args, "version_2_with_negative",
-        #                                   False)
+        # NOTE: using version_2_with_negative to check for squad2
         null_score_diff_threshold = getattr(args, "null_score_diff_threshold",
                                             0.0)
         model_type = getattr(args, "model_type")
@@ -325,7 +322,7 @@ def get_dataloaders(args, explicit_separated_dataset=False, **kw):
         dataset_keywords = {}
 
     if explicit_separated_dataset:
-        print("dataset_keywords", dataset_keywords)
+        # print("dataset_keywords", dataset_keywords)
         train_dl, test_dl, samplers, extra = get_separate_just_x_or_y_train_test_dl_from_args(
             args, verbose=False, dataset_keywords=dataset_keywords, **dl_kw)
     else:
@@ -708,8 +705,8 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
             },
         ]
         lengths = {
-            "no_decay": len(optimizer_grouped_parameters[1]['params']),
-            "decay": len(optimizer_grouped_parameters[0]['params'])
+            "no_decay": sum(p.numel() for p in optimizer_grouped_parameters[1]['params']),
+            "decay": sum(p.numel() for p in optimizer_grouped_parameters[0]['params'])
         }
         # total_length = lengths['decay'] + lengths['no_decay']
         print(f"-I- optimizer_grouped_parameters: {lengths}")
@@ -771,6 +768,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         if weight_predictor:
             partition.set_weight_predictor(weight_predictor,
                                            nag_with_predictor)
+            logger.info(f"Stage {args.stage} will use Weight Predictor")
 
         # Set Weight Stashing
         if getattr(args, "weight_stashing", False):

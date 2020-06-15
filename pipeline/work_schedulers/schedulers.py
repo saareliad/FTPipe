@@ -285,13 +285,13 @@ if __name__ == "__main__":
         breakpoint()
 
     num_stages = 4
-    EXTRA = 1
+    EXTRA = 30
     # stage = 0  # Should test the edge case.
     num_batches = num_stages * 2 + 1 + EXTRA
     step_every = 4
     sched_name = "1F1B"
-    sched_name = "SEQ"
-    sched_name = 'GPIPE'
+    # sched_name = "SEQ"
+    # sched_name = 'GPIPE'
     # sched_name = "PIPEDREAM"
 
     PRINT_STAGE_STRINGS = True

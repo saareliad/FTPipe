@@ -1,4 +1,5 @@
 import torch
+from tqdm import tqdm
 from torch import Tensor
 import logging
 from . import CommunicationHandlerBase
@@ -19,6 +20,7 @@ from .weight_stashing import WeightStasher
 import numpy as np
 import types
 from .true_weights_storage import TrueWeightsStorage
+
 
 DEBUG_FAKE_DRAW = False
 
@@ -620,6 +622,9 @@ class SinglePartitionManager:
         
         # sets warmpup state for PipeDream. Else no-op.
         self.work_scheduler.reset()
+        if self.is_last_partition:
+            b_tqdm = tqdm(range(num_batches))
+            b_tqdm_it = iter(b_tqdm)
 
         while done_bwds < num_batches:
             # Act according to some policy
@@ -642,6 +647,7 @@ class SinglePartitionManager:
             if is_last_partition:
                 done_bwds += 1
                 done_fwds += 1
+                next(b_tqdm_it)
             else:
                 if action_is_fwd:
                     done_fwds += 1

@@ -9,6 +9,7 @@ from functools import wraps
 
 __all__ = ["get_sched_predictor", "SchedulerPredictor"]
 
+
 def get_sched_predictor(optimizer, sched_creator_cls, **kw):
     """ Get scher predictor from optimizer and scheduler class and kwargs """
     n_param_groups = len(optimizer.param_groups)
@@ -61,6 +62,7 @@ class SchedulerPredictor:
     def patch_scheduler(self, scheduler):
         q = self.q
         dummy_sched = self.scheduler
+
         def step_decorator(func):
             @wraps(func)
             def inner(self, *args, **kwargs):
@@ -74,9 +76,7 @@ class SchedulerPredictor:
 
         scheduler.step = step_decorator(scheduler.step.__func__)
         print(
-            f"-I- patched scheduler to update sched-aware predictor on step()"
-        )
-
+            f"-I- patched scheduler to update sched-aware predictor on step()")
 
 
 if __name__ == "__main__":

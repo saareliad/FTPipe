@@ -13,8 +13,10 @@ from .sched_aware import get_sched_predictor, SchedulerPredictor
 #     'sgd2': SGD2MSNAG
 # }
 
+
 def get_weight_predictor(optimizer_type, pred_mem, optimizer, scheduler,
-                         nag_with_predictor, true_weights_storage, sched_predictor):
+                         nag_with_predictor, true_weights_storage,
+                         sched_predictor):
     if 'sgd' in optimizer_type:
         weight_predictor = get_sgd_weight_predictor(
             optimizer_type,
@@ -39,3 +41,4 @@ def get_weight_predictor(optimizer_type, pred_mem, optimizer, scheduler,
             true_weights_storage=true_weights_storage)
     else:
         raise NotImplementedError()
+    return weight_predictor
