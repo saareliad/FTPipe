@@ -1,7 +1,11 @@
-from .sympy_optimizer import *
+# from .sympy_optimizer import *
+from .sympy_optimizer import Symbol, run_sim, tplus_time
+
+from .sympy_optimizer import NormalSympyAdam, WDSympySGDMsnag
+
 from sympy import lambdify
 from collections import defaultdict
-
+import inspect
 
 def lambdify_dict(coeff):
     """ Lambidfy the given expression, returns a dict describing result """
@@ -9,12 +13,30 @@ def lambdify_dict(coeff):
     f = lambdify(free_symbols_list, coeff, modules=['math'])
 
     free_symbols_names = sorted(map(str, free_symbols_list))
-    generated_dict = dict(
-        f=f, free_symbols=free_symbols_names, coeff_expr=coeff)
+    generated_dict = dict(f=f,
+                          free_symbols=free_symbols_names,
+                          coeff_expr=coeff)
     return generated_dict
 
 
-def auto_lambdify(max_staleness, optimizer_class, simplify=False):
+def auto_lambdify_delay_1(optimizer_class,
+                  simplify=False,
+                  allow_no_coeff=False):
+    _, preds, gaps = run_sim(1, optimizer_class, simplify=simplify)
+    gap = gaps[0]
+    pred = preds[0]
+
+    fs_gap = list(gap.free_symbols)
+    fs_pred = list(pred.free_symbols)
+
+    f = lambdify(fs_gap, gap, modules=['math'])
+    dict(inspect.signature(f).parameters)
+
+
+def auto_lambdify(max_staleness,
+                  optimizer_class,
+                  simplify=False,
+                  allow_no_coeff=False):
     """ Auto generating functions for coefficients
 
     Example:
@@ -38,7 +60,7 @@ def auto_lambdify(max_staleness, optimizer_class, simplify=False):
     _, preds, gaps = run_sim(max_staleness, optimizer_class, simplify=simplify)
     res = defaultdict(dict)
     for idx, expr in enumerate(preds):
-        curr_staleness = idx+1
+        curr_staleness = idx + 1
 
         # print(f"Simplification ({curr_staleness})")
         expr = expr.expand()
@@ -53,8 +75,9 @@ def auto_lambdify(max_staleness, optimizer_class, simplify=False):
         for s in symbols:
             coeff = expr.coeff(s)
             if not coeff:
-                raise NotImplementedError(
-                    f"can't find {s} coeff in {expr}. Do it manually.")
+                if not allow_no_coeff:
+                    raise NotImplementedError(
+                        f"can't find {s} coeff in {expr}. Do it manually.")
 
             generated_dict = lambdify_dict(coeff)
             res[curr_staleness].update({str(s): generated_dict})
@@ -76,19 +99,46 @@ def auto_lambdify(max_staleness, optimizer_class, simplify=False):
 if __name__ == "__main__":
     from pprint import pprint
 
-    max_staleness = 3
-    optimizer_class = WDSympySGDMsnag
-    simplify = True
-    res, gap_res = auto_lambdify(
-        max_staleness, optimizer_class, simplify=simplify)
+    def sgd():
 
-    pprint(res)
-    pprint(gap_res)
+        max_staleness = 3
+        optimizer_class = WDSympySGDMsnag
+        simplify = True
+        res, gap_res = auto_lambdify(max_staleness,
+                                     optimizer_class,
+                                     simplify=simplify)
 
-    # Example:
-    f = res[1]["v"]['f']
-    required_args = res[1]["v"]["free_symbols"]
-    print(required_args)
-    d = {"\\eta": 0.1, "\\gamma": 0.9}
-    values = [d[a] for a in required_args]
-    print(f(*values))
+        pprint(res)
+        pprint(gap_res)
+
+        # Example:
+        f = res[1]["v"]['f']
+        required_args = res[1]["v"]["free_symbols"]
+        print(required_args)
+        d = {"\\eta": 0.1, "\\gamma": 0.9}
+        values = [d[a] for a in required_args]
+        print(f(*values))
+
+    def adam():
+        max_staleness = 1
+        optimizer_class = NormalSympyAdam
+        simplify = False
+        allow_no_coeff = True
+        res, gap_res = auto_lambdify(max_staleness,
+                                     optimizer_class,
+                                     simplify=simplify,
+                                     allow_no_coeff=allow_no_coeff)
+
+        pprint(res)
+        pprint(gap_res)
+
+    # sgd()
+
+    import ptvsd
+    port = 3000 + 0
+    address = ('127.0.0.1', port)
+    print(f"-I- rank {0} waiting for attachment on {address}")
+    ptvsd.enable_attach(address=address)
+    ptvsd.wait_for_attach()
+
+    adam()

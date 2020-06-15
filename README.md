@@ -157,6 +157,8 @@ may change in the future.
 
 ## TODOs
 
+- When aggregating, instead of using dp=0 use the gradient we already have for weight prediction.thats awassome.
+
 - tied wieghts with wieght prediction: problem: we change the weight itself (this has advantage!)
 
 - explictly check that recomputation overlaps with wait for MPI.
