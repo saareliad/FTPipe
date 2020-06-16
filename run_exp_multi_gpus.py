@@ -2,6 +2,9 @@ from run.sequential_sim_set import run_grid_on_multi_gpu_per_run
 import os
 import subprocess
 import torch
+import sys
+from inspect import getmembers, isfunction
+
 
 BWD_TO_FWD_RATIO_FULL_EXP = [1, 2, 3, 4, 5, -1]
 BWD_TO_FWD_RATIO_BEST_TRANSFORMER = [2]
@@ -274,33 +277,174 @@ def gpt2xl_untied_p8_gpipe():
 #######################
 
 
-def bert_p4():
-    raise NotImplementedError()
+def bert_p8():
     COMMAND = "python partition_squad_models.py"
-    TRAIN_FILE = "wikitext-2-raw/wiki.train.raw"
-    OUT_DIR = "results/bert_p4/"
+    TRAIN_FILE = "squad1/train-v1.1.json"
+    PREDICT_FILE = "squad1/train-v1.1.json"
+    OUT_DIR = "results/bert_p8/"
     os.makedirs(OUT_DIR, exist_ok=True)
+    
+    # use_network_profiler
+    # use_METIS
+    # disable_op_profiling
+    new = dict(objective=["stage_time"], basic_blocks=["BertSelfAttention"])
+    squad_stuff = dict(max_seq_length=[384],
+                       doc_strid=[128],
+                       threads=[60],
+                       do_lower_case=[""],
+                       model_type=["bert"],
+                       model_name_or_path=["bert-large-uncased-whole-word-masking"],
+                       # overwrite_cache=[""],
+                       train_file=[TRAIN_FILE],
+                       predict_file=[PREDICT_FILE],)
 
     param_grid = dict(seed=[26320],
-                      model_type=["gpt2"],
-                      model_name_or_path=["gpt2"],
-                      train_data_file=[TRAIN_FILE],
-                      n_partitions=[4],
-                      partitioning_batch_size=[4],
-                      analysis_batch_size=[4],
-                      block_size=[-1],
-                      n_iter=N_ITER,
-                      lmhead=[""],
+                      n_partitions=[8],
+                      partitioning_batch_size=[24],
+                      analysis_batch_size=[24],
+                      n_iter=[50],
                       async_pipeline=[""],
                       auto_file_name=[""],
-                      overwrite_cache=[""],
-                      bwd_to_fwd_ratio=TRANSFORMER_USED_RATIO,
-                      output_file=[OUT_DIR])
+                      bwd_to_fwd_ratio=[3],
+                      output_file=[OUT_DIR],
+                      bw=[11],
+                      )
+    param_grid.update(new)
+    param_grid.update(squad_stuff)
     run_grid_on_multi_gpu_per_run(COMMAND,
                                   param_grid,
                                   gpu_list=list(range(8)),
                                   gpus_per_config=1)
     find_best(OUT_DIR)
+
+
+
+def bert_p8_METIS():
+    COMMAND = "python partition_squad_models.py"
+    TRAIN_FILE = "squad1/train-v1.1.json"
+    PREDICT_FILE = "squad1/train-v1.1.json"
+    OUT_DIR = "results/bert_p8/"
+    os.makedirs(OUT_DIR, exist_ok=True)
+    
+    # use_network_profiler
+    # use_METIS
+    # disable_op_profiling
+    new = dict(use_METIS=[""], basic_blocks=["BertSelfAttention"])
+    squad_stuff = dict(max_seq_length=[384],
+                       doc_strid=[128],
+                       threads=[60],
+                       do_lower_case=[""],
+                       model_type=["bert"],
+                       model_name_or_path=["bert-large-uncased-whole-word-masking"],
+                       # overwrite_cache=[""],
+                       train_file=[TRAIN_FILE],
+                       predict_file=[PREDICT_FILE],)
+
+    param_grid = dict(seed=[26320],
+                      n_partitions=[8],
+                      partitioning_batch_size=[24],
+                      analysis_batch_size=[24],
+                      n_iter=[50],
+                      async_pipeline=[""],
+                      auto_file_name=[""],
+                      bwd_to_fwd_ratio=[3],
+                      output_file=[OUT_DIR],
+                      bw=[11],
+                      )
+    param_grid.update(new)
+    param_grid.update(squad_stuff)
+    run_grid_on_multi_gpu_per_run(COMMAND,
+                                  param_grid,
+                                  gpu_list=list(range(8)),
+                                  gpus_per_config=1)
+    find_best(OUT_DIR)
+
+
+
+def bert_p4():
+    COMMAND = "python partition_squad_models.py"
+    TRAIN_FILE = "squad1/train-v1.1.json"
+    PREDICT_FILE = "squad1/train-v1.1.json"
+    OUT_DIR = "results/bert_p4/"
+    os.makedirs(OUT_DIR, exist_ok=True)
+    
+    # use_network_profiler
+    # use_METIS
+    # disable_op_profiling
+    new = dict(objective=["stage_time"], basic_blocks=["BertSelfAttention"])
+    squad_stuff = dict(max_seq_length=[384],
+                       doc_strid=[128],
+                       threads=[60],
+                       do_lower_case=[""],
+                       model_type=["bert"],
+                       model_name_or_path=["bert-large-uncased-whole-word-masking"],
+                       # overwrite_cache=[""],
+                       train_file=[TRAIN_FILE],
+                       predict_file=[PREDICT_FILE],)
+
+    param_grid = dict(seed=[26320],
+                      n_partitions=[4],
+                      partitioning_batch_size=[12],
+                      analysis_batch_size=[12],
+                      n_iter=[50],
+                      async_pipeline=[""],
+                      auto_file_name=[""],
+                      bwd_to_fwd_ratio=[3],
+                      output_file=[OUT_DIR],
+                      bw=[11],
+                      )
+    param_grid.update(new)
+    param_grid.update(squad_stuff)
+    run_grid_on_multi_gpu_per_run(COMMAND,
+                                  param_grid,
+                                  gpu_list=list(range(8)),
+                                  gpus_per_config=1)
+    find_best(OUT_DIR)
+
+
+def bert_p4_edge_cut():
+    COMMAND = "python partition_squad_models.py"
+    TRAIN_FILE = "squad1/train-v1.1.json"
+    PREDICT_FILE = "squad1/train-v1.1.json"
+    OUT_DIR = "results/bert_p4/"
+    out_file="bert_4p_384_110GBps_edgecut.py"
+    out_file=os.path.join(OUT_DIR, out_file)
+
+    os.makedirs(OUT_DIR, exist_ok=True)
+    
+    # use_network_profiler
+    # use_METIS
+    # disable_op_profiling
+    new = dict(objective=["edge_cut"], basic_blocks=["BertSelfAttention"])
+    squad_stuff = dict(max_seq_length=[384],
+                       doc_strid=[128],
+                       threads=[60],
+                       do_lower_case=[""],
+                       model_type=["bert"],
+                       model_name_or_path=["bert-large-uncased-whole-word-masking"],
+                       train_file=[TRAIN_FILE],
+                       predict_file=[PREDICT_FILE],)
+
+    param_grid = dict(seed=[26320],
+                      n_partitions=[4],
+                      partitioning_batch_size=[12],
+                      analysis_batch_size=[12],
+                      n_iter=[50],
+                      async_pipeline=[""],
+                      auto_file_name=[""],
+                      bwd_to_fwd_ratio=[3],
+                      output_file=[out_file],
+                      bw=[11],
+                      )
+    param_grid.update(new)
+    param_grid.update(squad_stuff)
+    run_grid_on_multi_gpu_per_run(COMMAND,
+                                  param_grid,
+                                  gpu_list=list(range(8)),
+                                  gpus_per_config=1)
+    find_best(OUT_DIR)
+
+
 
 
 #######################
@@ -335,8 +479,28 @@ def wrn_p4_async():
     find_best(OUT_DIR)
 
 
-if __name__ == "__main__":
+FUNCTION_MAP = getmembers(
+      sys.modules[__name__],
+      lambda o: isfunction(o) and o.__module__ == __name__)
+FUNCTION_MAP = {i: v for (i, v) in FUNCTION_MAP}
 
+
+def from_cmd():
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="Partitioning models",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    parser.add_argument('command', choices=FUNCTION_MAP.keys())
+
+    args = parser.parse_args()
+
+    func = FUNCTION_MAP[args.command]
+    func()
+
+
+if __name__ == "__main__":
+    from_cmd()
     # Async pipeline
     # gpt2_tied_p4()
     # gpt2_untied_p4()
@@ -349,6 +513,6 @@ if __name__ == "__main__":
     # gpt2xl_tied_p8_gpipe()
     # gpt2xl_untied_p8_gpipe()
 
-    wrn_p4_async()
+    # wrn_p4_async()
 
     # gpt2xl_untied_p8()

@@ -45,7 +45,7 @@ def partition_async_pipe(cmd_args,model,batch_dim:int=0,args:tuple=None,kwargs:D
                                 use_layers_graph=True,**cmd_args.acyclic_opt)
         else:
             METIS_partition(graph,cmd_args.n_partitions,node_weight_function=evaluator,edge_weight_function=evaluator,
-                                use_layers_graph=True,**cmd_args.METIS_opts)
+                                use_layers_graph=True,**cmd_args.METIS_opt)
 
 
         n_runs += 1
