@@ -324,8 +324,10 @@ def partition_model(args,
         shape = (args.analysis_batch_size, labels.shape[1])
         expanded_labels = labels[0].unsqueeze(0).expand(shape)
 
-        analysis_sample = (expanded_inputs, expanded_labels)
-
+        if lm:
+            analysis_sample = (expanded_inputs, expanded_labels)
+        else:
+            analysis_sample = expanded_inputs
         stages_on_same_gpu = set()
         if args.lmhead and args.stateless_tied and len(
                 pipe_config.stages) == args.n_partitions + 1:
