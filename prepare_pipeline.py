@@ -211,10 +211,11 @@ def get_weight_predictor(args,
     optimizer_type = getattr(args, 'optimizer')['type']
     pred = getattr(args, 'weight_prediction')
     pred_mem = pred['args']['pred_mem']
+    pred_type = pred['type']
     nag_with_predictor = pred['args'].get('nag_with_predictor', False)
 
     assert (pred_mem in {"clone", "calc"})
-    assert (pred['type'] == "msnag")
+    assert (pred_type in {"msnag", "aggmsnag"})
     assert ('sgd' in optimizer_type or 'adam' in optimizer_type)
 
     sched_predictor = None
@@ -233,6 +234,7 @@ def get_weight_predictor(args,
     weight_predictor = get_weight_predictor_partial(
         optimizer_type,
         pred_mem,
+        pred_type,
         optimizer,
         scheduler=sched_predictor,
         nag_with_predictor=nag_with_predictor,

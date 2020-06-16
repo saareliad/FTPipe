@@ -1,0 +1,14 @@
+{
+    "base_config_path": "common.json",
+    "base_config_path_is_relative": true,
+    "statistics": "lm_loss_per_batch",
+    "weight_prediction": {
+    "type": "aggmsnag",
+    "args": {
+        "pred_mem": "clone",
+        "nag_with_predictor": false,
+        "sched_aware": true
+    }
+    },
+    "weight_stashing": false
+}

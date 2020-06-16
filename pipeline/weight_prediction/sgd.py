@@ -111,6 +111,7 @@ SGD_TYPE_TO_MSNAG_CLASS = {'sgd1': SGD1MSNAG, 'sgd2': SGD2MSNAG}
 
 def get_sgd_weight_predictor(sgd_type: str,
                              pred_mem: str,
+                             pred_type: str,
                              optimizer,
                              scheduler=None,
                              nag_with_predictor=False,

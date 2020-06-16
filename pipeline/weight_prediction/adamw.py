@@ -5,6 +5,32 @@ from .adam import adam_init, AdamClonedWeightPrediction
 import warnings
 
 
+def get_adamw_weight_predictor(pred_mem: str,
+                               pred_type: str,
+                               optimizer,
+                               scheduler=None,
+                               nag_with_predictor=False,
+                               true_weights_storage=None) -> WeightPredictor:
+
+    has_weight_decay = any(
+        [pg['weight_decay'] != 0 for pg in optimizer.param_groups])
+
+    if has_weight_decay:
+        pred_cls = AdamWClonedWeightPrediction
+    else:
+        # use normal adam weight prediction.
+        #  its the exact same
+        pred_cls = AdamClonedWeightPrediction
+        warnings.warn(
+            "using Adam weight prediciton instad of AdamW becuse weight decay is 0"
+        )
+    return pred_cls(optimizer,
+                    fix_fn=None,
+                    scheduler=scheduler,
+                    nag_with_predictor=nag_with_predictor,
+                    true_weights_storage=true_weights_storage)
+
+
 class AdamWClonedWeightPrediction(WeightPredictor):
     def __init__(self, *args, **kw):
 
@@ -69,27 +95,3 @@ class AdamWClonedWeightPrediction(WeightPredictor):
             return
         self.true_weights_storage.restore_if_needed()
 
-
-def get_adamw_weight_predictor(pred_mem: str,
-                               optimizer,
-                               scheduler=None,
-                               nag_with_predictor=False,
-                               true_weights_storage=None) -> WeightPredictor:
-
-    has_weight_decay = any(
-        [pg['weight_decay'] != 0 for pg in optimizer.param_groups])
-
-    if has_weight_decay:
-        pred_cls = AdamWClonedWeightPrediction
-    else:
-        # use normal adam weight prediction.
-        #  its the exact same
-        pred_cls = AdamClonedWeightPrediction
-        warnings.warn(
-            "using Adam weight prediciton instad of AdamW becuse weight decay is 0"
-        )
-    return pred_cls(optimizer,
-                    fix_fn=None,
-                    scheduler=scheduler,
-                    nag_with_predictor=nag_with_predictor,
-                    true_weights_storage=true_weights_storage)
