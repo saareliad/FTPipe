@@ -103,8 +103,9 @@ class AdamClonedWeightPrediction(WeightPredictor):
 
                         step_size = lr / bias_correction1
 
-                        p.data.addcdiv_(-step_size,
-                                        exp_avg * (beta1**staleness), denom)
+                        p.data.addcdiv_(exp_avg * (beta1**staleness),
+                                        denom,
+                                        value=-step_size)
 
     def revert(self):
         if not self.n_steps:
@@ -171,7 +172,7 @@ class AdamClonedWeightPredictionWithWD(WeightPredictor):
 
                         step_size = lr / bias_correction1
 
-                        p.data.addcdiv_(-step_size, exp_avg_hat, denom)
+                        p.data.addcdiv_(exp_avg_hat, denom, value=-step_size)
 
     def revert(self):
         if not self.n_steps:
@@ -249,7 +250,7 @@ class AdamClonedWeightPredictionForAggregationWithWD(WeightPredictor):
 
                         step_size = lr / bias_correction1
 
-                        p.data.addcdiv_(-step_size, exp_avg_hat, denom)
+                        p.data.addcdiv_(exp_avg_hat, denom, value=-step_size)
 
     def revert(self):
         if not self.n_steps:
