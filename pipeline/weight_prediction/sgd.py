@@ -116,6 +116,8 @@ def get_sgd_weight_predictor(sgd_type: str,
                              scheduler=None,
                              nag_with_predictor=False,
                              true_weights_storage=None) -> WeightPredictor:
+    if pred_type != 'msnag':
+        raise NotImplementedError(pred_type)
     has_weight_decay = any(
         [pg['weight_decay'] != 0 for pg in optimizer.param_groups])
     if has_weight_decay:
