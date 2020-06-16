@@ -1,6 +1,6 @@
 import shlex
 import sys
-from pytorch_Gpipe.model_partitioning.acyclic_partitioning import Objective
+from pytorch_Gpipe.model_partitioning.acyclic_partitioning import Objective,META_ALGORITH
 
 class ParsePartitioningOpts:
     def __init__(self):
@@ -212,17 +212,29 @@ class ParseAcyclicPartitionerOpts:
         opts.add_argument("--epsilon",default=0.1,help="imbalance factor")
         opts.add_argument("--rounds",default=10,help="number of optimization rounds default is 10")
         opts.add_argument("--allocated_seconds",default=10,help="run time allocated to the partitioning algorithm default is 10 seconds")
+        opts.add_argument("--multilevel",action="store_true",default=False,help="wether to use multilevel partitioning algorithm")
         opts.add_argument("--objective",choices=["edge_cut","stage_time"],default="edge_cut",help="partitioning optimization objective")
 
 
     @staticmethod
     def acyclic_opts_dict_from_parsed_args(args):
         """ build acyclic partitioner options """
+        
+        if args.objective == "edge_cut":
+            objective = Objective.EDGE_CUT
+        else:
+            objective = Objective.STAGE_TIME
+        
+        if args.multilevel:
+            meta_algorithm = META_ALGORITH.MULTI_LEVEL
+        else:
+            meta_algorithm = META_ALGORITH.SINGLE_LEVEL
 
         return {"epsilon":args.epsilon,
                 "rounds":args.rounds,
                 "allocated_seconds":args.allocated_seconds,
-                "objective":{"edge_cut":Objective.EDGE_CUT,"stage_time":Objective.STAGE_TIME}[args.objective]}
+                "meta_algorithm":meta_algorithm,
+                "objective":objective}
 
 
 

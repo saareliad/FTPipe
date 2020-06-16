@@ -1,8 +1,9 @@
 from collections import defaultdict
-from pytorch_Gpipe.model_profiling import Node
+from pytorch_Gpipe.model_profiling import Node,Graph
 from typing import Dict,Iterable,Set,Iterator,List,Tuple,Any,Optional
 import random
 import heapq
+import pickle
 
 class DoublePriority():
     def __init__(self,a,b):
@@ -124,7 +125,6 @@ class QuotientGraph():
         
         self._nodes:Dict[int,PartitionNode] = {idx:PartitionNode(group,idx) for idx,group in groups.items()}
 
-        
     def __getitem__(self,idx:int)->PartitionNode:
         return self._nodes[idx]
 
@@ -353,6 +353,53 @@ class QuotientGraph():
         assert not self.has_cycles()
 
 
+class VerticeStageConnections():
+    def __init__(self,nodes):
+        self._in_connections = dict()
+        self._out_connections = dict()
+        
+        for n in nodes:
+            self._in_connections[n] = defaultdict(lambda:0)
+            self._out_connections[n] = defaultdict(lambda:0)
+
+        for n in nodes:
+            for u in n.in_edges:
+                self._in_connections[n][u.part]+=1
+                self._out_connections[u][n.part]+=1
+            
+    def add_in_connection(self,n,src:int):
+        self._in_connections[n][src]+=1
+
+    def add_out_connection(self,n,dest:int):
+        self._out_connections[n][dest]+=1
+    
+    def remove_in_connection(self,n,src:int):
+        self._in_connections[n][src]-=1
+
+    def remove_out_connection(self,n,dest:int):
+        self._out_connections[n][dest]-=1
+    
+    def has_in_connection(self,n,src:int)->bool:
+        return self._in_connections[n][src] > 0
+    
+    def has_out_connection(self,n,dest:int)->bool:
+        return self._out_connections[n][dest] > 0
+    
+    def in_connections(self,n,src:int)->int:
+        return self._in_connections[n][src]
+    
+    def out_connections(self,n,dst:int)->int:
+        return self._out_connections[n][dst]
+
+    def move_node(self,n,dest:int):
+        for u in n.in_edges:
+            self.remove_out_connection(u,n.part)
+            self.add_out_connection(u,dest)
+        for o in n.out_edges:
+            self.remove_in_connection(o,n.part)
+            self.add_in_connection(o,dest)
+
+
 class Path():
     def __init__(self,v):
         self.start = self.end = v
@@ -482,3 +529,242 @@ class PathSet():
         paths = [p for p in self.paths.values() if p.active]
         return set(paths)
 
+
+class SimpleNode():
+    def __init__(self,idx,part):
+        self.id = idx
+        self.in_edges=set()
+        self.out_edges=set()
+        self.part = part
+    
+    def add_in_edge(self,node):
+        self.in_edges.add(node)
+    
+    def add_out_edge(self,node):
+        self.out_edges.add(node)
+
+
+class ContractedGraph():
+    def __init__(self,in_edges,partition,node_weights,edge_weights,matching):
+        #TODO make this compatible with acyclic partitioner
+        
+        self._nodes:Dict[int,SimpleNode]=dict()
+        for n in set(matching.values()):
+            self._nodes[n] = SimpleNode(n,partition[n])
+
+        self._node_weights = defaultdict(lambda :0)
+        self._edge_weights = defaultdict(lambda :0)
+
+        for n in node_weights.keys():
+            matched = matching[n]
+            self._node_weights[self._nodes[matched]] += node_weights[n]
+            for i in in_edges[n]:
+                matched_i = matching[i]
+                if matched_i == matched:
+                    continue
+                self._nodes[matched].add_in_edge(self._nodes[matched_i])
+                self._nodes[matched_i].add_out_edge(self._nodes[matched])
+
+                self._edge_weights[(self._nodes[matched_i],self._nodes[matched])] += edge_weights[(i,n)]
+    
+    def __len__(self)->int:
+        return len(self._nodes)
+
+    def __getitem__(self,idx)->SimpleNode:
+        return self._nodes[idx]
+
+    def node_weight(self,n)->float:
+        return self._node_weights[n]
+    
+    def edge_weight(self,u,v)->float:
+        return self._edge_weights[u,v]
+
+    @property
+    def nodes(self)->Iterable[SimpleNode]:
+        return self._nodes.values()
+
+    def selfcheck(self)->"ContractedGraph":
+        for idx,n in self._nodes.items():
+            assert n.id == idx
+            assert n in self._node_weights
+            for u in n.in_edges:
+                # assert n.id > u.id
+                assert n.part >= u.part
+                assert n in u.out_edges
+                assert (u,n) in self._edge_weights
+                assert u in self._node_weights
+                assert u.id in self._nodes
+
+            for o in n.out_edges:
+                # assert n.id < o.id
+                assert o.part >= n.part
+                assert n in o.in_edges
+                assert (n,o) in self._edge_weights
+                assert o in self._node_weights
+                assert o.id in self._nodes
+
+        return self
+
+    @classmethod
+    def contract(cls,contracted_graph,matching)->"ContractedGraph":
+        in_edges=dict()
+        partition=dict()
+        node_weights=dict()
+        edge_weights=dict()
+
+        for n in contracted_graph.nodes:
+            node_weights[n.id]=contracted_graph.node_weight(n)
+            partition[n.id]=n.part
+            us=set()
+            for u in n.in_edges:
+                us.add(u.id)
+                edge_weights[(u.id,n.id)] = contracted_graph.edge_weight(u,n)
+            in_edges[n.id]=us
+
+        return cls(in_edges,
+                    partition,
+                    node_weights,
+                    edge_weights,
+                    matching)
+    
+    @classmethod
+    def from_Graph(cls,graph:Graph,node_weights,edge_weights)->"ContractedGraph":
+        node_weights = {n.id:w for n,w in node_weights.items()}
+        edge_weights = {(u.id,v.id):w for (u,v),w in edge_weights.items()}
+        in_edges=dict()
+        partition=dict()
+        for n in graph.nodes:
+            in_edges[n.id]={u.id for u in n.in_edges}
+            partition[n.id]=n.part
+        
+        return cls(in_edges,partition,node_weights,edge_weights,{n:n for n in node_weights})
+
+    def build_dot(self):
+        '''
+        return a graphviz representation of the graph
+        Parameters
+        ----------
+        '''
+        theme = {
+            "background_color": "#FFFFFF",
+            "fill_color": "#E8E8E8",
+            "outline_color": "#000000",
+            "font_color": "#000000",
+            "font_name": "Times",
+            "font_size": "10",
+            "margin": "0,0",
+            "padding": "1.0,0.5"
+        }
+        from graphviz import Digraph
+
+        dot = Digraph()
+        dot.attr("graph",
+                 concentrate="true",
+                 bgcolor=theme["background_color"],
+                 color=theme["outline_color"],
+                 fontsize=theme["font_size"],
+                 fontcolor=theme["font_color"],
+                 fontname=theme["font_name"],
+                 margin=theme["margin"],
+                 rankdir="TB",
+                 pad=theme["padding"])
+
+        dot.attr("node",
+                 shape="box",
+                 style="filled",
+                 margin="0,0",
+                 fillcolor=theme["fill_color"],
+                 color=theme["outline_color"],
+                 fontsize=theme["font_size"],
+                 fontcolor=theme["font_color"],
+                 fontname=theme["font_name"])
+
+        dot.attr("edge",
+                 style="solid",
+                 color=theme["outline_color"],
+                 fontsize=theme["font_size"],
+                 fontcolor=theme["font_color"],
+                 fontname=theme["font_name"])
+
+        colors = {
+            0: 'grey',
+            1: 'green',
+            2: 'red',
+            3: 'yellow',
+            4: 'orange',
+            5: 'brown',
+            6: 'purple',
+            7: 'pink',
+            8: 'cyan',
+            9: 'gold',
+            10: 'darkolivegreen',
+            11: 'seagreen',
+            12: 'thistle',
+            13: 'plum',
+            14: 'deeppink',
+            15: 'lightyellow',
+            16: 'tan'
+        }
+
+        # add nodes
+        for node in self._nodes.values():
+            dot.node(str(node.id), label=f"Node:{node.id}\nweight:{self.node_weight(node)}",
+                        fillcolor=colors[node.part])
+            for i in node.in_edges:
+                dot.edge(str(i.id), str(node.id),label=f"weight:{self.edge_weight(i,node)}")
+
+        return dot
+
+    def save_as_pdf(self,file_name: str,directory: str):
+        '''
+        save the rendered graph to a pdf file
+
+        Parameters
+        ----------
+        file_name:
+            the name of the saved file
+        directory:
+            directory to store the file in
+        '''
+        dot = self.build_dot()
+        dot.format = "pdf"
+        import os
+        if os.path.exists(f"{directory}/{file_name}.pdf"):
+            os.remove(f"{directory}/{file_name}.pdf")
+        dot.render(file_name, directory=directory, cleanup=True)
+        return self
+    
+    def serialize(self,path):
+        edge_weights=dict()
+        node_weights=dict()
+        partition=dict()
+        in_edges=dict()
+        for n in self.nodes:
+            in_edges[n.id] = [u.id for u in n.in_edges]
+            idx = n.id
+            partition[idx] = n.part
+            node_weights[idx]=self.node_weight(n)
+            for i in n.in_edges:
+                edge_weights[(i.id,idx)] = self.edge_weight(i,n)
+
+        state=dict(in_edges=in_edges,partition=partition,edge_weights=edge_weights,node_weights=node_weights)
+
+        if not path.endswith(".graph"):
+            path += ".graph"
+
+        pickle.dump(state, open(path, "wb"))
+    
+    @classmethod
+    def deserialize(cls,path):
+        if not path.endswith(".graph"):
+            path += ".graph"
+
+        state = pickle.load(open(path, "rb"))
+        in_edges=state['in_edges']
+        partition=state['partition']
+        node_weights=state['node_weights']
+        edge_weights=state['edge_weights']
+        matching = {n:n for n in node_weights.keys()}
+
+        return cls(in_edges,partition,node_weights,edge_weights,matching).selfcheck()
+        

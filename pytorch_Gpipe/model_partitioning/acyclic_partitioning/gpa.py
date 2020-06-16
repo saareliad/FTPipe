@@ -1,24 +1,37 @@
 import random
 from typing import Dict,Tuple,List,Optional
-from pytorch_Gpipe.model_profiling import Node,Graph,NodeWeightFunction,EdgeWeightFunction
-from pytorch_Gpipe.model_partitioning.acyclic_partitioning.data_structures import Path,PathSet
+from pytorch_Gpipe.model_profiling import Node,Graph
+from pytorch_Gpipe.model_partitioning.acyclic_partitioning.data_structures import Path,PathSet,ContractedGraph,SimpleNode
 
 #adapted from https://github.com/KaHIP/KaHIP/blob/master/lib/partition/coarsening/matching/gpa/gpa_matching.cpp
 
 
-def find_max_matching(graph:Graph,node_weight_function:Optional[NodeWeightFunction]=None,
-                    edge_weight_function:Optional[EdgeWeightFunction]=None,seed:Optional[int]=None)->Tuple[List[List[Tuple[Node,Node]]],float]:
-    random.seed(seed)
-
-    if node_weight_function is None:
-        node_weight_function = lambda n: 1
+def coarsening(graph:Graph,node_weights:Dict[SimpleNode,float],
+                    edge_weights:Dict[Tuple[SimpleNode,SimpleNode],float])->List[Tuple[ContractedGraph,Dict[int,int],ContractedGraph]]:
+    g = ContractedGraph.from_Graph(graph,node_weights,edge_weights)
+    n = len(g)
     
-    if edge_weight_function is None:
-        edge_weight_function = lambda u,v: 1
+    hierarchy=[]
+    p = g
+    while True:
+        matching,_ = find_max_matching(g._node_weights,g._edge_weights)
+        g=g.contract(g,matching)
+        if len(g) == n:
+            break
+        hierarchy.append((p,matching,g))
+        n = len(g)
+        p = g
     
-    node_weights = {n:node_weight_function(n) for n in graph.nodes}
-    edge_weights = {(u,v):edge_weight_function(u,v) for u in graph.nodes for v in u.out_edges}
+    return hierarchy
 
+
+def refine(fine_graph:ContractedGraph,coarse_graph:ContractedGraph,matching:Dict[int,int]):
+    for n in fine_graph.nodes:
+        n.part = coarse_graph[matching[n.id]].part
+
+
+def find_max_matching(node_weights:Dict[SimpleNode,float],
+                    edge_weights:Dict[Tuple[SimpleNode,SimpleNode],float])->Tuple[Dict[int,int],float]:
     edges = list(edge_weights.keys())
     edge_ratings = {e: edge_rating(e[0],e[1],edge_weights,node_weights) for e in edges}
     random.shuffle(edges)
@@ -35,7 +48,6 @@ def find_max_matching(graph:Graph,node_weight_function:Optional[NodeWeightFuncti
     #find maximum matching for each path and cycle
     for node in node_weights.keys():
         path = pathset.paths[node]
-        
         if not path.active:
             continue
         if path.end is not node:
@@ -47,11 +59,10 @@ def find_max_matching(graph:Graph,node_weight_function:Optional[NodeWeightFuncti
             unpacked_cycle = unpack_path(pathset,path)
             first_edge = unpacked_cycle.pop(0)
             match_a,match_a_weight = max_path_matching(unpacked_cycle,edge_ratings)
-            
             unpacked_cycle.insert(0,first_edge)
+
             last_edge = unpacked_cycle.pop()
             match_b,match_b_weight = max_path_matching(unpacked_cycle,edge_ratings)
-
             unpacked_cycle.append(last_edge)
 
             if match_a_weight > match_b_weight:
@@ -60,6 +71,7 @@ def find_max_matching(graph:Graph,node_weight_function:Optional[NodeWeightFuncti
             else:
                 match = match_b
                 match_weight = match_b_weight
+                
         elif path.length == 1:
             if pathset.next_vertex(path.end) is path.start:
                 edge = pathset.edge_to_next(path.end)
@@ -71,16 +83,22 @@ def find_max_matching(graph:Graph,node_weight_function:Optional[NodeWeightFuncti
             unpacked_path = unpack_path(pathset,path)
             match,match_weight = max_path_matching(unpacked_path,edge_ratings)
         
-        max_match.append(match)
+        max_match.extend(match)
         max_match_weight+=match_weight
 
-    return max_match,max_match_weight
+    matching = {u.id:v.id for u,v in max_match}
+    for n in node_weights.keys():
+        if n.id not in matching:
+            matching[n.id]=n.id
+
+    return matching,max_match_weight
 
 
 def max_path_matching(unpacked_path:List[Tuple[Node,Node]],edge_ratings:Dict[Tuple[Node,Node],float])->Tuple[List[Tuple[Node,Node]],float]:
     k = len(unpacked_path)
     if k == 1:
-        return unpacked_path
+        #make sure to make a copy
+        return list(unpacked_path),edge_ratings[unpacked_path[0]]
     
     ratings = [0]*k
     decision = [False]*k
@@ -228,14 +246,14 @@ def visualize_matching(nodes,matching,file_name: str,directory: str):
         if c not in partition_color:
             matching_colors.add(c)
 
-    edge_colors={e:c for c,m in zip(matching_colors,matching) for e in m}
+    edge_colors={(u,v):c for (u,v),c in zip(matching.items(),matching_colors)}
 
     # add nodes
     for node in nodes:
         dot.node(str(node.id), label=node.scope,
                     fillcolor=partition_color[node.part])
         for i in node.in_edges:
-            dot.edge(str(i.id), str(node.id),color=edge_colors.get((i,node),"#000000"))
+            dot.edge(str(i.id), str(node.id),color=edge_colors.get((i.id,node.id),"#000000"))
 
     dot.format = "pdf"
     import os

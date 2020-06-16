@@ -1,2 +1,2 @@
 from .data_structures import QuotientGraph
-from .acyclic_partitioning import ALGORITHM,acyclic_partition,Objective
+from .acyclic_partitioning import ALGORITHM,acyclic_partition,Objective,META_ALGORITH

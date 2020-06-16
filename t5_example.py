@@ -12,10 +12,9 @@ import importlib
 import numpy as np
 from collections import Counter
 from pytorch_Gpipe import acyclic_partition
-from pytorch_Gpipe.model_partitioning.acyclic_partitioning.gpa import visualize_matching,find_max_matching
+from pytorch_Gpipe.model_partitioning.acyclic_partitioning import META_ALGORITH,Objective
 from heuristics import NodeWeightFunction,EdgeWeightFunction
 import functools
-from partition_async_pipe import AsyncPipePartitioner
 from partition_scripts_utils import run_x_tries_until_no_fail
 
 
@@ -59,7 +58,7 @@ def count_blocks(model):
     
 
 MAX_DEPTH=6
-MODEL_NAME = "t5-large"
+MODEL_NAME = "t5-small"
 
 def register_functions():
     register_new_explicit_untraced_function(operator.is_,operator)
@@ -199,7 +198,6 @@ def display_most_used_nodes(graph,threshold=5):
 COMPARE_MODELS=False
 
 if __name__ == "__main__":
-    raise NotImplementedError("currently not working")
     tokenizer = T5Tokenizer.from_pretrained(MODEL_NAME)
     print("tokenizer created")
     
@@ -227,57 +225,21 @@ if __name__ == "__main__":
         blocks = [basic_blocks[b] for b in ["T5Attention"]]
 
 
-        nwf = NodeWeightFunction(3,MULT_FACTOR=1)
-        ewf = EdgeWeightFunction(12,3,MULT_FACTOR=1)
+        nwf = NodeWeightFunction(-1,MULT_FACTOR=1000)
+        ewf = EdgeWeightFunction(12,-1,MULT_FACTOR=1000)
+        k=4
+        allocated_seconds = 10
 
-        partial_pipe_model = functools.partial(
-        pipe_model,
-        our,
-        0,
-        kwargs=lm_kwargs,
-        basic_blocks=blocks,
-        n_iter=20,
-        nparts=8,
-        node_weight_function=nwf,
-        edge_weight_function=ewf,
-        use_layers_only_graph=True,
-        use_graph_profiler=True,
-        use_network_profiler=False,
-        generate_model_parallel=True,
-        generate_explicit_del=True,
-        profile_ops=True,
-        output_file="T5_full_tied",
-        recomputation=True)
+        graph = build_graph(our,kwargs=lm_kwargs,basic_blocks=blocks)
 
-    
-        print("using async partitioner")
+        acyclic_partition(graph,k,allocated_seconds=allocated_seconds,
+        node_weight_function=nwf,edge_weight_function=ewf,meta_algorithm=META_ALGORITH.SINGLE_LEVEL,objective=Objective.EDGE_CUT)
 
-        async_pipe_partitioner = AsyncPipePartitioner(our, "T5_full_tied",
-                                                partial_pipe_model)
-        graph = run_x_tries_until_no_fail(
-            async_pipe_partitioner.partition,
-            10,
-            force_no_recomp_scopes=None,
-            allowed_mistakes=0)
+        acyclic_partition(graph,k,allocated_seconds=allocated_seconds,
+        node_weight_function=nwf,edge_weight_function=ewf,meta_algorithm=META_ALGORITH.MULTI_LEVEL,objective=Objective.EDGE_CUT)
 
-        from T5_full_tied import create_pipeline_configuration
-        from pytorch_Gpipe import PipelineConfig
-        from misc import run_analysis
-        dict_cfg = create_pipeline_configuration(DEBUG=True)
-        # PipelineConfig.fromDict(dict_cfg).toJson("cfg.json")
-        old_cfg = PipelineConfig.fromDict(dict_cfg)._to_old_format(layerDict(our,basic_blocks=blocks),tensorDict(our))
-        _, summary = run_analysis(lm_kwargs,
-                 graph,
-                 old_cfg,
-                 20,
-                 recomputation=True,
-                 bw_GBps=12,
-                 verbose=True,
-                 async_pipeline=True,
-                 add_comm_times_to_balance=True,
-                 sequential_model=None,
-                 analyze_traced_model=False)
-        
-        with open(f"T5_full_tied.py", "a") as f:
-            f.write("\n")
-            f.write('"""analysis summary\n' + summary + "\n" + '"""')
+        # acyclic_partition(graph,k,allocated_seconds=allocated_seconds,
+        # node_weight_function=nwf,edge_weight_function=ewf,meta_algorithm=META_ALGORITH.SINGLE_LEVEL,objective=Objective.STAGE_TIME)
+
+        # acyclic_partition(graph,k,allocated_seconds=allocated_seconds,
+        # node_weight_function=nwf,edge_weight_function=ewf,meta_algorithm=META_ALGORITH.MULTI_LEVEL,objective=Objective.STAGE_TIME)
