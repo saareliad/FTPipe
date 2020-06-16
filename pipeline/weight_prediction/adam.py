@@ -232,7 +232,8 @@ class AdamClonedWeightPredictionForAggregationWithWD(WeightPredictor):
                         if lr == 0:
                             continue
 
-                        d_p = 0 if p.grad is None else p.grad
+                        d_p = 0 if ((p.grad is None)
+                                    or staleness > 1) else p.grad
                         # NOTE that loss is scaled by number of aggregation steps e.g mb=8 but we can have in p.grad sum of less than mb updates.
                         # We assume here nothing about next gradients (e.g no colliniarity, norm 0)
 
