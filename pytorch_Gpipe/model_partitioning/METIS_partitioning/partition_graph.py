@@ -58,7 +58,7 @@ def METIS_partition(graph: Graph,
     if use_layers_only_graph:
         for node, part in zip(layers_graph.nodes, parts):
             node.part = part
-        induce_layer_partition(graph, layers_graph, layers_to_original)
+        graph.induce_layer_partition(layers_graph, layers_to_original)
     else:
         for node, part in zip(graph.nodes, parts):
             node.part = part
@@ -79,19 +79,4 @@ def METIS_partition(graph: Graph,
     return graph
 
 
-def induce_layer_partition(original_graph: Graph,layers_graph:Graph,
-                           layers_to_original: Dict[int, int]) -> Graph:
-    old_to_new = {v: k for k, v in layers_to_original.items()}
-    N = len(original_graph)
-    #iterate in reverse order
-    for idx in range(len(original_graph.nodes)):
-        node = original_graph[N-idx-1]
-        if node.id in old_to_new:
-            node.part = layers_graph[old_to_new[node.id]].part
-        else:
-            # as we iterate in reverse topological order we've already handled this node's outupts
-            #select the lowest partition index to ensure no cycles are created
-            node.part = sorted(node.out_edges,key=lambda n: n.part)[0].part
-        assert node.part >= 0
 
-    return original_graph

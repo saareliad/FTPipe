@@ -506,5 +506,24 @@ class Graph():
 
         return new_graph, lookup
 
+
+    def induce_layer_partition(self,layers_graph,
+                           layers_to_original: Dict[int, int]) -> "Graph":
+        assert len(self) >= len(layers_graph)
+        old_to_new = {v: k for k, v in layers_to_original.items()}
+        N = len(self)
+        #iterate in reverse order
+        for idx in range(len(self.nodes)):
+            node = self[N-idx-1]
+            if node.id in old_to_new:
+                node.part = layers_graph[old_to_new[node.id]].part
+            else:
+                # as we iterate in reverse topological order we've already handled this node's outupts
+                #select the lowest partition index to ensure no cycles are created
+                node.part = sorted(node.out_edges,key=lambda n: n.part)[0].part
+            assert node.part >= 0
+
+        return self
+
     def __getitem__(self,idx):
         return self._nodes[idx]

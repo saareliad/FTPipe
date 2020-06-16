@@ -1,7 +1,6 @@
 from pytorch_Gpipe.model_profiling import Graph,NodeWeightFunction,EdgeWeightFunction
 from .data_structures import QuotientGraph,SimpleNode,PriorityQueue,DoublePriority,VerticeStageConnections
 from .gpa import coarsening,refine
-from ..METIS_partitioning.partition_graph import induce_layer_partition
 import random
 import math
 import numpy as np
@@ -692,7 +691,7 @@ def single_level_partitioning(graph:Graph,algorithm:ALGORITHM=ALGORITHM.FIDUCCIA
     # induce partition from the layers graph to the original graph
     # recalculate partition metrics
     if use_layers_graph:
-        induce_layer_partition(graph,work_graph, layers_to_original)
+        graph.induce_layer_partition(work_graph, layers_to_original)
         #calculate metrics on original graph
         node_weights=dict()
         edge_weights=dict()
