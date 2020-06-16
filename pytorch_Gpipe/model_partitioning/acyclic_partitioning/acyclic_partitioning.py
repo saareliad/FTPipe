@@ -706,15 +706,16 @@ def single_level_partitioning(graph:Graph,algorithm:ALGORITHM=ALGORITHM.FIDUCCIA
             for o in n.out_edges:
                 edge_weights[(n,o)] = edge_weight_function(n,o)
         
-        if objective is Objective.EDGE_CUT:
-            partition_volumes = calculate_partition_volumes(k,node_weights)
-        else:
-            partition_volumes = calculate_stage_times(node_weights,edge_weights)
+    #calculate metrics
+    if objective is Objective.EDGE_CUT:
+        partition_volumes = calculate_partition_volumes(k,node_weights)
+    else:
+        partition_volumes = calculate_stage_times(node_weights,edge_weights)
+    edge_cut = calculate_edge_cut(graph.nodes,edge_weights)
     
     if DEBUG:
         QuotientGraph(graph.nodes).selfcheck()
 
-    edge_cut = calculate_edge_cut(graph.nodes,edge_weights)
 
     return Solution({n.id:n.part for n in graph.nodes},edge_cut,max(partition_volumes.values()),partition_volumes,algorithm),node_weights,edge_weights
 
@@ -737,10 +738,17 @@ def multilevel_partitioning(graph:Graph,algorithm:ALGORITHM=ALGORITHM.FIDUCCIA_M
     for fine_graph,matching,coarse_graph in reversed(hierarchy):
         ALGORITHMS[algorithm](partition_volumes,coarse_graph._edge_weights,coarse_graph._node_weights,L_max,rounds=rounds,objective=objective)
         refine(fine_graph,coarse_graph,matching)
+
     #update original graph
     root = hierarchy[0][0]
     for i in range(len(graph)):
         graph[i].part = root[i].part
+    
+    #calculate metrics
+    if objective is Objective.EDGE_CUT:
+        partition_volumes = calculate_partition_volumes(k,node_weights)
+    else:
+        partition_volumes = calculate_stage_times(node_weights,edge_weights)
     edge_cut = calculate_edge_cut(graph.nodes,edge_weights)
 
     return Solution({n.id:n.part for n in graph.nodes},edge_cut,max(partition_volumes.values()),partition_volumes,algorithm)
