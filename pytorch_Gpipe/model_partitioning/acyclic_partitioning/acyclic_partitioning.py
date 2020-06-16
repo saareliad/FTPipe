@@ -633,7 +633,7 @@ def worker(kwargs)->Solution:
         elif (solution.slowest_stage < best_solution.slowest_stage) or ((solution.slowest_stage==best_solution.slowest_stage) and (solution.edge_cut < best_solution.edge_cut)):
             best_solution = solution
         steps+=1
-    print(f"{kwargs['algorithm'].name} steps: {steps}")
+    # print(f"{kwargs['algorithm'].name} steps: {steps}")
     return best_solution
 
 ###################################################################################################

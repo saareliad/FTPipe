@@ -211,7 +211,7 @@ class ParseAcyclicPartitionerOpts:
         opts = parser.add_argument_group("AcyclicPartitioner options")
         opts.add_argument("--epsilon",default=0.1,help="imbalance factor")
         opts.add_argument("--rounds",default=10,help="number of optimization rounds default is 10")
-        opts.add_argument("--allocated_seconds",default=10,help="run time allocated to the partitioning algorithm default is 10 seconds")
+        opts.add_argument("--allocated_seconds",default=20,help="run time allocated to the partitioning algorithm default is 20 seconds")
         opts.add_argument("--multilevel",action="store_true",default=False,help="wether to use multilevel partitioning algorithm")
         opts.add_argument("--objective",choices=["edge_cut","stage_time"],default="edge_cut",help="partitioning optimization objective")
 

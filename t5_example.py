@@ -228,7 +228,7 @@ if __name__ == "__main__":
         nwf = NodeWeightFunction(-1,MULT_FACTOR=1000)
         ewf = EdgeWeightFunction(12,-1,MULT_FACTOR=1000)
         k=4
-        allocated_seconds = 10
+        allocated_seconds = 20
 
         graph = build_graph(our,kwargs=lm_kwargs,basic_blocks=blocks)
 
