@@ -238,8 +238,8 @@ if __name__ == "__main__":
         acyclic_partition(graph,k,allocated_seconds=allocated_seconds,
         node_weight_function=nwf,edge_weight_function=ewf,meta_algorithm=META_ALGORITH.MULTI_LEVEL,objective=Objective.EDGE_CUT)
 
-        # acyclic_partition(graph,k,allocated_seconds=allocated_seconds,
-        # node_weight_function=nwf,edge_weight_function=ewf,meta_algorithm=META_ALGORITH.SINGLE_LEVEL,objective=Objective.STAGE_TIME)
+        acyclic_partition(graph,k,allocated_seconds=allocated_seconds,
+        node_weight_function=nwf,edge_weight_function=ewf,meta_algorithm=META_ALGORITH.SINGLE_LEVEL,objective=Objective.STAGE_TIME)
 
-        # acyclic_partition(graph,k,allocated_seconds=allocated_seconds,
-        # node_weight_function=nwf,edge_weight_function=ewf,meta_algorithm=META_ALGORITH.MULTI_LEVEL,objective=Objective.STAGE_TIME)
+        acyclic_partition(graph,k,allocated_seconds=allocated_seconds,
+        node_weight_function=nwf,edge_weight_function=ewf,meta_algorithm=META_ALGORITH.MULTI_LEVEL,objective=Objective.STAGE_TIME)

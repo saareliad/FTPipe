@@ -407,7 +407,7 @@ PartitionState = namedtuple("PartitionState","edge_weights node_weights partitio
 #assumes W(u,v) > 0
 
 ###################################################################################################
-#TODO not accurate
+
 def calculate_stage_time_gain(v:SimpleNode,dest:int,state:PartitionState)->DoublePriority:
     #TODO maybe include summed distance from avg as penalty
     # or it's negation as gain
@@ -431,7 +431,7 @@ def calculate_stage_time_gain(v:SimpleNode,dest:int,state:PartitionState)->Doubl
 
     return DoublePriority(stage_gain,edge_gain)
 
-#TODO not accurate
+
 def update_stage_times(v:SimpleNode,dest:int,node_weights:Dict[SimpleNode,float],
                                 edge_weights:Dict[Tuple[SimpleNode,SimpleNode],float],stage_times:Dict[int,float])->float:    
     stage_times[v.part] -= node_weights[v]
@@ -451,16 +451,22 @@ def update_stage_times(v:SimpleNode,dest:int,node_weights:Dict[SimpleNode,float]
         if u.part == v.part:
             # u and v were at same partition
             # move adds comm less gain
+            if (v.part,w,dest,w) in comms:
+                continue
             comms.add((v.part,w,dest,w))
             edge_gain -= w
         elif u.part == dest:
             # u and v will be at same partition
             # move reduces comm more gain
+            if (v.part,-w,dest,-w) in comms:
+                continue
             comms.add((v.part,-w,dest,-w))
             edge_gain += w
         else:
             # u and v were and will be at different partitions
             # move comm from src to dst no gain
+            if (v.part,-w,dest,w) in comms:
+                continue
             comms.add((v.part,-w,dest,w))
         
         for p0,comm0,p1,comm1 in comms:
@@ -469,21 +475,27 @@ def update_stage_times(v:SimpleNode,dest:int,node_weights:Dict[SimpleNode,float]
     
     return edge_gain
 
-###################################################################################################
-# counts once per use instead of once per stage
-#TODO not accurate
+
 def calculate_edge_gain(v:SimpleNode,dest:int,state:PartitionState)->float:
     # C_in(v,dest,edge_weights) - C_out(v,v.part,edge_weights) + C_out(v,dest,edge_weights) - C_in(v,v.part,edge_weights)
 
     edge_weights = state.edge_weights
     gain = 0
+    stages=set()
     for n in v.in_edges:
+        if n.part in stages:
+            continue
+        stages.add(n.part)
         if n.part == dest:
             gain += edge_weights[(n,v)]
         elif n.part == v.part:
             gain -= edge_weights[(n,v)]
 
+    stages.clear()
     for n in v.out_edges:
+        if n.part in stages:
+            continue
+        stages.add(n.part)
         if n.part == dest:
             gain += edge_weights[(v,n)]
         elif n.part == v.part:
@@ -491,16 +503,18 @@ def calculate_edge_gain(v:SimpleNode,dest:int,state:PartitionState)->float:
 
     return gain
 
-#TODO not accurate
+###################################################################################################
+
 def calculate_edge_cut(nodes:Iterator[SimpleNode],edge_weights:Dict[Tuple[SimpleNode,SimpleNode],float])->float:
     edge_cut=0
     for n in nodes:
+        stages=set()
         for o in n.out_edges:
-            if (n.part != o.part):
+            if (n.part != o.part) and (o.part not in stages):
+                stages.add(o.part)
                 edge_cut += edge_weights[(n,o)]
     return edge_cut
 
-###################################################################################################
 
 def calculate_partition_volumes(k:int,node_weights:Dict[SimpleNode,float])->Dict[int,float]:
     partition_volumes={i:0 for i in range(k)}
@@ -519,7 +533,7 @@ def calculate_stage_times(node_weights:Dict[SimpleNode,float],edge_weights:Dict[
         #record sent activation only once per destination
         destinations=set()
         for o in n.out_edges:
-            if (o.part == n.part) or o.part in destinations:
+            if (o.part == n.part) or (o.part in destinations):
                 continue
             e = edge_weights[(n,o)]
             destinations.add(o.part)
@@ -679,14 +693,6 @@ def single_level_partitioning(graph:Graph,algorithm:ALGORITHM=ALGORITHM.FIDUCCIA
         work_graph.save_as_pdf(f"{algorithm.name}_after_refinmemt",".",
                                 node_weight_function=node_weight_function,
                                 edge_weight_function=edge_weight_function)
-    if DEBUG:
-        if objective is Objective.EDGE_CUT:
-            vs = calculate_partition_volumes(k,node_weights)
-        else:
-            vs = calculate_stage_times(node_weights,edge_weights)
-
-        for i in range(k):
-            assert vs[i] == partition_volumes[i],algorithm.name
 
     # induce partition from the layers graph to the original graph
     # recalculate partition metrics
@@ -736,15 +742,6 @@ def multilevel_partitioning(graph:Graph,algorithm:ALGORITHM=ALGORITHM.FIDUCCIA_M
     for i in range(len(graph)):
         graph[i].part = root[i].part
     edge_cut = calculate_edge_cut(graph.nodes,edge_weights)
-
-    if DEBUG:
-        if objective is Objective.EDGE_CUT:
-            vs = calculate_partition_volumes(k,node_weights)
-        else:
-            vs = calculate_stage_times(node_weights,edge_weights)
-            
-        for i in range(k):
-            assert vs[i] == partition_volumes[i],(vs[i],partition_volumes[i])
 
     return Solution({n.id:n.part for n in graph.nodes},edge_cut,max(partition_volumes.values()),partition_volumes,algorithm)
 
