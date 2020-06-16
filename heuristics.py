@@ -3,6 +3,8 @@ from functools import reduce
 import operator
 from pytorch_Gpipe.model_profiling import Node, NodeTypes, ExecTimes
 from pytorch_Gpipe.utils import flatten
+from collections import defaultdict
+
 __all__ = ["NodeWeightFunction", "EdgeWeightFunction"]
 
 
@@ -23,13 +25,46 @@ class NodeWeightFunction():
                 node.weight.forward_time))
 
 
+class HeterogeneousBandwidthOracle:
+    """Use to discover bandwidth between nodes"""
+    DEFAULT_PARTITION_SRC = -1
+    DEFAULT_PARTITION_TGT = -2
+
+    def __init__(self, default_bw_GBps=12, GPU_TO_GPU_BW=dict()):
+        """
+        default_bw_GBps: float
+        GPU_TO_GPU_BW: dict (src,taget) --> float
+        """
+        super().__init__()
+        self.default_bw_GBps = default_bw_GBps
+        self.GPU_TO_GPU_BW = defaultdict(self.default_bw)
+        self.GPU_TO_GPU_BW.update(GPU_TO_GPU_BW)
+
+    def __call__(self, u: Node, v: Node):
+        # get gpu id
+        gpu_src = getattr(u, "part", self.DEFAULT_PARTITION_SRC)
+        gpu_tgt = getattr(v, "part", self.DEFAULT_PARTITION_TGT)
+
+        # get bw
+        bw = self.GPU_TO_GPU_BW[(gpu_src, gpu_tgt)]
+        return bw
+
+    def default_bw(self):
+        """ dummy function to use in defaultdict
+        # (to avoid using a local function which can't be pickled)
+        """
+        return self.default_bw_GBps
+
+
 class EdgeWeightFunction():
     def __init__(self,
                  bw_GBps,
                  bwd_to_fwd_ratio=-1,
                  MULT_FACTOR=1000,
                  penalty=1e4):
-        self.bw = bw_GBps
+        # TODO: change the default behavior to allow hetrogenous BW,
+        # HeterogeneousBandwidthOracle should be initialed at caller
+        self.bw = HeterogeneousBandwidthOracle(default_bw_GBps=bw_GBps)
         self.ratio = bwd_to_fwd_ratio
         self.MULT_FACTOR = MULT_FACTOR
         self.penalty = penalty
@@ -44,16 +79,16 @@ class EdgeWeightFunction():
             for shape, dtype in zip(flatten(u.tensor_shape),
                                     flatten(u.tensor_dtype)):
                 if isinstance(shape, torch.Size):
-                    v = reduce(operator.mul, shape, 1)
+                    vol = reduce(operator.mul, shape, 1)
                     # include dtype size
-                    v *= torch.empty(1, dtype=dtype).element_size()
+                    vol *= torch.empty(1, dtype=dtype).element_size()
                 else:
-                    v = 4
-                volume += v
+                    vol = 4
+                volume += vol
 
             volume /= MB
             # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
-            w = max(1, (self.MULT_FACTOR * (volume / self.bw)))
+            w = max(1, (self.MULT_FACTOR * (volume / self.bw(u, v))))
 
             # NOTE (1): we traverse every edge twice,
             # NOTE (2): If we have bwd to fwd ratio, than have to normalize by it.
