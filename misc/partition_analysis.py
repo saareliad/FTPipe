@@ -14,8 +14,10 @@ from typing import List, Set
 from functools import wraps
 from contextlib import contextmanager
 from pytorch_Gpipe.utils import flatten, move_tensors, nested_map
-# TODO: compare expected speedup to execution without recomputation,
-# as async pipe partitioning will put many layers without recompuatation, therefore making it hard to understand which is the best partitioning.
+from .analysis_utils import (extra_communication_time_lower_bound,
+                             extra_communication_time_upper_bound,
+                             upper_utilization_bound, lower_utilization_bound,
+                             apply_ratio)
 
 
 def rounddict(d, x=2):
@@ -378,7 +380,9 @@ def run_analysis(sample,
 # analyze generated partitions
 # ##############################
 
-
+# TODO: also read req grad requirements, as they don't affect backward send times
+# TODO: calculate Backward send times with differnt links (sending grads)
+# TODO: calculate Forward send times with different links (sending activations)
 def profile_execution(model_inputs,
                       partition_config,
                       n_iters,
@@ -386,7 +390,9 @@ def profile_execution(model_inputs,
                       bw_GBps=12,
                       async_pipeline=False,
                       add_comm_times_to_balance=True,
-                      stages_on_same_gpu=[]):
+                      stages_on_same_gpu=[],
+                      parallel_comm_and_comp_ratio=0,
+                      different_links_between_accelerators=True):
     '''perfrom forward/backward passes and measure execution times accross n batches
     '''
     n_partitions = sum(1 for k in partition_config if isinstance(k, int))
@@ -439,7 +445,9 @@ def profile_execution(model_inputs,
             if all(tensor in activations
                    for tensor in partition_config[idx]['inputs']):
                 inputs = []
+                inputs_rcv_from_stage = []
                 in_size_mb = 0
+
                 for tensor in partition_config[idx]['inputs']:
                     recv_from = []
                     # cehck if same config
@@ -452,23 +460,52 @@ def profile_execution(model_inputs,
                     if not recv_from:
                         assert tensor in partition_config['model inputs']
                         is_same_gpu = False
+                        sender_stage_id = None
                     else:
-                        is_same_gpu = recv_from[0] in my_gpu_set
+                        assert(len(recv_from) == 1)
+                        sender_stage_id = recv_from[0]
+                        is_same_gpu = sender_stage_id in my_gpu_set
 
                     t = activations[tensor]
                     # shared weights support
                     if tensor in is_parameter:
                         t.requires_grad_()
                     inputs.append(t)
+                    inputs_rcv_from_stage.append(sender_stage_id)
 
+                    # TODO: analysis for differnt GPUs
                     if not is_same_gpu:
                         in_size_mb += tensor_sizes(t)
 
                 # input statistics
                 in_size_mb /= 1e6
-                recv_time = in_size_mb / bw_GBps
 
-                # time measurement
+                # Calculate Forward recv time
+                if different_links_between_accelerators:
+                    recv_sizes_by_gpu = defaultdict(float)
+                    for t, sender_stage_id in zip(inputs, inputs_rcv_from_stage):
+                        if sender_stage_id is None:
+                            continue
+                        is_same_gpu = sender_stage_id in my_gpu_set
+                        if is_same_gpu:
+                            continue
+                        
+                        recv_sizes_by_gpu[sender_stage_id] += (tensor_sizes(t) / 1e6)
+                    
+                    max_recv_time = 0
+                    for s, size in recv_sizes_by_gpu.items():
+                        # TODO: currently assuming same bandwidth
+                        t = size / bw_GBps
+                        max_recv_time = max(max_recv_time, t)
+
+                    recv_time = max_recv_time
+                else:
+                    recv_time = in_size_mb / bw_GBps
+                
+                # TODO: calculate Backward send times with differnt links (sending grads)
+                # TODO: calculate Forward send times with different links (sending activations)
+                
+                # Compute times measurement
                 with force_out_of_place(partition_config[idx]['model']):
                     if torch.cuda.is_available():
                         f_time, b_time, outputs = cuda_time(
@@ -494,6 +531,11 @@ def profile_execution(model_inputs,
                     assert "tuple::__add__" in partition_config[idx][
                         'outputs'][0]
                     outputs = (outputs, )
+                
+                # outputs
+                stage_outputs = outputs
+                stage_outputs_sent_to = []
+
                 for o, t in zip(partition_config[idx]['outputs'], outputs):
                     # TODO: figure out where this is sent too.
                     sent_to = []
@@ -502,9 +544,12 @@ def profile_execution(model_inputs,
                             continue
                         if o in partition_config[ii]['inputs']:
                             sent_to.append(ii)
+    
+                    stage_outputs_sent_to.append(sent_to)
+
                     if len(sent_to) > 1:
                         if current_iteration_num == 0:
-                            warning = f"tensor {o} set to more than 1 target. Inaccurate analysis"
+                            warning = f"tensor {o} sent to more than 1 target. Inaccurate (backward) communication time analysis"
                             warnings_list.append(warning)
                             warnings.warn(warning)
 
@@ -530,10 +575,14 @@ def profile_execution(model_inputs,
                     activations[o] = move_and_detach(t, 'cpu')
                     # TODO: figure out where this is sent too.
                     t_mb = (tensor_sizes(t)) / 1e6
-                    t_send = t_mb / bw_GBps
                     if not sent_to_same_gpu:
                         out_size_mb += t_mb  # This is relevant for buffer, maybe
-                        send_time += t_send
+
+                # Caluclate forward (activations) send time
+                if different_links_between_accelerators:
+                    raise NotImplementedError()  # TODO
+                else:
+                    send_time = out_size_mb / bw_GBps
 
                 del outputs
 
@@ -555,11 +604,41 @@ def profile_execution(model_inputs,
                 nocommf_times[idx].append(f_time)
                 nocommb_times[idx].append(b_time)
 
+                # TODO: calculate backward (gradients) send times
+                
+                if different_links_between_accelerators:
+                    raise NotImplementedError()
+                else:
+                    # FIXME: its not accuracte
+                    # FIXME: targets on differnt accelerators have different links
+                    bwd_send_time = in_size_mb / bw_GBps  # HACK:
+     
                 if add_comm_times_to_balance:
-                    if not is_last_partition:
-                        f_time += send_time
-                    if not is_first_partition:
-                        b_time += in_size_mb / bw_GBps  # HACK: activation input = gradient size
+                    if not parallel_comm_and_comp_ratio:
+                        if not is_last_partition:
+                            f_time += send_time
+                        if not is_first_partition:
+                            b_time += bwd_send_time
+                    else:
+                        # EXPERIMENTAL
+                        PARALLEL_RATIO = parallel_comm_and_comp_ratio
+                        bwd_plus_fwd = b_time + f_time  # computational times
+                        if not is_last_partition:
+                            lb = extra_communication_time_lower_bound(
+                                bwd_plus_fwd, send_time)
+                            ub = extra_communication_time_upper_bound(
+                                bwd_plus_fwd, send_time)
+                            extra_fwd_send_time = apply_ratio(
+                                ub, lb, PARALLEL_RATIO)
+                            f_time += extra_fwd_send_time
+                        if not is_first_partition:
+                            lb = extra_communication_time_lower_bound(
+                                bwd_plus_fwd, bwd_send_time)
+                            ub = extra_communication_time_upper_bound(
+                                bwd_plus_fwd, bwd_send_time)
+                            extra_bwd_send_time = apply_ratio(
+                                ub, lb, PARALLEL_RATIO)
+                            b_time += extra_bwd_send_time
 
                 f_times[idx].append(f_time)
                 b_times[idx].append(b_time)
@@ -573,16 +652,16 @@ def profile_execution(model_inputs,
 
 
 @contextmanager
-def force_out_of_place(model:torch.nn.Module):
-    state=dict()
+def force_out_of_place(model: torch.nn.Module):
+    state = dict()
     for m in model.modules():
-        if hasattr(m,"inplace") and isinstance(m.inplace,bool):
-            state[m]=m.inplace
-            m.inplace=False
-    
+        if hasattr(m, "inplace") and isinstance(m.inplace, bool):
+            state[m] = m.inplace
+            m.inplace = False
+
     yield
 
-    for m,s in state.items():
+    for m, s in state.items():
         m.inplace = s
 
 
@@ -1041,7 +1120,8 @@ def topology_aware_balance(f_times, b_times, cutting_edges):
 def run_partitions(model_inputs, partition_config):
     #kwarg input
     if isinstance(model_inputs, dict):
-        model_inputs = tuple([model_inputs[i] for i in partition_config['model inputs']])
+        model_inputs = tuple(
+            [model_inputs[i] for i in partition_config['model inputs']])
 
     n_partitions = sum(1 for k in partition_config if isinstance(k, int))
 

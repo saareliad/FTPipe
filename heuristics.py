@@ -59,6 +59,17 @@ class HeterogeneousBandwidthOracle:
         return self.default_bw_GBps
 
 
+# TODO: use it in analysis
+class HeterogeneousBandwidthOracleGPUs(HeterogeneousBandwidthOracle):
+    """ same thing, but called with partition ids instead of nodes """
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+
+    def __call__(self, gpu_src: int, gpu_tgt: int):
+        # get bw
+        return self.GPU_TO_GPU_BW[(gpu_src, gpu_tgt)]
+
+
 class EdgeWeightFunction():
     def __init__(self,
                  bw_GBps,

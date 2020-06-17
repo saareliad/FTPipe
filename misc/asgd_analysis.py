@@ -4,6 +4,10 @@ from pytorch_Gpipe.utils import move_tensors, flatten
 # NOTE: can so simillar anaysis for ZerOs,
 # (multiply communication by x1.5 according to what they claim)
 import torch.nn.functional as F
+from .analysis_utils import (extra_communication_time_lower_bound,
+                             extra_communication_time_upper_bound,
+                             upper_utilization_bound, lower_utilization_bound,
+                             apply_ratio)
 
 
 def run_analysis(sample,
@@ -112,35 +116,6 @@ def cuda_computation_times(model, inputs):
     return fb_time
 
 
-def extra_communication_time_lower_bound(comp_time, comm_time):
-    """communication is completly parallel to computation """
-    if comp_time >= comm_time:
-        return 0
-    else:
-        return comm_time - comp_time
-
-
-def extra_communication_time_upper_bound(comp_time, comm_time):
-    """communication is completly not parallel to computation """
-    return comm_time
-
-
-def upper_utilization_bound(comp_time, comm_time):
-    """communication is completly parallel to computation """
-    comm_time = extra_communication_time_lower_bound(comp_time, comm_time)
-    return comp_time / (comm_time + comp_time)
-
-
-def lower_utilization_bound(comp_time, comm_time):
-    """communication is completly not parallel to computation """
-    comm_time = extra_communication_time_upper_bound(comp_time, comm_time)
-    return comp_time / (comm_time + comp_time)
-
-
-def apply_ratio(upper, lower, ratio):
-    return (upper * (1 - ratio)) + (lower * ratio)
-
-
 def asgd_anayslsis_speedup_vs_ratio_graph(
     all_ratios,
     sample,
@@ -165,4 +140,3 @@ def asgd_anayslsis_speedup_vs_ratio_graph(
 #     import transfomers
 
 #     model = transfomers.BertModel.from_pretrained('bert-base-uncased')
-
