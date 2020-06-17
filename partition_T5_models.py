@@ -1,32 +1,33 @@
 from models.normal.NLP_models.modeling_t5 import T5ForConditionalGeneration, T5Model
 from models.normal.NLP_models.modeling_T5_tied_weights import T5ForConditionalGeneration as TiedT5ForConditionalGeneration, T5Model as TiedT5Model
-from transformers import T5Tokenizer,T5Config,T5_PRETRAINED_MODEL_ARCHIVE_MAP
+from transformers import T5Tokenizer, T5Config, T5_PRETRAINED_MODEL_ARCHIVE_MAP
 import torch
 import operator
 import math
-from pytorch_Gpipe import PipelineConfig,pipe_model
-from pytorch_Gpipe.model_profiling.tracer import register_new_explicit_untraced_function,register_new_traced_function
-from pytorch_Gpipe.utils import layerDict,tensorDict
+from pytorch_Gpipe import PipelineConfig, pipe_model
+from pytorch_Gpipe.model_profiling.tracer import register_new_explicit_untraced_function, register_new_traced_function
+from pytorch_Gpipe.utils import layerDict, tensorDict
 import argparse
 import importlib
-from heuristics import NodeWeightFunction,EdgeWeightFunction
+from heuristics import NodeWeightFunction, EdgeWeightFunction
 import functools
 from partition_async_pipe import partition_async_pipe
-from partition_scripts_utils import choose_blocks,ParseAcyclicPartitionerOpts,ParseMetisOpts,ParsePartitioningOpts,record_cmdline
-from misc import run_analysis,run_partitions
+from partition_scripts_utils import choose_blocks, ParseAcyclicPartitionerOpts, ParseMetisOpts, ParsePartitioningOpts, record_cmdline
+from misc import run_analysis, run_partitions
 
 
 def register_functions():
-    register_new_explicit_untraced_function(operator.is_,operator)
-    register_new_explicit_untraced_function(operator.is_not,operator)
-    register_new_traced_function(math.log,math)
-    register_new_traced_function(torch.einsum,torch)
+    register_new_explicit_untraced_function(operator.is_, operator)
+    register_new_explicit_untraced_function(operator.is_not, operator)
+    register_new_traced_function(math.log, math)
+    register_new_traced_function(torch.einsum, torch)
+
 
 def get_model_and_tokenizer(args):
     config = T5Config.from_pretrained(args.model)
-    config.output_attentions=False
-    config.output_hidden_states=False
-    setattr(config,"output_only",True)
+    config.output_attentions = False
+    config.output_hidden_states = False
+    setattr(config, "output_only", True)
     tokenizer = T5Tokenizer.from_pretrained(args.model)
     base = not args.lmhead
     tied = args.stateless_tied
@@ -39,41 +40,57 @@ def get_model_and_tokenizer(args):
         model_cls = TiedT5ForConditionalGeneration
     else:
         model_cls = T5ForConditionalGeneration
-    model = model_cls.from_pretrained(args.model,config=config).to(args.device).train()
+    model = model_cls.from_pretrained(args.model,
+                                      config=config).to(args.device).train()
 
     if tied:
         model.make_stateless()
-    
-    return model,tokenizer
 
-def get_input(args,tokenizer,analysis=False):
-    input_ids = tokenizer.encode(
-        "Hello, my dog is cute", return_tensors="pt").to(args.device)  # Batch (1,6)
-    
+    return model, tokenizer
+
+
+def get_input(args, tokenizer, analysis=False):
+    input_ids = tokenizer.encode("Hello, my dog is cute",
+                                 return_tensors="pt").to(
+                                     args.device)  # Batch (1,6)
+
     if analysis:
-        input_ids = input_ids.repeat(args.analysis_batch_size,10).contiguous() #Batch (ab,60)
+        input_ids = input_ids.repeat(args.analysis_batch_size,
+                                     10).contiguous()  #Batch (ab,60)
     else:
-        input_ids = input_ids.repeat(args.partitioning_batch_size,10).contiguous() #Batch (pb,60)
-    
+        input_ids = input_ids.repeat(args.partitioning_batch_size,
+                                     10).contiguous()  #Batch (pb,60)
+
     if args.lmhead:
-        kwargs = {"input_ids":input_ids,"decoder_input_ids":input_ids,"lm_labels":input_ids,"use_cache":False}
+        kwargs = {
+            "input_ids": input_ids,
+            "decoder_input_ids": input_ids,
+            "lm_labels": input_ids,
+            "use_cache": False
+        }
     else:
-        kwargs = {"input_ids":input_ids,"decoder_input_ids":input_ids,"use_cache":False}
-    
+        kwargs = {
+            "input_ids": input_ids,
+            "decoder_input_ids": input_ids,
+            "use_cache": False
+        }
+
     return kwargs
 
 
-
 class ParsePartitioningT5Opts(ParsePartitioningOpts):
-    def _extra(self,parser):
-        parser.add_argument("--model",choices=T5_PRETRAINED_MODEL_ARCHIVE_MAP.keys(),
+    def _extra(self, parser):
+        parser.add_argument("--model",
+                            choices=T5_PRETRAINED_MODEL_ARCHIVE_MAP.keys(),
                             default='t5-small')
-        parser.add_argument("--stateless_tied",action="store_true",default=False)
-        parser.add_argument("--lmhead",action="store_true",default=False)
-    
-    def set_defaults(self,parser):
+        parser.add_argument("--stateless_tied",
+                            action="store_true",
+                            default=False)
+        parser.add_argument("--lmhead", action="store_true", default=False)
+
+    def set_defaults(self, parser):
         d = {
-            "model":"t5-small",
+            "model": "t5-small",
             "partitioning_batch_size": 64,
             "n_iter": 50,
             "output_file": 'T5_small',
@@ -103,23 +120,23 @@ def parse_cli():
         args.output_file = args.output_file[:-3]
 
     args.METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
-    args.acyclic_opt = ParseAcyclicPartitionerOpts.acyclic_opts_dict_from_parsed_args(args)
+    args.acyclic_opt = ParseAcyclicPartitionerOpts.acyclic_opts_dict_from_parsed_args(
+        args)
 
-    
-    device = "cuda" if (torch.cuda.is_available() and (not args.model_too_big)) else "cpu"
+    device = "cuda" if (torch.cuda.is_available() and
+                        (not args.model_too_big)) else "cpu"
     device = torch.device(device)
     args.device = device
 
     return args
 
 
-
 if __name__ == "__main__":
-    args= parse_cli()
+    args = parse_cli()
 
-    model,tokenizer = get_model_and_tokenizer(args)
+    model, tokenizer = get_model_and_tokenizer(args)
 
-    sample = get_input(args,tokenizer,analysis=False)
+    sample = get_input(args, tokenizer, analysis=False)
 
     register_functions()
     # partition the model using our profiler
@@ -131,12 +148,12 @@ if __name__ == "__main__":
     n_partitions = args.n_partitions
     batch_dim = 0
     bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
-    args.basic_blocks = choose_blocks(model,args)
+    args.basic_blocks = choose_blocks(model, args)
     partial_pipe_model = functools.partial(
         pipe_model,
         model,
         batch_dim,
-        basic_blocks = args.basic_blocks,
+        basic_blocks=args.basic_blocks,
         depth=args.depth,
         kwargs=sample,
         nparts=n_partitions,
@@ -154,13 +171,13 @@ if __name__ == "__main__":
         n_iter=n_iter,
         recomputation=recomputation,
         save_memory_mode=args.save_memory_mode,
-        use_METIS= args.use_METIS,
+        use_METIS=args.use_METIS,
         acyclic_opt=args.acyclic_opt,
         METIS_opt=args.METIS_opt)
 
     if args.async_pipeline and (not args.no_recomputation):
         print("using async partitioner")
-        graph = partition_async_pipe(args,model,0,kwargs=sample)
+        graph = partition_async_pipe(args, model, 0, kwargs=sample)
     else:
         graph = partial_pipe_model()
 
@@ -174,7 +191,6 @@ if __name__ == "__main__":
     generated = importlib.import_module(module_path)
     create_pipeline_configuration = generated.create_pipeline_configuration
 
-
     config = create_pipeline_configuration(DEBUG=True)
 
     pipe_config = PipelineConfig.fromDict(config)
@@ -185,12 +201,12 @@ if __name__ == "__main__":
         analysis_config = pipe_config._to_old_format(
             layerDict(model, depth=depth, basic_blocks=blocks),
             tensorDict(model))
-    
+
     if not args.no_test_run:
         _ = run_partitions(sample, analysis_config)
 
     if not args.no_analysis:
-        sample = get_input(args,tokenizer, analysis=True)
+        sample = get_input(args, tokenizer, analysis=True)
         analysis_result, summary = run_analysis(
             sample,
             graph,
