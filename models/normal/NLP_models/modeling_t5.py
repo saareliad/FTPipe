@@ -1154,7 +1154,7 @@ class T5Stack(T5PreTrainedModel):
                 #NOTE is not None
                 # if self.is_decoder and encoder_hidden_states is not None:
                 if self.is_decoder and is_not_None(encoder_hidden_states):
-                    encoder_decoder_position_bias = layer_outputs[4 if self.output_attentions else 3]
+                    encoder_decoder_position_bias = layer_outputs[5 if self.output_attentions else 3]
             # append next layer key value states
             present_key_value_states = present_key_value_states + (present_key_value_state,)
 
