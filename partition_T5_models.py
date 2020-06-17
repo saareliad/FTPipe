@@ -1,6 +1,6 @@
 from models.normal.NLP_models.modeling_t5 import T5ForConditionalGeneration, T5Model
 from models.normal.NLP_models.modeling_T5_tied_weights import T5ForConditionalGeneration as TiedT5ForConditionalGeneration, T5Model as TiedT5Model
-from transformers import T5Tokenizer, T5Config, T5_PRETRAINED_MODEL_ARCHIVE_MAP
+from transformers import T5Tokenizer, T5Config
 import torch
 import operator
 import math
@@ -14,6 +14,9 @@ import functools
 from partition_async_pipe import partition_async_pipe
 from partition_scripts_utils import choose_blocks, ParseAcyclicPartitionerOpts, ParseMetisOpts, ParsePartitioningOpts, record_cmdline
 from misc import run_analysis, run_partitions
+
+# See https://huggingface.co/models
+T5_PRETRAINED_MODELS = {'t5-small', 't5-base', 't5-large', 't5-3b', 't5-11b'}
 
 
 def register_functions():
@@ -81,7 +84,7 @@ def get_input(args, tokenizer, analysis=False):
 class ParsePartitioningT5Opts(ParsePartitioningOpts):
     def _extra(self, parser):
         parser.add_argument("--model",
-                            choices=T5_PRETRAINED_MODEL_ARCHIVE_MAP.keys(),
+                            choices=T5_PRETRAINED_MODELS,
                             default='t5-small')
         parser.add_argument("--stateless_tied",
                             action="store_true",
