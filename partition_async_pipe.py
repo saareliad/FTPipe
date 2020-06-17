@@ -6,28 +6,32 @@ import functools
 from pytorch_Gpipe import trace_module, Graph, GraphProfiler, execute_graph, ExecTimes, acyclic_partition, infer_req_grad, compile_partitioned_model, METIS_partition, profile_network
 from pytorch_Gpipe.model_profiling import Node
 from pytorch_Gpipe.utils import move_tensors
-from heuristics import NodeWeightFunction, EdgeWeightFunction
+from heuristics import NodeWeightFunction, EdgeWeightFunction, NodeWeightFunctionWithRatioAutoInfer
 
 FullExecTimes = namedtuple('FullExecTimes', 'recomputation no_recomputation')
 
 
-def partition_async_pipe(cmd_args,
-                         model,
-                         batch_dim: int = 0,
-                         args: tuple = None,
-                         kwargs: Dict = None,
-                         MULT_FACTOR=1e4,
-                         penalty=1e4):
+def partition_async_pipe(
+    cmd_args,
+    model,
+    batch_dim: int = 0,
+    args: tuple = None,
+    kwargs: Dict = None,
+    MULT_FACTOR=1e4,
+    penalty=1e4,
+):
     if args is None:
         args = tuple()
     if kwargs is None:
         kwargs = dict()
 
-    #combined node/edge weight function depends on how many parameters are passed
+    # combined node/edge weight function depends on how many parameters are passed
     evaluator = Evaluator(cmd_args.bw,
                           bwd_to_fwd_ratio=cmd_args.bwd_to_fwd_ratio,
                           MULT_FACTOR=MULT_FACTOR,
-                          penalty=penalty)
+                          penalty=penalty,
+                          auto_infer_node_bwd_fwd_ratio=cmd_args.
+                          auto_infer_node_bwd_to_fwd_ratio)
 
     graph = trace_module(model,
                          args=args,
@@ -105,6 +109,7 @@ def partition_async_pipe(cmd_args,
 
     return graph
 
+
 def full_profile(graph: Graph, model: torch.nn.Module, args: tuple,
                  kwargs: dict, cmd_args) -> Dict[Node, FullExecTimes]:
     if cmd_args.use_network_profiler:
@@ -139,7 +144,7 @@ def full_profile(graph: Graph, model: torch.nn.Module, args: tuple,
                           enforce_out_of_place=True)
             return profiler.get_weights()
 
-    #profile recomputation
+    # profile recomputation
     if cmd_args.save_memory_mode:
         model, args, kwargs = move_tensors((model, args, kwargs), 'cpu')
 
@@ -148,7 +153,7 @@ def full_profile(graph: Graph, model: torch.nn.Module, args: tuple,
         if n.scope not in recomputation_times:
             recomputation_times[n.scope] = ExecTimes(0, 0)
 
-    #profile no recomputation
+    # profile no recomputation
     if cmd_args.save_memory_mode:
         model, args, kwargs = move_tensors((model, args, kwargs), 'cpu')
 
@@ -164,11 +169,21 @@ def full_profile(graph: Graph, model: torch.nn.Module, args: tuple,
     }
 
 
-
 class Evaluator():
-    def __init__(self, bw, bwd_to_fwd_ratio=-1, MULT_FACTOR=1000, penalty=1e4):
+    def __init__(self,
+                 bw,
+                 bwd_to_fwd_ratio=-1,
+                 MULT_FACTOR=1000,
+                 penalty=1e4,
+                 auto_infer_node_bwd_fwd_ratio=False):
         self.node_evaluator = NodeWeightFunction(
-            bwd_to_fwd_ratio=bwd_to_fwd_ratio, MULT_FACTOR=MULT_FACTOR)
+            bwd_to_fwd_ratio=bwd_to_fwd_ratio, MULT_FACTOR=MULT_FACTOR
+        ) if not auto_infer_node_bwd_fwd_ratio else NodeWeightFunctionWithRatioAutoInfer(
+            MULT_FACTOR=MULT_FACTOR)
+        
+        if auto_infer_node_bwd_fwd_ratio:
+            bwd_to_fwd_ratio = -1  # count once
+
         self.edge_evaluator = EdgeWeightFunction(
             bw_GBps=bw,
             bwd_to_fwd_ratio=bwd_to_fwd_ratio,

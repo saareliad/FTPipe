@@ -5,7 +5,10 @@ from pytorch_Gpipe.model_profiling import Node, NodeTypes, ExecTimes
 from pytorch_Gpipe.utils import flatten
 from collections import defaultdict
 
-__all__ = ["NodeWeightFunction", "EdgeWeightFunction"]
+__all__ = [
+    "NodeWeightFunction", "EdgeWeightFunction",
+    "NodeWeightFunctionWithRatioAutoInfer"
+]
 
 
 class NodeWeightFunction():
@@ -108,7 +111,7 @@ class EdgeWeightFunction():
 #############
 
 
-class NodeWeightFunctionAutoInfer():
+class NodeWeightFunctionWithRatioAutoInfer():
     def __init__(self, MULT_FACTOR=1000):
         self.ratio = "infer"
         self.MULT_FACTOR = MULT_FACTOR
@@ -121,8 +124,11 @@ class NodeWeightFunctionAutoInfer():
         # NOTE: TODO: as we do normalize the here,
         # ratio for edge weight should be just -1 or 0 (one direction)
         # or use a "guess" for the ratio of the entire stage
+        bwd_plus_fwd = bwd + fwd
+        if bwd_plus_fwd == 0:
+            return 0
         return int(self.MULT_FACTOR * max(1, bwd * bwd + fwd * fwd) /
-                   (bwd + fwd))
+                   bwd_plus_fwd)
 
 
 #################
@@ -153,4 +159,3 @@ def async_pipe_bwd_to_fwd_ratio_thumb_rules(args):
 
     if not recomputation:
         return 2
-

@@ -27,7 +27,7 @@ class ParsePartitioningOpts:
                             default=-1,
                             help="bwd to fwd ratio for heuristics")
 
-        parser.add_argument("--infer_node_bwd_to_fwd_ratio",
+        parser.add_argument("--auto_infer_node_bwd_to_fwd_ratio",
                             action='store_true',
                             default=False,
                             help="Automatically infer bwd to fwd ratio for nodes (computation). Expected Ratio for edges should be given `by bwd_to_fwd_ratio`")              
