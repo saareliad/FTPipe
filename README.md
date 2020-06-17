@@ -2,12 +2,12 @@
 
 ## Available algorithms
 
-### Asynchronous pipeline
+### Stale-synchronous pipeline
 
 - recomputation / no recomputation
 - stale
 - weight stashing (ws)
-- weight prediction (wp)
+- weight prediction (wp) : msnag, aggmsnag
 
   - sgd
   - adam
@@ -28,18 +28,18 @@ Note that there is difference between stale and weight prediction with recomputa
 
 Weight predicion is often called `msnag` in code.
 
-### Synchronous
-
-- sequential (seq)
-
-  - single gpu
-  - model parallel
+### Fully-synchronous
 
 - gpipe
-
-- DistributedDataParalle (DDP, SSGD)
+- DistributedDataParallel (DDP): SSGD
+- Sequential (seq): naive inter-layer model parallelisem (multi gpu)
+- single gpu for small model.
 
 ## Setup env
+There are several options:
+1. use pre-build pytorch image and multiprocessing (parallel comm&comp, for single node)
+2. Install from soruce to use cuda-aware opennmpi (only partiall parallel comm&comp, for multi node)
+3. (deprecated) Use pre-built pytorch with cuda-aware openmpi (older version of pytorch: 1.3 nightly)
 
 ### From source (new)
 
@@ -87,10 +87,16 @@ mpirun -np 2 python main.py
 on the rishon sever:
 
 ```bash
-salloc -n2 --gres=gpu:2 mpirun python main.py
+salloc -n2 --gres=gpu:2 <COMMAND>
 ```
 
-Note that OpenMPI may require special settings (e.g disable P2P via PCI `--mca btl_smcuda_use_cuda_ipc 0`).
+Note that OpenMPI may require special settings depending on the GPU.
+
+### Multiprocessing
+
+```bash
+python  main.py --nprocs 2 --mode mp
+```
 
 ### Via torch.distributed.launch model
 
@@ -111,7 +117,7 @@ python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_nod
 
 - **_NLP_** check you overwrite cash when needed.
 
-- **_Sending large tensors with MPI_** takes extra memory due buffer allocations. should consider sharing the tensor (e.g for tied weights), or having a single copy of it. Currently gradeints are not shared, this causes extra memory.
+- **_Sending large tensors with MPI_** takes extra memory due buffer allocations. should consider sharing the tensor (e.g for tied weights), or having a single copy of its `.data`.
 
 ## Adding a model
 
@@ -135,73 +141,51 @@ may change in the future.
 
   The problem is that p0 does 'send' bcast to p1 while p1 does 'send' bcast to p0, on the same group. Therefore need more groups.
 
-2. pipedream scheduler stopped working (deadlock)?
+2. pipedream scheduler stopped working (edit: probably solved by reset, I didn't bother to check)
 
-3. We need to pop/destroy async handlers, otherwise memory explodes.
+3. MPI: 
+  - we need to pop/destroy async handlers, otherwise memory explodes.
+  (change c code in torch mpigroup to drop the tensor and its pointers once ISends are completed, so we won't have to handle mem cleaning).
+  - must explicitly do `cuda.synchronize(...)` before CUDA-AWARE MPI sends.
 
-4. With `torch.distributed.launch` we may need to manually do `kill -9 <PIDs>` in case of errors to kill workers.
+4. Multiprocessing: multiple (2x or 3x) cuda contexts per GPU.
 
-5. must explicitly do `cuda.synchronize(...)` before CUDA-AWARE MPI sends.
+5. Tied weights: MPI: large memory consumption for sends, Multiprocessing/cudaIPC:(using the same tensor): race condition.
+
+
+5. `in_place` operations (like ReLU) at partition border have a potential of destroying our saved activations (also throws some autograd "variable changed inplace" error) => solution: automatically replace inplaces ops on partition borders. (the solution worked for resnets, will not work for more complex models). IMO this should be solved by partitioning.
+
+6. With `torch.distributed.launch` we may need to manually do `kill -9 <PIDs>` in case of errors to kill workers.
 
 ## Some Solved problems:
 
-- problem: batch normalization statistics keep going in `torch.no_grad()` => solution: monkey patch.
+- In Pipedream they pass the target all across the pipeline (waste of energy, inefficient). solution: using two data-loaders with correct synchronization.
 
-- problem: `in_place` operations (like ReLU) at partition border have a potential of destroying our saved activations (also throws some autograd "variable changed inplace" error) => solution: automatically replace inplaces ops on partition borders.
-
-- problem: In Pipedream they pass the target all across the pipeline (waste of energy, inefficient). solution: using two data-loaders with correct synchronization.
-
-- simulation with more than one partition per GPU + cuda aware: add `--mca btl_smcuda_use_cuda_ipc_same_gpu 0` to mpirun.
-
-- for delay=0 with msnag without weight stashing, so far I did `nag_with_predictor` even for non last partitions. This is problematic, as we would like to **return to the moved weights** in the backward pass. So what we can do is, create a dict were we save staleness from fwd to backward (we already do this, but for GA purpose) and if the staleness is 0 (and not last partition, which is the case in `run_batch_backward`) then, with the weight predictor: do `setup(0)->forward()->recomputation()->backward()->revert()->step`. (The condition for this is weight predictor + nag with predictor, without weight stashing)
+- (I decided to just avoid it, its minor and I spent to much time on it). for delay=0 with msnag without weight stashing, so far I did `nag_with_predictor` even for non last partitions. This is problematic, as we would like to **return to the moved weights** in the backward pass. Also not sure it this correct. So what we can do is, create a dict were we save staleness from fwd to backward (we already do this, but for GA purpose) and if the staleness is 0 (and not last partition, which is the case in `run_batch_backward`) then, with the weight predictor: do `setup(0)->forward()->recomputation()->backward()->revert()->step`. (The condition for this is weight predictor + nag with predictor, without weight stashing)
 
 ## TODOs
 
-- When aggregating, instead of using dp=0 use the gradient we already have for weight prediction.thats awassome.
+- Memory efficient Gap Aware for entire pipeline  (+`step_every`)
+  (When delay is 1, we can do gap aware even on deeper partitions without stashing)
 
 - tied wieghts with wieght prediction: problem: we change the weight itself (this has advantage!)
 
-- explictly check that recomputation overlaps with wait for MPI.
-
 - Currently, we do some extra "reverts" (e.g in case of several backwards one after another and weight stashing) Check this. its very small optimization (not in steady state), and may be yucky to implement.
 
-- problem wtih `step_every` async pipeline.
-
-- gap aware + step every.
-
-- fix batch normalization in `torch.no_grad()` to something better than monkey patch
-
-  - can write spesific class to every case (e.g Batch Norm) to make it more efficient.
-
-- Double Buffering (Remember credit to Mark)
-
-- timing (ms per batch, fwd, bwd, etc)
-
-- CUDA aware openmpi
-
-  - test to make sure we get the desired speedup [unlike this guy](https://www.pugetsystems.com/labs/hpc/P2P-peer-to-peer-on-NVIDIA-RTX-2080Ti-vs-GTX-1080Ti-GPUs-1331/#test-setup-and-results).
+- test with cuda-aware MPI on more than 2 P2P suported GPUs
 
 - Support multi node after everything works.
 
-- later change `batch_idx` to `micro_batch_index` to be consistent with the paper.
+- fix batch normalization in `torch.no_grad()` to something better than monkey patch
 
-- Can do gap aware at step 2 even on deeper partitions without stashing (effective only once per epoch). This is effecitve when using "batch aggregation staleness mitigation". Currently we can do it without stashing when staleness is 1.
+- extra irecvs in deeper layer to overlap (more) communication with computation and have a faster warmup.
+  - this requires more buffers but its neglibale in deeper layers.
 
-- add "scheduler aware prediction".
-
-- can wait in the last layer (extra irecv) to overlap (more) communication with computation.
-
-  - this requires another rcv buffer but in the last partition we don't have mem problems.
-
-- change c code in torch mpigroup to drop the tensor (and its pointers) once completed, so we won't have to handle mem cleaning (this can reduce peak memory memory).
-
-- option in GA to change gradient activation before sending!
+- Crazy idea: GA to change gradient activation before sending.
 
 ## References
 
-- [running with mpi](https://www.open-mpi.org/faq/?category=running)
-
-  - especially see [mpi-env-vars](https://www.open-mpi.org/faq/?category=running#mpi-environmental-variables).
+- [running with mpi](https://www.open-mpi.org/faq/?category=running) especially see [mpi-env-vars](https://www.open-mpi.org/faq/?category=running#mpi-environmental-variables).
 
 ## Debugging
 
@@ -222,30 +206,23 @@ may change in the future.
 
 - Before you debug, you may want to check run the error is cuda specific and not cpu
 
-## Systems stuff
+## Misc Systems stuff
 
 After talk with Amit Nadav
 
-- maybe do fork to share pinned memory. (need to be done before cuda)
+- Can do fork to share pinned memory. (need to be done before cuda context initialization)
 - `sudo ./pcm.x` to check data transfers between cpus. (git clone <https://github.com/opcm/pcm.git>)
 - use node 0 : `numactl --cpunodebind=0` (sudo apt install numactl)
-
   - checking this: either `lstopo` or `lspci -vvv | less`.
-
 - `less /proc/$PID/maps` to check memory mapping
-
 - check allocated sutff with `strace -f python -v`
 - There was
-
   - `sudo apt install hwloc` for something.
   - `modprobe msr` for something.
 
-## cuda aware openmpi
-
-see conda recipe for cuda aware openmpi.
+Communication Matrix Embedding with cuda P2P samples (15% BW improvment for pipeline).
 
 To see how pytorch is compiled, use
-
 ```
 torch.__config__.show()
 ```
