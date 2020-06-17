@@ -123,3 +123,34 @@ class NodeWeightFunctionAutoInfer():
         # or use a "guess" for the ratio of the entire stage
         return int(self.MULT_FACTOR * max(1, bwd * bwd + fwd * fwd) /
                    (bwd + fwd))
+
+
+#################
+# "Thumb rules"
+################
+
+
+def async_pipe_bwd_to_fwd_ratio_thumb_rules(args):
+    """Thumb_rules for global bwd_to_fwd_ratio.
+        These may not be accurate all the time."""
+    L = args.n_partitions
+    hacky_tied = getattr(args, "stateless_tied", False)
+    is_async_pipeline = args.async_pipeline
+    recomputation = not args.no_recomputation
+
+    # Deliberatliy wastful, to go over all options
+    if recomputation and is_async_pipeline and not hacky_tied:
+        # all stages recomputing accept last
+        # assuming stages are about equal
+        return (3 * (L - 1) + 2) / L
+
+    if recomputation and is_async_pipeline and hacky_tied:
+        # depends on how big is the embedding.
+        return 3
+
+    if recomputation and not is_async_pipeline:
+        return 3
+
+    if not recomputation:
+        return 2
+
