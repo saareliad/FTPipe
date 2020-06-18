@@ -14,9 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-Fine-tuning the library models for language modeling on a text file (GPT, GPT-2, BERT, RoBERTa).
-GPT and GPT-2 are fine-tuned using a causal language modeling (CLM) loss while BERT and RoBERTa are fine-tuned
-using a masked language modeling (MLM) loss.
+Fine-tuning the library models for language modeling on a text file (GPT-2, CTRL).
 """
 
 from __future__ import absolute_import, division, print_function
@@ -30,41 +28,22 @@ import importlib
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset, RandomSampler
-import warnings
-import sys
 from partition_scripts_utils import ParseMetisOpts, ParsePartitioningOpts, record_cmdline, run_x_tries_until_no_fail,choose_blocks
 from heuristics import NodeWeightFunction, EdgeWeightFunction
 from transformers import (
-    BertConfig,
-    BertForMaskedLM,
-    BertTokenizer,
     GPT2Config,
-    #    GPT2LMHeadModel,
     GPT2Tokenizer,
-    OpenAIGPTConfig,
-    OpenAIGPTLMHeadModel,
-    OpenAIGPTTokenizer,
-    RobertaConfig,
-    RobertaForMaskedLM,
-    RobertaTokenizer,
-    DistilBertConfig,
-    DistilBertForMaskedLM,
-    DistilBertTokenizer,
     CTRLConfig,
     CTRLTokenizer,
-    T5Config,
-    T5Tokenizer
-    #   CamembertConfig, CamembertForMaskedLM, CamembertTokenizer
 )
 
 from models.normal import GPT2LMHeadModel, GPT2Model
 from models.normal import StatelessGPT2LMHeadModel
 from models.normal import CTRLLMHeadModel, CTRLModel
 from models.normal import StatelessCTRLLMHeadModel
-from models.normal.NLP_models.modeling_t5 import T5Model, T5ForConditionalGeneration
 
 from pytorch_Gpipe import pipe_model
-from misc import run_analysis  # , run_partitions
+from misc import run_analysis
 from pytorch_Gpipe.utils import layerDict, tensorDict
 from pytorch_Gpipe import PipelineConfig
 import functools
@@ -75,20 +54,12 @@ import operator
 
 MODEL_CLASSES_LM_HEAD = {
     'gpt2': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
-    'openai-gpt': (OpenAIGPTConfig, OpenAIGPTLMHeadModel, OpenAIGPTTokenizer),
-    'bert': (BertConfig, BertForMaskedLM, BertTokenizer),
-    'roberta': (RobertaConfig, RobertaForMaskedLM, RobertaTokenizer),
-    'distilbert':
-    (DistilBertConfig, DistilBertForMaskedLM, DistilBertTokenizer),
-    'ctrl': (CTRLConfig, CTRLLMHeadModel, CTRLTokenizer),
-    't5': (T5Config, T5ForConditionalGeneration, T5Tokenizer)
-    # 'camembert': (CamembertConfig, CamembertForMaskedLM, CamembertTokenizer)
+    'ctrl': (CTRLConfig, CTRLLMHeadModel, CTRLTokenizer)
 }
 
 MODEL_CLASSES = {
     'gpt2': (GPT2Config, GPT2Model, GPT2Tokenizer),
-    'ctrl': (CTRLConfig, CTRLModel, CTRLTokenizer),
-    't5': (T5Config, T5Model, T5Tokenizer)
+    'ctrl': (CTRLConfig, CTRLModel, CTRLTokenizer)
 }
 
 MODEL_CLASSES_LM_HEAD_STATELESS_TIED = {
@@ -114,12 +85,9 @@ class TextDataset(Dataset):
             with open(file_path, encoding="utf-8") as f:
                 text = f.read()
 
-            print("preparing text")
             tokenized_text = tokenizer.tokenize(text)
-            print("tokenized text")
             tokenized_text = tokenizer.convert_tokens_to_ids(
                 tokenized_text)
-            print("converted tokens to ids")
 
             # Truncate in block of block_size
             for i in range(0,
@@ -127,7 +95,6 @@ class TextDataset(Dataset):
                 self.examples.append(
                     tokenizer.build_inputs_with_special_tokens(
                         tokenized_text[i:i + block_size]))
-                print(f"{i}/{len(tokenized_text) - block_size + 1}")
             # Note that we are loosing the last truncated example here for the sake of simplicity (no padding)
             # If your dataset is small, first you should loook for a bigger one :-) and second you
             # can change this behavior by adding (model specific) padding.
@@ -159,40 +126,6 @@ def set_seed(args):
         torch.cuda.manual_seed_all(args.seed)
 
 
-def mask_tokens(inputs, tokenizer, args):
-    """ Prepare masked tokens inputs/labels for masked language modeling: 80% MASK, 10% random, 10% original. """
-    labels = inputs.clone()
-    # We sample a few tokens in each sequence for masked-LM training
-    # (with probability args.mlm_probability defaults to 0.15 in Bert/RoBERTa)
-    probability_matrix = torch.full(labels.shape, args.mlm_probability)
-    special_tokens_mask = [
-        tokenizer.get_special_tokens_mask(val, already_has_special_tokens=True)
-        for val in labels.tolist()
-    ]
-    probability_matrix.masked_fill_(torch.tensor(special_tokens_mask,
-                                                 dtype=torch.bool),
-                                    value=0.0)
-    masked_indices = torch.bernoulli(probability_matrix).bool()
-    labels[~masked_indices] = -100  # We only compute loss on masked tokens
-
-    # 80% of the time, we replace masked input tokens with tokenizer.mask_token ([MASK])
-    indices_replaced = torch.bernoulli(torch.full(labels.shape,
-                                                  0.8)).bool() & masked_indices
-    inputs[indices_replaced] = tokenizer.convert_tokens_to_ids(
-        tokenizer.mask_token)
-
-    # 10% of the time, we replace masked input tokens with random word
-    indices_random = torch.bernoulli(torch.full(
-        labels.shape, 0.5)).bool() & masked_indices & ~indices_replaced
-    random_words = torch.randint(len(tokenizer),
-                                 labels.shape,
-                                 dtype=torch.long)
-    inputs[indices_random] = random_words[indices_random]
-
-    # The rest of the time (10% of the time) we keep the masked input tokens unchanged
-    return inputs, labels
-
-
 def partition_model(args,
                     train_dataset,
                     model,
@@ -211,22 +144,21 @@ def partition_model(args,
     if args.stateless_tied:
         model_to_resize.make_stateless_after_loaded_tied_and_resized()
 
-    set_seed(
-        args)  # Added here for reproducibility (even between python 2 and 3)
+    set_seed(args)  # Added here for reproducibility (even between python 2 and 3)
     batch = next(iter(train_dataloader))
 
-    inputs, labels = mask_tokens(batch, tokenizer,
-                                 args) if args.mlm else (batch, batch)
-    inputs = inputs.to(args.device)
-    labels = labels.to(args.device)
+    inputs = batch.to(args.device)
+    
     if lm:
+        labels = batch.to(args.device)
         sample = (inputs, labels)
     else:
         sample = inputs
+
     model.train()
     batch_dim = 0
     bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
-    # TODO assumes batch_dim is 0
+
     recomputation = not args.no_recomputation
 
     def force_no_recomputation_fn(scope):
@@ -252,7 +184,7 @@ def partition_model(args,
         node_weight_function=NodeWeightFunction(
             bwd_to_fwd_ratio=bwd_to_fwd_ratio),
         edge_weight_function=EdgeWeightFunction(
-            args.bandwidth_gps,
+            args.bw,
             bwd_to_fwd_ratio=bwd_to_fwd_ratio),
         use_layers_only_graph=True,
         use_graph_profiler=not args.use_network_profiler,
@@ -275,9 +207,6 @@ def partition_model(args,
             10,
             force_no_recomp_scopes=force_no_recomputation_fn,
             allowed_mistakes=0)
-
-        # graph = async_pipe_partitioner.partition(
-        #     force_no_recomp_scopes=force_no_recomputation_fn, allowed_mistakes=0)
     else:
         graph = partial_pipe_model(
             force_no_recomp_scopes=force_no_recomputation_fn)
@@ -309,7 +238,7 @@ def partition_model(args,
 
     pipe_config = PipelineConfig.fromDict(config)
 
-    bandwidth_gps = args.bandwidth_gps
+    bandwidth_gps = args.bw
 
     if not args.no_analysis:
         depth = pipe_config.depth
@@ -318,16 +247,16 @@ def partition_model(args,
             layerDict(model, depth=depth, basic_blocks=blocks),
             tensorDict(model))
 
-        # TODO assumes batch is first
         shape = (args.analysis_batch_size, inputs.shape[1])
         expanded_inputs = inputs[0].unsqueeze(0).expand(shape)
-        shape = (args.analysis_batch_size, labels.shape[1])
-        expanded_labels = labels[0].unsqueeze(0).expand(shape)
 
-        if lm:
+        if lm: 
+            shape = (args.analysis_batch_size, labels.shape[1])
+            expanded_labels = labels[0].unsqueeze(0).expand(shape)
             analysis_sample = (expanded_inputs, expanded_labels)
         else:
             analysis_sample = expanded_inputs
+        
         stages_on_same_gpu = set()
         if args.lmhead and args.stateless_tied and len(
                 pipe_config.stages) == args.n_partitions + 1:
@@ -345,12 +274,6 @@ def partition_model(args,
         with open(f"{args.output_file}.py", "a") as f:
             f.write("\n")
             f.write('"""analysis summary\n' + summary + "\n" + '"""')
-        sys.exit()
-    # model(inputs)
-    # outputs = model(inputs, masked_lm_labels=labels) if args.mlm else model(
-    #     inputs, labels=labels)
-    # # model outputs are always tuple in transformers (see doc)
-    # loss = outputs[0]
 
 
 def auto_file_name(args):
@@ -374,175 +297,96 @@ def auto_file_name(args):
     return s
 
 
+class ParsePartitioningOptsLM(ParsePartitioningOpts):
+    def _extra(self, parser):
+        parser.add_argument("--train_data_file",
+                            default=None,
+                            type=str,
+                            required=True,
+                            help="The input training data file (a text file).")
+        parser.add_argument("--model_type",
+                            default="gpt2",
+                            type=str,
+                            help="The model architecture to be fine-tuned.")
+        parser.add_argument(
+            "--model_name_or_path",
+            default="gpt2",
+            type=str,
+            help="The model checkpoint for weights initialization.")
+        parser.add_argument(
+            "--config_name",
+            default="",
+            type=str,
+            help="Optional pretrained config name or path if not the same as model_name_or_path"
+        )
+        parser.add_argument(
+            "--tokenizer_name",
+            default="",
+            type=str,
+            help="Optional pretrained tokenizer name or path if not the same as model_name_or_path"
+        )
+        parser.add_argument(
+            "--cache_dir",
+            default="",
+            type=str,
+            help="Optional directory to store the pre-trained models downloaded from s3 (instread of the default one)"
+        )
+        parser.add_argument(
+            "--block_size",
+            default=-1,
+            type=int,
+            help="Optional input sequence length after tokenization."
+            "The training dataset will be truncated in block of this size for training."
+            "Default to the model max input length for single sentence inputs (take into account special tokens)."
+        )
+        parser.add_argument(
+            "--do_lower_case",
+            action='store_true',
+            help="Set this flag if you are using an uncased model.")
+        parser.add_argument(
+            '--overwrite_cache',
+            action='store_true',
+            help="Overwrite the cached training and evaluation sets")
+        parser.add_argument('--seed',
+                            type=int,
+                            default=42,
+                            help="random seed for initialization")
+
+        parser.add_argument("--lmhead",
+                            default=False,
+                            action="store_true",
+                            help="Partition a model with LM head")
+
+        parser.add_argument(
+            "--stateless_tied",
+            default=False,
+            action="store_true",
+            help="Tie weights stateless trick. Note that shared weight may be sent in pipe"
+        )
+        parser.add_argument('--auto_file_name',
+                            action='store_true',
+                            default=False,
+                            help="create file name automatically")
+
+    def set_defaults(self, parser):
+        d = {
+            # "threads": 20,
+            "partitioning_batch_size": 1,
+            "n_iter": 10,
+            "output_file": 'gpt2',
+            "n_partitions": 4,
+            "bw": 12,
+            "analysis_batch_size": 1,
+        }
+
+        parser.set_defaults(**d)
+
+
 def parse_cli():
-    # TODO: use default partitioning args like other partitioning scripts
-    # And add extra args spesific to this script as needed.
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument("--bwd_to_fwd_ratio",
-                        type=float,
-                        default=-1,
-                        help="bwd to fwd ratio for heuristics")
-    # parameter required by the repo
-    tr_params = parser.add_argument_group("Transformers parameters")
-    tr_params.add_argument("--train_data_file",
-                           default=None,
-                           type=str,
-                           required=True,
-                           help="The input training data file (a text file).")
-    tr_params.add_argument("--model_type",
-                           default="gpt2",
-                           type=str,
-                           help="The model architecture to be fine-tuned.")
-    tr_params.add_argument(
-        "--model_name_or_path",
-        default="gpt2",
-        type=str,
-        help="The model checkpoint for weights initialization.")
-    tr_params.add_argument(
-        "--mlm",
-        action='store_true',
-        help="Train with masked-language modeling loss instead of language modeling."
-    )
-    tr_params.add_argument(
-        "--mlm_probability",
-        type=float,
-        default=0.15,
-        help="Ratio of tokens to mask for masked language modeling loss")
-    tr_params.add_argument(
-        "--config_name",
-        default="",
-        type=str,
-        help="Optional pretrained config name or path if not the same as model_name_or_path"
-    )
-    tr_params.add_argument(
-        "--tokenizer_name",
-        default="",
-        type=str,
-        help="Optional pretrained tokenizer name or path if not the same as model_name_or_path"
-    )
-    tr_params.add_argument(
-        "--cache_dir",
-        default="",
-        type=str,
-        help="Optional directory to store the pre-trained models downloaded from s3 (instread of the default one)"
-    )
-    tr_params.add_argument(
-        "--block_size",
-        default=-1,
-        type=int,
-        help="Optional input sequence length after tokenization."
-        "The training dataset will be truncated in block of this size for training."
-        "Default to the model max input length for single sentence inputs (take into account special tokens)."
-    )
-    tr_params.add_argument(
-        "--do_lower_case",
-        action='store_true',
-        help="Set this flag if you are using an uncased model.")
-    tr_params.add_argument(
-        '--overwrite_cache',
-        action='store_true',
-        help="Overwrite the cached training and evaluation sets")
-    tr_params.add_argument('--seed',
-                           type=int,
-                           default=42,
-                           help="random seed for initialization")
-
-    tr_params.add_argument("--lmhead",
-                           default=False,
-                           action="store_true",
-                           help="Partition a model with LM head")
-
-    tr_params.add_argument(
-        "--stateless_tied",
-        default=False,
-        action="store_true",
-        help="Tie weights stateless trick. Note that shared weight may be sent in pipe"
-    )
-
-    # parameters of the partitioning script
-    parser.add_argument('--partitioning_batch_size',
-                        type=int,
-                        default=1,
-                        help="batch size to use when partitioning the model")
-    parser.add_argument(
-        '--model_too_big',
-        action='store_true',
-        default=False,
-        help="if the model is too big run the whole partitioning process on CPU, and drink a cup of coffee in the meantime"
-    )
-    parser.add_argument('--n_partitions', type=int, default=4)
-    parser.add_argument('--output_file', default='gpt2')
-    parser.add_argument(
-        "--generate_model_parallel",
-        action="store_true",
-        default=False,
-        help="wether to generate a modelParallel version of the partitioning")
-    parser.add_argument(
-        "--generate_explicit_del",
-        action="store_true",
-        default=False,
-        help="wether to generate del statements in partitioned code")
-    parser.add_argument('--auto_file_name',
-                        action='store_true',
-                        default=False,
-                        help="create file name automatically")
-    parser.add_argument(
-        '--n_iter',
-        type=int,
-        default=10,
-        help="number of iteration used in order to profile the network and run analysis"
-    )
-    parser.add_argument(
-        '--bandwidth_gps',
-        type=float,
-        default=12,
-        help="data transfer rate between gpus in gigabaytes per second")
-    parser.add_argument(
-        '--no_recomputation',
-        action='store_true',
-        default=False,
-        help="whether to use recomputation for the backward pass")
-    parser.add_argument(
-        '--analysis_batch_size',
-        type=int,
-        default=1,
-        help="batch size to use when analysing the generated partititon")
-    parser.add_argument('--no_analysis',
-                        action='store_true',
-                        default=False,
-                        help="disable partition analysis")
-    parser.add_argument("--depth",
-                        default=10000,
-                        type=int,
-                        help="the depth in which we will partition the model")
-    parser.add_argument('--basic_blocks', nargs='*')
-    parser.add_argument(
-            "--use_network_profiler", default=False, action="store_true",
-            help="wether to use the old network_profiler instead of the newer graph based profiler"
-        )
-    parser.add_argument(
-            "--disable_op_profiling", default=False, action="store_true",
-            help="weheter to not profile ops when using the GraphProfiler"
-        )
-    parser.add_argument("--dot",
-                        default=False,
-                        action="store_true",
-                        help="Save and plot it using graphviz")
-
-    parser.add_argument(
-        "--save_memory_mode",
-        default=False,
-        action="store_true",
-        help="Save memory during profiling by storing everything on cpu," +
-        " but sending each layer to GPU before the profiling.")
-
-    parser.add_argument("-a",
-                        "--async_pipeline",
-                        default=False,
-                        action="store_true",
-                        help="Do analysis and partitioning for async pipeline")
+    ParsePartitioningOptsLM().add_partitioning_arguments(parser)
 
     ParseMetisOpts.add_metis_arguments(parser)
 
@@ -562,11 +406,6 @@ def main():
     args = parse_cli()
     METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
 
-    if args.model_type in ["bert", "roberta", "distilbert", "camembert"
-                           ] and not args.mlm:
-        raise ValueError(
-            "BERT and RoBERTa do not have LM heads but masked LM heads. They must be run using the --mlm "
-            "flag (masked language modeling).")
 
     # Setup CUDA, GPU
     device = torch.device("cuda" if torch.cuda.is_available()
@@ -610,8 +449,8 @@ def main():
         config=config,
         cache_dir=args.cache_dir if args.cache_dir else None)
 
-    # TODO: if not args.save_memory_mode:
-    model.to(args.device)
+    if not args.save_memory_mode:
+        model.to(args.device)
     print("model built")
     train_dataset = load_and_cache_examples(args, tokenizer)
     print("dataset created")
