@@ -545,9 +545,7 @@ class SimpleNode():
 
 
 class ContractedGraph():
-    def __init__(self,in_edges,partition,node_weights,edge_weights,matching):
-        #TODO make this compatible with acyclic partitioner
-        
+    def __init__(self,in_edges,partition,node_weights,edge_weights,matching):   
         self._nodes:Dict[int,SimpleNode]=dict()
         for n in set(matching.values()):
             self._nodes[n] = SimpleNode(n,partition[n])
