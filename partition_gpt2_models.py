@@ -440,11 +440,6 @@ def parse_cli():
                            default=False,
                            action="store_true",
                            help="Partition a model with LM head")
-    tr_params.add_argument(
-        "--output_past",
-        default=False,
-        action="store_true",
-        help="whether to return all hidden states or just the last  one")
 
     tr_params.add_argument(
         "--stateless_tied",
@@ -588,8 +583,6 @@ def main():
     config = config_class.from_pretrained(
         args.config_name if args.config_name else args.model_name_or_path,
         cache_dir=args.cache_dir if args.cache_dir else None)
-
-    config.output_past = args.output_past
 
     tokenizer = tokenizer_class.from_pretrained(
         args.tokenizer_name
