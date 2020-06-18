@@ -469,7 +469,6 @@ CTRL_INPUTS_DOCSTRING = r"""
 class CTRLModel(CTRLPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
-        self.output_attentions = config.output_attentions
 
         self.d_model_size = config.n_embd
         self.num_layers = config.n_layer

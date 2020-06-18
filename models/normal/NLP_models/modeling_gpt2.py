@@ -572,13 +572,9 @@ class GPT2Model(GPT2PreTrainedModel):
 
     def __init__(self, config):
         super(GPT2Model, self).__init__(config)
-        self.output_hidden_states = config.output_hidden_states
-        self.output_attentions = config.output_attentions
-
         self.wte = nn.Embedding(config.vocab_size, config.n_embd)
         self.wpe = nn.Embedding(config.n_positions, config.n_embd)
         self.drop = nn.Dropout(config.embd_pdrop, inplace=_DROPOUT_INPLACE)
-        self.output_shape = (-1, config.n_positions, config.n_embd)
         self.num_layers = config.n_layer
         self.blocks = nn.Sequential(*[Block(config.n_ctx, config, scale=True)
                                       for _ in range(self.num_layers)])
