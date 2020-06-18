@@ -574,7 +574,6 @@ class GPT2Model(GPT2PreTrainedModel):
         super(GPT2Model, self).__init__(config)
         self.output_hidden_states = config.output_hidden_states
         self.output_attentions = config.output_attentions
-        self.output_past = config.output_past
 
         self.wte = nn.Embedding(config.vocab_size, config.n_embd)
         self.wpe = nn.Embedding(config.n_positions, config.n_embd)
