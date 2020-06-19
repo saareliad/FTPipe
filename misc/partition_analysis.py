@@ -891,7 +891,7 @@ def edge_cut(graph):
     edges = []
     for n in graph.nodes:
         for u in n.out_edges:
-            if n.part != u.part:
+            if n.stage_id != u.stage_id:
                 edges.append((n, u))
 
     return edges
@@ -905,7 +905,7 @@ def theoretical_analysis(graph,
         the sequential assumption is that in the partition all operation are linear.
         the parallel assumption assumes that all computation paths are concurrent.
     '''
-    n_parts = len(set(n.part for n in graph.nodes))
+    n_parts = len(set(n.stage_id for n in graph.nodes))
     parallel_b = dict()
     parallel_f = dict()
 
@@ -923,8 +923,8 @@ def theoretical_analysis(graph,
             nodes[node.scope] = node
 
         # old way of measuring time as sum of all computation
-        sequential_f[node.part] += extract_time(node.weight, forward=True)
-        sequential_b[node.part] += extract_time(node.weight, forward=False)
+        sequential_f[node.stage_id] += extract_time(node.weight, forward=True)
+        sequential_b[node.stage_id] += extract_time(node.weight, forward=False)
 
     # new way of measuring time as longest path where all paths are concurrent
     for i in range(n_parts):
@@ -953,7 +953,7 @@ def parallel_execution_analysis(node, part_idx, cache):
     # use cache in order to remember common subpaths
     if node.scope in cache:
         return cache[node.scope]
-    elif node.part != part_idx:
+    elif node.stage_id != part_idx:
         cache[node.scope] = (0, 0)
         return 0, 0
 
@@ -1102,11 +1102,11 @@ def topology_aware_balance(f_times, b_times, cutting_edges):
     '''
     f_balance = b_balance = 10
     for u, v in cutting_edges:
-        f_ratio = min(f_times[u.part], f_times[v.part]) / \
-            max(f_times[u.part], f_times[v.part])
+        f_ratio = min(f_times[u.stage_id], f_times[v.stage_id]) / \
+            max(f_times[u.stage_id], f_times[v.stage_id])
 
-        b_ratio = min(b_times[u.part], b_times[v.part]) / \
-            max(b_times[u.part], b_times[v.part])
+        b_ratio = min(b_times[u.stage_id], b_times[v.stage_id]) / \
+            max(b_times[u.stage_id], b_times[v.stage_id])
 
         if f_ratio < f_balance:
             f_balance = f_ratio

@@ -56,17 +56,17 @@ def METIS_partition(graph: Graph,
     parts = [n for _, n in parts]
 
     if use_layers_only_graph:
-        for node, part in zip(layers_graph.nodes, parts):
-            node.part = part
+        for node, stage_id in zip(layers_graph.nodes, parts):
+            node.stage_id = stage_id
         graph.induce_layer_partition(layers_graph, layers_to_original)
     else:
-        for node, part in zip(graph.nodes, parts):
-            node.part = part
+        for node, stage_id in zip(graph.nodes, parts):
+            node.stage_id = stage_id
 
     n_parts = set(parts)
     post_process_partition(graph,edge_weight_function)
 
-    actual_nparts = len({n.part for n in graph.nodes})
+    actual_nparts = len({n.stage_id for n in graph.nodes})
 
     if (actual_nparts < num_partitions):
         print(

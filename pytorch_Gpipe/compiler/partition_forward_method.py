@@ -386,7 +386,7 @@ def sortedPartitionInputs(partition: List[Node]) -> List[Node]:
         
         inputs.update([
             n for n in node.in_edges
-            if n.part != node.part or n.type == NodeTypes.IN
+            if n.stage_id != node.stage_id or n.type == NodeTypes.IN
         ])
 
     return sorted(inputs, key=lambda n: n.id)
@@ -399,7 +399,7 @@ def sortedPartitionOutputs(partition: List[Node],
     '''
 
     def isOutput(n):
-        part_output = any(o.part != n.part for o in n.out_edges)
+        part_output = any(o.stage_id != n.stage_id for o in n.out_edges)
         return part_output or (n in model_outputs)
 
     outputs = {n for n in partition if isOutput(n)}
@@ -413,7 +413,7 @@ def node_uses(partition: List[Node], outputs: Set[Node]) -> Dict[str, int]:
     for node in partition:
         if node in outputs:
             uses[node] += 1
-        uses[node] += len(list(filter(lambda n: n.part == node.part,
+        uses[node] += len(list(filter(lambda n: n.stage_id == node.stage_id,
                                       node.out_edges)))
         if node.type is NodeTypes.CONSTANT:
             uses[node] = 100000

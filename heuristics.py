@@ -45,8 +45,8 @@ class HeterogeneousBandwidthOracle:
 
     def __call__(self, u: Node, v: Node):
         # get gpu id
-        gpu_src = getattr(u, "part", self.DEFAULT_PARTITION_SRC)
-        gpu_tgt = getattr(v, "part", self.DEFAULT_PARTITION_TGT)
+        gpu_src = getattr(u, "stage_id", self.DEFAULT_PARTITION_SRC)
+        gpu_tgt = getattr(v, "stage_id", self.DEFAULT_PARTITION_TGT)
 
         # get bw
         bw = self.GPU_TO_GPU_BW[(gpu_src, gpu_tgt)]

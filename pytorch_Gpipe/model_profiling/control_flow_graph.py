@@ -26,7 +26,7 @@ class Node():
         self.id = idx
         self.scope = scope
 
-        self.part = -1
+        self.stage_id = -1
         self.weight = None
 
         self.out_edges:Set[Node] = set()
@@ -68,7 +68,7 @@ class Node():
     @classmethod
     def from_other(cls,other):
         node = cls(other.type,other.id,other.scope)
-        node.part = other.part
+        node.stage_id = other.stage_id
         node.weight = other.weight
 
         node.out_edges = {n for n in other.out_edges}
@@ -113,7 +113,7 @@ class Graph():
 
     @property
     def num_partitions(self) -> int:
-        return len({n.part for n in self.nodes})
+        return len({n.stage_id for n in self.nodes})
 
     @property
     def output_scopes(self):
@@ -291,7 +291,7 @@ class Graph():
                     node_label += f"\nweight: {node_weight_function(node)}"
 
                 dot.node(str(node_id), label=node_label,
-                         fillcolor=colors[node.part])
+                         fillcolor=colors[node.stage_id])
 
                 # add edges
                 args, kwargs = node.args, node.kwargs
@@ -391,7 +391,7 @@ class Graph():
             state = dict(id=node.id,
                         scope=node.scope,
                         type=node.type,
-                        part=node.part,
+                        stage_id=node.stage_id,
                         weight=node.weight,
                         out_edges=[n.id for n in node.out_edges],
                         args=[n.id for n in node.args],
@@ -424,7 +424,7 @@ class Graph():
             node = Node(state['type'], state['id'], state['scope'])
             nodes[node.id] = node
 
-            node.part = state['part']
+            node.stage_id = state['stage_id']
             node.weight = state['weight']
             node.args = [nodes[n] for n in state['args']]
             node.kwargs = {nodes[n]: kw for n, kw in state['kwargs'].items()}
@@ -516,12 +516,12 @@ class Graph():
         for idx in range(len(self.nodes)):
             node = self[N-idx-1]
             if node.id in old_to_new:
-                node.part = layers_graph[old_to_new[node.id]].part
+                node.stage_id = layers_graph[old_to_new[node.id]].stage_id
             else:
                 # as we iterate in reverse topological order we've already handled this node's outupts
                 #select the lowest partition index to ensure no cycles are created
-                node.part = sorted(node.out_edges,key=lambda n: n.part)[0].part
-            assert node.part >= 0
+                node.stage_id = sorted(node.out_edges,key=lambda n: n.stage_id)[0].stage_id
+            assert node.stage_id >= 0
 
         return self
 

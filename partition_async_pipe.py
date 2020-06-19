@@ -73,9 +73,9 @@ def partition_async_pipe(
         n_runs += 1
 
         # Load last partition last stage scopes
-        last_p = max((n.part for n in graph.nodes))
+        last_p = max((n.stage_id for n in graph.nodes))
         generated_last_stage_scopes = [
-            n.scope for n in graph.nodes if n.part == last_p
+            n.scope for n in graph.nodes if n.stage_id == last_p
         ]
 
         # Count mistakes (false positives and false negatives)

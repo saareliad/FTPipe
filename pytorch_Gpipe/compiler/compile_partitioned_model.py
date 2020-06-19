@@ -49,7 +49,7 @@ def compile_partitioned_model(graph: Graph,
         for t, scope in traverse_params_buffs(model)
     }
 
-    parts = groupByPartition(graph.nodes)
+    stages = groupByPartition(graph.nodes)
 
     lines = generateImports(layer_classes)
     lines.append(connections(graph))
@@ -58,18 +58,18 @@ def compile_partitioned_model(graph: Graph,
     # and forward function
     partitions_code = []
     ios = dict()
-    for idx, part in parts:
+    for idx, stage in stages:
         class_name = f'Partition{idx}'
-        layers = [n for n in part if n.type == NodeTypes.LAYER]
+        layers = [n for n in stage if n.type == NodeTypes.LAYER]
         buffs_params = [
             n
-            for n in part if n.type == NodeTypes.BUFF_PARAM
+            for n in stage if n.type == NodeTypes.BUFF_PARAM
         ]
         class_decl, scope_to_class_field = generate_init_method(class_name, layers,
                                                                 is_param_dict, buffs_params)
         state_methods_functions = generate_partition_state_methods()
         forward_function, io = generate_forward_method(graph,
-                                                       part,
+                                                       stage,
                                                        graph.outputs,
                                                        scope_to_class_field,
                                                        generate_explicit_del=generate_explicit_del)
@@ -80,7 +80,7 @@ def compile_partitioned_model(graph: Graph,
         ios[idx] = io
 
     if output_file is None:
-        output_file = f'generated_{graph.model_name}{len(parts)}'
+        output_file = f'generated_{graph.model_name}{len(stages)}'
     elif output_file.endswith(".py"):
         output_file = output_file[:-3]
 
@@ -105,14 +105,14 @@ def compile_partitioned_model(graph: Graph,
 def groupByPartition(nodes: List[Node]) -> List[Tuple[int, List[Node]]]:
     '''groups nodes to their respective partitions
     '''
-    idxs = {n.part for n in nodes}
-    parts = OrderedDict()
+    idxs = {n.stage_id for n in nodes}
+    stages = OrderedDict()
     for i in sorted(idxs):
-        parts[i] = []
+        stages[i] = []
 
     for n in nodes:
-        parts[n.part].append(n)
-    return parts.items()
+        stages[n.stage_id].append(n)
+    return stages.items()
 
 
 def generateImports(layer_classes: Dict[str, Module]) -> List[str]:
@@ -237,17 +237,17 @@ def connections(graph: Graph) -> str:
     for node in graph.nodes:
         if node.type is NodeTypes.IN:
             for n in node.out_edges:
-                adj_matrix[n.part + 1]["inputs"].add(node.scope)
-                adj_matrix[0]["outputs"].add(n.part)
+                adj_matrix[n.stage_id + 1]["inputs"].add(node.scope)
+                adj_matrix[0]["outputs"].add(n.stage_id)
 
         if node in graph.outputs:
-            adj_matrix[num_partitions + 1]["inputs"].add(node.part)
-            adj_matrix[node.part + 1]["outputs"].add(f"output")
+            adj_matrix[num_partitions + 1]["inputs"].add(node.stage_id)
+            adj_matrix[node.stage_id + 1]["outputs"].add(f"output")
 
         for n in node.out_edges:
-            if n.part != node.part:
-                adj_matrix[node.part + 1]["outputs"].add(n.part)
-                adj_matrix[n.part + 1]["inputs"].add(node.part)
+            if n.stage_id != node.stage_id:
+                adj_matrix[node.stage_id + 1]["outputs"].add(n.stage_id)
+                adj_matrix[n.stage_id + 1]["inputs"].add(node.stage_id)
 
     lines = ["# partition adjacency"]
     lines.append(f"# model inputs {adj_matrix[0]['outputs']}")

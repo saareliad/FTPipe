@@ -27,7 +27,7 @@ def coarsening(graph:Graph,node_weights:Dict[SimpleNode,float],
 
 def refine(fine_graph:ContractedGraph,coarse_graph:ContractedGraph,matching:Dict[int,int]):
     for n in fine_graph.nodes:
-        n.part = coarse_graph[matching[n.id]].part
+        n.stage_id = coarse_graph[matching[n.id]].stage_id
 
 
 def find_max_matching(node_weights:Dict[SimpleNode,float],
@@ -251,7 +251,7 @@ def visualize_matching(nodes,matching,file_name: str,directory: str):
     # add nodes
     for node in nodes:
         dot.node(str(node.id), label=node.scope,
-                    fillcolor=partition_color[node.part])
+                    fillcolor=partition_color[node.stage_id])
         for i in node.in_edges:
             dot.edge(str(i.id), str(node.id),color=edge_colors.get((i.id,node.id),"#000000"))
 
