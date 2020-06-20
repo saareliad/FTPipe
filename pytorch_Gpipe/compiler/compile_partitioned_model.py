@@ -163,12 +163,13 @@ def create_pipeline_configuration(graph: Graph,
     '''generates the create_pipeline_configuration method which given a model creates his partitioned counterpart
     '''
     # TODO assumption the first input is batched
-    batch_size = graph._nodes[0].tensor_shape[batch_dim]
+    batch_size = next(graph.inputs).tensor_shape[batch_dim]
 
-    # TODO better logic for is_batched
-    # currently we assume that if a tensor has enough dimentions and the relevant dim size equals the batch_size
-    def is_batched(s):
-        return (s is not None) and(len(s) > (batch_dim + 1)) and (s[batch_dim] == batch_size)
+    def is_batched(shape):
+        def f(s):
+            return (s is not None) and(len(s) > (batch_dim + 1)) and (s[batch_dim] == batch_size)
+        return nested_map(f,shape)
+
 
     module_path = 'os.path.relpath(__file__).replace("/",".")[:-3]'
     basic_blocks = ",".join(
