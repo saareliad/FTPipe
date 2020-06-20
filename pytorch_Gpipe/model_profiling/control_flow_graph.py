@@ -71,16 +71,17 @@ class Node():
         node.stage_id = other.stage_id
         node.weight = other.weight
 
-        node.out_edges = {n for n in other.out_edges}
-        node.args = [n for n in other.in_edges]
-        node.kwargs = {n:k for n,k in other.kwargs.items()}
+        node.out_edges = set(other.out_edges)
+        node.args = list(other.args)
+        node.kwargs = dict(other.kwargs)
         node.value_type = other.value_type
 
         node.tensor_dtype = other.tensor_dtype
         node.tensor_shape = other.tensor_shape
+        node.req_grad = other.req_grad
 
         node.constant_value = other.constant_value
-        
+
         return node
 
 GraphNodes = Dict[int, Node]
