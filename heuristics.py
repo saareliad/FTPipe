@@ -4,6 +4,7 @@ import operator
 from pytorch_Gpipe.model_profiling import Node, NodeTypes, ExecTimes
 from pytorch_Gpipe.utils import flatten
 from collections import defaultdict
+import abc
 
 __all__ = [
     "NodeWeightFunction", "EdgeWeightFunction",
@@ -28,8 +29,8 @@ class NodeWeightFunction():
                 node.weight.forward_time))
 
 
-class HeterogeneousBandwidthOracle:
-    """Use to discover bandwidth between nodes"""
+class HeterogeneousBandwidthOracle(abc.ABC):
+    """Use to discover hetrogeneous bandwidth between nodes"""
     DEFAULT_PARTITION_SRC = -1
     DEFAULT_PARTITION_TGT = -2
 
@@ -43,8 +44,25 @@ class HeterogeneousBandwidthOracle:
         self.GPU_TO_GPU_BW = defaultdict(self.default_bw)
         self.GPU_TO_GPU_BW.update(GPU_TO_GPU_BW)
 
+    def default_bw(self):
+        """ dummy function to use in defaultdict
+        # (to avoid using a local function which can't be pickled)
+        """
+        return self.default_bw_GBps
+
+    @abc.abstractmethod
+    def __call__(self, *args, **kw):
+        pass
+
+
+# TODO: use it in partitioning
+class HeterogeneousBandwidthOracleNodes(HeterogeneousBandwidthOracle):
+    """Use to discover hetrogeneous bandwidth between nodes"""
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+
     def __call__(self, u: Node, v: Node):
-        # get gpu id
+        # us is src, v is target
         gpu_src = getattr(u, "stage_id", self.DEFAULT_PARTITION_SRC)
         gpu_tgt = getattr(v, "stage_id", self.DEFAULT_PARTITION_TGT)
 
@@ -52,22 +70,16 @@ class HeterogeneousBandwidthOracle:
         bw = self.GPU_TO_GPU_BW[(gpu_src, gpu_tgt)]
         return bw
 
-    def default_bw(self):
-        """ dummy function to use in defaultdict
-        # (to avoid using a local function which can't be pickled)
-        """
-        return self.default_bw_GBps
-
 
 # TODO: use it in analysis
 class HeterogeneousBandwidthOracleGPUs(HeterogeneousBandwidthOracle):
-    """ same thing, but called with partition ids instead of nodes """
+    """Use to discover hetrogeneous bandwidth between gpus"""
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
 
-    def __call__(self, gpu_src: int, gpu_tgt: int):
+    def __call__(self, gpu_id_src: int, gpu_id_tgt: int):
         # get bw
-        return self.GPU_TO_GPU_BW[(gpu_src, gpu_tgt)]
+        return self.GPU_TO_GPU_BW[(gpu_id_src, gpu_id_tgt)]
 
 
 class EdgeWeightFunction():
@@ -78,7 +90,7 @@ class EdgeWeightFunction():
                  penalty=1e4):
         # TODO: change the default behavior to allow hetrogenous BW,
         # HeterogeneousBandwidthOracle should be initialed at caller
-        self.bw = HeterogeneousBandwidthOracle(default_bw_GBps=bw_GBps)
+        self.bw = HeterogeneousBandwidthOracleNodes(default_bw_GBps=bw_GBps)
         self.ratio = bwd_to_fwd_ratio
         self.MULT_FACTOR = MULT_FACTOR
         self.penalty = penalty
