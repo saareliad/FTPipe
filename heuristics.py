@@ -29,59 +29,6 @@ class NodeWeightFunction():
                 node.weight.forward_time))
 
 
-class HeterogeneousBandwidthOracle(abc.ABC):
-    """Use to discover hetrogeneous bandwidth between nodes"""
-    DEFAULT_PARTITION_SRC = -1
-    DEFAULT_PARTITION_TGT = -2
-
-    def __init__(self, default_bw_GBps=12, GPU_TO_GPU_BW=dict()):
-        """
-        default_bw_GBps: float
-        GPU_TO_GPU_BW: dict (src,taget) --> float
-        """
-        super().__init__()
-        self.default_bw_GBps = default_bw_GBps
-        self.GPU_TO_GPU_BW = defaultdict(self.default_bw)
-        self.GPU_TO_GPU_BW.update(GPU_TO_GPU_BW)
-
-    def default_bw(self):
-        """ dummy function to use in defaultdict
-        # (to avoid using a local function which can't be pickled)
-        """
-        return self.default_bw_GBps
-
-    @abc.abstractmethod
-    def __call__(self, *args, **kw):
-        pass
-
-
-# TODO: use it in partitioning
-class HeterogeneousBandwidthOracleNodes(HeterogeneousBandwidthOracle):
-    """Use to discover hetrogeneous bandwidth between nodes"""
-    def __init__(self, *args, **kw):
-        super().__init__(*args, **kw)
-
-    def __call__(self, u: Node, v: Node):
-        # us is src, v is target
-        gpu_src = getattr(u, "stage_id", self.DEFAULT_PARTITION_SRC)
-        gpu_tgt = getattr(v, "stage_id", self.DEFAULT_PARTITION_TGT)
-
-        # get bw
-        bw = self.GPU_TO_GPU_BW[(gpu_src, gpu_tgt)]
-        return bw
-
-
-# TODO: use it in analysis
-class HeterogeneousBandwidthOracleGPUs(HeterogeneousBandwidthOracle):
-    """Use to discover hetrogeneous bandwidth between gpus"""
-    def __init__(self, *args, **kw):
-        super().__init__(*args, **kw)
-
-    def __call__(self, gpu_id_src: int, gpu_id_tgt: int):
-        # get bw
-        return self.GPU_TO_GPU_BW[(gpu_id_src, gpu_id_tgt)]
-
-
 class EdgeWeightFunction():
     def __init__(self,
                  bw_GBps,
@@ -182,3 +129,61 @@ def async_pipe_bwd_to_fwd_ratio_thumb_rules(args):
 
     if not recomputation:
         return 2
+
+
+###################
+# Heterogeneous
+###################
+
+
+class HeterogeneousBandwidthOracle(abc.ABC):
+    """Use to discover hetrogeneous bandwidth between nodes"""
+    DEFAULT_PARTITION_SRC = -1
+    DEFAULT_PARTITION_TGT = -2
+
+    def __init__(self, default_bw_GBps=12, GPU_TO_GPU_BW=dict()):
+        """
+        default_bw_GBps: float
+        GPU_TO_GPU_BW: dict (src,taget) --> float
+        """
+        super().__init__()
+        self.default_bw_GBps = default_bw_GBps
+        self.GPU_TO_GPU_BW = defaultdict(self.default_bw)
+        self.GPU_TO_GPU_BW.update(GPU_TO_GPU_BW)
+
+    def default_bw(self):
+        """ dummy function to use in defaultdict
+        # (to avoid using a local function which can't be pickled)
+        """
+        return self.default_bw_GBps
+
+    @abc.abstractmethod
+    def __call__(self, *args, **kw):
+        pass
+
+
+# TODO: use it in partitioning
+class HeterogeneousBandwidthOracleNodes(HeterogeneousBandwidthOracle):
+    """Use to discover hetrogeneous bandwidth between nodes"""
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+
+    def __call__(self, u: Node, v: Node):
+        # us is src, v is target
+        gpu_src = getattr(u, "stage_id", self.DEFAULT_PARTITION_SRC)
+        gpu_tgt = getattr(v, "stage_id", self.DEFAULT_PARTITION_TGT)
+
+        # get bw
+        bw = self.GPU_TO_GPU_BW[(gpu_src, gpu_tgt)]
+        return bw
+
+
+# TODO: use it in analysis
+class HeterogeneousBandwidthOracleGPUs(HeterogeneousBandwidthOracle):
+    """Use to discover hetrogeneous bandwidth between gpus"""
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+
+    def __call__(self, gpu_id_src: int, gpu_id_tgt: int):
+        # get bw
+        return self.GPU_TO_GPU_BW[(gpu_id_src, gpu_id_tgt)]
