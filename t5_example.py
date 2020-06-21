@@ -1,5 +1,5 @@
 from models.normal.NLP_models.modeling_t5 import T5ForConditionalGeneration as ourT5, T5Model as ourBase
-from models.normal.NLP_models.modeling_T5_tied_weights import T5ForConditionalGeneration as TiedT5, T5Model as TiedBase
+from models.normal.NLP_models.modeling_t5_tied_weights import T5ForConditionalGeneration as TiedT5, T5Model as TiedBase
 from transformers import T5Tokenizer,T5ForConditionalGeneration as refT5 ,T5Model as refBase
 import torch
 import operator
