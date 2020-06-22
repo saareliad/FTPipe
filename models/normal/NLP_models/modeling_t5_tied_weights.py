@@ -159,7 +159,7 @@ class T5Stack(T5PreTrainedModel):
             if self.output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
-            layer_outputs,use_cache = layer_module(
+            layer_outputs = layer_module(
                 hidden_states,
                 attention_mask=extended_attention_mask,
                 position_bias=position_bias,
@@ -269,7 +269,7 @@ class T5Model(T5PreTrainedModel):
         decoder_input_ids=None,
         decoder_attention_mask=None,
         decoder_past_key_value_states=None,
-        use_cache=True,
+        use_cache=False,
         inputs_embeds=None,
         decoder_inputs_embeds=None,
         head_mask=None,
@@ -419,7 +419,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         decoder_input_ids=None,
         decoder_attention_mask=None,
         decoder_past_key_value_states=None,
-        use_cache=True,
+        use_cache=False,
         lm_labels=None,
         inputs_embeds=None,
         decoder_inputs_embeds=None,

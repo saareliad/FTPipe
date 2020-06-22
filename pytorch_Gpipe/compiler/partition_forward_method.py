@@ -54,7 +54,7 @@ def generate_forward_method(graph:Graph,
         generateDeclaration(input_ids, partition_fields,
                             ready_expressions))
     outputs = sortedPartitionOutputs(partition_nodes, model_outputs)
-    out_scopes = [n.scope for n in outputs]
+    out_scopes = [graph.input_kw_ids.get(n.id,n.scope) for n in outputs]
     body = generateBody(outputs,
                         partition_nodes,
                         partition_fields,
