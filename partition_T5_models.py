@@ -68,14 +68,13 @@ def get_input(args, tokenizer, analysis=False):
         kwargs = {
             "input_ids": input_ids,
             "decoder_input_ids": input_ids,
-            "lm_labels": input_ids,
-            "use_cache": False
+            "lm_labels": input_ids, 
         }
     else:
         kwargs = {
             "input_ids": input_ids,
             "decoder_input_ids": input_ids,
-            "use_cache": False
+
         }
 
     return kwargs

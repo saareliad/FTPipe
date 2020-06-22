@@ -209,8 +209,8 @@ if __name__ == "__main__":
         input_ids=input_ids.repeat(4,10).contiguous() #Batch (4,60)
     else:
         input_ids=input_ids.repeat(32,16).contiguous()# Batch (32,96)
-    lm_kwargs={"input_ids":input_ids,"decoder_input_ids":input_ids,"lm_labels":input_ids,"use_cache":True}
-    kwargs = {"input_ids":input_ids,"decoder_input_ids":input_ids,"use_cache":True}
+    lm_kwargs={"input_ids":input_ids,"decoder_input_ids":input_ids,"lm_labels":input_ids}
+    kwargs = {"input_ids":input_ids,"decoder_input_ids":input_ids}
     
 
     if COMPARE_MODELS:
