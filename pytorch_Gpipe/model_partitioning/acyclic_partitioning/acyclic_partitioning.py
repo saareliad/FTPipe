@@ -914,8 +914,8 @@ def single_level_partitioning(
         edge_weight_function = lambda u, v: 1
 
     # TODO: change it to dict of callables
-    node_weights = DynamicNodeWeights(work_graph, node_weight_function)
-    edge_weights = DynamicEdgeWeights(work_graph, edge_weight_function)
+    node_weights = DynamicNodeWeights.from_graph(work_graph, node_weight_function)
+    edge_weights = DynamicEdgeWeights.from_graph(work_graph, edge_weight_function)
 
     initial_divide(work_graph, k, node_weights)
 
@@ -966,8 +966,8 @@ def single_level_partitioning(
     if use_layers_graph:
         graph.induce_layer_partition(work_graph, layers_to_original)
         # calculate metrics on original graph
-        node_weights = DynamicNodeWeights(graph, node_weight_function)
-        edge_weights = DynamicEdgeWeights(graph, edge_weight_function)
+        node_weights = DynamicNodeWeights.from_graph(graph, node_weight_function)
+        edge_weights = DynamicEdgeWeights.from_graph(graph, edge_weight_function)
 
     # calculate metrics
     if objective is Objective.EDGE_CUT:
@@ -1010,7 +1010,7 @@ def multilevel_partitioning(
     # FIXME: L_max is for EDGE_CUT, but also used for STAGE_TIME
     L_max = (1 + epsilon) * math.ceil(sum(partition_volumes.values()) / k)
 
-    hierarchy = coarsening(graph, node_weights, edge_weights)
+    hierarchy = coarsening(graph, node_weights, edge_weights, node_weight_function, edge_weight_function)
     # iterate in reverse order to coarsening
     # from smallest graph to largest graph
     for fine_graph, matching, coarse_graph in reversed(hierarchy):

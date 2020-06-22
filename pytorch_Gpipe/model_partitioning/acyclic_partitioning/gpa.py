@@ -8,16 +8,17 @@ from pytorch_Gpipe.model_partitioning.acyclic_partitioning.data_structures impor
 
 def coarsening(
     graph: Graph, node_weights: Dict[SimpleNode, float],
-    edge_weights: Dict[Tuple[SimpleNode, SimpleNode], float]
+    edge_weights: Dict[Tuple[SimpleNode, SimpleNode], float],
+    *args, **kw
 ) -> List[Tuple[ContractedGraph, Dict[int, int], ContractedGraph]]:
-    g = ContractedGraph.from_Graph(graph, node_weights, edge_weights)
+    g = ContractedGraph.from_Graph(graph, node_weights, edge_weights, *args, **kw)
     n = len(g)
 
     hierarchy = []
     p = g
     while True:
         matching, _ = find_max_matching(g._node_weights, g._edge_weights)
-        g = g.contract(g, matching)
+        g = g.contract(g, matching, *args, **kw)
         if len(g) == n:
             break
         hierarchy.append((p, matching, g))
