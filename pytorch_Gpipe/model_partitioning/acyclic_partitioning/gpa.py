@@ -1,47 +1,55 @@
 import random
-from typing import Dict,Tuple,List,Optional
-from pytorch_Gpipe.model_profiling import Node,Graph
-from pytorch_Gpipe.model_partitioning.acyclic_partitioning.data_structures import Path,PathSet,ContractedGraph,SimpleNode
+from typing import Dict, Tuple, List, Optional
+from pytorch_Gpipe.model_profiling import Node, Graph
+from pytorch_Gpipe.model_partitioning.acyclic_partitioning.data_structures import Path, PathSet, ContractedGraph, SimpleNode
 
 #adapted from https://github.com/KaHIP/KaHIP/blob/master/lib/partition/coarsening/matching/gpa/gpa_matching.cpp
 
 
-def coarsening(graph:Graph,node_weights:Dict[SimpleNode,float],
-                    edge_weights:Dict[Tuple[SimpleNode,SimpleNode],float])->List[Tuple[ContractedGraph,Dict[int,int],ContractedGraph]]:
-    g = ContractedGraph.from_Graph(graph,node_weights,edge_weights)
+def coarsening(
+    graph: Graph, node_weights: Dict[SimpleNode, float],
+    edge_weights: Dict[Tuple[SimpleNode, SimpleNode], float]
+) -> List[Tuple[ContractedGraph, Dict[int, int], ContractedGraph]]:
+    g = ContractedGraph.from_Graph(graph, node_weights, edge_weights)
     n = len(g)
-    
-    hierarchy=[]
+
+    hierarchy = []
     p = g
     while True:
-        matching,_ = find_max_matching(g._node_weights,g._edge_weights)
-        g=g.contract(g,matching)
+        matching, _ = find_max_matching(g._node_weights, g._edge_weights)
+        g = g.contract(g, matching)
         if len(g) == n:
             break
-        hierarchy.append((p,matching,g))
+        hierarchy.append((p, matching, g))
         n = len(g)
         p = g
-    
+
     return hierarchy
 
 
-def refine(fine_graph:ContractedGraph,coarse_graph:ContractedGraph,matching:Dict[int,int]):
+def refine(fine_graph: ContractedGraph, coarse_graph: ContractedGraph,
+           matching: Dict[int, int]):
     for n in fine_graph.nodes:
         n.stage_id = coarse_graph[matching[n.id]].stage_id
 
 
-def find_max_matching(node_weights:Dict[SimpleNode,float],
-                    edge_weights:Dict[Tuple[SimpleNode,SimpleNode],float])->Tuple[Dict[int,int],float]:
+def find_max_matching(
+    node_weights: Dict[SimpleNode,
+                       float], edge_weights: Dict[Tuple[SimpleNode,
+                                                        SimpleNode], float]
+) -> Tuple[Dict[int, int], float]:
     edges = list(edge_weights.keys())
-    edge_ratings = {e: edge_rating(e[0],e[1],edge_weights,node_weights) for e in edges}
+    edge_ratings = {
+        e: edge_rating(e[0], e[1], edge_weights, node_weights)
+        for e in edges
+    }
     random.shuffle(edges)
-    edges = sorted(edges,key=lambda e: edge_ratings[e],reverse=True)
-    
+    edges = sorted(edges, key=lambda e: edge_ratings[e], reverse=True)
+
     pathset = PathSet(node_weights.keys())
     #find all paths and cycles
     for edge in edges:
         pathset.add_if_eligible(edge)
-
 
     max_match = []
     max_match_weight = 0
@@ -56,13 +64,15 @@ def find_max_matching(node_weights:Dict[SimpleNode,float],
             continue
 
         if path.is_cycle():
-            unpacked_cycle = unpack_path(pathset,path)
+            unpacked_cycle = unpack_path(pathset, path)
             first_edge = unpacked_cycle.pop(0)
-            match_a,match_a_weight = max_path_matching(unpacked_cycle,edge_ratings)
-            unpacked_cycle.insert(0,first_edge)
+            match_a, match_a_weight = max_path_matching(
+                unpacked_cycle, edge_ratings)
+            unpacked_cycle.insert(0, first_edge)
 
             last_edge = unpacked_cycle.pop()
-            match_b,match_b_weight = max_path_matching(unpacked_cycle,edge_ratings)
+            match_b, match_b_weight = max_path_matching(
+                unpacked_cycle, edge_ratings)
             unpacked_cycle.append(last_edge)
 
             if match_a_weight > match_b_weight:
@@ -71,38 +81,42 @@ def find_max_matching(node_weights:Dict[SimpleNode,float],
             else:
                 match = match_b
                 match_weight = match_b_weight
-                
+
         elif path.length == 1:
             if pathset.next_vertex(path.end) is path.start:
                 edge = pathset.edge_to_next(path.end)
             else:
                 edge = pathset.edge_to_prev(path.end)
                 assert pathset.next_vertex(path.end) is path.start
-            match,match_weight = [edge],edge_ratings[edge]
+            match, match_weight = [edge], edge_ratings[edge]
         else:
-            unpacked_path = unpack_path(pathset,path)
-            match,match_weight = max_path_matching(unpacked_path,edge_ratings)
-        
-        max_match.extend(match)
-        max_match_weight+=match_weight
+            unpacked_path = unpack_path(pathset, path)
+            match, match_weight = max_path_matching(unpacked_path,
+                                                    edge_ratings)
 
-    matching = {u.id:v.id for u,v in max_match}
+        max_match.extend(match)
+        max_match_weight += match_weight
+
+    matching = {u.id: v.id for u, v in max_match}
     for n in node_weights.keys():
         if n.id not in matching:
-            matching[n.id]=n.id
+            matching[n.id] = n.id
 
-    return matching,max_match_weight
+    return matching, max_match_weight
 
 
-def max_path_matching(unpacked_path:List[Tuple[Node,Node]],edge_ratings:Dict[Tuple[Node,Node],float])->Tuple[List[Tuple[Node,Node]],float]:
+def max_path_matching(
+    unpacked_path: List[Tuple[Node, Node]], edge_ratings: Dict[Tuple[Node,
+                                                                     Node],
+                                                               float]
+) -> Tuple[List[Tuple[Node, Node]], float]:
     k = len(unpacked_path)
     if k == 1:
         #make sure to make a copy
-        return list(unpacked_path),edge_ratings[unpacked_path[0]]
-    
-    ratings = [0]*k
-    decision = [False]*k
+        return list(unpacked_path), edge_ratings[unpacked_path[0]]
 
+    ratings = [0] * k
+    decision = [False] * k
 
     ratings[0] = edge_ratings[unpacked_path[0]]
     ratings[1] = edge_ratings[unpacked_path[1]]
@@ -110,35 +124,35 @@ def max_path_matching(unpacked_path:List[Tuple[Node,Node]],edge_ratings:Dict[Tup
     decision[0] = True
     if ratings[0] < ratings[1]:
         decision[1] = True
-    
+
     #find optimal solution via dynamic programing
-    for i in range(2,k):
+    for i in range(2, k):
         cur_w = edge_ratings[unpacked_path[i]]
-        if(cur_w + ratings[i-2]) > ratings[i-1]:
+        if (cur_w + ratings[i - 2]) > ratings[i - 1]:
             decision[i] = True
-            ratings[i] = cur_w + ratings[i-2]
+            ratings[i] = cur_w + ratings[i - 2]
         else:
             decision[i] = False
-            ratings[i] = ratings[i-1]
+            ratings[i] = ratings[i - 1]
 
     if decision[-1]:
         match_weight = ratings[-1]
     else:
         match_weight = ratings[-2]
-    
-    match=[]
-    i = k-1
+
+    match = []
+    i = k - 1
     while i >= 0:
         if decision[i]:
             match.append(unpacked_path[i])
-            i-=2
+            i -= 2
         else:
-            i-=1
-    
-    return match,match_weight
+            i -= 1
+
+    return match, match_weight
 
 
-def unpack_path(pathset:PathSet,path:Path)->List[Tuple[Node,Node]]:
+def unpack_path(pathset: PathSet, path: Path) -> List[Tuple[Node, Node]]:
     assert path.active
 
     head = path.start
@@ -161,16 +175,17 @@ def unpack_path(pathset:PathSet,path:Path)->List[Tuple[Node,Node]]:
             next_v = pathset.next_vertex(current)
             unpacked_path.append(pathset.edge_to_next(current))
 
-        prev,current = current,next_v
-    
+        prev, current = current, next_v
+
     return unpacked_path
 
 
-def edge_rating(u:Node,v:Node,edge_weights:Dict[Tuple[Node,Node],float],node_weights:Dict[Node,float])->float:
-    return (edge_weights[(u,v)]**2)/(1 + node_weights[u] * node_weights[v])
+def edge_rating(u: Node, v: Node, edge_weights: Dict[Tuple[Node, Node], float],
+                node_weights: Dict[Node, float]) -> float:
+    return (edge_weights[(u, v)]**2) / (1 + node_weights[u] * node_weights[v])
 
 
-def visualize_matching(nodes,matching,file_name: str,directory: str):
+def visualize_matching(nodes, matching, file_name: str, directory: str):
     '''
     return a graphviz representation of the graph
     Parameters
@@ -190,32 +205,32 @@ def visualize_matching(nodes,matching,file_name: str,directory: str):
 
     dot = Digraph()
     dot.attr("graph",
-                concentrate="true",
-                bgcolor=theme["background_color"],
-                color=theme["outline_color"],
-                fontsize=theme["font_size"],
-                fontcolor=theme["font_color"],
-                fontname=theme["font_name"],
-                margin=theme["margin"],
-                rankdir="TB",
-                pad=theme["padding"])
+             concentrate="true",
+             bgcolor=theme["background_color"],
+             color=theme["outline_color"],
+             fontsize=theme["font_size"],
+             fontcolor=theme["font_color"],
+             fontname=theme["font_name"],
+             margin=theme["margin"],
+             rankdir="TB",
+             pad=theme["padding"])
 
     dot.attr("node",
-                shape="box",
-                style="filled",
-                margin="0,0",
-                fillcolor=theme["fill_color"],
-                color=theme["outline_color"],
-                fontsize=theme["font_size"],
-                fontcolor=theme["font_color"],
-                fontname=theme["font_name"])
+             shape="box",
+             style="filled",
+             margin="0,0",
+             fillcolor=theme["fill_color"],
+             color=theme["outline_color"],
+             fontsize=theme["font_size"],
+             fontcolor=theme["font_color"],
+             fontname=theme["font_name"])
 
     dot.attr("edge",
-                style="solid",
-                color=theme["outline_color"],
-                fontsize=theme["font_size"],
-                fontcolor=theme["font_color"],
-                fontname=theme["font_name"])
+             style="solid",
+             color=theme["outline_color"],
+             fontsize=theme["font_size"],
+             fontcolor=theme["font_color"],
+             fontname=theme["font_name"])
 
     partition_color = {
         0: 'grey',
@@ -238,7 +253,8 @@ def visualize_matching(nodes,matching,file_name: str,directory: str):
     }
 
     def random_color():
-        return "#"+''.join([random.choice('0123456789ABCDEF') for j in range(6)])
+        return "#" + ''.join(
+            [random.choice('0123456789ABCDEF') for j in range(6)])
 
     matching_colors = set()
     while len(matching_colors) < len(matching):
@@ -246,14 +262,18 @@ def visualize_matching(nodes,matching,file_name: str,directory: str):
         if c not in partition_color:
             matching_colors.add(c)
 
-    edge_colors={(u,v):c for (u,v),c in zip(matching.items(),matching_colors)}
+    edge_colors = {(u, v): c
+                   for (u, v), c in zip(matching.items(), matching_colors)}
 
     # add nodes
     for node in nodes:
-        dot.node(str(node.id), label=node.scope,
-                    fillcolor=partition_color[node.stage_id])
+        dot.node(str(node.id),
+                 label=node.scope,
+                 fillcolor=partition_color[node.stage_id])
         for i in node.in_edges:
-            dot.edge(str(i.id), str(node.id),color=edge_colors.get((i.id,node.id),"#000000"))
+            dot.edge(str(i.id),
+                     str(node.id),
+                     color=edge_colors.get((i.id, node.id), "#000000"))
 
     dot.format = "pdf"
     import os
