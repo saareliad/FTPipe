@@ -788,30 +788,36 @@ Solution = namedtuple("Solution",
 
 
 def acyclic_partition(
-        graph: Graph,
-        k: int,
-        epsilon: float = 0.1,
-        node_weight_function: Optional[NodeWeightFunction] = None,
-        edge_weight_function: Optional[EdgeWeightFunction] = None,
-        meta_algorithm: META_ALGORITH = META_ALGORITH.SINGLE_LEVEL,
-        objective: Objective = Objective.STAGE_TIME,
-        rounds: int = 10,
-        allocated_seconds: int = 20,
-        use_layers_graph: bool = True
+    graph: Graph,
+    k: int,
+    epsilon: float = 0.1,
+    node_weight_function: Optional[NodeWeightFunction] = None,
+    edge_weight_function: Optional[EdgeWeightFunction] = None,
+    meta_algorithm: META_ALGORITH = META_ALGORITH.SINGLE_LEVEL,
+    objective: Objective = Objective.STAGE_TIME,
+    rounds: int = 10,
+    allocated_seconds: int = 20,
+    use_layers_graph: bool = True,
+    use_dynamic_node_weights=False,
+    use_dynamic_edge_weights=False,
 ) -> Tuple[Graph, float, Dict[int, float]]:
     worker_args = [
-        dict(graph=graph.state(),
-             k=k,
-             meta_algorithm=meta_algorithm,
-             algorithm=alg,
-             epsilon=epsilon,
-             node_weight_function=node_weight_function,
-             edge_weight_function=edge_weight_function,
-             rounds=rounds,
-             allocated_seconds=allocated_seconds,
-             seed=random.randint(0, 2**32),
-             objective=objective,
-             use_layers_graph=use_layers_graph) for alg in ALGORITHM
+        dict(
+            graph=graph.state(),
+            k=k,
+            meta_algorithm=meta_algorithm,
+            algorithm=alg,
+            epsilon=epsilon,
+            node_weight_function=node_weight_function,
+            edge_weight_function=edge_weight_function,
+            rounds=rounds,
+            allocated_seconds=allocated_seconds,
+            seed=random.randint(0, 2**32),
+            objective=objective,
+            use_layers_graph=use_layers_graph,
+            use_dynamic_node_weights=False,
+            use_dynamic_edge_weights=False,
+        ) for alg in ALGORITHM
     ]
 
     with Pool(len(worker_args)) as pool:
@@ -994,18 +1000,18 @@ def single_level_partitioning(
 
 
 def multilevel_partitioning(
-        graph: Graph,
-        algorithm: ALGORITHM = ALGORITHM.FIDUCCIA_MATTHEYSES_MOVES,
-        k: int = 4,
-        epsilon: float = 0.1,
-        node_weight_function: Optional[NodeWeightFunction] = None,
-        edge_weight_function: Optional[EdgeWeightFunction] = None,
-        objective: Objective = Objective.EDGE_CUT,
-        rounds: int = 10,
-        use_layers_graph=True,
-        use_dynamic_node_weights=False,
-        use_dynamic_edge_weights=False,
-        ) -> Solution:
+    graph: Graph,
+    algorithm: ALGORITHM = ALGORITHM.FIDUCCIA_MATTHEYSES_MOVES,
+    k: int = 4,
+    epsilon: float = 0.1,
+    node_weight_function: Optional[NodeWeightFunction] = None,
+    edge_weight_function: Optional[EdgeWeightFunction] = None,
+    objective: Objective = Objective.EDGE_CUT,
+    rounds: int = 10,
+    use_layers_graph=True,
+    use_dynamic_node_weights=False,
+    use_dynamic_edge_weights=False,
+) -> Solution:
 
     initial_solution, node_weights, edge_weights = single_level_partitioning(
         graph,
@@ -1016,7 +1022,10 @@ def multilevel_partitioning(
         edge_weight_function=edge_weight_function,
         objective=objective,
         rounds=rounds,
-        use_layers_graph=use_layers_graph)
+        use_layers_graph=use_layers_graph,
+        use_dynamic_node_weights=use_dynamic_node_weights,
+        use_dynamic_edge_weights=use_dynamic_edge_weights,
+    )
     partition_volumes = initial_solution.volumes
 
     # FIXME: L_max is for EDGE_CUT, but also used for STAGE_TIME

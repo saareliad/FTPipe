@@ -27,10 +27,13 @@ class ParsePartitioningOpts:
                             default=-1,
                             help="bwd to fwd ratio for heuristics")
 
-        parser.add_argument("--auto_infer_node_bwd_to_fwd_ratio",
-                            action='store_true',
-                            default=False,
-                            help="Automatically infer bwd to fwd ratio for nodes (computation). Expected Ratio for edges should be given `by bwd_to_fwd_ratio`")              
+        parser.add_argument(
+            "--auto_infer_node_bwd_to_fwd_ratio",
+            action='store_true',
+            default=False,
+            help=
+            "Automatically infer bwd to fwd ratio for nodes (computation). Expected Ratio for edges should be given `by bwd_to_fwd_ratio`"
+        )
 
     def add_partitioning_arguments(self, parser):
         # parser = parser.add_argument_group("Partitioning options")
@@ -234,7 +237,10 @@ class ParseAcyclicPartitionerOpts:
     @staticmethod
     def add_acyclic_partitioner_arguments(parser):
         opts = parser.add_argument_group("AcyclicPartitioner options")
-        opts.add_argument("--epsilon", default=0.1,type=float, help="imbalance factor")
+        opts.add_argument("--epsilon",
+                          default=0.1,
+                          type=float,
+                          help="imbalance factor")
         opts.add_argument("--rounds",
                           default=10,
                           type=int,
@@ -256,6 +262,18 @@ class ParseAcyclicPartitionerOpts:
                           default="edge_cut",
                           help="partitioning optimization objective")
 
+        opts.add_argument(
+            "--hetrogenous_nodes",
+            action="store_true",
+            default=False,
+            help="use partitioning algorithm with hetrogenous nodes")
+
+        opts.add_argument(
+            "--hetrogenous_bw",
+            action="store_true",
+            default=False,
+            help="use partitioning algorithm with hetrogenous bandwidth")
+
     @staticmethod
     def acyclic_opts_dict_from_parsed_args(args):
         """ build acyclic partitioner options """
@@ -275,7 +293,9 @@ class ParseAcyclicPartitionerOpts:
             "rounds": args.rounds,
             "allocated_seconds": args.allocated_seconds,
             "meta_algorithm": meta_algorithm,
-            "objective": objective
+            "objective": objective,
+            "use_dynamic_node_weights": args.hetrogenous_nodes,
+            "use_dynamic_edge_weights": args.hetrogenous_bw,
         }
 
 
