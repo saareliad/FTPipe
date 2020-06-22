@@ -1,5 +1,8 @@
 from pytorch_Gpipe.model_profiling import Graph, NodeWeightFunction, EdgeWeightFunction
-from .data_structures import QuotientGraph, SimpleNode, PriorityQueue, DoublePriority, VerticeStageConnections
+from .data_structures import (QuotientGraph, SimpleNode, PriorityQueue,
+                              DoublePriority, VerticeStageConnections,
+                              DynamicNodeWeights, DynamicEdgeWeights,
+                              StaticNodeWeights, StaticEdgeWeights)
 from .gpa import coarsening, refine
 import random
 import math
@@ -10,8 +13,6 @@ from itertools import chain
 import enum
 from multiprocessing import Pool
 import time
-from contextlib import contextmanager
-from collections.abc import MutableMapping
 from functools import partial
 
 DEBUG = False
@@ -366,7 +367,8 @@ def global_moves(partition_volumes: Dict[int, float],
 
                 # TODO: integrate with dynamic
                 edge_gain = gain_function(n, dst, state)
-                if my_check_balance_with_lookhead(n, dst) or quotient_graph.move_creates_cycle(n, dst):
+                if my_check_balance_with_lookhead(
+                        n, dst) or quotient_graph.move_creates_cycle(n, dst):
                     edge_gain = -np.inf
 
                 moves[edge_gain].append(dst)
@@ -437,7 +439,6 @@ def Fiduccia_Mattheyses_moves(partition_volumes: Dict[int, float],
                                         best_objective)
 
     all_blocks = list(partition_volumes.keys())
-
 
     my_check_balance_with_lookhead = partial(
         check_balance_with_lookhead,
@@ -605,7 +606,7 @@ def update_stage_times(v: SimpleNode,
         w_new = edge_weights[edge]
 
         # record destinations so we won't overcount comm
-        # only once per destination stage 
+        # only once per destination stage
         # (v->o1 and v->o2 counted once if o1 and o2 are on same stage)
         comms = set()
         if u.stage_id == src:
@@ -637,7 +638,7 @@ def update_stage_times(v: SimpleNode,
 
     # FIXME: this is turned off because with it speedup for T5 went from 3.4 to 3.2
     # So maybe I have some bug.
-    BIDERECTIONAL = False  
+    BIDERECTIONAL = False
     if BIDERECTIONAL:
         # HACK: Another pass for the backward edges.
         for u in chain(v.in_edges, v.out_edges):
@@ -654,7 +655,7 @@ def update_stage_times(v: SimpleNode,
             w_new = edge_weights[bwd_edge]
 
             # record destinations so we won't overcount comm
-            # only once per destination stage 
+            # only once per destination stage
             # (v->o1 and v->o2 counted once if o1 and o2 are on same stage)
             comms = set()
             if u.stage_id == src:
@@ -887,96 +888,6 @@ def worker(kwargs) -> Solution:
         steps += 1
     # print(f"{kwargs['algorithm'].name} steps: {steps}")
     return best_solution
-
-
-###################################################################################################
-
-# The purpose of the following two classes is twofold:
-# (1) Provide dyanmic weights
-# (2) to be transparnt to the algorithm as mucha s possible
-
-
-class DynamicNodeWeights(MutableMapping):
-    def __init__(self, work_graph, node_weight_function):
-        node_weights = dict()
-
-        # Full init
-        for n in work_graph.nodes:
-            node_weights[n] = node_weight_function(n)
-
-        self.store = node_weights
-        self.work_graph = work_graph
-        self.node_weight_function = node_weight_function
-
-    def __getitem__(self, key):
-        return self.store[key]
-
-    def __setitem__(self, key, value):
-        self.store[key] = value
-
-    def __delitem__(self, key):
-        del self.store[key]
-
-    def __iter__(self):
-        return iter(self.store)
-
-    def __len__(self):
-        return len(self.store)
-
-    def recalculate_weight(self, key):
-        self.store[key] = self.node_weight_function(key)
-
-
-class DynamicEdgeWeights(MutableMapping):
-    def __init__(self, work_graph, edge_weight_function):
-        edge_weights = dict()
-
-        for n in work_graph.nodes:
-            for o in n.out_edges:
-                edge_weights[(n, o)] = edge_weight_function(n, o)
-                edge_weights[(o, n)] = edge_weight_function(o, n)
-
-        self.store = edge_weights
-        self.work_graph = work_graph
-        self.edge_weight_function = edge_weight_function
-        self._store_cache = dict()
-
-    def __getitem__(self, key):
-        return self.store[key]
-
-    def __setitem__(self, key, value):
-        self.store[key] = value
-
-    def __delitem__(self, key):
-        del self.store[key]
-
-    def __iter__(self):
-        return iter(self.store)
-
-    def __len__(self):
-        return len(self.store)
-
-    def recalculate_weight(self, key):
-        # NOTE: user should call twich in directed case
-        self.store[key] = self.edge_weight_function(key[0], key[1])
-
-
-class StaticNodeWeights(DynamicNodeWeights):
-    def __init__(self, *args, **kw):
-        super().__init__()
-
-    def recalculate_weight(self, key):
-        pass
-
-
-class StaticEdgeWeights(DynamicEdgeWeights):
-    def __init__(self, *args, **kw):
-        super().__init__()
-
-    def recalculate_weight(self, key):
-        pass
-
-###################################################################################################
 
 
 def single_level_partitioning(

@@ -4,6 +4,108 @@ from typing import Dict, Iterable, Set, Iterator, List, Tuple, Any, Optional
 import random
 import heapq
 import pickle
+from collections.abc import MutableMapping
+
+###################################################################################################
+
+# The purpose of the following two classes is twofold:
+# (1) Provide dyanmic weights
+# (2) to be transparnt to the algorithm as mucha s possible
+
+
+class DynamicNodeWeights(MutableMapping):
+    def __init__(self, work_graph, node_weight_function):
+        node_weights = dict()
+
+        # Full init
+        for n in work_graph.nodes:
+            node_weights[n] = node_weight_function(n)
+
+        self.store = node_weights
+        self.work_graph = work_graph
+        self.node_weight_function = node_weight_function
+
+    def __getitem__(self, key):
+        return self.store[key]
+
+    def __setitem__(self, key, value):
+        self.store[key] = value
+
+    def __delitem__(self, key):
+        del self.store[key]
+
+    def __iter__(self):
+        return iter(self.store)
+
+    def __len__(self):
+        return len(self.store)
+
+    def recalculate_weight(self, key):
+        self.store[key] = self.node_weight_function(key)
+
+
+class DynamicEdgeWeights(MutableMapping):
+    def __init__(self, work_graph, edge_weight_function):
+        edge_weights = dict()
+        backward_edges = set()
+
+        for n in work_graph.nodes:
+            for o in n.out_edges:
+                # Forward (normal) edges
+                edge_weights[(n, o)] = edge_weight_function(n, o)
+                # Backwaed edges, used just for heurirstics.
+                edge_weights[(o, n)] = edge_weight_function(o, n)
+                backward_edges.add((o, n))
+
+        self.store = edge_weights
+        self.work_graph = work_graph
+        self.edge_weight_function = edge_weight_function
+        self._backward_edges = backward_edges
+        self._store_cache = dict()
+
+    def __getitem__(self, key):
+        return self.store[key]
+
+    def __setitem__(self, key, value):
+        self.store[key] = value
+
+    def __delitem__(self, key):
+        del self.store[key]
+
+    def __iter__(self):
+        return iter(self.store)
+
+    def __len__(self):
+        return len(self.store)
+
+    def recalculate_weight(self, key):
+        # NOTE: user should call twich in directed case
+        self.store[key] = self.edge_weight_function(key[0], key[1])
+    
+    def clear_backward_edges(self):
+        """ backward edges are not part of the original graph,
+            can be used just for (directed) heuristics.
+        """
+        for key in self._backward_edges:
+            del self.store[key]
+
+
+class StaticNodeWeights(DynamicNodeWeights):
+    def __init__(self, *args, **kw):
+        super().__init__()
+
+    def recalculate_weight(self, key):
+        pass
+
+
+class StaticEdgeWeights(DynamicEdgeWeights):
+    def __init__(self, *args, **kw):
+        super().__init__()
+
+    def recalculate_weight(self, key):
+        pass
+
+###################################################################################################
 
 
 class DoublePriority():
@@ -555,7 +657,7 @@ class SimpleNode():
     def add_out_edge(self, node):
         self.out_edges.add(node)
 
-
+# TODO: change this to the other data structures.
 class ContractedGraph():
     def __init__(self, in_edges, partition, node_weights, edge_weights,
                  matching):
