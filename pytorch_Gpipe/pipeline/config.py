@@ -222,8 +222,15 @@ class PipelineConfig():
         all_inputs_used &= all_inputs.issubset(
             set(model_inputs).union(all_outputs))
         all_outputs_used = all_outputs.issuperset(model_outputs)
+        s=set(model_outputs).union(all_inputs)
+        for a in all_outputs:
+            if a not in s:
+                print(a)
         all_outputs_used &= all_outputs.issubset(
             set(model_outputs).union(all_inputs))
+
+
+        print(no_duplicates , has_in_out , disjoint , has_stages , stages_valid , all_inputs_used , all_outputs_used)
 
         # ensure that shapes dtypes and is_batched are consistent across all stages
         shapes = self.shapes()
@@ -457,12 +464,13 @@ class StageConfig():
         no_duplicates &= ((len(self.outputs) == len(set(self.outputs))))
 
         has_in_out = (len(self.inputs) > 0) and (len(self.outputs) > 0)
-        disjoint = set(self.inputs).isdisjoint(set(self.outputs))
+        #TODO inputs which are used in multiple stages will be sent from stage to stage
+        # disjoint = set(self.inputs).isdisjoint(set(self.outputs))
+        disjoint=True
         has_ranks = len(self.devices) > 0
 
         if (self._lr_scheduler_args[0] != None) and self._optimizer_args[0] is None:
             return False
-
         return no_duplicates and has_in_out and disjoint and has_ranks
 
     def realize(self, batch_dim: int, layers: Dict[str, Tensor], tensors: Dict[str, Tensor]) -> Tuple[nn.Module, torch.device, Optional[Optimizer], Optional[_LRScheduler], int]:
