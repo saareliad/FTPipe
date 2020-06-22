@@ -635,6 +635,55 @@ def update_stage_times(v: SimpleNode,
             stage_times[p0] += comm0
             stage_times[p1] += comm1
 
+    # FIXME: this is turned off because with it speedup for T5 went from 3.4 to 3.2
+    # So maybe I have some bug.
+    BIDERECTIONAL = False  
+    if BIDERECTIONAL:
+        # HACK: Another pass for the backward edges.
+        for u in chain(v.in_edges, v.out_edges):
+            edge = (u, v) if u.id < v.id else (v, u)
+            bwd_edge = (edge[1], edge[0])
+            del edge
+            # Handle dynamic bandwidth change from changing stages
+            v.stage_id = src
+            w_old = edge_weights[bwd_edge]
+            if just_lookahead:
+                old_edge_weights[bwd_edge] = w_old
+            v.stage_id = dest
+            edge_weights.recalculate_weight(bwd_edge)
+            w_new = edge_weights[bwd_edge]
+
+            # record destinations so we won't overcount comm
+            # only once per destination stage 
+            # (v->o1 and v->o2 counted once if o1 and o2 are on same stage)
+            comms = set()
+            if u.stage_id == src:
+                # u and v were at same partition
+                # move adds comm, less gain
+                if (src, w_new, dest, w_new) in comms:
+                    continue
+                comms.add((src, w_new, dest, w_new))
+                edge_gain -= w_new
+            elif u.stage_id == dest:
+                # u and v will be at same partition
+                # move reduces comm, more gain
+                if (src, -w_old, dest, -w_old) in comms:
+                    continue
+                comms.add((src, -w_old, dest, -w_old))
+                edge_gain += w_old
+            else:
+                # u and v were and will be at different partitions
+                # move comm from src to dst no gain
+                if (src, -w_old, dest, w_new) in comms:
+                    continue
+                comms.add((src, -w_old, dest, w_new))
+
+            # FIXME: it adds double communication to both partitions
+            # In practice it should add to 1 send activations and 1 send activations gradients.
+            for p0, comm0, p1, comm1 in comms:
+                stage_times[p0] += comm0
+                stage_times[p1] += comm1
+
     if just_lookahead:
         # Return to prev
         v.stage_id = src
