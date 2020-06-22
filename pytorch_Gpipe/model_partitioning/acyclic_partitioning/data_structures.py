@@ -104,7 +104,7 @@ class DynamicEdgeWeights(MutableMapping):
 
 class StaticNodeWeights(DynamicNodeWeights):
     def __init__(self, *args, **kw):
-        super().__init__()
+        super().__init__(*args, **kw)
 
     def recalculate_weight(self, key):
         pass
@@ -112,7 +112,7 @@ class StaticNodeWeights(DynamicNodeWeights):
 
 class StaticEdgeWeights(DynamicEdgeWeights):
     def __init__(self, *args, **kw):
-        super().__init__()
+        super().__init__(*args, **kw)
 
     def recalculate_weight(self, key):
         pass
@@ -695,8 +695,10 @@ class ContractedGraph():
         node_weights,
         edge_weights,
         matching,
-        node_weight_function,
-        edge_weight_function,
+        node_weight_function=None,
+        edge_weight_function=None,
+        use_dynamic_node_weights=False,
+        use_dynamic_edge_weights=False,
     ):
         self._nodes: Dict[int, SimpleNode] = dict()
         # FIXME: to support DynamicNodeWeights, something must be changed.
@@ -720,10 +722,21 @@ class ContractedGraph():
                 self._edge_weights[(self._nodes[matched_i],
                                     self._nodes[matched])] += edge_weights[(i,
                                                                             n)]
-        self._node_weights = ContractedGraphDynamicNodeWeights(
-            self, self._node_weights, node_weight_function)
-        self._edge_weights = ContractedGraphDynamicNodeWeights(
-            self, self._edge_weights, edge_weight_function)
+
+        if use_dynamic_node_weights:
+            self._node_weights = ContractedGraphDynamicNodeWeights(
+                self, self._node_weights, node_weight_function)
+        else:
+            self._node_weights = StaticNodeWeights(
+                self._node_weights,
+                node_weight_function)  # NOTE: node_weight_function can be None
+
+        if use_dynamic_edge_weights:
+            self._edge_weights = ContractedGraphDynamicNodeWeights(
+                self, self._edge_weights, edge_weight_function)
+        else:
+            self._edge_weights = StaticEdgeWeights(self._edge_weights,
+                                                   edge_weight_function)
 
     def __len__(self) -> int:
         return len(self._nodes)

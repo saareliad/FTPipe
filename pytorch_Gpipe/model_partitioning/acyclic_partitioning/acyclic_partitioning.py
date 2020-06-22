@@ -381,8 +381,8 @@ def global_moves(partition_volumes: Dict[int, float],
             best_moves = moves[max_gain]
             dst = random.sample(best_moves, 1)[0]
 
-            update_function(n, dst)
             quotient_graph.move_node(n, dst)
+            update_function(n, dst)
 
         if not changed:
             break
@@ -899,7 +899,9 @@ def single_level_partitioning(
     edge_weight_function: Optional[EdgeWeightFunction] = None,
     objective: Objective = Objective.EDGE_CUT,
     rounds: int = 10,
-    use_layers_graph=True
+    use_layers_graph=True,
+    use_dynamic_node_weights=False,
+    use_dynamic_edge_weights=False,
 ) -> Tuple[Solution, Dict[SimpleNode, float], Dict[Tuple[SimpleNode,
                                                          SimpleNode], float]]:
     if not use_layers_graph:
@@ -913,9 +915,14 @@ def single_level_partitioning(
     if edge_weight_function is None:
         edge_weight_function = lambda u, v: 1
 
-    # TODO: change it to dict of callables
-    node_weights = DynamicNodeWeights.from_graph(work_graph, node_weight_function)
-    edge_weights = DynamicEdgeWeights.from_graph(work_graph, edge_weight_function)
+    node_weights_class = DynamicNodeWeights if use_dynamic_node_weights else StaticNodeWeights
+
+    edge_weights_class = DynamicEdgeWeights if use_dynamic_edge_weights else StaticEdgeWeights
+
+    node_weights = node_weights_class.from_graph(work_graph,
+                                                 node_weight_function)
+    edge_weights = edge_weights_class.from_graph(work_graph,
+                                                 edge_weight_function)
 
     initial_divide(work_graph, k, node_weights)
 
@@ -966,8 +973,10 @@ def single_level_partitioning(
     if use_layers_graph:
         graph.induce_layer_partition(work_graph, layers_to_original)
         # calculate metrics on original graph
-        node_weights = DynamicNodeWeights.from_graph(graph, node_weight_function)
-        edge_weights = DynamicEdgeWeights.from_graph(graph, edge_weight_function)
+        node_weights = node_weights_class.from_graph(graph,
+                                                     node_weight_function)
+        edge_weights = edge_weights_class.from_graph(graph,
+                                                     edge_weight_function)
 
     # calculate metrics
     if objective is Objective.EDGE_CUT:
@@ -993,7 +1002,10 @@ def multilevel_partitioning(
         edge_weight_function: Optional[EdgeWeightFunction] = None,
         objective: Objective = Objective.EDGE_CUT,
         rounds: int = 10,
-        use_layers_graph=True) -> Solution:
+        use_layers_graph=True,
+        use_dynamic_node_weights=False,
+        use_dynamic_edge_weights=False,
+        ) -> Solution:
 
     initial_solution, node_weights, edge_weights = single_level_partitioning(
         graph,
@@ -1010,7 +1022,8 @@ def multilevel_partitioning(
     # FIXME: L_max is for EDGE_CUT, but also used for STAGE_TIME
     L_max = (1 + epsilon) * math.ceil(sum(partition_volumes.values()) / k)
 
-    hierarchy = coarsening(graph, node_weights, edge_weights, node_weight_function, edge_weight_function)
+    hierarchy = coarsening(graph, node_weights, edge_weights,
+                           node_weight_function, edge_weight_function)
     # iterate in reverse order to coarsening
     # from smallest graph to largest graph
     for fine_graph, matching, coarse_graph in reversed(hierarchy):
