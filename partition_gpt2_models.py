@@ -31,7 +31,7 @@ from torch.utils.data import DataLoader, Dataset, RandomSampler
 import warnings
 import sys
 from partition_scripts_utils import ParseMetisOpts,ParseAcyclicPartitionerOpts, ParsePartitioningOpts, record_cmdline,choose_blocks
-from heuristics import NodeWeightFunction, EdgeWeightFunction
+from heuristics import NodeWeightFunction, UndirectedEdgeWeightFunction, DirectedEdgeWeightFunction
 from transformers import (
     GPT2Config,
     GPT2Tokenizer,
@@ -173,6 +173,9 @@ def partition_model(args,
         if "stateless_lm_head" in scope or "lm_head" in scope:
             return True
     args.basic_blocks = choose_blocks(model,args)
+    edge_weight_function_cls = UndirectedEdgeWeightFunction if args.use_METIS else DirectedEdgeWeightFunction
+    bw = args.bw
+    edge_weight_function = edge_weight_function_cls(bw, bwd_to_fwd_ratio=bwd_to_fwd_ratio)    
     partial_pipe_model = functools.partial(
         pipe_model,
         model,
@@ -184,10 +187,8 @@ def partition_model(args,
         nparts=args.n_partitions,
         node_weight_function=NodeWeightFunction(
             bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-        edge_weight_function=EdgeWeightFunction(
-            args.bw,
-            bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-        use_layers_only_graph=True,
+        edge_weight_function=edge_weight_function,
+        use_layers_only_graph=True,  # FIXME:
         use_graph_profiler=not args.use_network_profiler,
         use_network_profiler=args.use_network_profiler,
         profile_ops=not args.disable_op_profiling,

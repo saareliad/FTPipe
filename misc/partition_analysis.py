@@ -383,6 +383,7 @@ def run_analysis(sample,
 # TODO: also read req grad requirements, as they don't affect backward send times
 # TODO: calculate Backward send times with differnt links (sending grads)
 # TODO: calculate Forward send times with different links (sending activations)
+# FIXME: setting different_links_between_accelerators=False because some parts were not implemented. will be fixed in next commit.
 def profile_execution(model_inputs,
                       partition_config,
                       n_iters,
@@ -392,7 +393,8 @@ def profile_execution(model_inputs,
                       add_comm_times_to_balance=True,
                       stages_on_same_gpu=[],
                       parallel_comm_and_comp_ratio=0,
-                      different_links_between_accelerators=True):
+                      different_links_between_accelerators=False):
+
     '''perfrom forward/backward passes and measure execution times accross n batches
     '''
     n_partitions = sum(1 for k in partition_config if isinstance(k, int))

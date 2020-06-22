@@ -1,5 +1,5 @@
 from models.normal.NLP_models.modeling_t5 import T5ForConditionalGeneration as ourT5, T5Model as ourBase
-from models.normal.NLP_models.modeling_T5_tied_weights import T5ForConditionalGeneration as TiedT5, T5Model as TiedBase
+from models.normal.NLP_models.modeling_t5_tied_weights import T5ForConditionalGeneration as TiedT5, T5Model as TiedBase
 from transformers import T5Tokenizer,T5ForConditionalGeneration as refT5 ,T5Model as refBase
 import torch
 import operator
@@ -13,7 +13,7 @@ import numpy as np
 from collections import Counter
 from pytorch_Gpipe import acyclic_partition
 from pytorch_Gpipe.model_partitioning.acyclic_partitioning import META_ALGORITH,Objective
-from heuristics import NodeWeightFunction,EdgeWeightFunction
+from heuristics import NodeWeightFunction,DirectedEdgeWeightFunction
 import functools
 from partition_scripts_utils import run_x_tries_until_no_fail
 
@@ -226,7 +226,7 @@ if __name__ == "__main__":
 
 
         nwf = NodeWeightFunction(-1,MULT_FACTOR=1000)
-        ewf = EdgeWeightFunction(12,-1,MULT_FACTOR=1000)
+        ewf = DirectedEdgeWeightFunction(12,-1,MULT_FACTOR=1000)
         k=4
         allocated_seconds = 20
 

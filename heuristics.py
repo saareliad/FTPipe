@@ -4,10 +4,12 @@ import operator
 from pytorch_Gpipe.model_profiling import Node, NodeTypes, ExecTimes
 from pytorch_Gpipe.utils import flatten
 from collections import defaultdict
+import abc
+# from typing import Dict, Any
 
 __all__ = [
-    "NodeWeightFunction", "EdgeWeightFunction",
-    "NodeWeightFunctionWithRatioAutoInfer"
+    "NodeWeightFunction", "UndirectedEdgeWeightFunction",
+    "DirectedEdgeWeightFunction", "NodeWeightFunctionWithRatioAutoInfer"
 ]
 
 
@@ -28,49 +30,50 @@ class NodeWeightFunction():
                 node.weight.forward_time))
 
 
-class HeterogeneousBandwidthOracle:
-    """Use to discover bandwidth between nodes"""
-    DEFAULT_PARTITION_SRC = -1
-    DEFAULT_PARTITION_TGT = -2
-
-    def __init__(self, default_bw_GBps=12, GPU_TO_GPU_BW=dict()):
-        """
-        default_bw_GBps: float
-        GPU_TO_GPU_BW: dict (src,taget) --> float
-        """
-        super().__init__()
-        self.default_bw_GBps = default_bw_GBps
-        self.GPU_TO_GPU_BW = defaultdict(self.default_bw)
-        self.GPU_TO_GPU_BW.update(GPU_TO_GPU_BW)
-
-    def __call__(self, u: Node, v: Node):
-        # get gpu id
-        gpu_src = getattr(u, "stage_id", self.DEFAULT_PARTITION_SRC)
-        gpu_tgt = getattr(v, "stage_id", self.DEFAULT_PARTITION_TGT)
-
-        # get bw
-        bw = self.GPU_TO_GPU_BW[(gpu_src, gpu_tgt)]
-        return bw
-
-    def default_bw(self):
-        """ dummy function to use in defaultdict
-        # (to avoid using a local function which can't be pickled)
-        """
-        return self.default_bw_GBps
+def default_node_attr():
+    return "weight"
 
 
-# TODO: use it in analysis
-class HeterogeneousBandwidthOracleGPUs(HeterogeneousBandwidthOracle):
-    """ same thing, but called with partition ids instead of nodes """
-    def __init__(self, *args, **kw):
-        super().__init__(*args, **kw)
+class NodeWeightFunctionByStageId:
+    DEFAULT_STAGE_ID = -1
 
-    def __call__(self, gpu_src: int, gpu_tgt: int):
-        # get bw
-        return self.GPU_TO_GPU_BW[(gpu_src, gpu_tgt)]
+    def __init__(self,
+                 bwd_to_fwd_ratio=-1,
+                 MULT_FACTOR=1000,
+                 stage_id_to_attr=defaultdict(default_node_attr)):
+
+        self.ratio = bwd_to_fwd_ratio
+        self.MULT_FACTOR = MULT_FACTOR
+        self.stage_id_to_attr = stage_id_to_attr
+
+    def _weight_by_stage_id(self, node):
+        stage_id = getattr(node, "stage_id", self.DEFAULT_STAGE_ID)
+        attr = self.stage_id_to_attr[stage_id]
+        weight = getattr(node, attr)
+        return weight
+
+    def __call__(self, node: Node):
+        weight = self._weight_by_stage_id(node)
+
+        assert isinstance(weight, ExecTimes)
+        if self.ratio < 0:
+            return int(self.MULT_FACTOR * (max(1, weight.backward_time)))
+        else:
+            # TODO: it has to be consistent with communication times to work
+            # NOTE: / (ratio + 1) is removed, as we do in edge.
+            return int(self.MULT_FACTOR * max(
+                1, self.ratio * weight.backward_time + weight.forward_time))
 
 
-class EdgeWeightFunction():
+# TODO: heuristic to handle undirected edges.
+class DirectedEdgeWeightFunction:
+    """ Heuristic to handle undirected edges.
+        The main differnece is:
+        if
+            when bwd_to_fwd_ratio!=1
+        then
+            w(u,v) != w(v,u)
+    """
     def __init__(self,
                  bw_GBps,
                  bwd_to_fwd_ratio=-1,
@@ -78,7 +81,7 @@ class EdgeWeightFunction():
                  penalty=1e4):
         # TODO: change the default behavior to allow hetrogenous BW,
         # HeterogeneousBandwidthOracle should be initialed at caller
-        self.bw = HeterogeneousBandwidthOracle(default_bw_GBps=bw_GBps)
+        self.bw = HeterogeneousBandwidthOracleNodes(default_bw_GBps=bw_GBps)
         self.ratio = bwd_to_fwd_ratio
         self.MULT_FACTOR = MULT_FACTOR
         self.penalty = penalty
@@ -97,7 +100,55 @@ class EdgeWeightFunction():
                     # include dtype size
                     vol *= torch.empty(1, dtype=dtype).element_size()
                 else:
-                    vol = 4
+                    vol = 4  # FIXME: its not always 4Bytes but whatever.
+                volume += vol
+
+            volume /= MB
+            # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
+            w = max(1, (self.MULT_FACTOR * (volume / self.bw(u, v))))
+
+            # NOTE (1): we traverse every edge twice,
+            # NOTE (2): If we have bwd to fwd ratio, than have to normalize by it.
+            # so for ratio 1 we have to multipy by 2
+            if self.ratio < 0:
+                # Just backward
+                mult_factor = 1
+            else:
+                mult_factor = self.ratio + 1
+            w *= mult_factor
+
+        return int(w)
+
+
+class UndirectedEdgeWeightFunction():
+    """This heuristic was written to handle METIS partitioning"""
+    def __init__(self,
+                 bw_GBps,
+                 bwd_to_fwd_ratio=-1,
+                 MULT_FACTOR=1000,
+                 penalty=1e4):
+        # TODO: change the default behavior to allow hetrogenous BW,
+        # HeterogeneousBandwidthOracle should be initialed at caller
+        self.bw = HeterogeneousBandwidthOracleNodes(default_bw_GBps=bw_GBps)
+        self.ratio = bwd_to_fwd_ratio
+        self.MULT_FACTOR = MULT_FACTOR
+        self.penalty = penalty
+
+    def __call__(self, u: Node, v: Node):
+        if u.type is NodeTypes.CONSTANT:
+            # no constant or scalars on boundries
+            w = self.penalty * self.MULT_FACTOR
+        else:
+            MB = 1e6
+            volume = 0
+            for shape, dtype in zip(flatten(u.tensor_shape),
+                                    flatten(u.tensor_dtype)):
+                if isinstance(shape, torch.Size):
+                    vol = reduce(operator.mul, shape, 1)
+                    # include dtype size
+                    vol *= torch.empty(1, dtype=dtype).element_size()
+                else:
+                    vol = 4  # FIXME: its not always 4Bytes but whatever.
                 volume += vol
 
             volume /= MB
@@ -170,3 +221,61 @@ def async_pipe_bwd_to_fwd_ratio_thumb_rules(args):
 
     if not recomputation:
         return 2
+
+
+###################
+# Heterogeneous
+###################
+
+
+class HeterogeneousBandwidthOracle(abc.ABC):
+    """Use to discover hetrogeneous bandwidth between nodes"""
+    DEFAULT_PARTITION_SRC = -1
+    DEFAULT_PARTITION_TGT = -2
+
+    def __init__(self, default_bw_GBps=12, GPU_TO_GPU_BW=dict()):
+        """
+        default_bw_GBps: float
+        GPU_TO_GPU_BW: dict (src,taget) --> float
+        """
+        super().__init__()
+        self.default_bw_GBps = default_bw_GBps
+        self.GPU_TO_GPU_BW = defaultdict(self.default_bw)
+        self.GPU_TO_GPU_BW.update(GPU_TO_GPU_BW)
+
+    def default_bw(self):
+        """ dummy function to use in defaultdict
+        # (to avoid using a local function which can't be pickled)
+        """
+        return self.default_bw_GBps
+
+    @abc.abstractmethod
+    def __call__(self, *args, **kw):
+        pass
+
+
+# TODO: use it in partitioning
+class HeterogeneousBandwidthOracleNodes(HeterogeneousBandwidthOracle):
+    """Use to discover hetrogeneous bandwidth between nodes"""
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+
+    def __call__(self, u: Node, v: Node):
+        # us is src, v is target
+        gpu_src = getattr(u, "stage_id", self.DEFAULT_PARTITION_SRC)
+        gpu_tgt = getattr(v, "stage_id", self.DEFAULT_PARTITION_TGT)
+
+        # get bw
+        bw = self.GPU_TO_GPU_BW[(gpu_src, gpu_tgt)]
+        return bw
+
+
+# TODO: use it in analysis
+class HeterogeneousBandwidthOracleGPUs(HeterogeneousBandwidthOracle):
+    """Use to discover hetrogeneous bandwidth between gpus"""
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+
+    def __call__(self, gpu_id_src: int, gpu_id_tgt: int):
+        # get bw
+        return self.GPU_TO_GPU_BW[(gpu_id_src, gpu_id_tgt)]
