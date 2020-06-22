@@ -130,7 +130,7 @@ def simple_edge_cut_update_function(v, src, dst, partition_volumes,
     partition_volumes[src] -= node_weights[v]
     # (2) update stage_id, dynamic node weight
     v.stage_id = dst
-    node_weights.update_weight(v)
+    node_weights.recalculate_weight(v)
     # (3) add new weight to partition_volumes
     partition_volumes[dst] += node_weights[v]
 
@@ -142,7 +142,7 @@ def check_balance_with_lookhead(n, dst, node_weights, partition_volumes,
     src = n.stage_id
     n.stage_id = dst
     old_w = node_weights[n]
-    node_weights.update_weight(n)
+    node_weights.recalculate_weight(n)
     new_w = node_weights[n]
     balance_flag = partition_volumes[dst] + new_w < L_max
     # revert
@@ -175,7 +175,7 @@ def simple_moves(partition_volumes: Dict[int, float],
             partition_volumes[src] -= node_weights[v]
             # (2) update stage_id, dynamic node weight
             v.stage_id = dst
-            node_weights.update_weight(v)
+            node_weights.recalculate_weight(v)
             # (3) add new weight to partition_volumes
             partition_volumes[dst] += node_weights[v]
             connections.move_node(v, src, dst)
@@ -258,7 +258,7 @@ def advanced_moves(partition_volumes: Dict[int, float],
             partition_volumes[src] -= node_weights[v]
             # (2) update stage_id, dynamic node weight
             v.stage_id = dst
-            node_weights.update_weight(v)
+            node_weights.recalculate_weight(v)
             # (3) add new weight to partition_volumes
             partition_volumes[dst] += node_weights[v]
     else:
@@ -334,7 +334,7 @@ def global_moves(partition_volumes: Dict[int, float],
             partition_volumes[src] -= node_weights[v]
             # (2) update stage_id, dynamic node weight
             v.stage_id = dst
-            node_weights.update_weight(v)
+            node_weights.recalculate_weight(v)
             # (3) add new weight to partition_volumes
             partition_volumes[dst] += node_weights[v]
     else:
@@ -411,7 +411,7 @@ def Fiduccia_Mattheyses_moves(partition_volumes: Dict[int, float],
             partition_volumes[src] -= node_weights[v]
             # (2) update stage_id, dynamic node weight
             v.stage_id = dst
-            node_weights.update_weight(v)
+            node_weights.recalculate_weight(v)
             # (3) add new weight to partition_volumes
             partition_volumes[dst] += node_weights[v]
 
@@ -587,7 +587,7 @@ def update_stage_times(v: SimpleNode,
     stage_times[src] -= node_weights[v]
     # (2) update stage_id, dynamic node weight
     v.stage_id = dest
-    node_weights.update_weight(v)
+    node_weights.recalculate_weight(v)
     # (3) add new weight to partition_volumes
     stage_times[dest] += node_weights[v]
 
@@ -601,11 +601,12 @@ def update_stage_times(v: SimpleNode,
         if just_lookahead:
             old_edge_weights[edge] = w_old
         v.stage_id = dest
-        edge_weights.update_weight(edge)
+        edge_weights.recalculate_weight(edge)
         w_new = edge_weights[edge]
 
         # record destinations so we won't overcount comm
-        # only once per destination stage
+        # only once per destination stage 
+        # (v->o1 and v->o2 counted once if o1 and o2 are on same stage)
         comms = set()
         if u.stage_id == src:
             # u and v were at same partition
@@ -634,12 +635,12 @@ def update_stage_times(v: SimpleNode,
             stage_times[p0] += comm0
             stage_times[p1] += comm1
 
-        if just_lookahead:
-            # Return to prev
-            v.stage_id = src
-            node_weights[v] = old_node_weight
-            for edge, w_old in old_edge_weights.items():
-                edge_weights[edge] = w_old
+    if just_lookahead:
+        # Return to prev
+        v.stage_id = src
+        node_weights[v] = old_node_weight
+        for edge, w_old in old_edge_weights.items():
+            edge_weights[edge] = w_old
 
     return edge_gain
 
@@ -707,15 +708,16 @@ def calculate_stage_times(
     for n, w in node_weights.items():
         stage_times[n.stage_id] += w
 
-        #record sent activation only once per destination
+        # record sent activation only once per destination
+        # that is : n->o1 and n->o2 is calculated only once.
         destinations = set()
         for o in n.out_edges:
             if (o.stage_id == n.stage_id) or (o.stage_id in destinations):
                 continue
-            e = edge_weights[(n, o)]
+            # directed weight
             destinations.add(o.stage_id)
-            stage_times[n.stage_id] += e
-            stage_times[o.stage_id] += e
+            stage_times[n.stage_id] += edge_weights[(n, o)]
+            stage_times[o.stage_id] += edge_weights[(o, n)]
 
     return dict(stage_times)
 
@@ -872,7 +874,7 @@ class DynamicNodeWeights(MutableMapping):
     def __len__(self):
         return len(self.store)
 
-    def update_weight(self, key):
+    def recalculate_weight(self, key):
         self.store[key] = self.node_weight_function(key)
 
 
@@ -905,7 +907,7 @@ class DynamicEdgeWeights(MutableMapping):
     def __len__(self):
         return len(self.store)
 
-    def update_weight(self, key):
+    def recalculate_weight(self, key):
         # NOTE: user should call twich in directed case
         self.store[key] = self.edge_weight_function(key[0], key[1])
 
@@ -914,7 +916,7 @@ class StaticNodeWeights(DynamicNodeWeights):
     def __init__(self, *args, **kw):
         super().__init__()
 
-    def update_weight(self, key):
+    def recalculate_weight(self, key):
         pass
 
 
@@ -922,25 +924,8 @@ class StaticEdgeWeights(DynamicEdgeWeights):
     def __init__(self, *args, **kw):
         super().__init__()
 
-    def update_weight(self, key):
+    def recalculate_weight(self, key):
         pass
-
-
-###################################################################################################
-# Context manager to calc "old" stuff
-
-
-@contextmanager
-def old_stage_id(old_stage_id, node, weights):
-    current_stage_id = node.stage_id
-    old_w = weights[node]
-    weights.update_weight(node)
-    try:
-        yield node
-    finally:
-        node.stage_id = current_stage_id
-        weights[node] = old_w
-
 
 ###################################################################################################
 

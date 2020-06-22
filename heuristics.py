@@ -105,19 +105,22 @@ class DirectedEdgeWeightFunction:
 
             volume /= MB
             # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
-            w = max(1, (self.MULT_FACTOR * (volume / self.bw(u, v))))
+            w = self.MULT_FACTOR * (volume / self.bw(u, v))
 
-            # NOTE (1): we traverse every edge twice,
-            # NOTE (2): If we have bwd to fwd ratio, than have to normalize by it.
-            # so for ratio 1 we have to multipy by 2
+            # Check edge direction:
+            is_fwd = v in u.out_edges
+            # (deliberatly verbose)
             if self.ratio < 0:
-                # Just backward
-                mult_factor = 1
+                if is_fwd:
+                    return 0  # only backward is modeled
+                else:
+                    pass
             else:
-                mult_factor = self.ratio + 1
-            w *= mult_factor
-
-        return int(w)
+                if is_fwd:
+                    pass  # *=1
+                else:
+                    w *= self.ratio
+        return w
 
 
 class UndirectedEdgeWeightFunction():
