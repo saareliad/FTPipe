@@ -234,13 +234,15 @@ class ParseAcyclicPartitionerOpts:
     @staticmethod
     def add_acyclic_partitioner_arguments(parser):
         opts = parser.add_argument_group("AcyclicPartitioner options")
-        opts.add_argument("--epsilon", default=0.1, help="imbalance factor")
+        opts.add_argument("--epsilon", default=0.1,type=float, help="imbalance factor")
         opts.add_argument("--rounds",
                           default=10,
+                          type=int,
                           help="number of optimization rounds default is 10")
         opts.add_argument(
             "--allocated_seconds",
             default=20,
+            type=int,
             help=
             "run time allocated to the partitioning algorithm default is 20 seconds"
         )
