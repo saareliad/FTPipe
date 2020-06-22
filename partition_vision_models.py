@@ -6,7 +6,7 @@ from pytorch_Gpipe import PipelineConfig, pipe_model
 import argparse
 import importlib
 from misc import run_analysis, run_partitions
-from heuristics import EdgeWeightFunction, NodeWeightFunction
+from heuristics import DirectedEdgeWeightFunction, UndirectedEdgeWeightFunction, NodeWeightFunction
 from partition_scripts_utils import ParseMetisOpts,ParseAcyclicPartitionerOpts, ParsePartitioningOpts, record_cmdline,choose_blocks
 import functools
 from partition_async_pipe import partition_async_pipe
@@ -182,6 +182,9 @@ if __name__ == "__main__":
     batch_dim = 0
     bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
     args.basic_blocks = choose_blocks(model,args)
+    edge_weight_function_cls = UndirectedEdgeWeightFunction if args.use_METIS else DirectedEdgeWeightFunction
+    edge_weight_function = edge_weight_function_cls(bw, bwd_to_fwd_ratio=bwd_to_fwd_ratio)
+  
     partial_pipe_model = functools.partial(
         pipe_model,
         model,
@@ -194,14 +197,13 @@ if __name__ == "__main__":
         output_file=args.output_file,
         generate_model_parallel=args.generate_model_parallel,
         generate_explicit_del=args.generate_explicit_del,
-        use_layers_only_graph=True,
+        use_layers_only_graph=True,  # FIXME:
         use_graph_profiler=not args.use_network_profiler,
         use_network_profiler=args.use_network_profiler,
         profile_ops=not args.disable_op_profiling,
         node_weight_function=NodeWeightFunction(
             bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-        edge_weight_function=EdgeWeightFunction(
-            bw, bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+        edge_weight_function=edge_weight_function,
         n_iter=n_iter,
         recomputation=recomputation,
         save_memory_mode=args.save_memory_mode,

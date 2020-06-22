@@ -391,12 +391,12 @@ class VerticeStageConnections():
     def out_connections(self,n,dst:int)->int:
         return self._out_connections[n][dst]
 
-    def move_node(self,n,dest:int):
+    def move_node(self,n, src:int , dest:int):
         for u in n.in_edges:
-            self.remove_out_connection(u,n.stage_id)
+            self.remove_out_connection(u,src)
             self.add_out_connection(u,dest)
         for o in n.out_edges:
-            self.remove_in_connection(o,n.stage_id)
+            self.remove_in_connection(o,src)
             self.add_in_connection(o,dest)
 
 

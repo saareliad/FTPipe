@@ -6,7 +6,7 @@ import functools
 from pytorch_Gpipe import trace_module, Graph, GraphProfiler, execute_graph, ExecTimes, acyclic_partition, infer_req_grad, compile_partitioned_model, METIS_partition, profile_network
 from pytorch_Gpipe.model_profiling import Node
 from pytorch_Gpipe.utils import move_tensors
-from heuristics import NodeWeightFunction, EdgeWeightFunction, NodeWeightFunctionWithRatioAutoInfer
+from heuristics import NodeWeightFunction, UndirectedEdgeWeightFunction, DirectedEdgeWeightFunction , NodeWeightFunctionWithRatioAutoInfer
 
 FullExecTimes = namedtuple('FullExecTimes', 'recomputation no_recomputation')
 
@@ -31,7 +31,8 @@ def partition_async_pipe(
                           MULT_FACTOR=MULT_FACTOR,
                           penalty=penalty,
                           auto_infer_node_bwd_fwd_ratio=cmd_args.
-                          auto_infer_node_bwd_to_fwd_ratio)
+                          auto_infer_node_bwd_to_fwd_ratio,
+                          use_METIS=cmd_args.use_METIS)
 
     graph = trace_module(model,
                          args=args,
@@ -60,14 +61,14 @@ def partition_async_pipe(
                               cmd_args.n_partitions,
                               node_weight_function=evaluator,
                               edge_weight_function=evaluator,
-                              use_layers_graph=True,
+                              use_layers_graph=True, # FIXME
                               **cmd_args.acyclic_opt)
         else:
             METIS_partition(graph,
                             cmd_args.n_partitions,
                             node_weight_function=evaluator,
                             edge_weight_function=evaluator,
-                            use_layers_graph=True,
+                            use_layers_graph=True,  # FIXME
                             **cmd_args.METIS_opt)
 
         n_runs += 1
@@ -175,7 +176,8 @@ class Evaluator():
                  bwd_to_fwd_ratio=-1,
                  MULT_FACTOR=1000,
                  penalty=1e4,
-                 auto_infer_node_bwd_fwd_ratio=False):
+                 auto_infer_node_bwd_fwd_ratio=False,
+                 use_METIS=False):
         self.node_evaluator = NodeWeightFunction(
             bwd_to_fwd_ratio=bwd_to_fwd_ratio, MULT_FACTOR=MULT_FACTOR
         ) if not auto_infer_node_bwd_fwd_ratio else NodeWeightFunctionWithRatioAutoInfer(
@@ -184,7 +186,9 @@ class Evaluator():
         if auto_infer_node_bwd_fwd_ratio:
             bwd_to_fwd_ratio = -1  # count once
 
-        self.edge_evaluator = EdgeWeightFunction(
+        edge_weight_function_cls = UndirectedEdgeWeightFunction if use_METIS else DirectedEdgeWeightFunction
+
+        self.edge_evaluator = edge_weight_function_cls(
             bw_GBps=bw,
             bwd_to_fwd_ratio=bwd_to_fwd_ratio,
             MULT_FACTOR=MULT_FACTOR,

@@ -5,10 +5,11 @@ from pytorch_Gpipe.model_profiling import Node, NodeTypes, ExecTimes
 from pytorch_Gpipe.utils import flatten
 from collections import defaultdict
 import abc
+# from typing import Dict, Any
 
 __all__ = [
-    "NodeWeightFunction", "EdgeWeightFunction",
-    "NodeWeightFunctionWithRatioAutoInfer"
+    "NodeWeightFunction", "UndirectedEdgeWeightFunction",
+    "DirectedEdgeWeightFunction", "NodeWeightFunctionWithRatioAutoInfer"
 ]
 
 
@@ -29,7 +30,50 @@ class NodeWeightFunction():
                 node.weight.forward_time))
 
 
-class EdgeWeightFunction():
+def default_node_attr():
+    return "weight"
+
+
+class NodeWeightFunctionByStageId:
+    DEFAULT_STAGE_ID = -1
+
+    def __init__(self,
+                 bwd_to_fwd_ratio=-1,
+                 MULT_FACTOR=1000,
+                 stage_id_to_attr=defaultdict(default_node_attr)):
+
+        self.ratio = bwd_to_fwd_ratio
+        self.MULT_FACTOR = MULT_FACTOR
+        self.stage_id_to_attr = stage_id_to_attr
+
+    def _weight_by_stage_id(self, node):
+        stage_id = getattr(node, "stage_id", self.DEFAULT_STAGE_ID)
+        attr = self.stage_id_to_attr[stage_id]
+        weight = getattr(node, attr)
+        return weight
+
+    def __call__(self, node: Node):
+        weight = self._weight_by_stage_id(node)
+
+        assert isinstance(weight, ExecTimes)
+        if self.ratio < 0:
+            return int(self.MULT_FACTOR * (max(1, weight.backward_time)))
+        else:
+            # TODO: it has to be consistent with communication times to work
+            # NOTE: / (ratio + 1) is removed, as we do in edge.
+            return int(self.MULT_FACTOR * max(
+                1, self.ratio * weight.backward_time + weight.forward_time))
+
+
+# TODO: heuristic to handle undirected edges.
+class DirectedEdgeWeightFunction:
+    """ Heuristic to handle undirected edges.
+        The main differnece is:
+        if
+            when bwd_to_fwd_ratio!=1
+        then
+            w(u,v) != w(v,u)
+    """
     def __init__(self,
                  bw_GBps,
                  bwd_to_fwd_ratio=-1,
@@ -56,7 +100,55 @@ class EdgeWeightFunction():
                     # include dtype size
                     vol *= torch.empty(1, dtype=dtype).element_size()
                 else:
-                    vol = 4
+                    vol = 4  # FIXME: its not always 4Bytes but whatever.
+                volume += vol
+
+            volume /= MB
+            # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
+            w = max(1, (self.MULT_FACTOR * (volume / self.bw(u, v))))
+
+            # NOTE (1): we traverse every edge twice,
+            # NOTE (2): If we have bwd to fwd ratio, than have to normalize by it.
+            # so for ratio 1 we have to multipy by 2
+            if self.ratio < 0:
+                # Just backward
+                mult_factor = 1
+            else:
+                mult_factor = self.ratio + 1
+            w *= mult_factor
+
+        return int(w)
+
+
+class UndirectedEdgeWeightFunction():
+    """This heuristic was written to handle METIS partitioning"""
+    def __init__(self,
+                 bw_GBps,
+                 bwd_to_fwd_ratio=-1,
+                 MULT_FACTOR=1000,
+                 penalty=1e4):
+        # TODO: change the default behavior to allow hetrogenous BW,
+        # HeterogeneousBandwidthOracle should be initialed at caller
+        self.bw = HeterogeneousBandwidthOracleNodes(default_bw_GBps=bw_GBps)
+        self.ratio = bwd_to_fwd_ratio
+        self.MULT_FACTOR = MULT_FACTOR
+        self.penalty = penalty
+
+    def __call__(self, u: Node, v: Node):
+        if u.type is NodeTypes.CONSTANT:
+            # no constant or scalars on boundries
+            w = self.penalty * self.MULT_FACTOR
+        else:
+            MB = 1e6
+            volume = 0
+            for shape, dtype in zip(flatten(u.tensor_shape),
+                                    flatten(u.tensor_dtype)):
+                if isinstance(shape, torch.Size):
+                    vol = reduce(operator.mul, shape, 1)
+                    # include dtype size
+                    vol *= torch.empty(1, dtype=dtype).element_size()
+                else:
+                    vol = 4  # FIXME: its not always 4Bytes but whatever.
                 volume += vol
 
             volume /= MB
