@@ -8,7 +8,7 @@ import abc
 # from typing import Dict, Any
 
 __all__ = [
-    "NodeWeightFunction", "UndirectedEdgeWeightFunction",
+    "NodeWeightFunction", "NodeWeightFunctionByStageId","UndirectedEdgeWeightFunction",
     "DirectedEdgeWeightFunction", "NodeWeightFunctionWithRatioAutoInfer"
 ]
 
@@ -87,6 +87,14 @@ class DirectedEdgeWeightFunction:
         self.penalty = penalty
 
     def __call__(self, u: Node, v: Node):
+
+        # Check edge direction:
+        is_fwd = v in u.out_edges
+
+        if is_fwd:
+            # Replace for volume calculation
+            u, v = v, u
+
         if u.type is NodeTypes.CONSTANT:
             # no constant or scalars on boundries
             w = self.penalty * self.MULT_FACTOR
@@ -105,10 +113,14 @@ class DirectedEdgeWeightFunction:
 
             volume /= MB
             # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
+
+            if is_fwd:
+                # Replace again, for bandwidth calculation
+                # in case bw(u,v) != bw(v,u), even though I don't see it happening.
+                u, v = v, u
+
             w = self.MULT_FACTOR * (volume / self.bw(u, v))
 
-            # Check edge direction:
-            is_fwd = v in u.out_edges
             # (deliberatly verbose)
             if self.ratio < 0:
                 if is_fwd:
@@ -138,6 +150,7 @@ class UndirectedEdgeWeightFunction():
         self.penalty = penalty
 
     def __call__(self, u: Node, v: Node):
+
         if u.type is NodeTypes.CONSTANT:
             # no constant or scalars on boundries
             w = self.penalty * self.MULT_FACTOR
