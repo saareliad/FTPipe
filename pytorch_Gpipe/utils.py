@@ -82,34 +82,35 @@ def tensorDict(model: nn.Module) -> OrderedDict[str, Tensor]:
     return collections.OrderedDict((s, t)for t, s in traverse_params_buffs(model))
 
 
-def nested_map(func, ts):
+def nested_map(func, ts,full=False):
     if isinstance(ts, torch.Size):
         # size is inheriting from tuple which is stupid
         return func(ts)
     elif isinstance(ts, (list, tuple, set)):
-        return type(ts)(nested_map(func, t) for t in ts)
+        return type(ts)(nested_map(func, t,full=full) for t in ts)
     elif isinstance(ts, dict):
-        return {k: nested_map(func, v) for k, v in ts.items()}
-    elif isinstance(ts, slice):
-        start = nested_map(func, ts.start)
-        stop = nested_map(func, ts.stop)
-        step = nested_map(func, ts.step)
+        return {k: nested_map(func, v,full=full) for k, v in ts.items()}
+    elif isinstance(ts, slice) and full:
+        start = nested_map(func, ts.start,full=full)
+        stop = nested_map(func, ts.stop,full=full)
+        step = nested_map(func, ts.step,full=full)
         return slice(start, stop, step)
     return func(ts)
 
 
-def flatten(ts):
+def flatten(ts,full=False):
     if isinstance(ts,torch.Size):
         # size is inheriting from tuple which is stupid
         yield ts
     elif isinstance(ts, (list, tuple, set)):
-        yield from chain(*[flatten(t) for t in ts])
+        yield from chain(*[flatten(t,full=full) for t in ts])
     elif isinstance(ts, dict):
-        yield from chain(*[flatten(t) for t in ts.values()])
-    elif isinstance(ts, slice):
-        yield from flatten(ts.start)
-        yield from flatten(ts.stop)
-        yield from flatten(ts.step)
+        yield from chain(*[flatten(t,full=full) for t in ts.values()])
+    #probably not necessary
+    elif isinstance(ts, slice) and full:
+        yield from flatten(ts.start,full=full)
+        yield from flatten(ts.stop,full=full)
+        yield from flatten(ts.step,full=full)
     else:
         yield ts
 

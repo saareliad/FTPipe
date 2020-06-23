@@ -108,7 +108,7 @@ class ExplicitUntracedFunction():
                 return v._data
             return v
 
-        return nested_map(untraced, vs)
+        return nested_map(untraced, vs,full=True)
 
 
 class TracedFunction():
