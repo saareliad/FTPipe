@@ -5,12 +5,14 @@ from pytorch_Gpipe.model_profiling import Node, NodeTypes, ExecTimes
 from pytorch_Gpipe.utils import flatten
 from collections import defaultdict
 import abc
+import sys
+from pprint import pprint
 # from typing import Dict, Any
 
 __all__ = [
-    "NodeWeightFunction", "NodeWeightFunctionByStageId",
-    "UndirectedEdgeWeightFunction", "DirectedEdgeWeightFunction",
-    "NodeWeightFunctionWithRatioAutoInfer",
+    "get_node_and_edge_weight_function_heuristics", "NodeWeightFunction",
+    "NodeWeightFunctionByStageId", "UndirectedEdgeWeightFunction",
+    "DirectedEdgeWeightFunction", "NodeWeightFunctionWithRatioAutoInfer",
     "NodeWeightFunctionByStageIdWithRatioAutoInfer"
 ]
 
@@ -24,30 +26,58 @@ __all__ = [
 _METIS = {
     'node': "NodeWeightFunction",
     'edge': "UndirectedEdgeWeightFunction",
+    # '_name': 'metis',
 }
 
 # TODO: write working dedicated heuristics which model what we want.
 _ACYCLIC = {  # None-dynamic
     'node': "NodeWeightFunction",  # FIXME
     'edge': "DirectedEdgeWeightFunction",
+    # '_name': 'acyclic',
+}
+
+_ACYCLIC_AUTOINFER = {
+    'node': "NodeWeightFunctionWithRatioAutoInfer",  # FIXME
+    'edge': "DirectedEdgeWeightFunction",
+    # '_name': 'acyclic_autoinfer',
 }
 
 _ACYCLIC_DYNAMIC = {
     'node': "NodeWeightFunctionByStageId",
     'edge': "DirectedEdgeWeightFunction",
+    # '_name': 'acyclic_dynamic',
 }
 
 _ACYCLIC_DYNAMIC_AUTOINFER = {
     'node': "NodeWeightFunctionByStageIdWithRatioAutoInfer",
     'edge': "DirectedEdgeWeightFunction",  # NOTE: use bwd_fwd_ratio = -1
+    # '_name': 'acyclic_dynamic_autoinfer',
 }
 
 # TODO: this was the original, its not optimal. It should be changed
 _ACYCLIC_MULTILEVEL = {
     'node': "NodeWeightFunction",  # FIXME
     'edge': "UndirectedEdgeWeightFunction",  # FIXME
+    # '_name': 'acyclic_multilevel',
 }
 
+# TODO: this was the original, its not optimal. It should be changed
+_ACYCLIC_MULTILEVEL_AUTOINFER = {
+    'node': "NodeWeightFunctionWithRatioAutoInfer",  # FIXME
+    'edge': "UndirectedEdgeWeightFunction",  # FIXME
+    # '_name': 'acyclic_multilevel',
+}
+
+_ALL_SUGGESTED_HEURISTICS = {
+    'metis': _METIS,
+    # 'metis_autoinfer': not supported
+    'acyclic': _ACYCLIC,
+    'acyclic_autoinfer': _ACYCLIC_AUTOINFER,
+    'acyclic_dynamic': _ACYCLIC_DYNAMIC,
+    'acyclic_dynamic_autoinfer': _ACYCLIC_DYNAMIC_AUTOINFER,
+    'acyclic_multilevel': _ACYCLIC_MULTILEVEL,
+    'acyclic_multilevel_autoinfer': _ACYCLIC_MULTILEVEL_AUTOINFER,
+}
 ######################################
 
 
@@ -103,7 +133,8 @@ class NodeWeightFunctionByStageId:
         else:
             # TODO: it has to be consistent with communication times to work
             # NOTE: devision by (ratio + 1) is removed, as we do in edge.
-            return self.MULT_FACTOR * (self.ratio * weight.backward_time + weight.forward_time)
+            return self.MULT_FACTOR * (self.ratio * weight.backward_time +
+                                       weight.forward_time)
 
 
 class DirectedEdgeWeightFunction:
@@ -361,3 +392,76 @@ class HeterogeneousBandwidthOracleGPUs(HeterogeneousBandwidthOracle):
     def __call__(self, gpu_id_src: int, gpu_id_tgt: int):
         # get bw
         return self.GPU_TO_GPU_BW[(gpu_id_src, gpu_id_tgt)]
+
+
+#################
+def get_node_and_edge_weight_function_heuristics_cls(args, verbose=True):
+    """Get suggested heuristics"""
+
+    # utility class, this can be changed.
+    def str_to_class(name):
+        return getattr(sys.modules[__name__], name)
+
+    # _ALL_SUGGESTED_HEURISTICS
+    # get mapping
+    mapping = 'acyclic'
+    if args.use_METIS:
+        mapping = 'metis'
+    elif args.multilevel:
+        if args.auto_infer_node_bwd_to_fwd_ratio:
+            mapping = 'multilevel_autoinfer'
+        else:
+            mapping = 'multilevel'
+    elif args.hetrogenous_nodes or args.hetrogenous_bw:
+        if args.auto_infer_node_bwd_to_fwd_ratio:
+            mapping = 'acyclic_dynamic_autoinfer'
+        else:
+            mapping = 'acyclic_dynamic'
+    elif args.auto_infer_node_bwd_to_fwd_ratio:
+        mapping = 'acyclic_autoinfer'
+
+    mapping_name = mapping
+    mapping = _ALL_SUGGESTED_HEURISTICS[mapping_name]
+    # get classes from mapping
+    node_cls = str_to_class(mapping['node'])
+    edge_cls = str_to_class(mapping['edge'])
+
+    if verbose:
+        print(f"-I- Using heuristics for: {mapping_name}")
+        pprint(mapping)
+
+    return node_cls, edge_cls
+
+
+def get_node_and_edge_weigh_function_keywords(args, node_cls, edge_cls, **kw):
+    node_kw = dict(bwd_to_fwd_ratio=args.bwd_to_fwd_ratio)
+    edge_kw = dict(bw_GBps=args.bw, bwd_to_fwd_ratio=args.bwd_to_fwd_ratio)
+    # TODO: MULT_FACTOR=1000,
+    # TODO: penalty=1e4
+
+    if issubclass(node_cls, NodeWeightFunctionWithRatioAutoInfer):
+        del node_kw['bwd_to_fwd_ratio']
+
+    if issubclass(node_cls, NodeWeightFunctionByStageId):
+        # TODO: read hetrogenous nodes mapping from somewere and pass to constructor
+        pass
+
+    # TODO: parse hetrogenous bandwidth for oracle when relevant
+    return node_kw, edge_kw
+
+
+def get_node_and_edge_weight_function_heuristics(args, verbose=True, **kw):
+    # (1) get classes
+    # (2) get keyrowrds, parse special arguments
+    # (3) create and return instance
+
+    node_cls, edge_cls = get_node_and_edge_weight_function_heuristics_cls(
+        args, verbose)
+
+    node_kw, edge_kw = get_node_and_edge_weigh_function_keywords(
+        args, node_cls, edge_cls, **kw)
+
+    node = node_cls(**node_kw)
+    edge = edge_cls(**edge_kw)
+
+    return node, edge

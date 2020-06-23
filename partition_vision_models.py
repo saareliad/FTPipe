@@ -6,8 +6,8 @@ from pytorch_Gpipe import PipelineConfig, pipe_model
 import argparse
 import importlib
 from misc import run_analysis, run_partitions
-from heuristics import DirectedEdgeWeightFunction, UndirectedEdgeWeightFunction, NodeWeightFunction
-from partition_scripts_utils import ParseMetisOpts,ParseAcyclicPartitionerOpts, ParsePartitioningOpts, record_cmdline,choose_blocks
+from heuristics import DirectedEdgeWeightFunction, UndirectedEdgeWeightFunction, NodeWeightFunction, get_node_and_edge_weight_function_heuristics
+from partition_scripts_utils import ParseMetisOpts, ParseAcyclicPartitionerOpts, ParsePartitioningOpts, record_cmdline, choose_blocks
 import functools
 from partition_async_pipe import partition_async_pipe
 
@@ -148,12 +148,13 @@ def parse_cli():
         args.output_file = args.output_file[:-3]
 
     args.METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
-    args.acyclic_opt = ParseAcyclicPartitionerOpts.acyclic_opts_dict_from_parsed_args(args)
+    args.acyclic_opt = ParseAcyclicPartitionerOpts.acyclic_opts_dict_from_parsed_args(
+        args)
     return args
 
 
 if __name__ == "__main__":
-    args= parse_cli()
+    args = parse_cli()
     GET_PARTITIONS_ON_CPU = True
 
     # if the model is too big run the whole partitioning process on CPU
@@ -181,16 +182,17 @@ if __name__ == "__main__":
     n_partitions = args.n_partitions
     batch_dim = 0
     bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
-    args.basic_blocks = choose_blocks(model,args)
-    edge_weight_function_cls = UndirectedEdgeWeightFunction if args.use_METIS else DirectedEdgeWeightFunction
-    edge_weight_function = edge_weight_function_cls(bw, bwd_to_fwd_ratio=bwd_to_fwd_ratio)
-  
+    args.basic_blocks = choose_blocks(model, args)
+
+    node_weight_function, edge_weight_function = get_node_and_edge_weight_function_heuristics(
+        args, verbose=True)
+
     partial_pipe_model = functools.partial(
         pipe_model,
         model,
         batch_dim,
         sample,
-        basic_blocks = args.basic_blocks,
+        basic_blocks=args.basic_blocks,
         depth=args.depth,
         kwargs=None,
         nparts=n_partitions,
@@ -201,19 +203,18 @@ if __name__ == "__main__":
         use_graph_profiler=not args.use_network_profiler,
         use_network_profiler=args.use_network_profiler,
         profile_ops=not args.disable_op_profiling,
-        node_weight_function=NodeWeightFunction(
-            bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+        node_weight_function=node_weight_function,
         edge_weight_function=edge_weight_function,
         n_iter=n_iter,
         recomputation=recomputation,
         save_memory_mode=args.save_memory_mode,
-        use_METIS= args.use_METIS,
+        use_METIS=args.use_METIS,
         acyclic_opt=args.acyclic_opt,
         METIS_opt=args.METIS_opt)
 
     if args.async_pipeline and (not args.no_recomputation):
         print("using async partitioner")
-        graph=partition_async_pipe(args,model,0,sample)
+        graph = partition_async_pipe(args, model, 0, sample)
     else:
         graph = partial_pipe_model()
 

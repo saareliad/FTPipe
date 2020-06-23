@@ -13,7 +13,7 @@ from models.normal import BertForQuestionAnswering
 from models.normal.NLP_models.modeling_bert import SQUAD_loss
 from partition_scripts_utils import ParsePartitioningOpts,ParseAcyclicPartitionerOpts ,ParseMetisOpts, record_cmdline,choose_blocks,run_x_tries_until_no_fail
 from partition_async_pipe import partition_async_pipe
-from heuristics import NodeWeightFunction, UndirectedEdgeWeightFunction, DirectedEdgeWeightFunction
+from heuristics import NodeWeightFunction, UndirectedEdgeWeightFunction, DirectedEdgeWeightFunction, get_node_and_edge_weight_function_heuristics
 from misc import run_analysis
 from pytorch_Gpipe import PipelineConfig, pipe_model
 from pytorch_Gpipe.model_profiling import register_new_traced_function,register_new_explicit_untraced_function
@@ -393,8 +393,10 @@ def main():
     bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
     args.basic_blocks = choose_blocks(model,args)
     bw = args.bw
-    edge_weight_function_cls = UndirectedEdgeWeightFunction if args.use_METIS else DirectedEdgeWeightFunction
-    edge_weight_function = edge_weight_function_cls(bw, bwd_to_fwd_ratio=bwd_to_fwd_ratio)
+
+    node_weight_function, edge_weight_function = get_node_and_edge_weight_function_heuristics(
+        args, verbose=True)
+
     print("-I- partitioning...")
     partial_pipe_model = functools.partial(
         pipe_model,
@@ -405,8 +407,7 @@ def main():
         depth=args.depth,
         n_iter=args.n_iter,
         nparts=args.n_partitions,
-        node_weight_function=NodeWeightFunction(
-            bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+        node_weight_function=node_weight_function,
         edge_weight_function=edge_weight_function,
         use_layers_only_graph=True,  # FIXME:
         use_graph_profiler=not args.use_network_profiler,

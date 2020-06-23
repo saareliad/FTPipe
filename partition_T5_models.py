@@ -9,7 +9,7 @@ from pytorch_Gpipe.model_profiling.tracer import register_new_explicit_untraced_
 from pytorch_Gpipe.utils import layerDict, tensorDict
 import argparse
 import importlib
-from heuristics import NodeWeightFunction, UndirectedEdgeWeightFunction, DirectedEdgeWeightFunction
+from heuristics import NodeWeightFunction, UndirectedEdgeWeightFunction, DirectedEdgeWeightFunction, get_node_and_edge_weight_function_heuristics
 import functools
 from partition_async_pipe import partition_async_pipe
 from partition_scripts_utils import choose_blocks, ParseAcyclicPartitionerOpts, ParseMetisOpts, ParsePartitioningOpts, record_cmdline
@@ -144,6 +144,9 @@ if __name__ == "__main__":
     # partition the model using our profiler
     # if the model need multiple inputs pass a tuple
     # if the model needs kwargs pass a dictionary
+
+    node_weight_function, edge_weight_function = get_node_and_edge_weight_function_heuristics(args, verbose=True)
+
     n_iter = args.n_iter
     recomputation = not args.no_recomputation
     bw = args.bw
@@ -151,8 +154,6 @@ if __name__ == "__main__":
     batch_dim = 0
     bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
     args.basic_blocks = choose_blocks(model, args)
-    edge_weight_function_cls = UndirectedEdgeWeightFunction if args.use_METIS else DirectedEdgeWeightFunction
-    edge_weight_function = edge_weight_function_cls(bw, bwd_to_fwd_ratio=bwd_to_fwd_ratio)
     partial_pipe_model = functools.partial(
         pipe_model,
         model,
@@ -168,8 +169,7 @@ if __name__ == "__main__":
         use_graph_profiler=not args.use_network_profiler,
         use_network_profiler=args.use_network_profiler,
         profile_ops=not args.disable_op_profiling,
-        node_weight_function=NodeWeightFunction(
-            bwd_to_fwd_ratio=bwd_to_fwd_ratio),
+        node_weight_function=node_weight_function,
         edge_weight_function=edge_weight_function,
         n_iter=n_iter,
         recomputation=recomputation,

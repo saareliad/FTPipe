@@ -6,7 +6,7 @@ import functools
 from pytorch_Gpipe import trace_module, Graph, GraphProfiler, execute_graph, ExecTimes, acyclic_partition, infer_req_grad, compile_partitioned_model, METIS_partition, profile_network
 from pytorch_Gpipe.model_profiling import Node
 from pytorch_Gpipe.utils import move_tensors
-from heuristics import NodeWeightFunction, UndirectedEdgeWeightFunction, DirectedEdgeWeightFunction , NodeWeightFunctionWithRatioAutoInfer
+from heuristics import NodeWeightFunction, UndirectedEdgeWeightFunction, DirectedEdgeWeightFunction, NodeWeightFunctionWithRatioAutoInfer, get_node_and_edge_weight_function_heuristics
 
 FullExecTimes = namedtuple('FullExecTimes', 'recomputation no_recomputation')
 
@@ -25,14 +25,11 @@ def partition_async_pipe(
     if kwargs is None:
         kwargs = dict()
 
+    node_weight_function, edge_weight_function = get_node_and_edge_weight_function_heuristics(
+        cmd_args, verbose=True)
+
     # combined node/edge weight function depends on how many parameters are passed
-    evaluator = Evaluator(cmd_args.bw,
-                          bwd_to_fwd_ratio=cmd_args.bwd_to_fwd_ratio,
-                          MULT_FACTOR=MULT_FACTOR,
-                          penalty=penalty,
-                          auto_infer_node_bwd_fwd_ratio=cmd_args.
-                          auto_infer_node_bwd_to_fwd_ratio,
-                          use_METIS=cmd_args.use_METIS)
+    evaluator = Evaluator(node_weight_function, edge_weight_function)
 
     graph = trace_module(model,
                          args=args,
@@ -61,15 +58,16 @@ def partition_async_pipe(
                               cmd_args.n_partitions,
                               node_weight_function=evaluator,
                               edge_weight_function=evaluator,
-                              use_layers_graph=True, # FIXME
+                              use_layers_graph=True,
                               **cmd_args.acyclic_opt)
         else:
-            METIS_partition(graph,
-                            cmd_args.n_partitions,
-                            node_weight_function=evaluator,
-                            edge_weight_function=evaluator,
-                            use_layers_graph=True,  # FIXME
-                            **cmd_args.METIS_opt)
+            METIS_partition(
+                graph,
+                cmd_args.n_partitions,
+                node_weight_function=evaluator,
+                edge_weight_function=evaluator,
+                use_layers_graph=True,  # FIXME
+                **cmd_args.METIS_opt)
 
         n_runs += 1
 
@@ -171,28 +169,9 @@ def full_profile(graph: Graph, model: torch.nn.Module, args: tuple,
 
 
 class Evaluator():
-    def __init__(self,
-                 bw,
-                 bwd_to_fwd_ratio=-1,
-                 MULT_FACTOR=1000,
-                 penalty=1e4,
-                 auto_infer_node_bwd_fwd_ratio=False,
-                 use_METIS=False):
-        self.node_evaluator = NodeWeightFunction(
-            bwd_to_fwd_ratio=bwd_to_fwd_ratio, MULT_FACTOR=MULT_FACTOR
-        ) if not auto_infer_node_bwd_fwd_ratio else NodeWeightFunctionWithRatioAutoInfer(
-            MULT_FACTOR=MULT_FACTOR)
-        
-        if auto_infer_node_bwd_fwd_ratio:
-            bwd_to_fwd_ratio = -1  # count once
-
-        edge_weight_function_cls = UndirectedEdgeWeightFunction if use_METIS else DirectedEdgeWeightFunction
-
-        self.edge_evaluator = edge_weight_function_cls(
-            bw_GBps=bw,
-            bwd_to_fwd_ratio=bwd_to_fwd_ratio,
-            MULT_FACTOR=MULT_FACTOR,
-            penalty=penalty)
+    def __init__(self, node_weight_function, edge_weight_function):
+        self.node_evaluator = node_weight_function
+        self.edge_evaluator = edge_weight_function
 
     def __call__(self, u: Node, v: Optional[Node] = None) -> float:
         if v is None:
