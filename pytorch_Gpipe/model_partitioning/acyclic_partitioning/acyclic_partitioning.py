@@ -2,7 +2,7 @@ from pytorch_Gpipe.model_profiling import Graph, NodeWeightFunction, EdgeWeightF
 from .data_structures import (QuotientGraph, SimpleNode, PriorityQueue,
                               DoublePriority, VerticeStageConnections,
                               DynamicNodeWeights, DynamicEdgeWeights,
-                              StaticNodeWeights, StaticEdgeWeights)
+                              StaticNodeWeights, StaticEdgeWeights, ContractedGraph)
 from .gpa import coarsening, refine
 import random
 import math
@@ -17,6 +17,9 @@ from functools import partial
 
 DEBUG = False
 ###################################################################################################
+# Turned off whenver wanted (currently for multilvevl).
+# Can do it nicer, e.g infer from given edge_weight_function
+USING_DIRECTED_EDGES = True
 
 
 class META_ALGORITH(enum.Enum):
@@ -766,8 +769,13 @@ def calculate_stage_times(
                 continue
             # directed weight
             destinations.add(o.stage_id)
-            stage_times[n.stage_id] += edge_weights[(n, o)]
-            stage_times[o.stage_id] += edge_weights[(o, n)]
+            if USING_DIRECTED_EDGES:
+                stage_times[n.stage_id] += edge_weights[(n, o)]
+                stage_times[o.stage_id] += edge_weights[(o, n)]
+            else:
+                e = edge_weights[(n, o)]
+                stage_times[n.stage_id] += e
+                stage_times[o.stage_id] += e
 
     return dict(stage_times)
 
@@ -925,10 +933,10 @@ def single_level_partitioning(
 
     edge_weights_class = DynamicEdgeWeights if use_dynamic_edge_weights else StaticEdgeWeights
 
-    node_weights = node_weights_class.from_graph(work_graph,
-                                                 node_weight_function)
-    edge_weights = edge_weights_class.from_graph(work_graph,
-                                                 edge_weight_function)
+    node_weights = node_weights_class.from_graph(
+        work_graph, node_weight_function)
+    edge_weights = edge_weights_class.from_graph(
+        work_graph, edge_weight_function, backward_edged=USING_DIRECTED_EDGES)
 
     initial_divide(work_graph, k, node_weights)
 
@@ -979,10 +987,10 @@ def single_level_partitioning(
     if use_layers_graph:
         graph.induce_layer_partition(work_graph, layers_to_original)
         # calculate metrics on original graph
-        node_weights = node_weights_class.from_graph(graph,
-                                                     node_weight_function)
-        edge_weights = edge_weights_class.from_graph(graph,
-                                                     edge_weight_function)
+        node_weights = node_weights_class.from_graph(
+            graph, node_weight_function)
+        edge_weights = edge_weights_class.from_graph(
+            graph, edge_weight_function, backward_edged=USING_DIRECTED_EDGES)
 
     # calculate metrics
     if objective is Objective.EDGE_CUT:
@@ -1012,6 +1020,11 @@ def multilevel_partitioning(
     use_dynamic_node_weights=False,
     use_dynamic_edge_weights=False,
 ) -> Solution:
+
+    # Turn off all extra behavior
+    global USING_DIRECTED_EDGES
+    USING_DIRECTED_EDGES = False
+    ContractedGraph.USING_DIRECTED_EDGES = False
 
     initial_solution, node_weights, edge_weights = single_level_partitioning(
         graph,

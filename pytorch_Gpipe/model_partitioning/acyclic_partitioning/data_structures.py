@@ -54,18 +54,21 @@ class DynamicEdgeWeights(MutableMapping):
                  backward_edged=True):
         # TODO: will provide option to turn off backward_edged
 
-        backward_edges = set(
-            (edge[1], edge[0]) for edge in edge_weights.keys())
-        for bwd_edge in backward_edges:
-            edge_weights[bwd_edge] = edge_weight_function(*bwd_edge)
-
         self.store = edge_weights
         # self.work_graph = work_graph
         self.edge_weight_function = edge_weight_function
-        self._backward_edges = backward_edges
+        
+        if backward_edged:
+            backward_edges = set(
+                (edge[1], edge[0]) for edge in edge_weights.keys())
+            for bwd_edge in backward_edges:
+                edge_weights[bwd_edge] = edge_weight_function(*bwd_edge)
+            self._backward_edges = backward_edges
+        else:
+            self._backward_edges = set()
 
     @classmethod
-    def from_graph(cls, work_graph, edge_weight_function):
+    def from_graph(cls, work_graph, edge_weight_function, backward_edged=True):
         edge_weights = dict()
 
         for n in work_graph.nodes:
@@ -73,7 +76,7 @@ class DynamicEdgeWeights(MutableMapping):
                 # Forward (normal) edges
                 edge_weights[(n, o)] = edge_weight_function(n, o)
 
-        return cls(edge_weights, edge_weight_function)
+        return cls(edge_weights, edge_weight_function, backward_edged=backward_edged)
 
     def __getitem__(self, key):
         return self.store[key]
@@ -688,6 +691,8 @@ class ContractedGraphDynamicNodeWeights(DynamicNodeWeights):
 
 # TODO: make it work with DynamicNodeWeights.
 class ContractedGraph():
+    USING_DIRECTED_EDGES = False
+
     def __init__(
         self,
         in_edges,
@@ -736,7 +741,7 @@ class ContractedGraph():
                 self, self._edge_weights, edge_weight_function)
         else:
             self._edge_weights = StaticEdgeWeights(self._edge_weights,
-                                                   edge_weight_function)
+                                                   edge_weight_function, backward_edged=self.USING_DIRECTED_EDGES)
 
     def __len__(self) -> int:
         return len(self._nodes)

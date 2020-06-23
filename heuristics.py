@@ -409,9 +409,9 @@ def get_node_and_edge_weight_function_heuristics_cls(args, verbose=True):
         mapping = 'metis'
     elif args.multilevel:
         if args.auto_infer_node_bwd_to_fwd_ratio:
-            mapping = 'multilevel_autoinfer'
+            mapping = 'acyclic_multilevel_autoinfer'
         else:
-            mapping = 'multilevel'
+            mapping = 'acyclic_multilevel'
     elif args.hetrogenous_nodes or args.hetrogenous_bw:
         if args.auto_infer_node_bwd_to_fwd_ratio:
             mapping = 'acyclic_dynamic_autoinfer'
