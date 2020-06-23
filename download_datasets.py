@@ -2,6 +2,7 @@ from torchvision.datasets import CIFAR10, CIFAR100
 import requests
 import os
 import zipfile
+import subprocess
 
 DATA_DIR = "/home_local/saareliad/data"
 
@@ -12,6 +13,9 @@ DATA_DIR = "/home_local/saareliad/data"
 def download_file(url, DATA_DIR=DATA_DIR):
     local_filename = url.split('/')[-1]
     local_filename = os.path.join(DATA_DIR, local_filename)
+    if os.path.exists(local_filename):
+        print(f"-I- file {local_filename} already exists, skipping download.")
+        return local_filename
     # NOTE the stream=True parameter below
     with requests.get(url, stream=True) as r:
         r.raise_for_status()
@@ -40,7 +44,7 @@ def download_wiki103():
     URL = "https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-103-raw-v1.zip"
 
     path_to_zip_file = download_file(URL)
-    print(f"-I- Donwloaded wikitext2 to {path_to_zip_file}. Extracting...")
+    print(f"-I- Donwloaded wikitext103 to {path_to_zip_file}. Extracting...")
     with zipfile.ZipFile(path_to_zip_file, 'r') as zip_ref:
         zip_ref.extractall(DATA_DIR)
     # NOTE: The data will be in DATA_DIR/wikitext-103-raw
@@ -75,6 +79,11 @@ popd
     os.system("bash -c '%s'" % script)
 
 
+def download_glue():
+    data_dir = os.path.join(DATA_DIR, "glue_data")
+    subprocess.call(["python", "datasets/download/download_glue_data.py", "--data_dir", data_dir, "--tasks", "all"])
+    
+
 if __name__ == "__main__":
     CIFAR100(root=DATA_DIR, download=True, train=True)
     CIFAR100(root=DATA_DIR, download=True, train=False)
@@ -85,3 +94,4 @@ if __name__ == "__main__":
     download_wiki2()
     # download_wiki103() TODO: update this when we have experiment.
     download_squad()
+    download_glue()

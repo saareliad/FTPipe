@@ -137,7 +137,7 @@ may change in the future.
 
 ## Adding a new learning task [WIP]
 
-A design change is needed before letting other humans use it
+A major design change is needed before letting other humans do it
 
 Currently this is very spaghetti code, we have to add:
 1. `dataset` file (for getting train and dev/test datasets, sometimes seprerated to x and y so every stage will load only what it needs locally)
@@ -145,9 +145,26 @@ Currently this is very spaghetti code, we have to add:
 3. `statistics` statistics collection class
 4. `task` class (packing/unpacking between dataset and partitions) This is somewhat not-needed as all classes do about same thing since we use sepreate x,y datasets. It needs to be changed only if we want to send the labels in the pipeline for some reason.
 
+Then, unfortunatly, there is a tedious work of editing:
+1. `datasets/dataset.py`
+2. `pipeline/training/__init__.py`
+3. `pipeline/stats/__init__.py`
+4. `pipeline/tasks/__init__.py`
+5. `prepare_pipeline.py` (special cmd args to the task)
+
+Not fun and dangerous design.
+
+Then adding all thous names to a json config.
+
+Current structure (to be changed/automated too) is
+1. `configs/task_name/dataset_name/model_name/common.json`
+2. Then all algorithms are added to the config dir.
+
 Most stuff is handled by inheritence or functional programing to utilize existing (non-optimal) system which handles many small details.
 
 Ideally, this should all be handled by the programer and given as some config class to our system, which will then read and use it to its needs.
+
+When possible, a data-loading script/code will be added to `download_datasets.py`.
 
 ## Known problems
 

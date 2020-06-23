@@ -33,7 +33,7 @@ from .hardcoded_dirs import DEFAULT_DATA_DIR
 # get_separate_just_x_or_y_train_test_dl_from_args  (train, valid)
 # get_separate_just_x_or_y_test_dl_from_args: (just the test dataloader)
 
-AVAILABLE_DATASETS = {'cifar10', 'cifar100', 'imagenet', 'wt2', 'squad1', 'squad2'}
+AVAILABLE_DATASETS = {'cifar10', 'cifar100', 'imagenet', 'wt2', 'squad1', 'squad2', 'glue'}
 
 # NOTE: these are functions which returns train and test/validation datasets.
 DATASET_TO_DS_FN = {

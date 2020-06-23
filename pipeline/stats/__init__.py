@@ -1,6 +1,7 @@
 from .cv import CVStats, NormCVstats, CVDistanceNorm, CVDistance
 from .lm import LMStats, NormLMstats, LMDistanceNorm, LMDistance
 from .squad import SquadStats, NormSquadstats, SquadDistanceNorm, SquadDistance
+from .glue import GlueStats, NormGluestats, GlueDistanceNorm, GlueDistance
 
 from .interface import Stats
 
@@ -42,7 +43,19 @@ SQAUD_STATS = {
     'squad_theta_dist_loss_per_batch': SquadDistance,
 }
 
-AVAILBALE_STATS = {**CV_STATS, **LM_STATS, **SQAUD_STATS}
+
+GLUE_STATS = {
+    'glue': GlueStats,
+    'glue_loss_per_batch': NormGluestats,
+    'glue_grad_norm': NormGluestats,
+    'glue_grad_norm_loss_per_batch': NormGluestats,
+    'glue_theta_dist_grad_norm': GlueDistanceNorm,
+    'glue_theta_dist_grad_norm_loss_per_batch': GlueDistanceNorm,
+    'glue_theta_dist': GlueDistance,
+    'glue_theta_dist_loss_per_batch': GlueDistance,
+}
+
+AVAILBALE_STATS = {**CV_STATS, **LM_STATS, **SQAUD_STATS, **GLUE_STATS}
 
 
 #  is_last_partition=True
