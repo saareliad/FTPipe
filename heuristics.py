@@ -8,12 +8,51 @@ import abc
 # from typing import Dict, Any
 
 __all__ = [
-    "NodeWeightFunction", "NodeWeightFunctionByStageId","UndirectedEdgeWeightFunction",
-    "DirectedEdgeWeightFunction", "NodeWeightFunctionWithRatioAutoInfer"
+    "NodeWeightFunction", "NodeWeightFunctionByStageId",
+    "UndirectedEdgeWeightFunction", "DirectedEdgeWeightFunction",
+    "NodeWeightFunctionWithRatioAutoInfer",
+    "NodeWeightFunctionByStageIdWithRatioAutoInfer"
 ]
+
+######################################
+# Suggested Heuristics per algorithm
+######################################
+# NOTE: a compelete heuristic is combination of
+# {node, edge, partitioning algorithm, pipeline}
+# Currently the pipeline is ignored for simplicity.
+
+_METIS = {
+    'node': "NodeWeightFunction",
+    'edge': "UndirectedEdgeWeightFunction",
+}
+
+# TODO: write working dedicated heuristics which model what we want.
+_ACYCLIC = {  # None-dynamic
+    'node': "NodeWeightFunction",  # FIXME
+    'edge': "DirectedEdgeWeightFunction",
+}
+
+_ACYCLIC_DYNAMIC = {
+    'node': "NodeWeightFunctionByStageId",
+    'edge': "DirectedEdgeWeightFunction",
+}
+
+_ACYCLIC_DYNAMIC_AUTOINFER = {
+    'node': "NodeWeightFunctionByStageIdWithRatioAutoInfer",
+    'edge': "DirectedEdgeWeightFunction",  # NOTE: use bwd_fwd_ratio = -1
+}
+
+# TODO: this was the original, its not optimal. It should be changed
+_ACYCLIC_MULTILEVEL = {
+    'node': "NodeWeightFunction",  # FIXME
+    'edge': "UndirectedEdgeWeightFunction",  # FIXME
+}
+
+######################################
 
 
 class NodeWeightFunction():
+    """This was written with METIS in mind, to be conbined with the UndirectedEdgeWeightFunction """
     def __init__(self, bwd_to_fwd_ratio=-1, MULT_FACTOR=1000):
         self.ratio = bwd_to_fwd_ratio
         self.MULT_FACTOR = MULT_FACTOR
@@ -35,6 +74,9 @@ def default_node_attr():
 
 
 class NodeWeightFunctionByStageId:
+    """ this is for "stage-aware" partitionings
+        (such as acyclic, when enabled)
+    """
     DEFAULT_STAGE_ID = -1
 
     def __init__(self,
@@ -57,17 +99,17 @@ class NodeWeightFunctionByStageId:
 
         assert isinstance(weight, ExecTimes)
         if self.ratio < 0:
-            return int(self.MULT_FACTOR * (max(1, weight.backward_time)))
+            return self.MULT_FACTOR * (max(1, weight.backward_time))
         else:
             # TODO: it has to be consistent with communication times to work
-            # NOTE: / (ratio + 1) is removed, as we do in edge.
-            return int(self.MULT_FACTOR * max(
-                1, self.ratio * weight.backward_time + weight.forward_time))
+            # NOTE: devision by (ratio + 1) is removed, as we do in edge.
+            return self.MULT_FACTOR * (self.ratio * weight.backward_time + weight.forward_time)
 
 
-# TODO: heuristic to handle undirected edges.
 class DirectedEdgeWeightFunction:
-    """ Heuristic to handle undirected edges.
+    """ Heuristic to handle Directed edges.
+        by definition, a "backward edge" is a dummy, non-existant edge in the graph.
+        Weight for "backward edge" is proportional to the weight of the real "forward edge".
         The main differnece is:
         if
             when bwd_to_fwd_ratio!=1
@@ -207,6 +249,30 @@ class NodeWeightFunctionWithRatioAutoInfer():
             return 0
         return int(self.MULT_FACTOR * max(1, bwd * bwd + fwd * fwd) /
                    bwd_plus_fwd)
+
+
+class NodeWeightFunctionByStageIdWithRatioAutoInfer(NodeWeightFunctionByStageId
+                                                    ):
+    def __init__(self,
+                 MULT_FACTOR=1000,
+                 stage_id_to_attr=defaultdict(default_node_attr)):
+        super().__init__(bwd_to_fwd_ratio='infer',
+                         MULT_FACTOR=MULT_FACTOR,
+                         stage_id_to_attr=stage_id_to_attr)
+
+    def __call__(self, node: Node):
+        assert (self.ratio == "infer")
+        weight = self._weight_by_stage_id(node)
+        assert isinstance(weight, ExecTimes)
+        bwd = weight.backward_time
+        fwd = weight.forward_time
+        # NOTE: TODO: as we do normalize the here,
+        # ratio for edge weight should be just -1 or 0 (one direction)
+        # or use a "guess" for the ratio of the entire stage
+        bwd_plus_fwd = bwd + fwd
+        if bwd_plus_fwd == 0:
+            return 0
+        return self.MULT_FACTOR * ((bwd * bwd + fwd * fwd) / bwd_plus_fwd)
 
 
 #################
