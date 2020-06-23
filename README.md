@@ -135,6 +135,20 @@ may change in the future.
   _register_model(dict(FN=dict()), None)
   ```
 
+## Adding a new learning task [WIP]
+
+A design change is needed before letting other humans use it
+
+Currently this is very spaghetti code, we have to add:
+1. `dataset` file (for getting train and dev/test datasets, sometimes seprerated to x and y so every stage will load only what it needs locally)
+2. `trainer` class (to calculate loss and statistics, handle backward, handle step)
+3. `statistics` statistics collection class
+4. `task` class (packing/unpacking between dataset and partitions) This is somewhat not-needed as all classes do about same thing since we use sepreate x,y datasets. It needs to be changed only if we want to send the labels in the pipeline for some reason.
+
+Most stuff is handled by inheritence or functional programing to utilize existing (non-optimal) system which handles many small details.
+
+Ideally, this should all be handled by the programer and given as some config class to our system, which will then read and use it to its needs.
+
 ## Known problems
 
 1. gpu bcast not working yet. (some deadlock)
@@ -150,7 +164,8 @@ may change in the future.
 
 4. Multiprocessing: multiple (2x or 3x) cuda contexts per GPU.
 
-5. Tied weights: MPI: large memory consumption for sends, Multiprocessing/cudaIPC:(using the same tensor): race condition.
+5. Tied weights: MPI: large memory consumption for sends, Multiprocessing/cudaIPC:(using the same tensor): race condition. wieght prediction: we change and send the weight itself (this has advantage and disadvantage).
+
 
 
 5. `in_place` operations (like ReLU) at partition border have a potential of destroying our saved activations (also throws some autograd "variable changed inplace" error) => solution: automatically replace inplaces ops on partition borders. (the solution worked for resnets, will not work for more complex models). IMO this should be solved by partitioning.
@@ -168,9 +183,11 @@ may change in the future.
 - Memory efficient Gap Aware for entire pipeline  (+`step_every`)
   (When delay is 1, we can do gap aware even on deeper partitions without stashing)
 
-- tied wieghts with wieght prediction: problem: we change the weight itself (this has advantage!)
-
 - Currently, we do some extra "reverts" (e.g in case of several backwards one after another and weight stashing) Check this. its very small optimization (not in steady state), and may be yucky to implement.
+
+- saving models
+
+- statistics or evaluation by number of steps and not just epochs.
 
 - test with cuda-aware MPI on more than 2 P2P suported GPUs
 
