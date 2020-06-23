@@ -144,7 +144,7 @@ def get_tensor_dtypes(ts):
     def get_dtype(t):
         if isinstance(t, Tensor):
             return t.dtype
-        return None
+        return type(t)
 
     return nested_map(get_dtype, ts)
 

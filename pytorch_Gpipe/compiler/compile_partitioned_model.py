@@ -170,60 +170,40 @@ def create_pipeline_configuration(graph: Graph,
             return (s is not None) and(len(s) > (batch_dim + 1)) and (s[batch_dim] == batch_size)
         return nested_map(f,shape)
 
-
     module_path = 'os.path.relpath(__file__).replace("/",".")[:-3]'
     basic_blocks = ",".join(
         map(lambda block: block.__name__, set(model_blocks.values())))
 
-    serialized_basic_blocks = f",\n{dtab}{tab}".join(f"'{inspect.getmodule(cls).__name__}.{cls.__name__}'"
-                                                     for cls in set(model_blocks.values()))
+    serialized_basic_blocks = [f"{inspect.getmodule(cls).__name__}.{cls.__name__}"
+                                                     for cls in set(model_blocks.values())]
 
     # function header
     lines = [
         f"def create_pipeline_configuration(DEBUG=False):",
-        f"depth = {graph.depth}",
         f"basic_blocks = ({basic_blocks})",
-        f"blocks_path = [ {serialized_basic_blocks}]",
         f"module_path = {module_path}",
-        "\n"
     ]
 
     # create and return the partition config
-
-    def format_dict(d):
-        items = [f'"{k}": {v}' for k, v in d.items()]
-        return "{" + f",\n{dtab}".join(items) + "}"
-
-    exp = f',\n{dtab}{tab}'.join(
-        [f"{k}: {format_dict(v)}" for k, v in stages_in_out_config(ios, is_batched).items()])
-    lines.append(
-        f"# creating configuration\n{tab}stages = {{{exp}\n{dtab}{tab}}}")
-
-    for idx in sorted(list(ios.keys())):
-        lines.extend(["\n",
-                      f"stages[{idx}]['stage_cls'] = module_path + '.Partition{idx}'",
-                      f"device = 'cpu' if DEBUG else 'cuda:{idx}'",
-                      f"stages[{idx}]['devices'] = [device]",
-                      ])
-
     model_inputs, model_outputs = create_model_in_out_config(graph, is_batched)
-
-    model_inputs = f',\n{dtab}{tab}'.join([f"{k}: {format_dict(v)}"
-                                           for k, v in model_inputs.items()])
-    model_outputs = f',\n{dtab}{tab}'.join([f"'{k}': {format_dict(v)}"
-                                            for k, v in model_outputs.items()])
-
+    stages = stages_in_out_config(ios, is_batched)
+    config = {
+        "batch_dim":batch_dim,
+        "depth":graph.depth,
+        "basic_blocks":serialized_basic_blocks,
+        "model_inputs":model_inputs,
+        "model_outputs":model_outputs,
+        "stages":stages
+    }
     lines.extend([
-        "\n",
-        "config = dict()",
-        f"config['batch_dim'] = {batch_dim}",
-        f"config['depth'] = depth",
-        f"config['basic_blocks'] = blocks_path",
-        f"config['model_inputs'] = {{{model_inputs}}}",
-        f"config['model_outputs'] = {{{model_outputs}}}",
-        f"config['stages'] = stages",
-        f"\n{tab}return config"
+        "",
+        f"config = {pretty_format_obj(config)}",
+        ""
     ])
+    lines.extend([f"config['stages'][{i}]['stage_cls'] = module_path+'.Partition{i}'" for i in stages.keys()])
+    lines.append("")
+    lines.extend([f"config['stages'][{i}]['devices'] = ['cpu' if DEBUG else 'cuda:{i}']" for i in stages.keys()])
+    lines.append(f"\n{tab}return config")
     return "\n" + f"\n{tab}".join(lines) + "\n"
 
 
@@ -319,7 +299,7 @@ def create_model_in_out_config(graph: Graph, is_batched: Callable[[torch.Size], 
                 is_batched
     """
 
-    input_ids = [f"'{graph.input_kw_ids.get(node.id,node.scope)}'" for node in graph.inputs]
+    input_ids = [f"{graph.input_kw_ids.get(node.id,node.scope)}" for node in graph.inputs]
     input_shapes = [n.tensor_shape for n in graph.inputs]
     input_dtypes = [n.tensor_dtype for n in graph.inputs]
     # TODO it is possible that if we have a single output
@@ -341,3 +321,35 @@ def create_model_in_out_config(graph: Graph, is_batched: Callable[[torch.Size], 
                             "is_batched": is_batched(s)}
 
     return model_inputs, model_outputs
+
+
+def pretty_format_obj(obj,dict_prefix=dtab):
+    if isinstance(obj,str):
+        return f"'{obj}'"
+    elif isinstance(obj, torch.Size):
+        # size is inheriting from tuple which is stupid
+        return str(obj)
+    elif isinstance(obj, (list, tuple, set)):
+        elements = [pretty_format_obj(t) for t in obj]
+        if len(elements) == 1 and isinstance(obj,tuple):
+            #(a,) one element tuple includs a comma
+            elements[0]+=","
+        elements = ", ".join(elements)
+        if isinstance(obj,tuple):
+            l,r="(",")"
+        elif isinstance(obj,list):
+            l,r="[","]"
+        else:
+            l,r="{","}"
+        return l+elements+r 
+    elif isinstance(obj, dict):
+        items = [f'{pretty_format_obj(k)}: {pretty_format_obj(v,dict_prefix+tab)}' for k, v in obj.items()]
+        items[0]=f"\n{dict_prefix}"+items[0]
+        return "{" + f",\n{dict_prefix}".join(items) + "}"
+    elif obj is type(None):
+        return "None"
+    elif obj is torch.device:
+        return "torch.device"
+    elif isinstance(obj,type):
+        return obj.__name__
+    return str(obj)
