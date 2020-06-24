@@ -916,7 +916,6 @@ class T5Stack(T5PreTrainedModel):
         super().__init__(config)
         self.embed_tokens = embed_tokens
         self.is_decoder = config.is_decoder
-        config.num_layers = 2
         #NOTE ModuleList
         for i in range(config.num_layers):
             self.add_module(str(i),
