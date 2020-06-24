@@ -379,14 +379,10 @@ class T5Attention(nn.Module):
 
         context = self.o(context)
 
-
         if self.has_relative_attention_bias:
-            outputs = (context,position_bias)
-        else:
-            outputs = (context,)
+            return context,position_bias
     
-        return outputs
-
+        return context
 
 class T5LayerSelfAttention(nn.Module):
     def __init__(self, config, has_relative_attention_bias=False):
@@ -394,6 +390,8 @@ class T5LayerSelfAttention(nn.Module):
         self.SelfAttention = T5Attention(config, has_relative_attention_bias=has_relative_attention_bias)
         self.layer_norm = T5LayerNorm(config.d_model, eps=config.layer_norm_epsilon)
         self.dropout = nn.Dropout(config.dropout_rate)
+
+        self.has_relative_attention_bias = has_relative_attention_bias
 
     def forward(
         self,
@@ -409,10 +407,16 @@ class T5LayerSelfAttention(nn.Module):
             position_bias=position_bias,
             head_mask=head_mask
         )
-        y = attention_output[0]
+        if self.has_relative_attention_bias:
+            y = attention_output[0]
+        else:
+            y = attention_output
         layer_output = hidden_states + self.dropout(y)
-        outputs = (layer_output,) + attention_output[1:]  # add attentions if we output them
-        return outputs
+        
+        if self.has_relative_attention_bias:
+            return layer_output,attention_output[1]
+        
+        return layer_output
 
 
 class T5LayerCrossAttention(nn.Module):
@@ -421,6 +425,8 @@ class T5LayerCrossAttention(nn.Module):
         self.EncDecAttention = T5Attention(config, has_relative_attention_bias=has_relative_attention_bias)
         self.layer_norm = T5LayerNorm(config.d_model, eps=config.layer_norm_epsilon)
         self.dropout = nn.Dropout(config.dropout_rate)
+
+        self.has_relative_attention_bias = has_relative_attention_bias
 
     def forward(
         self,
@@ -438,10 +444,17 @@ class T5LayerCrossAttention(nn.Module):
             position_bias=position_bias,
             head_mask=head_mask
         )
-        y = attention_output[0]
+
+        if self.has_relative_attention_bias:
+            y = attention_output[0]
+        else:
+            y = attention_output
         layer_output = hidden_states + self.dropout(y)
-        outputs = (layer_output,) + attention_output[1:]  # add attentions if we output them
-        return outputs
+        
+        if self.has_relative_attention_bias:
+            return layer_output,attention_output[1]
+        
+        return layer_output
 
 
 class T5Block(nn.Module):
@@ -461,6 +474,8 @@ class T5Block(nn.Module):
             self.block_size=2
 
         self.add_module(str(self.block_size),T5LayerFF(config))
+
+        self.has_relative_attention_bias = has_relative_attention_bias
         # self.layer.append(T5LayerFF(config))
 
     def forward(
@@ -481,8 +496,13 @@ class T5Block(nn.Module):
             position_bias=position_bias,
             head_mask=head_mask
         )
-        hidden_states = self_attention_outputs[0]
-        attention_outputs = self_attention_outputs[1:]  # Keep self-attention outputs and relative position weights
+        if self.has_relative_attention_bias:
+            hidden_states = self_attention_outputs[0]
+        else:
+            hidden_states = self_attention_outputs
+        
+        if self.has_relative_attention_bias:
+            attention_outputs = self_attention_outputs[1]  # Keep self-attention outputs and relative position weights
 
         # NOTE is not None
         # if self.is_decoder and encoder_hidden_states is not None:
@@ -496,19 +516,28 @@ class T5Block(nn.Module):
                 position_bias=encoder_decoder_position_bias,
                 head_mask=head_mask
             )
-            hidden_states = cross_attention_outputs[0]
-            # Keep cross-attention outputs and relative position weights
-            attention_outputs = attention_outputs + cross_attention_outputs[1:]
+            if self.has_relative_attention_bias:
+                hidden_states = cross_attention_outputs[0]
+            else:
+                hidden_states = cross_attention_outputs
+            
+            if self.has_relative_attention_bias:
+                # Keep cross-attention outputs and relative position weights
+                attention_outputs = (attention_outputs,cross_attention_outputs[1])
 
         # Apply Feed Forward layer
         #NOTE modulelist
         # hidden_states = self.layer[-1](hidden_states)
         hidden_states = getattr(self,str(self.block_size))(hidden_states)
-        outputs = (hidden_states,)
+        
+        if self.has_relative_attention_bias and (self.is_decoder and is_not_None(encoder_hidden_states)):
+            # Add attentions if we output them
+            return (hidden_states,) + attention_outputs
+        elif self.has_relative_attention_bias:
+            return (hidden_states,attention_outputs)
 
-        # Add attentions if we output them
-        outputs = outputs + attention_outputs
-        return outputs  # hidden-states, (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
+        return hidden_states
+        # return outputs  # hidden-states, (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
 
 
 class T5PreTrainedModel(PreTrainedModel):
@@ -1001,8 +1030,9 @@ class T5Stack(T5PreTrainedModel):
             )
             # layer_outputs is a tuple with:
             # hidden-states, (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
-            hidden_states = layer_outputs[0]
-            if i == 0:
+           
+            if i == 0: 
+                hidden_states = layer_outputs[0]
                 # We share the position biases between the layers - the first layer store them
                 # layer_outputs = hidden-states, (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
                 position_bias = layer_outputs[1]
@@ -1010,6 +1040,8 @@ class T5Stack(T5PreTrainedModel):
                 # if self.is_decoder and encoder_hidden_states is not None:
                 if self.is_decoder and is_not_None(encoder_hidden_states):
                     encoder_decoder_position_bias = layer_outputs[2]
+            else:
+                hidden_states = layer_outputs
 
         hidden_states = self.final_layer_norm(hidden_states)
         hidden_states = self.dropout(hidden_states)

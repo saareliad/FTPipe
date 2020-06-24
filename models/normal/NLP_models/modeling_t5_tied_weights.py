@@ -121,8 +121,9 @@ class T5Stack(T5PreTrainedModel):
             )
             # layer_outputs is a tuple with:
             # hidden-states, (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
-            hidden_states = layer_outputs[0]
-            if i == 0:
+           
+            if i == 0: 
+                hidden_states = layer_outputs[0]
                 # We share the position biases between the layers - the first layer store them
                 # layer_outputs = hidden-states, (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
                 position_bias = layer_outputs[1]
@@ -130,6 +131,8 @@ class T5Stack(T5PreTrainedModel):
                 # if self.is_decoder and encoder_hidden_states is not None:
                 if self.is_decoder and is_not_None(encoder_hidden_states):
                     encoder_decoder_position_bias = layer_outputs[2]
+            else:
+                hidden_states = layer_outputs
 
         hidden_states = self.final_layer_norm(hidden_states)
         hidden_states = self.dropout(hidden_states)
