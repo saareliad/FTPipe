@@ -164,7 +164,7 @@ class DirectedEdgeWeightFunction:
         # Check edge direction:
         is_fwd = v in u.out_edges
 
-        if is_fwd:
+        if not is_fwd:
             # Replace for volume calculation
             u, v = v, u
 
@@ -187,7 +187,7 @@ class DirectedEdgeWeightFunction:
             volume /= MB
             # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
 
-            if is_fwd:
+            if not is_fwd:
                 # Replace again, for bandwidth calculation
                 # in case bw(u,v) != bw(v,u), even though I don't see it happening.
                 u, v = v, u
