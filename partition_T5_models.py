@@ -53,6 +53,15 @@ def get_model_and_tokenizer(args):
 
 
 def get_input(args, tokenizer, analysis=False):
+
+    T5_TASK_TO_GET_INPUT = {
+        "dummy": get_input_dummy,
+    }
+    print("-I- geeting input for t5_task: {args.t5_task}")
+    return T5_TASK_TO_GET_INPUT[args.t5_task](args, tokenizer, analysis)
+
+
+def get_input_dummy(args, tokenizer, analysis=False):
     input_ids = tokenizer.encode("Hello, my dog is cute",
                                  return_tensors="pt").to(
                                      args.device)  # Batch (1,6)
@@ -68,13 +77,12 @@ def get_input(args, tokenizer, analysis=False):
         kwargs = {
             "input_ids": input_ids,
             "decoder_input_ids": input_ids,
-            "lm_labels": input_ids, 
+            "lm_labels": input_ids,
         }
     else:
         kwargs = {
             "input_ids": input_ids,
             "decoder_input_ids": input_ids,
-
         }
 
     return kwargs
@@ -89,6 +97,11 @@ class ParsePartitioningT5Opts(ParsePartitioningOpts):
                             action="store_true",
                             default=False)
         parser.add_argument("--lmhead", action="store_true", default=False)
+
+        parser.add_argument("--t5_task",
+                            type=str,
+                            choices=["dummy"],
+                            default="dummy")
 
     def set_defaults(self, parser):
         d = {
@@ -145,7 +158,8 @@ if __name__ == "__main__":
     # if the model need multiple inputs pass a tuple
     # if the model needs kwargs pass a dictionary
 
-    node_weight_function, edge_weight_function = get_node_and_edge_weight_function_heuristics(args, verbose=True)
+    node_weight_function, edge_weight_function = get_node_and_edge_weight_function_heuristics(
+        args, verbose=True)
 
     n_iter = args.n_iter
     recomputation = not args.no_recomputation
