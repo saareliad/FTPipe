@@ -439,7 +439,9 @@ def get_node_and_edge_weigh_function_keywords(args, node_cls, edge_cls, **kw):
     # TODO: MULT_FACTOR=1000,
     # TODO: penalty=1e4
 
-    if issubclass(node_cls, NodeWeightFunctionWithRatioAutoInfer):
+    if issubclass(node_cls,
+                  NodeWeightFunctionWithRatioAutoInfer) or issubclass(
+                      node_cls, NodeWeightFunctionByStageIdWithRatioAutoInfer):
         del node_kw['bwd_to_fwd_ratio']
 
     if issubclass(node_cls, NodeWeightFunctionByStageId):

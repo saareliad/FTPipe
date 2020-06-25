@@ -2,7 +2,8 @@ from pytorch_Gpipe.model_profiling import Graph, NodeWeightFunction, EdgeWeightF
 from .data_structures import (QuotientGraph, SimpleNode, PriorityQueue,
                               DoublePriority, VerticeStageConnections,
                               DynamicNodeWeights, DynamicEdgeWeights,
-                              StaticNodeWeights, StaticEdgeWeights, ContractedGraph)
+                              StaticNodeWeights, StaticEdgeWeights,
+                              ContractedGraph)
 from .gpa import coarsening, refine
 import random
 import math
@@ -934,8 +935,8 @@ def single_level_partitioning(
 
     edge_weights_class = DynamicEdgeWeights if use_dynamic_edge_weights else StaticEdgeWeights
 
-    node_weights = node_weights_class.from_graph(
-        work_graph, node_weight_function)
+    node_weights = node_weights_class.from_graph(work_graph,
+                                                 node_weight_function)
     edge_weights = edge_weights_class.from_graph(
         work_graph, edge_weight_function, backward_edged=USING_DIRECTED_EDGES)
 
@@ -988,8 +989,8 @@ def single_level_partitioning(
     if use_layers_graph:
         graph.induce_layer_partition(work_graph, layers_to_original)
         # calculate metrics on original graph
-        node_weights = node_weights_class.from_graph(
-            graph, node_weight_function)
+        node_weights = node_weights_class.from_graph(graph,
+                                                     node_weight_function)
         edge_weights = edge_weights_class.from_graph(
             graph, edge_weight_function, backward_edged=USING_DIRECTED_EDGES)
 
