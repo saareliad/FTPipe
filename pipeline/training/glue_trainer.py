@@ -56,7 +56,7 @@ class GlueTrainer(BaseOutPutIsLossTrainer):
         self.statistics.update_on_batch("loss", loss, batch_size)
 
 
-class GapAwareSquadTrainer(GlueTrainer, GapAwareTrainerBase):
+class GapAwareGlueTrainer(GlueTrainer, GapAwareTrainerBase):
     def __init__(self, gap_aware, scheduler=None, **kw):
         GlueTrainer.__init__(self, scheduler=scheduler, **kw)
         GapAwareTrainerBase.__init__(self, gap_aware, scheduler=scheduler)

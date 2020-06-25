@@ -131,9 +131,9 @@ class Partition(nn.Module):
                     # (when #buffers==#max(len(input_buffer)))
                     # In pytorch it can happen auto matically with THCCashingAlocator.
                     if self._CLONE_INPUTS:
-                        x = x.detach().clone().requires_grad_(self.req_grad)
+                        x = x.detach().clone().requires_grad_(self.req_grad[0])
                     else:
-                        x = x.detach().requires_grad_(self.req_grad)
+                        x = x.detach().requires_grad_(self.req_grad[0])
                     self.input_buffer[micro_batch_idx] = x
                     self.rng_stasher.stash_rng_state(micro_batch_idx)
                     x = self.layers(x)
@@ -294,7 +294,7 @@ class LastPartition(Partition):
             if isinstance(x, Tensor):
                 # # See note on option 1 below.
                 with torch.no_grad():
-                    x = x.requires_grad_(self.req_grad)
+                    x = x.requires_grad_(self.req_grad[0])
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(x)
             else:
@@ -413,9 +413,9 @@ class PartitionWithoutRecomputation(nn.Module):
                 # Save activation only if gradient is needed.
                 if self._REQ_GRAD:
                     if self._CLONE_INPUTS:
-                        x = x.detach().clone().requires_grad_(self.req_grad)
+                        x = x.detach().clone().requires_grad_(self.req_grad[0])
                     else:
-                        x = x.detach().requires_grad_(self.req_grad)
+                        x = x.detach().requires_grad_(self.req_grad[0])
 
                     self.input_buffer[micro_batch_idx] = x
                 x = self.layers(x)
@@ -604,6 +604,6 @@ def filter_for_backward(x, g):
 def req_grad_dict_to_tuple(req_grad: dict):
     ret = tuple(v for i, v in req_grad.items())
     # size 1 dosn't need tuple
-    if len(ret) == 1:
-        ret = ret[0]
+    # if len(ret) == 1:
+    #     ret = ret[0]
     return ret

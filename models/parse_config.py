@@ -190,7 +190,7 @@ class PartitioningConfigParser:
         return (self.receive_ranks, self.send_ranks, self.tensor_tags,
                 self.target_tensor_names, self.ranks_in_previous_stage,
                 self.ranks_in_next_stage, self.TOTAL_TAGS, self.req_grad,
-                self.outputs_req_grad)
+                self.outputs_req_grad, self.pipe_config)
 
     def get_shapes(self, batch_size):
         pipe_config = self.pipe_config

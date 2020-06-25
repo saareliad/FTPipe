@@ -28,6 +28,7 @@ class SimpleCommBase(CommunicationHandlerBase):
             TOTAL_TAGS,
             req_grad,
             outputs_req_grad,
+            pipe_config,
             cpu,
             num_chunks,
             device,
@@ -41,6 +42,7 @@ class SimpleCommBase(CommunicationHandlerBase):
         self.backend = backend
         self.logger = logging.getLogger('msnag')
         self.stage = stage
+        self.pipe_config = pipe_config
 
         self.receive_ranks = receive_ranks
         self.send_ranks = send_ranks
@@ -132,6 +134,9 @@ class SimpleCommBase(CommunicationHandlerBase):
             for tensor_name in tensor_names:
                 dtype = self.tensor_dtypes[tensor_name]
                 shape = self.tensor_shapes[tensor_name]
+                # TODO: handle None dtype
+                if dtype is None:
+                    raise NotImplementedError()
                 rcv_buffer = torch.zeros(shape,
                                          dtype=dtype,
                                          device=self.device,
