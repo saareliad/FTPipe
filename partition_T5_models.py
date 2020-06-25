@@ -40,6 +40,7 @@ def get_model_and_tokenizer(args):
     config.output_hidden_states = False
     setattr(config, "output_only", True)
     tokenizer = T5Tokenizer.from_pretrained(args.model)
+
     base = not args.lmhead
     tied = args.stateless_tied
 
@@ -121,9 +122,12 @@ def get_input_squad1(args, tokenizer, analysis=False):
             'target_ids': target_encodings['input_ids'],
             'target_attention_mask': target_encodings['attention_mask']
         }
+        return encodings
 
     # load train and validation split of squad
-    train_dataset = nlp.load_dataset('squad', split=nlp.Split.TRAIN)
+    # split = nlp.Split.TRAIN
+    split = 'train[:1%]'
+    train_dataset = nlp.load_dataset('squad', split=split)
     # valid_dataset = nlp.load_dataset('squad', split=nlp.Split.VALIDATION)
 
     # map add_eos_to_examples function to the dataset example wise
@@ -151,8 +155,8 @@ def get_input_squad1(args, tokenizer, analysis=False):
     # NOTE: slightly changed becase we want to pin memory and huggingface don't do it
     @dataclass
     class T2TDataCollator(DataCollator):
-        def __init__(self, batch):
-            self.batch = self.collate_batch(batch)
+        # def __init__(self, batch):
+        #     self.batch = self.collate_batch(batch)
 
         def collate_batch(self, batch: List) -> Dict[str, torch.Tensor]:
             """
@@ -173,24 +177,29 @@ def get_input_squad1(args, tokenizer, analysis=False):
             return {
                 'input_ids': input_ids,
                 'attention_mask': attention_mask,
-                'lm_labels': lm_labels,
+                # 'lm_labels': lm_labels,
                 'decoder_attention_mask': decoder_attention_mask
             }
 
-        def pin_memory(self):
-            for v in self.batch.values():
-                v.pin_memory()
+        # def pin_memory(self):
+        #     for v in self.batch.values():
+        #         v.pin_memory()
+        #     return self
+        
+    # def collate_wrapper(batch):
+    #     return T2TDataCollator(batch)
 
-            return self
-
-    collate_fn = T2TDataCollator().collate_batch
-    dl = torch.utils.data.Dataloader(dataset=train_dataset,
+    # collate_fn = T2TDataCollator().collate_batch
+    dl = torch.utils.data.DataLoader(dataset=train_dataset,
                                      shuffle=True,
                                      batch_size=batch_size,
-                                     collate_fn=collate_fn,
-                                     pin_memory=True)
+                                     collate_fn=T2TDataCollator().collate_batch,
+                                     pin_memory=False)
 
-    batch = next(dl)
+    batch = next(iter(dl))
+
+
+    batch = {i: batch[i].to(args.device) for i in batch}
     return batch
 
 
@@ -202,7 +211,7 @@ T5_TASK_TO_GET_INPUT = {
 
 def get_input(args, tokenizer, analysis=False):
 
-    print("-I- geeting input for t5_task: {args.t5_task}")
+    print(f"-I- geeting input for t5_task: {args.t5_task}")
     return T5_TASK_TO_GET_INPUT[args.t5_task](args, tokenizer, analysis)
 
 
@@ -267,6 +276,14 @@ def parse_cli():
 
 
 if __name__ == "__main__":
+    #    python partition_T5_models.py --objective stage_time --bwd_to_fwd_ratio -1 --n_iter 1 --t5_task squad1 --lmhead
+    # import ptvsd
+    # address = ('127.0.0.1', 3000)
+    # print(f"-I- rank waiting for attachment on {address}")
+    # ptvsd.enable_attach(address=address)
+    # ptvsd.wait_for_attach()
+    # print("attached")
+
     args = parse_cli()
 
     model, tokenizer = get_model_and_tokenizer(args)
