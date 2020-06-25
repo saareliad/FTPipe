@@ -921,8 +921,8 @@ def theoretical_analysis(graph,
     nodes = dict()
     for node in graph.nodes:
         # cache relevant nodes to make fetching them faster
-        if node.scope in tensor_names:
-            nodes[node.scope] = node
+        if graph.input_kw_ids.get(node.id,node.scope) in tensor_names:
+            nodes[graph.input_kw_ids.get(node.id,node.scope)] = node
 
         # old way of measuring time as sum of all computation
         sequential_f[node.stage_id] += extract_time(node.weight, forward=True)

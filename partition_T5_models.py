@@ -367,7 +367,6 @@ if __name__ == "__main__":
 
     if not args.no_analysis:
         sample = get_input(args, tokenizer, analysis=True)
-        # graph = None  # NOTE: without this analsis fails on theoretical thing.
         analysis_result, summary = run_analysis(
             sample,
             graph,
