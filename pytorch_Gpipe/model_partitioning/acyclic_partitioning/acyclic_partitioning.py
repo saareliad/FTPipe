@@ -809,6 +809,7 @@ def acyclic_partition(
     use_dynamic_node_weights=False,
     use_dynamic_edge_weights=False,
 ) -> Tuple[Graph, float, Dict[int, float]]:
+
     worker_args = [
         dict(
             graph=graph.state(),
@@ -823,8 +824,8 @@ def acyclic_partition(
             seed=random.randint(0, 2**32),
             objective=objective,
             use_layers_graph=use_layers_graph,
-            use_dynamic_node_weights=False,
-            use_dynamic_edge_weights=False,
+            use_dynamic_node_weights=use_dynamic_node_weights,
+            use_dynamic_edge_weights=use_dynamic_edge_weights,
         ) for alg in ALGORITHM
     ]
 
