@@ -6,6 +6,7 @@ import torch.nn as nn
 from torch import Tensor
 from itertools import chain
 from contextlib import contextmanager
+import inspect
 
 __all__ = ["traverse_model", "traverse_params_buffs",
            "layerDict", "tensorDict"]
@@ -98,21 +99,47 @@ def nested_map(func, ts,full=False):
     return func(ts)
 
 
-def flatten(ts,full=False):
+def flatten(ts):
     if isinstance(ts,torch.Size):
         # size is inheriting from tuple which is stupid
         yield ts
     elif isinstance(ts, (list, tuple, set)):
-        yield from chain(*[flatten(t,full=full) for t in ts])
+        yield from chain(*[flatten(t) for t in ts])
     elif isinstance(ts, dict):
-        yield from chain(*[flatten(t,full=full) for t in ts.values()])
-    #probably not necessary
-    elif isinstance(ts, slice) and full:
-        yield from flatten(ts.start,full=full)
-        yield from flatten(ts.stop,full=full)
-        yield from flatten(ts.step,full=full)
+        yield from chain(*[flatten(t) for k,t in sorted(ts.items(),key=lambda t:t[0])])
     else:
         yield ts
+
+def unflatten(xs,structure):
+    return _unflatten(xs,structure)[0]
+
+def _unflatten(xs,structure):
+    if isinstance(structure,torch.Size):
+        #torch.Size is subclass of tuple which is stupid
+        return xs[0],1
+
+    if not isinstance(structure,(list,tuple,set,dict)):
+        return xs[0],1
+    
+    if isinstance(structure,(list,tuple,set)):
+        offset=0
+        elements = []
+        for s in structure:
+            e,n = _unflatten(xs[offset:],s)
+            elements.append(e)
+            offset += n
+        
+        return type(structure)(elements),offset
+    
+    assert isinstance(structure,dict)
+    offset = 0
+    elements = dict()
+    for k,v in sorted(structure.items(),key=lambda t: t[0]):
+        e,n = _unflatten(xs[offset:],v)
+        elements[k] = e
+        offset += n
+    
+    return elements,offset
 
 
 def detach_tensors(ts):
@@ -230,3 +257,12 @@ unary_ops={"__neg__":"-",
 magics={"__len__":"len",
         "__abs__":"abs",
         "__iter__":"iter"}
+
+
+
+def print_call_site():
+    for f in inspect.stack():
+        frameinfo=inspect.getframeinfo(f[0]) 
+        if (frameinfo.filename != __file__):
+            print(frameinfo.filename+", line "+str(frameinfo.lineno)+"\n")
+            break
