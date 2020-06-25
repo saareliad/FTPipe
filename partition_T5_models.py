@@ -177,7 +177,7 @@ def get_input_squad1(args, tokenizer, analysis=False):
             return {
                 'input_ids': input_ids,
                 'attention_mask': attention_mask,
-                # 'lm_labels': lm_labels,
+                'lm_labels': lm_labels,
                 'decoder_attention_mask': decoder_attention_mask
             }
 
@@ -229,16 +229,17 @@ class ParsePartitioningT5Opts(ParsePartitioningOpts):
                             type=str,
                             choices=T5_TASK_TO_GET_INPUT.keys(),
                             default="dummy")
+        parser.add_argument("--debug", action="store_true", default=False)
 
     def set_defaults(self, parser):
         d = {
             "model": "t5-small",
-            "partitioning_batch_size": 64,
+            "partitioning_batch_size": 16,
             "n_iter": 50,
             "output_file": 'T5_small',
             "n_partitions": 4,
             "bw": 12,
-            "analysis_batch_size": 64,
+            "analysis_batch_size": 16,
             "basic_blocks": ["T5Attention"]
         }
         parser.set_defaults(**d)
@@ -272,19 +273,19 @@ def parse_cli():
 
     return args
 
-    return encodings
-
 
 if __name__ == "__main__":
     #    python partition_T5_models.py --objective stage_time --bwd_to_fwd_ratio -1 --n_iter 1 --t5_task squad1 --lmhead
-    # import ptvsd
-    # address = ('127.0.0.1', 3000)
-    # print(f"-I- rank waiting for attachment on {address}")
-    # ptvsd.enable_attach(address=address)
-    # ptvsd.wait_for_attach()
-    # print("attached")
 
     args = parse_cli()
+
+    if args.debug:
+        import ptvsd
+        address = ('127.0.0.1', 3000)
+        print(f"-I- rank waiting for attachment on {address}")
+        ptvsd.enable_attach(address=address)
+        ptvsd.wait_for_attach()
+        print("attached")
 
     model, tokenizer = get_model_and_tokenizer(args)
 
@@ -305,13 +306,18 @@ if __name__ == "__main__":
     batch_dim = 0
     bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
     args.basic_blocks = choose_blocks(model, args)
+
+    # kwargs = {i:v for i,v in sample.items() if i != 'input_ids'}
+    kwargs = sample
+
     partial_pipe_model = functools.partial(
         pipe_model,
         model,
         batch_dim,
         basic_blocks=args.basic_blocks,
         depth=args.depth,
-        kwargs=sample,
+        # args=(sample['input_ids']),
+        kwargs=kwargs,
         nparts=n_partitions,
         output_file=args.output_file,
         generate_model_parallel=args.generate_model_parallel,
@@ -361,6 +367,7 @@ if __name__ == "__main__":
 
     if not args.no_analysis:
         sample = get_input(args, tokenizer, analysis=True)
+        # graph = None  # NOTE: without this analsis fails on theoretical thing.
         analysis_result, summary = run_analysis(
             sample,
             graph,
