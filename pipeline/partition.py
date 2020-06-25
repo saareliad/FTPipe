@@ -9,6 +9,7 @@ from .rng_stasher import PartitionRngStasher
 from . import dp_sim
 import types
 from functools import partial
+from .util import flatten, unflatten, nested_map
 
 # import logging
 Tensors = Tuple[Tensor, ...]
@@ -139,15 +140,20 @@ class Partition(nn.Module):
                     x = self.layers(x)
                 else:
                     if self._CLONE_INPUTS:
-                        x = [
-                            tensor.detach().clone().requires_grad_(rg)
-                            for tensor, rg in zip(x, self.req_grad)
-                        ]
+                        x = list(get_dcr(x, self.req_grad))
+
+
+                        # x = [
+                        #     tensor.detach().clone().requires_grad_(rg)
+                        #     for tensor, rg in zip(x, self.req_grad)
+                        # ]
                     else:
-                        x = [
-                            tensor.detach().requires_grad_(rg)
-                            for tensor, rg in zip(x, self.req_grad)
-                        ]
+                        x = list(get_dr(x, self.req_grad))
+
+                        # x = [
+                        #     tensor.detach().requires_grad_(rg)
+                        #     for tensor, rg in zip(x, self.req_grad)
+                        # ]
 
                     self.input_buffer[micro_batch_idx] = x
                     self.rng_stasher.stash_rng_state(micro_batch_idx)
@@ -580,7 +586,8 @@ class GPipeLastPartitionWithLabelInput(GPipeLastPartition):
         super().__init__(*args, **kw)
 
 
-filter_req_grad_tensors = partial(filter, lambda a: isinstance(a, Tensor) and a.requires_grad)
+filter_req_grad_tensors = partial(
+    filter, lambda a: isinstance(a, Tensor) and a.requires_grad)
 
 
 def filter_for_backward(x, g):
@@ -607,3 +614,22 @@ def req_grad_dict_to_tuple(req_grad: dict):
     # if len(ret) == 1:
     #     ret = ret[0]
     return ret
+
+
+# NOTE: we count that the user would not change mutable object because we don't deepcopy them...
+
+
+def get_dcr(x, req_grad):
+    for t, r in zip(flatten(x), flatten(req_grad)):
+        if isinstance(t, Tensor):
+            yield t.detach().clone().requires_grad_(r)
+        else:
+            yield t
+
+
+def get_dr(x, req_grad):
+    for t, r in zip(flatten(x), flatten(req_grad)):
+        if isinstance(t, Tensor):
+            yield t.detach().requires_grad_(r)
+        else:
+            yield t
