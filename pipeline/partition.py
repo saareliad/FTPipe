@@ -110,10 +110,6 @@ class Partition(nn.Module):
         if to_device:
             self.to(self.device)
 
-    # def on_new_batch(self, num_micro_batches):
-    #     # Create placeholder for micro batches input and rng states.
-    #     self.input_buffer = {idx: None for idx in range(num_micro_batches)}
-
     def forward(self, x: TensorOrTensors, micro_batch_idx):
 
         if self.training:  # Dummy fwd to save input and pass output to next layer
@@ -125,38 +121,27 @@ class Partition(nn.Module):
                 self.dummy_forward_monkey_patcher.replace_for_dummy()
 
             with torch.no_grad():
-                # EXPLICITLY DO CLONE
+
                 if isinstance(x, Tensor):
-                    # Note - we clone here because we don't want the tensor to get overriden.
-                    # TODO: it could be done better if we use multiple input buffers instead of allocating
-                    # (when #buffers==#max(len(input_buffer)))
-                    # In pytorch it can happen auto matically with THCCashingAlocator.
+                  # EXPLICITLY DO CLONE
                     if self._CLONE_INPUTS:
                         x = x.detach().clone().requires_grad_(self.req_grad[0])
                     else:
                         x = x.detach().requires_grad_(self.req_grad[0])
                     self.input_buffer[micro_batch_idx] = x
                     self.rng_stasher.stash_rng_state(micro_batch_idx)
+                    # TODO: UNFLATTEN
                     x = self.layers(x)
-                else:
+
+                else:    
+                    # EXPLICITLY DO CLONE
                     if self._CLONE_INPUTS:
                         x = list(get_dcr(x, self.req_grad))
-
-
-                        # x = [
-                        #     tensor.detach().clone().requires_grad_(rg)
-                        #     for tensor, rg in zip(x, self.req_grad)
-                        # ]
                     else:
                         x = list(get_dr(x, self.req_grad))
-
-                        # x = [
-                        #     tensor.detach().requires_grad_(rg)
-                        #     for tensor, rg in zip(x, self.req_grad)
-                        # ]
-
                     self.input_buffer[micro_batch_idx] = x
                     self.rng_stasher.stash_rng_state(micro_batch_idx)
+                    # TODO: UNFLATTEN
                     x = self.layers(*x)
 
                 if self.dummy_forward_monkey_patcher:
@@ -167,9 +152,11 @@ class Partition(nn.Module):
             with torch.no_grad():
                 if self.dummy_forward_monkey_patcher:
                     self.dummy_forward_monkey_patcher.replace_for_forward()
+                
                 if isinstance(x, Tensor):
                     x = self.layers(x)
                 else:
+                    # TODO: UNFLATTEN
                     x = self.layers(*x)
                 return x
 
@@ -180,10 +167,9 @@ class Partition(nn.Module):
         # TODO: maybe changing the rng state messes up with MPI?
         with torch.random.fork_rng(devices=self.rng_stasher.devices):
             self.rng_stasher.restore_rng_state(micro_batch_idx)
-            if isinstance(x, Tensor):
-                x = self.layers(x)
-            else:
-                x = self.layers(*x)
+
+            # TODO: UNFLATTEN
+            x = self.layers(*x)
         # Save for later
         self.bwd_graph_head_buffer[micro_batch_idx] = x
 
@@ -299,25 +285,23 @@ class LastPartition(Partition):
 
             if isinstance(x, Tensor):
                 # # See note on option 1 below.
-                with torch.no_grad():
-                    x = x.requires_grad_(self.req_grad[0])
+                x = x.requires_grad_(self.req_grad[0])
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(x)
             else:
                 # Option 2
-                with torch.no_grad():
-                    x = [
-                        tensor.requires_grad_(rg)
-                        for tensor, rg in zip(x, self.req_grad)
-                    ]
-
+                x = list(get_r(x, self.req_grad))
                 self.input_buffer[micro_batch_idx] = x
+
+                # TODO: UNFLATEN
                 x = self.layers(*x)
         else:
             with torch.no_grad():
                 if isinstance(x, Tensor):
                     x = self.layers(x)
                 else:
+
+                    # TODO: UNFLATEN
                     x = self.layers(*x)
 
         #  Last partition outputs should be in a tensor format
@@ -341,14 +325,14 @@ class LastPartitionWithLabelInput(LastPartition):
         label = x[-1]
         x = x[:-1]
         if self.training:
-            x = [
-                tensor.requires_grad_(rg)
-                for tensor, rg in zip(x, self.req_grad)
-            ]
+            x = list(get_r(x, self.req_grad))
             self.input_buffer[micro_batch_idx] = x
+
+            # TODO: UNFLATEN
             x = self.layers(*x, label)
         else:
             with torch.no_grad():
+                # TODO: UNFLATEN
                 x = self.layers(*x, label)
 
         #  Last partition outputs should be in a tensor format
@@ -428,17 +412,12 @@ class PartitionWithoutRecomputation(nn.Module):
             else:
                 if self._REQ_GRAD:
                     if self._CLONE_INPUTS:
-                        x = [
-                            tensor.detach().clone().requires_grad_(rg)
-                            for tensor, rg in zip(x, self.req_grad)
-                        ]
+                        x = list(get_dcr(x, self.req_grad))
                     else:
-                        x = [
-                            tensor.detach().requires_grad_(rg)
-                            for tensor, rg in zip(x, self.req_grad)
-                        ]
+                        x = list(get_dr(x, self.req_grad))
                     self.input_buffer[micro_batch_idx] = x
 
+                # TODO: UNFLATEN
                 x = self.layers(*x)
 
             # save the head.
@@ -450,6 +429,7 @@ class PartitionWithoutRecomputation(nn.Module):
                 if isinstance(x, Tensor):
                     x = self.layers(x)
                 else:
+                    # TODO: UNFLATEN
                     x = self.layers(*x)
                 return x
 
@@ -590,10 +570,12 @@ filter_req_grad_tensors = partial(
     filter, lambda a: isinstance(a, Tensor) and a.requires_grad)
 
 
+# TODO: make it recursive
 def filter_for_backward(x, g):
     # TODO: remove this compeltly, by saving for backward only whats needed.
-    x = filter_req_grad_tensors(x)
-    x = list(x)  # just for the assert
+    x = filter_req_grad_tensors(flatten(x))
+    x = list(x)  # FIXME: just for the assert
+    g = list(flatten(g))  # FIXME: just for the assert
     assert len(x) == len(g)
     tensors = []
     grad_tensors = []
@@ -610,9 +592,6 @@ def filter_for_backward(x, g):
 
 def req_grad_dict_to_tuple(req_grad: dict):
     ret = tuple(v for i, v in req_grad.items())
-    # size 1 dosn't need tuple
-    # if len(ret) == 1:
-    #     ret = ret[0]
     return ret
 
 
@@ -622,6 +601,7 @@ def req_grad_dict_to_tuple(req_grad: dict):
 def get_dcr(x, req_grad):
     for t, r in zip(flatten(x), flatten(req_grad)):
         if isinstance(t, Tensor):
+            assert isinstance(r, bool)
             yield t.detach().clone().requires_grad_(r)
         else:
             yield t
@@ -630,6 +610,16 @@ def get_dcr(x, req_grad):
 def get_dr(x, req_grad):
     for t, r in zip(flatten(x), flatten(req_grad)):
         if isinstance(t, Tensor):
+            assert isinstance(r, bool)
             yield t.detach().requires_grad_(r)
+        else:
+            yield t
+
+
+def get_r(x, req_grad):
+    for t, r in zip(flatten(x), flatten(req_grad)):
+        if isinstance(t, Tensor):
+            assert isinstance(r, bool)
+            yield t.requires_grad_(r)
         else:
             yield t
