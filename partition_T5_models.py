@@ -105,11 +105,13 @@ def get_input_squad1(args, tokenizer, analysis=False):
 
     # tokenize the examples
     # NOTE: they use global tokenizer
+    max_length = args.max_seq_length
+
     def convert_to_features(example_batch):
         input_encodings = tokenizer.batch_encode_plus(
             example_batch['input_text'],
             pad_to_max_length=True,
-            max_length=512
+            max_length=max_length
         )  # NOTE: I think this could be changed to 384 like bert to save memory.
         target_encodings = tokenizer.batch_encode_plus(
             example_batch['target_text'],
@@ -185,19 +187,19 @@ def get_input_squad1(args, tokenizer, analysis=False):
         #     for v in self.batch.values():
         #         v.pin_memory()
         #     return self
-        
+
     # def collate_wrapper(batch):
     #     return T2TDataCollator(batch)
 
     # collate_fn = T2TDataCollator().collate_batch
-    dl = torch.utils.data.DataLoader(dataset=train_dataset,
-                                     shuffle=True,
-                                     batch_size=batch_size,
-                                     collate_fn=T2TDataCollator().collate_batch,
-                                     pin_memory=False)
+    dl = torch.utils.data.DataLoader(
+        dataset=train_dataset,
+        shuffle=True,
+        batch_size=batch_size,
+        collate_fn=T2TDataCollator().collate_batch,
+        pin_memory=False)
 
     batch = next(iter(dl))
-
 
     batch = {i: batch[i].to(args.device) for i in batch}
     return batch
@@ -220,6 +222,7 @@ class ParsePartitioningT5Opts(ParsePartitioningOpts):
         parser.add_argument("--model",
                             choices=T5_PRETRAINED_MODELS,
                             default='t5-small')
+        parser.add_argument("--max_seq_length", type=int, default=512)
         parser.add_argument("--stateless_tied",
                             action="store_true",
                             default=False)
@@ -287,7 +290,13 @@ if __name__ == "__main__":
         ptvsd.wait_for_attach()
         print("attached")
 
+    if args.save_memory_mode:
+        tmp = args.device
+        args.device = torch.device("cpu")
     model, tokenizer = get_model_and_tokenizer(args)
+    if args.save_memory_mode:
+        args.device = tmp
+        del tmp
 
     sample = get_input(args, tokenizer, analysis=False)
 
@@ -362,7 +371,7 @@ if __name__ == "__main__":
             layerDict(model, depth=depth, basic_blocks=blocks),
             tensorDict(model))
 
-    if not args.no_test_run:
+    if not args.no_test_run and not args.model_too_big:
         _ = run_partitions(sample, analysis_config)
 
     if not args.no_analysis:

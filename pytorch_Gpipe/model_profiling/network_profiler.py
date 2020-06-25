@@ -9,15 +9,15 @@ __all__ = ['profile_network']
 
 
 def profile_network(
-        net: nn.Module,
-        sample_batch: tuple = (),
-        kwargs: Optional[Dict] = None,
-        basic_blocks: Optional[List[nn.Module]] = None,
-        max_depth=100,
-        n_iter=10,
-        save_memory_mode=False,
-        recomputation=False,
-        force_no_recomp_scopes=None,
+    net: nn.Module,
+    sample_batch: tuple = (),
+    kwargs: Optional[Dict] = None,
+    basic_blocks: Optional[List[nn.Module]] = None,
+    max_depth=100,
+    n_iter=10,
+    save_memory_mode=False,
+    recomputation=False,
+    force_no_recomp_scopes=None,
 ) -> Dict[str, ExecTimes]:
     '''
     profiles a network's computation time(forward/backward)
@@ -55,7 +55,9 @@ def profile_network(
         sample_batch = (sample_batch, )
 
     if force_no_recomp_scopes is None:
-        def f(s): return False
+
+        def f(s):
+            return False
     else:
         f = force_no_recomp_scopes
 
@@ -70,7 +72,10 @@ def profile_network(
     # perform n_iter symbolic forward backward run
     # first one is warmup as we have seen the first time measurements are higher
     for _ in range(n_iter + 1):
-        _perform_forward_backward_pass(net, *sample_batch, **kwargs)
+        _perform_forward_backward_pass(net,
+                                       *sample_batch,
+                                       save_memory_mode=save_memory_mode,
+                                       **kwargs)
 
     # gather forward and backward execution times
     backward_times = [
@@ -83,7 +88,8 @@ def profile_network(
     # prepare profiling results
     layers_profile = {
         name: ExecTimes(forward, backward)
-        for name, forward, backward in zip(layers_dict.keys(), forward_times, backward_times)
+        for name, forward, backward in zip(layers_dict.keys(), forward_times,
+                                           backward_times)
     }
 
     _unwrap_layers(net)
@@ -91,10 +97,15 @@ def profile_network(
     return layers_profile
 
 
-def _perform_forward_backward_pass(net, *sample_batch: tuple,
+def _perform_forward_backward_pass(net,
+                                   *sample_batch: tuple,
+                                   save_memory_mode=False,
                                    **kwargs: Dict):
 
-    device = get_device((sample_batch, kwargs))
+    if save_memory_mode:
+        device = torch.device("cuda")
+    else:
+        device = get_device((sample_batch, kwargs))
 
     if device.type == "cuda":
         torch.cuda.synchronize(device=device)
@@ -114,8 +125,7 @@ def _wrap_profiled_layers(module: nn.Module,
                           basic_blocks: List[nn.Module],
                           save_memory_mode=False,
                           recomputation=False,
-                          force_no_recomp_scopes=lambda s: False
-                          ):
+                          force_no_recomp_scopes=lambda s: False):
     layers_dict = {}
     for sub_layer, scope, parent in traverse_model(module,
                                                    depth,
@@ -158,7 +168,6 @@ class Wrapper(nn.Module):
         a nn.module to be profiled
 
     '''
-
     def __init__(self,
                  sub_module: nn.Module,
                  scope: str,
@@ -184,8 +193,8 @@ class Wrapper(nn.Module):
         if self.save_memory_mode:
             self.device = torch.device("cuda")
         else:
-            self.device = get_device((inputs, kwargs,
-                                      self.parameters(), self.buffers()))
+            self.device = get_device(
+                (inputs, kwargs, self.parameters(), self.buffers()))
 
         if self.save_memory_mode:
             self.layer.to(self.device)
@@ -199,15 +208,15 @@ class Wrapper(nn.Module):
 
         with torch.set_grad_enabled(not self.recomputation):
             # if recomputation: its a dummy forward
-            forward_time, outputs, _ = time_op(self.device,
-                                               self.layer, *detached_inputs, **kwargs)
+            forward_time, outputs, _ = time_op(self.device, self.layer,
+                                               *detached_inputs, **kwargs)
 
         self.forward_time.append(forward_time)
 
         if self.recomputation:
             # Then, we do fwd+bwd
-            forward_time, outputs, _ = time_op(self.device,
-                                               self.layer, *detached_inputs, **kwargs)
+            forward_time, outputs, _ = time_op(self.device, self.layer,
+                                               *detached_inputs, **kwargs)
 
         # NOTE: the commented code is less accurate, but it can be usefull for memory problems
         # reduce outputs to calculate dummy loss
@@ -329,17 +338,15 @@ def time_op(device, func, *inputs: tuple, **kwargs: Dict):
 def avg_time(times):
     max_v = max(times)
 
-    return sum([t for t in times if t < max_v
-                ]) / (len(times) - 1)
-
-
+    return sum([t for t in times if t < max_v]) / (len(times) - 1)
 
 
 def set_req_grad_for_parameters(ts):
     def f(t):
-        if not isinstance(t,torch.Tensor):
+        if not isinstance(t, torch.Tensor):
             return t
-        req_grad = t.requires_grad if isinstance(t, torch.nn.Parameter) else False
+        req_grad = t.requires_grad if isinstance(t,
+                                                 torch.nn.Parameter) else False
         return t.detach().requires_grad_(req_grad)
-    
-    return nested_map(f,ts)
+
+    return nested_map(f, ts)
