@@ -348,8 +348,8 @@ def pretty_format_obj(obj,dict_prefix=dtab):
         return "{" + f",\n{dict_prefix}".join(items) + "}"
     elif obj is type(None):
         return "None"
-    elif obj is torch.device:
-        return "torch.device"
+    elif obj in [torch.Size,torch.device,torch.dtype]:
+        return f"torch.{obj.__name__}"
     elif isinstance(obj,type):
         return obj.__name__
     return str(obj)

@@ -317,9 +317,8 @@ class TracedValue(object):
     def __setitem__(self, idx, value):
         pass
 
-    @delegate_to_traced_value
     def __len__(self):
-        pass
+        return len(self._data)
 
         
     ##############################
