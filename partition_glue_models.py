@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader, RandomSampler
 
 from models.normal import BertForSequenceClassification
 from models.normal.NLP_models.modeling_bert import GlueLoss
+from models.normal.NLP_models.modeling_roberta import RobertaForSequenceClassification
 from partition_scripts_utils import ParsePartitioningOpts, ParseAcyclicPartitionerOpts, ParseMetisOpts, record_cmdline, choose_blocks, run_x_tries_until_no_fail
 from partition_async_pipe import partition_async_pipe
 from heuristics import get_node_and_edge_weight_function_heuristics
@@ -44,6 +45,8 @@ def make_just_x(ds, mode="train"):
         for key, val in vars(feature).items():
             if key == "label":
                 continue
+            if val is None:
+                continue
             d[key].append(val)
     return TensorDataset(*[torch.tensor(x) for x in d.values()])
 
@@ -74,7 +77,7 @@ def get_sample(args, tokenizer, model):
     inputs = {
         "input_ids": batch[0],
         "attention_mask": batch[1],
-        "token_type_ids": batch[2],
+        # "token_type_ids": batch[2],
         # # NOTE: we explicitly add to match to the signatute
         # "position_ids": None,
         # "head_mask": None,
@@ -85,7 +88,7 @@ def get_sample(args, tokenizer, model):
     signature_order = [
         "input_ids",
         "attention_mask",
-        "token_type_ids",
+        # "token_type_ids",
         # "position_ids",
         # "head_mask",
         # "start_positions",
@@ -93,8 +96,11 @@ def get_sample(args, tokenizer, model):
     ]
 
     if args.model_type in ["xlm", "roberta", "distilbert", "camembert"]:
-        raise NotImplementedError()
-        del inputs["token_type_ids"]
+        # del inputs["token_type_ids"]
+        pass
+    else:
+        inputs["token_type_ids"] = batch[2]
+        signature_order.append("token_type_ids")
 
     if args.model_type in ["xlnet", "xlm"]:
         raise NotImplementedError()
@@ -239,6 +245,7 @@ def main():
         args)
     args.model_type = args.model_type.lower()
 
+    args.auto_file_name = not args.no_auto_file_name
     if args.auto_file_name:
         args.output_file = f"{args.model_name_or_path}_{args.n_partitions}p_glue"
 
@@ -260,7 +267,10 @@ def main():
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
 
-    model = BertForSequenceClassification.from_pretrained(
+    model_cls = {'bert': BertForSequenceClassification, 'roberta': RobertaForSequenceClassification}
+    model_cls = model_cls[args.model_type]
+
+    model = model_cls.from_pretrained(
         args.model_name_or_path,
         from_tf=bool(".ckpt" in args.model_name_or_path),
         config=config,
@@ -281,9 +291,7 @@ def main():
     n_iter = args.n_iter
     recomputation = not args.no_recomputation
     bw = args.bw
-    n_partitions = args.n_partitions
     batch_dim = 0
-    bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
     args.basic_blocks = choose_blocks(model, args)
     bw = args.bw
 
