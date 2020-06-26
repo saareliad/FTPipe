@@ -96,7 +96,7 @@ class Partition(nn.Module):
 
         # just make it None if nothing to patch.
         if self.dummy_forward_monkey_patcher is not None and not self.dummy_forward_monkey_patcher.models:
-            self.self.dummy_forward_monkey_patcher = None
+            self.dummy_forward_monkey_patcher = None
 
         self.input_buffer = {}  # For saving activations
         self.bwd_graph_head_buffer = {}  # For recompute
