@@ -30,19 +30,12 @@ __all__ = [
     'GPipeLastPartitionWithLabelInput'
 ]
 
+# TODO: LayerNorm? GroupNorm?
 DEFAULT_CLASSES_LIST_TO_PATCH = [
     nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d, nn.SyncBatchNorm,
     nn.InstanceNorm1d, nn.InstanceNorm2d, nn.InstanceNorm3d,
     dp_sim.BatchNorm1d, dp_sim.BatchNorm2d, dp_sim.BatchNorm3d
 ]
-
-# TODO: LayerNorm? GroupNorm?
-
-# def single_tensor(x):
-#     if not isinstance(x, Tensor):
-#         assert (len(x) == 1)
-#         return x[0]
-#     return x
 
 
 def get_buffers_for_ddp_sync(model,
@@ -62,7 +55,6 @@ def get_buffers_for_ddp_sync(model,
     return buffers
 
 
-# TODO: input req_grad reqirements.
 class Partition(nn.Module):
     """
     Partition with recomputation.
@@ -99,9 +91,13 @@ class Partition(nn.Module):
             # TODO: can print if is_replaced
             replace_inplace_for_first_innermost_layer_(self.layers)
 
-        # TODO: can just make it None if nothing to patch.
         self.dummy_forward_monkey_patcher = DummyForwardMonkeyPatcher(self.layers, classes_list_to_patch) \
             if self._HAS_DUMMY_FORWARD else None
+
+        # just make it None if nothing to patch.
+        if self.dummy_forward_monkey_patcher is not None and not self.dummy_forward_monkey_patcher.models:
+            self.self.dummy_forward_monkey_patcher = None
+
         self.input_buffer = {}  # For saving activations
         self.bwd_graph_head_buffer = {}  # For recompute
         self.rng_stasher = PartitionRngStasher(device=self.device)
@@ -123,7 +119,7 @@ class Partition(nn.Module):
             with torch.no_grad():
 
                 if isinstance(x, Tensor):
-                  # EXPLICITLY DO CLONE
+                    # EXPLICITLY DO CLONE
                     if self._CLONE_INPUTS:
                         x = x.detach().clone().requires_grad_(self.req_grad[0])
                     else:
@@ -133,7 +129,7 @@ class Partition(nn.Module):
                     # TODO: UNFLATTEN
                     x = self.layers(x)
 
-                else:    
+                else:
                     # EXPLICITLY DO CLONE
                     if self._CLONE_INPUTS:
                         x = list(get_dcr(x, self.req_grad))
@@ -141,7 +137,8 @@ class Partition(nn.Module):
                         x = list(get_dr(x, self.req_grad))
                     self.input_buffer[micro_batch_idx] = x
                     self.rng_stasher.stash_rng_state(micro_batch_idx)
-                    # TODO: UNFLATTEN
+                    # UNFLATTEN
+                    x = unflatten(x, self.req_grad)
                     x = self.layers(*x)
 
                 if self.dummy_forward_monkey_patcher:
@@ -152,11 +149,12 @@ class Partition(nn.Module):
             with torch.no_grad():
                 if self.dummy_forward_monkey_patcher:
                     self.dummy_forward_monkey_patcher.replace_for_forward()
-                
+
                 if isinstance(x, Tensor):
                     x = self.layers(x)
                 else:
-                    # TODO: UNFLATTEN
+                    # UNFLATTEN
+                    x = unflatten(x, self.req_grad)
                     x = self.layers(*x)
                 return x
 
@@ -168,7 +166,8 @@ class Partition(nn.Module):
         with torch.random.fork_rng(devices=self.rng_stasher.devices):
             self.rng_stasher.restore_rng_state(micro_batch_idx)
 
-            # TODO: UNFLATTEN
+            #  UNFLATTEN
+            x = unflatten(x, self.req_grad)
             x = self.layers(*x)
         # Save for later
         self.bwd_graph_head_buffer[micro_batch_idx] = x
@@ -267,8 +266,6 @@ class LastPartition(Partition):
     _REQ_GRAD = True
     _HAS_DUMMY_FORWARD = False
 
-    # TODO: make the inheritance true subtype.
-
     def __init__(self, *args, **kw):
         super(LastPartition, self).__init__(*args, **kw)
 
@@ -293,7 +290,8 @@ class LastPartition(Partition):
                 x = list(get_r(x, self.req_grad))
                 self.input_buffer[micro_batch_idx] = x
 
-                # TODO: UNFLATEN
+                # UNFLATEN
+                x = unflatten(x, self.req_grad)
                 x = self.layers(*x)
         else:
             with torch.no_grad():
@@ -301,7 +299,8 @@ class LastPartition(Partition):
                     x = self.layers(x)
                 else:
 
-                    # TODO: UNFLATEN
+                    # UNFLATEN
+                    x = unflatten(x, self.req_grad)
                     x = self.layers(*x)
 
         #  Last partition outputs should be in a tensor format
@@ -328,11 +327,13 @@ class LastPartitionWithLabelInput(LastPartition):
             x = list(get_r(x, self.req_grad))
             self.input_buffer[micro_batch_idx] = x
 
-            # TODO: UNFLATEN
+            # UNFLATEN
+            x = unflatten(x, self.req_grad)
             x = self.layers(*x, label)
         else:
             with torch.no_grad():
-                # TODO: UNFLATEN
+                # UNFLATEN
+                x = unflatten(x, self.req_grad)
                 x = self.layers(*x, label)
 
         #  Last partition outputs should be in a tensor format
@@ -417,10 +418,12 @@ class PartitionWithoutRecomputation(nn.Module):
                         x = list(get_dr(x, self.req_grad))
                     self.input_buffer[micro_batch_idx] = x
 
-                # TODO: UNFLATEN
+                # UNFLATEN
+                x = unflatten(x, self.req_grad)
                 x = self.layers(*x)
 
             # save the head.
+            # NOTE: we do not need to unflatten, it happens in filter_for_backward
             self.bwd_graph_head_buffer[micro_batch_idx] = x
             return x
 
@@ -429,7 +432,8 @@ class PartitionWithoutRecomputation(nn.Module):
                 if isinstance(x, Tensor):
                     x = self.layers(x)
                 else:
-                    # TODO: UNFLATEN
+                    # UNFLATEN
+                    x = unflatten(x, self.req_grad)
                     x = self.layers(*x)
                 return x
 
@@ -463,6 +467,7 @@ class FirstPartitionWithoutRecomputation(PartitionWithoutRecomputation):
 ##################
 # GPipe
 # TODO: we can easly avoid clones() and just use the same buffer.
+# NOTE: this already  happens in multiprocessing
 # it will save buffer memory, but its minor.
 ##################
 
@@ -570,9 +575,9 @@ filter_req_grad_tensors = partial(
     filter, lambda a: isinstance(a, Tensor) and a.requires_grad)
 
 
-# TODO: make it recursive
 def filter_for_backward(x, g):
     # TODO: remove this compeltly, by saving for backward only whats needed.
+    # NOTE: we currently build on this behavior  so be careful when removing.
     x = filter_req_grad_tensors(flatten(x))
     x = list(x)  # FIXME: just for the assert
     g = list(flatten(g))  # FIXME: just for the assert

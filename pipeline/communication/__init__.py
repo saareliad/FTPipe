@@ -1,6 +1,6 @@
 from .interface import CommunicationHandlerBase
 # from .common_simple_comm import SimpleCommBase
-# from .bcast import BCASTCommunicationHandler
+from .bcast import BCASTCommunicationHandler
 from .p2p import P2PCommunicationHandler
 from .replicated import P2PRankIO as ReplicatedCommunicationHandler
 from .replicated import create_replicated_comm_handler_args
@@ -34,7 +34,7 @@ def to_policy(backend, cpu):
 # TODO: add replicated somewhow.
 POLICY_TO_COMM = {
     CommPolicy.P2P: P2PCommunicationHandler,
-    # CommPolicy.BCAST: BCASTCommunicationHandler,
+    CommPolicy.BCAST: BCASTCommunicationHandler,
 }
 
 

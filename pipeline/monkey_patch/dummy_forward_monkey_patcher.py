@@ -12,6 +12,7 @@ def convert_child_by_dict(model, dict_id_b4_to_after):
         else:
             convert_child_by_dict(child, dict_id_b4_to_after)
 
+
 class DummyForwardMonkeyPatcher:
     def __init__(self, model, classes_list_to_patch):
         """ List of model names to patch """

@@ -80,6 +80,8 @@ def make_just_x(ds, mode="train"):
         for key, val in vars(feature).items():
             if key == "label":
                 continue
+            if val is None:
+                continue
             d[key].append(val)
     return TensorDataset(*[torch.tensor(x) for x in d.values()])
 
