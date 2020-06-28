@@ -280,9 +280,12 @@ def get_dataloaders(args, explicit_separated_dataset=False, **kw):
         # version_2_with_negative = args.version_2_with_negative
 
         if hasattr(args, "version_2_with_negative"):
-            assert version_2_with_negative == args.version_2_with_negative, (version_2_with_negative, args.version_2_with_negative)
+            assert version_2_with_negative == args.version_2_with_negative, (
+                version_2_with_negative, args.version_2_with_negative)
         else:
-            print(f"-W- version_2_with_negative infered automaticaly as {version_2_with_negative}. args.dataset: {args.dataset}. args.task: {args.task}")
+            print(
+                f"-W- version_2_with_negative infered automaticaly as {version_2_with_negative}. args.dataset: {args.dataset}. args.task: {args.task}"
+            )
 
         dataset_keywords = dict(
             model_name_or_path=args.model_name_or_path,
@@ -315,10 +318,17 @@ def get_dataloaders(args, explicit_separated_dataset=False, **kw):
                  version_2_with_negative=version_2_with_negative,
                  null_score_diff_threshold=null_score_diff_threshold,
                  model_type=model_type,
-                 output_dir=output_dir
-                 )
+                 output_dir=output_dir)
 
         dataset_keywords.update(d)
+
+    elif 'glue' in args.task:
+        dataset_keywords = dict(
+            tokenizer=kw.pop('tokenizer'),
+            overwrite_cache=getattr(args, 'overwrite_cache', False),
+            task_name=getattr(args, 'glue_task_name'),
+            max_seq_length=getattr(args, 'max_seq_length', 128),
+        )
 
     else:
         dataset_keywords = {}
@@ -682,7 +692,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     # After the partition is on its device:
     # Set optimizer
     # If is transformer, use grouped parameters.
-    if 'lm' in args.task or 'squad' in args.task:
+    if 'lm' in args.task or 'squad' in args.task or 'glue' in args.task:
         # No weight decay for some parameters.
         model = partition.partition
         # NOTE: it works even if len(model.paramerters()) == 0
@@ -707,8 +717,10 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
             },
         ]
         lengths = {
-            "no_decay": sum(p.numel() for p in optimizer_grouped_parameters[1]['params']),
-            "decay": sum(p.numel() for p in optimizer_grouped_parameters[0]['params'])
+            "no_decay":
+            sum(p.numel() for p in optimizer_grouped_parameters[1]['params']),
+            "decay":
+            sum(p.numel() for p in optimizer_grouped_parameters[0]['params'])
         }
         # total_length = lengths['decay'] + lengths['no_decay']
         print(f"-I- optimizer_grouped_parameters: {lengths}")
