@@ -528,16 +528,10 @@ def profile_execution(model_inputs,
                 out_size_mb = 0
                 send_time = 0
 
-                #NOTE it's possible we record a tuple::__add__
+                #NOTE it's possible we record a tuple
                 #in that case we have only one output in the config but multiple in the model
                 if len(partition_config[idx]['outputs']) != len(outputs):
                     assert len(partition_config[idx]['outputs']) == 1
-
-                    if "tuple::__add__" not in partition_config[idx][
-                            'outputs'][0]:
-                        print(
-                            f"-W-",
-                            f'"tuple::__add__" not in partition {idx} outputs')
 
                     outputs = (outputs, )
 
@@ -1166,7 +1160,6 @@ def run_partitions(model_inputs, partition_config):
                     activations[o] = t
             else:
                 assert len(partition_config[idx]['outputs']) == 1
-                assert "tuple::__add__" in partition_config[idx]['outputs'][0]
                 activations[partition_config[idx]['outputs'][0]] = outs
         else:
             parts.append(idx)
