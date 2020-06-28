@@ -12,7 +12,10 @@ from torch.utils.data import DataLoader, RandomSampler
 from models.normal import BertForSequenceClassification
 from models.normal.NLP_models.modeling_bert import GlueLoss
 from models.normal.NLP_models.modeling_roberta import RobertaForSequenceClassification
-from partition_scripts_utils import ParsePartitioningOpts, ParseAcyclicPartitionerOpts, ParseMetisOpts, record_cmdline, choose_blocks, run_x_tries_until_no_fail
+from partition_scripts_utils import (ParsePartitioningOpts,
+                                     ParseAcyclicPartitionerOpts,
+                                     ParseMetisOpts, record_cmdline,
+                                     choose_blocks, run_x_tries_until_no_fail)
 from partition_async_pipe import partition_async_pipe
 from heuristics import get_node_and_edge_weight_function_heuristics
 from misc import run_analysis
@@ -25,6 +28,7 @@ from transformers import (
     AutoConfig,
     AutoModelForSequenceClassification,
     AutoTokenizer,
+    glue_tasks_num_labels
 )
 
 from transformers import GlueDataset, GlueDataTrainingArguments
@@ -56,10 +60,14 @@ def get_dataset(args, tokenizer):
     data_dir = os.path.join(data_dir, "MNLI")
 
     glue_args = GlueDataTrainingArguments(task_name=args.task_name,
-                                     data_dir=data_dir,
-                                     max_seq_length=args.max_seq_length,
-                                     overwrite_cache=args.overwrite_cache)
-    ds = GlueDataset(glue_args, tokenizer, mode="train", )
+                                          data_dir=data_dir,
+                                          max_seq_length=args.max_seq_length,
+                                          overwrite_cache=args.overwrite_cache)
+    ds = GlueDataset(
+        glue_args,
+        tokenizer,
+        mode="train",
+    )
     ds = make_just_x(ds, mode="train")
     return ds
 
@@ -67,7 +75,7 @@ def get_dataset(args, tokenizer):
 def get_sample(args, tokenizer, model):
     train_dataset = get_dataset(args, tokenizer)
     train_sampler = RandomSampler(train_dataset)
-    # TODO: create a dataloader like they do in transformers... 
+    # TODO: create a dataloader like they do in transformers...
     train_dataloader = DataLoader(train_dataset,
                                   sampler=train_sampler,
                                   batch_size=args.partitioning_batch_size)
@@ -122,8 +130,11 @@ class ParsePartitioningOptsGlue(ParsePartitioningOpts):
 
     def _extra(self, parser):
         # Me adding manually...
-        parser.add_argument("--task_name", type=str, default="mnli", help="Glue task")
-        
+        parser.add_argument("--task_name",
+                            type=str,
+                            default="mnli",
+                            help="Glue task")
+
         # Required parameters
         parser.add_argument(
             "--model_type",
@@ -137,8 +148,7 @@ class ParsePartitioningOptsGlue(ParsePartitioningOpts):
             default=None,
             type=str,
             required=True,
-            help=
-            "Path to pre-trained model or shortcut name.",
+            help="Path to pre-trained model or shortcut name.",
         )
 
         # Other parameters
@@ -146,9 +156,7 @@ class ParsePartitioningOptsGlue(ParsePartitioningOpts):
             "--data_dir",
             default="/home_local/saareliad/data/glue_data/",
             type=str,
-            help=
-            "The input data dir. Should contain the files for the task."
-            )
+            help="The input data dir. Should contain the files for the task.")
 
         parser.add_argument(
             "--config_name",
@@ -178,7 +186,7 @@ class ParsePartitioningOptsGlue(ParsePartitioningOpts):
             "The maximum total input sequence length after WordPiece tokenization. Sequences "
             "longer than this will be truncated, and sequences shorter than this will be padded.",
         )
-        
+
         parser.add_argument(
             "--do_lower_case",
             action="store_true",
@@ -246,13 +254,15 @@ def main():
 
     args.auto_file_name = not args.no_auto_file_name
     if args.auto_file_name:
-        args.output_file = f"{args.model_name_or_path}_{args.n_partitions}p_bw{args.bw}"
+        bw_str = str(args.bw).replace(".", "_")
+        model_str = str(args.model_name_or_path).replace("-", "_")
+        args.output_file = f"{model_str}_{args.n_partitions}p_bw{bw_str}"
 
         if args.async_pipeline:
             args.output_file += "_async"
 
+        args.output_file += f"_{args.task_name}"
         args.output_file += "_glue"
-        
 
     #####
     device = torch.device("cuda" if torch.cuda.is_available()
@@ -265,6 +275,10 @@ def main():
         args.config_name if args.config_name else args.model_name_or_path,
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
+    
+    # get correct number of labels.
+    config.num_labels = glue_tasks_num_labels.get(args.task_name)
+
     tokenizer = AutoTokenizer.from_pretrained(
         args.tokenizer_name
         if args.tokenizer_name else args.model_name_or_path,
@@ -272,7 +286,10 @@ def main():
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
 
-    model_cls = {'bert': BertForSequenceClassification, 'roberta': RobertaForSequenceClassification}
+    model_cls = {
+        'bert': BertForSequenceClassification,
+        'roberta': RobertaForSequenceClassification
+    }
     model_cls = model_cls[args.model_type]
 
     model = model_cls.from_pretrained(
@@ -381,7 +398,8 @@ def _example():
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
     ds = GlueDataset(args, tokenizer, mode="train")
     # NOTE: this is problematic as we have our own implementation
-    model = AutoModelForSequenceClassification.from_pretrained("bert-base-uncased")
+    model = AutoModelForSequenceClassification.from_pretrained(
+        "bert-base-uncased")
 
 
 if __name__ == "__main__":
