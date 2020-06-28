@@ -445,7 +445,11 @@ def get_node_and_edge_weigh_function_keywords(args, node_cls, edge_cls, **kw):
         del node_kw['bwd_to_fwd_ratio']
 
     if issubclass(node_cls, NodeWeightFunctionByStageId):
-        # TODO: read hetrogenous nodes mapping from somewere and pass to constructor
+        # read hetrogenous nodes mapping from somewere and pass to constructor
+        if args.async_pipeline and False:  # FIXME:
+            stage_id_to_attr = make_recomomputation_dynamic_mapping(args.n_partitions)
+            node_kw["stage_id_to_attr"] = stage_id_to_attr
+            # TODO: make sure that we have 2 types of profiles according to these names.
         pass
 
     # TODO: parse hetrogenous bandwidth for oracle when relevant
@@ -467,3 +471,18 @@ def get_node_and_edge_weight_function_heuristics(args, verbose=True, **kw):
     edge = edge_cls(**edge_kw)
 
     return node, edge
+
+
+##########
+
+def make_recomomputation_dynamic_mapping(num_stages):
+    """ creates a dynamic mapping: last stage does not do recomputation, the rest do """
+    r = "recomputation"
+    nr = "no_recomputation"
+    d = {}
+    for i in range(num_stages - 1):
+        d[i] = r
+    
+    d[num_stages - 1] = nr
+
+    return d

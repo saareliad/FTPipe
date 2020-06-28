@@ -200,7 +200,6 @@ class ParsePartitioningOptsGlue(ParsePartitioningOpts):
                             default=42,
                             help="random seed for initialization")
 
-
         parser.add_argument('--auto_file_name',
                             action='store_true',
                             default=False,
@@ -247,7 +246,13 @@ def main():
 
     args.auto_file_name = not args.no_auto_file_name
     if args.auto_file_name:
-        args.output_file = f"{args.model_name_or_path}_{args.n_partitions}p_glue"
+        args.output_file = f"{args.model_name_or_path}_{args.n_partitions}p_bw{args.bw}"
+
+        if args.async_pipeline:
+            args.output_file += "_async"
+
+        args.output_file += "_glue"
+        
 
     #####
     device = torch.device("cuda" if torch.cuda.is_available()

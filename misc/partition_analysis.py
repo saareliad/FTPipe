@@ -380,6 +380,7 @@ def run_analysis(sample,
 # analyze generated partitions
 # ##############################
 
+
 # TODO: also read req grad requirements, as they don't affect backward send times
 # TODO: calculate Backward send times with differnt links (sending grads)
 # TODO: calculate Forward send times with different links (sending activations)
@@ -394,7 +395,6 @@ def profile_execution(model_inputs,
                       stages_on_same_gpu=[],
                       parallel_comm_and_comp_ratio=0,
                       different_links_between_accelerators=False):
-
     '''perfrom forward/backward passes and measure execution times accross n batches
     '''
     n_partitions = sum(1 for k in partition_config if isinstance(k, int))
@@ -464,7 +464,7 @@ def profile_execution(model_inputs,
                         is_same_gpu = False
                         sender_stage_id = None
                     else:
-                        assert(len(recv_from) == 1)
+                        assert (len(recv_from) == 1)
                         sender_stage_id = recv_from[0]
                         is_same_gpu = sender_stage_id in my_gpu_set
 
@@ -485,15 +485,17 @@ def profile_execution(model_inputs,
                 # Calculate Forward recv time
                 if different_links_between_accelerators:
                     recv_sizes_by_gpu = defaultdict(float)
-                    for t, sender_stage_id in zip(inputs, inputs_rcv_from_stage):
+                    for t, sender_stage_id in zip(inputs,
+                                                  inputs_rcv_from_stage):
                         if sender_stage_id is None:
                             continue
                         is_same_gpu = sender_stage_id in my_gpu_set
                         if is_same_gpu:
                             continue
-                        
-                        recv_sizes_by_gpu[sender_stage_id] += (tensor_sizes(t) / 1e6)
-                    
+
+                        recv_sizes_by_gpu[sender_stage_id] += (
+                            tensor_sizes(t) / 1e6)
+
                     max_recv_time = 0
                     for s, size in recv_sizes_by_gpu.items():
                         # TODO: currently assuming same bandwidth
@@ -503,10 +505,10 @@ def profile_execution(model_inputs,
                     recv_time = max_recv_time
                 else:
                     recv_time = in_size_mb / bw_GBps
-                
+
                 # TODO: calculate Backward send times with differnt links (sending grads)
                 # TODO: calculate Forward send times with different links (sending activations)
-                
+
                 # Compute times measurement
                 with force_out_of_place(partition_config[idx]['model']):
                     if torch.cuda.is_available():
@@ -530,10 +532,15 @@ def profile_execution(model_inputs,
                 #in that case we have only one output in the config but multiple in the model
                 if len(partition_config[idx]['outputs']) != len(outputs):
                     assert len(partition_config[idx]['outputs']) == 1
-                    assert "tuple::__add__" in partition_config[idx][
-                        'outputs'][0]
+
+                    if "tuple::__add__" not in partition_config[idx][
+                            'outputs'][0]:
+                        print(
+                            f"-W-",
+                            f'"tuple::__add__" not in partition {idx} outputs')
+
                     outputs = (outputs, )
-                
+
                 # outputs
                 stage_outputs = outputs
                 stage_outputs_sent_to = []
@@ -546,7 +553,7 @@ def profile_execution(model_inputs,
                             continue
                         if o in partition_config[ii]['inputs']:
                             sent_to.append(ii)
-    
+
                     stage_outputs_sent_to.append(sent_to)
 
                     if len(sent_to) > 1:
@@ -607,14 +614,14 @@ def profile_execution(model_inputs,
                 nocommb_times[idx].append(b_time)
 
                 # TODO: calculate backward (gradients) send times
-                
+
                 if different_links_between_accelerators:
                     raise NotImplementedError()
                 else:
                     # FIXME: its not accuracte
                     # FIXME: targets on differnt accelerators have different links
                     bwd_send_time = in_size_mb / bw_GBps  # HACK:
-     
+
                 if add_comm_times_to_balance:
                     if not parallel_comm_and_comp_ratio:
                         if not is_last_partition:
@@ -921,8 +928,8 @@ def theoretical_analysis(graph,
     nodes = dict()
     for node in graph.nodes:
         # cache relevant nodes to make fetching them faster
-        if graph.input_kw_ids.get(node.id,node.scope) in tensor_names:
-            nodes[graph.input_kw_ids.get(node.id,node.scope)] = node
+        if graph.input_kw_ids.get(node.id, node.scope) in tensor_names:
+            nodes[graph.input_kw_ids.get(node.id, node.scope)] = node
 
         # old way of measuring time as sum of all computation
         sequential_f[node.stage_id] += extract_time(node.weight, forward=True)

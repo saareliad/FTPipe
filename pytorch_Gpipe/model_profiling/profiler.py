@@ -111,7 +111,7 @@ class GraphProfiler():
                 start.record()
                 output = function(*args, **kwargs)
                 tensors = self.only_tensors_that_require_grad(output)
-                grads = GraphProfiler.get_grads(tensors)
+                grads = GraphProfiler.get_grads(tensors)  # FIXME: memory allocation time will be recorded
                 torch.autograd.backward(tensors=tensors,
                                         grad_tensors=grads)
                 end.record()
