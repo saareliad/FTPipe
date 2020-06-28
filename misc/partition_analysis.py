@@ -46,7 +46,7 @@ def run_analysis(sample,
     UTILIZATION_SLOWDOWN_SPEEDUP = True
     PRINT_THEORETICAL = False
     PRINT_VAR_STD = False
-    TRY_SSGD_ANALYSIS = True
+    TRY_SSGD_ANALYSIS = False
     TRY_ASGD_ANALYSIS = True
 
     # NOTE tracing ignores our generated state_methods
