@@ -1,9 +1,5 @@
 # Based on hugginface transformers commit-id: 33ef7002e17fe42b276dc6d36c07a3c39b1f09ed
 import os
-from functools import partial
-from multiprocessing import Pool, cpu_count
-
-from tqdm import tqdm
 import numpy as np
 import types
 import torch
@@ -14,14 +10,12 @@ from torch.utils.data import TensorDataset
 from transformers.data.datasets.glue import GlueDataset, GlueDataTrainingArguments
 from transformers.data.metrics import glue_compute_metrics
 
-from transformers.data.processors.glue import (
-    glue_convert_examples_to_features, glue_output_modes, glue_processors,
-    glue_tasks_num_labels)
+from transformers.data.processors.glue import (glue_output_modes,
+                                               glue_tasks_num_labels)
 
 from transformers import EvalPrediction
 from typing import Callable, Dict
 
-from types import SimpleNamespace
 from collections import defaultdict
 
 
@@ -185,4 +179,3 @@ if __name__ == "__main__":
         do_lower_case=False,
         cache_dir=None,
     )
-

@@ -253,20 +253,7 @@ def get_weight_predictor(args,
     return weight_predictor, nag_with_predictor
 
 
-def get_dataloaders(args, explicit_separated_dataset=False, **kw):
-    # TODO: currently assuming that only 1 rank is x or y.
-    # will have to fix this for replicated.
-    dl_kw = dict()
-    if args.cpu:
-        dl_kw['pin_memory'] = False
-    else:
-        dl_kw['pin_memory'] = True
-
-    dl_kw['num_workers'] = args.num_data_workers
-    dl_kw['drop_last'] = True
-
-    if getattr(args, "dont_drop_last", False):
-        dl_kw['drop_last'] = False
+def get_data_keywords_by_task(args, dl_kw, **kw):
 
     if "lm" in args.task:
         # FIXME
@@ -340,8 +327,29 @@ def get_dataloaders(args, explicit_separated_dataset=False, **kw):
 
     else:
         dataset_keywords = {}
+    
+    return dataset_keywords
+
+
+def get_dataloaders(args, explicit_separated_dataset=False, **kw):
+    # TODO: currently assuming that only 1 rank is x or y.
+    # will have to fix this for replicated.
+    dl_kw = dict()
+    if args.cpu:
+        dl_kw['pin_memory'] = False
+    else:
+        dl_kw['pin_memory'] = True
+
+    dl_kw['num_workers'] = args.num_data_workers
+    dl_kw['drop_last'] = True
+
+    if getattr(args, "dont_drop_last", False):
+        dl_kw['drop_last'] = False
+
+    dataset_keywords = get_data_keywords_by_task(args, dl_kw, **kw)
 
     if explicit_separated_dataset:
+        # TODO: this does it just for x and y.
         # print("dataset_keywords", dataset_keywords)
         train_dl, test_dl, samplers, extra = get_separate_just_x_or_y_train_test_dl_from_args(
             args, verbose=False, dataset_keywords=dataset_keywords, **dl_kw)
