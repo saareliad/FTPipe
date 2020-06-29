@@ -24,14 +24,21 @@ def pretrained_model_config_and_tokenizer(
         cache_dir: str = "",
         output_past=False,
         stateless_tied=False,
+        **config_kw
 ):
 
     config_class, model_class, tokenizer_class = MODEL_TYPES[model_type]
     config = config_class.from_pretrained(
         config_name if config_name else model_name_or_path,
-        cache_dir=cache_dir if cache_dir else None)
+        cache_dir=cache_dir if cache_dir else None,
+        **config_kw
+        # num_labels=num_labels,
+        # finetuning_task=data_args.task_name,
+        )
 
-    config.output_past = output_past
+    config.output_past = output_past  # FIXME: deprecated
+    # for k, v in config_kw.items():
+    #     setattr(config, k, v)
 
     tokenizer = tokenizer_class.from_pretrained(
         tokenizer_name if tokenizer_name else model_name_or_path,
