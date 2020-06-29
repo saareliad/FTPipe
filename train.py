@@ -2,6 +2,7 @@ import math
 import time
 import torch
 
+
 def training_loop(args, logger, train_dl, test_dl, is_first_partition,
                   is_last_partition, partition, statistics, train_dl_len,
                   test_dl_len, samplers):
@@ -121,4 +122,46 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
                 f"Finished all steps. Total steps:{steps}, rank:{args.local_rank}"
             )
             break  # steps condition met
+        else:
+            if getattr(args, "patience", False):
+                if is_last_partition:  # FIXME:  args.world_size - 1
+                    # TODO: Try catch?                    
+                    should_early_stop = should_stop_early(
+                        args, statistics.get_metric_for_early_stop(), logger)
+                    data = torch.tensor(int(should_early_stop))
+                else:
+                    data = torch.tensor(int(False))  # create buffer
+
+                torch.distributed.broadcast(data, args.world_size - 1)
+                should_early_stop = data.item()
+                if should_early_stop:
+                    break
+
     return total_epoch_times_list, train_epochs_times_list
+
+
+def should_stop_early(args, valid_loss, logger):
+    # skip check if no validation was done in the current epoch
+    if valid_loss is None:
+        return False
+    if args.patience <= 0:
+        return False
+
+    def is_better(a, b):
+        return a > b if getattr(args, "maximize_best_checkpoint_metric",
+                                False) else a < b
+
+    prev_best = getattr(should_stop_early, "best", None)
+    if prev_best is None or is_better(valid_loss, prev_best):
+        should_stop_early.best = valid_loss
+        should_stop_early.num_runs = 0
+        return False
+    else:
+        should_stop_early.num_runs += 1
+        if should_stop_early.num_runs >= args.patience:
+            logger.info(
+                "early stop since valid performance hasn't improved for last {} runs"
+                .format(args.patience))
+            return True
+        else:
+            return False

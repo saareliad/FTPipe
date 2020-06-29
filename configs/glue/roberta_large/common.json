@@ -7,7 +7,7 @@
     "out_filename": "tst",
     "distributed_backend": "mpi",
     "task": "glue_sep",
-    "model": "roberta_large_8p_glue",
+    "model": "roberta_large_8p_bw11_0_mnli_glue",
     "dataset": "glue",
     "trainer": {
         "type": "glue",
@@ -20,26 +20,28 @@
     "bs_test": 32,
     "num_data_workers": 10,
     "optimizer": {
-        "type": "adamw",
+        "type": "adam",
         "args": {
-            "lr": 2e-5,
+            "lr": 1e-5,
             "weight_decay": 0.1,
-            "eps": 1e-8
+            "eps": 1e-6,
+            "betas": [0.9, 0.98]
         }
     },
     "lr_scheduler": {
         "type": "get_linear_schedule_with_warmup",
         "preproc_args": {
-            "num_training_steps": "epochs_to_steps",
-            "num_warmup_steps": "epochs_to_steps"
+            "num_warmup_steps": "ratio_from_num_training_steps"
         },
         "args": {
-            "num_warmup_steps": 0,
-            "num_training_steps": -1,
+            "num_warmup_steps": 0.06,
+            "num_training_steps": 123873,
             "last_epoch": -1
         }
     },
-    "epochs": 3,
+    "maximize_best_checkpoint_metric": true,
+    "patience": 1,
+    "epochs": 10,
     "steps": -1,
     "seed_from_cmd": true,
     "bs_train_from_cmd": false,

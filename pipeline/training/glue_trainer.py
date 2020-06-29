@@ -24,6 +24,7 @@ class GlueTrainer(BaseOutPutIsLossTrainer):
         loss = self.loss_fn(x, labels)
         self.statistics.update_on_batch("loss", loss.item(), batch_size)
         self.statistics.predictions.append(x)
+        self.statistics.label_ids.append(labels)
 
     def backprop_last_partition(self, x, labels, batch_size):
         # logits = x[0]

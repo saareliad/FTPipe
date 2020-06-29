@@ -1,5 +1,4 @@
 import torch
-
 from misc.filelogger import FileLogger
 from pipeline import dp_sim
 from datasets import (simplified_get_train_valid_dl_from_args,
@@ -125,6 +124,15 @@ def get_lr_scheduler(args, optimizer):
                     attr['args'][arg_name] = num_steps
                     print(
                         f"preprocessed {arg_name} from {given_epochs} epochs to {num_steps} steps."
+                    )
+                elif preproc_command == "ratio_from_num_training_steps":
+                    num_steps = attr['args']['num_training_steps']
+                    given_ratio = attr['args'][arg_name]
+                    assert given_ratio >= 0 and given_ratio <= 1
+                    warmup_steps = int(given_ratio*num_steps)
+                    attr['args'][arg_name] = warmup_steps
+                    print(
+                        f"preprocessed {arg_name} from ratio {given_ratio} to {warmup_steps} steps."
                     )
                 else:
                     raise NotImplementedError(
@@ -454,6 +462,13 @@ def get_optimizer_cls(args, has_gap_aware):
     return optimizer_cls
 
 
+def tuplify(listything):
+    if isinstance(listything, list): return tuple(map(tuplify, listything))
+    if isinstance(listything, dict):
+        return {k: tuplify(v) for k, v in listything.items()}
+    return listything
+
+
 def get_optimizer(args, optimizer_cls, parameters):
     # without the list, python 3.8 pytorch 1.5: TypeError: object of type 'generator' has no len()
     parameters = list(parameters)
@@ -461,7 +476,12 @@ def get_optimizer(args, optimizer_cls, parameters):
         if not getattr(args, "allow_stateless", False):
             raise ValueError(f"Got stateless partition {args.stage}")
 
-    optimizer = optimizer_cls(parameters, **args.optimizer['args'])
+    # HACK: tuplify all optimizer paramerets, just in case...
+    # https://stackoverflow.com/questions/15721363/preserve-python-tuples-with-json
+    opt_args = args.optimizer['args']
+    tuplified_opt_args = tuplify(opt_args)
+
+    optimizer = optimizer_cls(parameters, **tuplified_opt_args)
 
     return optimizer
 

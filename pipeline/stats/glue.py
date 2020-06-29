@@ -22,6 +22,12 @@ class GlueStats(Stats):
         self.predictions = []
         self.label_ids = []
 
+    def get_metric_for_early_stop(self):
+        num_epochs = self.fit_res.num_epochs
+        # FIXME: by task name
+        v = self.fit_res.glue_results[num_epochs]['acc']
+        return v
+
     def last_partition_on_epoch_end(self):
         super().last_partition_on_epoch_end()
         if not self.training:

@@ -136,3 +136,6 @@ class Stats(abc.ABC):
             fit_res[new_name] = fit_res.pop(old_name)
         return fit_res
 
+    def get_metric_for_early_stop(self):
+        return None
+

@@ -147,7 +147,7 @@ def create_pipeline_configuration(DEBUG=False):
                     'RobertaForSequenceClassification/RobertaModel[roberta]/BertEncoder[encoder]/BertLayer[8]/BertOutput[output]/LayerNorm[LayerNorm]': {
                         'shape': torch.Size([32, 128, 1024]),
                         'dtype': torch.float32,
-                        'req_grad': False,
+                        'req_grad': True,  # HACK: fixed manualy.
                         'is_batched': True}},
                 'outputs': {
                     'RobertaForSequenceClassification/RobertaModel[roberta]/BertEncoder[encoder]/tuple::__getitem___1506': {
