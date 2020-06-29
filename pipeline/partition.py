@@ -98,7 +98,11 @@ class Partition(nn.Module):
         if self.dummy_forward_monkey_patcher is not None and not self.dummy_forward_monkey_patcher.models:
             self.dummy_forward_monkey_patcher = None
 
-        self.input_buffer = {}  # For saving activations
+        # input_buffer is for saving activations.
+        # we save activations for:
+        #   (1) back-propagate thier gradients
+        #   (2) recomputation
+        self.input_buffer = {}
         self.bwd_graph_head_buffer = {}  # For recompute
         self.rng_stasher = PartitionRngStasher(device=self.device)
         self.req_grad = req_grad_dict_to_tuple(req_grad)
@@ -179,11 +183,11 @@ class Partition(nn.Module):
 
     def get_grad(self, micro_batch_idx):
         """ returns an iteretable of grads """
-        x = self.input_buffer.pop(micro_batch_idx)
+        x = self.input_buffer.pop(micro_batch_idx)  # Flattened
         if isinstance(x, Tensor):
             return (x.grad, )
         else:
-            return [y.grad for y in x]
+            return [y.grad for y in filter_req_grad_tensors(x)]
 
     def backward(self, g, **kw):
         raise NotImplementedError()
@@ -279,14 +283,16 @@ class LastPartition(Partition):
             #     # as all we need from it is its grad, imidaitly after.
             #     # (otherwise, we have to do synchrounous recvs)
             # TODO: can we avoid the detach?
+            # NOTE: currently there is not detach here!
 
+            # TODO: if _HAS_DUMMY_FORWARD == False we can store only activations which need gradients.
             if isinstance(x, Tensor):
                 # # See note on option 1 below.
                 x = x.requires_grad_(self.req_grad[0])
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(x)
             else:
-                # Option 2
+                # Option 2 
                 x = list(get_r(x, self.req_grad))
                 self.input_buffer[micro_batch_idx] = x
 
@@ -316,25 +322,26 @@ class LastPartitionWithLabelInput(LastPartition):
         
         In use for our partitoned transformers with LMhead.
     """
-
+    # TODO: 
     # _REQ_GRAD = True
     # _HAS_DUMMY_FORWARD = False
     def forward(self, x: TensorOrTensors, micro_batch_idx):
         assert not isinstance(x, Tensor)
-        label = x[-1]
-        x = x[:-1]
+        req_grad = self.req_grad
         if self.training:
-            x = list(get_r(x, self.req_grad))
-            self.input_buffer[micro_batch_idx] = x
+
+            # For backprobpagating gradients
+            x = list(get_r(x, req_grad))
+            self.input_buffer[micro_batch_idx] = list(filter_req_grad_tensors(flatten(x)))
 
             # UNFLATEN
-            x = unflatten(x, self.req_grad)
-            x = self.layers(*x, label)
+            x = unflatten(x, req_grad)
+            x = self.layers(*x)
         else:
             with torch.no_grad():
                 # UNFLATEN
-                x = unflatten(x, self.req_grad)
-                x = self.layers(*x, label)
+                x = unflatten(x, req_grad)
+                x = self.layers(*x)
 
         #  Last partition outputs should be in a tensor format
         if not isinstance(x, Tensor):
@@ -453,7 +460,7 @@ class PartitionWithoutRecomputation(nn.Module):
         if isinstance(x, Tensor):
             return (x.grad, )
         else:
-            return [y.grad for y in x]
+            return [y.grad for y in filter_req_grad_tensors(x)]
 
 
 class FirstPartitionWithoutRecomputation(PartitionWithoutRecomputation):
