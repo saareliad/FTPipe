@@ -70,8 +70,9 @@ def _patched_parameters(
 
     time = -1 if time is None else time
 
-    for p in self._fast_params[time]:
-        yield p
+    return iter(self._fast_params[time])
+    # for p in self._fast_params[time]:
+    #     yield p
 
 
 class _MonkeyPatchBase(_abc.ABC, _torch.nn.Module):

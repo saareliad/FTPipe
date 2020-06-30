@@ -5,7 +5,7 @@ from collections import deque
 import torch
 import torch.nn as nn
 from torch import Tensor
-from itertools import chain
+from typing import Any, List
 
 
 def get_world_size(backend) -> int:
@@ -114,21 +114,28 @@ def nested_map(func, ts, full=False):
     return func(ts)
 
 
-def flatten(ts):
-    if isinstance(ts, torch.Size):
-        # size is inheriting from tuple which is stupid
-        yield ts
-    elif isinstance(ts, (list, tuple, set)):
-        yield from chain(*[flatten(t) for t in ts])
-    elif isinstance(ts, dict):
-        yield from chain(
-            *[flatten(t) for k, t in sorted(ts.items(), key=lambda t: t[0])])
+def flatten(x: Any) -> List[Any]:
+    r"""Returns a flattened list of objects from a nested structure."""
+    l: List[Any] = []
+    if isinstance(x, torch.Size):
+        l.append(x)
+    if isinstance(x, dict):
+        for y in x.values():
+            l.extend(flatten(y))
+    elif isinstance(x, list) or isinstance(x, set) or isinstance(x, tuple):
+        for y in x:
+            l.extend(flatten(y))
     else:
-        yield ts
+        l.append(x)
+    return l
 
 
 def unflatten(xs, structure):
-    return _unflatten(xs, structure)[0]
+    res = _unflatten(xs, structure)[0]
+    f_xs = list(flatten(xs))
+    f_res = list(flatten(res))
+    assert (len(f_xs) == len(f_res))
+    return res
 
 
 def _unflatten(xs, structure):

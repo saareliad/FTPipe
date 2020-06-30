@@ -122,20 +122,19 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
                 f"Finished all steps. Total steps:{steps}, rank:{args.local_rank}"
             )
             break  # steps condition met
-        else:
-            if getattr(args, "patience", False):
-                if is_last_partition:  # FIXME:  args.world_size - 1
-                    # TODO: Try catch?                    
-                    should_early_stop = should_stop_early(
-                        args, statistics.get_metric_for_early_stop(), logger)
-                    data = torch.tensor(int(should_early_stop))
-                else:
-                    data = torch.tensor(int(False))  # create buffer
+        elif getattr(args, "patience", False):
+            if is_last_partition:  # FIXME:  args.world_size - 1
+                # TODO: Try catch?                    
+                should_early_stop = should_stop_early(
+                    args, statistics.get_metric_for_early_stop(), logger)
+                data = torch.tensor(int(should_early_stop))
+            else:
+                data = torch.tensor(int(False))  # create buffer
 
-                torch.distributed.broadcast(data, args.world_size - 1)
-                should_early_stop = data.item()
-                if should_early_stop:
-                    break
+            torch.distributed.broadcast(data, args.world_size - 1)
+            should_early_stop = data.item()
+            if should_early_stop:
+                break
 
     return total_epoch_times_list, train_epochs_times_list
 

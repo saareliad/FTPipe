@@ -130,7 +130,6 @@ class Partition(nn.Module):
                         x = x.detach().requires_grad_(self.req_grad[0])
                     self.input_buffer[micro_batch_idx] = x
                     self.rng_stasher.stash_rng_state(micro_batch_idx)
-                    # TODO: UNFLATTEN
                     x = self.layers(x)
 
                 else:
@@ -259,6 +258,7 @@ class FirstPartition(Partition):
                 x = self.layers(x)
             else:
                 x = self.layers(*x)
+
         self.bwd_graph_head_buffer[micro_batch_idx] = x
         # #### CODE COPY FROM super().recompute ########
 
@@ -604,34 +604,51 @@ def filter_for_backward(x, g):
 
 def req_grad_dict_to_tuple(req_grad: dict):
     ret = tuple(v for i, v in req_grad.items())
+    # print(f"-I- req_grad tuple: {ret}")
     return ret
 
 
 # NOTE: we count that the user would not change mutable object because we don't deepcopy them...
 
 
+def assert_same_size(x, g):
+    assert len(list(flatten(x))) == len(list(flatten(g)))
+
+
 def get_dcr(x, req_grad):
+    # assert_same_size(x, req_grad)
+    res = []
     for t, r in zip(flatten(x), flatten(req_grad)):
         if isinstance(t, Tensor):
             assert isinstance(r, bool)
-            yield t.detach().clone().requires_grad_(r)
+            res.append(t.detach().clone().requires_grad_(r))
         else:
-            yield t
+            assert r is False
+            res.append(t)
+    return res
 
 
 def get_dr(x, req_grad):
+    # assert_same_size(x, req_grad)
+    res = []
     for t, r in zip(flatten(x), flatten(req_grad)):
         if isinstance(t, Tensor):
             assert isinstance(r, bool)
-            yield t.detach().requires_grad_(r)
+            res.append(t.detach().requires_grad_(r))
         else:
-            yield t
+            assert r is False
+            res.append(t)
+    return res
 
 
 def get_r(x, req_grad):
+    # assert_same_size(x, req_grad)
+    res = []
     for t, r in zip(flatten(x), flatten(req_grad)):
         if isinstance(t, Tensor):
             assert isinstance(r, bool)
-            yield t.requires_grad_(r)
+            res.append(t.requires_grad_(r))
         else:
-            yield t
+            assert r is False
+            res.append(t)
+    return res
