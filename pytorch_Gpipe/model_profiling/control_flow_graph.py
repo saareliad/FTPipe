@@ -524,3 +524,24 @@ class Graph():
 
     def __getitem__(self,idx):
         return self._nodes[idx]
+    
+    def selfcheck(self):
+        visited = set()
+        try:
+            for n in self.nodes:
+                for u in n.in_edges:
+                    assert u.id < n.id
+                    assert n in u.out_edges,(n.scope,u.scope)
+                    visited.add(u)
+                assert n not in n.in_edges        
+                for o in n.out_edges:
+                    assert o.id > n.id
+                    assert n in o.in_edges,(n.scope,o.scope)
+                    visited.add(o)
+                visited.add(n)
+                assert n not in n.out_edges
+            assert len(visited) == len(self.nodes)
+        except AssertionError as e:
+            self.save_as_pdf("selfcheck_error",".")
+            raise e
+        return self
