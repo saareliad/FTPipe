@@ -272,8 +272,7 @@ def stages_in_out_config(ios: Dict, is_batched: Callable[[torch.Size], bool]) ->
                                "dtype": d,
                                "req_grad":r,
                                "is_batched": is_batched(s)}
-        # TODO it is possible that if we have a single output
-        # it's still a list/tuple for example return l(x) where l returns multiple outputs
+
         stage_outputs = dict()
         for o, s, d in zip(outputs, output_shapes, output_dtypes):
             stage_outputs[o] = {"shape": s,
@@ -302,8 +301,7 @@ def create_model_in_out_config(graph: Graph, is_batched: Callable[[torch.Size], 
     input_ids = [f"{graph.input_kw_ids.get(node.id,node.scope)}" for node in graph.inputs]
     input_shapes = [n.tensor_shape for n in graph.inputs]
     input_dtypes = [n.tensor_dtype for n in graph.inputs]
-    # TODO it is possible that if we have a single output
-    # it's still a list/tuple for example return l(x) where l returns multiple outputs
+
     output_shapes = [n.tensor_shape for n in graph.outputs]
     output_ids = graph.output_scopes
     output_dtypes = [n.tensor_dtype for n in graph.outputs]

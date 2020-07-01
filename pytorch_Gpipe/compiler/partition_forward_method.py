@@ -67,8 +67,6 @@ def generate_forward_method(graph:Graph,
 
     lines.append(body)
 
-    # TODO it is possible that if we have a single output
-    # it's still a list/tuple for example return l(x) where l returns multiple outputs
     input_shapes = [n.tensor_shape for n in part_inputs]
     output_shapes = [n.tensor_shape for n in outputs]
     input_dtypes = [n.tensor_dtype for n in part_inputs]
@@ -386,7 +384,7 @@ def sortedPartitionInputs(partition: List[Node]) -> List[Node]:
         
         inputs.update([
             n for n in node.in_edges
-            if n.stage_id != node.stage_id or n.type == NodeTypes.IN
+            if (n.stage_id != node.stage_id) or (n.type == NodeTypes.IN)
         ])
 
     return sorted(inputs, key=lambda n: n.id)
@@ -399,7 +397,7 @@ def sortedPartitionOutputs(partition: List[Node],
     '''
 
     def isOutput(n):
-        part_output = any(o.stage_id != n.stage_id for o in n.out_edges)
+        part_output = (n.type != NodeTypes.IN) and any(o.stage_id != n.stage_id for o in n.out_edges)
         return part_output or (n in model_outputs)
 
     outputs = {n for n in partition if isOutput(n)}
