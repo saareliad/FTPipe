@@ -212,7 +212,6 @@ class ParsePartitioningOptsGlue(ParsePartitioningOpts):
         d = {
             "partitioning_batch_size": 1,
             "n_iter": 1,
-            "output_file": 'bert',
             # "model_name_or_path": 'bert',
             # "model_type": 'bert',
             "n_partitions": 2,

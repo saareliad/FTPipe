@@ -366,7 +366,6 @@ class ParsePartitioningOptsLM(ParsePartitioningOpts):
             # "threads": 20,
             "partitioning_batch_size": 1,
             "n_iter": 10,
-            "output_file": 'gpt2',
             "n_partitions": 4,
             "bw": 12,
             "analysis_batch_size": 1,

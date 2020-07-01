@@ -245,7 +245,6 @@ class ParsePartitioningOptsSquad(ParsePartitioningOpts):
             # "threads": 20,
             "partitioning_batch_size": 1,
             "n_iter": 1,
-            "output_file": 'bert',
             "n_partitions": 2,
             "bw": 12,
             "analysis_batch_size": 1,

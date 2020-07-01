@@ -239,7 +239,6 @@ class ParsePartitioningT5Opts(ParsePartitioningOpts):
             "model": "t5-small",
             "partitioning_batch_size": 16,
             "n_iter": 50,
-            "output_file": 'T5_small',
             "n_partitions": 4,
             "bw": 12,
             "analysis_batch_size": 16,

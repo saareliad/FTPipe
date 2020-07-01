@@ -120,7 +120,6 @@ class ParsePartitioningOptsVision(ParsePartitioningOpts):
             # "model": 'wrn_16x4',
             "partitioning_batch_size": 128,
             "n_iter": 100,
-            "output_file": 'wrn_16x4',
             "n_partitions": 4,
             "bw": 12,
             "analysis_batch_size": 32,
