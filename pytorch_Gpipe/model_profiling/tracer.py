@@ -12,7 +12,7 @@ from torch._overrides import get_overridable_functions
 
 from pytorch_Gpipe.utils import traverse_model
 from .control_flow_graph import Node, NodeTypes, Graph
-from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops,logical_ops, nested_map
+from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops,logical_ops, nested_map,print_call_site
 ##############################
 # Tracing Metadata
 ##############################
@@ -244,6 +244,11 @@ class TracedValue(object):
         self.node.tensor_dtype = get_tensor_dtypes(data)
         self.node.tensor_shape = get_tensor_shapes(data)
 
+        #target device is managed by the stage and is not dynamic
+        #so we will convert this node to a CONSTANT
+        if isinstance(data,torch.device):
+            self.node.constant_value = data
+        
     def _ensure_no_hardcoded_device(self,data):
         if self.node.type is NodeTypes.CONSTANT:
             if isinstance(data,torch.device) or (data == "cpu") or (isinstance(data,str) and "cuda" in data):
@@ -704,7 +709,8 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
 
     CURRENT_SCOPE = ""
 
-    nodes,output_id = duplicate_constants(NODES,output_id)
+    nodes = make_constant(NODES)
+    nodes,output_id = duplicate_constants(nodes,output_id)
 
     nodes = discard_unused_nodes(nodes,output_id)
 
@@ -716,13 +722,12 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
     nodes, output_id = set_node_indices(nodes, output_id)
     NODES.clear()
 
-    nodes, output_ids = prepare_graph_outputs(nodes, output_id)
 
     is_valid, errors = check_is_valid_graph(nodes)
     if not is_valid:
         raise RuntimeError(errors)
 
-    return Graph(nodes, input_kw_ids, output_ids, depth, basic_blocks)
+    return Graph(nodes, input_kw_ids, [output_id], depth, basic_blocks)
 
 def find_reachable_nodes(nodes,output_id):
     '''do a bfs from the output on the undirected graph to find all nodes that are 
@@ -955,6 +960,24 @@ def discard_unused_nodes(nodes,output_id):
     return dict(reversed(new_nodes))
 
 
+def make_constant(nodes):
+    #devices are managed by the stage and are static
+    def device_predicate(n):
+        return n.value_type is torch.device
+    _make_constant(nodes,device_predicate)
+    return nodes
+
+
+def _make_constant(nodes,predicate):
+    for n in nodes.values():
+        if predicate(n):
+            for i in n.in_edges:
+                i.remove_output(n)
+            n.args.clear()
+            n.kwargs.clear()
+            n.type = NodeTypes.CONSTANT
+
+
 def set_node_indices(nodes, output_id):
     new_nodes = dict()
 
@@ -971,28 +994,7 @@ def set_node_indices(nodes, output_id):
     return new_nodes, nodes[output_id].id
 
 
-def prepare_graph_outputs(nodes, output_id):
-    """by our convention a graph multiple outputs are represented by multiple nodes
-     and not by a single list/tuple node
-    """
-    #TODO disabled to be removed when we fully support nested outputs
-    return nodes,[output_id]
-    output_node = nodes[output_id]
 
-    is_layer_or_tuple = output_node.value_type in {list, tuple}
-    is_primitive = output_node.type is NodeTypes.PRIMITIVE
-    if not (is_layer_or_tuple and is_primitive):
-        return nodes, [output_id]
-
-    # remove the node from the graph
-    # set it's parents as outputs
-    nodes.pop(output_id)
-    output_ids = []
-    for n in output_node.in_edges:
-        n.remove_output(output_node)
-        output_ids.append(n.id)
-
-    return nodes, output_ids
 
 ##############################
 # recording of function args and kwargs
