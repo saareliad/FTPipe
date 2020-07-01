@@ -7,7 +7,7 @@ from contextlib import nullcontext
 from torch import nn
 from pytorch_Gpipe.model_profiling import (Graph, Node, NodeTypes,
                                            used_namespaces)
-from pytorch_Gpipe.utils import layerDict, tensorDict,force_out_of_place
+from pytorch_Gpipe.utils import layerDict, tensorDict,force_out_of_place,inplace_arithmetic_ops
 
 
 class PreHook(abc.ABC):
@@ -106,7 +106,7 @@ def execute_graph(model: nn.Module, graph: Graph, model_args=(), model_kwargs=No
             outputs = call_function(namespaces,
                                     node,
                                     args, kwargs,
-                                    pre_hook, post_hook)
+                                    pre_hook, post_hook,enforce_out_of_place=enforce_out_of_place)
 
             ready_expressions[node] = outputs
         del args
@@ -140,7 +140,7 @@ def create_container_construct(node, args, kwargs):
         return slice(*args)
 
 
-def call_function(namespaces, node, args, kwargs, pre_hook, post_hook):
+def call_function(namespaces, node, args, kwargs, pre_hook, post_hook,enforce_out_of_place=True):
     op_path = node.scope.rsplit("/", maxsplit=1)[1].rsplit("_",maxsplit=1)[0]
     namespace, func_name = op_path.split("::")
     # function call
@@ -155,6 +155,9 @@ def call_function(namespaces, node, args, kwargs, pre_hook, post_hook):
             return getattr(args[0], args[1])
         else:
             assert len(kwargs) == 0, "no kwarg in magic method"
+
+            if func_name in inplace_arithmetic_ops:
+                func_name ="__"+func_name[3:]
             if hasattr(operator, func_name):
                 function = getattr(operator, func_name)
             else:
