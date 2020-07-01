@@ -208,11 +208,6 @@ class ParsePartitioningOptsGlue(ParsePartitioningOpts):
                             default=42,
                             help="random seed for initialization")
 
-        parser.add_argument('--auto_file_name',
-                            action='store_true',
-                            default=False,
-                            help="create file name automatically")
-
     def set_defaults(self, parser):
         d = {
             "partitioning_batch_size": 1,
@@ -252,8 +247,7 @@ def main():
         args)
     args.model_type = args.model_type.lower()
 
-    args.auto_file_name = not args.no_auto_file_name
-    if args.auto_file_name:
+    if not args.output_file:
         bw_str = str(args.bw).replace(".", "_")
         model_str = str(args.model_name_or_path).replace("-", "_")
         args.output_file = f"{model_str}_{args.n_partitions}p_bw{bw_str}"

@@ -51,11 +51,7 @@ class ParsePartitioningOpts:
             "if the model is too big run the whole partitioning process on CPU, "
             "and drink a cup of coffee in the meantime")
         parser.add_argument('-p', '--n_partitions', type=int, default=4)
-        parser.add_argument('-o', '--output_file', default='wrn_16x4')
-        parser.add_argument('--no_auto_file_name',
-                            action='store_true',
-                            default=False,
-                            help="do not create file name automatically")
+        parser.add_argument('-o', '--output_file', default='')
         parser.add_argument(
             '--n_iter',
             type=int,
@@ -261,7 +257,6 @@ class ParseAcyclicPartitionerOpts:
                           choices=["edge_cut", "stage_time"],
                           default="edge_cut",
                           help="partitioning optimization objective")
-
         opts.add_argument(
             "--hetrogenous_nodes",
             action="store_true",
@@ -297,6 +292,12 @@ class ParseAcyclicPartitionerOpts:
             "use_dynamic_node_weights": args.hetrogenous_nodes,
             "use_dynamic_edge_weights": args.hetrogenous_bw,
         }
+
+def parse_machines_and_bw(args):
+    assert len(args.machines_per_level) == len(args.bw_per_level)
+    if len(args.machines_per_level) == 1:
+        args.n_partitions=args.machines_per_level[0]
+        args.bw = args.bw_per_level[0]
 
 
 def choose_blocks(model, args):

@@ -258,8 +258,7 @@ def parse_cli():
     ParseAcyclicPartitionerOpts.add_acyclic_partitioner_arguments(parser)
 
     args = parser.parse_args()
-    args.auto_file_name = not args.no_auto_file_name
-    if args.auto_file_name:
+    if not args.output_file:
         args.output_file = f"{args.model.replace('-','_')}_p{args.n_partitions}_{args.t5_task}"
 
     if args.output_file.endswith(".py"):

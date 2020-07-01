@@ -240,11 +240,6 @@ class ParsePartitioningOptsSquad(ParsePartitioningOpts):
             default=1,
             help="multiple threads for converting example to features")
 
-        parser.add_argument('--auto_file_name',
-                            action='store_true',
-                            default=False,
-                            help="create file name automatically")
-
     def set_defaults(self, parser):
         d = {
             # "threads": 20,
@@ -347,7 +342,7 @@ def main():
         args)
     args.model_type = args.model_type.lower()
 
-    if args.auto_file_name:
+    if not args.output_file:
         args.output_file = f"{args.model_type}_{args.n_partitions}p"
 
     #####

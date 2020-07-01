@@ -360,10 +360,6 @@ class ParsePartitioningOptsLM(ParsePartitioningOpts):
             action="store_true",
             help="Tie weights stateless trick. Note that shared weight may be sent in pipe"
         )
-        parser.add_argument('--auto_file_name',
-                            action='store_true',
-                            default=False,
-                            help="create file name automatically")
 
     def set_defaults(self, parser):
         d = {
@@ -390,7 +386,7 @@ def parse_cli():
 
     args = parser.parse_args()
 
-    if args.auto_file_name:
+    if not args.output_file:
         args.output_file = auto_file_name(args)
 
     if args.output_file.endswith(".py"):
@@ -474,4 +470,4 @@ if __name__ == "__main__":
 
     main()
 
-# python partition_gpt2_models.py --use_graph_profiler --profile_ops --analysis_batch_size 1 --async_pipeline --auto_file_name --block_size -1 --bwd_to_fwd_ratio 3 --lmhead --model_name_or_path t5-small --train_data_file wikitext-2-raw/wiki.train.raw --model_type t5 --n_iter 50 --n_partitions 2 --output_file results/t5_p2/ --overwrite_cache --partitioning_batch_size 1 --seed 42 --train_data_file wikitext-2-raw/wiki.train.raw
+# python partition_gpt2_models.py --use_graph_profiler --profile_ops --analysis_batch_size 1 --async_pipeline --block_size -1 --bwd_to_fwd_ratio 3 --lmhead --model_name_or_path t5-small --train_data_file wikitext-2-raw/wiki.train.raw --model_type t5 --n_iter 50 --n_partitions 2 --output_file results/t5_p2/ --overwrite_cache --partitioning_batch_size 1 --seed 42 --train_data_file wikitext-2-raw/wiki.train.raw
