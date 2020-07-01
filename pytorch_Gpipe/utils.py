@@ -260,9 +260,10 @@ magics={"__len__":"len",
 
 
 
-def print_call_site():
+def print_call_site(*ignored_files):
+    ignored_files = (__file__,) + ignored_files
     for f in inspect.stack():
         frameinfo=inspect.getframeinfo(f[0]) 
-        if (frameinfo.filename != __file__):
+        if (frameinfo.filename not in ignored_files):
             print(frameinfo.filename+", line "+str(frameinfo.lineno)+"\n")
             break
