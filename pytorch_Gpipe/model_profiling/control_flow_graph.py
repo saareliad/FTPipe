@@ -387,7 +387,7 @@ class Graph():
         returns a dicitionary containing the graphs state
         '''
 
-        node_states = []
+        node_states = dict()
         for node in self.nodes:
             state = dict(id=node.id,
                         scope=node.scope,
@@ -403,7 +403,7 @@ class Graph():
                         tensor_dtype=node.tensor_dtype,
                         tensor_shape=node.tensor_shape,
                         req_grad=node.req_grad)
-            node_states.append(state)
+            node_states[node.id] = state
 
         return{"node_data": node_states,
                "input_kw_ids": self.input_kw_ids,
@@ -412,16 +412,15 @@ class Graph():
                "basic_blocks": self.basic_blocks
                }
 
-    def load_state(self, state):
-        output_ids = state['output_ids']
-        depth = state['depth']
-        basic_blocks = state['basic_blocks']
-        input_kw_ids = state['input_kw_ids']
+    def load_state(self, graph_state):
+        output_ids = graph_state['output_ids']
+        depth = graph_state['depth']
+        basic_blocks = graph_state['basic_blocks']
+        input_kw_ids = graph_state['input_kw_ids']
 
         nodes = dict()
-
-        states = state['node_data']
-        for state in states:
+        node_states = graph_state['node_data']
+        for state in sorted(node_states.values(),key=lambda s:s['id']):
             node = Node(state['type'], state['id'], state['scope'])
             nodes[node.id] = node
 
@@ -436,7 +435,7 @@ class Graph():
             node.req_grad = state['req_grad']
 
         for node in nodes.values():
-            node.out_edges = {nodes[n] for n in states[node.id]['out_edges']}
+            node.out_edges = {nodes[n] for n in node_states[node.id]['out_edges']}
 
         self._nodes = nodes
         self.basic_blocks = basic_blocks
@@ -476,7 +475,6 @@ class Graph():
 
         new_graph = Graph(None, None, None, None,
                           None).load_state(self.state())
-
         num_removed = 0
         lookup = dict()
         for node in new_graph._nodes.values():
@@ -512,10 +510,8 @@ class Graph():
                            layers_to_original: Dict[int, int]) -> "Graph":
         assert len(self) >= len(layers_graph)
         old_to_new = {v: k for k, v in layers_to_original.items()}
-        N = len(self)
         #iterate in reverse order
-        for idx in range(len(self.nodes)):
-            node = self[N-idx-1]
+        for node in sorted(self.nodes,key=lambda n:n.id,reverse=True):
             if node.id in old_to_new:
                 node.stage_id = layers_graph[old_to_new[node.id]].stage_id
             else:
