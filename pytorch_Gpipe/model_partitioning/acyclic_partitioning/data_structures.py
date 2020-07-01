@@ -248,6 +248,10 @@ class QuotientGraph():
             idx: PartitionNode(group, idx)
             for idx, group in groups.items()
         }
+        
+    @property
+    def n_stages(self)->int:
+        return len({n.stage_id for n in self.nodes})
 
     def __getitem__(self, idx: int) -> PartitionNode:
         return self._nodes[idx]
@@ -406,7 +410,6 @@ class QuotientGraph():
     def save_as_pdf(self, file_name: str, directory: str):
         '''
         save the rendered graph to a pdf file
-
         Parameters
         ----------
         file_name:
@@ -756,29 +759,36 @@ class ContractedGraph():
         return self._edge_weights[u, v]
 
     @property
+    def n_stages(self)->int:
+        return len({n.stage_id for n in self.nodes})
+
+    @property
     def nodes(self) -> Iterable[SimpleNode]:
         return self._nodes.values()
 
     def selfcheck(self) -> "ContractedGraph":
-        for idx, n in self._nodes.items():
-            assert n.id == idx
-            assert n in self._node_weights
-            for u in n.in_edges:
-                # assert n.id > u.id
-                assert n.stage_id >= u.stage_id
-                assert n in u.out_edges
-                assert (u, n) in self._edge_weights
-                assert u in self._node_weights
-                assert u.id in self._nodes
+        try:
+            for idx, n in self._nodes.items():
+                assert n.id == idx
+                assert n in self._node_weights
+                for u in n.in_edges:
+                    # assert n.id > u.id
+                    assert n.stage_id >= u.stage_id
+                    assert n in u.out_edges
+                    assert (u, n) in self._edge_weights
+                    assert u in self._node_weights
+                    assert u.id in self._nodes
 
-            for o in n.out_edges:
-                # assert n.id < o.id
-                assert o.stage_id >= n.stage_id
-                assert n in o.in_edges
-                assert (n, o) in self._edge_weights
-                assert o in self._node_weights
-                assert o.id in self._nodes
-
+                for o in n.out_edges:
+                    # assert n.id < o.id
+                    assert o.stage_id >= n.stage_id
+                    assert n in o.in_edges
+                    assert (n, o) in self._edge_weights
+                    assert o in self._node_weights
+                    assert o.id in self._nodes
+        except (Exception,AssertionError) as e:
+            self.save_as_pdf("selfcheck_error",".")
+            raise e
         return self
 
     @classmethod
@@ -898,7 +908,6 @@ class ContractedGraph():
     def save_as_pdf(self, file_name: str, directory: str):
         '''
         save the rendered graph to a pdf file
-
         Parameters
         ----------
         file_name:

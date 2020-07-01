@@ -8,13 +8,14 @@ from .gpa import coarsening, refine
 import random
 import math
 import numpy as np
-from typing import Tuple, Dict, Optional, Iterator
+from typing import Tuple, Dict, Optional, Iterator,List
 from collections import defaultdict, namedtuple
-from itertools import chain
+from itertools import chain,islice
 import enum
 from multiprocessing import Pool
 import time
 from functools import partial
+import json
 
 DEBUG = False
 ###################################################################################################
@@ -1078,3 +1079,59 @@ def multilevel_partitioning(
 
 
 ###################################################################################################
+
+
+
+
+def dedup_dicts(items: List[dict])->List[dict]:
+    dedupped = [json.loads(i) for i in set(json.dumps(item, sort_keys=True) for item in items)]
+    return [{int(k):v for k,v in d.items()} for d in dedupped]
+
+
+def all_topo(graph):
+    # Traverse adjacency lists to fill indegrees of 
+    # vertices.  This step takes O(V+E) time 
+    in_degree = {n:len(n.in_edges) for n in graph.nodes}
+
+    # Create an queue and enqueue all vertices with 
+    # indegree 0 
+    queue = []
+    for n,deg in in_degree.items():
+        if deg == 0:
+            queue.append(n)
+
+    yield from process_queue(len(graph),queue, in_degree, [], 0)
+
+
+def process_queue(n, queue, in_degree, top_order, cnt):
+    if queue:
+        # We have multiple possible next nodes, generate all possbile variations
+        for u in queue:
+
+            # create temp copies for passing to process_queue
+            curr_top_order = top_order + [u]
+            curr_in_degree = dict(in_degree)
+            curr_queue = list(queue)
+            curr_queue.remove(u)
+
+            # Iterate through all neighbouring nodes 
+            # of dequeued node u and decrease their in-degree 
+            # by 1 
+            for i in u.out_edges:
+                curr_in_degree[i] -= 1
+                # If in-degree becomes zero, add it to queue 
+                if curr_in_degree[i] == 0:
+                    curr_queue.append(i)
+
+            yield from process_queue(n,curr_queue, curr_in_degree, curr_top_order, cnt + 1)  # continue recursive
+
+    elif cnt != n:
+        print("There exists a cycle in the graph")
+    else:
+        sol=tuple([n.id for n in top_order])
+        yield sol
+
+
+def take(n, iterable):
+    "Return first n items of the iterable as a list"
+    return list(islice(iterable, n))
