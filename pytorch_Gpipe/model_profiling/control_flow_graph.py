@@ -166,7 +166,7 @@ class Graph():
                 if edge_weight_function is None:
                     w = 1
                 else:
-                    w = edge_weight_function(u, v)
+                    w = int(max(1,edge_weight_function(u, v)))
                 G.add_edge(u.id, v.id, weight=w)
 
         for n in self.nodes:
@@ -174,7 +174,7 @@ class Graph():
                 w = 1
             else:
                 w = node_weight_function(n)
-            G.nodes[n.id]['weight'] = w
+            G.nodes[n.id]['weight'] = int(w)
 
         return G
 
