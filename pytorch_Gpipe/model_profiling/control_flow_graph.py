@@ -3,7 +3,7 @@ import pickle
 from typing import Tuple, Optional, Callable, Dict, Iterable, List,Set
 from itertools import chain
 from torch import Tensor, nn as nn
-
+from collections import defaultdict
 
 class NodeTypes(IntEnum):
     '''
@@ -26,7 +26,7 @@ class Node():
         self.id = idx
         self.scope = scope
 
-        self.stage_id = -1
+        self.stage_id = 0
         self.weight = None
 
         self.out_edges:Set[Node] = set()
@@ -99,7 +99,11 @@ class Graph():
 
     def __len__(self)->int:
         return len(self._nodes)
-        
+    
+    @property
+    def n_stages(self)->int:
+        return len({n.stage_id for n in self.nodes})
+    
     @property
     def nodes(self) -> Iterable[Node]:
         return self._nodes.values()
@@ -238,7 +242,6 @@ class Graph():
         # TODO split big graphs to multiple pdfs
 
         colors = {
-            -1:'grey',
             0: 'grey',
             1: 'green',
             2: 'red',
@@ -545,3 +548,63 @@ class Graph():
             self.save_as_pdf("selfcheck_error",".")
             raise e
         return self
+
+    def split_to_stages(self)->Dict[int,"Graph"]:
+        """return a sub graph for each stage in the graph
+
+        Returns:
+            Dict[int,Graph] 
+        """
+        stages = dict()
+
+        tmp = Graph(None, None, None, None, None).load_state(self.state())
+
+        groups = defaultdict(list)
+        for n in tmp.nodes:
+            if n.type != NodeTypes.IN:
+                groups[n.stage_id].append(n)
+        
+
+        for stage_id,group in groups.items():
+            stage_nodes=dict()
+            stage_inputs = dict()
+            stage_output_ids = []
+            stage_input_kws = dict()
+
+            for n in sorted(group,key=lambda w:w.id):
+                stage_nodes[n.id] = n
+                #check if stage output
+                if (n.id in self.output_ids) or any(o.stage_id != stage_id for o in n.out_edges):
+                    stage_output_ids.append(n.id)
+                
+                #discard outgoing edges to external stages
+                n.out_edges = {o for o in n.out_edges if o.stage_id == stage_id}
+
+                #add stage inputs
+                to_replace = dict()
+                for u in n.in_edges:
+                    if (u.stage_id != stage_id) or (u.type is NodeTypes.IN):
+                        if u.id in stage_inputs:
+                            stage_input = stage_inputs[u.id]
+                        else:
+                            #create a new input node for this stage
+                            stage_input = Node.from_other(u)
+                            stage_input.type = NodeTypes.IN
+                            stage_input.args=[]
+                            stage_input.kwargs=dict()
+                            stage_input.stage_id = stage_id
+                            stage_input.out_edges = {o for o in u.out_edges if o.stage_id == stage_id}
+                            stage_inputs[u.id] = stage_input
+                            stage_nodes[u.id] = stage_input
+                        to_replace[u] = stage_input        
+                    
+                    if u.id in self.input_kw_ids:
+                        stage_input_kws[u.id] = self.input_kw_ids[u.id]
+                
+                #replace inputs
+                for old,new in to_replace.items():
+                    n.replace_input(old,new)
+                    new.add_out_edge(n)
+            stages[stage_id] = Graph(stage_nodes, stage_input_kws, stage_output_ids, self.depth,self.basic_blocks)
+
+        return stages
