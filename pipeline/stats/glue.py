@@ -30,10 +30,11 @@ class GlueStats(Stats):
 
     def last_partition_on_epoch_end(self):
         super().last_partition_on_epoch_end()
+        # NOTE: we can easly calc stats like accuracy for train set but we don't do it.
         if not self.training:
             self.evaluate_glue()  # FIXME: set by dataset
-        self.predictions.clear()  # Clear results for next time
-        self.label_ids.clear()
+            self.predictions.clear()  # Clear results for next time
+            self.label_ids.clear()
 
     def get_epoch_info_str(self, is_train):
         # FIXME: in per-batch-loss it returns value for the last batch instead of for epoch!

@@ -9,6 +9,7 @@ from .normal import GPT2LMHeadModel, GPT2Model, StatelessGPT2LMHeadModel
 from .normal.NLP_models.modeling_bert_old import BertForQuestionAnswering
 # from .normal.NLP_models.modeling_roberta import RobertaForQuestionAnswering
 from .normal.NLP_models.modeling_roberta import RobertaForSequenceClassification
+from .normal.NLP_models.modeling_bert import BertForSequenceClassification
 
 import sys
 from inspect import getmembers, isfunction
@@ -19,6 +20,7 @@ MODEL_TYPES = {
     'gpt2_lm': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
     'gpt2_lm_stateless': (GPT2Config, StatelessGPT2LMHeadModel, GPT2Tokenizer),
     'bert_squad_old': (BertConfig, BertForQuestionAnswering, BertTokenizer),
+    'bert_glue': (BertConfig, BertForSequenceClassification, BertTokenizer),
     'roberta_glue':
     (AutoConfig, RobertaForSequenceClassification, AutoTokenizer),
 }
@@ -26,10 +28,29 @@ MODEL_TYPES = {
 # NOTE: some of these configs are just for this repo, see
 # `models.transformers_utils.pretrained_model_config_and_tokenizer`
 
+# def roberta_large_8p_bw11_0_mnli_glue():
+#     return dict(model_type='roberta_glue',
+#                 model_name_or_path='roberta-large',
+#                 do_lower_case=False,
+#                 output_past=False,
+#                 stateless_tied=False,
+#                 num_labels=3,
+#                 finetuning_task='mnli')
+
 
 def roberta_large_8p_bw11_0_mnli_glue():
     return dict(model_type='roberta_glue',
-                model_name_or_path='roberta-large',
+                model_name_or_path='roberta-large-mnli',
+                do_lower_case=False,
+                output_past=False,
+                stateless_tied=False,
+                num_labels=3,
+                finetuning_task='mnli')
+
+
+def bert_large_uncased_whole_word_masking_8p_bw11_0_async_mnli_glue():
+    return dict(model_type='bert_glue',
+                model_name_or_path='bert-large-uncased-whole-word-masking',
                 do_lower_case=False,
                 output_past=False,
                 stateless_tied=False,

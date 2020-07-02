@@ -142,13 +142,21 @@ class PipelineConfig():
         return dtypes
 
     def change_batch(self, batch_size, for_replicated=True):
-        for i, shape in zip(self.model_inputs, self.model_input_shapes):
-            if self.is_batched[i]:
-                shape[self.batch_dim] = batch_size
 
-        for o, shape in zip(self.model_outputs, self.model_output_shapes):
-            if self.is_batched[o]:
-                shape[self.batch_dim] = batch_size
+        assert len(self.model_outputs) == len(self.model_output_shapes)
+        assert len(self.model_inputs) == len(self.model_input_shapes)
+
+        self.model_input_shapes = [
+            nested_batch_change(self.is_batched[i], shape, self.batch_dim,
+                                batch_size)
+            for i, shape in zip(self.model_inputs, self.model_input_shapes)
+        ]
+
+        self.model_output_shapes = [
+            nested_batch_change(self.is_batched[i], shape, self.batch_dim,
+                                batch_size)
+            for i, shape in zip(self.model_outputs, self.model_output_shapes)
+        ]
 
         for stage in self.stages.values():
             stage.change_batch(self.batch_dim,
@@ -379,17 +387,17 @@ class StageConfig():
 
         assert batch_size % n_devices == 0
 
-        for n, s in chain(zip(self.inputs, self.input_shapes), zip(self.outputs, self.output_shapes)):
-            if self.is_batched[n]:
-                s[batch_dim] = batch_size
+        self.input_shapes = [
+            nested_batch_change(self.is_batched[i], shape, batch_dim,
+                                batch_size)
+            for i, shape in zip(self.inputs, self.input_shapes)
+        ]
 
-        # for i, shape in zip(self.inputs, self.input_shapes):
-        #     if self.is_batched[i]:
-        #         shape[batch_dim] = batch_size
-
-        # for o, shape in zip(self.outputs, self.output_shapes):
-        #     if self.is_batched[o]:
-        #         shape[batch_dim] = batch_size
+        self.model_output_shapes = [
+            nested_batch_change(self.is_batched[i], shape, batch_dim,
+                                batch_size)
+            for i, shape in zip(self.outputs, self.output_shapes)
+        ]
 
     def state_dict(self) -> Dict:
         state = dict()
@@ -478,6 +486,27 @@ def deserialize_python_class_or_function(path: str):
     module_path, obj_name = path.rsplit(".", 1)
     module = importlib.import_module(module_path)
     return getattr(module, obj_name)
+
+
+def atomic_batch_change(atomic_is_batched, atomic_shape, dim, batch_size):
+    assert isinstance(atomic_is_batched, bool)
+    if atomic_is_batched:
+        atomic_shape = list(atomic_shape)
+        atomic_shape[dim] = batch_size
+        atomic_shape = torch.Size(atomic_shape)
+    return atomic_shape
+
+
+def nested_batch_change(is_batched, shape, dim, batch_size):
+    if isinstance(is_batched, bool):
+        return atomic_batch_change(is_batched, shape, dim, batch_size)
+    else:
+        assert isinstance(is_batched, (tuple, list))
+        assert len(is_batched) == len(shape)
+        new_shape = type(is_batched)(
+            nested_batch_change(i, j, dim, batch_size)
+            for i, j in zip(is_batched, shape))
+        return new_shape
 
 
 # config structure

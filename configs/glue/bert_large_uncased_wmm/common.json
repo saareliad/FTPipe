@@ -7,7 +7,7 @@
     "out_filename": "tst",
     "distributed_backend": "mpi",
     "task": "glue_sep",
-    "model": "bert_large_uncased_glue_8p",
+    "model": "bert_large_uncased_whole_word_masking_8p_bw11_0_async_mnli_glue",
     "dataset": "glue",
     "trainer": {
         "type": "glue",

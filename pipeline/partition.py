@@ -616,7 +616,7 @@ def assert_same_size(x, g):
 
 
 def get_dcr(x, req_grad):
-    # assert_same_size(x, req_grad)
+    assert_same_size(x, req_grad)
     res = []
     for t, r in zip(flatten(x), flatten(req_grad)):
         if isinstance(t, Tensor):
@@ -629,7 +629,7 @@ def get_dcr(x, req_grad):
 
 
 def get_dr(x, req_grad):
-    # assert_same_size(x, req_grad)
+    assert_same_size(x, req_grad)
     res = []
     for t, r in zip(flatten(x), flatten(req_grad)):
         if isinstance(t, Tensor):
@@ -642,7 +642,7 @@ def get_dr(x, req_grad):
 
 
 def get_r(x, req_grad):
-    # assert_same_size(x, req_grad)
+    assert_same_size(x, req_grad)
     res = []
     for t, r in zip(flatten(x), flatten(req_grad)):
         if isinstance(t, Tensor):

@@ -23,8 +23,8 @@ class GlueTrainer(BaseOutPutIsLossTrainer):
         # NOTE: we include loss for dev, huggingface does not
         loss = self.loss_fn(x, labels)
         self.statistics.update_on_batch("loss", loss.item(), batch_size)
-        self.statistics.predictions.append(x)
-        self.statistics.label_ids.append(labels)
+        self.statistics.predictions.append(x.detach())
+        self.statistics.label_ids.append(labels.detach())
 
     def backprop_last_partition(self, x, labels, batch_size):
         # logits = x[0]

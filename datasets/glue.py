@@ -77,6 +77,7 @@ def make_just_x(ds, mode="train"):
             if val is None:
                 continue
             d[key].append(val)
+    print(d.keys())
     return TensorDataset(*[torch.tensor(x) for x in d.values()])
 
 
@@ -125,6 +126,8 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
         just_f = make_just_x
     elif just == 'y':
         just_f = make_just_y
+    else:
+        raise NotImplementedError()
 
     train_ds = just_f(train_ds, mode='train')
     dev_ds = just_f(dev_ds, mode='eval')

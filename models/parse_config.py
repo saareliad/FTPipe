@@ -39,7 +39,7 @@ def get_my_send_recv_ranks(config, stage, stage_to_rank_map=None):
 
     return send_ranks, receive_ranks
 
-
+# FIXME: for tuples
 def tensor_tags_from_config(config,
                             num_chunks=1,
                             target_tensor_names=None,
@@ -147,7 +147,7 @@ class PartitioningConfigParser:
         self.send_ranks, self.receive_ranks = get_my_send_recv_ranks(
             pipe_config, self.stage, stage_to_rank_map=stage_to_rank_map)
 
-        tag_info = tensor_tags_from_config(pipe_config)
+        tag_info = tensor_tags_from_config(pipe_config)  # FIXME: for tuples. (can avoid None but its minor)
         self.tensor_tags, self.TOTAL_TAGS = tag_info
 
         if send_target_in_pipe:
