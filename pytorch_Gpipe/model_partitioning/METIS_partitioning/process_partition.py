@@ -7,7 +7,7 @@ import torch
 __all__ = ["post_process_partition"]
 
 
-def post_process_partition(graph: Graph,edge_weight_function, verbose_on_error=True) -> Graph:
+def post_process_partition(graph: Graph,edge_weight_function, verbose_on_error=True, assert_output_types=False) -> Graph:
     '''
     process the partition and optimize it
     called as part of partition_graph method
@@ -53,9 +53,14 @@ def post_process_partition(graph: Graph,edge_weight_function, verbose_on_error=T
 
         error = "error cycle detected mutual dependecy between partitions"
         raise AssertionError(error)
+    
 
     is_valid, error = is_valid_partitioning(graph,edge_weight_function)
-    assert is_valid, error
+    if assert_output_types:
+        assert is_valid, error
+    else:
+        print("Output between partitons is tricky, but allowing this")
+        print_all_problematic_outputs_between_partitions(graph,edge_weight_function)
 
     return graph
 
@@ -176,3 +181,25 @@ def is_valid_partitioning(graph: Graph,edge_weight_function):
                     return False, msg
 
     return True, ""
+
+
+
+
+def print_all_problematic_outputs_between_partitions(graph: Graph,edge_weight_function):
+    """
+    check if we only send tensors between partitions
+    """
+    problems = []
+    valid_state = True
+    for n in graph.nodes:
+        if n.value_type in {type(None), list, tuple, dict, set, int, bool, float, str, slice, torch.Size, torch.dtype}:
+            for o in n.out_edges:
+                if n.stage_id != o.stage_id:
+                    msg = f"invalid output type at partition boundary {n.stage_id}=>{o.stage_id}"
+                    msg += f"\noutput is {n.scope} of type {n.value_type}, weight {edge_weight_function(n,o)}"
+                    valid_state = False
+                    problems.append(msg)
+
+
+    s = f"Valid outputs states = {valid_state}\n" + "problems:\n" + "\n".join(problems)
+    print(s)

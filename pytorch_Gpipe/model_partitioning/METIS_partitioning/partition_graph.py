@@ -64,7 +64,7 @@ def METIS_partition(graph: Graph,
             node.stage_id = stage_id
 
     n_parts = set(parts)
-    post_process_partition(graph,edge_weight_function)
+    post_process_partition(graph,edge_weight_function, assert_output_types=False)
 
     actual_nparts = len({n.stage_id for n in graph.nodes})
 

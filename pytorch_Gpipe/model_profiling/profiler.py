@@ -169,8 +169,10 @@ class GraphProfiler():
     @staticmethod
     def pre_get_grads(function, args, kwargs):
         with torch.enable_grad():
+            set_grad_mode((args, kwargs), True)
             output = function(*args, **kwargs)
             output = GraphProfiler.only_tensors_that_require_grad(output)
+            set_grad_mode((args, kwargs), False)
             return GraphProfiler.get_grads(output)
 
     @staticmethod

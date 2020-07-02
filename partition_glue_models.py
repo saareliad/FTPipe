@@ -22,6 +22,7 @@ from misc import run_analysis
 from pytorch_Gpipe import PipelineConfig, pipe_model
 from pytorch_Gpipe.model_profiling import register_new_traced_function, register_new_explicit_untraced_function
 from pytorch_Gpipe.utils import layerDict, tensorDict
+import os
 
 from transformers import (
     MODEL_FOR_SEQUENCE_CLASSIFICATION_MAPPING,
@@ -45,7 +46,7 @@ MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
 
 def make_just_x(ds, mode="train"):
     d = defaultdict(list)
-    for feature in ds:
+    for feature in ds[:5]:  # no reason to go over everything...
         for key, val in vars(feature).items():
             if key == "label":
                 continue
@@ -55,7 +56,14 @@ def make_just_x(ds, mode="train"):
     return TensorDataset(*[torch.tensor(x) for x in d.values()])
 
 
-def get_dataset(args, tokenizer):
+def get_dataset(args, tokenizer, cache_name="glue_ds.pt"):
+
+    if os.path.exists(cache_name) and not args.overwrite_cache:
+        print(f"-I- loading dataset from cahce {cache_name}")
+        ds = torch.load(cache_name)
+        return ds
+    
+    print("-I- creating dataset")
     data_dir = args.data_dir
     data_dir = os.path.join(data_dir, "MNLI")
 
@@ -69,6 +77,12 @@ def get_dataset(args, tokenizer):
         mode="train",
     )
     ds = make_just_x(ds, mode="train")
+
+    if (not os.path.exists(cache_name)) or args.overwrite_cache:
+        print("-I- dataset saved")
+        torch.save(ds, cache_name)
+
+    print("-I- DONE creating dataset")
     return ds
 
 

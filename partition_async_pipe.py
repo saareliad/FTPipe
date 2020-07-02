@@ -120,7 +120,7 @@ def full_profile(graph: Graph, model: torch.nn.Module, args: tuple,
             args,
             kwargs,
             basic_blocks=cmd_args.basic_blocks,
-            max_depth=cmd_args.max_depth,
+            max_depth=cmd_args.depth,
             n_iter=cmd_args.n_iter,
             save_memory_mode=cmd_args.save_memory_mode,
             force_no_recomp_scopes=None)

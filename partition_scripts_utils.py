@@ -334,8 +334,15 @@ def run_x_tries_until_no_fail(func, number_of_tries, *args, **kw):
     res = None
 
     while number_of_tries < 0 or count < number_of_tries:
-
-        res = func(*args, **kw)
+        try:
+            res = func(*args, **kw)
+        except Exception as e:
+            count += 1
+            if count == number_of_tries - 1:
+                print(f"-E- run_x_tries_until_no_fail Failed after {count} raising last exception")
+                raise e
+            continue
+        
         success = True
         count += 1
         break
