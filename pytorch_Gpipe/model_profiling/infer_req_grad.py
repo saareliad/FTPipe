@@ -19,7 +19,7 @@ def infer_req_grad(graph:Graph,model:torch.nn.Module,args=None,kwargs=None):
 class Visitor():
     def __call__(self, node: Node, function: Callable, args: tuple, kwargs: Dict):
         for n,a in zip(node.args,args):
-            if n.part != node.part or n.type is NodeTypes.IN:
+            if n.stage_id != node.stage_id or n.type is NodeTypes.IN:
                 n.req_grad = Visitor.req_grad(a)
             
         for n,k in node.kwargs.items():

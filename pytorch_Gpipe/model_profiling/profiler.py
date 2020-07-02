@@ -106,12 +106,13 @@ class GraphProfiler():
                 torch.cuda.synchronize(device='cuda')
                 start = torch.cuda.Event(enable_timing=True)
                 end = torch.cuda.Event(enable_timing=True)
+                grads = GraphProfiler.pre_get_grads(function, args, kwargs)
                 torch.cuda.synchronize(device='cuda')
 
                 start.record()
                 output = function(*args, **kwargs)
                 tensors = self.only_tensors_that_require_grad(output)
-                grads = GraphProfiler.get_grads(tensors)
+                # grads = GraphProfiler.get_grads(tensors)  # pre exectured to avoid recording memory allocation times
                 torch.autograd.backward(tensors=tensors,
                                         grad_tensors=grads)
                 end.record()
@@ -160,7 +161,17 @@ class GraphProfiler():
 
     @staticmethod
     def get_grads(ts):
+        # NOTE: these dummy gradients will cause problems:
+        # will probalbly miss-measure everything with sparsity.
+        # (e.g dropout, relu, the layer right before giant embedding layers...)
         return [torch.randn_like(t) for t in ts]
+
+    @staticmethod
+    def pre_get_grads(function, args, kwargs):
+        with torch.enable_grad():
+            output = function(*args, **kwargs)
+            output = GraphProfiler.only_tensors_that_require_grad(output)
+            return GraphProfiler.get_grads(output)
 
     @staticmethod
     def avg_time(times):

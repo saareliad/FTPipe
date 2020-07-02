@@ -28,8 +28,10 @@ import importlib
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset, RandomSampler
-from partition_scripts_utils import ParseMetisOpts, ParsePartitioningOpts, record_cmdline, run_x_tries_until_no_fail,choose_blocks
-from heuristics import NodeWeightFunction, EdgeWeightFunction
+import warnings
+import sys
+from partition_scripts_utils import ParseMetisOpts,ParseAcyclicPartitionerOpts, ParsePartitioningOpts, record_cmdline,choose_blocks
+from heuristics import NodeWeightFunction, UndirectedEdgeWeightFunction, DirectedEdgeWeightFunction, get_node_and_edge_weight_function_heuristics
 from transformers import (
     GPT2Config,
     GPT2Tokenizer,
@@ -47,7 +49,7 @@ from misc import run_analysis
 from pytorch_Gpipe.utils import layerDict, tensorDict
 from pytorch_Gpipe import PipelineConfig
 import functools
-from partition_async_pipe import AsyncPipePartitioner
+from partition_async_pipe import partition_async_pipe
 import math
 from pytorch_Gpipe.model_profiling.tracer import register_new_traced_function,register_new_explicit_untraced_function
 import operator
@@ -130,8 +132,7 @@ def partition_model(args,
                     train_dataset,
                     model,
                     tokenizer,
-                    lm=True,
-                    METIS_opt=dict()):
+                    lm=True):
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset,
                                   sampler=train_sampler,
@@ -139,7 +140,7 @@ def partition_model(args,
 
     model_to_resize = model.module if hasattr(model, 'module') else model
     model_to_resize.resize_token_embeddings(len(tokenizer))
-    print("embedding resized")
+
     # Tie weights artificially using statless trick
     if args.stateless_tied:
         model_to_resize.make_stateless_after_loaded_tied_and_resized()
@@ -161,32 +162,33 @@ def partition_model(args,
 
     recomputation = not args.no_recomputation
 
-    def force_no_recomputation_fn(scope):
-        if "stateless_lm_head" in scope or "lm_head" in scope:
-            return True
-
     # so we could trace math.sqrt in gpt2 attention
     register_new_traced_function(math.sqrt, namespace=math)
     register_new_explicit_untraced_function(operator.is_,
                                             namespace=operator)
     register_new_explicit_untraced_function(operator.is_not,
                                             namespace=operator)
+    
+    def force_no_recomputation_fn(scope):
+        if "stateless_lm_head" in scope or "lm_head" in scope:
+            return True
+    args.basic_blocks = choose_blocks(model,args)
+    bw = args.bw
 
+    node_weight_function, edge_weight_function = get_node_and_edge_weight_function_heuristics(args, verbose=True)
+    
     partial_pipe_model = functools.partial(
         pipe_model,
         model,
         batch_dim,
         sample,
-        basic_blocks=choose_blocks(model,args),
+        basic_blocks=args.basic_blocks,
         depth=args.depth,
         n_iter=args.n_iter,
         nparts=args.n_partitions,
-        node_weight_function=NodeWeightFunction(
-            bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-        edge_weight_function=EdgeWeightFunction(
-            args.bw,
-            bwd_to_fwd_ratio=bwd_to_fwd_ratio),
-        use_layers_only_graph=True,
+        node_weight_function=node_weight_function,
+        edge_weight_function=edge_weight_function,
+        use_layers_only_graph=True,  # FIXME:
         use_graph_profiler=not args.use_network_profiler,
         use_network_profiler=args.use_network_profiler,
         profile_ops=not args.disable_op_profiling,
@@ -195,18 +197,13 @@ def partition_model(args,
         generate_explicit_del=args.generate_explicit_del,
         save_memory_mode=args.save_memory_mode,
         recomputation=recomputation,
-        METIS_opt=METIS_opt)
+        use_METIS=args.use_METIS,
+        acyclic_opt=args.acyclic_opt,
+        METIS_opt=args.METIS_opt)
 
     if args.async_pipeline and (not args.no_recomputation):
         print("using async partitioner")
-        async_pipe_partitioner = AsyncPipePartitioner(model, args.output_file,
-                                                      partial_pipe_model)
-
-        graph = run_x_tries_until_no_fail(
-            async_pipe_partitioner.partition,
-            10,
-            force_no_recomp_scopes=force_no_recomputation_fn,
-            allowed_mistakes=0)
+        graph=partition_async_pipe(args,model,0,sample)
     else:
         graph = partial_pipe_model(
             force_no_recomp_scopes=force_no_recomputation_fn)
@@ -238,7 +235,7 @@ def partition_model(args,
 
     pipe_config = PipelineConfig.fromDict(config)
 
-    bandwidth_gps = args.bw
+    bw = args.bw
 
     if not args.no_analysis:
         depth = pipe_config.depth
@@ -267,7 +264,7 @@ def partition_model(args,
                                   analysis_config,
                                   args.n_iter,
                                   recomputation=recomputation,
-                                  bw_GBps=bandwidth_gps,
+                                  bw_GBps=bw,
                                   async_pipeline=args.async_pipeline,
                                   sequential_model=model,
                                   stages_on_same_gpu=stages_on_same_gpu)
@@ -363,17 +360,12 @@ class ParsePartitioningOptsLM(ParsePartitioningOpts):
             action="store_true",
             help="Tie weights stateless trick. Note that shared weight may be sent in pipe"
         )
-        parser.add_argument('--auto_file_name',
-                            action='store_true',
-                            default=False,
-                            help="create file name automatically")
 
     def set_defaults(self, parser):
         d = {
             # "threads": 20,
             "partitioning_batch_size": 1,
             "n_iter": 10,
-            "output_file": 'gpt2',
             "n_partitions": 4,
             "bw": 12,
             "analysis_batch_size": 1,
@@ -389,10 +381,11 @@ def parse_cli():
     ParsePartitioningOptsLM().add_partitioning_arguments(parser)
 
     ParseMetisOpts.add_metis_arguments(parser)
+    ParseAcyclicPartitionerOpts.add_acyclic_partitioner_arguments(parser)
 
     args = parser.parse_args()
 
-    if args.auto_file_name:
+    if not args.output_file:
         args.output_file = auto_file_name(args)
 
     if args.output_file.endswith(".py"):
@@ -404,7 +397,8 @@ def parse_cli():
 def main():
 
     args = parse_cli()
-    METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
+    args.METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
+    args.acyclic_opt = ParseAcyclicPartitionerOpts.acyclic_opts_dict_from_parsed_args(args)
 
 
     # Setup CUDA, GPU
@@ -442,7 +436,6 @@ def main():
         args.block_size = tokenizer.max_len_single_sentence
     args.block_size = min(args.block_size, tokenizer.max_len_single_sentence)
 
-    print("tokenizer created")
     model = model_class.from_pretrained(
         args.model_name_or_path,
         from_tf=bool('.ckpt' in args.model_name_or_path),
@@ -453,13 +446,11 @@ def main():
         model.to(args.device)
     print("model built")
     train_dataset = load_and_cache_examples(args, tokenizer)
-    print("dataset created")
     partition_model(args,
                     train_dataset,
                     model,
                     tokenizer,
-                    lm=args.lmhead,
-                    METIS_opt=METIS_opt)
+                    lm=args.lmhead)
 
 
 # download dataset from https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip
@@ -478,4 +469,4 @@ if __name__ == "__main__":
 
     main()
 
-# python partition_gpt2_models.py --use_graph_profiler --profile_ops --analysis_batch_size 1 --async_pipeline --auto_file_name --block_size -1 --bwd_to_fwd_ratio 3 --lmhead --model_name_or_path t5-small --train_data_file wikitext-2-raw/wiki.train.raw --model_type t5 --n_iter 50 --n_partitions 2 --output_file results/t5_p2/ --overwrite_cache --partitioning_batch_size 1 --seed 42 --train_data_file wikitext-2-raw/wiki.train.raw
+# python partition_gpt2_models.py --use_graph_profiler --profile_ops --analysis_batch_size 1 --async_pipeline --block_size -1 --bwd_to_fwd_ratio 3 --lmhead --model_name_or_path t5-small --train_data_file wikitext-2-raw/wiki.train.raw --model_type t5 --n_iter 50 --n_partitions 2 --output_file results/t5_p2/ --overwrite_cache --partitioning_batch_size 1 --seed 42 --train_data_file wikitext-2-raw/wiki.train.raw

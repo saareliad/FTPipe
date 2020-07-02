@@ -12,6 +12,8 @@ def run_analysis(sample, model, n_workers, bw_GBps=12, verbose=True):
 
     single_send_time = send_mb / bw_GBps
 
+    # FIXME: this is not correct at all.
+    # because we can do it with reduce-brodcast
     num_sends = n_workers * math.log2(n_workers)
 
     total_send_time = num_sends * single_send_time

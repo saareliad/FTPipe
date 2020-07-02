@@ -1,4 +1,4 @@
-from .partition_graph import METIS_partition
-from .process_partition import post_process_partition
+from .METIS_partitioning import METIS_partition
+from .acyclic_partitioning import acyclic_partition
 
-__all__ = ["post_process_partition", "METIS_partition"]
+__all__ = ["acyclic_partition", "METIS_partition"]

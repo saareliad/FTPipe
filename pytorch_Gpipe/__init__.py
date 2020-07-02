@@ -3,7 +3,7 @@ from typing import Any, Callable, List, Dict, Optional, Union
 import torch
 import torch.nn as nn
 
-from .model_partitioning import METIS_partition
+from .model_partitioning import METIS_partition,acyclic_partition
 from .compiler import compile_partitioned_model
 from .model_profiling import Graph, profile_network, GraphProfiler, trace_module, ExecTimes, NodeWeightFunction, EdgeWeightFunction
 from .model_profiling.infer_req_grad import infer_req_grad
@@ -23,23 +23,25 @@ def pipe_model(model: nn.Module,
                batch_dim: int,
                args: tuple = (),
                kwargs: Optional[Dict] = None,
-               n_iter=10,
+               n_iter:int=10,
                nparts: int = 4,
-               depth=1000,
+               depth:int=1000,
                basic_blocks: Optional[List[nn.Module]] = None,
                node_weight_function: Optional[NodeWeightFunction] = None,
                edge_weight_function: Optional[EdgeWeightFunction] = None,
                use_layers_only_graph: bool = True,
-               output_file: str = None,
+               output_file:Optional[str] = None,
                generate_model_parallel: bool = False,
-               generate_explicit_del=False,
-               recomputation=False,
-               METIS_opt=dict(),
-               force_no_recomp_scopes=lambda s: False,
-               save_memory_mode=False,
-               use_graph_profiler=True,
-               use_network_profiler=False,
-               profile_ops=True) -> Graph:
+               generate_explicit_del:bool=False,
+               recomputation:bool=False,
+               use_METIS:bool=False,
+               METIS_opt:Optional[Dict]=None,
+               acyclic_opt:Optional[Dict]=None,
+               force_no_recomp_scopes:Optional[Callable[[str], bool]]=None,
+               save_memory_mode:bool=False,
+               use_graph_profiler:bool=True,
+               use_network_profiler:bool=False,
+               profile_ops:bool=True) -> Graph:
     '''attemps to partition a model to given number of parts using our profiler
        this will produce a python file with the partition config
 
@@ -80,8 +82,13 @@ def pipe_model(model: nn.Module,
     generate_explicit_del:
         whether to generate del statements to explicitly delete variables when they are no longer used
         default False
+    use_METIS:
+        wether to use METIS partitioning instead of the acyclic partitioner
+        default False
     METIS_opt:
         dict of additional kwargs to pass to the METIS partitioning algorithm
+    acyclic_opt:
+        dict of additional kwargs to pass to the acyclic partitioning algorithm
     force_no_recomp_scopes:
         fn(scope):
             returns true if we want to force recomputation scope_specific_recomp
@@ -115,7 +122,9 @@ def pipe_model(model: nn.Module,
                             edge_weight_function=edge_weight_function,
                             use_layers_only_graph=use_layers_only_graph,
                             recomputation=recomputation,
+                            use_METIS=use_METIS,
                             METIS_opt=METIS_opt,
+                            acyclic_opt=acyclic_opt,
                             force_no_recomp_scopes=force_no_recomp_scopes,
                             use_graph_profiler=use_graph_profiler,
                             use_network_profiler=use_network_profiler,
@@ -138,20 +147,22 @@ def pipe_model(model: nn.Module,
 def partition_model(model: nn.Module,
                     args: tuple = (),
                     kwargs: Optional[Dict] = None,
-                    n_iter=10,
-                    nparts=4,
-                    max_depth=100,
+                    n_iter:int=10,
+                    nparts:int=4,
+                    max_depth:int=100,
                     basic_blocks: Optional[List[nn.Module]] = None,
                     node_weight_function: Optional[NodeWeightFunction] = None,
                     edge_weight_function: Optional[EdgeWeightFunction] = None,
                     use_layers_only_graph: bool = True,
                     recomputation: bool = False,
-                    METIS_opt=dict(),
-                    force_no_recomp_scopes=lambda s: False,
-                    use_graph_profiler=True,
-                    use_network_profiler=False,
-                    profile_ops=True,
-                    save_memory_mode=False) -> Graph:
+                    use_METIS:bool=False,
+                    METIS_opt:Optional[Dict]=None,
+                    acyclic_opt:Optional[Dict]=None,
+                    force_no_recomp_scopes:Optional[Callable[[str], bool]]=None,
+                    use_graph_profiler:bool=True,
+                    use_network_profiler:bool=False,
+                    profile_ops:bool=True,
+                    save_memory_mode:bool=False) -> Graph:
     '''
     profiles the network and return a graph representing the partition
 
@@ -179,8 +190,13 @@ def partition_model(model: nn.Module,
         if not given a default value of 1 will be given to all edges
     use_layers_only_graph:
         whether to partition a smaller version of the graph containing only the layers (usefull fo big models with lots of unprofiled ops)
+    use_METIS:
+        wether to use METIS partitioning instead of the acyclic partitioner
+        default False
     METIS_opt:
         dict of additional kwargs to pass to the METIS partitioning algorithm
+    acyclic_opt:
+        dict of additional kwargs to pass to the acyclic partitioning algorithm
     use_graph_profiler:
         whether to use the new graph based profiler
         default True
@@ -193,6 +209,11 @@ def partition_model(model: nn.Module,
     '''
     if basic_blocks is None:
         basic_blocks = ()
+    if METIS_opt is None:
+        METIS_opt = dict()
+    if acyclic_opt is None:
+        acyclic_opt = dict()
+
     graph = build_graph(model,
                         args=args,
                         kwargs=kwargs,
@@ -205,13 +226,22 @@ def partition_model(model: nn.Module,
                         recomputation=recomputation,
                         force_no_recomp_scopes=force_no_recomp_scopes,
                         save_memory_mode=save_memory_mode)
+    if use_METIS:
+        print("-I- using METIS partitioning algorithm")
+        graph = METIS_partition(graph,
+                                nparts,
+                                node_weight_function=node_weight_function,
+                                edge_weight_function=edge_weight_function,
+                                use_layers_only_graph=use_layers_only_graph,
+                                **METIS_opt)
+    else:
+        print("-I- using Acyclic Partitioning algorithm")
+        acyclic_partition(graph,nparts,
+        node_weight_function=node_weight_function,
+        edge_weight_function=edge_weight_function,
+        use_layers_graph=use_layers_only_graph,
+        **acyclic_opt)
 
-    graph = METIS_partition(graph,
-                            nparts,
-                            node_weight_function=node_weight_function,
-                            edge_weight_function=edge_weight_function,
-                            use_layers_only_graph=use_layers_only_graph,
-                            **METIS_opt)
     print("partitioned model")
 
     return graph

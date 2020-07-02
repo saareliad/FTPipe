@@ -4,9 +4,9 @@ channels:
   - defaults
   - conda-forge
 dependencies:
-  - python=3.7
-  - pytorch=1.4.0
-  - torchvision=0.5.0
+  - python=3.8
+  - pytorch=1.5.0
+  - torchvision=0.6.0
   - graphviz
   - python-graphviz
   - networkx
@@ -16,4 +16,4 @@ dependencies:
   - cython
   - pip:
       - git+https://github.com/networkx/networkx-metis.git
-      - transformers
+      - transformers>2.9.1

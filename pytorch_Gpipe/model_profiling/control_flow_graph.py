@@ -3,7 +3,7 @@ import pickle
 from typing import Tuple, Optional, Callable, Dict, Iterable, List,Set
 from itertools import chain
 from torch import Tensor, nn as nn
-
+from collections import defaultdict
 
 class NodeTypes(IntEnum):
     '''
@@ -26,7 +26,7 @@ class Node():
         self.id = idx
         self.scope = scope
 
-        self.part = 0
+        self.stage_id = 0
         self.weight = None
 
         self.out_edges:Set[Node] = set()
@@ -64,6 +64,25 @@ class Node():
             pass
         if original in self.kwargs:
             self.kwargs[new]=self.kwargs.pop(original)
+    
+    @classmethod
+    def from_other(cls,other):
+        node = cls(other.type,other.id,other.scope)
+        node.stage_id = other.stage_id
+        node.weight = other.weight
+
+        node.out_edges = set(other.out_edges)
+        node.args = list(other.args)
+        node.kwargs = dict(other.kwargs)
+        node.value_type = other.value_type
+
+        node.tensor_dtype = other.tensor_dtype
+        node.tensor_shape = other.tensor_shape
+        node.req_grad = other.req_grad
+
+        node.constant_value = other.constant_value
+
+        return node
 
 GraphNodes = Dict[int, Node]
 NodeWeightFunction = Callable[[Node], int]
@@ -80,7 +99,11 @@ class Graph():
 
     def __len__(self)->int:
         return len(self._nodes)
-        
+    
+    @property
+    def n_stages(self)->int:
+        return len({n.stage_id for n in self.nodes})
+    
     @property
     def nodes(self) -> Iterable[Node]:
         return self._nodes.values()
@@ -95,7 +118,7 @@ class Graph():
 
     @property
     def num_partitions(self) -> int:
-        return len({n.part for n in self.nodes})
+        return len({n.stage_id for n in self.nodes})
 
     @property
     def output_scopes(self):
@@ -147,7 +170,7 @@ class Graph():
                 if edge_weight_function is None:
                     w = 1
                 else:
-                    w = edge_weight_function(u, v)
+                    w = int(max(1,edge_weight_function(u, v)))
                 G.add_edge(u.id, v.id, weight=w)
 
         for n in self.nodes:
@@ -155,7 +178,7 @@ class Graph():
                 w = 1
             else:
                 w = node_weight_function(n)
-            G.nodes[n.id]['weight'] = w
+            G.nodes[n.id]['weight'] = int(w)
 
         return G
 
@@ -272,7 +295,7 @@ class Graph():
                     node_label += f"\nweight: {node_weight_function(node)}"
 
                 dot.node(str(node_id), label=node_label,
-                         fillcolor=colors[node.part])
+                         fillcolor=colors[node.stage_id])
 
                 # add edges
                 args, kwargs = node.args, node.kwargs
@@ -367,12 +390,12 @@ class Graph():
         returns a dicitionary containing the graphs state
         '''
 
-        node_states = []
+        node_states = dict()
         for node in self.nodes:
             state = dict(id=node.id,
                         scope=node.scope,
                         type=node.type,
-                        part=node.part,
+                        stage_id=node.stage_id,
                         weight=node.weight,
                         out_edges=[n.id for n in node.out_edges],
                         args=[n.id for n in node.args],
@@ -381,8 +404,9 @@ class Graph():
                         value_type=node.value_type,
                         constant_value=node.constant_value,
                         tensor_dtype=node.tensor_dtype,
-                        tensor_shape=node.tensor_shape)
-            node_states.append(state)
+                        tensor_shape=node.tensor_shape,
+                        req_grad=node.req_grad)
+            node_states[node.id] = state
 
         return{"node_data": node_states,
                "input_kw_ids": self.input_kw_ids,
@@ -391,20 +415,19 @@ class Graph():
                "basic_blocks": self.basic_blocks
                }
 
-    def load_state(self, state):
-        output_ids = state['output_ids']
-        depth = state['depth']
-        basic_blocks = state['basic_blocks']
-        input_kw_ids = state['input_kw_ids']
+    def load_state(self, graph_state):
+        output_ids = graph_state['output_ids']
+        depth = graph_state['depth']
+        basic_blocks = graph_state['basic_blocks']
+        input_kw_ids = graph_state['input_kw_ids']
 
         nodes = dict()
-
-        states = state['node_data']
-        for state in states:
+        node_states = graph_state['node_data']
+        for state in sorted(node_states.values(),key=lambda s:s['id']):
             node = Node(state['type'], state['id'], state['scope'])
             nodes[node.id] = node
 
-            node.part = state['part']
+            node.stage_id = state['stage_id']
             node.weight = state['weight']
             node.args = [nodes[n] for n in state['args']]
             node.kwargs = {nodes[n]: kw for n, kw in state['kwargs'].items()}
@@ -412,9 +435,10 @@ class Graph():
             node.value_type = state['value_type']
             node.tensor_dtype = state['tensor_dtype']
             node.tensor_shape = state['tensor_shape']
+            node.req_grad = state['req_grad']
 
         for node in nodes.values():
-            node.out_edges = {nodes[n] for n in states[node.id]['out_edges']}
+            node.out_edges = {nodes[n] for n in node_states[node.id]['out_edges']}
 
         self._nodes = nodes
         self.basic_blocks = basic_blocks
@@ -454,11 +478,18 @@ class Graph():
 
         new_graph = Graph(None, None, None, None,
                           None).load_state(self.state())
-
         num_removed = 0
         lookup = dict()
         for node in new_graph._nodes.values():
-            if node.type is NodeTypes.CONSTANT or ((node.type in [NodeTypes.PRIMITIVE,NodeTypes.OP]) and (len(node.in_edges) == 0)):
+            is_constant = node.type is NodeTypes.CONSTANT
+            op_without_inputs = (node.type in [NodeTypes.PRIMITIVE,NodeTypes.OP]) and (len(node.in_edges) == 0)
+
+            #NOTE i hate this but it handles passing labels which are used only at last partiton
+            input_or_buff_param_with_one_use_at_end = (node.type in [NodeTypes.IN,NodeTypes.BUFF_PARAM]) and (len(node.out_edges) == 1)
+            if input_or_buff_param_with_one_use_at_end:
+                input_or_buff_param_with_one_use_at_end &= (list(node.out_edges)[0].id - node.id) >= (len(self) / 2)
+            
+            if is_constant or op_without_inputs or input_or_buff_param_with_one_use_at_end:
                 for o in node.out_edges:
                     o.kwargs.pop(node, None)
                     o.args = [n for n in o.args if n is not node]
@@ -477,5 +508,103 @@ class Graph():
 
         return new_graph, lookup
 
+
+    def induce_layer_partition(self,layers_graph,
+                           layers_to_original: Dict[int, int]) -> "Graph":
+        assert len(self) >= len(layers_graph)
+        old_to_new = {v: k for k, v in layers_to_original.items()}
+        #iterate in reverse order
+        for node in sorted(self.nodes,key=lambda n:n.id,reverse=True):
+            if node.id in old_to_new:
+                node.stage_id = layers_graph[old_to_new[node.id]].stage_id
+            else:
+                # as we iterate in reverse topological order we've already handled this node's outupts
+                #select the lowest partition index to ensure no cycles are created
+                node.stage_id = sorted(node.out_edges,key=lambda n: n.stage_id)[0].stage_id
+            assert node.stage_id >= 0
+
+        return self
+
     def __getitem__(self,idx):
         return self._nodes[idx]
+    
+    def selfcheck(self):
+        visited = set()
+        try:
+            for n in self.nodes:
+                for u in n.in_edges:
+                    assert u.id < n.id
+                    assert n in u.out_edges,(n.scope,u.scope)
+                    visited.add(u)
+                assert n not in n.in_edges        
+                for o in n.out_edges:
+                    assert o.id > n.id
+                    assert n in o.in_edges,(n.scope,o.scope)
+                    visited.add(o)
+                visited.add(n)
+                assert n not in n.out_edges
+            assert len(visited) == len(self.nodes)
+        except AssertionError as e:
+            self.save_as_pdf("selfcheck_error",".")
+            raise e
+        return self
+
+    def split_to_stages(self)->Dict[int,"Graph"]:
+        """return a sub graph for each stage in the graph
+
+        Returns:
+            Dict[int,Graph] 
+        """
+        stages = dict()
+
+        tmp = Graph(None, None, None, None, None).load_state(self.state())
+
+        groups = defaultdict(list)
+        for n in tmp.nodes:
+            if n.type != NodeTypes.IN:
+                groups[n.stage_id].append(n)
+        
+
+        for stage_id,group in groups.items():
+            stage_nodes=dict()
+            stage_inputs = dict()
+            stage_output_ids = []
+            stage_input_kws = dict()
+
+            for n in sorted(group,key=lambda w:w.id):
+                stage_nodes[n.id] = n
+                #check if stage output
+                if (n.id in self.output_ids) or any(o.stage_id != stage_id for o in n.out_edges):
+                    stage_output_ids.append(n.id)
+                
+                #discard outgoing edges to external stages
+                n.out_edges = {o for o in n.out_edges if o.stage_id == stage_id}
+
+                #add stage inputs
+                to_replace = dict()
+                for u in n.in_edges:
+                    if (u.stage_id != stage_id) or (u.type is NodeTypes.IN):
+                        if u.id in stage_inputs:
+                            stage_input = stage_inputs[u.id]
+                        else:
+                            #create a new input node for this stage
+                            stage_input = Node.from_other(u)
+                            stage_input.type = NodeTypes.IN
+                            stage_input.args=[]
+                            stage_input.kwargs=dict()
+                            stage_input.stage_id = stage_id
+                            stage_input.out_edges = {o for o in u.out_edges if o.stage_id == stage_id}
+                            stage_inputs[u.id] = stage_input
+                            stage_nodes[u.id] = stage_input
+                        to_replace[u] = stage_input        
+                    
+                    if u.id in self.input_kw_ids:
+                        stage_input_kws[u.id] = self.input_kw_ids[u.id]
+                
+                #replace inputs
+                for old,new in to_replace.items():
+                    n.replace_input(old,new)
+                    new.add_out_edge(n)
+            stages[stage_id] = Graph(stage_nodes, stage_input_kws, stage_output_ids, self.depth,self.basic_blocks)
+
+        return stages

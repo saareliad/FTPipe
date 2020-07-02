@@ -1,189 +1,180 @@
-import importlib
-from functools import partial
-from pytorch_Gpipe import PipelineConfig, pipe_model
-from pytorch_Gpipe.utils import layerDict, tensorDict
-from collections import deque
+import torch
+from collections import namedtuple
+from typing import Dict, Optional
+import functools
+
+from pytorch_Gpipe import trace_module, Graph, GraphProfiler, execute_graph, ExecTimes, acyclic_partition, infer_req_grad, compile_partitioned_model, METIS_partition, profile_network
+from pytorch_Gpipe.model_profiling import Node
+from pytorch_Gpipe.utils import move_tensors
+from partition_scripts_utils import run_x_tries_until_no_fail
+from heuristics import NodeWeightFunction, UndirectedEdgeWeightFunction, DirectedEdgeWeightFunction, NodeWeightFunctionWithRatioAutoInfer, get_node_and_edge_weight_function_heuristics
+
+FullExecTimes = namedtuple('FullExecTimes', 'recomputation no_recomputation')
 
 
-class AutoReLoader:
-    __instance = None
-    d = {}  # module_path --> generated
+def partition_async_pipe(
+    cmd_args,
+    model,
+    batch_dim: int = 0,
+    args: tuple = None,
+    kwargs: Dict = None,
+    MULT_FACTOR=1e4,
+    penalty=1e4,
+):
+    if args is None:
+        args = tuple()
+    if kwargs is None:
+        kwargs = dict()
 
-    # Singleton
-    def __new__(cls):
-        if AutoReLoader.__instance is None:
-            AutoReLoader.__instance = object.__new__(cls)
-        return AutoReLoader.__instance
+    node_weight_function, edge_weight_function = get_node_and_edge_weight_function_heuristics(
+        cmd_args, verbose=True)
 
-    @classmethod
-    def load_or_reload_module(cls, module_path):
-        if module_path not in cls.d:
-            # Loading
-            generated = importlib.import_module(module_path)
-            cls.d[module_path] = generated
-        else:
-            # Reloading
-            generated = cls.d.pop(module_path)
-            generated = importlib.reload(generated)
-            cls.d[module_path] = generated
+    # combined node/edge weight function depends on how many parameters are passed
+    evaluator = Evaluator(node_weight_function, edge_weight_function)
 
-        return generated
+    graph = trace_module(model,
+                         args=args,
+                         kwargs=kwargs,
+                         depth=cmd_args.depth,
+                         basic_blocks=cmd_args.basic_blocks)
 
-    @classmethod
-    def import_module(cls, module_path):
-        # Hiding...
-        return cls.load_or_reload_module(module_path)
+    weights = full_profile(graph, model, args, kwargs, cmd_args)
 
+    last_partition_scopes = set()
 
-def get_generated_last_stage_scopes(output_file,
-                                    GET_PARTITIONS_ON_CPU=True):
-    module_path = output_file.replace("/", ".")
-    generated = AutoReLoader.import_module(module_path)
-    create_pipeline_configuration = generated.create_pipeline_configuration
-    config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
-    pipe_config = PipelineConfig.fromDict(config)
+    allowed_mistakes = 0
+    current_mistakes = allowed_mistakes + 1
+    n_runs = 0
 
-    n_stages = len(config['stages'])
-    last_stage = n_stages - 1
-    last_stage_cls = getattr(generated, f"Partition{last_stage}")
+    while current_mistakes > allowed_mistakes:
 
-    last_stage_scopes = last_stage_cls.LAYER_SCOPES
-
-    return last_stage_scopes
-
-
-def get_all_generated_stage_scopes(output_file,
-                                   GET_PARTITIONS_ON_CPU=True):
-
-    module_path = output_file.replace("/", ".")
-    generated = AutoReLoader.import_module(module_path)
-    create_pipeline_configuration = generated.create_pipeline_configuration
-    config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
-    pipe_config = PipelineConfig.fromDict(config)
-
-    n_stages = len(config['stages'])
-
-    all_scopes = []
-    for stage_id in range(n_stages):
-        stage_cls = getattr(generated, f"Partition{stage_id}")
-
-        all_scopes.extend(stage_cls.LAYER_SCOPES)
-    return all_scopes
-
-
-def force_no_recomp_fn_factory(scopes):
-    def foo(scope):
-        return scope in scopes
-
-    return foo
-
-
-class AsyncPipePartitioner:
-    def __init__(self, model, output_file, partition_method, *args, **kw):
-        """
-
-        Args:
-            original model (NOTE: this can be spared)
-            output_file of the generated model
-
-            partition_method, *args, **kw:
-                partitioning method + args and kw for it, execpt force_no_recomp_scopes.
-
-        """
-
-        if "force_no_recomp_scopes" in kw:
-            raise ValueError("force_no_recomp_scopes should be overriden")
-            # TODO: can implement composition...
-
-        # TODO: can replace n_iter with a small number (e.g 1).
-
-        self.partition_method = partial(partition_method, *args, **kw)
-        self.n_runs = 0
-        self.model = model
-        self.output_file = output_file
-
-    def partition(self,
-                  force_no_recomp_scopes=None,
-                  scopes_to_begin_with=set(),
-                  allowed_mistakes=2):
-        """Force no recomputation for given layers in last partition until a certain allowed_mistakes is achieved. """
-
-        if force_no_recomp_scopes and scopes_to_begin_with:
-            raise ValueError("mutially exlusive")
-        elif force_no_recomp_scopes:
-            start_with_fn = True
-        else:
-            start_with_fn = False
-
-        last_partition_scopes = scopes_to_begin_with
-
-        # Just initialize it higher
-        current_mistakes = allowed_mistakes + 1
-
-        # TODO: take care of METIS seed here, can be important for stability
-
-        # Stats
-        stats = []
-
-        # Results
-        # TODO: can recorded results limit with deque maxlen
-        scopes = []
-        scopes_arg = []
-        graphs = []
-
-        while current_mistakes > allowed_mistakes:
-
-            # Generate rule based on current scopes
-            if start_with_fn:
-                f = force_no_recomp_scopes
+        for n in graph.nodes:
+            if n.scope in last_partition_scopes:
+                n.weight = weights[n].no_recomputation
             else:
-                f = force_no_recomp_fn_factory(last_partition_scopes)
+                n.weight = weights[n].recomputation
 
-            # Partition
-            graph = self.partition_method(force_no_recomp_scopes=f)
-            self.n_runs += 1
+        if not cmd_args.use_METIS:
+            acyclic_partition(graph,
+                              cmd_args.n_partitions,
+                              node_weight_function=evaluator,
+                              edge_weight_function=evaluator,
+                              use_layers_graph=True,
+                              **cmd_args.acyclic_opt)
+        else:
+            # can fail due to cycles so we try 10 times
+            run_x_tries_until_no_fail(METIS_partition,10,
+                                      graph,
+                                      cmd_args.n_partitions,
+                                      node_weight_function=evaluator,
+                                      edge_weight_function=evaluator,
+                                      use_layers_graph=True,
+                                      **cmd_args.METIS_opt)
+        n_runs += 1
 
-            # Load last partition last stage scopes
-            generated_last_stage_scopes = get_generated_last_stage_scopes(self.output_file,
-                                                                          GET_PARTITIONS_ON_CPU=True)
+        # Load last partition last stage scopes
+        last_p = max((n.stage_id for n in graph.nodes))
+        generated_last_stage_scopes = [
+            n.scope for n in graph.nodes if n.stage_id == last_p
+        ]
 
-            if start_with_fn:
-                start_with_fn = False
-                # For stats, we record for which scopes our function returns True
-                # (that is, predicts its in the last stage)
-                all_scopes = get_all_generated_stage_scopes(self.output_file,
-                                                            GET_PARTITIONS_ON_CPU=True)
-                last_partition_scopes = [s for s in all_scopes if f(s)]
-                # del all_scopes
+        # Count mistakes (false positives and false negatives)
+        A = set(last_partition_scopes)
+        B = set(generated_last_stage_scopes)
+        intersection = A & B
+        correct = len(intersection)
+        fp = len(A) - correct  # we predicted: true, result: false
+        fn = len(B) - correct  # we predicted: false, result: true
+        current_mistakes = fp + fn
 
-            # Count mistakes (false positives and false negatives)
-            A = set(last_partition_scopes)
-            B = set(generated_last_stage_scopes)
-            intersection = A & B
-            correct = len(intersection)
-            fp = len(A) - correct  # we predicted: true, result: false
-            fn = len(B) - correct  # we predicted: false, result: true
-            current_mistakes = fp + fn
+        # stats:
+        d = dict(correct=correct, fp=fp, fn=fn, mistakes=current_mistakes)
+        # set current scopes as model scopes
+        last_partition_scopes = generated_last_stage_scopes
 
-            # stats:
-            d = dict(correct=correct, fp=fp, fn=fn, mistakes=current_mistakes)
-            stats.append(d)
-            scopes.append(generated_last_stage_scopes)
-            scopes_arg.append(last_partition_scopes)
-            graphs.append(graph)
+        # log something
+        print(f"run:{n_runs}", d)
 
-            # set current scopes as model scopes
-            last_partition_scopes = generated_last_stage_scopes
+    print(f"Success! got {current_mistakes} mistakes after {n_runs} runs")
 
-            # log something
-            print(f"run:{self.n_runs}", d)
+    infer_req_grad(graph, model, args=args, kwargs=kwargs)
 
-        # Save
-        self.stats = stats
-        self.scopes = scopes
-        self.graphs = graphs
+    compile_partitioned_model(
+        graph,
+        model,
+        batch_dim,
+        generate_explicit_del=cmd_args.generate_explicit_del,
+        generate_model_parallel=cmd_args.generate_model_parallel,
+        output_file=cmd_args.output_file)
 
+    return graph
+
+
+def full_profile(graph: Graph, model: torch.nn.Module, args: tuple,
+                 kwargs: dict, cmd_args) -> Dict[Node, FullExecTimes]:
+    if cmd_args.use_network_profiler:
+        assert cmd_args.disable_op_profiling, "op profiling is not supported in the network profiler"
+        profile_func = functools.partial(
+            profile_network,
+            model,
+            args,
+            kwargs,
+            basic_blocks=cmd_args.basic_blocks,
+            max_depth=cmd_args.max_depth,
+            n_iter=cmd_args.n_iter,
+            save_memory_mode=cmd_args.save_memory_mode,
+            force_no_recomp_scopes=None)
+    else:
         print(
-            f"Success! got {current_mistakes} mistakes after {self.n_runs} runs")
+            f"using graph profiler with op profiling = {not cmd_args.disable_op_profiling} save_memory_mode = {cmd_args.save_memory_mode}"
+        )
 
-        return graph
+        def profile_func(recomputation=True):
+            profiler = GraphProfiler(
+                recomputation=recomputation,
+                n_iter=cmd_args.n_iter,
+                profile_ops=not cmd_args.disable_op_profiling,
+                force_no_recomp_scopes=None)
+            execute_graph(model,
+                          graph,
+                          model_args=args,
+                          model_kwargs=kwargs,
+                          pre_hook=profiler.time_forward,
+                          post_hook=profiler.time_backward,
+                          enforce_out_of_place=True)
+            return profiler.get_weights()
+
+    # profile recomputation
+    if cmd_args.save_memory_mode:
+        model, args, kwargs = move_tensors((model, args, kwargs), 'cpu')
+
+    recomputation_times = profile_func(recomputation=True)
+    for n in graph.nodes:
+        if n.scope not in recomputation_times:
+            recomputation_times[n.scope] = ExecTimes(0, 0)
+
+    # profile no recomputation
+    if cmd_args.save_memory_mode:
+        model, args, kwargs = move_tensors((model, args, kwargs), 'cpu')
+
+    no_recomputation_times = profile_func(recomputation=False)
+    for n in graph.nodes:
+        if n.scope not in no_recomputation_times:
+            no_recomputation_times[n.scope] = ExecTimes(0, 0)
+
+    return {
+        n: FullExecTimes(recomputation_times[n.scope],
+                         no_recomputation_times[n.scope])
+        for n in graph.nodes
+    }
+
+
+class Evaluator():
+    def __init__(self, node_weight_function, edge_weight_function):
+        self.node_evaluator = node_weight_function
+        self.edge_evaluator = edge_weight_function
+
+    def __call__(self, u: Node, v: Optional[Node] = None) -> float:
+        if v is None:
+            return self.node_evaluator(u)
+        return self.edge_evaluator(u, v)

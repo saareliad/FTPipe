@@ -6,6 +6,7 @@ import torch.nn as nn
 from torch import Tensor
 from itertools import chain
 from contextlib import contextmanager
+import inspect
 
 __all__ = ["traverse_model", "traverse_params_buffs",
            "layerDict", "tensorDict"]
@@ -82,33 +83,63 @@ def tensorDict(model: nn.Module) -> OrderedDict[str, Tensor]:
     return collections.OrderedDict((s, t)for t, s in traverse_params_buffs(model))
 
 
-def nested_map(func, ts):
+def nested_map(func, ts,full=False):
     if isinstance(ts, torch.Size):
         # size is inheriting from tuple which is stupid
         return func(ts)
     elif isinstance(ts, (list, tuple, set)):
-        return type(ts)(nested_map(func, t) for t in ts)
+        return type(ts)(nested_map(func, t,full=full) for t in ts)
     elif isinstance(ts, dict):
-        return {k: nested_map(func, v) for k, v in ts.items()}
-    elif isinstance(ts, slice):
-        start = nested_map(func, ts.start)
-        stop = nested_map(func, ts.stop)
-        step = nested_map(func, ts.step)
+        return {k: nested_map(func, v,full=full) for k, v in ts.items()}
+    elif isinstance(ts, slice) and full:
+        start = nested_map(func, ts.start,full=full)
+        stop = nested_map(func, ts.stop,full=full)
+        step = nested_map(func, ts.step,full=full)
         return slice(start, stop, step)
     return func(ts)
 
 
 def flatten(ts):
-    if isinstance(ts, (list, tuple, set)):
+    if isinstance(ts,torch.Size):
+        # size is inheriting from tuple which is stupid
+        yield ts
+    elif isinstance(ts, (list, tuple, set)):
         yield from chain(*[flatten(t) for t in ts])
     elif isinstance(ts, dict):
-        yield from chain(*[flatten(t) for t in ts.values()])
-    elif isinstance(ts, slice):
-        yield from flatten(ts.start)
-        yield from flatten(ts.stop)
-        yield from flatten(ts.step)
+        yield from chain(*[flatten(t) for k,t in sorted(ts.items(),key=lambda t:t[0])])
     else:
         yield ts
+
+def unflatten(xs,structure):
+    return _unflatten(xs,structure)[0]
+
+def _unflatten(xs,structure):
+    if isinstance(structure,torch.Size):
+        #torch.Size is subclass of tuple which is stupid
+        return xs[0],1
+
+    if not isinstance(structure,(list,tuple,set,dict)):
+        return xs[0],1
+    
+    if isinstance(structure,(list,tuple,set)):
+        offset=0
+        elements = []
+        for s in structure:
+            e,n = _unflatten(xs[offset:],s)
+            elements.append(e)
+            offset += n
+        
+        return type(structure)(elements),offset
+    
+    assert isinstance(structure,dict)
+    offset = 0
+    elements = dict()
+    for k,v in sorted(structure.items(),key=lambda t: t[0]):
+        e,n = _unflatten(xs[offset:],v)
+        elements[k] = e
+        offset += n
+    
+    return elements,offset
 
 
 def detach_tensors(ts):
@@ -226,3 +257,13 @@ unary_ops={"__neg__":"-",
 magics={"__len__":"len",
         "__abs__":"abs",
         "__iter__":"iter"}
+
+
+
+def print_call_site(*ignored_files):
+    ignored_files = (__file__,) + ignored_files
+    for f in inspect.stack():
+        frameinfo=inspect.getframeinfo(f[0]) 
+        if (frameinfo.filename not in ignored_files):
+            print(frameinfo.filename+", line "+str(frameinfo.lineno)+"\n")
+            break

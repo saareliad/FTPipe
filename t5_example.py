@@ -1,5 +1,5 @@
 from models.normal.NLP_models.modeling_t5 import T5ForConditionalGeneration as ourT5, T5Model as ourBase
-from models.normal.NLP_models.modeling_T5_tied_weights import T5ForConditionalGeneration as TiedT5, T5Model as TiedBase
+from models.normal.NLP_models.modeling_t5_tied_weights import T5ForConditionalGeneration as TiedT5, T5Model as TiedBase
 from transformers import T5Tokenizer,T5ForConditionalGeneration as refT5 ,T5Model as refBase
 import torch
 import operator
@@ -11,7 +11,12 @@ import os
 import importlib
 import numpy as np
 from collections import Counter
-from heuristics import NodeWeightFunction,EdgeWeightFunction
+from pytorch_Gpipe import acyclic_partition
+from pytorch_Gpipe.model_partitioning.acyclic_partitioning import META_ALGORITH,Objective
+from heuristics import NodeWeightFunction,DirectedEdgeWeightFunction
+import functools
+from partition_scripts_utils import run_x_tries_until_no_fail
+
 
 def seed():
     torch.cuda.synchronize()
@@ -53,6 +58,7 @@ def count_blocks(model):
     
 
 MAX_DEPTH=6
+MODEL_NAME = "t5-small"
 
 def register_functions():
     register_new_explicit_untraced_function(operator.is_,operator)
@@ -132,7 +138,7 @@ def get_models_for_comparison(base=True,tied=False):
     ref_cls = refBase if base else refT5
 
     seed()
-    transformer_ref = ref_cls.from_pretrained('t5-small').cuda().train()
+    transformer_ref = ref_cls.from_pretrained(MODEL_NAME).cuda().train()
 
     if base and tied:
         our_cls = TiedBase
@@ -144,7 +150,7 @@ def get_models_for_comparison(base=True,tied=False):
         our_cls = ourT5
     
     seed()
-    our = our_cls.from_pretrained('t5-small').cuda().train()
+    our = our_cls.from_pretrained(MODEL_NAME).cuda().train()
 
     if tied:
         our.make_stateless()
@@ -189,10 +195,10 @@ def display_most_used_nodes(graph,threshold=5):
     print()
 
 
-COMPARE_MODELS=True
+COMPARE_MODELS=False
 
 if __name__ == "__main__":
-    tokenizer = T5Tokenizer.from_pretrained('t5-small')
+    tokenizer = T5Tokenizer.from_pretrained(MODEL_NAME)
     print("tokenizer created")
     
     input_ids = tokenizer.encode(
@@ -200,11 +206,11 @@ if __name__ == "__main__":
     print("tokenized input")
     print()
     if not COMPARE_MODELS:
-        input_ids=input_ids.repeat(32,20).contiguous() #Batch (32,120)
+        input_ids=input_ids.repeat(4,10).contiguous() #Batch (4,60)
     else:
-        input_ids=input_ids.repeat(8,4).contiguous()# Batch (8,24)
-    lm_kwargs={"input_ids":input_ids,"decoder_input_ids":input_ids,"lm_labels":input_ids,"use_cache":True}
-    kwargs = {"input_ids":input_ids,"decoder_input_ids":input_ids,"use_cache":True}
+        input_ids=input_ids.repeat(32,16).contiguous()# Batch (32,96)
+    lm_kwargs={"input_ids":input_ids,"decoder_input_ids":input_ids,"lm_labels":input_ids}
+    kwargs = {"input_ids":input_ids,"decoder_input_ids":input_ids}
     
 
     if COMPARE_MODELS:
@@ -213,19 +219,27 @@ if __name__ == "__main__":
         register_functions()
         ref,our = get_models_for_comparison(base=False,tied=True)
 
-        c_ref = count_blocks(ref)
-        c_our = count_blocks(our)
-
-        for e,n in c_ref.items():
-            print(e,n)
-        print()
-        for e,n in c_our.items():
-            print(e,n)
-
         del ref
 
         basic_blocks = get_blocks(our)
         blocks = [basic_blocks[b] for b in ["T5Attention"]]
 
-        pipe_model(our,0,kwargs=lm_kwargs,
-        save_memory_mode=False,basic_blocks=blocks,force_no_recomp_scopes=None,node_weight_function=NodeWeightFunction(3),edge_weight_function=EdgeWeightFunction(12,3))
+
+        nwf = NodeWeightFunction(-1,MULT_FACTOR=1000)
+        ewf = DirectedEdgeWeightFunction(12,-1,MULT_FACTOR=1000)
+        k=4
+        allocated_seconds = 20
+
+        graph = build_graph(our,kwargs=lm_kwargs,basic_blocks=blocks)
+
+        acyclic_partition(graph,k,allocated_seconds=allocated_seconds,
+        node_weight_function=nwf,edge_weight_function=ewf,meta_algorithm=META_ALGORITH.SINGLE_LEVEL,objective=Objective.EDGE_CUT)
+
+        acyclic_partition(graph,k,allocated_seconds=allocated_seconds,
+        node_weight_function=nwf,edge_weight_function=ewf,meta_algorithm=META_ALGORITH.MULTI_LEVEL,objective=Objective.EDGE_CUT)
+
+        acyclic_partition(graph,k,allocated_seconds=allocated_seconds,
+        node_weight_function=nwf,edge_weight_function=ewf,meta_algorithm=META_ALGORITH.SINGLE_LEVEL,objective=Objective.STAGE_TIME)
+
+        acyclic_partition(graph,k,allocated_seconds=allocated_seconds,
+        node_weight_function=nwf,edge_weight_function=ewf,meta_algorithm=META_ALGORITH.MULTI_LEVEL,objective=Objective.STAGE_TIME)

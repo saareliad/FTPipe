@@ -1,5 +1,6 @@
 import shlex
 import sys
+from pytorch_Gpipe.model_partitioning.acyclic_partitioning import Objective, META_ALGORITH
 
 
 class ParsePartitioningOpts:
@@ -26,6 +27,14 @@ class ParsePartitioningOpts:
                             default=-1,
                             help="bwd to fwd ratio for heuristics")
 
+        parser.add_argument(
+            "--auto_infer_node_bwd_to_fwd_ratio",
+            action='store_true',
+            default=False,
+            help=
+            "Automatically infer bwd to fwd ratio for nodes (computation). Expected Ratio for edges should be given `by bwd_to_fwd_ratio`"
+        )
+
     def add_partitioning_arguments(self, parser):
         # parser = parser.add_argument_group("Partitioning options")
         self._extra(parser)
@@ -38,24 +47,23 @@ class ParsePartitioningOpts:
             '--model_too_big',
             action='store_true',
             default=False,
-            help="if the model is too big run the whole partitioning process on CPU, "
+            help=
+            "if the model is too big run the whole partitioning process on CPU, "
             "and drink a cup of coffee in the meantime")
         parser.add_argument('-p', '--n_partitions', type=int, default=4)
-        parser.add_argument('-o', '--output_file', default='wrn_16x4')
-        parser.add_argument('--no_auto_file_name',
-                            action='store_true',
-                            default=False,
-                            help="do not create file name automatically")
+        parser.add_argument('-o', '--output_file', default='')
         parser.add_argument(
             '--n_iter',
             type=int,
-            help="number of iteration used in order to profile the network and run analysis"
+            help=
+            "number of iteration used in order to profile the network and run analysis"
         )
         parser.add_argument(
             '--bw',
             type=float,
             default=12,
-            help="data transfer rate between gpus in GBps (Gigabytes per second)")
+            help=
+            "data transfer rate between gpus in GBps (Gigabytes per second)")
         parser.add_argument(
             '--no_recomputation',
             action='store_true',
@@ -72,18 +80,30 @@ class ParsePartitioningOpts:
             help="the depth in which we will partition the model")
         parser.add_argument('--basic_blocks', nargs='*')
         parser.add_argument(
-            "--use_network_profiler", default=False, action="store_true",
-            help="wether to use the old network_profiler instead of the newer graph based profiler"
+            "--use_network_profiler",
+            default=False,
+            action="store_true",
+            help=
+            "wether to use the old network_profiler instead of the newer graph based profiler"
         )
         parser.add_argument(
-            "--disable_op_profiling", default=False, action="store_true",
-            help="weheter to not profile ops when using the GraphProfiler"
+            "--disable_op_profiling",
+            default=False,
+            action="store_true",
+            help="weheter to not profile ops when using the GraphProfiler")
+        parser.add_argument(
+            "--use_METIS",
+            default=False,
+            action="store_true",
+            help=
+            "wether to use METIS partitioning instead of the acyclic partitioner"
         )
         parser.add_argument(
             "--generate_model_parallel",
             action="store_true",
             default=False,
-            help="wether to generate a modelParallel version of the partitioning")
+            help=
+            "wether to generate a modelParallel version of the partitioning")
         parser.add_argument(
             "--generate_explicit_del",
             action="store_true",
@@ -129,23 +149,28 @@ class ParseMetisOpts:
                                 type=int,
                                 help="Random seed for Metis algorithm")
         metis_opts.add_argument(
-            '--compress', default=False, action='store_true',
+            '--metis_compress',
+            default=False,
+            action='store_true',
             help="Compress")  # NOTE: this is differnt from default!
         metis_opts.add_argument(
             '--metis_niter',
             type=int,
-            help="Specifies the number of iterations for the refinement algorithms at each stage of the uncoarsening process."
+            help=
+            "Specifies the number of iterations for the refinement algorithms at each stage of the uncoarsening process."
             "Default is 10.")
         metis_opts.add_argument(
-            '--nseps',
+            '--metis_nseps',
             type=int,
-            help="Specifies the number of different separators that it will compute at each level of nested dissection."
+            help=
+            "Specifies the number of different separators that it will compute at each level of nested dissection."
             "The final separator that is used is the smallest one. Default is 1."
         )
         metis_opts.add_argument(
-            "--ncuts",
+            "--metis_ncuts",
             type=int,
-            help="Specifies the number of different partitionings that it will compute."
+            help=
+            "Specifies the number of different partitionings that it will compute."
             " The final partitioning is the one that achieves the best edgecut or communication volume."
             "Default is 1.")
         metis_opts.add_argument(
@@ -153,9 +178,10 @@ class ParseMetisOpts:
             type=int,
             help="Metis debug level. Refer to the docs for explanation")
         metis_opts.add_argument(
-            '--objtype',
+            '--metis_objtype',
             type=int,
-            help="Extra objective type to miminize (0: edgecut, 1: vol, default: edgecut)"
+            help=
+            "Extra objective type to miminize (0: edgecut, 1: vol, default: edgecut)"
         )
 
     @staticmethod
@@ -168,10 +194,11 @@ class ParseMetisOpts:
             'seed': getattr(args, "metis_seed", None),
             'nseps': getattr(args, "nseps", None),
             'niter': getattr(args, "metis_niter", None),
-            'compress': False,  # NOTE: this is differnt from default!
-            'ncuts': getattr(args, "ncuts", None),
+            'compress': getattr(args, "metis_compress",
+                                None),  # NOTE: this is differnt from default!
+            'ncuts': getattr(args, "metis_ncuts", None),
             # 0, edgecut, 1 Vol minimization! # NOTE: this is differnt from default edgecut.
-            'objtype': getattr(args, 'objtype', None),
+            'objtype': getattr(args, 'metis_objtype', None),
             # NOTE: default is -1, # TODO: add getattr getattr(args, "metis_dbglvl", None),
             '_dbglvl': 1  # TODO: can't make it print...
         }
@@ -199,16 +226,89 @@ class ParseMetisOpts:
         #  }
 
 
+class ParseAcyclicPartitionerOpts:
+    def __init__(self):
+        pass
 
-def choose_blocks(model,args):
-    blocks=dict()
+    @staticmethod
+    def add_acyclic_partitioner_arguments(parser):
+        opts = parser.add_argument_group("AcyclicPartitioner options")
+        opts.add_argument("--epsilon",
+                          default=0.1,
+                          type=float,
+                          help="imbalance factor")
+        opts.add_argument("--rounds",
+                          default=10,
+                          type=int,
+                          help="number of optimization rounds default is 10")
+        opts.add_argument(
+            "--allocated_seconds",
+            default=20,
+            type=int,
+            help=
+            "run time allocated to the partitioning algorithm default is 20 seconds"
+        )
+        opts.add_argument(
+            "--multilevel",
+            action="store_true",
+            default=False,
+            help="wether to use multilevel partitioning algorithm")
+        opts.add_argument("--objective",
+                          choices=["edge_cut", "stage_time"],
+                          default="edge_cut",
+                          help="partitioning optimization objective")
+        opts.add_argument(
+            "--hetrogenous_nodes",
+            action="store_true",
+            default=False,
+            help="use partitioning algorithm with hetrogenous nodes")
+
+        opts.add_argument(
+            "--hetrogenous_bw",
+            action="store_true",
+            default=False,
+            help="use partitioning algorithm with hetrogenous bandwidth")
+
+    @staticmethod
+    def acyclic_opts_dict_from_parsed_args(args):
+        """ build acyclic partitioner options """
+
+        if args.objective == "edge_cut":
+            objective = Objective.EDGE_CUT
+        else:
+            objective = Objective.STAGE_TIME
+
+        if args.multilevel:
+            meta_algorithm = META_ALGORITH.MULTI_LEVEL
+        else:
+            meta_algorithm = META_ALGORITH.SINGLE_LEVEL
+
+        return {
+            "epsilon": args.epsilon,
+            "rounds": args.rounds,
+            "allocated_seconds": args.allocated_seconds,
+            "meta_algorithm": meta_algorithm,
+            "objective": objective,
+            "use_dynamic_node_weights": args.hetrogenous_nodes,
+            "use_dynamic_edge_weights": args.hetrogenous_bw,
+        }
+
+def parse_machines_and_bw(args):
+    assert len(args.machines_per_level) == len(args.bw_per_level)
+    if len(args.machines_per_level) == 1:
+        args.n_partitions=args.machines_per_level[0]
+        args.bw = args.bw_per_level[0]
+
+
+def choose_blocks(model, args):
+    blocks = dict()
 
     for m in model.modules():
         block = type(m)
         blocks[block.__name__] = block
-    
+
     if args.basic_blocks is None:
-        args.basic_blocks=[]
+        args.basic_blocks = []
 
     return tuple([blocks[name] for name in args.basic_blocks])
 
@@ -235,16 +335,10 @@ def run_x_tries_until_no_fail(func, number_of_tries, *args, **kw):
 
     while number_of_tries < 0 or count < number_of_tries:
 
-        try:
-            res = func(*args, **kw)
-            success = True
-            count += 1
-            break
-        except (Exception,AssertionError) as e:
-            print()
-            print(e)
-            count += 1
-            print()
+        res = func(*args, **kw)
+        success = True
+        count += 1
+        break
 
     print(f"running function got succcess={success} after {count} attempts")
     return res

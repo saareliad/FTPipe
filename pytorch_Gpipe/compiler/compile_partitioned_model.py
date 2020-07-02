@@ -49,7 +49,7 @@ def compile_partitioned_model(graph: Graph,
         for t, scope in traverse_params_buffs(model)
     }
 
-    parts = groupByPartition(graph.nodes)
+    stages = groupByPartition(graph.nodes)
 
     lines = generateImports(layer_classes)
     lines.append(connections(graph))
@@ -58,18 +58,18 @@ def compile_partitioned_model(graph: Graph,
     # and forward function
     partitions_code = []
     ios = dict()
-    for idx, part in parts:
+    for idx, stage in stages:
         class_name = f'Partition{idx}'
-        layers = [n for n in part if n.type == NodeTypes.LAYER]
+        layers = [n for n in stage if n.type == NodeTypes.LAYER]
         buffs_params = [
             n
-            for n in part if n.type == NodeTypes.BUFF_PARAM
+            for n in stage if n.type == NodeTypes.BUFF_PARAM
         ]
         class_decl, scope_to_class_field = generate_init_method(class_name, layers,
                                                                 is_param_dict, buffs_params)
         state_methods_functions = generate_partition_state_methods()
         forward_function, io = generate_forward_method(graph,
-                                                       part,
+                                                       stage,
                                                        graph.outputs,
                                                        scope_to_class_field,
                                                        generate_explicit_del=generate_explicit_del)
@@ -80,7 +80,7 @@ def compile_partitioned_model(graph: Graph,
         ios[idx] = io
 
     if output_file is None:
-        output_file = f'generated_{graph.model_name}{len(parts)}'
+        output_file = f'generated_{graph.model_name}{len(stages)}'
     elif output_file.endswith(".py"):
         output_file = output_file[:-3]
 
@@ -88,7 +88,7 @@ def compile_partitioned_model(graph: Graph,
         create_pipeline_configuration(graph, ios, layer_classes, batch_dim))
     if generate_model_parallel:
         lines.append(
-            create_model_parallel_module(graph, batch_dim, ios, graph.num_inputs,
+            create_model_parallel_module(graph, batch_dim, ios,
                                          graph.output_scopes))
     lines += partitions_code
     lines.append(generateHelpFunctions())
@@ -105,14 +105,14 @@ def compile_partitioned_model(graph: Graph,
 def groupByPartition(nodes: List[Node]) -> List[Tuple[int, List[Node]]]:
     '''groups nodes to their respective partitions
     '''
-    idxs = {n.part for n in nodes}
-    parts = OrderedDict()
+    idxs = {n.stage_id for n in nodes}
+    stages = OrderedDict()
     for i in sorted(idxs):
-        parts[i] = []
+        stages[i] = []
 
     for n in nodes:
-        parts[n.part].append(n)
-    return parts.items()
+        stages[n.stage_id].append(n)
+    return stages.items()
 
 
 def generateImports(layer_classes: Dict[str, Module]) -> List[str]:
@@ -218,17 +218,17 @@ def connections(graph: Graph) -> str:
     for node in graph.nodes:
         if node.type is NodeTypes.IN:
             for n in node.out_edges:
-                adj_matrix[n.part + 1]["inputs"].add(node.scope)
-                adj_matrix[0]["outputs"].add(n.part)
+                adj_matrix[n.stage_id + 1]["inputs"].add(node.scope)
+                adj_matrix[0]["outputs"].add(n.stage_id)
 
         if node in graph.outputs:
-            adj_matrix[num_partitions + 1]["inputs"].add(node.part)
-            adj_matrix[node.part + 1]["outputs"].add(f"output")
+            adj_matrix[num_partitions + 1]["inputs"].add(node.stage_id)
+            adj_matrix[node.stage_id + 1]["outputs"].add(f"output")
 
         for n in node.out_edges:
-            if n.part != node.part:
-                adj_matrix[node.part + 1]["outputs"].add(n.part)
-                adj_matrix[n.part + 1]["inputs"].add(node.part)
+            if n.stage_id != node.stage_id:
+                adj_matrix[node.stage_id + 1]["outputs"].add(n.stage_id)
+                adj_matrix[n.stage_id + 1]["inputs"].add(node.stage_id)
 
     lines = ["# partition adjacency"]
     lines.append(f"# model inputs {adj_matrix[0]['outputs']}")
@@ -272,8 +272,7 @@ def stages_in_out_config(ios: Dict, is_batched: Callable[[torch.Size], bool]) ->
                                "dtype": d,
                                "req_grad":r,
                                "is_batched": is_batched(s)}
-        # TODO it is possible that if we have a single output
-        # it's still a list/tuple for example return l(x) where l returns multiple outputs
+
         stage_outputs = dict()
         for o, s, d in zip(outputs, output_shapes, output_dtypes):
             stage_outputs[o] = {"shape": s,
@@ -302,8 +301,7 @@ def create_model_in_out_config(graph: Graph, is_batched: Callable[[torch.Size], 
     input_ids = [f"{graph.input_kw_ids.get(node.id,node.scope)}" for node in graph.inputs]
     input_shapes = [n.tensor_shape for n in graph.inputs]
     input_dtypes = [n.tensor_dtype for n in graph.inputs]
-    # TODO it is possible that if we have a single output
-    # it's still a list/tuple for example return l(x) where l returns multiple outputs
+
     output_shapes = [n.tensor_shape for n in graph.outputs]
     output_ids = graph.output_scopes
     output_dtypes = [n.tensor_dtype for n in graph.outputs]
@@ -348,8 +346,8 @@ def pretty_format_obj(obj,dict_prefix=dtab):
         return "{" + f",\n{dict_prefix}".join(items) + "}"
     elif obj is type(None):
         return "None"
-    elif obj is torch.device:
-        return "torch.device"
+    elif obj in [torch.Size,torch.device,torch.dtype]:
+        return f"torch.{obj.__name__}"
     elif isinstance(obj,type):
         return obj.__name__
     return str(obj)

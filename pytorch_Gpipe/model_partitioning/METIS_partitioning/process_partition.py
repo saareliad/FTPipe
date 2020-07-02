@@ -2,7 +2,7 @@ from collections import defaultdict
 from typing import List, Dict, Set
 from copy import copy
 import os
-from ..model_profiling import Graph, NodeTypes, Node
+from ...model_profiling import Graph, NodeTypes, Node
 import torch
 __all__ = ["post_process_partition"]
 
@@ -48,7 +48,7 @@ def post_process_partition(graph: Graph,edge_weight_function, verbose_on_error=T
                 print(p)
                 print(i)
 
-            n_partitions = len(set(u.part for u in graph.nodes))
+            n_partitions = len(set(u.stage_id for u in graph.nodes))
             print("n_partitions:", n_partitions)
 
         error = "error cycle detected mutual dependecy between partitions"
@@ -64,14 +64,14 @@ def cannonize_partition_indices(graph: Graph):
     out_edges = defaultdict(set)
     for node in graph.nodes:
         for o in node.out_edges:
-            out_edges[node.part].add(o.part)
+            out_edges[node.stage_id].add(o.stage_id)
 
     for i, e in out_edges.items():
         e.discard(i)
 
     translation = {idx: i for i, idx in enumerate(topological_sort(out_edges))}
     for node in graph.nodes:
-        node.part = translation[node.part]
+        node.stage_id = translation[node.stage_id]
 
 
 def topological_sort(out_edges: Dict[int, Set[int]]) -> List[int]:
@@ -101,8 +101,8 @@ def get_problematic_partitions(graph):
     info = []
     for u in graph.nodes:
         for v in u.out_edges:
-            if v.part < u.part:
-                problems.append([v.part, u.part])
+            if v.stage_id < u.stage_id:
+                problems.append([v.stage_id, u.stage_id])
                 info.append([v.scope, u.scope])
     return problems, info
 
@@ -110,7 +110,7 @@ def get_problematic_partitions(graph):
 def has_cycles(graph: Graph) -> bool:
     for u in graph.nodes:
         for v in u.out_edges:
-            if v.part < u.part:
+            if v.stage_id < u.stage_id:
                 return True
 
     return False
@@ -121,16 +121,16 @@ def break_partition_cycles(graph: Graph):
     roots = defaultdict(set)
     # roots[i] = nodes in partition j s.t j<i and exists backward edge from partition i to j
     for u in graph.nodes:
-        parts.add(u.part)
+        parts.add(u.stage_id)
         for v in u.out_edges:
-            if u.part > v.part:
-                roots[v.part].add(v)
+            if u.stage_id > v.stage_id:
+                roots[v.stage_id].add(v)
 
     n_parts = len(parts)
     for idx, group in roots.items():
         # each group represents a new partition to create
         for n in find_subtree(group, len(graph.nodes)):
-            n.part = n_parts
+            n.stage_id = n_parts
         n_parts += 1
 
 
@@ -141,7 +141,7 @@ def find_subtree(roots: Set[Node], graph_size: int):
         n = open.pop()
         nodes.add(n)
         for u in n.out_edges:
-            if u.part == n.part:
+            if u.stage_id == n.stage_id:
                 nodes.add(u)
                 open.add(u)
 
@@ -152,7 +152,7 @@ def find_subtree(roots: Set[Node], graph_size: int):
             continue
 
         for u in n.in_edges:
-            if u.part == n.part:
+            if u.stage_id == n.stage_id:
                 # TODO we need to know if u is part of the sub tree
                 # this is an reasonable estimation
                 if u.type != NodeTypes.IN and ((n.id - u.id) > graph_size // 2):
@@ -170,8 +170,8 @@ def is_valid_partitioning(graph: Graph,edge_weight_function):
     for n in graph.nodes:
         if n.value_type in {type(None), list, tuple, dict, set, int, bool, float, str, slice, torch.Size, torch.dtype}:
             for o in n.out_edges:
-                if n.part != o.part:
-                    msg = f"invalid output type at partition boundary {n.part}=>{o.part}"
+                if n.stage_id != o.stage_id:
+                    msg = f"invalid output type at partition boundary {n.stage_id}=>{o.stage_id}"
                     msg += f"\noutput is {n.scope} of type {n.value_type}, weight {edge_weight_function(n,o)}"
                     return False, msg
 
