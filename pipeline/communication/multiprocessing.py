@@ -225,6 +225,14 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
 
             x = q.get()
 
+            if self.verbose:
+                tensor_tag = self.tensor_tags[tensor_name] + \
+                    (self.TOTAL_TAGS * batch_idx)
+                self.logger.info(
+                    f"rank={self.local_rank}: done q.get(), src={receive_rank}, tag={tensor_tag}, name={tensor_name}"
+                )
+
+
             # give the next buffer
             # FIXME: un-optimized clones
             # NOTE: this happends on the main stream FIXME?
@@ -250,6 +258,9 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         return self._recv_tensors_p2p(x, batch_idx, self.grad_rcv_items, False)
 
     def _send_tensors_p2p(self, x, batch_idx, ranks_dict_items, is_grad):
+        # if is_grad:
+        #     print("sending gradients")
+        assert (len(x) == len(ranks_dict_items))
         torch.cuda.set_device(self.device)  # needed for thread.
         request_objects = []
 
@@ -308,7 +319,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         return future
 
     def send_gradients(self, x, batch_idx):
-        x = filter_none(x)
+        x = list(filter_none(x))
         future = self.pool_send_grad.submit(self._send_tensors_p2p, x,
                                             batch_idx, self.grad_send_items,
                                             True)

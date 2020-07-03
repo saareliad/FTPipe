@@ -119,7 +119,7 @@ def flatten(x: Any) -> List[Any]:
     l: List[Any] = []
     if isinstance(x, torch.Size):
         l.append(x)
-    if isinstance(x, dict):
+    elif isinstance(x, dict):
         for y in x.values():
             l.extend(flatten(y))
     elif isinstance(x, list) or isinstance(x, set) or isinstance(x, tuple):
@@ -165,6 +165,10 @@ def _unflatten(xs, structure):
         offset += n
 
     return elements, offset
+
+
+# def expand_like(val, structure):
+#     return unflatten([val for _ in flatten(structure)], structure)
 
 
 def detach_tensors(ts):

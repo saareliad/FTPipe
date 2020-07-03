@@ -191,6 +191,9 @@ class Partition(nn.Module):
     def backward(self, g, **kw):
         raise NotImplementedError()
 
+    def unflatten_output(self, x):
+        return unflatten(x, self.outputs_req_grad)
+
 
 class FirstPartition(Partition):
     """ The first partition does not need to record gradients of stashed inputs.
@@ -292,7 +295,7 @@ class LastPartition(Partition):
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(x)
             else:
-                # Option 2 
+                # Option 2
                 x = list(get_r(x, self.req_grad))
                 self.input_buffer[micro_batch_idx] = x
 
@@ -322,7 +325,8 @@ class LastPartitionWithLabelInput(LastPartition):
         
         In use for our partitoned transformers with LMhead.
     """
-    # TODO: 
+
+    # TODO:
     # _REQ_GRAD = True
     # _HAS_DUMMY_FORWARD = False
     def forward(self, x: TensorOrTensors, micro_batch_idx):
@@ -332,7 +336,8 @@ class LastPartitionWithLabelInput(LastPartition):
 
             # For backprobpagating gradients
             x = list(get_r(x, req_grad))
-            self.input_buffer[micro_batch_idx] = list(filter_req_grad_tensors(flatten(x)))
+            self.input_buffer[micro_batch_idx] = list(
+                filter_req_grad_tensors(flatten(x)))
 
             # UNFLATEN
             x = unflatten(x, req_grad)
@@ -462,6 +467,9 @@ class PartitionWithoutRecomputation(nn.Module):
         else:
             return [y.grad for y in filter_req_grad_tensors(x)]
 
+    def unflatten_output(self, x):
+        return unflatten(x, self.outputs_req_grad)
+
 
 class FirstPartitionWithoutRecomputation(PartitionWithoutRecomputation):
     """ its Just a hack for GPIpe... """
@@ -538,6 +546,9 @@ class GPipePartition(nn.Module):
         """
         used_partition = self.no_recomputation_partition if self.is_last_micro_batch else self.recomputation_partition
         return used_partition.bwd_graph_head_buffer.pop(micro_batch_idx)
+
+    def unflatten_output(self, x):
+        return self.recomputation_partition.unflatten_output(x)
 
 
 class GPipeFirstPartition(GPipePartition):

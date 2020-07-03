@@ -318,6 +318,18 @@ class PipelineConfig():
 
         return cls.fromDict(state)
 
+    def get_outputs_req_grad_for_stage(self, stage_id: int) -> Dict[str, bool]:
+        """Infer grad requirements for output tensors """
+        my_outputs = self.stages[stage_id].outputs
+        # its needed also for module outputs but the value is unused (don't care)
+        # outputs_req_grad = {output: True for output in my_outputs}
+        outputs_req_grad = {}
+        for i, stage in self.stages.items():
+            for name, r in stage.req_grad.items():
+                if name in my_outputs:
+                    outputs_req_grad[name] = r
+        return outputs_req_grad
+
 
 class StageConfig():
     def __init__(self, stage_class: nn.Module):

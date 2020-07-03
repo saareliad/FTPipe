@@ -159,7 +159,7 @@ def create_pipeline_configuration(DEBUG=False):
                     'BertForSequenceClassification/BertModel[bert]/BertEncoder[encoder]/BertLayer[11]/BertOutput[output]/LayerNorm[LayerNorm]': {
                         'shape': torch.Size([1, 128, 1024]),
                         'dtype': torch.float32,
-                        'req_grad': False,
+                        'req_grad': True,
                         'is_batched': True}},
                 'outputs': {
                     'BertForSequenceClassification/BertModel[bert]/BertEncoder[encoder]/tuple::__getitem___1749': {
@@ -222,7 +222,7 @@ def create_pipeline_configuration(DEBUG=False):
                     'BertForSequenceClassification/BertModel[bert]/BertEncoder[encoder]/BertLayer[20]/BertOutput[output]/LayerNorm[LayerNorm]': {
                         'shape': torch.Size([1, 128, 1024]),
                         'dtype': torch.float32,
-                        'req_grad': False,
+                        'req_grad': True,
                         'is_batched': True}},
                 'outputs': {
                     'BertForSequenceClassification/Linear[classifier]': {

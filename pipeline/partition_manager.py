@@ -17,10 +17,8 @@ from .weight_prediction.interface import WeightPredictor
 from .gap_aware import GapAwareBase
 from .work_schedulers import WorkScheduler, get_fwds_between_first_and_seconds_step_for_stage
 from .weight_stashing import WeightStasher
-import numpy as np
 import types
 from .true_weights_storage import TrueWeightsStorage
-
 
 DEBUG_FAKE_DRAW = False
 
@@ -291,6 +289,7 @@ class SinglePartitionManager:
             x = (*x, *preload_input)
 
         x = self.partition(x, batch_idx)
+        # x = self.partition.unflatten_output(x)
 
         request_objects = None
 
@@ -617,7 +616,7 @@ class SinglePartitionManager:
         run_batch_backward = self.run_batch_backward
         run_batch_forward = self.run_batch_forward
         futures_handler = self.futures_handler
-        
+
         # sets warmpup state for PipeDream. Else no-op.
         self.work_scheduler.reset()
         if self.is_last_partition:
@@ -692,7 +691,7 @@ class GPipePartitionManager(SinglePartitionManager):
                 partition_cls = GPipeFirstPartition
             else:
                 partition_cls = GPipePartition
-            
+
             if is_mp:
                 # We do the clone ourself.
                 partition_cls._CLONE_INPUTS = False
@@ -845,6 +844,8 @@ class GPipePartitionManager(SinglePartitionManager):
 
             # TODO: add more stats. e.g can print here time, ' ms/batch {:5.2f} | ' ,...
             self.logger.info(batch_log_str)
+
+        return request_objects
 
     def run_batch_backward(self, batch_idx, num_batches):
         """ Runs the backwards pass + step for all partitions except the last partition """

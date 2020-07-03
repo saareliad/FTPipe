@@ -2,8 +2,6 @@ from .cfg_to_model import get_partitioning
 
 from itertools import count
 from collections import OrderedDict
-import numpy as np
-
 
 def get_my_send_recv_ranks(config, stage, stage_to_rank_map=None):
     def ranks_in_stage(given_stage):
@@ -38,57 +36,6 @@ def get_my_send_recv_ranks(config, stage, stage_to_rank_map=None):
                                 if k in receive_ranks)
 
     return send_ranks, receive_ranks
-
-# FIXME: for tuples
-def tensor_tags_from_config(config,
-                            num_chunks=1,
-                            target_tensor_names=None,
-                            GRAD_UGLY_SHAMEFUL_NAME="_grad"):
-    def config_to_tuples_array(config):
-        def config_to_tuples_generator(stages):
-            """ allows iterating with the tuple: (stage_id, inputs, outputs) """
-            for i, v in stages.items():
-                yield i, v.inputs, v.outputs
-
-        return np.array(list(config_to_tuples_generator(config.stages)))
-
-    # Note: same tags for all process
-
-    tensor_tags = {}
-    tensor_tag = 1
-    model = config_to_tuples_array(config)
-
-    for (_, input_tensors, output_tensors) in model:
-        for input_tensor in input_tensors:
-            if input_tensor not in tensor_tags:
-                tensor_tags[input_tensor] = tensor_tag
-                tensor_tag += num_chunks
-        for output_tensor in output_tensors:
-            if output_tensor not in tensor_tags:
-                tensor_tags[output_tensor] = tensor_tag
-                tensor_tag += num_chunks
-    # Create different tags for gradients
-    for (_, input_tensors, output_tensors) in model:
-        for input_tensor in input_tensors:
-            input_tensor += GRAD_UGLY_SHAMEFUL_NAME
-            if input_tensor not in tensor_tags:
-                tensor_tags[input_tensor] = tensor_tag
-                tensor_tag += num_chunks
-        for output_tensor in output_tensors:
-            output_tensor += GRAD_UGLY_SHAMEFUL_NAME
-            if output_tensor not in tensor_tags:
-                tensor_tags[output_tensor] = tensor_tag
-                tensor_tag += num_chunks
-
-    if target_tensor_names:
-        for target_tensor_name in sorted(target_tensor_names):
-            tensor_tags[target_tensor_name] = tensor_tag
-            tensor_tag += num_chunks
-
-    # tensor_tags["ack"] = tensor_tag
-    tensor_tag += num_chunks
-
-    return tensor_tags, tensor_tag
 
 
 class PartitioningConfigParser:
@@ -147,9 +94,6 @@ class PartitioningConfigParser:
         self.send_ranks, self.receive_ranks = get_my_send_recv_ranks(
             pipe_config, self.stage, stage_to_rank_map=stage_to_rank_map)
 
-        tag_info = tensor_tags_from_config(pipe_config)  # FIXME: for tuples. (can avoid None but its minor)
-        self.tensor_tags, self.TOTAL_TAGS = tag_info
-
         if send_target_in_pipe:
             self.target_tensor_names = pipe_config.model_outputs  # else None
             if self.stage > 0:
@@ -176,20 +120,13 @@ class PartitioningConfigParser:
         # Grad requirements for input tensors
         self.req_grad = pipe_config.stages[self.stage].req_grad
 
-        # Grad requirements for input tensors (infer)
-        outputs_req_grad = dict()
-        my_outputs = pipe_config.stages[self.stage].outputs
-        for i, stage in pipe_config.stages.items():
-            for name, r in stage.req_grad.items():
-                if name in my_outputs:
-                    outputs_req_grad[name] = r
-
-        self.outputs_req_grad = outputs_req_grad
+        # Grad requirements for output tensors (infer)
+        self.outputs_req_grad = pipe_config.get_outputs_req_grad_for_stage(self.stage)
 
     def comm_init_args(self):
-        return (self.receive_ranks, self.send_ranks, self.tensor_tags,
+        return (self.receive_ranks, self.send_ranks,
                 self.target_tensor_names, self.ranks_in_previous_stage,
-                self.ranks_in_next_stage, self.TOTAL_TAGS, self.req_grad,
+                self.ranks_in_next_stage, self.req_grad,
                 self.outputs_req_grad, self.pipe_config)
 
     def get_shapes(self, batch_size):
@@ -206,11 +143,9 @@ class PartitioningConfigParser:
 
 # receive_ranks,
 # send_ranks,
-# tensor_tags,
 # target_tensor_names,
 # ranks_in_previous_stage,
 # ranks_in_next_stage,
-# TOTAL_TAGS
 
 # Partition Manager:
 
