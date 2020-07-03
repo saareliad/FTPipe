@@ -220,7 +220,7 @@ def run_sim(nsteps,
     theta_preds = []
     theta_true = []
 
-    f = lambdify(free_symbols_list, coeff, modules=['math'])
+    # f = lambdify(free_symbols_list, coeff, modules=['math'])
 
     for staleness in range(1, nsteps + 1):
         s1.step()
