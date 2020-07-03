@@ -1,4 +1,4 @@
-from typing import Callable,Dict
+from typing import Callable,Dict,Any
 import torch
 from .graph_executor import execute_graph
 from .control_flow_graph import Node,NodeTypes,Graph
@@ -11,23 +11,29 @@ def infer_req_grad(graph:Graph,model:torch.nn.Module,args=None,kwargs=None):
     if kwargs is None:
         kwargs = dict()
     
-    visitor = Visitor()
-    execute_graph(model,graph,model_args=args,model_kwargs=kwargs,pre_hook=visitor,post_hook=None)
+    with torch.enable_grad():
+        visitor = Visitor()
+        execute_graph(model,graph,model_args=args,model_kwargs=kwargs,pre_hook=visitor.prehook,post_hook=visitor.posthook)
 
 
 
 class Visitor():
-    def __call__(self, node: Node, function: Callable, args: tuple, kwargs: Dict):
+    def prehook(self, node: Node, function: Callable, args: tuple, kwargs: Dict):
         for n,a in zip(node.args,args):
-            if n.stage_id != node.stage_id or n.type is NodeTypes.IN:
-                n.req_grad = Visitor.req_grad(a)
-            
+            # the or statement should not be necessary
+            n.req_grad =  n.req_grad or Visitor.req_grad(a)
+
         for n,k in node.kwargs.items():
             v = kwargs[k]
-            n.req_grad = Visitor.req_grad(v)
-
+            # the or statement should not be necessary
+            n.req_grad = n.req_grad or Visitor.req_grad(v)
+        
         return detach_tensors(args),detach_tensors(kwargs)
 
+    def posthook(self,node: Node, function: Callable, args: tuple, kwargs: Dict, outputs: Any):
+        node.req_grad = Visitor.req_grad(outputs)
+
+        return detach_tensors(outputs)
 
     @staticmethod
     def req_grad(ts):
