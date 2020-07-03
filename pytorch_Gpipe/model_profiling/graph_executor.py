@@ -156,7 +156,7 @@ def call_function(namespaces, node, args, kwargs, pre_hook, post_hook,enforce_ou
         else:
             assert len(kwargs) == 0, "no kwarg in magic method"
 
-            if func_name in inplace_arithmetic_ops:
+            if enforce_out_of_place and (func_name in inplace_arithmetic_ops):
                 func_name ="__"+func_name[3:]
             if hasattr(operator, func_name):
                 function = getattr(operator, func_name)
