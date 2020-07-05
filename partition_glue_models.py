@@ -67,6 +67,7 @@ def make_just_y(ds, mode="train"):
     y = torch.tensor(y)
     return TensorDataset(y)
 
+
 def get_dataset(args, tokenizer, cache_name="glue_ds.pt"):
 
     if os.path.exists(cache_name) and not args.overwrite_cache:
@@ -414,6 +415,16 @@ def main():
                 )
                 analysis_config[i]['model'].device = device
 
+            # NOTE: this is the original model
+            # With the original model we get sota valid results.
+            #otherwise- its random chance
+            TAKE_ORIGINAL_MODEL = False
+
+            if TAKE_ORIGINAL_MODEL:
+                model = AutoModelForSequenceClassification.from_pretrained(
+                    args.model_name_or_path)
+            
+            model.to(args.device)
             model.eval()
             data_dir = args.data_dir
             data_dir = os.path.join(data_dir, "MNLI")
@@ -471,6 +482,9 @@ def main():
 
                     logits = model(*bx)
 
+                    if isinstance(logits, tuple):
+                        logits = logits[0]
+
                     # logits = run_partitions(bx, analysis_config)
                     # assert len(logits) == 1
                     # logits = logits[0]
@@ -527,7 +541,7 @@ def build_compute_metrics_fn(
 
 
 if __name__ == "__main__":
-    DEBUG=False
+    DEBUG = False
     if DEBUG:
         import ptvsd
         address = ('127.0.0.1', 3000)

@@ -44,6 +44,7 @@ def mish(x):
 
 ACT2FN = {"gelu": gelu, "relu": torch.nn.functional.relu, "swish": swish, "gelu_new": gelu_new, "mish": mish}
 
+
 def is_None(a):
     return operator.is_(a, None)
 
@@ -60,8 +61,10 @@ def load_tf_weights_in_bert(model, config, tf_checkpoint_path):
         import numpy as np
         import tensorflow as tf
     except ImportError:
-        logger.error("Loading a TensorFlow model in PyTorch, requires TensorFlow to be installed. Please see "
-                     "https://www.tensorflow.org/install/ for installation instructions.")
+        logger.error(
+            "Loading a TensorFlow model in PyTorch, requires TensorFlow to be installed. Please see "
+            "https://www.tensorflow.org/install/ for installation instructions."
+        )
         raise
     tf_path = os.path.abspath(tf_checkpoint_path)
     logger.info("Converting TensorFlow checkpoint from {}".format(tf_path))
@@ -76,38 +79,41 @@ def load_tf_weights_in_bert(model, config, tf_checkpoint_path):
         arrays.append(array)
 
     for name, array in zip(names, arrays):
-        name = name.split('/')
+        name = name.split("/")
         # adam_v and adam_m are variables used in AdamWeightDecayOptimizer to calculated m and v
         # which are not required for using pretrained model
-        if any(n in ["adam_v", "adam_m", "global_step"] for n in name):
+        if any(
+            n in ["adam_v", "adam_m", "AdamWeightDecayOptimizer", "AdamWeightDecayOptimizer_1", "global_step"]
+            for n in name
+        ):
             logger.info("Skipping {}".format("/".join(name)))
             continue
         pointer = model
         for m_name in name:
-            if re.fullmatch(r'[A-Za-z]+_\d+', m_name):
-                l = re.split(r'_(\d+)', m_name)
+            if re.fullmatch(r"[A-Za-z]+_\d+", m_name):
+                scope_names = re.split(r"_(\d+)", m_name)
             else:
-                l = [m_name]
-            if l[0] == 'kernel' or l[0] == 'gamma':
-                pointer = getattr(pointer, 'weight')
-            elif l[0] == 'output_bias' or l[0] == 'beta':
-                pointer = getattr(pointer, 'bias')
-            elif l[0] == 'output_weights':
-                pointer = getattr(pointer, 'weight')
-            elif l[0] == 'squad':
-                pointer = getattr(pointer, 'classifier')
+                scope_names = [m_name]
+            if scope_names[0] == "kernel" or scope_names[0] == "gamma":
+                pointer = getattr(pointer, "weight")
+            elif scope_names[0] == "output_bias" or scope_names[0] == "beta":
+                pointer = getattr(pointer, "bias")
+            elif scope_names[0] == "output_weights":
+                pointer = getattr(pointer, "weight")
+            elif scope_names[0] == "squad":
+                pointer = getattr(pointer, "classifier")
             else:
                 try:
-                    pointer = getattr(pointer, l[0])
+                    pointer = getattr(pointer, scope_names[0])
                 except AttributeError:
                     logger.info("Skipping {}".format("/".join(name)))
                     continue
-            if len(l) >= 2:
-                num = int(l[1])
+            if len(scope_names) >= 2:
+                num = int(scope_names[1])
                 pointer = pointer[num]
-        if m_name[-11:] == '_embeddings':
-            pointer = getattr(pointer, 'weight')
-        elif m_name == 'kernel':
+        if m_name[-11:] == "_embeddings":
+            pointer = getattr(pointer, "weight")
+        elif m_name == "kernel":
             array = np.transpose(array)
         try:
             assert pointer.shape == array.shape
@@ -117,6 +123,8 @@ def load_tf_weights_in_bert(model, config, tf_checkpoint_path):
         logger.info("Initialize PyTorch weight {}".format(name))
         pointer.data = torch.from_numpy(array)
     return model
+
+
 
 
 BertLayerNorm = torch.nn.LayerNorm
@@ -330,6 +338,7 @@ class BertEncoder(nn.Module):
     def __init__(self, config):
         super(BertEncoder, self).__init__()
         self.num_layers = config.num_hidden_layers
+        self.config = config
         for i in range(self.num_layers):
             self.add_module(str(i), BertLayer(config))
 
@@ -427,7 +436,6 @@ class BertPreTrainingHeads(nn.Module):
         prediction_scores = self.predictions(sequence_output)
         seq_relationship_score = self.seq_relationship(pooled_output)
         return prediction_scores, seq_relationship_score
-
 
 
 class BertPreTrainedModel(PreTrainedModel):
@@ -551,6 +559,7 @@ class BertModel(BertPreTrainedModel):
 
     def __init__(self, config):
         super(BertModel, self).__init__(config)
+        self.config = config
 
         self.embeddings = BertEmbeddings(config)
         self.encoder = BertEncoder(config)
@@ -558,12 +567,18 @@ class BertModel(BertPreTrainedModel):
 
         self.init_weights()
 
-    def _resize_token_embeddings(self, new_num_tokens):
-        old_embeddings = self.embeddings.word_embeddings
-        new_embeddings = self._get_resized_embeddings(
-            old_embeddings, new_num_tokens)
-        self.embeddings.word_embeddings = new_embeddings
+    def get_input_embeddings(self):
         return self.embeddings.word_embeddings
+
+    def set_input_embeddings(self, value):
+        self.embeddings.word_embeddings = value
+
+    # def _resize_token_embeddings(self, new_num_tokens):
+    #     old_embeddings = self.embeddings.word_embeddings
+    #     new_embeddings = self._get_resized_embeddings(
+    #         old_embeddings, new_num_tokens)
+    #     self.embeddings.word_embeddings = new_embeddings
+    #     return self.embeddings.word_embeddings
 
     def _prune_heads(self, heads_to_prune):
         """ Prunes heads of the model.
@@ -673,14 +688,18 @@ class BertForPreTraining(BertPreTrainedModel):
         self.masked_lm_loss = nn.CrossEntropyLoss(ignore_index=-100)
         self.next_sentence_loss = nn.CrossEntropyLoss(ignore_index=-100)
         self.init_weights()
-        self.tie_weights()
+        # self.tie_weights()
 
-    def tie_weights(self):
-        """ Make sure we are sharing the input and output embeddings.
-            Export to TorchScript can't handle parameter sharing so we are cloning them instead.
-        """
-        self._tie_or_clone_weights(self.cls.predictions.decoder,
-                                   self.bert.embeddings.word_embeddings)
+    # def tie_weights(self):
+    #     """ Make sure we are sharing the input and output embeddings.
+    #         Export to TorchScript can't handle parameter sharing so we are cloning them instead.
+    #     """
+    #     self._tie_or_clone_weights(self.cls.predictions.decoder,
+    #                                self.bert.embeddings.word_embeddings)
+
+    def get_output_embeddings(self):
+        return self.cls.predictions.decoder
+
 
     def forward(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None,
                 masked_lm_labels=None, next_sentence_label=None):
@@ -750,14 +769,17 @@ class BertForMaskedLM(BertPreTrainedModel):
         self.cls = BertOnlyMLMHead(config)
         self.masked_lm_loss = nn.CrossEntropyLoss(ignore_index=-100)
         self.init_weights()
-        self.tie_weights()
+        # self.tie_weights()
 
-    def tie_weights(self):
-        """ Make sure we are sharing the input and output embeddings.
-            Export to TorchScript can't handle parameter sharing so we are cloning them instead.
-        """
-        self._tie_or_clone_weights(self.cls.predictions.decoder,
-                                   self.bert.embeddings.word_embeddings)
+    # def tie_weights(self):
+    #     """ Make sure we are sharing the input and output embeddings.
+    #         Export to TorchScript can't handle parameter sharing so we are cloning them instead.
+    #     """
+    #     self._tie_or_clone_weights(self.cls.predictions.decoder,
+    #                                self.bert.embeddings.word_embeddings)
+
+    def get_output_embeddings(self):
+        return self.cls.predictions.decoder
 
     def forward(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None,
                 masked_lm_labels=None):
