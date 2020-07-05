@@ -28,24 +28,25 @@ MODEL_TYPES = {
 # NOTE: some of these configs are just for this repo, see
 # `models.transformers_utils.pretrained_model_config_and_tokenizer`
 
-# def roberta_large_8p_bw11_0_mnli_glue():
-#     return dict(model_type='roberta_glue',
-#                 model_name_or_path='roberta-large',
-#                 do_lower_case=False,
-#                 output_past=False,
-#                 stateless_tied=False,
-#                 num_labels=3,
-#                 finetuning_task='mnli')
-
 
 def roberta_large_8p_bw11_0_mnli_glue():
     return dict(model_type='roberta_glue',
-                model_name_or_path='roberta-large-mnli',
+                model_name_or_path='roberta-large',
                 do_lower_case=False,
                 output_past=False,
                 stateless_tied=False,
                 num_labels=3,
                 finetuning_task='mnli')
+
+# NOTE: this is to reprocduce a pretrained checkpoint on MNLI.
+# def roberta_large_8p_bw11_0_mnli_glue():
+#     return dict(model_type='roberta_glue',
+#                 model_name_or_path='roberta-large-mnli',
+#                 do_lower_case=False,
+#                 output_past=False,
+#                 stateless_tied=False,
+#                 num_labels=3,
+#                 finetuning_task='mnli')
 
 
 def bert_large_uncased_whole_word_masking_8p_bw11_0_async_mnli_glue():

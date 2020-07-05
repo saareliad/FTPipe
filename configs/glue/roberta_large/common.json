@@ -56,7 +56,7 @@
     "keep_buffers_alive": false,
     "train_batches_limit": -1,
     "log_frequency": 200,
-    "model_name_or_path": "roberta-large-mnli",
+    "model_name_or_path": "roberta-large",
     "max_seq_length": 128,
     "glue_task_name": "mnli",
     "train_seq_len": 128,
