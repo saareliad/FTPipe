@@ -185,7 +185,8 @@ class ParseMetisOpts:
         )
         metis_opts.add_argument(
             '--metis_contig',
-            type=int,
+            default=False,
+            action='store_true',
             help="A boolean to create contigous partitions."
             # see http://glaros.dtc.umn.edu/gkhome/metis/metis/faq"
         )
