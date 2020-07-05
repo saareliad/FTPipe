@@ -69,7 +69,7 @@ def make_just_y(ds, mode="train"):
 
 
 def get_dataset(args, tokenizer, cache_name="glue_ds.pt"):
-
+    cache_name += args.model_name_or_path
     if os.path.exists(cache_name) and not args.overwrite_cache:
         print(f"-I- loading dataset from cahce {cache_name}")
         ds = torch.load(cache_name)
@@ -234,6 +234,12 @@ class ParsePartitioningOptsGlue(ParsePartitioningOpts):
                             default=42,
                             help="random seed for initialization")
 
+        parser.add_argument(
+            "--eval_glue",
+            action="store_true",
+            default=False,
+            help="evaluate glue on dev set to check weight loading")
+
     def set_defaults(self, parser):
         d = {
             "partitioning_batch_size": 1,
@@ -243,7 +249,7 @@ class ParsePartitioningOptsGlue(ParsePartitioningOpts):
             "n_partitions": 2,
             "bw": 12,
             "analysis_batch_size": 1,
-            'eval_glue': True
+            'eval_glue': False # FIXME: currently always on until bug is solved
         }
 
         parser.set_defaults(**d)
@@ -423,7 +429,7 @@ def main():
             if TAKE_ORIGINAL_MODEL:
                 model = AutoModelForSequenceClassification.from_pretrained(
                     args.model_name_or_path)
-            
+
             model.to(args.device)
             model.eval()
             data_dir = args.data_dir
@@ -437,7 +443,7 @@ def main():
 
             print("creating datasets")
 
-            CACHE_NAME = "glue_dev"
+            CACHE_NAME = "glue_dev" + "_" + args.model_name_or_path
             ds = GlueDataset(
                 glue_args,
                 tokenizer,
@@ -507,18 +513,18 @@ def main():
             print(result)
 
 
-def _example():
-    data_dir = "/home_local/saareliad/data/glue_data/"
-    data_dir = os.path.join(data_dir, "MNLI")
-    args = GlueDataTrainingArguments(task_name='mnli',
-                                     data_dir=data_dir,
-                                     max_seq_length=128,
-                                     overwrite_cache=False)
-    tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-    ds = GlueDataset(args, tokenizer, mode="train")
-    # NOTE: this is problematic as we have our own implementation
-    model = AutoModelForSequenceClassification.from_pretrained(
-        "bert-base-uncased")
+# def _example():
+#     data_dir = "/home_local/saareliad/data/glue_data/"
+#     data_dir = os.path.join(data_dir, "MNLI")
+#     args = GlueDataTrainingArguments(task_name='mnli',
+#                                      data_dir=data_dir,
+#                                      max_seq_length=128,
+#                                      overwrite_cache=False)
+#     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+#     ds = GlueDataset(args, tokenizer, mode="train")
+#     # NOTE: this is problematic as we have our own implementation
+#     model = AutoModelForSequenceClassification.from_pretrained(
+#         "bert-base-uncased")
 
 
 def build_compute_metrics_fn(

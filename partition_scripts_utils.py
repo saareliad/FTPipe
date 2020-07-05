@@ -183,6 +183,12 @@ class ParseMetisOpts:
             help=
             "Extra objective type to miminize (0: edgecut, 1: vol, default: edgecut)"
         )
+        metis_opts.add_argument(
+            '--metis_contig',
+            type=int,
+            help="A boolean to create contigous partitions."
+            # see http://glaros.dtc.umn.edu/gkhome/metis/metis/faq"
+        )
 
     @staticmethod
     def metis_opts_dict_from_parsed_args(args):
@@ -199,6 +205,7 @@ class ParseMetisOpts:
             'ncuts': getattr(args, "metis_ncuts", None),
             # 0, edgecut, 1 Vol minimization! # NOTE: this is differnt from default edgecut.
             'objtype': getattr(args, 'metis_objtype', None),
+            'contig': getattr(args, 'metis_contig', None),
             # NOTE: default is -1, # TODO: add getattr getattr(args, "metis_dbglvl", None),
             '_dbglvl': 1  # TODO: can't make it print...
         }
@@ -293,10 +300,11 @@ class ParseAcyclicPartitionerOpts:
             "use_dynamic_edge_weights": args.hetrogenous_bw,
         }
 
+
 def parse_machines_and_bw(args):
     assert len(args.machines_per_level) == len(args.bw_per_level)
     if len(args.machines_per_level) == 1:
-        args.n_partitions=args.machines_per_level[0]
+        args.n_partitions = args.machines_per_level[0]
         args.bw = args.bw_per_level[0]
 
 
@@ -339,10 +347,12 @@ def run_x_tries_until_no_fail(func, number_of_tries, *args, **kw):
         except Exception as e:
             count += 1
             if count == number_of_tries - 1:
-                print(f"-E- run_x_tries_until_no_fail Failed after {count} raising last exception")
+                print(
+                    f"-E- run_x_tries_until_no_fail Failed after {count} raising last exception"
+                )
                 raise e
             continue
-        
+
         success = True
         count += 1
         break
