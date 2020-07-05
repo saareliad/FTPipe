@@ -7,7 +7,7 @@ import sys
 import math
 import operator
 import functools
-from torch.utils.data import DataLoader, RandomSampler
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 
 from models.normal import BertForSequenceClassification
 from models.normal.NLP_models.modeling_bert import GlueLoss
@@ -18,24 +18,27 @@ from partition_scripts_utils import (ParsePartitioningOpts,
                                      choose_blocks, run_x_tries_until_no_fail)
 from partition_async_pipe import partition_async_pipe
 from heuristics import get_node_and_edge_weight_function_heuristics
-from misc import run_analysis
+from misc import run_analysis, run_partitions
 from pytorch_Gpipe import PipelineConfig, pipe_model
 from pytorch_Gpipe.model_profiling import register_new_traced_function, register_new_explicit_untraced_function
 from pytorch_Gpipe.utils import layerDict, tensorDict
 import os
 
-from transformers import (
-    MODEL_FOR_SEQUENCE_CLASSIFICATION_MAPPING,
-    AutoConfig,
-    AutoModelForSequenceClassification,
-    AutoTokenizer,
-    glue_tasks_num_labels
-)
+from transformers import (MODEL_FOR_SEQUENCE_CLASSIFICATION_MAPPING,
+                          AutoConfig, AutoModelForSequenceClassification,
+                          AutoTokenizer, glue_tasks_num_labels)
 
 from transformers import GlueDataset, GlueDataTrainingArguments
 
 from collections import defaultdict
 from torch.utils.data import TensorDataset
+
+import numpy as np
+from transformers import EvalPrediction
+from transformers.data.metrics import glue_compute_metrics
+from transformers.data.processors.glue import (glue_output_modes,
+                                               glue_tasks_num_labels)
+from typing import Callable, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -46,15 +49,23 @@ MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
 
 def make_just_x(ds, mode="train"):
     d = defaultdict(list)
-    for feature in ds[:5]:  # no reason to go over everything...
+    for feature in ds:  # no reason to go over everything...
         for key, val in vars(feature).items():
             if key == "label":
                 continue
             if val is None:
                 continue
             d[key].append(val)
+
+    print(d.keys())
     return TensorDataset(*[torch.tensor(x) for x in d.values()])
 
+
+def make_just_y(ds, mode="train"):
+    # NOTE: I made it output example ids in eval for conviniece
+    y = [feature.label for feature in ds]
+    y = torch.tensor(y)
+    return TensorDataset(y)
 
 def get_dataset(args, tokenizer, cache_name="glue_ds.pt"):
 
@@ -62,7 +73,7 @@ def get_dataset(args, tokenizer, cache_name="glue_ds.pt"):
         print(f"-I- loading dataset from cahce {cache_name}")
         ds = torch.load(cache_name)
         return ds
-    
+
     print("-I- creating dataset")
     data_dir = args.data_dir
     data_dir = os.path.join(data_dir, "MNLI")
@@ -231,6 +242,7 @@ class ParsePartitioningOptsGlue(ParsePartitioningOpts):
             "n_partitions": 2,
             "bw": 12,
             "analysis_batch_size": 1,
+            'eval_glue': True
         }
 
         parser.set_defaults(**d)
@@ -282,7 +294,7 @@ def main():
         args.config_name if args.config_name else args.model_name_or_path,
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
-    
+
     # get correct number of labels.
     config.num_labels = glue_tasks_num_labels.get(args.task_name)
 
@@ -394,6 +406,92 @@ def main():
             f.write("\n")
             f.write('"""analysis summary\n' + summary + "\n" + '"""')
 
+        if getattr(args, "eval_glue", False):
+            n_partitions = sum(1 for k in analysis_config
+                               if isinstance(k, int))
+            for i in range(n_partitions):
+                analysis_config[i]['model'] = analysis_config[i]['model'].eval(
+                )
+                analysis_config[i]['model'].device = device
+
+            model.eval()
+            data_dir = args.data_dir
+            data_dir = os.path.join(data_dir, "MNLI")
+
+            glue_args = GlueDataTrainingArguments(
+                task_name=args.task_name,
+                data_dir=data_dir,
+                max_seq_length=args.max_seq_length,
+                overwrite_cache=args.overwrite_cache)
+
+            print("creating datasets")
+
+            CACHE_NAME = "glue_dev"
+            ds = GlueDataset(
+                glue_args,
+                tokenizer,
+                mode="dev",
+            )
+
+            if not os.path.exists(CACHE_NAME + "x.pt"):
+                dsx = make_just_x(ds, mode="eval")
+                torch.save(dsx, CACHE_NAME + "x.pt")
+            else:
+                dsx = torch.load(CACHE_NAME + "x.pt")
+
+            if not os.path.exists(CACHE_NAME + "y.pt"):
+                dsy = make_just_y(ds, mode="eval")
+                torch.save(dsy, CACHE_NAME + "y.pt")
+            else:
+                dsy = torch.load(CACHE_NAME + "y.pt")
+
+            # TODO: create a dataloader like they do in transformers...
+            dlx = DataLoader(dsx,
+                             sampler=SequentialSampler(dsx),
+                             batch_size=args.analysis_batch_size)
+
+            dly = DataLoader(dsy,
+                             sampler=SequentialSampler(dsy),
+                             batch_size=args.analysis_batch_size)
+
+            preds = []
+            labels = []
+            print("running partitions")
+            with torch.no_grad():
+                for bx, by in zip(dlx, dly):
+
+                    def to_device(a):
+                        if isinstance(a, torch.Tensor):
+                            return a.to(args.device),
+                        else:
+                            return [t.to(args.device) for t in a]
+
+                    bx = to_device(bx)
+                    # by = to_device(by)
+
+                    logits = model(*bx)
+
+                    # logits = run_partitions(bx, analysis_config)
+                    # assert len(logits) == 1
+                    # logits = logits[0]
+
+                    preds.append(logits.detach().cpu())
+                    labels.append(by[0].detach().cpu())
+
+            preds = torch.cat(preds, dim=0).cpu().numpy()
+            labels = torch.cat(labels, dim=0).cpu().numpy()
+
+            print(preds)
+            print(labels)
+
+            ep = EvalPrediction(preds, labels)
+
+            print("evaluating on CPU")
+            partial_evaluate = build_compute_metrics_fn(args.task_name)
+
+            result = partial_evaluate(ep)
+            print(result)
+
 
 def _example():
     data_dir = "/home_local/saareliad/data/glue_data/"
@@ -409,6 +507,34 @@ def _example():
         "bert-base-uncased")
 
 
+def build_compute_metrics_fn(
+        task_name: str) -> Callable[[EvalPrediction], Dict]:
+
+    try:
+        # num_labels = glue_tasks_num_labels[task_name]
+        output_mode = glue_output_modes[task_name]
+    except KeyError:
+        raise ValueError("Task not found: %s" % (task_name))
+
+    def compute_metrics_fn(p: EvalPrediction):
+        if output_mode == "classification":
+            preds = np.argmax(p.predictions, axis=1)
+        elif output_mode == "regression":
+            preds = np.squeeze(p.predictions)
+        return glue_compute_metrics(task_name, preds, p.label_ids)
+
+    return compute_metrics_fn
+
+
 if __name__ == "__main__":
+    DEBUG=False
+    if DEBUG:
+        import ptvsd
+        address = ('127.0.0.1', 3000)
+        print(f"-I- rank waiting for attachment on {address}")
+        ptvsd.enable_attach(address=address)
+        ptvsd.wait_for_attach()
+        print("attached")
+
     main()
     #  python partition_glue_models.py --model_type bert --objective stage_time --model_name_or_path bert-base-uncased --n_partitions 2

@@ -1119,7 +1119,7 @@ def topology_aware_balance(f_times, b_times, cutting_edges):
 
     return f_balance, b_balance
 
-
+# FIXME: this is infinte loop for None in outputs
 def run_partitions(model_inputs, partition_config):
     #kwarg input
     if isinstance(model_inputs, dict):
