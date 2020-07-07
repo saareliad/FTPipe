@@ -448,7 +448,9 @@ class PartitionWithoutRecomputation(nn.Module):
                     x = self.layers(x)
                 else:
                     # UNFLATEN
-                    x = unflatten(x, self.req_grad)
+                    if self._REQ_GRAD:
+                        x = unflatten(x, self.req_grad)
+                    # Else: its the first partition!
                     x = self.layers(*x)
                 return x
 
