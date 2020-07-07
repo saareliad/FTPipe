@@ -83,7 +83,7 @@ class P2PCommunicationHandler(SimpleCommBase):
                                       False)
 
     def send_gradients(self, x, batch_idx):
-        x = filter_none(x)
+        x = list(filter_none(x))
         return self._send_tensors_p2p(x, batch_idx, self.grad_send_items, True)
 
     def fix_after_recv(self, x):
