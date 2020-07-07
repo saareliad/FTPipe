@@ -13,10 +13,10 @@ import collections
 import os
 from torch.nn.modules.activation import Tanh
 from torch.nn.modules.dropout import Dropout
-from models.normal.NLP_models.modeling_bert import BertSelfAttention
+from models.normal.NLP_models.modeling_bert_old import BertSelfAttention
 from torch.nn.modules.normalization import LayerNorm
 from torch.nn.modules.sparse import Embedding
-from models.normal.NLP_models.modeling_bert import Gelu
+from models.normal.NLP_models.modeling_bert_old import Gelu
 from torch.nn.modules.linear import Linear
 # this is an auto generated file do not edit unless you know what you are doing
 
@@ -39,10 +39,10 @@ def create_pipeline_configuration(DEBUG=False):
                     Gelu, Linear)
     blocks_path = [
         'torch.nn.modules.activation.Tanh', 'torch.nn.modules.dropout.Dropout',
-        'models.normal.NLP_models.modeling_bert.BertSelfAttention',
+        'models.normal.NLP_models.modeling_bert_old.BertSelfAttention',
         'torch.nn.modules.normalization.LayerNorm',
         'torch.nn.modules.sparse.Embedding',
-        'models.normal.NLP_models.modeling_bert.Gelu',
+        'models.normal.NLP_models.modeling_bert_old.Gelu',
         'torch.nn.modules.linear.Linear'
     ]
     module_path = os.path.relpath(__file__).replace("/", ".")[:-3]
