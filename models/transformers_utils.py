@@ -24,6 +24,7 @@ def pretrained_model_config_and_tokenizer(
         cache_dir: str = "",
         output_past=False,
         stateless_tied=False,
+        explicitly_set_dict={},
         **config_kw
 ):
 
@@ -37,8 +38,8 @@ def pretrained_model_config_and_tokenizer(
         )
 
     config.output_past = output_past  # FIXME: deprecated
-    # for k, v in config_kw.items():
-    #     setattr(config, k, v)
+    for k, v in explicitly_set_dict.items():
+        setattr(config, k, v)
 
     tokenizer = tokenizer_class.from_pretrained(
         tokenizer_name if tokenizer_name else model_name_or_path,

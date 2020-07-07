@@ -5,7 +5,9 @@ from transformers import (GPT2Config, GPT2Tokenizer)
 from transformers import (BertConfig, BertTokenizer)
 from transformers import (AutoConfig, AutoTokenizer)
 
-from .normal import GPT2LMHeadModel, GPT2Model, StatelessGPT2LMHeadModel
+from .normal.NLP_models import (GPT2LMHeadModel, GPT2Model,
+                                StatelessGPT2LMHeadModel)
+from .normal.NLP_models import StatelessGPT2LMHeadModel
 from .normal.NLP_models.modeling_bert_old import BertForQuestionAnswering
 # from .normal.NLP_models.modeling_roberta import RobertaForQuestionAnswering
 from .normal.NLP_models.modeling_roberta import RobertaForSequenceClassification
@@ -37,6 +39,7 @@ def roberta_large_8p_bw11_0_mnli_glue():
                 stateless_tied=False,
                 num_labels=3,
                 finetuning_task='mnli')
+
 
 # NOTE: this is to reprocduce a pretrained checkpoint on MNLI.
 # def roberta_large_8p_bw11_0_mnli_glue():
@@ -132,6 +135,21 @@ def t5_small_p4():
                 model_name_or_path='t5-small',
                 do_lower_case=False,
                 output_past=False,
+                stateless_tied=False)
+
+
+def t5_small_p3_squad1():
+    return dict(model_type='t5',
+                model_name_or_path='t5-small',
+                do_lower_case=False,
+                output_past=False,
+                output_attentions=False,
+                output_hidden_states=False,
+                explicitly_set_dict={
+                    "output_only": True,
+                    "output_attentions": False,
+                    "output_hidden_states": False
+                },
                 stateless_tied=False)
 
 

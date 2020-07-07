@@ -24,10 +24,10 @@ import operator
 import torch
 import torch.nn.functional as F
 from torch import nn
-from transformers.configuration_t5 import T5Config,PretrainedConfig
+from transformers.configuration_t5 import T5Config
 from transformers.file_utils import DUMMY_INPUTS, DUMMY_MASK, add_start_docstrings, add_start_docstrings_to_callable
-from transformers.modeling_utils import PreTrainedModel, prune_linear_layer
-from transformers.file_utils import cached_path, WEIGHTS_NAME, TF_WEIGHTS_NAME, TF2_WEIGHTS_NAME,hf_bucket_url,is_remote_url
+from transformers.modeling_utils import prune_linear_layer
+from .utils import PreTrainedModel
 
 
 logger = logging.getLogger(__name__)
@@ -36,14 +36,14 @@ logger = logging.getLogger(__name__)
 # This dict contrains shortcut names and associated url
 # for the pretrained weights provided with the models
 ####################################################
-T5_PRETRAINED_MODEL_ARCHIVE_MAP = {
-    "t5-small": "https://cdn.huggingface.co/t5-small-pytorch_model.bin",
-    "t5-base": "https://cdn.huggingface.co/t5-base-pytorch_model.bin",
-    "t5-large": "https://cdn.huggingface.co/t5-large-pytorch_model.bin",
-    "t5-3b": "https://cdn.huggingface.co/t5-3b-pytorch_model.bin",
-    "t5-11b": "https://cdn.huggingface.co/t5-11b-pytorch_model.bin",
-}
-
+T5_PRETRAINED_MODEL_ARCHIVE_LIST = [
+    "t5-small",
+    "t5-base",
+    "t5-large",
+    "t5-3b",
+    "t5-11b",
+    # See all T5 models at https://huggingface.co/models?filter=t5
+]
 def is_None(a):
     return operator.is_(a, None)
 
@@ -194,7 +194,6 @@ class T5Attention(nn.Module):
         self.is_decoder = config.is_decoder
         self.has_relative_attention_bias = has_relative_attention_bias
 
-        self.output_attentions = config.output_attentions
         self.relative_attention_num_buckets = config.relative_attention_num_buckets
         self.d_model = config.d_model
         self.d_kv = config.d_kv
@@ -305,10 +304,7 @@ class T5Attention(nn.Module):
         mask=None,
         kv=None,
         position_bias=None,
-        past_key_value_state=None,
-        head_mask=None,
-        query_length=None,
-        use_cache=False,
+        head_mask=None
     ):
         """
         Self-attention (if kv is None) or attention over source sentence (provided by kv).
@@ -317,22 +313,7 @@ class T5Attention(nn.Module):
         # Mask is (bs, klen) (non-causal) or (bs, klen, klen)
         # past_key_value_state[0] is (bs, n_heads, q_len - 1, dim_per_head)
         bs, qlen, dim = input.size()
-
-        # NOTE is_not_None
-        # if past_key_value_state is not None:
-        if is_not_None(past_key_value_state):
-            # assert self.is_decoder is True, "Encoder cannot cache past key value states"
-            assert self.is_decoder, "Encoder cannot cache past key value states"
-            assert (
-                len(past_key_value_state) == 2
-            ), "past_key_value_state should have 2 past states: keys and values. Got {} past states".format(
-                len(past_key_value_state)
-            )
-            #NOTE is none
-            # real_qlen = qlen + past_key_value_state[0].shape[2] if query_length is None else query_length
-            real_qlen = qlen + past_key_value_state[0].shape[2] if is_None(query_length) else query_length
-        else:
-            real_qlen = qlen
+        real_qlen = qlen
 
         #NOTE is none
         # if kv is None:
@@ -356,32 +337,19 @@ class T5Attention(nn.Module):
         if is_None(kv):
             k = shape(self.k(input))  # (bs, n_heads, qlen, dim_per_head)
             v = shape(self.v(input))  # (bs, n_heads, qlen, dim_per_head)
-        #NOTE is none
-        # elif past_key_value_state is None:
-        elif is_None(past_key_value_state):
+        else:
             k = v = kv
             k = shape(self.k(k))  # (bs, n_heads, qlen, dim_per_head)
             v = shape(self.v(v))  # (bs, n_heads, qlen, dim_per_head)
 
-        # NOTE is not none
-        # if past_key_value_state is not None:
-        if is_not_None(past_key_value_state):
-            #NOTE is none
-            # if kv is None:
-            if is_None(kv):
-                k_, v_ = past_key_value_state
-                k = torch.cat([k_, k], dim=2)  # (bs, n_heads, klen, dim_per_head)
-                v = torch.cat([v_, v], dim=2)  # (bs, n_heads, klen, dim_per_head)
-            else:
-                k, v = past_key_value_state
-
         # if self.is_decoder and use_cache is True:
-        if self.is_decoder and use_cache:
-            present_key_value_state = ((k, v),)
-        else:
-            present_key_value_state = (None,)
+        # if False and self.is_decoder and use_cache:
+        #     present_key_value_state = ((k, v),)
+        # else:
+        #     present_key_value_state = (None,)
+        # scores = torch.einsum("bnqd,bnkd->bnqk", q, k)  # (bs, n_heads, qlen, klen)
 
-        scores = torch.einsum("bnqd,bnkd->bnqk", q, k)  # (bs, n_heads, qlen, klen)
+        scores = torch.matmul(q,k.transpose(3,2))
 
         # NOTE is none
         # if position_bias is None:
@@ -390,12 +358,6 @@ class T5Attention(nn.Module):
                 raise ValueError("No position_bias provided and no weights to compute position_bias")
             position_bias = self.compute_bias(real_qlen, klen)
 
-            # if key and values are already calculated
-            # we want only the last query position bias
-            #NOTE is not none
-            # if past_key_value_state is not None:
-            if is_not_None(past_key_value_state):
-                position_bias = position_bias[:, :, -1:, :]
 
             # NOTE is not none
             # if mask is not None:
@@ -419,14 +381,10 @@ class T5Attention(nn.Module):
 
         context = self.o(context)
 
-        outputs = (context,) + present_key_value_state
-
-        if self.output_attentions:
-            outputs = outputs + (weights,)
         if self.has_relative_attention_bias:
-            outputs = outputs + (position_bias,)
-        return outputs
-
+            return context,position_bias
+    
+        return context
 
 class T5LayerSelfAttention(nn.Module):
     def __init__(self, config, has_relative_attention_bias=False):
@@ -435,28 +393,32 @@ class T5LayerSelfAttention(nn.Module):
         self.layer_norm = T5LayerNorm(config.d_model, eps=config.layer_norm_epsilon)
         self.dropout = nn.Dropout(config.dropout_rate)
 
+        self.has_relative_attention_bias = has_relative_attention_bias
+
     def forward(
         self,
         hidden_states,
         attention_mask=None,
         position_bias=None,
-        head_mask=None,
-        past_key_value_state=None,
-        use_cache=False,
+        head_mask=None
     ):
         norm_x = self.layer_norm(hidden_states)
         attention_output = self.SelfAttention(
             norm_x,
             mask=attention_mask,
             position_bias=position_bias,
-            head_mask=head_mask,
-            past_key_value_state=past_key_value_state,
-            use_cache=use_cache,
+            head_mask=head_mask
         )
-        y = attention_output[0]
+        if self.has_relative_attention_bias:
+            y = attention_output[0]
+        else:
+            y = attention_output
         layer_output = hidden_states + self.dropout(y)
-        outputs = (layer_output,) + attention_output[1:]  # add attentions if we output them
-        return outputs
+        
+        if self.has_relative_attention_bias:
+            return layer_output,attention_output[1]
+        
+        return layer_output
 
 
 class T5LayerCrossAttention(nn.Module):
@@ -466,16 +428,15 @@ class T5LayerCrossAttention(nn.Module):
         self.layer_norm = T5LayerNorm(config.d_model, eps=config.layer_norm_epsilon)
         self.dropout = nn.Dropout(config.dropout_rate)
 
+        self.has_relative_attention_bias = has_relative_attention_bias
+
     def forward(
         self,
         hidden_states,
         kv,
         attention_mask=None,
         position_bias=None,
-        head_mask=None,
-        past_key_value_state=None,
-        use_cache=False,
-        query_length=None,
+        head_mask=None
     ):
         norm_x = self.layer_norm(hidden_states)
         attention_output = self.EncDecAttention(
@@ -483,15 +444,19 @@ class T5LayerCrossAttention(nn.Module):
             mask=attention_mask,
             kv=kv,
             position_bias=position_bias,
-            head_mask=head_mask,
-            past_key_value_state=past_key_value_state,
-            use_cache=use_cache,
-            query_length=query_length,
+            head_mask=head_mask
         )
-        y = attention_output[0]
+
+        if self.has_relative_attention_bias:
+            y = attention_output[0]
+        else:
+            y = attention_output
         layer_output = hidden_states + self.dropout(y)
-        outputs = (layer_output,) + attention_output[1:]  # add attentions if we output them
-        return outputs
+        
+        if self.has_relative_attention_bias:
+            return layer_output,attention_output[1]
+        
+        return layer_output
 
 
 class T5Block(nn.Module):
@@ -511,6 +476,8 @@ class T5Block(nn.Module):
             self.block_size=2
 
         self.add_module(str(self.block_size),T5LayerFF(config))
+
+        self.has_relative_attention_bias = has_relative_attention_bias
         # self.layer.append(T5LayerFF(config))
 
     def forward(
@@ -521,56 +488,27 @@ class T5Block(nn.Module):
         encoder_hidden_states=None,
         encoder_attention_mask=None,
         encoder_decoder_position_bias=None,
-        head_mask=None,
-        past_key_value_state=None,
-        use_cache=False,
+        head_mask=None
     ):
-
-        #NOTE is not None
-        # if past_key_value_state is not None:
-        if is_not_None(past_key_value_state):
-            assert self.is_decoder, "Only decoder can use `past_key_value_states`"
-            #NOTE is none
-            # expected_num_past_key_value_states = 2 if encoder_hidden_states is None else 4
-            expected_num_past_key_value_states = 2 if is_None(encoder_hidden_states) else 4
-
-            error_message = "There should be {} past states. 2 (past / key) for self attention.{} Got {} past key / value states".format(
-                expected_num_past_key_value_states,
-                "2 (past / key) for cross attention" if expected_num_past_key_value_states == 4 else "",
-                len(past_key_value_state),
-            )
-            assert len(past_key_value_state) == expected_num_past_key_value_states, error_message
-
-            self_attn_past_key_value_state = past_key_value_state[:2]
-            cross_attn_past_key_value_state = past_key_value_state[2:]
-        else:
-            self_attn_past_key_value_state, cross_attn_past_key_value_state = None, None
-
         #NOTE moduleList
         # self_attention_outputs = self.layer[0](
         self_attention_outputs = getattr(self,str(0))(
             hidden_states,
             attention_mask=attention_mask,
             position_bias=position_bias,
-            head_mask=head_mask,
-            past_key_value_state=self_attn_past_key_value_state,
-            use_cache=use_cache,
+            head_mask=head_mask
         )
-        hidden_states, present_key_value_state = self_attention_outputs[:2]
-        attention_outputs = self_attention_outputs[2:]  # Keep self-attention outputs and relative position weights
+        if self.has_relative_attention_bias:
+            hidden_states = self_attention_outputs[0]
+        else:
+            hidden_states = self_attention_outputs
+        
+        if self.has_relative_attention_bias:
+            attention_outputs = self_attention_outputs[1]  # Keep self-attention outputs and relative position weights
 
         # NOTE is not None
         # if self.is_decoder and encoder_hidden_states is not None:
         if self.is_decoder and is_not_None(encoder_hidden_states):
-            # the actual query length is unknown for cross attention
-            # if using past key value states. Need to inject it here
-            # NOTE is not None
-            # if present_key_value_state is not None:
-            if is_not_None(present_key_value_state):
-                query_length = present_key_value_state[0].shape[2]
-            else:
-                query_length = None
-
             #NOTE moduleList
             cross_attention_outputs = getattr(self,str(1))(
             # cross_attention_outputs = self.layer[1](
@@ -578,30 +516,30 @@ class T5Block(nn.Module):
                 kv=encoder_hidden_states,
                 attention_mask=encoder_attention_mask,
                 position_bias=encoder_decoder_position_bias,
-                head_mask=head_mask,
-                past_key_value_state=cross_attn_past_key_value_state,
-                query_length=query_length,
-                use_cache=use_cache,
+                head_mask=head_mask
             )
-            hidden_states = cross_attention_outputs[0]
-            # Combine self attn and cross attn key value states
-            # NOTE is not None
-            # if present_key_value_state is not None:
-            if is_not_None(present_key_value_state):
-                present_key_value_state = present_key_value_state + cross_attention_outputs[1]
-
-            # Keep cross-attention outputs and relative position weights
-            attention_outputs = attention_outputs + cross_attention_outputs[2:]
+            if self.has_relative_attention_bias:
+                hidden_states = cross_attention_outputs[0]
+            else:
+                hidden_states = cross_attention_outputs
+            
+            if self.has_relative_attention_bias:
+                # Keep cross-attention outputs and relative position weights
+                attention_outputs = (attention_outputs,cross_attention_outputs[1])
 
         # Apply Feed Forward layer
         #NOTE modulelist
         # hidden_states = self.layer[-1](hidden_states)
         hidden_states = getattr(self,str(self.block_size))(hidden_states)
-        outputs = (hidden_states,)
+        
+        if self.has_relative_attention_bias and (self.is_decoder and is_not_None(encoder_hidden_states)):
+            # Add attentions if we output them
+            return (hidden_states,) + attention_outputs
+        elif self.has_relative_attention_bias:
+            return (hidden_states,attention_outputs)
 
-        # Add attentions if we output them
-        outputs = outputs + (present_key_value_state,) + attention_outputs
-        return outputs  # hidden-states, present_key_value_states, (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
+        return hidden_states
+        # return outputs  # hidden-states, (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
 
 
 class T5PreTrainedModel(PreTrainedModel):
@@ -610,9 +548,12 @@ class T5PreTrainedModel(PreTrainedModel):
     """
 
     config_class = T5Config
-    pretrained_model_archive_map = T5_PRETRAINED_MODEL_ARCHIVE_MAP
     load_tf_weights = load_tf_weights_in_t5
     base_model_prefix = "transformer"
+    KEY_PREFIX_TO_REPLACE=".layer."
+    NEW_PREFIX = "."
+    KEY_TRANSLATION = {".layer.":".",
+                    ".block.":"."}
 
     @property
     def dummy_inputs(self):
@@ -682,304 +623,6 @@ class T5PreTrainedModel(PreTrainedModel):
 
         return shifted_input_ids
 
-
-    @classmethod
-    def from_pretrained(cls, pretrained_model_name_or_path, *model_args, **kwargs):
-        r"""Instantiate a pretrained pytorch model from a pre-trained model configuration.
-
-        The model is set in evaluation mode by default using ``model.eval()`` (Dropout modules are deactivated)
-        To train the model, you should first set it back in training mode with ``model.train()``
-
-        The warning ``Weights from XXX not initialized from pretrained model`` means that the weights of XXX do not come pre-trained with the rest of the model.
-        It is up to you to train those weights with a downstream fine-tuning task.
-
-        The warning ``Weights from XXX not used in YYY`` means that the layer XXX is not used by YYY, therefore those weights are discarded.
-
-        Parameters:
-            pretrained_model_name_or_path: either:
-              - a string with the `shortcut name` of a pre-trained model to load from cache or download, e.g.: ``bert-base-uncased``.
-              - a string with the `identifier name` of a pre-trained model that was user-uploaded to our S3, e.g.: ``dbmdz/bert-base-german-cased``.
-              - a path to a `directory` containing model weights saved using :func:`~transformers.PreTrainedModel.save_pretrained`, e.g.: ``./my_model_directory/``.
-              - a path or url to a `tensorflow index checkpoint file` (e.g. `./tf_model/model.ckpt.index`). In this case, ``from_tf`` should be set to True and a configuration object should be provided as ``config`` argument. This loading path is slower than converting the TensorFlow checkpoint in a PyTorch model using the provided conversion scripts and loading the PyTorch model afterwards.
-              - None if you are both providing the configuration and state dictionary (resp. with keyword arguments ``config`` and ``state_dict``)
-
-            model_args: (`optional`) Sequence of positional arguments:
-                All remaning positional arguments will be passed to the underlying model's ``__init__`` method
-
-            config: (`optional`) one of:
-                - an instance of a class derived from :class:`~transformers.PretrainedConfig`, or
-                - a string valid as input to :func:`~transformers.PretrainedConfig.from_pretrained()`
-                Configuration for the model to use instead of an automatically loaded configuation. Configuration can be automatically loaded when:
-                    - the model is a model provided by the library (loaded with the ``shortcut-name`` string of a pretrained model), or
-                    - the model was saved using :func:`~transformers.PreTrainedModel.save_pretrained` and is reloaded by suppling the save directory.
-                    - the model is loaded by suppling a local directory as ``pretrained_model_name_or_path`` and a configuration JSON file named `config.json` is found in the directory.
-
-            state_dict: (`optional`) dict:
-                an optional state dictionnary for the model to use instead of a state dictionary loaded from saved weights file.
-                This option can be used if you want to create a model from a pretrained configuration but load your own weights.
-                In this case though, you should check if using :func:`~transformers.PreTrainedModel.save_pretrained` and :func:`~transformers.PreTrainedModel.from_pretrained` is not a simpler option.
-
-            cache_dir: (`optional`) string:
-                Path to a directory in which a downloaded pre-trained model
-                configuration should be cached if the standard cache should not be used.
-
-            force_download: (`optional`) boolean, default False:
-                Force to (re-)download the model weights and configuration files and override the cached versions if they exists.
-
-            resume_download: (`optional`) boolean, default False:
-                Do not delete incompletely recieved file. Attempt to resume the download if such a file exists.
-
-            proxies: (`optional`) dict, default None:
-                A dictionary of proxy servers to use by protocol or endpoint, e.g.: {'http': 'foo.bar:3128', 'http://hostname': 'foo.bar:4012'}.
-                The proxies are used on each request.
-
-            output_loading_info: (`optional`) boolean:
-                Set to ``True`` to also return a dictionnary containing missing keys, unexpected keys and error messages.
-
-            kwargs: (`optional`) Remaining dictionary of keyword arguments:
-                Can be used to update the configuration object (after it being loaded) and initiate the model. (e.g. ``output_attention=True``). Behave differently depending on whether a `config` is provided or automatically loaded:
-
-                - If a configuration is provided with ``config``, ``**kwargs`` will be directly passed to the underlying model's ``__init__`` method (we assume all relevant updates to the configuration have already been done)
-                - If a configuration is not provided, ``kwargs`` will be first passed to the configuration class initialization function (:func:`~transformers.PretrainedConfig.from_pretrained`). Each key of ``kwargs`` that corresponds to a configuration attribute will be used to override said attribute with the supplied ``kwargs`` value. Remaining keys that do not correspond to any configuration attribute will be passed to the underlying model's ``__init__`` function.
-
-        Examples::
-
-            # For example purposes. Not runnable.
-            model = BertModel.from_pretrained('bert-base-uncased')    # Download model and configuration from S3 and cache.
-            model = BertModel.from_pretrained('./test/saved_model/')  # E.g. model was saved using `save_pretrained('./test/saved_model/')`
-            model = BertModel.from_pretrained('bert-base-uncased', output_attention=True)  # Update configuration during loading
-            assert model.config.output_attention == True
-            # Loading from a TF checkpoint file instead of a PyTorch model (slower)
-            config = BertConfig.from_json_file('./tf_model/my_tf_model_config.json')
-            model = BertModel.from_pretrained('./tf_model/my_tf_checkpoint.ckpt.index', from_tf=True, config=config)
-
-        """
-        config = kwargs.pop("config", None)
-        state_dict = kwargs.pop("state_dict", None)
-        cache_dir = kwargs.pop("cache_dir", None)
-        from_tf = kwargs.pop("from_tf", False)
-        force_download = kwargs.pop("force_download", False)
-        resume_download = kwargs.pop("resume_download", False)
-        proxies = kwargs.pop("proxies", None)
-        output_loading_info = kwargs.pop("output_loading_info", False)
-        local_files_only = kwargs.pop("local_files_only", False)
-        use_cdn = kwargs.pop("use_cdn", True)
-
-        # Load config if we don't provide a configuration
-        if not isinstance(config, PretrainedConfig):
-            config_path = config if config is not None else pretrained_model_name_or_path
-            config, model_kwargs = cls.config_class.from_pretrained(
-                config_path,
-                *model_args,
-                cache_dir=cache_dir,
-                return_unused_kwargs=True,
-                force_download=force_download,
-                resume_download=resume_download,
-                proxies=proxies,
-                local_files_only=local_files_only,
-                **kwargs,
-            )
-        else:
-            model_kwargs = kwargs
-
-        # Load model
-        if pretrained_model_name_or_path is not None:
-            if pretrained_model_name_or_path in cls.pretrained_model_archive_map:
-                archive_file = cls.pretrained_model_archive_map[pretrained_model_name_or_path]
-            elif os.path.isdir(pretrained_model_name_or_path):
-                if from_tf and os.path.isfile(os.path.join(pretrained_model_name_or_path, TF_WEIGHTS_NAME + ".index")):
-                    # Load from a TF 1.0 checkpoint
-                    archive_file = os.path.join(pretrained_model_name_or_path, TF_WEIGHTS_NAME + ".index")
-                elif from_tf and os.path.isfile(os.path.join(pretrained_model_name_or_path, TF2_WEIGHTS_NAME)):
-                    # Load from a TF 2.0 checkpoint
-                    archive_file = os.path.join(pretrained_model_name_or_path, TF2_WEIGHTS_NAME)
-                elif os.path.isfile(os.path.join(pretrained_model_name_or_path, WEIGHTS_NAME)):
-                    # Load from a PyTorch checkpoint
-                    archive_file = os.path.join(pretrained_model_name_or_path, WEIGHTS_NAME)
-                else:
-                    raise EnvironmentError(
-                        "Error no file named {} found in directory {} or `from_tf` set to False".format(
-                            [WEIGHTS_NAME, TF2_WEIGHTS_NAME, TF_WEIGHTS_NAME + ".index"],
-                            pretrained_model_name_or_path,
-                        )
-                    )
-            elif os.path.isfile(pretrained_model_name_or_path) or is_remote_url(pretrained_model_name_or_path):
-                archive_file = pretrained_model_name_or_path
-            elif os.path.isfile(pretrained_model_name_or_path + ".index"):
-                assert (
-                    from_tf
-                ), "We found a TensorFlow checkpoint at {}, please set from_tf to True to load from this checkpoint".format(
-                    pretrained_model_name_or_path + ".index"
-                )
-                archive_file = pretrained_model_name_or_path + ".index"
-            else:
-                archive_file = hf_bucket_url(
-                    pretrained_model_name_or_path,
-                    filename=(TF2_WEIGHTS_NAME if from_tf else WEIGHTS_NAME),
-                    use_cdn=use_cdn,
-                )
-
-            # redirect to the cache, if necessary
-            try:
-                resolved_archive_file = cached_path(
-                    archive_file,
-                    cache_dir=cache_dir,
-                    force_download=force_download,
-                    proxies=proxies,
-                    resume_download=resume_download,
-                    local_files_only=local_files_only,
-                )
-            except EnvironmentError:
-                if pretrained_model_name_or_path in cls.pretrained_model_archive_map:
-                    msg = "Couldn't reach server at '{}' to download pretrained weights.".format(archive_file)
-                else:
-                    msg = (
-                        "Model name '{}' was not found in model name list ({}). "
-                        "We assumed '{}' was a path or url to model weight files named one of {} but "
-                        "couldn't find any such file at this path or url.".format(
-                            pretrained_model_name_or_path,
-                            ", ".join(cls.pretrained_model_archive_map.keys()),
-                            archive_file,
-                            [WEIGHTS_NAME, TF2_WEIGHTS_NAME, TF_WEIGHTS_NAME],
-                        )
-                    )
-                raise EnvironmentError(msg)
-
-            if resolved_archive_file == archive_file:
-                logger.info("loading weights file {}".format(archive_file))
-            else:
-                logger.info("loading weights file {} from cache at {}".format(archive_file, resolved_archive_file))
-        else:
-            resolved_archive_file = None
-
-        # Instantiate model.
-        model = cls(config, *model_args, **model_kwargs)
-
-        if state_dict is None and not from_tf:
-            try:
-                state_dict = torch.load(resolved_archive_file, map_location="cpu")
-            except Exception:
-                raise OSError(
-                    "Unable to load weights from pytorch checkpoint file. "
-                    "If you tried to load a PyTorch model from a TF 2.0 checkpoint, please set from_tf=True. "
-                )
-
-        missing_keys = []
-        unexpected_keys = []
-        error_msgs = []
-
-        if from_tf:
-            if resolved_archive_file.endswith(".index"):
-                # Load from a TensorFlow 1.X checkpoint - provided by original authors
-                model = cls.load_tf_weights(model, config, resolved_archive_file[:-6])  # Remove the '.index'
-            else:
-                # Load from our TensorFlow 2.0 checkpoints
-                try:
-                    from transformers import load_tf2_checkpoint_in_pytorch_model
-
-                    model = load_tf2_checkpoint_in_pytorch_model(model, resolved_archive_file, allow_missing_keys=True)
-                except ImportError:
-                    logger.error(
-                        "Loading a TensorFlow model in PyTorch, requires both PyTorch and TensorFlow to be installed. Please see "
-                        "https://pytorch.org/ and https://www.tensorflow.org/install/ for installation instructions."
-                    )
-                    raise
-        else:
-            # Convert old format to new format if needed from a PyTorch state_dict
-            old_keys = []
-            new_keys = []
-            for key in state_dict.keys():
-                cur_key=key
-                if "block." in cur_key:
-                    cur_key = cur_key.replace("block.","")
-                if "layer." in cur_key:
-                    cur_key = cur_key.replace("layer.","")
-                if "gamma" in cur_key:
-                    cur_key = cur_key.replace("gamma", "weight")
-                if "beta" in cur_key:
-                    cur_key = cur_key.replace("beta", "bias")
-                if key != cur_key:
-                    old_keys.append(key)
-                    new_keys.append(cur_key)
-            for old_key, new_key in zip(old_keys, new_keys):
-                state_dict[new_key] = state_dict.pop(old_key)
-
-            # copy state_dict so _load_from_state_dict can modify it
-            metadata = getattr(state_dict, "_metadata", None)
-            state_dict = state_dict.copy()
-            if metadata is not None:
-                state_dict._metadata = metadata
-
-            # PyTorch's `_load_from_state_dict` does not copy parameters in a module's descendants
-            # so we need to apply the function recursively.
-            def load(module: nn.Module, prefix=""):
-                local_metadata = {} if metadata is None else metadata.get(prefix[:-1], {})
-                module._load_from_state_dict(
-                    state_dict, prefix, local_metadata, True, missing_keys, unexpected_keys, error_msgs,
-                )
-                for name, child in module._modules.items():
-                    if child is not None:
-                        load(child, prefix + name + ".")
-
-            # Make sure we are able to load base models as well as derived models (with heads)
-            start_prefix = ""
-            model_to_load = model
-            has_prefix_module = any(s.startswith(cls.base_model_prefix) for s in state_dict.keys())
-            if not hasattr(model, cls.base_model_prefix) and has_prefix_module:
-                start_prefix = cls.base_model_prefix + "."
-            if hasattr(model, cls.base_model_prefix) and not has_prefix_module:
-                model_to_load = getattr(model, cls.base_model_prefix)
-
-            load(model_to_load, prefix=start_prefix)
-
-            if model.__class__.__name__ != model_to_load.__class__.__name__:
-                base_model_state_dict = model_to_load.state_dict().keys()
-                head_model_state_dict_without_base_prefix = [
-                    key.split(cls.base_model_prefix + ".")[-1] for key in model.state_dict().keys()
-                ]
-
-                missing_keys.extend(head_model_state_dict_without_base_prefix - base_model_state_dict)
-
-            if len(missing_keys) > 0:
-                logger.info(
-                    "Weights of {} not initialized from pretrained model: {}".format(
-                        model.__class__.__name__, missing_keys
-                    )
-                )
-            if len(unexpected_keys) > 0:
-                logger.info(
-                    "Weights from pretrained model not used in {}: {}".format(
-                        model.__class__.__name__, unexpected_keys
-                    )
-                )
-            if len(error_msgs) > 0:
-                raise RuntimeError(
-                    "Error(s) in loading state_dict for {}:\n\t{}".format(
-                        model.__class__.__name__, "\n\t".join(error_msgs)
-                    )
-                )
-        model.tie_weights()  # make sure token embedding weights are still tied if needed
-
-        # Set model in evaluation mode to deactivate DropOut modules by default
-        model.eval()
-
-        if output_loading_info:
-            loading_info = {
-                "missing_keys": missing_keys,
-                "unexpected_keys": unexpected_keys,
-                "error_msgs": error_msgs,
-            }
-            return model, loading_info
-
-        if hasattr(config, "xla_device") and config.xla_device:
-            import torch_xla.core.xla_model as xm
-
-            model = xm.send_cpu_data_to_device(model, xm.xla_device())
-            model = model.to(xm.xla_device())
-
-        return model
-
-
     def get_head_mask(self, head_mask, num_hidden_layers, is_attention_chunked=False):
         """
         # Prepare head mask if needed
@@ -1007,12 +650,8 @@ class T5PreTrainedModel(PreTrainedModel):
 class T5Stack(T5PreTrainedModel):
     def __init__(self, config, embed_tokens=None):
         super().__init__(config)
-        self.output_attentions = config.output_attentions
-        self.output_hidden_states = config.output_hidden_states
-
         self.embed_tokens = embed_tokens
         self.is_decoder = config.is_decoder
-        
         #NOTE ModuleList
         for i in range(config.num_layers):
             self.add_module(str(i),
@@ -1038,54 +677,25 @@ class T5Stack(T5PreTrainedModel):
 
     def forward(
         self,
-        input_ids=None,
+        input_ids,
         attention_mask=None,
         encoder_hidden_states=None,
         encoder_attention_mask=None,
-        inputs_embeds=None,
-        head_mask=None,
-        past_key_value_states=None,
-        use_cache=False,
+        head_mask=None
     ):
+
+
+        input_shape = input_ids.size()
+        input_ids = input_ids.view(-1, input_shape[-1])
+
         # NOTE is not None
-        # if input_ids is not None and inputs_embeds is not None:
-        if is_not_None(input_ids) and is_not_None(inputs_embeds):
-            raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
-        # NOTE is not None
-        # elif input_ids is not None:
-        elif is_not_None(input_ids):
-            input_shape = input_ids.size()
-            input_ids = input_ids.view(-1, input_shape[-1])
-        # NOTE is not None
-        # elif inputs_embeds is not None:
-        elif is_not_None(inputs_embeds):
-            input_shape = inputs_embeds.size()[:-1]
-        else:
-            if self.is_decoder:
-                raise ValueError("You have to specify either decoder_input_ids or decoder_inputs_embeds")
-            else:
-                raise ValueError("You have to specify either input_ids or inputs_embeds")
-        # NOTE is None
-        # if inputs_embeds is None:
-        if is_None(inputs_embeds):
-            # NOTE is not None
-            # assert self.embed_tokens is not None, "You have to intialize the model with valid token embeddings"
-            assert is_not_None(self.embed_tokens), "You have to intialize the model with valid token embeddings"
-            inputs_embeds = self.embed_tokens(input_ids)
+        # assert self.embed_tokens is not None, "You have to intialize the model with valid token embeddings"
+        assert is_not_None(self.embed_tokens), "You have to intialize the model with valid token embeddings"
+        inputs_embeds = self.embed_tokens(input_ids)
 
         batch_size, seq_length = input_shape
 
-        # NOTE is not None
-        # if past_key_value_states is not None:
-        if is_not_None(past_key_value_states):
-            assert seq_length == 1, "Input shape is {}, but should be {} when using past_key_value_sates".format(
-                input_shape, (batch_size, 1)
-            )
-            # required mask seq length can be calculated via length of past
-            # key value states and seq_length = 1 for the last token
-            mask_seq_length = past_key_value_states[0][0].shape[2] + seq_length
-        else:
-            mask_seq_length = seq_length
+        mask_seq_length = seq_length
 
         # NOTE is None
         # if attention_mask is None:
@@ -1097,13 +707,6 @@ class T5Stack(T5PreTrainedModel):
             encoder_seq_length = encoder_hidden_states.shape[1]
             encoder_attention_mask = torch.ones(batch_size, encoder_seq_length).to(inputs_embeds.device)
 
-        # initialize past_key_value_states with `None` if past does not exist
-        # NOTE is None
-        # if past_key_value_states is None:
-        if is_None(past_key_value_states):
-            #NOTE moduleList
-            past_key_value_states = [None] * self.num_layers
-            # past_key_value_states = [None] * len(self.block)
 
         # ourselves in which case we just need to make it broadcastable to all heads.
         extended_attention_mask = self.get_extended_attention_mask(attention_mask, input_shape, attention_mask.device)
@@ -1117,22 +720,14 @@ class T5Stack(T5PreTrainedModel):
 
         # Prepare head mask if needed
         head_mask = self.get_head_mask(head_mask, self.config.num_layers)
-        present_key_value_states = ()
-        all_hidden_states = ()
-        all_attentions = ()
         position_bias = None
         encoder_decoder_position_bias = None
 
         hidden_states = self.dropout(inputs_embeds)
 
         #NOTE moduleList
-        # for i, (layer_module, past_key_value_state) in enumerate(zip(self.block, past_key_value_states)):
-        # TODO what will happen if past_key_value_states is traced?
-        for i,past_key_value_state in enumerate(past_key_value_states):
+        for i in range(self.num_layers):
             layer_module = getattr(self,str(i))
-            if self.output_hidden_states:
-                all_hidden_states = all_hidden_states + (hidden_states,)
-
             layer_outputs = layer_module(
                 hidden_states,
                 attention_mask=extended_attention_mask,
@@ -1140,44 +735,27 @@ class T5Stack(T5PreTrainedModel):
                 encoder_hidden_states=encoder_hidden_states,
                 encoder_attention_mask=encoder_extended_attention_mask,
                 encoder_decoder_position_bias=encoder_decoder_position_bias,
-                head_mask=head_mask[i],
-                past_key_value_state=past_key_value_state,
-                use_cache=use_cache,
+                head_mask=head_mask[i]
             )
             # layer_outputs is a tuple with:
-            # hidden-states, key-value-states, (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
-            hidden_states, present_key_value_state = layer_outputs[:2]
-            if i == 0:
+            # hidden-states, (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
+           
+            if i == 0: 
+                hidden_states = layer_outputs[0]
                 # We share the position biases between the layers - the first layer store them
-                # layer_outputs = hidden-states, key-value-states (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
-                position_bias = layer_outputs[3 if self.output_attentions else 2]
+                # layer_outputs = hidden-states, (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
+                position_bias = layer_outputs[1]
                 #NOTE is not None
                 # if self.is_decoder and encoder_hidden_states is not None:
                 if self.is_decoder and is_not_None(encoder_hidden_states):
-                    encoder_decoder_position_bias = layer_outputs[5 if self.output_attentions else 3]
-            # append next layer key value states
-            present_key_value_states = present_key_value_states + (present_key_value_state,)
-
-            if self.output_attentions:
-                all_attentions = all_attentions + (layer_outputs[2],)  # We keep only self-attention weights for now
+                    encoder_decoder_position_bias = layer_outputs[2]
+            else:
+                hidden_states = layer_outputs
 
         hidden_states = self.final_layer_norm(hidden_states)
         hidden_states = self.dropout(hidden_states)
 
-        # Add last layer
-        if self.output_hidden_states:
-            all_hidden_states = all_hidden_states + (hidden_states,)
-
-        outputs = (hidden_states,)
-        # if use_cache is True:
-        if use_cache:
-            assert self.is_decoder, "`use_cache` can only be set to `True` if {} is used as a decoder".format(self)
-            outputs = outputs + (present_key_value_states,)
-        if self.output_hidden_states:
-            outputs = outputs + (all_hidden_states,)
-        if self.output_attentions:
-            outputs = outputs + (all_attentions,)
-        return outputs  # last-layer hidden state, (presents,) (all hidden states), (all attentions)
+        return hidden_states
 
 
 T5_START_DOCSTRING = r"""    The T5 model was proposed in
@@ -1294,15 +872,10 @@ class T5Model(T5PreTrainedModel):
     @add_start_docstrings_to_callable(T5_INPUTS_DOCSTRING)
     def forward(
         self,
-        input_ids=None,
+        input_ids,
         attention_mask=None,
-        encoder_outputs=None,
         decoder_input_ids=None,
         decoder_attention_mask=None,
-        decoder_past_key_value_states=None,
-        use_cache=False,
-        inputs_embeds=None,
-        decoder_inputs_embeds=None,
         head_mask=None,
     ):
         r"""
@@ -1339,50 +912,22 @@ class T5Model(T5PreTrainedModel):
 
         """
 
-        # Encode if needed (training, first prediction pass)
-        #NOTE is None
-        # if encoder_outputs is None:
-        if is_None(encoder_outputs):
-            encoder_outputs = self.encoder(
-                input_ids=input_ids, attention_mask=attention_mask, inputs_embeds=inputs_embeds, head_mask=head_mask
-            )
-
-        hidden_states = encoder_outputs[0]
-
-        # If decoding with past key value states, only the last tokens
-        # should be given as an input
-        #NOTE is not None
-        # if decoder_past_key_value_states is not None:
-        if is_not_None(decoder_past_key_value_states):
-            #NOTE is not None
-            # if decoder_input_ids is not None:
-            if is_not_None(decoder_input_ids):
-                decoder_input_ids = decoder_input_ids[:, -1:]
-            #NOTE is not None
-            # if decoder_inputs_embeds is not None:
-            if is_not_None(decoder_inputs_embeds):
-                decoder_inputs_embeds = decoder_inputs_embeds[:, -1:]
+        # Encode
+        encoder_hidden_states = self.encoder(input_ids=input_ids,attention_mask=attention_mask,head_mask=head_mask)
 
         # Decode
-        decoder_outputs = self.decoder(
+        decoder_hidden_states = self.decoder(
             input_ids=decoder_input_ids,
             attention_mask=decoder_attention_mask,
-            inputs_embeds=decoder_inputs_embeds,
-            past_key_value_states=decoder_past_key_value_states,
-            encoder_hidden_states=hidden_states,
+            encoder_hidden_states=encoder_hidden_states,
             encoder_attention_mask=attention_mask,
-            head_mask=head_mask,
-            use_cache=use_cache,
+            head_mask=head_mask
         )
 
-        # if use_cache is True:
-        if use_cache:
-            past = ((encoder_outputs, decoder_outputs[1]),)
-            decoder_outputs = decoder_outputs[:1] + past + decoder_outputs[2:]
-        
         if self.output_only:
-            return decoder_outputs[0]
-        return decoder_outputs + encoder_outputs
+            return decoder_hidden_states
+
+        return decoder_hidden_states,encoder_hidden_states
 
 
 @add_start_docstrings("""T5 Model with a `language modeling` head on top. """, T5_START_DOCSTRING)
@@ -1428,16 +973,11 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
     @add_start_docstrings_to_callable(T5_INPUTS_DOCSTRING)
     def forward(
         self,
-        input_ids=None,
+        input_ids,
         attention_mask=None,
-        encoder_outputs=None,
         decoder_input_ids=None,
         decoder_attention_mask=None,
-        decoder_past_key_value_states=None,
-        use_cache=False,
         lm_labels=None,
-        inputs_embeds=None,
-        decoder_inputs_embeds=None,
         head_mask=None,
     ):
         r"""
@@ -1483,66 +1023,30 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         outputs = model.generate(input_ids)
         """
 
-        # Encode if needed (training, first prediction pass)
-        #NOTE is none
-        # if encoder_outputs is None:
-        if is_None(encoder_outputs):
-            # Convert encoder inputs in embeddings if needed
-            encoder_outputs = self.encoder(
-                input_ids=input_ids, attention_mask=attention_mask, inputs_embeds=inputs_embeds, head_mask=head_mask
-            )
 
-        hidden_states = encoder_outputs[0]
+        encoder_hidden_states = self.encoder(input_ids=input_ids, attention_mask=attention_mask, head_mask=head_mask)
 
         #NOTE is not none, is none, is none
         # if lm_labels is not None and decoder_input_ids is None and decoder_inputs_embeds is None:
-        if is_not_None(lm_labels) and is_None(decoder_input_ids) and is_None(decoder_inputs_embeds):
+        if is_not_None(lm_labels) and is_None(decoder_input_ids):
             # get decoder inputs from shifting lm labels to the right
             decoder_input_ids = self._shift_right(lm_labels)
 
-        # If decoding with past key value states, only the last tokens
-        # should be given as an input
-        #NOTE is not None
-        # if decoder_past_key_value_states is not None:
-        if is_not_None(decoder_past_key_value_states):
-            #NOTE is None
-            # assert lm_labels is None, "Decoder should not use cached key value states when training."
-            assert is_None(lm_labels), "Decoder should not use cached key value states when training."
-            #NOTE is not None
-            # if decoder_input_ids is not None:
-            if is_not_None(decoder_input_ids):
-                decoder_input_ids = decoder_input_ids[:, -1:]
-            #NOTE is not None    
-            # if decoder_inputs_embeds is not None:
-            if is_not_None(decoder_inputs_embeds):
-                decoder_inputs_embeds = decoder_inputs_embeds[:, -1:]
-
         # Decode
-        decoder_outputs = self.decoder(
+        decoder_hidden_states = self.decoder(
             input_ids=decoder_input_ids,
             attention_mask=decoder_attention_mask,
-            inputs_embeds=decoder_inputs_embeds,
-            past_key_value_states=decoder_past_key_value_states,
-            encoder_hidden_states=hidden_states,
+            encoder_hidden_states=encoder_hidden_states,
             encoder_attention_mask=attention_mask,
-            head_mask=head_mask,
-            use_cache=use_cache,
+            head_mask=head_mask
         )
 
-        # insert decoder past at right place
-        # to speed up decoding
-        # if use_cache is True:
-        if use_cache:
-            past = ((encoder_outputs, decoder_outputs[1]),)
-            decoder_outputs = decoder_outputs[:1] + past + decoder_outputs[2:]
-
-        sequence_output = decoder_outputs[0]
         # Rescale output before projecting on vocab
         # See https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/transformer/transformer.py#L586
-        sequence_output = sequence_output * (self.model_dim ** -0.5)
+        sequence_output = decoder_hidden_states * (self.model_dim ** -0.5)
         lm_logits = self.lm_head(sequence_output)
 
-        decoder_outputs = (lm_logits,) + decoder_outputs[1:]  # Add hidden states and attention if they are here
+        decoder_outputs = (lm_logits,decoder_hidden_states) # Add hidden states
         #NOTE is not None
         # if lm_labels is not None:
         if is_not_None(lm_labels):
@@ -1554,7 +1058,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         
         if self.output_only:
             return decoder_outputs[0]
-        return decoder_outputs + encoder_outputs
+        return decoder_outputs + (encoder_hidden_states,)
 
     def prepare_inputs_for_generation(self, input_ids, past, attention_mask, use_cache, **kwargs):
         #NOTE is not None
