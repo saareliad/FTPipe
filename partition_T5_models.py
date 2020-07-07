@@ -22,6 +22,7 @@ import numpy as np
 import torch
 from transformers import (
     DataCollator, )
+from torch.utils.data import TensorDataset
 
 # See https://huggingface.co/models
 T5_PRETRAINED_MODELS = {'t5-small', 't5-base', 't5-large', 't5-3b', 't5-11b'}
@@ -35,11 +36,11 @@ def register_functions():
 
 
 def get_model_and_tokenizer(args):
-    config = T5Config.from_pretrained(args.model)
+    config = T5Config.from_pretrained(args.model_name_or_path)
     config.output_attentions = False
     config.output_hidden_states = False
     setattr(config, "output_only", True)
-    tokenizer = T5Tokenizer.from_pretrained(args.model)
+    tokenizer = T5Tokenizer.from_pretrained(args.model_name_or_path)
 
     base = not args.lmhead
     tied = args.stateless_tied
@@ -52,7 +53,7 @@ def get_model_and_tokenizer(args):
         model_cls = TiedT5ForConditionalGeneration
     else:
         model_cls = T5ForConditionalGeneration
-    model = model_cls.from_pretrained(args.model,
+    model = model_cls.from_pretrained(args.model_name_or_path,
                                       config=config).to(args.device).train()
 
     if tied:
@@ -61,7 +62,7 @@ def get_model_and_tokenizer(args):
     return model, tokenizer
 
 
-def get_input_dummy(args, tokenizer, analysis=False):
+def get_input_dummy(args, tokenizer, model=None, analysis=False):
     input_ids = tokenizer.encode("Hello, my dog is cute",
                                  return_tensors="pt").to(
                                      args.device)  # Batch (1,6)
@@ -88,7 +89,7 @@ def get_input_dummy(args, tokenizer, analysis=False):
     return kwargs
 
 
-def get_input_squad1(args, tokenizer, analysis=False):
+def get_input_squad1(args, tokenizer, model, analysis=False):
     # see https://colab.research.google.com/github/patil-suraj/exploring-T5/blob/master/T5_on_TPU.ipynb#scrollTo=2ZWE4addfSmi
     batch_size = args.analysis_batch_size if analysis else args.partitioning_batch_size
 
@@ -176,9 +177,14 @@ def get_input_squad1(args, tokenizer, analysis=False):
             decoder_attention_mask = torch.stack(
                 [example['target_attention_mask'] for example in batch])
 
+            decoder_input_ids = model._shift_right(lm_labels)
+
+            # decoder_input_ids =
+
             return {
                 'input_ids': input_ids,
                 'attention_mask': attention_mask,
+                'decoder_input_ids': decoder_input_ids,
                 'lm_labels': lm_labels,
                 'decoder_attention_mask': decoder_attention_mask
             }
@@ -205,21 +211,45 @@ def get_input_squad1(args, tokenizer, analysis=False):
     return batch
 
 
+def make_nlp_train_ds(train_dataset, model):
+    input_ids = torch.stack(
+        [example['input_ids'] for example in train_dataset])
+    lm_labels = torch.stack(
+        [example['target_ids'] for example in train_dataset])
+    lm_labels[lm_labels[:, :] == 0] = -100
+    attention_mask = torch.stack(
+        [example['attention_mask'] for example in train_dataset])
+    decoder_attention_mask = torch.stack(
+        [example['target_attention_mask'] for example in train_dataset])
+
+    decoder_input_ids = model._shift_right(lm_labels)
+    
+    # NOTE this is according to parameter order in T5. 
+    # Order matters
+    d = {}
+    d['input_ids'] = input_ids
+    d['attention_mask'] = attention_mask
+    d['decoder_input_ids'] = decoder_input_ids
+    d['decoder_attention_mask'] = decoder_attention_mask
+    d['lm_labels'] = lm_labels
+    return TensorDataset(*[torch.tensor(x) for x in d.values()])
+
+
 T5_TASK_TO_GET_INPUT = {
     "dummy": get_input_dummy,
     'squad1': get_input_squad1,
 }
 
 
-def get_input(args, tokenizer, analysis=False):
+def get_input(args, tokenizer, model, analysis=False):
 
     print(f"-I- geeting input for t5_task: {args.t5_task}")
-    return T5_TASK_TO_GET_INPUT[args.t5_task](args, tokenizer, analysis)
+    return T5_TASK_TO_GET_INPUT[args.t5_task](args, tokenizer, model, analysis)
 
 
 class ParsePartitioningT5Opts(ParsePartitioningOpts):
     def _extra(self, parser):
-        parser.add_argument("--model",
+        parser.add_argument("--model_name_or_path",
                             choices=T5_PRETRAINED_MODELS,
                             default='t5-small')
         parser.add_argument("--max_seq_length", type=int, default=512)
@@ -236,7 +266,7 @@ class ParsePartitioningT5Opts(ParsePartitioningOpts):
 
     def set_defaults(self, parser):
         d = {
-            "model": "t5-small",
+            "model_name_or_path": "t5-small",
             "partitioning_batch_size": 16,
             "n_iter": 50,
             "n_partitions": 4,
@@ -256,9 +286,24 @@ def parse_cli():
     ParseMetisOpts.add_metis_arguments(parser)
     ParseAcyclicPartitionerOpts.add_acyclic_partitioner_arguments(parser)
 
+    
+
     args = parser.parse_args()
     if not args.output_file:
-        args.output_file = f"{args.model.replace('-','_')}_p{args.n_partitions}_{args.t5_task}"
+
+        bw_str = str(args.bw).replace(".", "_")
+        model_str = str(args.model_name_or_path).replace("-", "_")
+        tied = "tied" if args.stateless_tied else "untied"
+        if tied:
+            model_str += "_tied"
+
+
+        args.output_file = f"{model_str}_{args.n_partitions}p_bw{bw_str}"
+
+        if args.async_pipeline:
+            args.output_file += "_async"
+
+        args.output_file += f"_{args.t5_task}"
 
     if args.output_file.endswith(".py"):
         args.output_file = args.output_file[:-3]
@@ -296,7 +341,7 @@ if __name__ == "__main__":
         args.device = tmp
         del tmp
 
-    sample = get_input(args, tokenizer, analysis=False)
+    sample = get_input(args, tokenizer, model, analysis=False)
 
     register_functions()
     # partition the model using our profiler
@@ -373,7 +418,7 @@ if __name__ == "__main__":
         _ = run_partitions(sample, analysis_config)
 
     if not args.no_analysis:
-        sample = get_input(args, tokenizer, analysis=True)
+        sample = get_input(args, tokenizer, model, analysis=True)
         analysis_result, summary = run_analysis(
             sample,
             graph,

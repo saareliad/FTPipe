@@ -347,7 +347,9 @@ class T5Attention(nn.Module):
         #     present_key_value_state = ((k, v),)
         # else:
         #     present_key_value_state = (None,)
-        scores = torch.einsum("bnqd,bnkd->bnqk", q, k)  # (bs, n_heads, qlen, klen)
+        # scores = torch.einsum("bnqd,bnkd->bnqk", q, k)  # (bs, n_heads, qlen, klen)
+
+        scores = torch.matmul(q,k.transpose(3,2))
 
         # NOTE is none
         # if position_bias is None:
@@ -681,6 +683,8 @@ class T5Stack(T5PreTrainedModel):
         encoder_attention_mask=None,
         head_mask=None
     ):
+
+
         input_shape = input_ids.size()
         input_ids = input_ids.view(-1, input_shape[-1])
 
