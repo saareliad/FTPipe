@@ -431,7 +431,10 @@ class PartitionWithoutRecomputation(nn.Module):
                     self.input_buffer[micro_batch_idx] = x
 
                 # UNFLATEN
-                x = unflatten(x, self.req_grad)
+                if self._REQ_GRAD:
+                    x = unflatten(x, self.req_grad)
+                # Else: its the first partition!
+
                 x = self.layers(*x)
 
             # save the head.
