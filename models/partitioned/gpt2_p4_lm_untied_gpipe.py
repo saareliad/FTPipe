@@ -49,13 +49,13 @@ def create_pipeline_configuration(DEBUG=False):
                 }
             },
             "outputs": {
-                'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/aten::add5411':
+                'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/aten::add5411':
                 {
                     'shape': [4, 1024, 768],
                     'dtype': 'torch.float32',
                     'is_batched': True
                 },
-                'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[resid_dropout]':
+                'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Dropout[resid_dropout]':
                 {
                     'shape': [4, 1024, 768],
                     'dtype': 'torch.float32',
@@ -65,14 +65,14 @@ def create_pipeline_configuration(DEBUG=False):
         },
         1: {
             "inputs": {
-                'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/aten::add5411':
+                'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/aten::add5411':
                 {
                     'shape': [4, 1024, 768],
                     'dtype': 'torch.float32',
                     'is_batched': True,
                     'req_grad': True
                 },
-                'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[resid_dropout]':
+                'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Dropout[resid_dropout]':
                 {
                     'shape': [4, 1024, 768],
                     'dtype': 'torch.float32',
@@ -81,13 +81,13 @@ def create_pipeline_configuration(DEBUG=False):
                 }
             },
             "outputs": {
-                'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/aten::add6147':
+                'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/aten::add6147':
                 {
                     'shape': [4, 1024, 768],
                     'dtype': 'torch.float32',
                     'is_batched': True
                 },
-                'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_attn]':
+                'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Conv1D[c_attn]':
                 {
                     'shape': [4, 1024, 2304],
                     'dtype': 'torch.float32',
@@ -97,14 +97,14 @@ def create_pipeline_configuration(DEBUG=False):
         },
         2: {
             "inputs": {
-                'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/aten::add6147':
+                'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/aten::add6147':
                 {
                     'shape': [4, 1024, 768],
                     'dtype': 'torch.float32',
                     'is_batched': True,
                     'req_grad': True
                 },
-                'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_attn]':
+                'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Conv1D[c_attn]':
                 {
                     'shape': [4, 1024, 2304],
                     'dtype': 'torch.float32',
@@ -113,7 +113,7 @@ def create_pipeline_configuration(DEBUG=False):
                 }
             },
             "outputs": {
-                'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/aten::add7067':
+                'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/aten::add7067':
                 {
                     'shape': [4, 1024, 768],
                     'dtype': 'torch.float32',
@@ -123,7 +123,7 @@ def create_pipeline_configuration(DEBUG=False):
         },
         3: {
             "inputs": {
-                'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/aten::add7067':
+                'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/aten::add7067':
                 {
                     'shape': [4, 1024, 768],
                     'dtype': 'torch.float32',
@@ -196,38 +196,38 @@ class Partition0(nn.Module):
         'GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wte]',
         'GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wpe]',
         'GPT2LMHeadModel/GPT2Model[transformer]/Dropout[drop]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_1]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_attn]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[attn_dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[resid_dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_2]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_fc]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Dropout[dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_1]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_attn]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[attn_dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[resid_dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_2]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_fc]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Dropout[dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_1]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_attn]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[attn_dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[resid_dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_2]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_fc]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Dropout[dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_1]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_attn]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[attn_dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/LayerNorm[ln_2]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/Dropout[dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/LayerNorm[ln_2]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/Dropout[dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/LayerNorm[ln_2]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/Dropout[dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Dropout[resid_dropout]',
     }
 
     def __init__(self, layers, tensors):
@@ -247,175 +247,175 @@ class Partition0(nn.Module):
         self.scopes.append(
             'GPT2LMHeadModel/GPT2Model[transformer]/Dropout[drop]')
         self.l_3 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_1]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/LayerNorm[ln_1]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_1]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/LayerNorm[ln_1]')
         self.l_4 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_attn]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Conv1D[c_attn]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_attn]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Conv1D[c_attn]'
         )
         self.l_5 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[attn_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Dropout[attn_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[attn_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Dropout[attn_dropout]'
         )
         self.l_6 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Conv1D[c_proj]'
         )
         self.l_7 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[resid_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Dropout[resid_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[resid_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Dropout[resid_dropout]'
         )
         self.l_8 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_2]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/LayerNorm[ln_2]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_2]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/LayerNorm[ln_2]')
         self.l_9 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_fc]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/Conv1D[c_fc]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_fc]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/Conv1D[c_fc]'
         )
         self.l_10 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/Conv1D[c_proj]'
         )
         self.l_11 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Dropout[dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/Dropout[dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Dropout[dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/Dropout[dropout]'
         )
         self.l_12 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_1]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/LayerNorm[ln_1]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_1]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/LayerNorm[ln_1]')
         self.l_13 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_attn]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Conv1D[c_attn]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_attn]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Conv1D[c_attn]'
         )
         self.l_14 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[attn_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Dropout[attn_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[attn_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Dropout[attn_dropout]'
         )
         self.l_15 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Conv1D[c_proj]'
         )
         self.l_16 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[resid_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Dropout[resid_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[resid_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Dropout[resid_dropout]'
         )
         self.l_17 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_2]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/LayerNorm[ln_2]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_2]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/LayerNorm[ln_2]')
         self.l_18 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_fc]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/Conv1D[c_fc]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_fc]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/Conv1D[c_fc]'
         )
         self.l_19 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/Conv1D[c_proj]'
         )
         self.l_20 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Dropout[dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/Dropout[dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Dropout[dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/Dropout[dropout]'
         )
         self.l_21 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_1]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/LayerNorm[ln_1]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_1]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/LayerNorm[ln_1]')
         self.l_22 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_attn]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Conv1D[c_attn]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_attn]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Conv1D[c_attn]'
         )
         self.l_23 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[attn_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Dropout[attn_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[attn_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Dropout[attn_dropout]'
         )
         self.l_24 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Conv1D[c_proj]'
         )
         self.l_25 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[resid_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Dropout[resid_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[resid_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Dropout[resid_dropout]'
         )
         self.l_26 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_2]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/LayerNorm[ln_2]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_2]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/LayerNorm[ln_2]')
         self.l_27 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_fc]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/Conv1D[c_fc]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_fc]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/Conv1D[c_fc]'
         )
         self.l_28 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/Conv1D[c_proj]'
         )
         self.l_29 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Dropout[dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/Dropout[dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Dropout[dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/Dropout[dropout]'
         )
         self.l_30 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_1]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/LayerNorm[ln_1]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_1]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/LayerNorm[ln_1]')
         self.l_31 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_attn]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Conv1D[c_attn]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_attn]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Conv1D[c_attn]'
         )
         self.l_32 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[attn_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Dropout[attn_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[attn_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Dropout[attn_dropout]'
         )
         self.l_33 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Conv1D[c_proj]'
         )
         self.l_34 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[resid_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Dropout[resid_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[resid_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Dropout[resid_dropout]'
         )
 
         # initializing partition buffers
         self.register_buffer(
             'b_0', tensors[
-                'GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Tensor[bias]']
+                'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Tensor[bias]']
         )
         self.register_buffer(
             'b_1', tensors[
-                'GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Tensor[bias]']
+                'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Tensor[bias]']
         )
         self.register_buffer(
             'b_2', tensors[
-                'GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Tensor[bias]']
+                'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Tensor[bias]']
         )
         self.register_buffer(
             'b_3', tensors[
-                'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Tensor[bias]']
+                'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Tensor[bias]']
         )
 
         self.device = torch.device('cuda:0')
@@ -423,84 +423,84 @@ class Partition0(nn.Module):
             'l_0': 'transformer.wte',
             'l_1': 'transformer.wpe',
             'l_2': 'transformer.drop',
-            'l_3': 'transformer.0.ln_1',
-            'l_4': 'transformer.0.attn.c_attn',
-            'l_5': 'transformer.0.attn.attn_dropout',
-            'l_6': 'transformer.0.attn.c_proj',
-            'l_7': 'transformer.0.attn.resid_dropout',
-            'l_8': 'transformer.0.ln_2',
-            'l_9': 'transformer.0.mlp.c_fc',
-            'l_10': 'transformer.0.mlp.c_proj',
-            'l_11': 'transformer.0.mlp.dropout',
-            'l_12': 'transformer.1.ln_1',
-            'l_13': 'transformer.1.attn.c_attn',
-            'l_14': 'transformer.1.attn.attn_dropout',
-            'l_15': 'transformer.1.attn.c_proj',
-            'l_16': 'transformer.1.attn.resid_dropout',
-            'l_17': 'transformer.1.ln_2',
-            'l_18': 'transformer.1.mlp.c_fc',
-            'l_19': 'transformer.1.mlp.c_proj',
-            'l_20': 'transformer.1.mlp.dropout',
-            'l_21': 'transformer.2.ln_1',
-            'l_22': 'transformer.2.attn.c_attn',
-            'l_23': 'transformer.2.attn.attn_dropout',
-            'l_24': 'transformer.2.attn.c_proj',
-            'l_25': 'transformer.2.attn.resid_dropout',
-            'l_26': 'transformer.2.ln_2',
-            'l_27': 'transformer.2.mlp.c_fc',
-            'l_28': 'transformer.2.mlp.c_proj',
-            'l_29': 'transformer.2.mlp.dropout',
-            'l_30': 'transformer.3.ln_1',
-            'l_31': 'transformer.3.attn.c_attn',
-            'l_32': 'transformer.3.attn.attn_dropout',
-            'l_33': 'transformer.3.attn.c_proj',
-            'l_34': 'transformer.3.attn.resid_dropout',
-            'b_0': 'transformer.0.attn.bias',
-            'b_1': 'transformer.1.attn.bias',
-            'b_2': 'transformer.2.attn.bias',
-            'b_3': 'transformer.3.attn.bias'
+            'l_3': 'transformer.blocks.0.ln_1',
+            'l_4': 'transformer.blocks.0.attn.c_attn',
+            'l_5': 'transformer.blocks.0.attn.attn_dropout',
+            'l_6': 'transformer.blocks.0.attn.c_proj',
+            'l_7': 'transformer.blocks.0.attn.resid_dropout',
+            'l_8': 'transformer.blocks.0.ln_2',
+            'l_9': 'transformer.blocks.0.mlp.c_fc',
+            'l_10': 'transformer.blocks.0.mlp.c_proj',
+            'l_11': 'transformer.blocks.0.mlp.dropout',
+            'l_12': 'transformer.blocks.1.ln_1',
+            'l_13': 'transformer.blocks.1.attn.c_attn',
+            'l_14': 'transformer.blocks.1.attn.attn_dropout',
+            'l_15': 'transformer.blocks.1.attn.c_proj',
+            'l_16': 'transformer.blocks.1.attn.resid_dropout',
+            'l_17': 'transformer.blocks.1.ln_2',
+            'l_18': 'transformer.blocks.1.mlp.c_fc',
+            'l_19': 'transformer.blocks.1.mlp.c_proj',
+            'l_20': 'transformer.blocks.1.mlp.dropout',
+            'l_21': 'transformer.blocks.2.ln_1',
+            'l_22': 'transformer.blocks.2.attn.c_attn',
+            'l_23': 'transformer.blocks.2.attn.attn_dropout',
+            'l_24': 'transformer.blocks.2.attn.c_proj',
+            'l_25': 'transformer.blocks.2.attn.resid_dropout',
+            'l_26': 'transformer.blocks.2.ln_2',
+            'l_27': 'transformer.blocks.2.mlp.c_fc',
+            'l_28': 'transformer.blocks.2.mlp.c_proj',
+            'l_29': 'transformer.blocks.2.mlp.dropout',
+            'l_30': 'transformer.blocks.3.ln_1',
+            'l_31': 'transformer.blocks.3.attn.c_attn',
+            'l_32': 'transformer.blocks.3.attn.attn_dropout',
+            'l_33': 'transformer.blocks.3.attn.c_proj',
+            'l_34': 'transformer.blocks.3.attn.resid_dropout',
+            'b_0': 'transformer.blocks.0.attn.bias',
+            'b_1': 'transformer.blocks.1.attn.bias',
+            'b_2': 'transformer.blocks.2.attn.bias',
+            'b_3': 'transformer.blocks.3.attn.bias'
         }
 
     def forward(self, x0):
         # GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wte] <=> self.l_0
         # GPT2LMHeadModel/GPT2Model[transformer]/Embedding[wpe] <=> self.l_1
         # GPT2LMHeadModel/GPT2Model[transformer]/Dropout[drop] <=> self.l_2
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_1] <=> self.l_3
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_attn] <=> self.l_4
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[attn_dropout] <=> self.l_5
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_proj] <=> self.l_6
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[resid_dropout] <=> self.l_7
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_2] <=> self.l_8
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_fc] <=> self.l_9
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_proj] <=> self.l_10
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Dropout[dropout] <=> self.l_11
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_1] <=> self.l_12
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_attn] <=> self.l_13
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[attn_dropout] <=> self.l_14
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_proj] <=> self.l_15
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[resid_dropout] <=> self.l_16
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_2] <=> self.l_17
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_fc] <=> self.l_18
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_proj] <=> self.l_19
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Dropout[dropout] <=> self.l_20
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_1] <=> self.l_21
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_attn] <=> self.l_22
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[attn_dropout] <=> self.l_23
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_proj] <=> self.l_24
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[resid_dropout] <=> self.l_25
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_2] <=> self.l_26
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_fc] <=> self.l_27
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_proj] <=> self.l_28
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Dropout[dropout] <=> self.l_29
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_1] <=> self.l_30
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_attn] <=> self.l_31
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[attn_dropout] <=> self.l_32
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_proj] <=> self.l_33
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[resid_dropout] <=> self.l_34
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Tensor[bias] <=> self.b_0
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Tensor[bias] <=> self.b_1
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Tensor[bias] <=> self.b_2
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Tensor[bias] <=> self.b_3
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/LayerNorm[ln_1] <=> self.l_3
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Conv1D[c_attn] <=> self.l_4
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Dropout[attn_dropout] <=> self.l_5
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Conv1D[c_proj] <=> self.l_6
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Dropout[resid_dropout] <=> self.l_7
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/LayerNorm[ln_2] <=> self.l_8
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/Conv1D[c_fc] <=> self.l_9
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/Conv1D[c_proj] <=> self.l_10
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/Dropout[dropout] <=> self.l_11
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/LayerNorm[ln_1] <=> self.l_12
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Conv1D[c_attn] <=> self.l_13
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Dropout[attn_dropout] <=> self.l_14
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Conv1D[c_proj] <=> self.l_15
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Dropout[resid_dropout] <=> self.l_16
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/LayerNorm[ln_2] <=> self.l_17
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/Conv1D[c_fc] <=> self.l_18
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/Conv1D[c_proj] <=> self.l_19
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/Dropout[dropout] <=> self.l_20
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/LayerNorm[ln_1] <=> self.l_21
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Conv1D[c_attn] <=> self.l_22
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Dropout[attn_dropout] <=> self.l_23
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Conv1D[c_proj] <=> self.l_24
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Dropout[resid_dropout] <=> self.l_25
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/LayerNorm[ln_2] <=> self.l_26
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/Conv1D[c_fc] <=> self.l_27
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/Conv1D[c_proj] <=> self.l_28
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/Dropout[dropout] <=> self.l_29
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/LayerNorm[ln_1] <=> self.l_30
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Conv1D[c_attn] <=> self.l_31
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Dropout[attn_dropout] <=> self.l_32
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Conv1D[c_proj] <=> self.l_33
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Dropout[resid_dropout] <=> self.l_34
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Tensor[bias] <=> self.b_0
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Tensor[bias] <=> self.b_1
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Tensor[bias] <=> self.b_2
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Tensor[bias] <=> self.b_3
         # input0 <=> x0
 
         # moving inputs to current device no op if already on the correct device
@@ -563,1095 +563,1095 @@ class Partition0(nn.Module):
         # calling GPT2LMHeadModel/GPT2Model[transformer]/Dropout[drop] with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/aten::add4858
         t_2 = self.l_2(t_2)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_1] with arguments:
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/LayerNorm[ln_1] with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Dropout[drop]
         t_1 = self.l_3(t_2)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_attn] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_1]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Conv1D[c_attn] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/LayerNorm[ln_1]
         t_1 = self.l_4(t_1)
         # calling torch.split with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_attn]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4871
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4872
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Conv1D[c_attn]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4871
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4872
         t_1 = t_1.split(split_size=768, dim=2)
         t_4 = t_1[0]
         t_5 = t_1[1]
         t_1 = t_1[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48740
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4877
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::ListUnpack48740
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4877
         t_6 = t_4.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48740
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4881
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::ListUnpack48740
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4881
         t_7 = t_4.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48740
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4885
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::ListUnpack48740
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4885
         t_8 = t_4.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::size4886
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4888
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::size4886
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4888
         t_8 = torch.div(input=t_8, other=12)
         t_8 = [t_6, t_7, 12, t_8]
         del t_7
         del t_6
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48740
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListConstruct4892
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::ListUnpack48740
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::ListConstruct4892
         t_8 = t_4.view(size=t_8)
         del t_4
         t_4 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::view4893
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListConstruct4898
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::view4893
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::ListConstruct4898
         t_4 = t_8.permute(dims=t_4)
         del t_8
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48741
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4900
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::ListUnpack48741
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4900
         t_8 = t_5.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48741
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4904
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::ListUnpack48741
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4904
         t_7 = t_5.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48741
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4908
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::ListUnpack48741
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4908
         t_6 = t_5.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::size4909
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4911
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::size4909
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4911
         t_6 = torch.div(input=t_6, other=12)
         t_6 = [t_8, t_7, 12, t_6]
         del t_7
         del t_8
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48741
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListConstruct4915
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::ListUnpack48741
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::ListConstruct4915
         t_6 = t_5.view(size=t_6)
         del t_5
         t_5 = [0, 2, 3, 1]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::view4916
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListConstruct4921
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::view4916
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::ListConstruct4921
         t_5 = t_6.permute(dims=t_5)
         del t_6
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48742
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4923
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::ListUnpack48742
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4923
         t_6 = t_1.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48742
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4927
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::ListUnpack48742
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4927
         t_7 = t_1.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48742
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4931
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::ListUnpack48742
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4931
         t_8 = t_1.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::size4932
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4934
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::size4932
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4934
         t_8 = torch.div(input=t_8, other=12)
         t_8 = [t_6, t_7, 12, t_8]
         del t_7
         del t_6
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListUnpack48742
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListConstruct4938
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::ListUnpack48742
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::ListConstruct4938
         t_8 = t_1.view(size=t_8)
         del t_1
         t_1 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::view4939
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListConstruct4944
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::view4939
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::ListConstruct4944
         t_1 = t_8.permute(dims=t_1)
         del t_8
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::permute4899
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::permute4922
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::permute4899
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::permute4922
         t_5 = t_4.matmul(other=t_5)
         del t_4
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::matmul4946
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4947
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::matmul4946
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4947
         t_5 = torch.div(input=t_5, other=8.0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::div4948
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4949
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::div4948
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4949
         t_4 = t_5.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::div4948
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4952
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::div4948
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4952
         t_8 = t_5.size(dim=-1)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::size4953
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::size4950
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::size4953
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::size4950
         t_4 = torch.sub(input=t_8, other=t_4)
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Tensor[bias]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4960
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4961
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4962
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4963
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Tensor[bias]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4960
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4961
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4962
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4963
         t_7 = self.b_0[0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::slice4964
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4965
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4966
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4967
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4968
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::slice4964
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4965
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4966
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4967
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4968
         t_7 = t_7[:, 0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::slice4969
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4970
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::sub4958
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::size4953
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4971
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::slice4969
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4970
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::sub4958
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::size4953
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4971
         t_4 = t_7[:, :, t_4:t_8:1]
         del t_7
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::slice4972
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4973
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4974
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::size4953
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4975
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::slice4972
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4973
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4974
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::size4953
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4975
         t_8 = t_4[:, :, :, 0:t_8:1]
         del t_4
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::div4948
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::slice4976
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::div4948
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::slice4976
         t_5 = torch.mul(input=t_5, other=t_8)
         # calling torch.rsub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::slice4976
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4978
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4979
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::slice4976
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4978
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4979
         t_8 = torch.rsub(t_8, other=1, alpha=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::rsub4980
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4981
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::rsub4980
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4981
         t_8 = torch.mul(input=t_8, other=10000.0)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::mul4977
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::mul4982
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::mul4977
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::mul4982
         t_8 = torch.sub(input=t_5, other=t_8)
         del t_5
         # calling torch.softmax with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::sub4984
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4985
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4986
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::sub4984
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4985
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4986
         t_8 = t_8.softmax(dim=-1, dtype=None)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[attn_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::softmax4987
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Dropout[attn_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::softmax4987
         t_8 = self.l_5(t_8)
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[attn_dropout]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::permute4945
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Dropout[attn_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::permute4945
         t_1 = t_8.matmul(other=t_1)
         del t_8
         t_8 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::matmul4989
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListConstruct4994
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::matmul4989
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::ListConstruct4994
         t_8 = t_1.permute(dims=t_8)
         del t_1
         # calling Tensor.contiguous with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::permute4995
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::permute4995
         t_8 = t_8.contiguous()
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::contiguous4997
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant4998
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::contiguous4997
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant4998
         t_1 = t_8.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::contiguous4997
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant5002
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::contiguous4997
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant5002
         t_5 = t_8.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::contiguous4997
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant5006
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::contiguous4997
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant5006
         t_4 = t_8.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::contiguous4997
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::Constant5009
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::contiguous4997
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::Constant5009
         t_7 = t_8.size(dim=-1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::size5007
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::size5010
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::size5007
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::size5010
         t_7 = torch.mul(input=t_4, other=t_7)
         del t_4
         t_7 = [t_1, t_5, t_7]
         del t_5
         del t_1
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::contiguous4997
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/prim::ListConstruct5014
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::contiguous4997
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/prim::ListConstruct5014
         t_7 = t_8.view(size=t_7)
         del t_8
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/aten::view5015
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/aten::view5015
         t_7 = self.l_6(t_7)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[resid_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Dropout[resid_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Conv1D[c_proj]
         t_7 = self.l_7(t_7)
         # calling torch.add with arguments:
         # GPT2LMHeadModel/GPT2Model[transformer]/Dropout[drop]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/Attention[attn]/Dropout[resid_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/Attention[attn]/Dropout[resid_dropout]
         t_7 = torch.add(input=t_2, other=t_7)
         del t_2
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_2] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/aten::add5019
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/LayerNorm[ln_2] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/aten::add5019
         t_2 = self.l_8(t_7)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_fc] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/LayerNorm[ln_2]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/Conv1D[c_fc] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/LayerNorm[ln_2]
         t_2 = self.l_9(t_2)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/prim::Constant5025
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/prim::Constant5025
         t_8 = torch.mul(input=t_2, other=0.5)
         # calling torch.pow with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/prim::Constant5027
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/prim::Constant5027
         t_5 = t_2.pow(exponent=3)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/aten::pow5028
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/prim::Constant5029
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/aten::pow5028
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/prim::Constant5029
         t_5 = torch.mul(input=t_5, other=0.044715)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/aten::mul5030
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/aten::mul5030
         t_5 = torch.add(input=t_2, other=t_5)
         del t_2
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/aten::add5032
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/prim::Constant5033
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/aten::add5032
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/prim::Constant5033
         t_5 = torch.mul(input=t_5, other=0.7978845608028654)
         # calling torch.tanh with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/aten::mul5034
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/aten::mul5034
         t_5 = t_5.tanh()
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/aten::tanh5035
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/prim::Constant5036
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/aten::tanh5035
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/prim::Constant5036
         t_5 = torch.add(input=t_5, other=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/aten::mul5026
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/aten::add5038
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/aten::mul5026
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/aten::add5038
         t_5 = torch.mul(input=t_8, other=t_5)
         del t_8
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/aten::mul5039
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/aten::mul5039
         t_5 = self.l_10(t_5)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Dropout[dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/Dropout[dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/Conv1D[c_proj]
         t_5 = self.l_11(t_5)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/aten::add5019
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/MLP[mlp]/Dropout[dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/aten::add5019
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/MLP[mlp]/Dropout[dropout]
         t_5 = torch.add(input=t_7, other=t_5)
         del t_7
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_1] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/aten::add5043
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/LayerNorm[ln_1] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/aten::add5043
         t_7 = self.l_12(t_5)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_attn] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_1]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Conv1D[c_attn] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/LayerNorm[ln_1]
         t_7 = self.l_13(t_7)
         # calling torch.split with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_attn]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5055
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5056
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Conv1D[c_attn]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5055
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5056
         t_7 = t_7.split(split_size=768, dim=2)
         t_2 = t_7[0]
         t_1 = t_7[1]
         t_7 = t_7[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50580
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5061
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::ListUnpack50580
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5061
         t_4 = t_2.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50580
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5065
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::ListUnpack50580
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5065
         t_6 = t_2.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50580
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5069
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::ListUnpack50580
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5069
         t_9 = t_2.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::size5070
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5072
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::size5070
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5072
         t_9 = torch.div(input=t_9, other=12)
         t_9 = [t_4, t_6, 12, t_9]
         del t_6
         del t_4
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50580
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListConstruct5076
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::ListUnpack50580
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::ListConstruct5076
         t_9 = t_2.view(size=t_9)
         del t_2
         t_2 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::view5077
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListConstruct5082
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::view5077
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::ListConstruct5082
         t_2 = t_9.permute(dims=t_2)
         del t_9
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50581
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5084
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::ListUnpack50581
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5084
         t_9 = t_1.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50581
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5088
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::ListUnpack50581
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5088
         t_6 = t_1.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50581
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5092
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::ListUnpack50581
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5092
         t_4 = t_1.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::size5093
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5095
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::size5093
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5095
         t_4 = torch.div(input=t_4, other=12)
         t_4 = [t_9, t_6, 12, t_4]
         del t_6
         del t_9
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50581
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListConstruct5099
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::ListUnpack50581
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::ListConstruct5099
         t_4 = t_1.view(size=t_4)
         del t_1
         t_1 = [0, 2, 3, 1]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::view5100
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListConstruct5105
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::view5100
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::ListConstruct5105
         t_1 = t_4.permute(dims=t_1)
         del t_4
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50582
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5107
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::ListUnpack50582
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5107
         t_4 = t_7.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50582
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5111
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::ListUnpack50582
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5111
         t_6 = t_7.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50582
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5115
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::ListUnpack50582
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5115
         t_9 = t_7.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::size5116
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5118
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::size5116
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5118
         t_9 = torch.div(input=t_9, other=12)
         t_9 = [t_4, t_6, 12, t_9]
         del t_6
         del t_4
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListUnpack50582
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListConstruct5122
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::ListUnpack50582
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::ListConstruct5122
         t_9 = t_7.view(size=t_9)
         del t_7
         t_7 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::view5123
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListConstruct5128
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::view5123
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::ListConstruct5128
         t_7 = t_9.permute(dims=t_7)
         del t_9
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::permute5083
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::permute5106
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::permute5083
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::permute5106
         t_1 = t_2.matmul(other=t_1)
         del t_2
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::matmul5130
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5131
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::matmul5130
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5131
         t_1 = torch.div(input=t_1, other=8.0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::div5132
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5133
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::div5132
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5133
         t_2 = t_1.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::div5132
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5136
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::div5132
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5136
         t_9 = t_1.size(dim=-1)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::size5137
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::size5134
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::size5137
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::size5134
         t_2 = torch.sub(input=t_9, other=t_2)
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Tensor[bias]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5144
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5145
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5146
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5147
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Tensor[bias]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5144
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5145
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5146
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5147
         t_6 = self.b_1[0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::slice5148
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5149
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5150
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5151
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5152
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::slice5148
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5149
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5150
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5151
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5152
         t_6 = t_6[:, 0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::slice5153
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5154
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::sub5142
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::size5137
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5155
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::slice5153
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5154
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::sub5142
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::size5137
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5155
         t_2 = t_6[:, :, t_2:t_9:1]
         del t_6
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::slice5156
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5157
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5158
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::size5137
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5159
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::slice5156
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5157
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5158
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::size5137
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5159
         t_9 = t_2[:, :, :, 0:t_9:1]
         del t_2
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::div5132
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::slice5160
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::div5132
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::slice5160
         t_1 = torch.mul(input=t_1, other=t_9)
         # calling torch.rsub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::slice5160
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5162
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5163
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::slice5160
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5162
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5163
         t_9 = torch.rsub(t_9, other=1, alpha=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::rsub5164
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5165
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::rsub5164
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5165
         t_9 = torch.mul(input=t_9, other=10000.0)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::mul5161
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::mul5166
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::mul5161
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::mul5166
         t_9 = torch.sub(input=t_1, other=t_9)
         del t_1
         # calling torch.softmax with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::sub5168
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5169
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5170
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::sub5168
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5169
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5170
         t_9 = t_9.softmax(dim=-1, dtype=None)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[attn_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::softmax5171
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Dropout[attn_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::softmax5171
         t_9 = self.l_14(t_9)
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[attn_dropout]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::permute5129
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Dropout[attn_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::permute5129
         t_7 = t_9.matmul(other=t_7)
         del t_9
         t_9 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::matmul5173
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListConstruct5178
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::matmul5173
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::ListConstruct5178
         t_9 = t_7.permute(dims=t_9)
         del t_7
         # calling Tensor.contiguous with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::permute5179
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::permute5179
         t_9 = t_9.contiguous()
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::contiguous5181
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5182
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::contiguous5181
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5182
         t_7 = t_9.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::contiguous5181
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5186
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::contiguous5181
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5186
         t_1 = t_9.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::contiguous5181
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5190
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::contiguous5181
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5190
         t_2 = t_9.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::contiguous5181
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::Constant5193
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::contiguous5181
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::Constant5193
         t_6 = t_9.size(dim=-1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::size5191
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::size5194
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::size5191
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::size5194
         t_6 = torch.mul(input=t_2, other=t_6)
         del t_2
         t_6 = [t_7, t_1, t_6]
         del t_1
         del t_7
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::contiguous5181
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/prim::ListConstruct5198
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::contiguous5181
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/prim::ListConstruct5198
         t_6 = t_9.view(size=t_6)
         del t_9
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/aten::view5199
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/aten::view5199
         t_6 = self.l_15(t_6)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[resid_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Dropout[resid_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Conv1D[c_proj]
         t_6 = self.l_16(t_6)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[0]/aten::add5043
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/Attention[attn]/Dropout[resid_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[0]/aten::add5043
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/Attention[attn]/Dropout[resid_dropout]
         t_6 = torch.add(input=t_5, other=t_6)
         del t_5
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_2] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/aten::add5203
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/LayerNorm[ln_2] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/aten::add5203
         t_5 = self.l_17(t_6)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_fc] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/LayerNorm[ln_2]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/Conv1D[c_fc] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/LayerNorm[ln_2]
         t_5 = self.l_18(t_5)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/prim::Constant5209
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/prim::Constant5209
         t_9 = torch.mul(input=t_5, other=0.5)
         # calling torch.pow with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/prim::Constant5211
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/prim::Constant5211
         t_1 = t_5.pow(exponent=3)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/aten::pow5212
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/prim::Constant5213
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/aten::pow5212
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/prim::Constant5213
         t_1 = torch.mul(input=t_1, other=0.044715)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/aten::mul5214
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/aten::mul5214
         t_1 = torch.add(input=t_5, other=t_1)
         del t_5
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/aten::add5216
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/prim::Constant5217
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/aten::add5216
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/prim::Constant5217
         t_1 = torch.mul(input=t_1, other=0.7978845608028654)
         # calling torch.tanh with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/aten::mul5218
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/aten::mul5218
         t_1 = t_1.tanh()
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/aten::tanh5219
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/prim::Constant5220
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/aten::tanh5219
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/prim::Constant5220
         t_1 = torch.add(input=t_1, other=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/aten::mul5210
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/aten::add5222
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/aten::mul5210
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/aten::add5222
         t_1 = torch.mul(input=t_9, other=t_1)
         del t_9
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/aten::mul5223
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/aten::mul5223
         t_1 = self.l_19(t_1)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Dropout[dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/Dropout[dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/Conv1D[c_proj]
         t_1 = self.l_20(t_1)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/aten::add5203
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/MLP[mlp]/Dropout[dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/aten::add5203
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/MLP[mlp]/Dropout[dropout]
         t_1 = torch.add(input=t_6, other=t_1)
         del t_6
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_1] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/aten::add5227
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/LayerNorm[ln_1] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/aten::add5227
         t_6 = self.l_21(t_1)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_attn] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_1]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Conv1D[c_attn] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/LayerNorm[ln_1]
         t_6 = self.l_22(t_6)
         # calling torch.split with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_attn]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5239
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5240
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Conv1D[c_attn]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5239
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5240
         t_6 = t_6.split(split_size=768, dim=2)
         t_5 = t_6[0]
         t_7 = t_6[1]
         t_6 = t_6[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52420
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5245
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::ListUnpack52420
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5245
         t_2 = t_5.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52420
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5249
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::ListUnpack52420
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5249
         t_4 = t_5.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52420
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5253
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::ListUnpack52420
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5253
         t_10 = t_5.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::size5254
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5256
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::size5254
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5256
         t_10 = torch.div(input=t_10, other=12)
         t_10 = [t_2, t_4, 12, t_10]
         del t_4
         del t_2
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52420
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListConstruct5260
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::ListUnpack52420
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::ListConstruct5260
         t_10 = t_5.view(size=t_10)
         del t_5
         t_5 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::view5261
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListConstruct5266
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::view5261
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::ListConstruct5266
         t_5 = t_10.permute(dims=t_5)
         del t_10
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52421
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5268
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::ListUnpack52421
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5268
         t_10 = t_7.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52421
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5272
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::ListUnpack52421
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5272
         t_4 = t_7.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52421
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5276
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::ListUnpack52421
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5276
         t_2 = t_7.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::size5277
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5279
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::size5277
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5279
         t_2 = torch.div(input=t_2, other=12)
         t_2 = [t_10, t_4, 12, t_2]
         del t_4
         del t_10
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52421
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListConstruct5283
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::ListUnpack52421
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::ListConstruct5283
         t_2 = t_7.view(size=t_2)
         del t_7
         t_7 = [0, 2, 3, 1]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::view5284
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListConstruct5289
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::view5284
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::ListConstruct5289
         t_7 = t_2.permute(dims=t_7)
         del t_2
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52422
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5291
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::ListUnpack52422
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5291
         t_2 = t_6.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52422
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5295
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::ListUnpack52422
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5295
         t_4 = t_6.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52422
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5299
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::ListUnpack52422
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5299
         t_10 = t_6.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::size5300
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5302
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::size5300
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5302
         t_10 = torch.div(input=t_10, other=12)
         t_10 = [t_2, t_4, 12, t_10]
         del t_4
         del t_2
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListUnpack52422
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListConstruct5306
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::ListUnpack52422
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::ListConstruct5306
         t_10 = t_6.view(size=t_10)
         del t_6
         t_6 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::view5307
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListConstruct5312
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::view5307
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::ListConstruct5312
         t_6 = t_10.permute(dims=t_6)
         del t_10
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::permute5267
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::permute5290
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::permute5267
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::permute5290
         t_7 = t_5.matmul(other=t_7)
         del t_5
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::matmul5314
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5315
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::matmul5314
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5315
         t_7 = torch.div(input=t_7, other=8.0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::div5316
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5317
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::div5316
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5317
         t_5 = t_7.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::div5316
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5320
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::div5316
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5320
         t_10 = t_7.size(dim=-1)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::size5321
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::size5318
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::size5321
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::size5318
         t_5 = torch.sub(input=t_10, other=t_5)
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Tensor[bias]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5328
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5329
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5330
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5331
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Tensor[bias]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5328
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5329
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5330
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5331
         t_4 = self.b_2[0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::slice5332
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5333
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5334
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5335
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5336
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::slice5332
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5333
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5334
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5335
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5336
         t_4 = t_4[:, 0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::slice5337
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5338
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::sub5326
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::size5321
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5339
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::slice5337
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5338
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::sub5326
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::size5321
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5339
         t_5 = t_4[:, :, t_5:t_10:1]
         del t_4
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::slice5340
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5341
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5342
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::size5321
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5343
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::slice5340
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5341
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5342
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::size5321
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5343
         t_10 = t_5[:, :, :, 0:t_10:1]
         del t_5
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::div5316
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::slice5344
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::div5316
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::slice5344
         t_7 = torch.mul(input=t_7, other=t_10)
         # calling torch.rsub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::slice5344
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5346
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5347
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::slice5344
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5346
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5347
         t_10 = torch.rsub(t_10, other=1, alpha=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::rsub5348
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5349
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::rsub5348
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5349
         t_10 = torch.mul(input=t_10, other=10000.0)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::mul5345
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::mul5350
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::mul5345
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::mul5350
         t_10 = torch.sub(input=t_7, other=t_10)
         del t_7
         # calling torch.softmax with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::sub5352
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5353
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5354
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::sub5352
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5353
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5354
         t_10 = t_10.softmax(dim=-1, dtype=None)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[attn_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::softmax5355
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Dropout[attn_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::softmax5355
         t_10 = self.l_23(t_10)
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[attn_dropout]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::permute5313
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Dropout[attn_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::permute5313
         t_6 = t_10.matmul(other=t_6)
         del t_10
         t_10 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::matmul5357
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListConstruct5362
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::matmul5357
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::ListConstruct5362
         t_10 = t_6.permute(dims=t_10)
         del t_6
         # calling Tensor.contiguous with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::permute5363
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::permute5363
         t_10 = t_10.contiguous()
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::contiguous5365
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5366
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::contiguous5365
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5366
         t_6 = t_10.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::contiguous5365
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5370
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::contiguous5365
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5370
         t_7 = t_10.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::contiguous5365
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5374
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::contiguous5365
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5374
         t_5 = t_10.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::contiguous5365
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::Constant5377
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::contiguous5365
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::Constant5377
         t_4 = t_10.size(dim=-1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::size5375
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::size5378
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::size5375
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::size5378
         t_4 = torch.mul(input=t_5, other=t_4)
         del t_5
         t_4 = [t_6, t_7, t_4]
         del t_7
         del t_6
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::contiguous5365
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/prim::ListConstruct5382
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::contiguous5365
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/prim::ListConstruct5382
         t_4 = t_10.view(size=t_4)
         del t_10
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/aten::view5383
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/aten::view5383
         t_4 = self.l_24(t_4)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[resid_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Dropout[resid_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Conv1D[c_proj]
         t_4 = self.l_25(t_4)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[1]/aten::add5227
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/Attention[attn]/Dropout[resid_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[1]/aten::add5227
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/Attention[attn]/Dropout[resid_dropout]
         t_4 = torch.add(input=t_1, other=t_4)
         del t_1
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_2] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/aten::add5387
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/LayerNorm[ln_2] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/aten::add5387
         t_1 = self.l_26(t_4)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_fc] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/LayerNorm[ln_2]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/Conv1D[c_fc] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/LayerNorm[ln_2]
         t_1 = self.l_27(t_1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/prim::Constant5393
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/prim::Constant5393
         t_10 = torch.mul(input=t_1, other=0.5)
         # calling torch.pow with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/prim::Constant5395
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/prim::Constant5395
         t_7 = t_1.pow(exponent=3)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/aten::pow5396
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/prim::Constant5397
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/aten::pow5396
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/prim::Constant5397
         t_7 = torch.mul(input=t_7, other=0.044715)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/aten::mul5398
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/aten::mul5398
         t_7 = torch.add(input=t_1, other=t_7)
         del t_1
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/aten::add5400
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/prim::Constant5401
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/aten::add5400
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/prim::Constant5401
         t_7 = torch.mul(input=t_7, other=0.7978845608028654)
         # calling torch.tanh with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/aten::mul5402
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/aten::mul5402
         t_7 = t_7.tanh()
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/aten::tanh5403
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/prim::Constant5404
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/aten::tanh5403
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/prim::Constant5404
         t_7 = torch.add(input=t_7, other=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/aten::mul5394
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/aten::add5406
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/aten::mul5394
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/aten::add5406
         t_7 = torch.mul(input=t_10, other=t_7)
         del t_10
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/aten::mul5407
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/aten::mul5407
         t_7 = self.l_28(t_7)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Dropout[dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/Dropout[dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/Conv1D[c_proj]
         t_7 = self.l_29(t_7)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/aten::add5387
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/MLP[mlp]/Dropout[dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/aten::add5387
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/MLP[mlp]/Dropout[dropout]
         t_7 = torch.add(input=t_4, other=t_7)
         del t_4
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_1] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/aten::add5411
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/LayerNorm[ln_1] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/aten::add5411
         t_4 = self.l_30(t_7)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_attn] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_1]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Conv1D[c_attn] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/LayerNorm[ln_1]
         t_4 = self.l_31(t_4)
         # calling torch.split with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_attn]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5423
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5424
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Conv1D[c_attn]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5423
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5424
         t_4 = t_4.split(split_size=768, dim=2)
         t_1 = t_4[0]
         t_6 = t_4[1]
         t_4 = t_4[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54260
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5429
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::ListUnpack54260
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5429
         t_5 = t_1.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54260
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5433
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::ListUnpack54260
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5433
         t_2 = t_1.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54260
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5437
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::ListUnpack54260
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5437
         t_11 = t_1.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::size5438
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5440
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::size5438
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5440
         t_11 = torch.div(input=t_11, other=12)
         t_11 = [t_5, t_2, 12, t_11]
         del t_2
         del t_5
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54260
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListConstruct5444
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::ListUnpack54260
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::ListConstruct5444
         t_11 = t_1.view(size=t_11)
         del t_1
         t_1 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::view5445
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListConstruct5450
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::view5445
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::ListConstruct5450
         t_1 = t_11.permute(dims=t_1)
         del t_11
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54261
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5452
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::ListUnpack54261
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5452
         t_11 = t_6.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54261
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5456
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::ListUnpack54261
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5456
         t_2 = t_6.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54261
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5460
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::ListUnpack54261
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5460
         t_5 = t_6.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::size5461
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5463
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::size5461
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5463
         t_5 = torch.div(input=t_5, other=12)
         t_5 = [t_11, t_2, 12, t_5]
         del t_2
         del t_11
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54261
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListConstruct5467
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::ListUnpack54261
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::ListConstruct5467
         t_5 = t_6.view(size=t_5)
         del t_6
         t_6 = [0, 2, 3, 1]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::view5468
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListConstruct5473
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::view5468
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::ListConstruct5473
         t_6 = t_5.permute(dims=t_6)
         del t_5
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54262
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5475
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::ListUnpack54262
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5475
         t_5 = t_4.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54262
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5479
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::ListUnpack54262
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5479
         t_2 = t_4.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54262
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5483
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::ListUnpack54262
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5483
         t_11 = t_4.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::size5484
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5486
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::size5484
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5486
         t_11 = torch.div(input=t_11, other=12)
         t_11 = [t_5, t_2, 12, t_11]
         del t_2
         del t_5
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListUnpack54262
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListConstruct5490
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::ListUnpack54262
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::ListConstruct5490
         t_11 = t_4.view(size=t_11)
         del t_4
         t_4 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::view5491
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListConstruct5496
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::view5491
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::ListConstruct5496
         t_4 = t_11.permute(dims=t_4)
         del t_11
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::permute5451
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::permute5474
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::permute5451
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::permute5474
         t_6 = t_1.matmul(other=t_6)
         del t_1
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::matmul5498
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5499
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::matmul5498
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5499
         t_6 = torch.div(input=t_6, other=8.0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::div5500
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5501
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::div5500
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5501
         t_1 = t_6.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::div5500
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5504
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::div5500
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5504
         t_11 = t_6.size(dim=-1)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::size5505
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::size5502
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::size5505
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::size5502
         t_1 = torch.sub(input=t_11, other=t_1)
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Tensor[bias]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5512
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5513
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5514
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5515
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Tensor[bias]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5512
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5513
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5514
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5515
         t_2 = self.b_3[0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::slice5516
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5517
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5518
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5519
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5520
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::slice5516
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5517
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5518
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5519
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5520
         t_2 = t_2[:, 0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::slice5521
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5522
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::sub5510
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::size5505
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5523
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::slice5521
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5522
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::sub5510
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::size5505
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5523
         t_1 = t_2[:, :, t_1:t_11:1]
         del t_2
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::slice5524
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5525
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5526
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::size5505
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5527
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::slice5524
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5525
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5526
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::size5505
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5527
         t_11 = t_1[:, :, :, 0:t_11:1]
         del t_1
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::div5500
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::slice5528
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::div5500
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::slice5528
         t_6 = torch.mul(input=t_6, other=t_11)
         # calling torch.rsub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::slice5528
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5530
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5531
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::slice5528
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5530
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5531
         t_11 = torch.rsub(t_11, other=1, alpha=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::rsub5532
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5533
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::rsub5532
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5533
         t_11 = torch.mul(input=t_11, other=10000.0)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::mul5529
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::mul5534
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::mul5529
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::mul5534
         t_11 = torch.sub(input=t_6, other=t_11)
         del t_6
         # calling torch.softmax with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::sub5536
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5537
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5538
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::sub5536
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5537
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5538
         t_11 = t_11.softmax(dim=-1, dtype=None)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[attn_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::softmax5539
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Dropout[attn_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::softmax5539
         t_11 = self.l_32(t_11)
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[attn_dropout]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::permute5497
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Dropout[attn_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::permute5497
         t_4 = t_11.matmul(other=t_4)
         del t_11
         t_11 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::matmul5541
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListConstruct5546
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::matmul5541
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::ListConstruct5546
         t_11 = t_4.permute(dims=t_11)
         del t_4
         # calling Tensor.contiguous with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::permute5547
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::permute5547
         t_11 = t_11.contiguous()
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::contiguous5549
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5550
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::contiguous5549
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5550
         t_4 = t_11.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::contiguous5549
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5554
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::contiguous5549
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5554
         t_6 = t_11.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::contiguous5549
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5558
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::contiguous5549
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5558
         t_1 = t_11.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::contiguous5549
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::Constant5561
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::contiguous5549
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::Constant5561
         t_2 = t_11.size(dim=-1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::size5559
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::size5562
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::size5559
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::size5562
         t_2 = torch.mul(input=t_1, other=t_2)
         del t_1
         t_2 = [t_4, t_6, t_2]
         del t_6
         del t_4
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::contiguous5549
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/prim::ListConstruct5566
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::contiguous5549
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/prim::ListConstruct5566
         t_2 = t_11.view(size=t_2)
         del t_11
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/aten::view5567
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/aten::view5567
         t_2 = self.l_33(t_2)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[resid_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Dropout[resid_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Conv1D[c_proj]
         t_2 = self.l_34(t_2)
 
         # returning:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/aten::add5411
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[resid_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/aten::add5411
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Dropout[resid_dropout]
         return (t_7, t_2)
 
     def state_dict(self, device=None):
@@ -1681,39 +1681,39 @@ class Partition0(nn.Module):
 
 class Partition1(nn.Module):
     SCOPES = {
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_2]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_fc]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Dropout[dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_1]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_attn]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[attn_dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[resid_dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_2]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_fc]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Dropout[dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_1]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_attn]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[attn_dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[resid_dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_2]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_fc]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Dropout[dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_1]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_attn]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[attn_dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[resid_dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_2]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_fc]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Dropout[dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_1]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/LayerNorm[ln_2]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/Dropout[dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/LayerNorm[ln_2]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/Dropout[dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/LayerNorm[ln_2]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/Dropout[dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/LayerNorm[ln_2]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/Dropout[dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Conv1D[c_attn]',
     }
 
     def __init__(self, layers, tensors):
@@ -1721,1182 +1721,1182 @@ class Partition1(nn.Module):
         # initializing partition layers
         self.scopes = []
         self.l_0 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_2]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/LayerNorm[ln_2]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_2]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/LayerNorm[ln_2]')
         self.l_1 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_fc]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/Conv1D[c_fc]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_fc]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/Conv1D[c_fc]'
         )
         self.l_2 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/Conv1D[c_proj]'
         )
         self.l_3 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Dropout[dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/Dropout[dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Dropout[dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/Dropout[dropout]'
         )
         self.l_4 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_1]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/LayerNorm[ln_1]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_1]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/LayerNorm[ln_1]')
         self.l_5 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_attn]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Conv1D[c_attn]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_attn]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Conv1D[c_attn]'
         )
         self.l_6 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[attn_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Dropout[attn_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[attn_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Dropout[attn_dropout]'
         )
         self.l_7 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Conv1D[c_proj]'
         )
         self.l_8 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[resid_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Dropout[resid_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[resid_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Dropout[resid_dropout]'
         )
         self.l_9 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_2]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/LayerNorm[ln_2]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_2]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/LayerNorm[ln_2]')
         self.l_10 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_fc]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/Conv1D[c_fc]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_fc]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/Conv1D[c_fc]'
         )
         self.l_11 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/Conv1D[c_proj]'
         )
         self.l_12 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Dropout[dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/Dropout[dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Dropout[dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/Dropout[dropout]'
         )
         self.l_13 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_1]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/LayerNorm[ln_1]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_1]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/LayerNorm[ln_1]')
         self.l_14 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_attn]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Conv1D[c_attn]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_attn]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Conv1D[c_attn]'
         )
         self.l_15 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[attn_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Dropout[attn_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[attn_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Dropout[attn_dropout]'
         )
         self.l_16 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Conv1D[c_proj]'
         )
         self.l_17 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[resid_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Dropout[resid_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[resid_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Dropout[resid_dropout]'
         )
         self.l_18 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_2]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/LayerNorm[ln_2]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_2]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/LayerNorm[ln_2]')
         self.l_19 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_fc]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/Conv1D[c_fc]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_fc]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/Conv1D[c_fc]'
         )
         self.l_20 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/Conv1D[c_proj]'
         )
         self.l_21 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Dropout[dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/Dropout[dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Dropout[dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/Dropout[dropout]'
         )
         self.l_22 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_1]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/LayerNorm[ln_1]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_1]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/LayerNorm[ln_1]')
         self.l_23 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_attn]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Conv1D[c_attn]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_attn]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Conv1D[c_attn]'
         )
         self.l_24 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[attn_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Dropout[attn_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[attn_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Dropout[attn_dropout]'
         )
         self.l_25 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Conv1D[c_proj]'
         )
         self.l_26 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[resid_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Dropout[resid_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[resid_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Dropout[resid_dropout]'
         )
         self.l_27 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_2]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/LayerNorm[ln_2]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_2]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/LayerNorm[ln_2]')
         self.l_28 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_fc]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/Conv1D[c_fc]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_fc]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/Conv1D[c_fc]'
         )
         self.l_29 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/Conv1D[c_proj]'
         )
         self.l_30 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Dropout[dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/Dropout[dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Dropout[dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/Dropout[dropout]'
         )
         self.l_31 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_1]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/LayerNorm[ln_1]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_1]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/LayerNorm[ln_1]')
         self.l_32 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_attn]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Conv1D[c_attn]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_attn]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Conv1D[c_attn]'
         )
 
         # initializing partition buffers
         self.register_buffer(
             'b_0', tensors[
-                'GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Tensor[bias]']
+                'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Tensor[bias]']
         )
         self.register_buffer(
             'b_1', tensors[
-                'GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Tensor[bias]']
+                'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Tensor[bias]']
         )
         self.register_buffer(
             'b_2', tensors[
-                'GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Tensor[bias]']
+                'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Tensor[bias]']
         )
 
         self.device = torch.device('cuda:1')
         self.lookup = {
-            'l_0': 'transformer.3.ln_2',
-            'l_1': 'transformer.3.mlp.c_fc',
-            'l_2': 'transformer.3.mlp.c_proj',
-            'l_3': 'transformer.3.mlp.dropout',
-            'l_4': 'transformer.4.ln_1',
-            'l_5': 'transformer.4.attn.c_attn',
-            'l_6': 'transformer.4.attn.attn_dropout',
-            'l_7': 'transformer.4.attn.c_proj',
-            'l_8': 'transformer.4.attn.resid_dropout',
-            'l_9': 'transformer.4.ln_2',
-            'l_10': 'transformer.4.mlp.c_fc',
-            'l_11': 'transformer.4.mlp.c_proj',
-            'l_12': 'transformer.4.mlp.dropout',
-            'l_13': 'transformer.5.ln_1',
-            'l_14': 'transformer.5.attn.c_attn',
-            'l_15': 'transformer.5.attn.attn_dropout',
-            'l_16': 'transformer.5.attn.c_proj',
-            'l_17': 'transformer.5.attn.resid_dropout',
-            'l_18': 'transformer.5.ln_2',
-            'l_19': 'transformer.5.mlp.c_fc',
-            'l_20': 'transformer.5.mlp.c_proj',
-            'l_21': 'transformer.5.mlp.dropout',
-            'l_22': 'transformer.6.ln_1',
-            'l_23': 'transformer.6.attn.c_attn',
-            'l_24': 'transformer.6.attn.attn_dropout',
-            'l_25': 'transformer.6.attn.c_proj',
-            'l_26': 'transformer.6.attn.resid_dropout',
-            'l_27': 'transformer.6.ln_2',
-            'l_28': 'transformer.6.mlp.c_fc',
-            'l_29': 'transformer.6.mlp.c_proj',
-            'l_30': 'transformer.6.mlp.dropout',
-            'l_31': 'transformer.7.ln_1',
-            'l_32': 'transformer.7.attn.c_attn',
-            'b_0': 'transformer.4.attn.bias',
-            'b_1': 'transformer.5.attn.bias',
-            'b_2': 'transformer.6.attn.bias'
+            'l_0': 'transformer.blocks.3.ln_2',
+            'l_1': 'transformer.blocks.3.mlp.c_fc',
+            'l_2': 'transformer.blocks.3.mlp.c_proj',
+            'l_3': 'transformer.blocks.3.mlp.dropout',
+            'l_4': 'transformer.blocks.4.ln_1',
+            'l_5': 'transformer.blocks.4.attn.c_attn',
+            'l_6': 'transformer.blocks.4.attn.attn_dropout',
+            'l_7': 'transformer.blocks.4.attn.c_proj',
+            'l_8': 'transformer.blocks.4.attn.resid_dropout',
+            'l_9': 'transformer.blocks.4.ln_2',
+            'l_10': 'transformer.blocks.4.mlp.c_fc',
+            'l_11': 'transformer.blocks.4.mlp.c_proj',
+            'l_12': 'transformer.blocks.4.mlp.dropout',
+            'l_13': 'transformer.blocks.5.ln_1',
+            'l_14': 'transformer.blocks.5.attn.c_attn',
+            'l_15': 'transformer.blocks.5.attn.attn_dropout',
+            'l_16': 'transformer.blocks.5.attn.c_proj',
+            'l_17': 'transformer.blocks.5.attn.resid_dropout',
+            'l_18': 'transformer.blocks.5.ln_2',
+            'l_19': 'transformer.blocks.5.mlp.c_fc',
+            'l_20': 'transformer.blocks.5.mlp.c_proj',
+            'l_21': 'transformer.blocks.5.mlp.dropout',
+            'l_22': 'transformer.blocks.6.ln_1',
+            'l_23': 'transformer.blocks.6.attn.c_attn',
+            'l_24': 'transformer.blocks.6.attn.attn_dropout',
+            'l_25': 'transformer.blocks.6.attn.c_proj',
+            'l_26': 'transformer.blocks.6.attn.resid_dropout',
+            'l_27': 'transformer.blocks.6.ln_2',
+            'l_28': 'transformer.blocks.6.mlp.c_fc',
+            'l_29': 'transformer.blocks.6.mlp.c_proj',
+            'l_30': 'transformer.blocks.6.mlp.dropout',
+            'l_31': 'transformer.blocks.7.ln_1',
+            'l_32': 'transformer.blocks.7.attn.c_attn',
+            'b_0': 'transformer.blocks.4.attn.bias',
+            'b_1': 'transformer.blocks.5.attn.bias',
+            'b_2': 'transformer.blocks.6.attn.bias'
         }
 
     def forward(self, x0, x1):
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_2] <=> self.l_0
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_fc] <=> self.l_1
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_proj] <=> self.l_2
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Dropout[dropout] <=> self.l_3
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_1] <=> self.l_4
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_attn] <=> self.l_5
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[attn_dropout] <=> self.l_6
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_proj] <=> self.l_7
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[resid_dropout] <=> self.l_8
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_2] <=> self.l_9
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_fc] <=> self.l_10
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_proj] <=> self.l_11
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Dropout[dropout] <=> self.l_12
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_1] <=> self.l_13
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_attn] <=> self.l_14
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[attn_dropout] <=> self.l_15
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_proj] <=> self.l_16
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[resid_dropout] <=> self.l_17
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_2] <=> self.l_18
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_fc] <=> self.l_19
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_proj] <=> self.l_20
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Dropout[dropout] <=> self.l_21
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_1] <=> self.l_22
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_attn] <=> self.l_23
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[attn_dropout] <=> self.l_24
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_proj] <=> self.l_25
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[resid_dropout] <=> self.l_26
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_2] <=> self.l_27
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_fc] <=> self.l_28
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_proj] <=> self.l_29
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Dropout[dropout] <=> self.l_30
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_1] <=> self.l_31
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_attn] <=> self.l_32
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Tensor[bias] <=> self.b_0
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Tensor[bias] <=> self.b_1
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Tensor[bias] <=> self.b_2
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/aten::add5411 <=> x0
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[resid_dropout] <=> x1
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/LayerNorm[ln_2] <=> self.l_0
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/Conv1D[c_fc] <=> self.l_1
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/Conv1D[c_proj] <=> self.l_2
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/Dropout[dropout] <=> self.l_3
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/LayerNorm[ln_1] <=> self.l_4
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Conv1D[c_attn] <=> self.l_5
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Dropout[attn_dropout] <=> self.l_6
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Conv1D[c_proj] <=> self.l_7
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Dropout[resid_dropout] <=> self.l_8
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/LayerNorm[ln_2] <=> self.l_9
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/Conv1D[c_fc] <=> self.l_10
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/Conv1D[c_proj] <=> self.l_11
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/Dropout[dropout] <=> self.l_12
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/LayerNorm[ln_1] <=> self.l_13
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Conv1D[c_attn] <=> self.l_14
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Dropout[attn_dropout] <=> self.l_15
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Conv1D[c_proj] <=> self.l_16
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Dropout[resid_dropout] <=> self.l_17
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/LayerNorm[ln_2] <=> self.l_18
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/Conv1D[c_fc] <=> self.l_19
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/Conv1D[c_proj] <=> self.l_20
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/Dropout[dropout] <=> self.l_21
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/LayerNorm[ln_1] <=> self.l_22
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Conv1D[c_attn] <=> self.l_23
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Dropout[attn_dropout] <=> self.l_24
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Conv1D[c_proj] <=> self.l_25
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Dropout[resid_dropout] <=> self.l_26
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/LayerNorm[ln_2] <=> self.l_27
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/Conv1D[c_fc] <=> self.l_28
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/Conv1D[c_proj] <=> self.l_29
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/Dropout[dropout] <=> self.l_30
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/LayerNorm[ln_1] <=> self.l_31
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Conv1D[c_attn] <=> self.l_32
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Tensor[bias] <=> self.b_0
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Tensor[bias] <=> self.b_1
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Tensor[bias] <=> self.b_2
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/aten::add5411 <=> x0
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Dropout[resid_dropout] <=> x1
 
         # moving inputs to current device no op if already on the correct device
         x0 = x0.to(self.device)
         x1 = x1.to(self.device)
 
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[2]/aten::add5411
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/Attention[attn]/Dropout[resid_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[2]/aten::add5411
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/Attention[attn]/Dropout[resid_dropout]
         t_0 = torch.add(input=x0, other=x1)
         del x1
         del x0
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_2] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/aten::add5571
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/LayerNorm[ln_2] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/aten::add5571
         t_1 = self.l_0(t_0)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_fc] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/LayerNorm[ln_2]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/Conv1D[c_fc] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/LayerNorm[ln_2]
         t_1 = self.l_1(t_1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/prim::Constant5577
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/prim::Constant5577
         t_2 = torch.mul(input=t_1, other=0.5)
         # calling torch.pow with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/prim::Constant5579
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/prim::Constant5579
         t_3 = t_1.pow(exponent=3)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/aten::pow5580
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/prim::Constant5581
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/aten::pow5580
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/prim::Constant5581
         t_3 = torch.mul(input=t_3, other=0.044715)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/aten::mul5582
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/aten::mul5582
         t_3 = torch.add(input=t_1, other=t_3)
         del t_1
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/aten::add5584
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/prim::Constant5585
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/aten::add5584
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/prim::Constant5585
         t_3 = torch.mul(input=t_3, other=0.7978845608028654)
         # calling torch.tanh with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/aten::mul5586
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/aten::mul5586
         t_3 = t_3.tanh()
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/aten::tanh5587
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/prim::Constant5588
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/aten::tanh5587
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/prim::Constant5588
         t_3 = torch.add(input=t_3, other=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/aten::mul5578
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/aten::add5590
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/aten::mul5578
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/aten::add5590
         t_3 = torch.mul(input=t_2, other=t_3)
         del t_2
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/aten::mul5591
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/aten::mul5591
         t_3 = self.l_2(t_3)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Dropout[dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/Dropout[dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/Conv1D[c_proj]
         t_3 = self.l_3(t_3)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/aten::add5571
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/MLP[mlp]/Dropout[dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/aten::add5571
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/MLP[mlp]/Dropout[dropout]
         t_3 = torch.add(input=t_0, other=t_3)
         del t_0
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_1] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/aten::add5595
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/LayerNorm[ln_1] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/aten::add5595
         t_0 = self.l_4(t_3)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_attn] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_1]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Conv1D[c_attn] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/LayerNorm[ln_1]
         t_0 = self.l_5(t_0)
         # calling torch.split with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_attn]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5607
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5608
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Conv1D[c_attn]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5607
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5608
         t_0 = t_0.split(split_size=768, dim=2)
         t_1 = t_0[0]
         t_4 = t_0[1]
         t_0 = t_0[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56100
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5613
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::ListUnpack56100
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5613
         t_5 = t_1.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56100
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5617
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::ListUnpack56100
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5617
         t_6 = t_1.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56100
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5621
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::ListUnpack56100
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5621
         t_7 = t_1.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::size5622
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5624
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::size5622
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5624
         t_7 = torch.div(input=t_7, other=12)
         t_7 = [t_5, t_6, 12, t_7]
         del t_6
         del t_5
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56100
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListConstruct5628
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::ListUnpack56100
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::ListConstruct5628
         t_7 = t_1.view(size=t_7)
         del t_1
         t_1 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::view5629
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListConstruct5634
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::view5629
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::ListConstruct5634
         t_1 = t_7.permute(dims=t_1)
         del t_7
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56101
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5636
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::ListUnpack56101
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5636
         t_7 = t_4.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56101
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5640
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::ListUnpack56101
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5640
         t_6 = t_4.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56101
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5644
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::ListUnpack56101
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5644
         t_5 = t_4.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::size5645
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5647
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::size5645
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5647
         t_5 = torch.div(input=t_5, other=12)
         t_5 = [t_7, t_6, 12, t_5]
         del t_6
         del t_7
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56101
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListConstruct5651
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::ListUnpack56101
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::ListConstruct5651
         t_5 = t_4.view(size=t_5)
         del t_4
         t_4 = [0, 2, 3, 1]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::view5652
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListConstruct5657
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::view5652
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::ListConstruct5657
         t_4 = t_5.permute(dims=t_4)
         del t_5
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56102
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5659
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::ListUnpack56102
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5659
         t_5 = t_0.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56102
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5663
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::ListUnpack56102
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5663
         t_6 = t_0.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56102
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5667
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::ListUnpack56102
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5667
         t_7 = t_0.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::size5668
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5670
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::size5668
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5670
         t_7 = torch.div(input=t_7, other=12)
         t_7 = [t_5, t_6, 12, t_7]
         del t_6
         del t_5
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListUnpack56102
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListConstruct5674
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::ListUnpack56102
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::ListConstruct5674
         t_7 = t_0.view(size=t_7)
         del t_0
         t_0 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::view5675
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListConstruct5680
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::view5675
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::ListConstruct5680
         t_0 = t_7.permute(dims=t_0)
         del t_7
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::permute5635
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::permute5658
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::permute5635
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::permute5658
         t_4 = t_1.matmul(other=t_4)
         del t_1
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::matmul5682
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5683
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::matmul5682
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5683
         t_4 = torch.div(input=t_4, other=8.0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::div5684
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5685
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::div5684
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5685
         t_1 = t_4.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::div5684
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5688
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::div5684
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5688
         t_7 = t_4.size(dim=-1)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::size5689
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::size5686
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::size5689
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::size5686
         t_1 = torch.sub(input=t_7, other=t_1)
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Tensor[bias]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5696
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5697
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5698
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5699
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Tensor[bias]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5696
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5697
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5698
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5699
         t_6 = self.b_0[0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::slice5700
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5701
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5702
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5703
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5704
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::slice5700
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5701
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5702
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5703
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5704
         t_6 = t_6[:, 0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::slice5705
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5706
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::sub5694
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::size5689
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5707
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::slice5705
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5706
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::sub5694
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::size5689
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5707
         t_1 = t_6[:, :, t_1:t_7:1]
         del t_6
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::slice5708
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5709
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5710
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::size5689
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5711
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::slice5708
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5709
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5710
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::size5689
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5711
         t_7 = t_1[:, :, :, 0:t_7:1]
         del t_1
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::div5684
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::slice5712
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::div5684
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::slice5712
         t_4 = torch.mul(input=t_4, other=t_7)
         # calling torch.rsub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::slice5712
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5714
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5715
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::slice5712
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5714
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5715
         t_7 = torch.rsub(t_7, other=1, alpha=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::rsub5716
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5717
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::rsub5716
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5717
         t_7 = torch.mul(input=t_7, other=10000.0)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::mul5713
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::mul5718
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::mul5713
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::mul5718
         t_7 = torch.sub(input=t_4, other=t_7)
         del t_4
         # calling torch.softmax with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::sub5720
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5721
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5722
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::sub5720
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5721
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5722
         t_7 = t_7.softmax(dim=-1, dtype=None)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[attn_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::softmax5723
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Dropout[attn_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::softmax5723
         t_7 = self.l_6(t_7)
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[attn_dropout]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::permute5681
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Dropout[attn_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::permute5681
         t_0 = t_7.matmul(other=t_0)
         del t_7
         t_7 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::matmul5725
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListConstruct5730
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::matmul5725
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::ListConstruct5730
         t_7 = t_0.permute(dims=t_7)
         del t_0
         # calling Tensor.contiguous with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::permute5731
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::permute5731
         t_7 = t_7.contiguous()
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::contiguous5733
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5734
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::contiguous5733
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5734
         t_0 = t_7.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::contiguous5733
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5738
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::contiguous5733
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5738
         t_4 = t_7.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::contiguous5733
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5742
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::contiguous5733
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5742
         t_1 = t_7.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::contiguous5733
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::Constant5745
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::contiguous5733
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::Constant5745
         t_6 = t_7.size(dim=-1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::size5743
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::size5746
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::size5743
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::size5746
         t_6 = torch.mul(input=t_1, other=t_6)
         del t_1
         t_6 = [t_0, t_4, t_6]
         del t_4
         del t_0
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::contiguous5733
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/prim::ListConstruct5750
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::contiguous5733
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/prim::ListConstruct5750
         t_6 = t_7.view(size=t_6)
         del t_7
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/aten::view5751
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/aten::view5751
         t_6 = self.l_7(t_6)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[resid_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Dropout[resid_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Conv1D[c_proj]
         t_6 = self.l_8(t_6)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[3]/aten::add5595
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/Attention[attn]/Dropout[resid_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[3]/aten::add5595
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/Attention[attn]/Dropout[resid_dropout]
         t_6 = torch.add(input=t_3, other=t_6)
         del t_3
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_2] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/aten::add5755
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/LayerNorm[ln_2] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/aten::add5755
         t_3 = self.l_9(t_6)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_fc] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/LayerNorm[ln_2]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/Conv1D[c_fc] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/LayerNorm[ln_2]
         t_3 = self.l_10(t_3)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/prim::Constant5761
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/prim::Constant5761
         t_7 = torch.mul(input=t_3, other=0.5)
         # calling torch.pow with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/prim::Constant5763
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/prim::Constant5763
         t_4 = t_3.pow(exponent=3)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/aten::pow5764
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/prim::Constant5765
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/aten::pow5764
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/prim::Constant5765
         t_4 = torch.mul(input=t_4, other=0.044715)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/aten::mul5766
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/aten::mul5766
         t_4 = torch.add(input=t_3, other=t_4)
         del t_3
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/aten::add5768
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/prim::Constant5769
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/aten::add5768
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/prim::Constant5769
         t_4 = torch.mul(input=t_4, other=0.7978845608028654)
         # calling torch.tanh with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/aten::mul5770
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/aten::mul5770
         t_4 = t_4.tanh()
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/aten::tanh5771
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/prim::Constant5772
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/aten::tanh5771
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/prim::Constant5772
         t_4 = torch.add(input=t_4, other=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/aten::mul5762
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/aten::add5774
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/aten::mul5762
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/aten::add5774
         t_4 = torch.mul(input=t_7, other=t_4)
         del t_7
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/aten::mul5775
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/aten::mul5775
         t_4 = self.l_11(t_4)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Dropout[dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/Dropout[dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/Conv1D[c_proj]
         t_4 = self.l_12(t_4)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/aten::add5755
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/MLP[mlp]/Dropout[dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/aten::add5755
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/MLP[mlp]/Dropout[dropout]
         t_4 = torch.add(input=t_6, other=t_4)
         del t_6
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_1] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/aten::add5779
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/LayerNorm[ln_1] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/aten::add5779
         t_6 = self.l_13(t_4)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_attn] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_1]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Conv1D[c_attn] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/LayerNorm[ln_1]
         t_6 = self.l_14(t_6)
         # calling torch.split with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_attn]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5791
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5792
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Conv1D[c_attn]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5791
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5792
         t_6 = t_6.split(split_size=768, dim=2)
         t_3 = t_6[0]
         t_0 = t_6[1]
         t_6 = t_6[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57940
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5797
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::ListUnpack57940
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5797
         t_1 = t_3.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57940
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5801
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::ListUnpack57940
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5801
         t_5 = t_3.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57940
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5805
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::ListUnpack57940
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5805
         t_8 = t_3.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::size5806
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5808
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::size5806
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5808
         t_8 = torch.div(input=t_8, other=12)
         t_8 = [t_1, t_5, 12, t_8]
         del t_5
         del t_1
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57940
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListConstruct5812
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::ListUnpack57940
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::ListConstruct5812
         t_8 = t_3.view(size=t_8)
         del t_3
         t_3 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::view5813
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListConstruct5818
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::view5813
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::ListConstruct5818
         t_3 = t_8.permute(dims=t_3)
         del t_8
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57941
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5820
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::ListUnpack57941
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5820
         t_8 = t_0.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57941
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5824
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::ListUnpack57941
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5824
         t_5 = t_0.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57941
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5828
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::ListUnpack57941
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5828
         t_1 = t_0.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::size5829
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5831
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::size5829
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5831
         t_1 = torch.div(input=t_1, other=12)
         t_1 = [t_8, t_5, 12, t_1]
         del t_5
         del t_8
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57941
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListConstruct5835
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::ListUnpack57941
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::ListConstruct5835
         t_1 = t_0.view(size=t_1)
         del t_0
         t_0 = [0, 2, 3, 1]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::view5836
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListConstruct5841
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::view5836
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::ListConstruct5841
         t_0 = t_1.permute(dims=t_0)
         del t_1
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57942
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5843
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::ListUnpack57942
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5843
         t_1 = t_6.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57942
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5847
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::ListUnpack57942
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5847
         t_5 = t_6.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57942
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5851
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::ListUnpack57942
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5851
         t_8 = t_6.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::size5852
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5854
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::size5852
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5854
         t_8 = torch.div(input=t_8, other=12)
         t_8 = [t_1, t_5, 12, t_8]
         del t_5
         del t_1
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListUnpack57942
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListConstruct5858
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::ListUnpack57942
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::ListConstruct5858
         t_8 = t_6.view(size=t_8)
         del t_6
         t_6 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::view5859
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListConstruct5864
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::view5859
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::ListConstruct5864
         t_6 = t_8.permute(dims=t_6)
         del t_8
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::permute5819
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::permute5842
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::permute5819
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::permute5842
         t_0 = t_3.matmul(other=t_0)
         del t_3
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::matmul5866
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5867
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::matmul5866
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5867
         t_0 = torch.div(input=t_0, other=8.0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::div5868
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5869
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::div5868
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5869
         t_3 = t_0.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::div5868
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5872
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::div5868
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5872
         t_8 = t_0.size(dim=-1)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::size5873
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::size5870
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::size5873
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::size5870
         t_3 = torch.sub(input=t_8, other=t_3)
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Tensor[bias]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5880
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5881
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5882
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5883
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Tensor[bias]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5880
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5881
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5882
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5883
         t_5 = self.b_1[0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::slice5884
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5885
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5886
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5887
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5888
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::slice5884
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5885
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5886
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5887
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5888
         t_5 = t_5[:, 0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::slice5889
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5890
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::sub5878
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::size5873
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5891
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::slice5889
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5890
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::sub5878
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::size5873
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5891
         t_3 = t_5[:, :, t_3:t_8:1]
         del t_5
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::slice5892
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5893
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5894
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::size5873
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5895
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::slice5892
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5893
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5894
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::size5873
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5895
         t_8 = t_3[:, :, :, 0:t_8:1]
         del t_3
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::div5868
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::slice5896
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::div5868
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::slice5896
         t_0 = torch.mul(input=t_0, other=t_8)
         # calling torch.rsub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::slice5896
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5898
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5899
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::slice5896
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5898
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5899
         t_8 = torch.rsub(t_8, other=1, alpha=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::rsub5900
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5901
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::rsub5900
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5901
         t_8 = torch.mul(input=t_8, other=10000.0)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::mul5897
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::mul5902
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::mul5897
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::mul5902
         t_8 = torch.sub(input=t_0, other=t_8)
         del t_0
         # calling torch.softmax with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::sub5904
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5905
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5906
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::sub5904
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5905
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5906
         t_8 = t_8.softmax(dim=-1, dtype=None)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[attn_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::softmax5907
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Dropout[attn_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::softmax5907
         t_8 = self.l_15(t_8)
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[attn_dropout]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::permute5865
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Dropout[attn_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::permute5865
         t_6 = t_8.matmul(other=t_6)
         del t_8
         t_8 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::matmul5909
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListConstruct5914
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::matmul5909
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::ListConstruct5914
         t_8 = t_6.permute(dims=t_8)
         del t_6
         # calling Tensor.contiguous with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::permute5915
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::permute5915
         t_8 = t_8.contiguous()
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::contiguous5917
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5918
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::contiguous5917
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5918
         t_6 = t_8.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::contiguous5917
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5922
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::contiguous5917
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5922
         t_0 = t_8.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::contiguous5917
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5926
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::contiguous5917
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5926
         t_3 = t_8.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::contiguous5917
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::Constant5929
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::contiguous5917
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::Constant5929
         t_5 = t_8.size(dim=-1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::size5927
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::size5930
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::size5927
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::size5930
         t_5 = torch.mul(input=t_3, other=t_5)
         del t_3
         t_5 = [t_6, t_0, t_5]
         del t_0
         del t_6
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::contiguous5917
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/prim::ListConstruct5934
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::contiguous5917
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/prim::ListConstruct5934
         t_5 = t_8.view(size=t_5)
         del t_8
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/aten::view5935
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/aten::view5935
         t_5 = self.l_16(t_5)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[resid_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Dropout[resid_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Conv1D[c_proj]
         t_5 = self.l_17(t_5)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[4]/aten::add5779
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/Attention[attn]/Dropout[resid_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[4]/aten::add5779
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/Attention[attn]/Dropout[resid_dropout]
         t_5 = torch.add(input=t_4, other=t_5)
         del t_4
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_2] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/aten::add5939
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/LayerNorm[ln_2] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/aten::add5939
         t_4 = self.l_18(t_5)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_fc] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/LayerNorm[ln_2]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/Conv1D[c_fc] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/LayerNorm[ln_2]
         t_4 = self.l_19(t_4)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/prim::Constant5945
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/prim::Constant5945
         t_8 = torch.mul(input=t_4, other=0.5)
         # calling torch.pow with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/prim::Constant5947
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/prim::Constant5947
         t_0 = t_4.pow(exponent=3)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/aten::pow5948
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/prim::Constant5949
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/aten::pow5948
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/prim::Constant5949
         t_0 = torch.mul(input=t_0, other=0.044715)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/aten::mul5950
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/aten::mul5950
         t_0 = torch.add(input=t_4, other=t_0)
         del t_4
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/aten::add5952
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/prim::Constant5953
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/aten::add5952
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/prim::Constant5953
         t_0 = torch.mul(input=t_0, other=0.7978845608028654)
         # calling torch.tanh with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/aten::mul5954
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/aten::mul5954
         t_0 = t_0.tanh()
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/aten::tanh5955
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/prim::Constant5956
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/aten::tanh5955
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/prim::Constant5956
         t_0 = torch.add(input=t_0, other=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/aten::mul5946
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/aten::add5958
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/aten::mul5946
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/aten::add5958
         t_0 = torch.mul(input=t_8, other=t_0)
         del t_8
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/aten::mul5959
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/aten::mul5959
         t_0 = self.l_20(t_0)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Dropout[dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/Dropout[dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/Conv1D[c_proj]
         t_0 = self.l_21(t_0)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/aten::add5939
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/MLP[mlp]/Dropout[dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/aten::add5939
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/Dropout[dropout]
         t_0 = torch.add(input=t_5, other=t_0)
         del t_5
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_1] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/aten::add5963
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/LayerNorm[ln_1] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/aten::add5963
         t_5 = self.l_22(t_0)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_attn] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_1]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Conv1D[c_attn] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/LayerNorm[ln_1]
         t_5 = self.l_23(t_5)
         # calling torch.split with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_attn]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant5975
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant5976
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Conv1D[c_attn]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant5975
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant5976
         t_5 = t_5.split(split_size=768, dim=2)
         t_4 = t_5[0]
         t_6 = t_5[1]
         t_5 = t_5[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59780
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant5981
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::ListUnpack59780
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant5981
         t_3 = t_4.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59780
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant5985
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::ListUnpack59780
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant5985
         t_1 = t_4.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59780
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant5989
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::ListUnpack59780
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant5989
         t_9 = t_4.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::size5990
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant5992
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::size5990
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant5992
         t_9 = torch.div(input=t_9, other=12)
         t_9 = [t_3, t_1, 12, t_9]
         del t_1
         del t_3
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59780
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListConstruct5996
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::ListUnpack59780
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::ListConstruct5996
         t_9 = t_4.view(size=t_9)
         del t_4
         t_4 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::view5997
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListConstruct6002
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::view5997
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::ListConstruct6002
         t_4 = t_9.permute(dims=t_4)
         del t_9
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59781
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6004
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::ListUnpack59781
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6004
         t_9 = t_6.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59781
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6008
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::ListUnpack59781
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6008
         t_1 = t_6.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59781
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6012
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::ListUnpack59781
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6012
         t_3 = t_6.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::size6013
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6015
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::size6013
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6015
         t_3 = torch.div(input=t_3, other=12)
         t_3 = [t_9, t_1, 12, t_3]
         del t_1
         del t_9
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59781
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListConstruct6019
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::ListUnpack59781
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::ListConstruct6019
         t_3 = t_6.view(size=t_3)
         del t_6
         t_6 = [0, 2, 3, 1]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::view6020
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListConstruct6025
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::view6020
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::ListConstruct6025
         t_6 = t_3.permute(dims=t_6)
         del t_3
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59782
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6027
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::ListUnpack59782
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6027
         t_3 = t_5.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59782
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6031
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::ListUnpack59782
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6031
         t_1 = t_5.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59782
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6035
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::ListUnpack59782
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6035
         t_9 = t_5.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::size6036
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6038
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::size6036
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6038
         t_9 = torch.div(input=t_9, other=12)
         t_9 = [t_3, t_1, 12, t_9]
         del t_1
         del t_3
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListUnpack59782
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListConstruct6042
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::ListUnpack59782
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::ListConstruct6042
         t_9 = t_5.view(size=t_9)
         del t_5
         t_5 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::view6043
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListConstruct6048
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::view6043
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::ListConstruct6048
         t_5 = t_9.permute(dims=t_5)
         del t_9
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::permute6003
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::permute6026
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::permute6003
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::permute6026
         t_6 = t_4.matmul(other=t_6)
         del t_4
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::matmul6050
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6051
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::matmul6050
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6051
         t_6 = torch.div(input=t_6, other=8.0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::div6052
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6053
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::div6052
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6053
         t_4 = t_6.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::div6052
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6056
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::div6052
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6056
         t_9 = t_6.size(dim=-1)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::size6057
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::size6054
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::size6057
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::size6054
         t_4 = torch.sub(input=t_9, other=t_4)
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Tensor[bias]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6064
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6065
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6066
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6067
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Tensor[bias]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6064
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6065
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6066
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6067
         t_1 = self.b_2[0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::slice6068
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6069
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6070
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6071
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6072
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::slice6068
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6069
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6070
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6071
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6072
         t_1 = t_1[:, 0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::slice6073
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6074
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::sub6062
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::size6057
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6075
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::slice6073
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6074
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::sub6062
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::size6057
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6075
         t_4 = t_1[:, :, t_4:t_9:1]
         del t_1
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::slice6076
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6077
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6078
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::size6057
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6079
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::slice6076
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6077
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6078
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::size6057
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6079
         t_9 = t_4[:, :, :, 0:t_9:1]
         del t_4
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::div6052
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::slice6080
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::div6052
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::slice6080
         t_6 = torch.mul(input=t_6, other=t_9)
         # calling torch.rsub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::slice6080
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6082
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6083
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::slice6080
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6082
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6083
         t_9 = torch.rsub(t_9, other=1, alpha=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::rsub6084
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6085
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::rsub6084
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6085
         t_9 = torch.mul(input=t_9, other=10000.0)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::mul6081
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::mul6086
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::mul6081
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::mul6086
         t_9 = torch.sub(input=t_6, other=t_9)
         del t_6
         # calling torch.softmax with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::sub6088
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6089
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6090
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::sub6088
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6089
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6090
         t_9 = t_9.softmax(dim=-1, dtype=None)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[attn_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::softmax6091
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Dropout[attn_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::softmax6091
         t_9 = self.l_24(t_9)
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[attn_dropout]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::permute6049
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Dropout[attn_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::permute6049
         t_5 = t_9.matmul(other=t_5)
         del t_9
         t_9 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::matmul6093
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListConstruct6098
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::matmul6093
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::ListConstruct6098
         t_9 = t_5.permute(dims=t_9)
         del t_5
         # calling Tensor.contiguous with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::permute6099
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::permute6099
         t_9 = t_9.contiguous()
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::contiguous6101
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6102
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::contiguous6101
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6102
         t_5 = t_9.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::contiguous6101
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6106
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::contiguous6101
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6106
         t_6 = t_9.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::contiguous6101
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6110
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::contiguous6101
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6110
         t_4 = t_9.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::contiguous6101
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::Constant6113
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::contiguous6101
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::Constant6113
         t_1 = t_9.size(dim=-1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::size6111
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::size6114
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::size6111
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::size6114
         t_1 = torch.mul(input=t_4, other=t_1)
         del t_4
         t_1 = [t_5, t_6, t_1]
         del t_6
         del t_5
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::contiguous6101
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/prim::ListConstruct6118
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::contiguous6101
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/prim::ListConstruct6118
         t_1 = t_9.view(size=t_1)
         del t_9
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/aten::view6119
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/aten::view6119
         t_1 = self.l_25(t_1)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[resid_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Dropout[resid_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Conv1D[c_proj]
         t_1 = self.l_26(t_1)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[5]/aten::add5963
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/Attention[attn]/Dropout[resid_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/aten::add5963
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/Attention[attn]/Dropout[resid_dropout]
         t_1 = torch.add(input=t_0, other=t_1)
         del t_0
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_2] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/aten::add6123
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/LayerNorm[ln_2] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/aten::add6123
         t_0 = self.l_27(t_1)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_fc] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/LayerNorm[ln_2]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/Conv1D[c_fc] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/LayerNorm[ln_2]
         t_0 = self.l_28(t_0)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/prim::Constant6129
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/prim::Constant6129
         t_9 = torch.mul(input=t_0, other=0.5)
         # calling torch.pow with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/prim::Constant6131
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/prim::Constant6131
         t_6 = t_0.pow(exponent=3)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/aten::pow6132
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/prim::Constant6133
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/aten::pow6132
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/prim::Constant6133
         t_6 = torch.mul(input=t_6, other=0.044715)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/aten::mul6134
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/aten::mul6134
         t_6 = torch.add(input=t_0, other=t_6)
         del t_0
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/aten::add6136
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/prim::Constant6137
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/aten::add6136
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/prim::Constant6137
         t_6 = torch.mul(input=t_6, other=0.7978845608028654)
         # calling torch.tanh with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/aten::mul6138
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/aten::mul6138
         t_6 = t_6.tanh()
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/aten::tanh6139
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/prim::Constant6140
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/aten::tanh6139
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/prim::Constant6140
         t_6 = torch.add(input=t_6, other=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/aten::mul6130
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/aten::add6142
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/aten::mul6130
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/aten::add6142
         t_6 = torch.mul(input=t_9, other=t_6)
         del t_9
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/aten::mul6143
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/aten::mul6143
         t_6 = self.l_29(t_6)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Dropout[dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/Dropout[dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/Conv1D[c_proj]
         t_6 = self.l_30(t_6)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/aten::add6123
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/MLP[mlp]/Dropout[dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/aten::add6123
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/MLP[mlp]/Dropout[dropout]
         t_6 = torch.add(input=t_1, other=t_6)
         del t_1
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_1] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/aten::add6147
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/LayerNorm[ln_1] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/aten::add6147
         t_1 = self.l_31(t_6)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_attn] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_1]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Conv1D[c_attn] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/LayerNorm[ln_1]
         t_1 = self.l_32(t_1)
 
         # returning:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/aten::add6147
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_attn]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/aten::add6147
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Conv1D[c_attn]
         return (t_6, t_1)
 
     def state_dict(self, device=None):
@@ -2926,49 +2926,49 @@ class Partition1(nn.Module):
 
 class Partition2(nn.Module):
     SCOPES = {
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[attn_dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[resid_dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_2]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_fc]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Dropout[dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_1]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_attn]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[attn_dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[resid_dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_2]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_fc]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Dropout[dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_1]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_attn]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[attn_dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[resid_dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_2]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_fc]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Dropout[dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_1]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_attn]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[attn_dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[resid_dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_2]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_fc]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Dropout[dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_1]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_attn]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[attn_dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[resid_dropout]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_2]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_fc]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_proj]',
-        'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Dropout[dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/LayerNorm[ln_2]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/Dropout[dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/LayerNorm[ln_2]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/Dropout[dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/LayerNorm[ln_2]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/Dropout[dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/LayerNorm[ln_2]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/Dropout[dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/LayerNorm[ln_1]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Conv1D[c_attn]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Dropout[attn_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Dropout[resid_dropout]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/LayerNorm[ln_2]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/Conv1D[c_fc]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/Conv1D[c_proj]',
+        'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/Dropout[dropout]',
     }
 
     def __init__(self, layers, tensors):
@@ -2976,1765 +2976,1765 @@ class Partition2(nn.Module):
         # initializing partition layers
         self.scopes = []
         self.l_0 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[attn_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Dropout[attn_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[attn_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Dropout[attn_dropout]'
         )
         self.l_1 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Conv1D[c_proj]'
         )
         self.l_2 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[resid_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Dropout[resid_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[resid_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Dropout[resid_dropout]'
         )
         self.l_3 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_2]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/LayerNorm[ln_2]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_2]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/LayerNorm[ln_2]')
         self.l_4 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_fc]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/Conv1D[c_fc]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_fc]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/Conv1D[c_fc]'
         )
         self.l_5 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/Conv1D[c_proj]'
         )
         self.l_6 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Dropout[dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/Dropout[dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Dropout[dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/Dropout[dropout]'
         )
         self.l_7 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_1]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/LayerNorm[ln_1]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_1]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/LayerNorm[ln_1]')
         self.l_8 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_attn]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Conv1D[c_attn]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_attn]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Conv1D[c_attn]'
         )
         self.l_9 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[attn_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Dropout[attn_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[attn_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Dropout[attn_dropout]'
         )
         self.l_10 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Conv1D[c_proj]'
         )
         self.l_11 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[resid_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Dropout[resid_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[resid_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Dropout[resid_dropout]'
         )
         self.l_12 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_2]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/LayerNorm[ln_2]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_2]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/LayerNorm[ln_2]')
         self.l_13 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_fc]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/Conv1D[c_fc]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_fc]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/Conv1D[c_fc]'
         )
         self.l_14 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/Conv1D[c_proj]'
         )
         self.l_15 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Dropout[dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/Dropout[dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Dropout[dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/Dropout[dropout]'
         )
         self.l_16 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_1]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/LayerNorm[ln_1]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_1]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/LayerNorm[ln_1]')
         self.l_17 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_attn]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Conv1D[c_attn]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_attn]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Conv1D[c_attn]'
         )
         self.l_18 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[attn_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Dropout[attn_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[attn_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Dropout[attn_dropout]'
         )
         self.l_19 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Conv1D[c_proj]'
         )
         self.l_20 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[resid_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Dropout[resid_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[resid_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Dropout[resid_dropout]'
         )
         self.l_21 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_2]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/LayerNorm[ln_2]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_2]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/LayerNorm[ln_2]')
         self.l_22 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_fc]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/Conv1D[c_fc]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_fc]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/Conv1D[c_fc]'
         )
         self.l_23 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/Conv1D[c_proj]'
         )
         self.l_24 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Dropout[dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/Dropout[dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Dropout[dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/Dropout[dropout]'
         )
         self.l_25 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_1]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/LayerNorm[ln_1]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_1]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/LayerNorm[ln_1]')
         self.l_26 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_attn]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Conv1D[c_attn]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_attn]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Conv1D[c_attn]'
         )
         self.l_27 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[attn_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Dropout[attn_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[attn_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Dropout[attn_dropout]'
         )
         self.l_28 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Conv1D[c_proj]'
         )
         self.l_29 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[resid_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Dropout[resid_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[resid_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Dropout[resid_dropout]'
         )
         self.l_30 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_2]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/LayerNorm[ln_2]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_2]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/LayerNorm[ln_2]')
         self.l_31 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_fc]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/Conv1D[c_fc]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_fc]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/Conv1D[c_fc]'
         )
         self.l_32 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/Conv1D[c_proj]'
         )
         self.l_33 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Dropout[dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/Dropout[dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Dropout[dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/Dropout[dropout]'
         )
         self.l_34 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_1]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/LayerNorm[ln_1]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_1]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/LayerNorm[ln_1]')
         self.l_35 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_attn]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Conv1D[c_attn]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_attn]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Conv1D[c_attn]'
         )
         self.l_36 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[attn_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Dropout[attn_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[attn_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Dropout[attn_dropout]'
         )
         self.l_37 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Conv1D[c_proj]'
         )
         self.l_38 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[resid_dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Dropout[resid_dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[resid_dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Dropout[resid_dropout]'
         )
         self.l_39 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_2]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/LayerNorm[ln_2]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_2]')
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/LayerNorm[ln_2]')
         self.l_40 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_fc]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/Conv1D[c_fc]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_fc]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/Conv1D[c_fc]'
         )
         self.l_41 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_proj]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/Conv1D[c_proj]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_proj]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/Conv1D[c_proj]'
         )
         self.l_42 = layers[
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Dropout[dropout]']
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/Dropout[dropout]']
         self.scopes.append(
-            'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Dropout[dropout]'
+            'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/Dropout[dropout]'
         )
 
         # initializing partition buffers
         self.register_buffer(
             'b_0', tensors[
-                'GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Tensor[bias]']
+                'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Tensor[bias]']
         )
         self.register_buffer(
             'b_1', tensors[
-                'GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Tensor[bias]']
+                'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Tensor[bias]']
         )
         self.register_buffer(
             'b_2', tensors[
-                'GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Tensor[bias]']
+                'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Tensor[bias]']
         )
         self.register_buffer(
             'b_3', tensors[
-                'GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Tensor[bias]']
+                'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Tensor[bias]']
         )
         self.register_buffer(
             'b_4', tensors[
-                'GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Tensor[bias]']
+                'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Tensor[bias]']
         )
 
         self.device = torch.device('cuda:2')
         self.lookup = {
-            'l_0': 'transformer.7.attn.attn_dropout',
-            'l_1': 'transformer.7.attn.c_proj',
-            'l_2': 'transformer.7.attn.resid_dropout',
-            'l_3': 'transformer.7.ln_2',
-            'l_4': 'transformer.7.mlp.c_fc',
-            'l_5': 'transformer.7.mlp.c_proj',
-            'l_6': 'transformer.7.mlp.dropout',
-            'l_7': 'transformer.8.ln_1',
-            'l_8': 'transformer.8.attn.c_attn',
-            'l_9': 'transformer.8.attn.attn_dropout',
-            'l_10': 'transformer.8.attn.c_proj',
-            'l_11': 'transformer.8.attn.resid_dropout',
-            'l_12': 'transformer.8.ln_2',
-            'l_13': 'transformer.8.mlp.c_fc',
-            'l_14': 'transformer.8.mlp.c_proj',
-            'l_15': 'transformer.8.mlp.dropout',
-            'l_16': 'transformer.9.ln_1',
-            'l_17': 'transformer.9.attn.c_attn',
-            'l_18': 'transformer.9.attn.attn_dropout',
-            'l_19': 'transformer.9.attn.c_proj',
-            'l_20': 'transformer.9.attn.resid_dropout',
-            'l_21': 'transformer.9.ln_2',
-            'l_22': 'transformer.9.mlp.c_fc',
-            'l_23': 'transformer.9.mlp.c_proj',
-            'l_24': 'transformer.9.mlp.dropout',
-            'l_25': 'transformer.10.ln_1',
-            'l_26': 'transformer.10.attn.c_attn',
-            'l_27': 'transformer.10.attn.attn_dropout',
-            'l_28': 'transformer.10.attn.c_proj',
-            'l_29': 'transformer.10.attn.resid_dropout',
-            'l_30': 'transformer.10.ln_2',
-            'l_31': 'transformer.10.mlp.c_fc',
-            'l_32': 'transformer.10.mlp.c_proj',
-            'l_33': 'transformer.10.mlp.dropout',
-            'l_34': 'transformer.11.ln_1',
-            'l_35': 'transformer.11.attn.c_attn',
-            'l_36': 'transformer.11.attn.attn_dropout',
-            'l_37': 'transformer.11.attn.c_proj',
-            'l_38': 'transformer.11.attn.resid_dropout',
-            'l_39': 'transformer.11.ln_2',
-            'l_40': 'transformer.11.mlp.c_fc',
-            'l_41': 'transformer.11.mlp.c_proj',
-            'l_42': 'transformer.11.mlp.dropout',
-            'b_0': 'transformer.7.attn.bias',
-            'b_1': 'transformer.8.attn.bias',
-            'b_2': 'transformer.9.attn.bias',
-            'b_3': 'transformer.10.attn.bias',
-            'b_4': 'transformer.11.attn.bias'
+            'l_0': 'transformer.blocks.7.attn.attn_dropout',
+            'l_1': 'transformer.blocks.7.attn.c_proj',
+            'l_2': 'transformer.blocks.7.attn.resid_dropout',
+            'l_3': 'transformer.blocks.7.ln_2',
+            'l_4': 'transformer.blocks.7.mlp.c_fc',
+            'l_5': 'transformer.blocks.7.mlp.c_proj',
+            'l_6': 'transformer.blocks.7.mlp.dropout',
+            'l_7': 'transformer.blocks.8.ln_1',
+            'l_8': 'transformer.blocks.8.attn.c_attn',
+            'l_9': 'transformer.blocks.8.attn.attn_dropout',
+            'l_10': 'transformer.blocks.8.attn.c_proj',
+            'l_11': 'transformer.blocks.8.attn.resid_dropout',
+            'l_12': 'transformer.blocks.8.ln_2',
+            'l_13': 'transformer.blocks.8.mlp.c_fc',
+            'l_14': 'transformer.blocks.8.mlp.c_proj',
+            'l_15': 'transformer.blocks.8.mlp.dropout',
+            'l_16': 'transformer.blocks.9.ln_1',
+            'l_17': 'transformer.blocks.9.attn.c_attn',
+            'l_18': 'transformer.blocks.9.attn.attn_dropout',
+            'l_19': 'transformer.blocks.9.attn.c_proj',
+            'l_20': 'transformer.blocks.9.attn.resid_dropout',
+            'l_21': 'transformer.blocks.9.ln_2',
+            'l_22': 'transformer.blocks.9.mlp.c_fc',
+            'l_23': 'transformer.blocks.9.mlp.c_proj',
+            'l_24': 'transformer.blocks.9.mlp.dropout',
+            'l_25': 'transformer.blocks.10.ln_1',
+            'l_26': 'transformer.blocks.10.attn.c_attn',
+            'l_27': 'transformer.blocks.10.attn.attn_dropout',
+            'l_28': 'transformer.blocks.10.attn.c_proj',
+            'l_29': 'transformer.blocks.10.attn.resid_dropout',
+            'l_30': 'transformer.blocks.10.ln_2',
+            'l_31': 'transformer.blocks.10.mlp.c_fc',
+            'l_32': 'transformer.blocks.10.mlp.c_proj',
+            'l_33': 'transformer.blocks.10.mlp.dropout',
+            'l_34': 'transformer.blocks.11.ln_1',
+            'l_35': 'transformer.blocks.11.attn.c_attn',
+            'l_36': 'transformer.blocks.11.attn.attn_dropout',
+            'l_37': 'transformer.blocks.11.attn.c_proj',
+            'l_38': 'transformer.blocks.11.attn.resid_dropout',
+            'l_39': 'transformer.blocks.11.ln_2',
+            'l_40': 'transformer.blocks.11.mlp.c_fc',
+            'l_41': 'transformer.blocks.11.mlp.c_proj',
+            'l_42': 'transformer.blocks.11.mlp.dropout',
+            'b_0': 'transformer.blocks.7.attn.bias',
+            'b_1': 'transformer.blocks.8.attn.bias',
+            'b_2': 'transformer.blocks.9.attn.bias',
+            'b_3': 'transformer.blocks.10.attn.bias',
+            'b_4': 'transformer.blocks.11.attn.bias'
         }
 
     def forward(self, x0, x1):
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[attn_dropout] <=> self.l_0
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_proj] <=> self.l_1
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[resid_dropout] <=> self.l_2
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_2] <=> self.l_3
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_fc] <=> self.l_4
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_proj] <=> self.l_5
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Dropout[dropout] <=> self.l_6
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_1] <=> self.l_7
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_attn] <=> self.l_8
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[attn_dropout] <=> self.l_9
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_proj] <=> self.l_10
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[resid_dropout] <=> self.l_11
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_2] <=> self.l_12
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_fc] <=> self.l_13
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_proj] <=> self.l_14
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Dropout[dropout] <=> self.l_15
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_1] <=> self.l_16
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_attn] <=> self.l_17
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[attn_dropout] <=> self.l_18
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_proj] <=> self.l_19
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[resid_dropout] <=> self.l_20
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_2] <=> self.l_21
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_fc] <=> self.l_22
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_proj] <=> self.l_23
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Dropout[dropout] <=> self.l_24
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_1] <=> self.l_25
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_attn] <=> self.l_26
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[attn_dropout] <=> self.l_27
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_proj] <=> self.l_28
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[resid_dropout] <=> self.l_29
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_2] <=> self.l_30
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_fc] <=> self.l_31
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_proj] <=> self.l_32
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Dropout[dropout] <=> self.l_33
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_1] <=> self.l_34
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_attn] <=> self.l_35
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[attn_dropout] <=> self.l_36
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_proj] <=> self.l_37
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[resid_dropout] <=> self.l_38
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_2] <=> self.l_39
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_fc] <=> self.l_40
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_proj] <=> self.l_41
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Dropout[dropout] <=> self.l_42
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Tensor[bias] <=> self.b_0
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Tensor[bias] <=> self.b_1
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Tensor[bias] <=> self.b_2
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Tensor[bias] <=> self.b_3
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Tensor[bias] <=> self.b_4
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/aten::add6147 <=> x0
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_attn] <=> x1
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Dropout[attn_dropout] <=> self.l_0
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Conv1D[c_proj] <=> self.l_1
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Dropout[resid_dropout] <=> self.l_2
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/LayerNorm[ln_2] <=> self.l_3
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/Conv1D[c_fc] <=> self.l_4
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/Conv1D[c_proj] <=> self.l_5
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/Dropout[dropout] <=> self.l_6
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/LayerNorm[ln_1] <=> self.l_7
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Conv1D[c_attn] <=> self.l_8
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Dropout[attn_dropout] <=> self.l_9
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Conv1D[c_proj] <=> self.l_10
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Dropout[resid_dropout] <=> self.l_11
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/LayerNorm[ln_2] <=> self.l_12
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/Conv1D[c_fc] <=> self.l_13
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/Conv1D[c_proj] <=> self.l_14
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/Dropout[dropout] <=> self.l_15
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/LayerNorm[ln_1] <=> self.l_16
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Conv1D[c_attn] <=> self.l_17
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Dropout[attn_dropout] <=> self.l_18
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Conv1D[c_proj] <=> self.l_19
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Dropout[resid_dropout] <=> self.l_20
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/LayerNorm[ln_2] <=> self.l_21
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/Conv1D[c_fc] <=> self.l_22
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/Conv1D[c_proj] <=> self.l_23
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/Dropout[dropout] <=> self.l_24
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/LayerNorm[ln_1] <=> self.l_25
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Conv1D[c_attn] <=> self.l_26
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Dropout[attn_dropout] <=> self.l_27
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Conv1D[c_proj] <=> self.l_28
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Dropout[resid_dropout] <=> self.l_29
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/LayerNorm[ln_2] <=> self.l_30
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/Conv1D[c_fc] <=> self.l_31
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/Conv1D[c_proj] <=> self.l_32
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/Dropout[dropout] <=> self.l_33
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/LayerNorm[ln_1] <=> self.l_34
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Conv1D[c_attn] <=> self.l_35
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Dropout[attn_dropout] <=> self.l_36
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Conv1D[c_proj] <=> self.l_37
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Dropout[resid_dropout] <=> self.l_38
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/LayerNorm[ln_2] <=> self.l_39
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/Conv1D[c_fc] <=> self.l_40
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/Conv1D[c_proj] <=> self.l_41
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/Dropout[dropout] <=> self.l_42
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Tensor[bias] <=> self.b_0
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Tensor[bias] <=> self.b_1
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Tensor[bias] <=> self.b_2
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Tensor[bias] <=> self.b_3
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Tensor[bias] <=> self.b_4
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/aten::add6147 <=> x0
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Conv1D[c_attn] <=> x1
 
         # moving inputs to current device no op if already on the correct device
         x0 = x0.to(self.device)
         x1 = x1.to(self.device)
 
         # calling torch.split with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_attn]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6159
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6160
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Conv1D[c_attn]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6159
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6160
         t_1 = x1.split(split_size=768, dim=2)
         del x1
         t_2 = t_1[0]
         t_3 = t_1[1]
         t_1 = t_1[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61620
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6165
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::ListUnpack61620
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6165
         t_4 = t_2.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61620
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6169
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::ListUnpack61620
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6169
         t_5 = t_2.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61620
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6173
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::ListUnpack61620
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6173
         t_6 = t_2.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::size6174
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6176
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::size6174
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6176
         t_6 = torch.div(input=t_6, other=12)
         t_6 = [t_4, t_5, 12, t_6]
         del t_5
         del t_4
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61620
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListConstruct6180
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::ListUnpack61620
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::ListConstruct6180
         t_6 = t_2.view(size=t_6)
         del t_2
         t_2 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::view6181
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListConstruct6186
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::view6181
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::ListConstruct6186
         t_2 = t_6.permute(dims=t_2)
         del t_6
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61621
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6188
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::ListUnpack61621
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6188
         t_6 = t_3.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61621
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6192
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::ListUnpack61621
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6192
         t_5 = t_3.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61621
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6196
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::ListUnpack61621
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6196
         t_4 = t_3.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::size6197
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6199
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::size6197
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6199
         t_4 = torch.div(input=t_4, other=12)
         t_4 = [t_6, t_5, 12, t_4]
         del t_5
         del t_6
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61621
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListConstruct6203
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::ListUnpack61621
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::ListConstruct6203
         t_4 = t_3.view(size=t_4)
         del t_3
         t_3 = [0, 2, 3, 1]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::view6204
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListConstruct6209
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::view6204
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::ListConstruct6209
         t_3 = t_4.permute(dims=t_3)
         del t_4
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61622
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6211
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::ListUnpack61622
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6211
         t_4 = t_1.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61622
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6215
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::ListUnpack61622
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6215
         t_5 = t_1.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61622
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6219
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::ListUnpack61622
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6219
         t_6 = t_1.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::size6220
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6222
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::size6220
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6222
         t_6 = torch.div(input=t_6, other=12)
         t_6 = [t_4, t_5, 12, t_6]
         del t_5
         del t_4
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListUnpack61622
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListConstruct6226
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::ListUnpack61622
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::ListConstruct6226
         t_6 = t_1.view(size=t_6)
         del t_1
         t_1 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::view6227
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListConstruct6232
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::view6227
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::ListConstruct6232
         t_1 = t_6.permute(dims=t_1)
         del t_6
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::permute6187
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::permute6210
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::permute6187
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::permute6210
         t_3 = t_2.matmul(other=t_3)
         del t_2
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::matmul6234
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6235
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::matmul6234
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6235
         t_3 = torch.div(input=t_3, other=8.0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::div6236
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6237
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::div6236
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6237
         t_2 = t_3.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::div6236
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6240
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::div6236
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6240
         t_6 = t_3.size(dim=-1)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::size6241
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::size6238
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::size6241
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::size6238
         t_2 = torch.sub(input=t_6, other=t_2)
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Tensor[bias]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6248
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6249
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6250
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6251
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Tensor[bias]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6248
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6249
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6250
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6251
         t_5 = self.b_0[0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::slice6252
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6253
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6254
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6255
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6256
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::slice6252
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6253
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6254
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6255
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6256
         t_5 = t_5[:, 0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::slice6257
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6258
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::sub6246
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::size6241
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6259
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::slice6257
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6258
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::sub6246
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::size6241
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6259
         t_2 = t_5[:, :, t_2:t_6:1]
         del t_5
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::slice6260
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6261
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6262
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::size6241
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6263
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::slice6260
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6261
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6262
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::size6241
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6263
         t_6 = t_2[:, :, :, 0:t_6:1]
         del t_2
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::div6236
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::slice6264
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::div6236
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::slice6264
         t_3 = torch.mul(input=t_3, other=t_6)
         # calling torch.rsub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::slice6264
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6266
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6267
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::slice6264
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6266
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6267
         t_6 = torch.rsub(t_6, other=1, alpha=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::rsub6268
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6269
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::rsub6268
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6269
         t_6 = torch.mul(input=t_6, other=10000.0)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::mul6265
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::mul6270
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::mul6265
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::mul6270
         t_6 = torch.sub(input=t_3, other=t_6)
         del t_3
         # calling torch.softmax with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::sub6272
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6273
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6274
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::sub6272
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6273
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6274
         t_6 = t_6.softmax(dim=-1, dtype=None)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[attn_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::softmax6275
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Dropout[attn_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::softmax6275
         t_6 = self.l_0(t_6)
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[attn_dropout]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::permute6233
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Dropout[attn_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::permute6233
         t_1 = t_6.matmul(other=t_1)
         del t_6
         t_6 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::matmul6277
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListConstruct6282
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::matmul6277
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::ListConstruct6282
         t_6 = t_1.permute(dims=t_6)
         del t_1
         # calling Tensor.contiguous with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::permute6283
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::permute6283
         t_6 = t_6.contiguous()
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::contiguous6285
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6286
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::contiguous6285
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6286
         t_1 = t_6.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::contiguous6285
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6290
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::contiguous6285
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6290
         t_3 = t_6.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::contiguous6285
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6294
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::contiguous6285
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6294
         t_2 = t_6.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::contiguous6285
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::Constant6297
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::contiguous6285
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::Constant6297
         t_5 = t_6.size(dim=-1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::size6295
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::size6298
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::size6295
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::size6298
         t_5 = torch.mul(input=t_2, other=t_5)
         del t_2
         t_5 = [t_1, t_3, t_5]
         del t_3
         del t_1
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::contiguous6285
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/prim::ListConstruct6302
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::contiguous6285
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/prim::ListConstruct6302
         t_5 = t_6.view(size=t_5)
         del t_6
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/aten::view6303
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/aten::view6303
         t_5 = self.l_1(t_5)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[resid_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Dropout[resid_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Conv1D[c_proj]
         t_5 = self.l_2(t_5)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[6]/aten::add6147
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/Attention[attn]/Dropout[resid_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[6]/aten::add6147
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/Attention[attn]/Dropout[resid_dropout]
         t_5 = torch.add(input=x0, other=t_5)
         del x0
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_2] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/aten::add6307
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/LayerNorm[ln_2] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/aten::add6307
         t_6 = self.l_3(t_5)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_fc] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/LayerNorm[ln_2]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/Conv1D[c_fc] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/LayerNorm[ln_2]
         t_6 = self.l_4(t_6)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/prim::Constant6313
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/prim::Constant6313
         t_3 = torch.mul(input=t_6, other=0.5)
         # calling torch.pow with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/prim::Constant6315
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/prim::Constant6315
         t_1 = t_6.pow(exponent=3)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/aten::pow6316
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/prim::Constant6317
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/aten::pow6316
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/prim::Constant6317
         t_1 = torch.mul(input=t_1, other=0.044715)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/aten::mul6318
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/aten::mul6318
         t_1 = torch.add(input=t_6, other=t_1)
         del t_6
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/aten::add6320
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/prim::Constant6321
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/aten::add6320
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/prim::Constant6321
         t_1 = torch.mul(input=t_1, other=0.7978845608028654)
         # calling torch.tanh with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/aten::mul6322
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/aten::mul6322
         t_1 = t_1.tanh()
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/aten::tanh6323
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/prim::Constant6324
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/aten::tanh6323
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/prim::Constant6324
         t_1 = torch.add(input=t_1, other=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/aten::mul6314
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/aten::add6326
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/aten::mul6314
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/aten::add6326
         t_1 = torch.mul(input=t_3, other=t_1)
         del t_3
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/aten::mul6327
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/aten::mul6327
         t_1 = self.l_5(t_1)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Dropout[dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/Dropout[dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/Conv1D[c_proj]
         t_1 = self.l_6(t_1)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/aten::add6307
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/MLP[mlp]/Dropout[dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/aten::add6307
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/MLP[mlp]/Dropout[dropout]
         t_1 = torch.add(input=t_5, other=t_1)
         del t_5
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_1] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/aten::add6331
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/LayerNorm[ln_1] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/aten::add6331
         t_5 = self.l_7(t_1)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_attn] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_1]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Conv1D[c_attn] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/LayerNorm[ln_1]
         t_5 = self.l_8(t_5)
         # calling torch.split with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_attn]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6343
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6344
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Conv1D[c_attn]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6343
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6344
         t_5 = t_5.split(split_size=768, dim=2)
         t_6 = t_5[0]
         t_2 = t_5[1]
         t_5 = t_5[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63460
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6349
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::ListUnpack63460
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6349
         t_4 = t_6.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63460
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6353
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::ListUnpack63460
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6353
         t_7 = t_6.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63460
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6357
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::ListUnpack63460
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6357
         t_8 = t_6.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::size6358
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6360
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::size6358
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6360
         t_8 = torch.div(input=t_8, other=12)
         t_8 = [t_4, t_7, 12, t_8]
         del t_7
         del t_4
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63460
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListConstruct6364
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::ListUnpack63460
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::ListConstruct6364
         t_8 = t_6.view(size=t_8)
         del t_6
         t_6 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::view6365
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListConstruct6370
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::view6365
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::ListConstruct6370
         t_6 = t_8.permute(dims=t_6)
         del t_8
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63461
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6372
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::ListUnpack63461
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6372
         t_8 = t_2.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63461
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6376
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::ListUnpack63461
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6376
         t_7 = t_2.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63461
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6380
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::ListUnpack63461
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6380
         t_4 = t_2.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::size6381
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6383
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::size6381
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6383
         t_4 = torch.div(input=t_4, other=12)
         t_4 = [t_8, t_7, 12, t_4]
         del t_7
         del t_8
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63461
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListConstruct6387
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::ListUnpack63461
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::ListConstruct6387
         t_4 = t_2.view(size=t_4)
         del t_2
         t_2 = [0, 2, 3, 1]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::view6388
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListConstruct6393
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::view6388
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::ListConstruct6393
         t_2 = t_4.permute(dims=t_2)
         del t_4
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63462
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6395
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::ListUnpack63462
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6395
         t_4 = t_5.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63462
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6399
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::ListUnpack63462
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6399
         t_7 = t_5.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63462
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6403
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::ListUnpack63462
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6403
         t_8 = t_5.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::size6404
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6406
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::size6404
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6406
         t_8 = torch.div(input=t_8, other=12)
         t_8 = [t_4, t_7, 12, t_8]
         del t_7
         del t_4
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListUnpack63462
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListConstruct6410
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::ListUnpack63462
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::ListConstruct6410
         t_8 = t_5.view(size=t_8)
         del t_5
         t_5 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::view6411
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListConstruct6416
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::view6411
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::ListConstruct6416
         t_5 = t_8.permute(dims=t_5)
         del t_8
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::permute6371
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::permute6394
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::permute6371
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::permute6394
         t_2 = t_6.matmul(other=t_2)
         del t_6
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::matmul6418
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6419
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::matmul6418
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6419
         t_2 = torch.div(input=t_2, other=8.0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::div6420
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6421
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::div6420
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6421
         t_6 = t_2.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::div6420
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6424
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::div6420
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6424
         t_8 = t_2.size(dim=-1)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::size6425
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::size6422
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::size6425
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::size6422
         t_6 = torch.sub(input=t_8, other=t_6)
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Tensor[bias]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6432
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6433
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6434
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6435
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Tensor[bias]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6432
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6433
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6434
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6435
         t_7 = self.b_1[0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::slice6436
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6437
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6438
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6439
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6440
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::slice6436
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6437
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6438
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6439
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6440
         t_7 = t_7[:, 0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::slice6441
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6442
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::sub6430
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::size6425
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6443
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::slice6441
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6442
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::sub6430
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::size6425
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6443
         t_6 = t_7[:, :, t_6:t_8:1]
         del t_7
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::slice6444
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6445
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6446
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::size6425
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6447
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::slice6444
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6445
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6446
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::size6425
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6447
         t_8 = t_6[:, :, :, 0:t_8:1]
         del t_6
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::div6420
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::slice6448
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::div6420
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::slice6448
         t_2 = torch.mul(input=t_2, other=t_8)
         # calling torch.rsub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::slice6448
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6450
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6451
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::slice6448
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6450
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6451
         t_8 = torch.rsub(t_8, other=1, alpha=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::rsub6452
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6453
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::rsub6452
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6453
         t_8 = torch.mul(input=t_8, other=10000.0)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::mul6449
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::mul6454
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::mul6449
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::mul6454
         t_8 = torch.sub(input=t_2, other=t_8)
         del t_2
         # calling torch.softmax with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::sub6456
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6457
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6458
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::sub6456
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6457
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6458
         t_8 = t_8.softmax(dim=-1, dtype=None)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[attn_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::softmax6459
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Dropout[attn_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::softmax6459
         t_8 = self.l_9(t_8)
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[attn_dropout]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::permute6417
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Dropout[attn_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::permute6417
         t_5 = t_8.matmul(other=t_5)
         del t_8
         t_8 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::matmul6461
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListConstruct6466
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::matmul6461
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::ListConstruct6466
         t_8 = t_5.permute(dims=t_8)
         del t_5
         # calling Tensor.contiguous with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::permute6467
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::permute6467
         t_8 = t_8.contiguous()
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::contiguous6469
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6470
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::contiguous6469
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6470
         t_5 = t_8.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::contiguous6469
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6474
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::contiguous6469
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6474
         t_2 = t_8.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::contiguous6469
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6478
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::contiguous6469
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6478
         t_6 = t_8.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::contiguous6469
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::Constant6481
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::contiguous6469
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::Constant6481
         t_7 = t_8.size(dim=-1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::size6479
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::size6482
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::size6479
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::size6482
         t_7 = torch.mul(input=t_6, other=t_7)
         del t_6
         t_7 = [t_5, t_2, t_7]
         del t_2
         del t_5
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::contiguous6469
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/prim::ListConstruct6486
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::contiguous6469
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/prim::ListConstruct6486
         t_7 = t_8.view(size=t_7)
         del t_8
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/aten::view6487
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/aten::view6487
         t_7 = self.l_10(t_7)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[resid_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Dropout[resid_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Conv1D[c_proj]
         t_7 = self.l_11(t_7)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[7]/aten::add6331
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/Attention[attn]/Dropout[resid_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[7]/aten::add6331
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/Attention[attn]/Dropout[resid_dropout]
         t_7 = torch.add(input=t_1, other=t_7)
         del t_1
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_2] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/aten::add6491
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/LayerNorm[ln_2] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/aten::add6491
         t_1 = self.l_12(t_7)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_fc] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/LayerNorm[ln_2]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/Conv1D[c_fc] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/LayerNorm[ln_2]
         t_1 = self.l_13(t_1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/prim::Constant6497
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/prim::Constant6497
         t_8 = torch.mul(input=t_1, other=0.5)
         # calling torch.pow with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/prim::Constant6499
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/prim::Constant6499
         t_2 = t_1.pow(exponent=3)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/aten::pow6500
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/prim::Constant6501
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/aten::pow6500
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/prim::Constant6501
         t_2 = torch.mul(input=t_2, other=0.044715)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/aten::mul6502
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/aten::mul6502
         t_2 = torch.add(input=t_1, other=t_2)
         del t_1
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/aten::add6504
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/prim::Constant6505
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/aten::add6504
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/prim::Constant6505
         t_2 = torch.mul(input=t_2, other=0.7978845608028654)
         # calling torch.tanh with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/aten::mul6506
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/aten::mul6506
         t_2 = t_2.tanh()
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/aten::tanh6507
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/prim::Constant6508
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/aten::tanh6507
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/prim::Constant6508
         t_2 = torch.add(input=t_2, other=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/aten::mul6498
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/aten::add6510
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/aten::mul6498
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/aten::add6510
         t_2 = torch.mul(input=t_8, other=t_2)
         del t_8
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/aten::mul6511
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/aten::mul6511
         t_2 = self.l_14(t_2)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Dropout[dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/Dropout[dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/Conv1D[c_proj]
         t_2 = self.l_15(t_2)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/aten::add6491
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/MLP[mlp]/Dropout[dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/aten::add6491
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/MLP[mlp]/Dropout[dropout]
         t_2 = torch.add(input=t_7, other=t_2)
         del t_7
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_1] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/aten::add6515
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/LayerNorm[ln_1] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/aten::add6515
         t_7 = self.l_16(t_2)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_attn] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_1]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Conv1D[c_attn] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/LayerNorm[ln_1]
         t_7 = self.l_17(t_7)
         # calling torch.split with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_attn]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6527
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6528
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Conv1D[c_attn]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6527
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6528
         t_7 = t_7.split(split_size=768, dim=2)
         t_1 = t_7[0]
         t_5 = t_7[1]
         t_7 = t_7[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65300
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6533
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::ListUnpack65300
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6533
         t_6 = t_1.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65300
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6537
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::ListUnpack65300
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6537
         t_4 = t_1.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65300
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6541
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::ListUnpack65300
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6541
         t_9 = t_1.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::size6542
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6544
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::size6542
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6544
         t_9 = torch.div(input=t_9, other=12)
         t_9 = [t_6, t_4, 12, t_9]
         del t_4
         del t_6
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65300
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListConstruct6548
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::ListUnpack65300
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::ListConstruct6548
         t_9 = t_1.view(size=t_9)
         del t_1
         t_1 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::view6549
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListConstruct6554
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::view6549
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::ListConstruct6554
         t_1 = t_9.permute(dims=t_1)
         del t_9
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65301
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6556
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::ListUnpack65301
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6556
         t_9 = t_5.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65301
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6560
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::ListUnpack65301
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6560
         t_4 = t_5.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65301
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6564
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::ListUnpack65301
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6564
         t_6 = t_5.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::size6565
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6567
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::size6565
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6567
         t_6 = torch.div(input=t_6, other=12)
         t_6 = [t_9, t_4, 12, t_6]
         del t_4
         del t_9
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65301
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListConstruct6571
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::ListUnpack65301
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::ListConstruct6571
         t_6 = t_5.view(size=t_6)
         del t_5
         t_5 = [0, 2, 3, 1]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::view6572
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListConstruct6577
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::view6572
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::ListConstruct6577
         t_5 = t_6.permute(dims=t_5)
         del t_6
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65302
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6579
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::ListUnpack65302
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6579
         t_6 = t_7.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65302
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6583
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::ListUnpack65302
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6583
         t_4 = t_7.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65302
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6587
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::ListUnpack65302
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6587
         t_9 = t_7.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::size6588
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6590
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::size6588
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6590
         t_9 = torch.div(input=t_9, other=12)
         t_9 = [t_6, t_4, 12, t_9]
         del t_4
         del t_6
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListUnpack65302
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListConstruct6594
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::ListUnpack65302
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::ListConstruct6594
         t_9 = t_7.view(size=t_9)
         del t_7
         t_7 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::view6595
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListConstruct6600
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::view6595
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::ListConstruct6600
         t_7 = t_9.permute(dims=t_7)
         del t_9
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::permute6555
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::permute6578
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::permute6555
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::permute6578
         t_5 = t_1.matmul(other=t_5)
         del t_1
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::matmul6602
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6603
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::matmul6602
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6603
         t_5 = torch.div(input=t_5, other=8.0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::div6604
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6605
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::div6604
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6605
         t_1 = t_5.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::div6604
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6608
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::div6604
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6608
         t_9 = t_5.size(dim=-1)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::size6609
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::size6606
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::size6609
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::size6606
         t_1 = torch.sub(input=t_9, other=t_1)
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Tensor[bias]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6616
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6617
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6618
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6619
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Tensor[bias]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6616
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6617
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6618
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6619
         t_4 = self.b_2[0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::slice6620
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6621
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6622
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6623
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6624
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::slice6620
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6621
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6622
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6623
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6624
         t_4 = t_4[:, 0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::slice6625
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6626
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::sub6614
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::size6609
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6627
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::slice6625
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6626
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::sub6614
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::size6609
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6627
         t_1 = t_4[:, :, t_1:t_9:1]
         del t_4
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::slice6628
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6629
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6630
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::size6609
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6631
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::slice6628
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6629
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6630
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::size6609
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6631
         t_9 = t_1[:, :, :, 0:t_9:1]
         del t_1
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::div6604
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::slice6632
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::div6604
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::slice6632
         t_5 = torch.mul(input=t_5, other=t_9)
         # calling torch.rsub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::slice6632
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6634
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6635
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::slice6632
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6634
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6635
         t_9 = torch.rsub(t_9, other=1, alpha=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::rsub6636
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6637
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::rsub6636
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6637
         t_9 = torch.mul(input=t_9, other=10000.0)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::mul6633
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::mul6638
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::mul6633
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::mul6638
         t_9 = torch.sub(input=t_5, other=t_9)
         del t_5
         # calling torch.softmax with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::sub6640
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6641
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6642
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::sub6640
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6641
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6642
         t_9 = t_9.softmax(dim=-1, dtype=None)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[attn_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::softmax6643
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Dropout[attn_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::softmax6643
         t_9 = self.l_18(t_9)
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[attn_dropout]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::permute6601
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Dropout[attn_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::permute6601
         t_7 = t_9.matmul(other=t_7)
         del t_9
         t_9 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::matmul6645
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListConstruct6650
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::matmul6645
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::ListConstruct6650
         t_9 = t_7.permute(dims=t_9)
         del t_7
         # calling Tensor.contiguous with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::permute6651
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::permute6651
         t_9 = t_9.contiguous()
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::contiguous6653
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6654
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::contiguous6653
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6654
         t_7 = t_9.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::contiguous6653
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6658
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::contiguous6653
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6658
         t_5 = t_9.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::contiguous6653
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6662
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::contiguous6653
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6662
         t_1 = t_9.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::contiguous6653
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::Constant6665
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::contiguous6653
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::Constant6665
         t_4 = t_9.size(dim=-1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::size6663
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::size6666
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::size6663
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::size6666
         t_4 = torch.mul(input=t_1, other=t_4)
         del t_1
         t_4 = [t_7, t_5, t_4]
         del t_5
         del t_7
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::contiguous6653
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/prim::ListConstruct6670
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::contiguous6653
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/prim::ListConstruct6670
         t_4 = t_9.view(size=t_4)
         del t_9
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/aten::view6671
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/aten::view6671
         t_4 = self.l_19(t_4)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[resid_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Dropout[resid_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Conv1D[c_proj]
         t_4 = self.l_20(t_4)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[8]/aten::add6515
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/Attention[attn]/Dropout[resid_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[8]/aten::add6515
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/Attention[attn]/Dropout[resid_dropout]
         t_4 = torch.add(input=t_2, other=t_4)
         del t_2
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_2] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/aten::add6675
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/LayerNorm[ln_2] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/aten::add6675
         t_2 = self.l_21(t_4)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_fc] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/LayerNorm[ln_2]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/Conv1D[c_fc] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/LayerNorm[ln_2]
         t_2 = self.l_22(t_2)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/prim::Constant6681
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/prim::Constant6681
         t_9 = torch.mul(input=t_2, other=0.5)
         # calling torch.pow with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/prim::Constant6683
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/prim::Constant6683
         t_5 = t_2.pow(exponent=3)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/aten::pow6684
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/prim::Constant6685
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/aten::pow6684
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/prim::Constant6685
         t_5 = torch.mul(input=t_5, other=0.044715)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/aten::mul6686
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/aten::mul6686
         t_5 = torch.add(input=t_2, other=t_5)
         del t_2
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/aten::add6688
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/prim::Constant6689
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/aten::add6688
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/prim::Constant6689
         t_5 = torch.mul(input=t_5, other=0.7978845608028654)
         # calling torch.tanh with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/aten::mul6690
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/aten::mul6690
         t_5 = t_5.tanh()
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/aten::tanh6691
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/prim::Constant6692
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/aten::tanh6691
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/prim::Constant6692
         t_5 = torch.add(input=t_5, other=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/aten::mul6682
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/aten::add6694
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/aten::mul6682
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/aten::add6694
         t_5 = torch.mul(input=t_9, other=t_5)
         del t_9
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/aten::mul6695
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/aten::mul6695
         t_5 = self.l_23(t_5)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Dropout[dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/Dropout[dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/Conv1D[c_proj]
         t_5 = self.l_24(t_5)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/aten::add6675
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/MLP[mlp]/Dropout[dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/aten::add6675
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/MLP[mlp]/Dropout[dropout]
         t_5 = torch.add(input=t_4, other=t_5)
         del t_4
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_1] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/aten::add6699
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/LayerNorm[ln_1] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/aten::add6699
         t_4 = self.l_25(t_5)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_attn] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_1]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Conv1D[c_attn] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/LayerNorm[ln_1]
         t_4 = self.l_26(t_4)
         # calling torch.split with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_attn]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6711
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6712
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Conv1D[c_attn]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6711
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6712
         t_4 = t_4.split(split_size=768, dim=2)
         t_2 = t_4[0]
         t_7 = t_4[1]
         t_4 = t_4[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67140
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6717
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::ListUnpack67140
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6717
         t_1 = t_2.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67140
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6721
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::ListUnpack67140
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6721
         t_6 = t_2.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67140
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6725
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::ListUnpack67140
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6725
         t_10 = t_2.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::size6726
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6728
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::size6726
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6728
         t_10 = torch.div(input=t_10, other=12)
         t_10 = [t_1, t_6, 12, t_10]
         del t_6
         del t_1
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67140
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListConstruct6732
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::ListUnpack67140
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::ListConstruct6732
         t_10 = t_2.view(size=t_10)
         del t_2
         t_2 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::view6733
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListConstruct6738
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::view6733
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::ListConstruct6738
         t_2 = t_10.permute(dims=t_2)
         del t_10
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67141
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6740
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::ListUnpack67141
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6740
         t_10 = t_7.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67141
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6744
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::ListUnpack67141
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6744
         t_6 = t_7.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67141
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6748
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::ListUnpack67141
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6748
         t_1 = t_7.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::size6749
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6751
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::size6749
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6751
         t_1 = torch.div(input=t_1, other=12)
         t_1 = [t_10, t_6, 12, t_1]
         del t_6
         del t_10
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67141
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListConstruct6755
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::ListUnpack67141
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::ListConstruct6755
         t_1 = t_7.view(size=t_1)
         del t_7
         t_7 = [0, 2, 3, 1]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::view6756
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListConstruct6761
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::view6756
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::ListConstruct6761
         t_7 = t_1.permute(dims=t_7)
         del t_1
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67142
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6763
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::ListUnpack67142
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6763
         t_1 = t_4.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67142
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6767
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::ListUnpack67142
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6767
         t_6 = t_4.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67142
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6771
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::ListUnpack67142
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6771
         t_10 = t_4.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::size6772
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6774
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::size6772
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6774
         t_10 = torch.div(input=t_10, other=12)
         t_10 = [t_1, t_6, 12, t_10]
         del t_6
         del t_1
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListUnpack67142
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListConstruct6778
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::ListUnpack67142
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::ListConstruct6778
         t_10 = t_4.view(size=t_10)
         del t_4
         t_4 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::view6779
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListConstruct6784
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::view6779
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::ListConstruct6784
         t_4 = t_10.permute(dims=t_4)
         del t_10
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::permute6739
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::permute6762
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::permute6739
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::permute6762
         t_7 = t_2.matmul(other=t_7)
         del t_2
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::matmul6786
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6787
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::matmul6786
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6787
         t_7 = torch.div(input=t_7, other=8.0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::div6788
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6789
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::div6788
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6789
         t_2 = t_7.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::div6788
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6792
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::div6788
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6792
         t_10 = t_7.size(dim=-1)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::size6793
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::size6790
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::size6793
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::size6790
         t_2 = torch.sub(input=t_10, other=t_2)
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Tensor[bias]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6800
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6801
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6802
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6803
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Tensor[bias]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6800
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6801
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6802
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6803
         t_6 = self.b_3[0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::slice6804
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6805
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6806
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6807
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6808
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::slice6804
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6805
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6806
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6807
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6808
         t_6 = t_6[:, 0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::slice6809
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6810
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::sub6798
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::size6793
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6811
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::slice6809
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6810
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::sub6798
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::size6793
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6811
         t_2 = t_6[:, :, t_2:t_10:1]
         del t_6
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::slice6812
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6813
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6814
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::size6793
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6815
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::slice6812
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6813
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6814
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::size6793
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6815
         t_10 = t_2[:, :, :, 0:t_10:1]
         del t_2
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::div6788
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::slice6816
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::div6788
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::slice6816
         t_7 = torch.mul(input=t_7, other=t_10)
         # calling torch.rsub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::slice6816
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6818
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6819
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::slice6816
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6818
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6819
         t_10 = torch.rsub(t_10, other=1, alpha=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::rsub6820
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6821
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::rsub6820
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6821
         t_10 = torch.mul(input=t_10, other=10000.0)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::mul6817
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::mul6822
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::mul6817
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::mul6822
         t_10 = torch.sub(input=t_7, other=t_10)
         del t_7
         # calling torch.softmax with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::sub6824
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6825
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6826
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::sub6824
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6825
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6826
         t_10 = t_10.softmax(dim=-1, dtype=None)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[attn_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::softmax6827
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Dropout[attn_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::softmax6827
         t_10 = self.l_27(t_10)
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[attn_dropout]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::permute6785
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Dropout[attn_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::permute6785
         t_4 = t_10.matmul(other=t_4)
         del t_10
         t_10 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::matmul6829
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListConstruct6834
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::matmul6829
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::ListConstruct6834
         t_10 = t_4.permute(dims=t_10)
         del t_4
         # calling Tensor.contiguous with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::permute6835
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::permute6835
         t_10 = t_10.contiguous()
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::contiguous6837
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6838
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::contiguous6837
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6838
         t_4 = t_10.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::contiguous6837
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6842
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::contiguous6837
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6842
         t_7 = t_10.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::contiguous6837
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6846
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::contiguous6837
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6846
         t_2 = t_10.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::contiguous6837
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::Constant6849
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::contiguous6837
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::Constant6849
         t_6 = t_10.size(dim=-1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::size6847
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::size6850
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::size6847
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::size6850
         t_6 = torch.mul(input=t_2, other=t_6)
         del t_2
         t_6 = [t_4, t_7, t_6]
         del t_7
         del t_4
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::contiguous6837
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/prim::ListConstruct6854
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::contiguous6837
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/prim::ListConstruct6854
         t_6 = t_10.view(size=t_6)
         del t_10
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/aten::view6855
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/aten::view6855
         t_6 = self.l_28(t_6)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[resid_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Dropout[resid_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Conv1D[c_proj]
         t_6 = self.l_29(t_6)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[9]/aten::add6699
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/Attention[attn]/Dropout[resid_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[9]/aten::add6699
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/Attention[attn]/Dropout[resid_dropout]
         t_6 = torch.add(input=t_5, other=t_6)
         del t_5
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_2] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/aten::add6859
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/LayerNorm[ln_2] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/aten::add6859
         t_5 = self.l_30(t_6)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_fc] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/LayerNorm[ln_2]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/Conv1D[c_fc] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/LayerNorm[ln_2]
         t_5 = self.l_31(t_5)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/prim::Constant6865
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/prim::Constant6865
         t_10 = torch.mul(input=t_5, other=0.5)
         # calling torch.pow with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/prim::Constant6867
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/prim::Constant6867
         t_7 = t_5.pow(exponent=3)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/aten::pow6868
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/prim::Constant6869
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/aten::pow6868
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/prim::Constant6869
         t_7 = torch.mul(input=t_7, other=0.044715)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/aten::mul6870
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/aten::mul6870
         t_7 = torch.add(input=t_5, other=t_7)
         del t_5
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/aten::add6872
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/prim::Constant6873
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/aten::add6872
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/prim::Constant6873
         t_7 = torch.mul(input=t_7, other=0.7978845608028654)
         # calling torch.tanh with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/aten::mul6874
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/aten::mul6874
         t_7 = t_7.tanh()
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/aten::tanh6875
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/prim::Constant6876
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/aten::tanh6875
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/prim::Constant6876
         t_7 = torch.add(input=t_7, other=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/aten::mul6866
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/aten::add6878
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/aten::mul6866
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/aten::add6878
         t_7 = torch.mul(input=t_10, other=t_7)
         del t_10
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/aten::mul6879
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/aten::mul6879
         t_7 = self.l_32(t_7)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Dropout[dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/Dropout[dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/Conv1D[c_proj]
         t_7 = self.l_33(t_7)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/aten::add6859
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/MLP[mlp]/Dropout[dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/aten::add6859
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/MLP[mlp]/Dropout[dropout]
         t_7 = torch.add(input=t_6, other=t_7)
         del t_6
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_1] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/aten::add6883
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/LayerNorm[ln_1] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/aten::add6883
         t_6 = self.l_34(t_7)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_attn] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_1]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Conv1D[c_attn] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/LayerNorm[ln_1]
         t_6 = self.l_35(t_6)
         # calling torch.split with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_attn]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6895
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6896
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Conv1D[c_attn]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6895
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6896
         t_6 = t_6.split(split_size=768, dim=2)
         t_5 = t_6[0]
         t_4 = t_6[1]
         t_6 = t_6[2]
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68980
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6901
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::ListUnpack68980
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6901
         t_2 = t_5.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68980
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6905
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::ListUnpack68980
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6905
         t_1 = t_5.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68980
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6909
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::ListUnpack68980
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6909
         t_11 = t_5.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::size6910
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6912
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::size6910
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6912
         t_11 = torch.div(input=t_11, other=12)
         t_11 = [t_2, t_1, 12, t_11]
         del t_1
         del t_2
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68980
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListConstruct6916
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::ListUnpack68980
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::ListConstruct6916
         t_11 = t_5.view(size=t_11)
         del t_5
         t_5 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::view6917
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListConstruct6922
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::view6917
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::ListConstruct6922
         t_5 = t_11.permute(dims=t_5)
         del t_11
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68981
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6924
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::ListUnpack68981
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6924
         t_11 = t_4.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68981
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6928
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::ListUnpack68981
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6928
         t_1 = t_4.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68981
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6932
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::ListUnpack68981
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6932
         t_2 = t_4.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::size6933
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6935
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::size6933
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6935
         t_2 = torch.div(input=t_2, other=12)
         t_2 = [t_11, t_1, 12, t_2]
         del t_1
         del t_11
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68981
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListConstruct6939
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::ListUnpack68981
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::ListConstruct6939
         t_2 = t_4.view(size=t_2)
         del t_4
         t_4 = [0, 2, 3, 1]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::view6940
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListConstruct6945
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::view6940
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::ListConstruct6945
         t_4 = t_2.permute(dims=t_4)
         del t_2
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68982
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6947
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::ListUnpack68982
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6947
         t_2 = t_6.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68982
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6951
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::ListUnpack68982
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6951
         t_1 = t_6.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68982
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6955
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::ListUnpack68982
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6955
         t_11 = t_6.size(dim=-1)
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::size6956
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6958
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::size6956
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6958
         t_11 = torch.div(input=t_11, other=12)
         t_11 = [t_2, t_1, 12, t_11]
         del t_1
         del t_2
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListUnpack68982
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListConstruct6962
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::ListUnpack68982
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::ListConstruct6962
         t_11 = t_6.view(size=t_11)
         del t_6
         t_6 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::view6963
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListConstruct6968
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::view6963
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::ListConstruct6968
         t_6 = t_11.permute(dims=t_6)
         del t_11
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::permute6923
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::permute6946
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::permute6923
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::permute6946
         t_4 = t_5.matmul(other=t_4)
         del t_5
         # calling torch.div with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::matmul6970
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6971
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::matmul6970
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6971
         t_4 = torch.div(input=t_4, other=8.0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::div6972
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6973
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::div6972
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6973
         t_5 = t_4.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::div6972
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6976
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::div6972
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6976
         t_11 = t_4.size(dim=-1)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::size6977
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::size6974
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::size6977
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::size6974
         t_5 = torch.sub(input=t_11, other=t_5)
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Tensor[bias]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6984
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6985
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6986
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6987
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Tensor[bias]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6984
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6985
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6986
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6987
         t_1 = self.b_4[0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::slice6988
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6989
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6990
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6991
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6992
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::slice6988
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6989
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6990
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6991
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6992
         t_1 = t_1[:, 0:9223372036854775807:1]
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::slice6993
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6994
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::sub6982
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::size6977
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6995
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::slice6993
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6994
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::sub6982
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::size6977
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6995
         t_5 = t_1[:, :, t_5:t_11:1]
         del t_1
         # calling Tensor.slice with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::slice6996
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6997
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6998
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::size6977
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant6999
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::slice6996
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6997
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6998
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::size6977
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant6999
         t_11 = t_5[:, :, :, 0:t_11:1]
         del t_5
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::div6972
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::slice7000
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::div6972
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::slice7000
         t_4 = torch.mul(input=t_4, other=t_11)
         # calling torch.rsub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::slice7000
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant7002
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant7003
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::slice7000
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant7002
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant7003
         t_11 = torch.rsub(t_11, other=1, alpha=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::rsub7004
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant7005
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::rsub7004
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant7005
         t_11 = torch.mul(input=t_11, other=10000.0)
         # calling torch.sub with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::mul7001
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::mul7006
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::mul7001
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::mul7006
         t_11 = torch.sub(input=t_4, other=t_11)
         del t_4
         # calling torch.softmax with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::sub7008
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant7009
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant7010
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::sub7008
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant7009
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant7010
         t_11 = t_11.softmax(dim=-1, dtype=None)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[attn_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::softmax7011
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Dropout[attn_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::softmax7011
         t_11 = self.l_36(t_11)
         # calling torch.matmul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[attn_dropout]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::permute6969
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Dropout[attn_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::permute6969
         t_6 = t_11.matmul(other=t_6)
         del t_11
         t_11 = [0, 2, 1, 3]
         # calling Tensor.permute with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::matmul7013
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListConstruct7018
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::matmul7013
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::ListConstruct7018
         t_11 = t_6.permute(dims=t_11)
         del t_6
         # calling Tensor.contiguous with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::permute7019
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::permute7019
         t_11 = t_11.contiguous()
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::contiguous7021
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant7022
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::contiguous7021
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant7022
         t_6 = t_11.size(dim=0)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::contiguous7021
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant7026
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::contiguous7021
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant7026
         t_4 = t_11.size(dim=1)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::contiguous7021
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant7030
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::contiguous7021
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant7030
         t_5 = t_11.size(dim=-2)
         # calling Tensor.size with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::contiguous7021
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::Constant7033
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::contiguous7021
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::Constant7033
         t_1 = t_11.size(dim=-1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::size7031
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::size7034
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::size7031
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::size7034
         t_1 = torch.mul(input=t_5, other=t_1)
         del t_5
         t_1 = [t_6, t_4, t_1]
         del t_4
         del t_6
         # calling Tensor.view with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::contiguous7021
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/prim::ListConstruct7038
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::contiguous7021
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/prim::ListConstruct7038
         t_1 = t_11.view(size=t_1)
         del t_11
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/aten::view7039
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/aten::view7039
         t_1 = self.l_37(t_1)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[resid_dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Dropout[resid_dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Conv1D[c_proj]
         t_1 = self.l_38(t_1)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[10]/aten::add6883
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/Attention[attn]/Dropout[resid_dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[10]/aten::add6883
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/Attention[attn]/Dropout[resid_dropout]
         t_1 = torch.add(input=t_7, other=t_1)
         del t_7
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_2] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/aten::add7043
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/LayerNorm[ln_2] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/aten::add7043
         t_7 = self.l_39(t_1)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_fc] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/LayerNorm[ln_2]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/Conv1D[c_fc] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/LayerNorm[ln_2]
         t_7 = self.l_40(t_7)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/prim::Constant7049
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/prim::Constant7049
         t_11 = torch.mul(input=t_7, other=0.5)
         # calling torch.pow with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/prim::Constant7051
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/prim::Constant7051
         t_4 = t_7.pow(exponent=3)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/aten::pow7052
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/prim::Constant7053
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/aten::pow7052
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/prim::Constant7053
         t_4 = torch.mul(input=t_4, other=0.044715)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_fc]
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/aten::mul7054
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/Conv1D[c_fc]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/aten::mul7054
         t_4 = torch.add(input=t_7, other=t_4)
         del t_7
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/aten::add7056
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/prim::Constant7057
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/aten::add7056
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/prim::Constant7057
         t_4 = torch.mul(input=t_4, other=0.7978845608028654)
         # calling torch.tanh with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/aten::mul7058
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/aten::mul7058
         t_4 = t_4.tanh()
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/aten::tanh7059
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/prim::Constant7060
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/aten::tanh7059
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/prim::Constant7060
         t_4 = torch.add(input=t_4, other=1)
         # calling torch.mul with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/aten::mul7050
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/aten::add7062
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/aten::mul7050
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/aten::add7062
         t_4 = torch.mul(input=t_11, other=t_4)
         del t_11
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_proj] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/aten::mul7063
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/Conv1D[c_proj] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/aten::mul7063
         t_4 = self.l_41(t_4)
-        # calling GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Dropout[dropout] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Conv1D[c_proj]
+        # calling GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/Dropout[dropout] with arguments:
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/Conv1D[c_proj]
         t_4 = self.l_42(t_4)
         # calling torch.add with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/aten::add7043
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/MLP[mlp]/Dropout[dropout]
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/aten::add7043
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/Dropout[dropout]
         t_4 = torch.add(input=t_1, other=t_4)
         del t_1
 
         # returning:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/aten::add7067
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/aten::add7067
         return (t_4, )
 
     def state_dict(self, device=None):
@@ -4785,7 +4785,7 @@ class Partition3(nn.Module):
     def forward(self, x0, x1):
         # GPT2LMHeadModel/GPT2Model[transformer]/LayerNorm[ln_f] <=> self.l_0
         # GPT2LMHeadModel/Linear[lm_head] <=> self.l_1
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/aten::add7067 <=> x0
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/aten::add7067 <=> x0
         # input1 <=> x1
 
         # moving inputs to current device no op if already on the correct device
@@ -4793,7 +4793,7 @@ class Partition3(nn.Module):
         x1 = x1.to(self.device)
 
         # calling GPT2LMHeadModel/GPT2Model[transformer]/LayerNorm[ln_f] with arguments:
-        # GPT2LMHeadModel/GPT2Model[transformer]/Block[11]/aten::add7067
+        # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/aten::add7067
         t_1 = self.l_0(x0)
         del x0
         # calling GPT2LMHeadModel/Linear[lm_head] with arguments:
