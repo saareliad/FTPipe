@@ -10,8 +10,8 @@ import importlib
 from itertools import chain
 from copy import deepcopy
 from pipeline.util import nested_map
+# NOTE: currently nesting is supported just for tuples and lists
 
-# _SHAPE_CLS = list
 _SHAPE_CLS = torch.Size
 
 
@@ -37,6 +37,11 @@ class PipelineConfig():
         self.model_inputs.append(input_name)
         if is_batched:
             shape = _SHAPE_CLS(shape)
+        elif isinstance(shape, (tuple, list)):
+            shape = _SHAPE_CLS(shape)
+        elif isinstance(shape, dict):
+            raise NotImplementedError()
+
         self.model_input_shapes.append(shape)
         self.is_batched[input_name] = is_batched
         self.dtypes[input_name] = dtype
@@ -47,6 +52,11 @@ class PipelineConfig():
         self.model_outputs.append(output_name)
         if is_batched:
             shape = _SHAPE_CLS(shape)
+        elif isinstance(shape, (tuple, list)):
+            shape = _SHAPE_CLS(shape)
+        elif isinstance(shape, dict):
+            raise NotImplementedError()
+
         self.model_output_shapes.append(shape)
         self.is_batched[output_name] = is_batched
         self.dtypes[output_name] = dtype
