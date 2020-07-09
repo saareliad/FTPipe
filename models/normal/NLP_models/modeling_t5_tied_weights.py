@@ -34,7 +34,7 @@ class T5Stack(T5PreTrainedModel):
         super().__init__(config)
         self.embed_tokens = embed_tokens
         self.is_decoder = config.is_decoder
-        
+        self.precomputed_masks = config.precomputed_masks
         #NOTE ModuleList
         for i in range(config.num_layers):
             self.add_module(str(i),
@@ -76,28 +76,31 @@ class T5Stack(T5PreTrainedModel):
 
         batch_size, seq_length = input_shape
 
-        mask_seq_length = seq_length
 
-        # NOTE is None
-        # if attention_mask is None:
-        if is_None(attention_mask):
-            attention_mask = torch.ones(batch_size, mask_seq_length).to(inputs_embeds.device)
-        # NOTE is None is not None
-        # if self.is_decoder and encoder_attention_mask is None and encoder_hidden_states is not None:
-        if self.is_decoder and is_None(encoder_attention_mask) and is_not_None(encoder_hidden_states):
-            encoder_seq_length = encoder_hidden_states.shape[1]
-            encoder_attention_mask = torch.ones(batch_size, encoder_seq_length).to(inputs_embeds.device)
+        if not self.precomputed_masks:
+            # NOTE is None
+            # if attention_mask is None:
+            if is_None(attention_mask):
+                attention_mask = torch.ones(batch_size, seq_length).to(inputs_embeds.device)
+            # NOTE is None is not None
+            # if self.is_decoder and encoder_attention_mask is None and encoder_hidden_states is not None:
+            if self.is_decoder and is_None(encoder_attention_mask) and is_not_None(encoder_hidden_states):
+                encoder_seq_length = encoder_hidden_states.shape[1]
+                encoder_attention_mask = torch.ones(batch_size, encoder_seq_length).to(inputs_embeds.device)
 
 
-        # ourselves in which case we just need to make it broadcastable to all heads.
-        extended_attention_mask = self.get_extended_attention_mask(attention_mask, input_shape, attention_mask.device)
+            # ourselves in which case we just need to make it broadcastable to all heads.
+            extended_attention_mask = self.get_extended_attention_mask(attention_mask, input_shape, attention_mask.device)
 
-        # NOTE is not None
-        # if self.is_decoder and encoder_attention_mask is not None:
-        if self.is_decoder and is_not_None(encoder_attention_mask):
-            encoder_extended_attention_mask = self.invert_attention_mask(encoder_attention_mask)
+            # NOTE is not None
+            # if self.is_decoder and encoder_attention_mask is not None:
+            if self.is_decoder and is_not_None(encoder_attention_mask):
+                encoder_extended_attention_mask = self.invert_attention_mask(encoder_attention_mask)
+            else:
+                encoder_extended_attention_mask = None
         else:
-            encoder_extended_attention_mask = None
+            extended_attention_mask = attention_mask
+            encoder_extended_attention_mask = encoder_attention_mask
 
         position_bias = None
         encoder_decoder_position_bias = None
@@ -153,7 +156,8 @@ class T5Model(T5PreTrainedModel):
         decoder_config.is_decoder = True
         self.decoder = T5Stack(decoder_config, self.shared)
 
-        self.output_only = getattr(config,"output_only",False)
+        self.output_only = config.output_only
+        self.precomputed_masks = config.precomputed_masks
 
         self.init_weights()
 
@@ -196,7 +200,8 @@ class T5Model(T5PreTrainedModel):
         input_ids,
         attention_mask=None,
         decoder_input_ids=None,
-        decoder_attention_mask=None
+        decoder_attention_mask=None,
+        inverted_encoder_attention_mask=None,
     ):
         r"""
     Return:
@@ -242,7 +247,7 @@ class T5Model(T5PreTrainedModel):
             shared_embedding=self.shared_embed_weight,
             attention_mask=decoder_attention_mask,
             encoder_hidden_states=encoder_hidden_states,
-            encoder_attention_mask=attention_mask
+            encoder_attention_mask=inverted_encoder_attention_mask if self.precomputed_masks else attention_mask
         )
 
         if self.output_only:
@@ -270,8 +275,9 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
 
         self.lm_loss = nn.CrossEntropyLoss(ignore_index=-100)
 
-        self.output_only = getattr(config,"output_only",False)
-
+        self.output_only = config.output_only
+        self.precomputed_masks = config.precomputed_masks
+        
         self.init_weights()
 
     
@@ -310,6 +316,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         attention_mask=None,
         decoder_input_ids=None,
         decoder_attention_mask=None,
+        inverted_encoder_attention_mask=None,
         lm_labels=None,
     ):
         r"""
@@ -371,7 +378,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
             shared_embedding=self.shared_embed_weight,
             attention_mask=decoder_attention_mask,
             encoder_hidden_states=encoder_hidden_states,
-            encoder_attention_mask=attention_mask
+            encoder_attention_mask=inverted_encoder_attention_mask if self.precomputed_masks else attention_mask
         )
 
         # Rescale output before projecting on vocab

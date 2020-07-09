@@ -218,7 +218,7 @@ def connections(graph: Graph) -> str:
     for node in graph.nodes:
         if node.type is NodeTypes.IN:
             for n in node.out_edges:
-                adj_matrix[n.stage_id + 1]["inputs"].add(node.scope)
+                adj_matrix[n.stage_id + 1]["inputs"].add(graph.input_kw_ids.get(node.id,node.scope))
                 adj_matrix[0]["outputs"].add(n.stage_id)
 
         if node in graph.outputs:
