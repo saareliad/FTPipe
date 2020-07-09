@@ -70,7 +70,6 @@ class PipelineConfig():
             model = stage._stage_class(layers, tensors).to(stage.devices[0])
             stage_config['model'] = model
             old_config[idx] = stage_config
-
         return old_config
 
     @property
@@ -227,6 +226,7 @@ class PipelineConfig():
                 major = max(n, m)
                 minor = min(n, m)
                 if major % minor:
+                    assert major % minor
                     return False
         if self.batch_dim < 0:
             assert self.batch_dim < 0
@@ -437,7 +437,7 @@ class StageConfig():
             for i, shape in zip(self.inputs, self.input_shapes)
         ]
 
-        self.model_output_shapes = [
+        self.output_shapes = [
             nested_batch_change(self.is_batched[i], shape, batch_dim,
                                 batch_size)
             for i, shape in zip(self.outputs, self.output_shapes)
