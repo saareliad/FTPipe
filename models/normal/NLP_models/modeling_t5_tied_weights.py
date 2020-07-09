@@ -64,8 +64,7 @@ class T5Stack(T5PreTrainedModel):
         shared_embedding,
         attention_mask=None,
         encoder_hidden_states=None,
-        encoder_attention_mask=None,
-        head_mask=None
+        encoder_attention_mask=None
     ):
         input_shape = input_ids.size()
         input_ids = input_ids.view(-1, input_shape[-1])
@@ -100,8 +99,6 @@ class T5Stack(T5PreTrainedModel):
         else:
             encoder_extended_attention_mask = None
 
-        # Prepare head mask if needed
-        head_mask = self.get_head_mask(head_mask, self.config.num_layers)
         position_bias = None
         encoder_decoder_position_bias = None
 
@@ -116,8 +113,7 @@ class T5Stack(T5PreTrainedModel):
                 position_bias=position_bias,
                 encoder_hidden_states=encoder_hidden_states,
                 encoder_attention_mask=encoder_extended_attention_mask,
-                encoder_decoder_position_bias=encoder_decoder_position_bias,
-                head_mask=head_mask[i]
+                encoder_decoder_position_bias=encoder_decoder_position_bias
             )
             # layer_outputs is a tuple with:
             # hidden-states, (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
@@ -200,8 +196,7 @@ class T5Model(T5PreTrainedModel):
         input_ids,
         attention_mask=None,
         decoder_input_ids=None,
-        decoder_attention_mask=None,
-        head_mask=None,
+        decoder_attention_mask=None
     ):
         r"""
     Return:
@@ -239,7 +234,7 @@ class T5Model(T5PreTrainedModel):
 
         # Encode
         encoder_hidden_states = self.encoder(input_ids=input_ids,shared_embedding=self.shared_embed_weight,
-                                            attention_mask=attention_mask,head_mask=head_mask)
+                                            attention_mask=attention_mask)
 
         # Decode
         decoder_hidden_states = self.decoder(
@@ -247,8 +242,7 @@ class T5Model(T5PreTrainedModel):
             shared_embedding=self.shared_embed_weight,
             attention_mask=decoder_attention_mask,
             encoder_hidden_states=encoder_hidden_states,
-            encoder_attention_mask=attention_mask,
-            head_mask=head_mask
+            encoder_attention_mask=attention_mask
         )
 
         if self.output_only:
@@ -317,7 +311,6 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         decoder_input_ids=None,
         decoder_attention_mask=None,
         lm_labels=None,
-        head_mask=None,
     ):
         r"""
         lm_labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size,)`, `optional`, defaults to :obj:`None`):
@@ -364,7 +357,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
 
 
         encoder_hidden_states = self.encoder(input_ids=input_ids,shared_embedding=self.shared_embed_weight,
-                                            attention_mask=attention_mask, head_mask=head_mask)
+                                            attention_mask=attention_mask)
 
         #NOTE is not none, is none, is none
         # if lm_labels is not None and decoder_input_ids is None and decoder_inputs_embeds is None:
@@ -378,8 +371,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
             shared_embedding=self.shared_embed_weight,
             attention_mask=decoder_attention_mask,
             encoder_hidden_states=encoder_hidden_states,
-            encoder_attention_mask=attention_mask,
-            head_mask=head_mask
+            encoder_attention_mask=attention_mask
         )
 
         # Rescale output before projecting on vocab

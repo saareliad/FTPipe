@@ -303,8 +303,7 @@ class T5Attention(nn.Module):
         input,
         mask=None,
         kv=None,
-        position_bias=None,
-        head_mask=None
+        position_bias=None
     ):
         """
         Self-attention (if kv is None) or attention over source sentence (provided by kv).
@@ -370,11 +369,6 @@ class T5Attention(nn.Module):
         # weights = F.dropout(weights, p=self.dropout, training=self.training)  # (bs, n_heads, qlen, klen)
         weights = self.dropout(weights)
 
-        # Mask heads if we want to
-        #NOTE is not none
-        # if head_mask is not None:
-        if is_not_None(head_mask):
-            weights = weights * head_mask
 
         context = torch.matmul(weights, v)  # (bs, n_heads, qlen, dim_per_head)
         context = unshape(context)  # (bs, qlen, dim)
@@ -399,15 +393,13 @@ class T5LayerSelfAttention(nn.Module):
         self,
         hidden_states,
         attention_mask=None,
-        position_bias=None,
-        head_mask=None
+        position_bias=None
     ):
         norm_x = self.layer_norm(hidden_states)
         attention_output = self.SelfAttention(
             norm_x,
             mask=attention_mask,
-            position_bias=position_bias,
-            head_mask=head_mask
+            position_bias=position_bias
         )
         if self.has_relative_attention_bias:
             y = attention_output[0]
@@ -435,16 +427,14 @@ class T5LayerCrossAttention(nn.Module):
         hidden_states,
         kv,
         attention_mask=None,
-        position_bias=None,
-        head_mask=None
+        position_bias=None
     ):
         norm_x = self.layer_norm(hidden_states)
         attention_output = self.EncDecAttention(
             norm_x,
             mask=attention_mask,
             kv=kv,
-            position_bias=position_bias,
-            head_mask=head_mask
+            position_bias=position_bias
         )
 
         if self.has_relative_attention_bias:
@@ -487,16 +477,14 @@ class T5Block(nn.Module):
         position_bias=None,
         encoder_hidden_states=None,
         encoder_attention_mask=None,
-        encoder_decoder_position_bias=None,
-        head_mask=None
+        encoder_decoder_position_bias=None
     ):
         #NOTE moduleList
         # self_attention_outputs = self.layer[0](
         self_attention_outputs = getattr(self,str(0))(
             hidden_states,
             attention_mask=attention_mask,
-            position_bias=position_bias,
-            head_mask=head_mask
+            position_bias=position_bias
         )
         if self.has_relative_attention_bias:
             hidden_states = self_attention_outputs[0]
@@ -515,8 +503,7 @@ class T5Block(nn.Module):
                 hidden_states,
                 kv=encoder_hidden_states,
                 attention_mask=encoder_attention_mask,
-                position_bias=encoder_decoder_position_bias,
-                head_mask=head_mask
+                position_bias=encoder_decoder_position_bias
             )
             if self.has_relative_attention_bias:
                 hidden_states = cross_attention_outputs[0]
@@ -550,8 +537,6 @@ class T5PreTrainedModel(PreTrainedModel):
     config_class = T5Config
     load_tf_weights = load_tf_weights_in_t5
     base_model_prefix = "transformer"
-    KEY_PREFIX_TO_REPLACE=".layer."
-    NEW_PREFIX = "."
     KEY_TRANSLATION = {".layer.":".",
                     ".block.":"."}
 
@@ -623,30 +608,6 @@ class T5PreTrainedModel(PreTrainedModel):
 
         return shifted_input_ids
 
-    def get_head_mask(self, head_mask, num_hidden_layers, is_attention_chunked=False):
-        """
-        # Prepare head mask if needed
-        # 1.0 in head_mask indicate we keep the head
-        attention_probs has shape bsz x n_heads x N x N
-        Arguments:
-            head_mask: torch.Tensor or None: has shape [num_heads] or [num_hidden_layers x num_heads]
-            num_hidden_layers: int
-        Returns:
-             Tensor of shape shape [num_hidden_layers x batch x num_heads x seq_length x seq_length]
-             or list with [None] for each layer
-        """
-        #NOTE is not none
-        # if head_mask is not None:
-        if is_not_None(head_mask):
-            head_mask = self._convert_head_mask_to_5d(head_mask, num_hidden_layers)
-            # if is_attention_chunked is True:
-            if is_attention_chunked:
-                head_mask = head_mask.unsqueeze(-1)
-        else:
-            head_mask = [None] * num_hidden_layers
-
-        return head_mask
-
 class T5Stack(T5PreTrainedModel):
     def __init__(self, config, embed_tokens=None):
         super().__init__(config)
@@ -680,8 +641,7 @@ class T5Stack(T5PreTrainedModel):
         input_ids,
         attention_mask=None,
         encoder_hidden_states=None,
-        encoder_attention_mask=None,
-        head_mask=None
+        encoder_attention_mask=None
     ):
 
 
@@ -718,8 +678,6 @@ class T5Stack(T5PreTrainedModel):
         else:
             encoder_extended_attention_mask = None
 
-        # Prepare head mask if needed
-        head_mask = self.get_head_mask(head_mask, self.config.num_layers)
         position_bias = None
         encoder_decoder_position_bias = None
 
@@ -734,8 +692,7 @@ class T5Stack(T5PreTrainedModel):
                 position_bias=position_bias,
                 encoder_hidden_states=encoder_hidden_states,
                 encoder_attention_mask=encoder_extended_attention_mask,
-                encoder_decoder_position_bias=encoder_decoder_position_bias,
-                head_mask=head_mask[i]
+                encoder_decoder_position_bias=encoder_decoder_position_bias
             )
             # layer_outputs is a tuple with:
             # hidden-states, (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
@@ -875,8 +832,7 @@ class T5Model(T5PreTrainedModel):
         input_ids,
         attention_mask=None,
         decoder_input_ids=None,
-        decoder_attention_mask=None,
-        head_mask=None,
+        decoder_attention_mask=None
     ):
         r"""
     Return:
@@ -913,15 +869,14 @@ class T5Model(T5PreTrainedModel):
         """
 
         # Encode
-        encoder_hidden_states = self.encoder(input_ids=input_ids,attention_mask=attention_mask,head_mask=head_mask)
+        encoder_hidden_states = self.encoder(input_ids=input_ids,attention_mask=attention_mask)
 
         # Decode
         decoder_hidden_states = self.decoder(
             input_ids=decoder_input_ids,
             attention_mask=decoder_attention_mask,
             encoder_hidden_states=encoder_hidden_states,
-            encoder_attention_mask=attention_mask,
-            head_mask=head_mask
+            encoder_attention_mask=attention_mask
         )
 
         if self.output_only:
@@ -977,8 +932,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         attention_mask=None,
         decoder_input_ids=None,
         decoder_attention_mask=None,
-        lm_labels=None,
-        head_mask=None,
+        lm_labels=None
     ):
         r"""
         lm_labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size,)`, `optional`, defaults to :obj:`None`):
@@ -1024,7 +978,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         """
 
 
-        encoder_hidden_states = self.encoder(input_ids=input_ids, attention_mask=attention_mask, head_mask=head_mask)
+        encoder_hidden_states = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
 
         #NOTE is not none, is none, is none
         # if lm_labels is not None and decoder_input_ids is None and decoder_inputs_embeds is None:
@@ -1037,8 +991,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
             input_ids=decoder_input_ids,
             attention_mask=decoder_attention_mask,
             encoder_hidden_states=encoder_hidden_states,
-            encoder_attention_mask=attention_mask,
-            head_mask=head_mask
+            encoder_attention_mask=attention_mask
         )
 
         # Rescale output before projecting on vocab
