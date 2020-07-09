@@ -37,32 +37,32 @@ def create_pipeline_configuration(DEBUG=False):
         ],
         "model_inputs": {
             "input0": {
-                "shape": [32, 3, 224, 224],
-                "dtype": "torch.float32",
+                "shape": torch.Size([32, 3, 224, 224]),
+                "dtype": torch.float32,
                 "is_batched": True
             }
         },
         "model_outputs": {
             "ResNet/Linear[fc]": {
-                "shape": [32, 1000],
-                "dtype": "torch.float32",
+                "shape": torch.Size([32, 1000]),
+                "dtype": torch.float32,
                 "is_batched": True
             }
         },
         "stages": {
-            "0": {
+            0: {
                 "inputs": {
                     "input0": {
-                        "shape": [32, 3, 224, 224],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([32, 3, 224, 224]),
+                        "dtype": torch.float32,
                         "is_batched": True,
                         'req_grad': False
                     }
                 },
                 "outputs": {
                     "ResNet/Sequential[layer1]/Bottleneck[0]/aten::add_3862": {
-                        "shape": [32, 256, 56, 56],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([32, 256, 56, 56]),
+                        "dtype": torch.float32,
                         "is_batched": True
                     }
                 },
@@ -70,19 +70,19 @@ def create_pipeline_configuration(DEBUG=False):
                 "models.partitioned.resnet50_imagenet_p8.ResNetPartition0",
                 "devices": ["cpu" if DEBUG else "cuda:0"]
             },
-            "1": {
+            1: {
                 "inputs": {
                     "ResNet/Sequential[layer1]/Bottleneck[0]/aten::add_3862": {
-                        "shape": [32, 256, 56, 56],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([32, 256, 56, 56]),
+                        "dtype": torch.float32,
                         "is_batched": True,
                         "req_grad": True
                     }
                 },
                 "outputs": {
                     "ResNet/Sequential[layer1]/Bottleneck[2]/aten::add_4058": {
-                        "shape": [32, 256, 56, 56],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([32, 256, 56, 56]),
+                        "dtype": torch.float32,
                         "is_batched": True
                     }
                 },
@@ -90,24 +90,24 @@ def create_pipeline_configuration(DEBUG=False):
                 "models.partitioned.resnet50_imagenet_p8.ResNetPartition1",
                 "devices": ["cpu" if DEBUG else "cuda:1"]
             },
-            "2": {
+            2: {
                 "inputs": {
                     "ResNet/Sequential[layer1]/Bottleneck[2]/aten::add_4058": {
-                        "shape": [32, 256, 56, 56],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([32, 256, 56, 56]),
+                        "dtype": torch.float32,
                         "is_batched": True,
                         "req_grad": True
                     }
                 },
                 "outputs": {
                     "ResNet/Sequential[layer2]/Bottleneck[0]/aten::relu4193": {
-                        "shape": [32, 512, 28, 28],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([32, 512, 28, 28]),
+                        "dtype": torch.float32,
                         "is_batched": True
                     },
                     "ResNet/Sequential[layer2]/Bottleneck[1]/aten::relu4259": {
-                        "shape": [32, 128, 28, 28],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([32, 128, 28, 28]),
+                        "dtype": torch.float32,
                         "is_batched": True
                     }
                 },
@@ -115,25 +115,25 @@ def create_pipeline_configuration(DEBUG=False):
                 "models.partitioned.resnet50_imagenet_p8.ResNetPartition2",
                 "devices": ["cpu" if DEBUG else "cuda:2"]
             },
-            "3": {
+            3: {
                 "inputs": {
                     "ResNet/Sequential[layer2]/Bottleneck[0]/aten::relu4193": {
-                        "shape": [32, 512, 28, 28],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([32, 512, 28, 28]),
+                        "dtype": torch.float32,
                         "is_batched": True,
                         "req_grad": True
                     },
                     "ResNet/Sequential[layer2]/Bottleneck[1]/aten::relu4259": {
-                        "shape": [32, 128, 28, 28],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([32, 128, 28, 28]),
+                        "dtype": torch.float32,
                         "is_batched": True,
                         "req_grad": True
                     }
                 },
                 "outputs": {
                     "ResNet/Sequential[layer2]/Bottleneck[3]/aten::add_4486": {
-                        "shape": [32, 512, 28, 28],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([32, 512, 28, 28]),
+                        "dtype": torch.float32,
                         "is_batched": True
                     }
                 },
@@ -141,19 +141,19 @@ def create_pipeline_configuration(DEBUG=False):
                 "models.partitioned.resnet50_imagenet_p8.ResNetPartition3",
                 "devices": ["cpu" if DEBUG else "cuda:3"]
             },
-            "4": {
+            4: {
                 "inputs": {
                     "ResNet/Sequential[layer2]/Bottleneck[3]/aten::add_4486": {
-                        "shape": [32, 512, 28, 28],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([32, 512, 28, 28]),
+                        "dtype": torch.float32,
                         "is_batched": True,
                         "req_grad": True
                     }
                 },
                 "outputs": {
                     "ResNet/Sequential[layer3]/Bottleneck[1]/aten::add_4720": {
-                        "shape": [32, 1024, 14, 14],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([32, 1024, 14, 14]),
+                        "dtype": torch.float32,
                         "is_batched": True
                     }
                 },
@@ -161,24 +161,24 @@ def create_pipeline_configuration(DEBUG=False):
                 "models.partitioned.resnet50_imagenet_p8.ResNetPartition4",
                 "devices": ["cpu" if DEBUG else "cuda:4"]
             },
-            "5": {
+            5: {
                 "inputs": {
                     "ResNet/Sequential[layer3]/Bottleneck[1]/aten::add_4720": {
-                        "shape": [32, 1024, 14, 14],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([32, 1024, 14, 14]),
+                        "dtype": torch.float32,
                         "is_batched": True,
                         "req_grad": True
                     }
                 },
                 "outputs": {
                     "ResNet/Sequential[layer3]/Bottleneck[3]/aten::relu4917": {
-                        "shape": [32, 1024, 14, 14],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([32, 1024, 14, 14]),
+                        "dtype": torch.float32,
                         "is_batched": True
                     },
                     "ResNet/Sequential[layer3]/Bottleneck[4]/Conv2d[conv2]": {
-                        "shape": [32, 256, 14, 14],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([32, 256, 14, 14]),
+                        "dtype": torch.float32,
                         "is_batched": True
                     }
                 },
@@ -186,17 +186,17 @@ def create_pipeline_configuration(DEBUG=False):
                 "models.partitioned.resnet50_imagenet_p8.ResNetPartition5",
                 "devices": ["cpu" if DEBUG else "cuda:5"]
             },
-            "6": {
+            6: {
                 "inputs": {
                     "ResNet/Sequential[layer3]/Bottleneck[3]/aten::relu4917": {
-                        "shape": [32, 1024, 14, 14],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([32, 1024, 14, 14]),
+                        "dtype": torch.float32,
                         "is_batched": True,
                         "req_grad": True
                     },
                     "ResNet/Sequential[layer3]/Bottleneck[4]/Conv2d[conv2]": {
-                        "shape": [32, 256, 14, 14],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([32, 256, 14, 14]),
+                        "dtype": torch.float32,
                         "is_batched": True,
                         "req_grad": True
                     }
@@ -204,13 +204,13 @@ def create_pipeline_configuration(DEBUG=False):
                 "outputs": {
                     "ResNet/Sequential[layer4]/Bottleneck[0]/Sequential[downsample]/Conv2d[0]":
                     {
-                        "shape": [32, 2048, 7, 7],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([32, 2048, 7, 7]),
+                        "dtype": torch.float32,
                         "is_batched": True
                     },
                     "ResNet/Sequential[layer4]/Bottleneck[0]/aten::relu5183": {
-                        "shape": [32, 512, 7, 7],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([32, 512, 7, 7]),
+                        "dtype": torch.float32,
                         "is_batched": True
                     }
                 },
@@ -218,26 +218,26 @@ def create_pipeline_configuration(DEBUG=False):
                 "models.partitioned.resnet50_imagenet_p8.ResNetPartition6",
                 "devices": ["cpu" if DEBUG else "cuda:6"]
             },
-            "7": {
+            7: {
                 "inputs": {
                     "ResNet/Sequential[layer4]/Bottleneck[0]/Sequential[downsample]/Conv2d[0]":
                     {
-                        "shape": [32, 2048, 7, 7],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([32, 2048, 7, 7]),
+                        "dtype": torch.float32,
                         "is_batched": True,
                         "req_grad": True
                     },
                     "ResNet/Sequential[layer4]/Bottleneck[0]/aten::relu5183": {
-                        "shape": [32, 512, 7, 7],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([32, 512, 7, 7]),
+                        "dtype": torch.float32,
                         "is_batched": True,
                         "req_grad": True
                     }
                 },
                 "outputs": {
                     "ResNet/Linear[fc]": {
-                        "shape": [32, 1000],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([32, 1000]),
+                        "dtype": torch.float32,
                         "is_batched": True
                     }
                 },

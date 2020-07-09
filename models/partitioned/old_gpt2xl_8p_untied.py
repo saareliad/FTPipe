@@ -45,8 +45,8 @@ def create_pipeline_configuration(DEBUG=False):
         0: {
             "inputs": {
                 'input0': {
-                    'shape': [1, 1024],
-                    'dtype': 'torch.int64',
+                    'shape': torch.Size([1, 1024]),
+                    'dtype': torch.int64,
                     'is_batched': True,
                     'req_grad': False
                 }
@@ -54,14 +54,14 @@ def create_pipeline_configuration(DEBUG=False):
             "outputs": {
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/aten::mul19963':
                 {
-                    'shape': [1, 1024, 6400],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 6400]),
+                    'dtype': torch.float32,
                     'is_batched': True
                 },
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/aten::add19943':
                 {
-                    'shape': [1, 1024, 1600],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 1600]),
+                    'dtype': torch.float32,
                     'is_batched': True
                 }
             }
@@ -70,15 +70,15 @@ def create_pipeline_configuration(DEBUG=False):
             "inputs": {
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/MLP[mlp]/aten::mul19963':
                 {
-                    'shape': [1, 1024, 6400],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 6400]),
+                    'dtype': torch.float32,
                     'is_batched': True,
                     'req_grad': True
                 },
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[5]/aten::add19943':
                 {
-                    'shape': [1, 1024, 1600],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 1600]),
+                    'dtype': torch.float32,
                     'is_batched': True,
                     'req_grad': True
                 }
@@ -86,14 +86,14 @@ def create_pipeline_configuration(DEBUG=False):
             "outputs": {
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/Conv1D[c_proj]':
                 {
-                    'shape': [1, 1024, 1600],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 1600]),
+                    'dtype': torch.float32,
                     'is_batched': True
                 },
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/aten::add21047':
                 {
-                    'shape': [1, 1024, 1600],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 1600]),
+                    'dtype': torch.float32,
                     'is_batched': True
                 }
             }
@@ -102,15 +102,15 @@ def create_pipeline_configuration(DEBUG=False):
             "inputs": {
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/MLP[mlp]/Conv1D[c_proj]':
                 {
-                    'shape': [1, 1024, 1600],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 1600]),
+                    'dtype': torch.float32,
                     'is_batched': True,
                     'req_grad': True
                 },
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[11]/aten::add21047':
                 {
-                    'shape': [1, 1024, 1600],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 1600]),
+                    'dtype': torch.float32,
                     'is_batched': True,
                     'req_grad': True
                 }
@@ -118,26 +118,26 @@ def create_pipeline_configuration(DEBUG=False):
             "outputs": {
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[17]/aten::add22175':
                 {
-                    'shape': [1, 1024, 1600],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 1600]),
+                    'dtype': torch.float32,
                     'is_batched': True
                 },
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[18]/Attention[attn]/aten::permute22238':
                 {
-                    'shape': [1, 25, 64, 1024],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 25, 64, 1024]),
+                    'dtype': torch.float32,
                     'is_batched': True
                 },
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[18]/Attention[attn]/aten::view22209':
                 {
-                    'shape': [1, 1024, 25, 64],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 25, 64]),
+                    'dtype': torch.float32,
                     'is_batched': True
                 },
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[18]/Attention[attn]/aten::view22255':
                 {
-                    'shape': [1, 1024, 25, 64],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 25, 64]),
+                    'dtype': torch.float32,
                     'is_batched': True
                 }
             }
@@ -146,29 +146,29 @@ def create_pipeline_configuration(DEBUG=False):
             "inputs": {
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[17]/aten::add22175':
                 {
-                    'shape': [1, 1024, 1600],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 1600]),
+                    'dtype': torch.float32,
                     'is_batched': True,
                     'req_grad': True
                 },
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[18]/Attention[attn]/aten::permute22238':
                 {
-                    'shape': [1, 25, 64, 1024],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 25, 64, 1024]),
+                    'dtype': torch.float32,
                     'is_batched': True,
                     'req_grad': True
                 },
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[18]/Attention[attn]/aten::view22209':
                 {
-                    'shape': [1, 1024, 25, 64],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 25, 64]),
+                    'dtype': torch.float32,
                     'is_batched': True,
                     'req_grad': True
                 },
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[18]/Attention[attn]/aten::view22255':
                 {
-                    'shape': [1, 1024, 25, 64],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 25, 64]),
+                    'dtype': torch.float32,
                     'is_batched': True,
                     'req_grad': True
                 }
@@ -176,14 +176,14 @@ def create_pipeline_configuration(DEBUG=False):
             "outputs": {
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[24]/LayerNorm[ln_2]':
                 {
-                    'shape': [1, 1024, 1600],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 1600]),
+                    'dtype': torch.float32,
                     'is_batched': True
                 },
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[24]/aten::add23439':
                 {
-                    'shape': [1, 1024, 1600],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 1600]),
+                    'dtype': torch.float32,
                     'is_batched': True
                 }
             }
@@ -192,15 +192,15 @@ def create_pipeline_configuration(DEBUG=False):
             "inputs": {
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[24]/LayerNorm[ln_2]':
                 {
-                    'shape': [1, 1024, 1600],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 1600]),
+                    'dtype': torch.float32,
                     'is_batched': True,
                     'req_grad': True
                 },
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[24]/aten::add23439':
                 {
-                    'shape': [1, 1024, 1600],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 1600]),
+                    'dtype': torch.float32,
                     'is_batched': True,
                     'req_grad': True
                 }
@@ -208,14 +208,14 @@ def create_pipeline_configuration(DEBUG=False):
             "outputs": {
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[30]/MLP[mlp]/Conv1D[c_fc]':
                 {
-                    'shape': [1, 1024, 6400],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 6400]),
+                    'dtype': torch.float32,
                     'is_batched': True
                 },
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[30]/aten::add24543':
                 {
-                    'shape': [1, 1024, 1600],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 1600]),
+                    'dtype': torch.float32,
                     'is_batched': True
                 }
             }
@@ -224,15 +224,15 @@ def create_pipeline_configuration(DEBUG=False):
             "inputs": {
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[30]/MLP[mlp]/Conv1D[c_fc]':
                 {
-                    'shape': [1, 1024, 6400],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 6400]),
+                    'dtype': torch.float32,
                     'is_batched': True,
                     'req_grad': True
                 },
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[30]/aten::add24543':
                 {
-                    'shape': [1, 1024, 1600],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 1600]),
+                    'dtype': torch.float32,
                     'is_batched': True,
                     'req_grad': True
                 }
@@ -240,14 +240,14 @@ def create_pipeline_configuration(DEBUG=False):
             "outputs": {
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[36]/MLP[mlp]/Dropout[dropout]':
                 {
-                    'shape': [1, 1024, 1600],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 1600]),
+                    'dtype': torch.float32,
                     'is_batched': True
                 },
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[36]/aten::add25647':
                 {
-                    'shape': [1, 1024, 1600],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 1600]),
+                    'dtype': torch.float32,
                     'is_batched': True
                 }
             }
@@ -256,15 +256,15 @@ def create_pipeline_configuration(DEBUG=False):
             "inputs": {
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[36]/MLP[mlp]/Dropout[dropout]':
                 {
-                    'shape': [1, 1024, 1600],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 1600]),
+                    'dtype': torch.float32,
                     'is_batched': True,
                     'req_grad': True
                 },
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[36]/aten::add25647':
                 {
-                    'shape': [1, 1024, 1600],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 1600]),
+                    'dtype': torch.float32,
                     'is_batched': True,
                     'req_grad': True
                 }
@@ -272,14 +272,14 @@ def create_pipeline_configuration(DEBUG=False):
             "outputs": {
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[42]/aten::add26775':
                 {
-                    'shape': [1, 1024, 1600],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 1600]),
+                    'dtype': torch.float32,
                     'is_batched': True
                 },
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[43]/Attention[attn]/aten::view26931':
                 {
-                    'shape': [1, 1024, 1600],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 1600]),
+                    'dtype': torch.float32,
                     'is_batched': True
                 }
             }
@@ -288,29 +288,29 @@ def create_pipeline_configuration(DEBUG=False):
             "inputs": {
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[42]/aten::add26775':
                 {
-                    'shape': [1, 1024, 1600],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 1600]),
+                    'dtype': torch.float32,
                     'is_batched': True,
                     'req_grad': True
                 },
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[43]/Attention[attn]/aten::view26931':
                 {
-                    'shape': [1, 1024, 1600],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1, 1024, 1600]),
+                    'dtype': torch.float32,
                     'is_batched': True,
                     'req_grad': True
                 },
                 'input1': {
-                    'shape': [1, 1024],
-                    'dtype': 'torch.int64',
+                    'shape': torch.Size([1, 1024]),
+                    'dtype': torch.int64,
                     'is_batched': True,
                     'req_grad': False
                 }
             },
             "outputs": {
                 'GPT2LMHeadModel/aten::nll_loss16398': {
-                    'shape': [1],
-                    'dtype': 'torch.float32',
+                    'shape': torch.Size([1]),
+                    'dtype': torch.float32,
                     'is_batched': False
                 }
             }
@@ -355,20 +355,20 @@ def create_pipeline_configuration(DEBUG=False):
     config['basic_blocks'] = blocks_path
     config['model_inputs'] = {
         'input0': {
-            "shape": [1, 1024],
-            "dtype": 'torch.int64',
+            "shape": torch.Size([1, 1024]),
+            "dtype": torch.int64,
             "is_batched": True
         },
         'input1': {
-            "shape": [1, 1024],
-            "dtype": 'torch.int64',
+            "shape": torch.Size([1, 1024]),
+            "dtype": torch.int64,
             "is_batched": True
         }
     }
     config['model_outputs'] = {
         'GPT2LMHeadModel/aten::nll_loss16398': {
-            "shape": [1],
-            "dtype": 'torch.float32',
+            "shape": torch.Size([1]),
+            "dtype": torch.float32,
             "is_batched": False
         }
     }

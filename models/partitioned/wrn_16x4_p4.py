@@ -37,15 +37,15 @@ def create_pipeline_configuration(DEBUG=False):
         ],
         "model_inputs": {
             "input0": {
-                "shape": [64, 3, 32, 32],
-                "dtype": "torch.float32",
+                "shape": torch.Size([64, 3, 32, 32]),
+                "dtype": torch.float32,
                 "is_batched": True
             }
         },
         "model_outputs": {
             "WideResNet/Linear[fc]": {
-                "shape": [64, 10],
-                "dtype": "torch.float32",
+                "shape": torch.Size([64, 10]),
+                "dtype": torch.float32,
                 "is_batched": True
             }
         },
@@ -53,8 +53,8 @@ def create_pipeline_configuration(DEBUG=False):
             "0": {
                 "inputs": {
                     "input0": {
-                        "shape": [64, 3, 32, 32],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([64, 3, 32, 32]),
+                        "dtype": torch.float32,
                         "is_batched": True,
                         "req_grad": False
                     }
@@ -62,8 +62,8 @@ def create_pipeline_configuration(DEBUG=False):
                 "outputs": {
                     "WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[0]/aten::add211":
                     {
-                        "shape": [64, 64, 32, 32],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([64, 64, 32, 32]),
+                        "dtype": torch.float32,
                         "is_batched": True
                     }
                 },
@@ -71,12 +71,12 @@ def create_pipeline_configuration(DEBUG=False):
                 "models.partitioned.wrn_16x4_p4.WideResNetPartition0",
                 "devices": ["cpu" if DEBUG else f"cuda:0"]
             },
-            "1": {
+            1: {
                 "inputs": {
                     "WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[0]/aten::add211":
                     {
-                        "shape": [64, 64, 32, 32],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([64, 64, 32, 32]),
+                        "dtype": torch.float32,
                         "is_batched": True,
                         "req_grad": True
                     }
@@ -84,8 +84,8 @@ def create_pipeline_configuration(DEBUG=False):
                 "outputs": {
                     "WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[1]/aten::add301":
                     {
-                        "shape": [64, 64, 32, 32],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([64, 64, 32, 32]),
+                        "dtype": torch.float32,
                         "is_batched": True
                     }
                 },
@@ -93,12 +93,12 @@ def create_pipeline_configuration(DEBUG=False):
                 "models.partitioned.wrn_16x4_p4.WideResNetPartition1",
                 "devices": ["cpu" if DEBUG else f"cuda:1"]
             },
-            "2": {
+            2: {
                 "inputs": {
                     "WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[1]/aten::add301":
                     {
-                        "shape": [64, 64, 32, 32],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([64, 64, 32, 32]),
+                        "dtype": torch.float32,
                         "is_batched": True,
                         "req_grad": True
                     }
@@ -106,8 +106,8 @@ def create_pipeline_configuration(DEBUG=False):
                 "outputs": {
                     "WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/aten::add410":
                     {
-                        "shape": [64, 128, 16, 16],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([64, 128, 16, 16]),
+                        "dtype": torch.float32,
                         "is_batched": True
                     }
                 },
@@ -115,20 +115,20 @@ def create_pipeline_configuration(DEBUG=False):
                 "models.partitioned.wrn_16x4_p4.WideResNetPartition2",
                 "devices": ["cpu" if DEBUG else f"cuda:2"]
             },
-            "3": {
+            3: {
                 "inputs": {
                     "WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/aten::add410":
                     {
-                        "shape": [64, 128, 16, 16],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([64, 128, 16, 16]),
+                        "dtype": torch.float32,
                         "is_batched": True,
                         "req_grad": True
                     }
                 },
                 "outputs": {
                     "WideResNet/Linear[fc]": {
-                        "shape": [64, 10],
-                        "dtype": "torch.float32",
+                        "shape": torch.Size([64, 10]),
+                        "dtype": torch.float32,
                         "is_batched": True
                     }
                 },
