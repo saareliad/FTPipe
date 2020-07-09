@@ -11,6 +11,9 @@ from itertools import chain
 from copy import deepcopy
 from pipeline.util import nested_map
 
+# _SHAPE_CLS = list
+_SHAPE_CLS = torch.Size
+
 
 class PipelineConfig():
     """
@@ -33,7 +36,7 @@ class PipelineConfig():
                   is_batched: bool, dtype: torch.dtype) -> "PipelineConfig":
         self.model_inputs.append(input_name)
         if is_batched:
-            shape = list(shape)
+            shape = _SHAPE_CLS(shape)
         self.model_input_shapes.append(shape)
         self.is_batched[input_name] = is_batched
         self.dtypes[input_name] = dtype
@@ -43,7 +46,7 @@ class PipelineConfig():
                    is_batched: bool, dtype: torch.dtype) -> "PipelineConfig":
         self.model_outputs.append(output_name)
         if is_batched:
-            shape = list(shape)
+            shape = _SHAPE_CLS(shape)
         self.model_output_shapes.append(shape)
         self.is_batched[output_name] = is_batched
         self.dtypes[output_name] = dtype
@@ -197,12 +200,14 @@ class PipelineConfig():
                 zip(self.model_inputs, self.model_input_shapes),
                 zip(self.model_outputs, self.model_output_shapes)):
             if shape != shapes[scope]:
+                assert shape != shapes[scope]
                 return False
 
         for stage in self.stages.values():
             for scope, shape in chain(zip(stage.inputs, stage.input_shapes),
                                       zip(stage.outputs, stage.output_shapes)):
                 if shape != shapes[scope]:
+                    assert shape != shapes[scope]
                     return False
 
         # ensure balanced communication
@@ -224,7 +229,24 @@ class PipelineConfig():
                 if major % minor:
                     return False
         if self.batch_dim < 0:
+            assert self.batch_dim < 0
             return False
+
+        d = dict(
+            no_duplicates=no_duplicates,
+            has_in_out=has_in_out,
+            disjoint=disjoint,
+            has_stages=has_stages,
+            stages_valid=stages_valid,
+            all_inputs_used=all_inputs_used,
+            all_outputs_used=all_outputs_used,
+        )
+        for i, v in d.items():
+            if not v:
+                print(f"error {i} is not valid")
+                print(self.state_dict())
+                assert v, i
+
         return (no_duplicates and has_in_out and disjoint and has_stages
                 and stages_valid and all_inputs_used and all_outputs_used)
 
@@ -347,7 +369,7 @@ class StageConfig():
                                                       ...], is_batched: bool,
                   dtype: torch.dtype, req_grad: bool) -> "StageConfig":
         self.inputs.append(input_name)
-        shape = list(shape)
+        shape = _SHAPE_CLS(shape)
         self.input_shapes.append(shape)
         self.is_batched[input_name] = is_batched
         self.dtypes[input_name] = dtype
@@ -357,7 +379,7 @@ class StageConfig():
     def add_output(self, output_name: str, shape: Tuple[int, ...],
                    is_batched: bool, dtype: torch.dtype) -> "StageConfig":
         self.outputs.append(output_name)
-        shape = list(shape)
+        shape = _SHAPE_CLS(shape)
         self.output_shapes.append(shape)
         self.is_batched[output_name] = is_batched
         self.dtypes[output_name] = dtype
@@ -378,6 +400,16 @@ class StageConfig():
         has_in_out = (len(self.inputs) > 0) and (len(self.outputs) > 0)
         disjoint = set(self.inputs).isdisjoint(set(self.outputs))
         has_ranks = len(self.devices) > 0
+
+        d = dict(no_duplicates=no_duplicates,
+                 has_in_out=has_in_out,
+                 disjoint=disjoint,
+                 has_ranks=has_ranks)
+        for i, v in d.items():
+            if not v:
+                print(f"error {i} is not valid")
+                print(self.state_dict())
+                assert v, i
 
         return no_duplicates and has_in_out and disjoint and has_ranks
 
@@ -505,7 +537,8 @@ def atomic_batch_change(atomic_is_batched, atomic_shape, dim, batch_size):
     if atomic_is_batched:
         atomic_shape = list(atomic_shape)
         atomic_shape[dim] = batch_size
-        atomic_shape = torch.Size(atomic_shape)
+        atomic_shape = _SHAPE_CLS(atomic_shape)
+        # atomic_shape = torch.Size(atomic_shape)
     return atomic_shape
 
 
