@@ -7,6 +7,7 @@ from .buffer import make_buff
 from collections import OrderedDict
 from ..util import flatten
 import numpy as np
+from copy import deepcopy
 
 
 def expand_name_for(name, fv):
@@ -187,8 +188,8 @@ class SimpleCommBase(CommunicationHandlerBase):
         # HACK: we flatten dicts of names and send each tensor by itself.
 
         # NOTE: Order is important, must call for send,recv ranks before in/out req grads.
-        tmp_req_grad = req_grad
-        tmp_outputs_req_grad = outputs_req_grad
+        tmp_req_grad = deepcopy(req_grad)
+        tmp_outputs_req_grad = deepcopy(outputs_req_grad)
 
         req_grad = flatten_dict_of_names(req_grad)
         outputs_req_grad = flatten_dict_of_names(outputs_req_grad)
