@@ -8,8 +8,7 @@ dtab = tab + tab
 
 
 def create_model_parallel_module(graph: Graph, batch_dim: int, ios: Dict[int, Dict[str,
-                                                                                   List[str]]],
-                                 model_outputs: List[str]) -> str:
+                                                                                   List[str]]]) -> str:
     '''create a modelParallel version of the partition config
     '''
     class_decl_and_init = "\n".join([
@@ -26,7 +25,9 @@ def create_model_parallel_module(graph: Graph, batch_dim: int, ios: Dict[int, Di
         dtab + f"\n{dtab}".join(f"self.stage{i} = Partition{i}(layers,tensors).to('cpu' if CPU else 'cuda:{i}')"
                                 for i in ios)
     ])
-    model_inputs  = [graph.input_kw_ids.get(node.id,node.scope) for node in graph.inputs]
+    model_inputs  = [graph.input_kw_ids.get(node.id,node.scope) for node in sorted(graph.inputs,key=lambda n: n.id)]
+    model_outputs = [n.scope for n in sorted(graph.outputs,key = lambda n: n.id)]
+
     forwards = model_parallel_forward(graph, ios,
                                       model_inputs, model_outputs)
 

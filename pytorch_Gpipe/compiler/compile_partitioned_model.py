@@ -88,8 +88,7 @@ def compile_partitioned_model(graph: Graph,
         create_pipeline_configuration(graph, ios, layer_classes, batch_dim))
     if generate_model_parallel:
         lines.append(
-            create_model_parallel_module(graph, batch_dim, ios,
-                                         graph.output_scopes))
+            create_model_parallel_module(graph, batch_dim, ios))
     lines += partitions_code
     lines.append(generateHelpFunctions())
 
@@ -163,7 +162,7 @@ def create_pipeline_configuration(graph: Graph,
     '''generates the create_pipeline_configuration method which given a model creates his partitioned counterpart
     '''
     # TODO assumption the first input is batched
-    batch_size = next(graph.inputs).tensor_shape[batch_dim]
+    batch_size = sorted(graph.inputs,key=lambda n: n.id)[0].tensor_shape[batch_dim]
 
     def is_batched(shape):
         def f(s):
@@ -297,14 +296,15 @@ def create_model_in_out_config(graph: Graph, is_batched: Callable[[torch.Size], 
                 dtype
                 is_batched
     """
+    sorted_model_inputs = sorted(graph.inputs,key=lambda n: n.id)
+    input_ids = [f"{graph.input_kw_ids.get(node.id,node.scope)}" for node in sorted_model_inputs]
+    input_shapes = [n.tensor_shape for n in sorted_model_inputs]
+    input_dtypes = [n.tensor_dtype for n in sorted_model_inputs]
 
-    input_ids = [f"{graph.input_kw_ids.get(node.id,node.scope)}" for node in graph.inputs]
-    input_shapes = [n.tensor_shape for n in graph.inputs]
-    input_dtypes = [n.tensor_dtype for n in graph.inputs]
-
-    output_shapes = [n.tensor_shape for n in graph.outputs]
-    output_ids = graph.output_scopes
-    output_dtypes = [n.tensor_dtype for n in graph.outputs]
+    sorted_model_outputs = sorted(graph.outputs,key=lambda n: n.id)
+    output_ids = [n.scope for n in sorted_model_outputs]
+    output_shapes = [n.tensor_shape for n in sorted_model_outputs]
+    output_dtypes = [n.tensor_dtype for n in sorted_model_outputs]
 
     model_inputs = dict()
     for i, s, d in zip(input_ids, input_shapes, input_dtypes):
