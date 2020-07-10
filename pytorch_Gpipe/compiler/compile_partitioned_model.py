@@ -1,7 +1,7 @@
 import torch
 from torch.nn import Module
 from ..model_profiling import Node, NodeTypes, Graph, used_namespaces
-from pytorch_Gpipe.utils import traverse_model, traverse_params_buffs, layerDict, tensorDict,nested_map,move_tensors
+from pytorch_Gpipe.utils import traverse_model, traverse_params_buffs, layerDict, tensorDict,nested_map,move_tensors,flatten,_unflatten,unflatten
 from .partition_forward_method import generate_forward_method
 from .partition_init_method import generate_init_method
 from .state_methods import get_state_methods, generate_partition_state_methods
@@ -84,11 +84,10 @@ def compile_partitioned_model(graph: Graph,
     elif output_file.endswith(".py"):
         output_file = output_file[:-3]
 
-    lines.append(
-        create_pipeline_configuration(graph, ios, layer_classes, batch_dim))
+    create_pipeline_configuration_str,config = create_pipeline_configuration(graph, ios, layer_classes, batch_dim)
+    lines.append(create_pipeline_configuration_str)
     if generate_model_parallel:
-        lines.append(
-            create_model_parallel_module(graph, batch_dim, ios))
+        lines.append(create_model_parallel_module(config))
     lines += partitions_code
     lines.append(generateHelpFunctions())
 
@@ -147,7 +146,7 @@ def generateHelpFunctions() -> str:
     lines = [
         inspect.getsource(f) for f in
         [traverse_model, layerDict, traverse_params_buffs,
-            tensorDict,move_tensors,nested_map] + get_state_methods()
+            tensorDict,move_tensors,nested_map,flatten,unflatten,_unflatten] + get_state_methods()
     ]
 
     return "\n\n".join(lines)
@@ -158,7 +157,7 @@ def create_pipeline_configuration(graph: Graph,
                                             Dict[str,
                                                  List[str]]],
                                   model_blocks: Dict[str, Module],
-                                  batch_dim: int) -> str:
+                                  batch_dim: int) -> Tuple[str,Dict]:
     '''generates the create_pipeline_configuration method which given a model creates his partitioned counterpart
     '''
     # TODO assumption the first input is batched
@@ -203,7 +202,7 @@ def create_pipeline_configuration(graph: Graph,
     lines.append("")
     lines.extend([f"config['stages'][{i}]['devices'] = ['cpu' if DEBUG else 'cuda:{i}']" for i in stages.keys()])
     lines.append(f"\n{tab}return config")
-    return "\n" + f"\n{tab}".join(lines) + "\n"
+    return "\n" + f"\n{tab}".join(lines) + "\n", config
 
 
 def connections(graph: Graph) -> str:
@@ -219,6 +218,7 @@ def connections(graph: Graph) -> str:
             for n in node.out_edges:
                 adj_matrix[n.stage_id + 1]["inputs"].add(graph.input_kw_ids.get(node.id,node.scope))
                 adj_matrix[0]["outputs"].add(n.stage_id)
+            continue
 
         if node in graph.outputs:
             adj_matrix[num_partitions + 1]["inputs"].add(node.stage_id)

@@ -1,68 +1,71 @@
 from .partition_forward_method import variableNameGenerator
-from ..model_profiling import Graph
 from typing import List, Tuple, Dict
 from collections import deque, defaultdict
-
+import inspect
+import torch
+from ..utils import flatten,unflatten
 tab = '    '
 dtab = tab + tab
 
 
-def create_model_parallel_module(graph: Graph, batch_dim: int, ios: Dict[int, Dict[str,
-                                                                                   List[str]]]) -> str:
+
+def create_model_parallel_module(config: Dict) -> str:
     '''create a modelParallel version of the partition config
     '''
+    n_stages = len(config['stages'])
+    partitions = ", ".join(f"partition{i}" for i in range(n_stages))
+
     class_decl_and_init = "\n".join([
         f"class ModelParallel(nn.Module):",
-        f"{tab}def __init__(self,layers,tensors,CPU=False,num_chunks={len(ios)}):",
+        f"{tab}def __init__(self,{partitions}):",
         f"{dtab}super(ModelParallel,self).__init__()",
-        f"{dtab}self.batch_dim = {batch_dim}",
-        f"{dtab}self.num_chunks = num_chunks",
-        f"{dtab}assert self.num_chunks >= {len(ios)}",
-        f"{dtab}self.cpu = CPU",
-        f"{dtab}if not CPU:",
-        f"{dtab}{tab}# partitions X chunks streams",
-        f"{dtab}{tab}self.streams = [[torch.cuda.Stream(f'cuda:{{idx}}') for _ in range(self.num_chunks)] for idx in range({len(ios)})]",
-        dtab + f"\n{dtab}".join(f"self.stage{i} = Partition{i}(layers,tensors).to('cpu' if CPU else 'cuda:{i}')"
-                                for i in ios)
+        f"{dtab}self.batch_dim = {config['batch_dim']}",
+        f"{dtab}self.streams = None",
+        dtab + f"\n{dtab}".join(f"self.stage{i} = partition{i}"
+                                for i in range(n_stages))
     ])
-    model_inputs  = [graph.input_kw_ids.get(node.id,node.scope) for node in sorted(graph.inputs,key=lambda n: n.id)]
-    model_outputs = [n.scope for n in sorted(graph.outputs,key = lambda n: n.id)]
+    
+    forwards = model_parallel_forward(config)
 
-    forwards = model_parallel_forward(graph, ios,
-                                      model_inputs, model_outputs)
+    create_streams = [f"def create_streams(self,num_chunks):",
+    "# create a CUDA stream for every chunk for every device num_chunks X num_devices streams",
+    "if (self.streams is None) or len(self.streams[0]) != num_chunks:",
+    f"{tab}self.streams = []"]
+    create_streams += [f"{tab}self.streams.append([torch.cuda.Stream(self.stage{idx}.device) for _ in range(num_chunks)])" for idx in range(n_stages)]
+    create_streams = f"\n{dtab}".join(create_streams)
 
-    stream = [f"def stream(self,device_idx,mb_idx):",
+    current_stream = [f"def current_stream(self,stage_id, chunk_id):",
               "# return the stream for the current device and micro batch",
-              "return torch.cuda.stream(self.streams[device_idx][mb_idx])"]
-    stream = f"\n{dtab}".join(stream)
+              "return torch.cuda.stream(self.streams[stage_id][chunk_id])"]
+    current_stream = f"\n{dtab}".join(current_stream)
 
-    wait_stream = [f"def wait_stream(self,device_idx,mb_idx):",
-                   "stream = self.streams[device_idx][mb_idx]",
+    sync_with_prev_tasks = [f"def sync_with_prev_tasks(self,stage_id, chunk_id):",
+                   "stream = torch.cuda.current_stream()",
                    "# wait until the mb was cleared by previous partition",
-                   "stream.wait_stream(self.streams[device_idx-1][mb_idx])",
+                   "stream.wait_stream(self.streams[stage_id-1][chunk_id])",
                    "# wait until previous mb was cleared by this partition",
-                   "stream.wait_stream(self.streams[device_idx][mb_idx-1])"]
-    wait_stream = f"\n{dtab}".join(wait_stream)
+                   "stream.wait_stream(self.streams[stage_id][chunk_id-1])"]
+    sync_with_prev_tasks = f"\n{dtab}".join(sync_with_prev_tasks)
 
     states = f",\n{dtab}{dtab}".join(
-        [f"**self.stage{i}.state_dict()" for i in ios])
+        [f"**self.stage{i}.state_dict()" for i in range(n_stages)])
 
     states = f"{{{states}}}"
 
     state_dict = f"\n{dtab}".join(
         ["def state_dict(self):", f"return {states}"])
 
-    loads = f"\n{dtab}".join([f"self.stage{i}.load_state(state)" for i in ios])
+    loads = f"\n{dtab}".join([f"self.stage{i}.load_state_dict(state)" for i in range(n_stages)])
     load_state_dict = f"\n{tab}{tab}".join(
         ["def load_state_dict(self,state):", loads])
 
     buffer_states = f",\n{dtab}{dtab}{tab} ".join(
-        [f"self.stage{i}.named_buffers()" for i in ios])
+        [f"self.stage{i}.named_buffers()" for i in range(n_stages)])
     named_buffers = f"\n{dtab}".join(
         [f"def named_buffers(self):", f"return chain({buffer_states})"])
 
     parameter_states = f",\n{dtab}{dtab}{tab} ".join(
-        [f"self.stage{i}.named_parameters()" for i in ios])
+        [f"self.stage{i}.named_parameters()" for i in range(n_stages)])
     named_parameters = f"\n{dtab}".join(
         [f"def named_parameters(self):", f"return chain({parameter_states})"])
 
@@ -74,123 +77,144 @@ def create_model_parallel_module(graph: Graph, batch_dim: int, ios: Dict[int, Di
     buffers = f"\n{dtab}".join(
         ["def buffers(self):", f"return [b for _,b in self.named_buffers()]"])
 
+    chunk = f"\n{tab}".join([s[:-1] for s in inspect.getsourcelines(chunk_inputs)[0]])
+
     return "\n" + f"\n\n{tab}".join([
-        class_decl_and_init, stream, wait_stream,
-        *forwards, state_dict, load_state_dict,
+        class_decl_and_init, create_streams, current_stream, sync_with_prev_tasks,
+        chunk,*forwards, state_dict, load_state_dict,
         named_buffers, named_parameters, buffers, parameters
     ]) + "\n\n"
 
 
-def model_parallel_forward(graph: Graph, ios: Dict[int, Dict[str, List[str]]],
-                           model_inputs: List[str],
-                           model_outputs: List[str]) -> List[str]:
+def model_parallel_forward(config: Dict) -> List[str]:
+    model_inputs = list(config['model_inputs'].keys())
+    model_outputs = list(config['model_outputs'].keys())
 
-    body, activations = forward_statements(ios, model_inputs)
+    body, activations = forward_statements(config, model_inputs,pipelined=False)
     outputs = ",".join([activations[o] for o in model_outputs])
     forward = simple_forward(model_inputs, body, outputs)
 
+    body, activations = forward_statements(config, model_inputs,pipelined=True)
     out_producers = defaultdict(list)
-    for idx, io in ios.items():
+    for idx, io in config['stages'].items():
         for o in io['outputs']:
             if o in model_outputs:
                 out_producers[idx].append(activations[o])
 
     created_upto_i = defaultdict(list)
     created_after_i = defaultdict(list)
-    # created_upto_i[idx] = all outputs who are produced by a stage <= idx
-    # created_after_i[idx] = all outputs who are producerd by a stage >= idx
+    # created_upto_i[idx] = all outputs which are produced by a stage <= idx
+    # created_after_i[idx] = all outputs which are produced by a stage >= idx
     for idx, outs in out_producers.items():
         for i in range(idx + 1):
             created_after_i[i].extend(outs)
         for i in range(idx, len(body)):
             created_upto_i[i].extend(outs)
 
-    pipe_forward = pipelined_forward(graph, model_inputs,
+    pipe_forward = pipelined_forward(config, model_inputs,activations,
                                      body, outputs, created_after_i, created_upto_i, use_streams=False)
-    pipe_with_streams = pipelined_forward(graph, model_inputs,
+    pipe_with_streams = pipelined_forward(config, model_inputs,activations,
                                           body, outputs, created_after_i, created_upto_i, use_streams=True)
 
     return [forward, pipe_forward, pipe_with_streams]
 
 
-def pipelined_forward(graph: Graph, model_inputs: List[str], statements: List[str], outputs: str,
+def pipelined_forward(config: Dict, model_inputs: List[str],activations:Dict[str,str], statements: List[str], outputs: str,
                       created_after_i: Dict[int, List[str]],
                       created_upto_i: Dict[int, List[str]],
                       use_streams: bool) -> str:
     model_outputs = outputs.split(",")
     n_parts = len(statements)
     if use_streams:
-        decleration = f"def pipelined_forward_with_streams(self,{', '.join(model_inputs)}):"
+        decleration = f"def pipelined_forward_with_streams(self,{', '.join(model_inputs)}, num_chunks={n_parts}):"
     else:
-        decleration = f"def pipelined_forward(self,{', '.join(model_inputs)}):"
-    get_inputs, body, collect_outputs = generate_get_inputs_splits_and_aggeragators(model_inputs,
+        decleration = f"def pipelined_forward(self,{', '.join(model_inputs)}, num_chunks={n_parts}):"
+    body, collect_outputs = generate_chunk_inputs_splits_and_aggeragators(config,model_inputs,
                                                                                     model_outputs)
-    if use_streams:
-        body = ["assert not self.cpu"] + body
+    
 
+    created,delayed_activations,max_delay = delay(config)
+
+    if delayed_activations:
+        body.append(f"\n{dtab}#creating delay buffers")
+        for act,tmp in activations.items():
+            if act in delayed_activations:
+                body.append(f"{tmp}_buff = collections.deque(maxlen={max_delay[act]+1})")
+        body.append("")
+
+    body.append("assert num_chunks >= len(list(self.children()))")
+    if use_streams:
+        body = ["self.create_streams(num_chunks)"] + body
+
+    body.append("chunk_id = 0")
     # create filling stage
-    body.append(f"\n{dtab}# fill the pipeline")
+    body.append(f"\n{dtab}# filling the pipeline feed chunks until the first chunk enters last stage")
     statements = list(reversed(statements))
-    for idx in range(1, n_parts + 1):
-        body.extend(get_inputs)
-        for i, s in enumerate(statements[n_parts - idx:n_parts]):
+    for idx in range(1, n_parts):
+        for i, sts in enumerate(statements[n_parts - idx:n_parts]):
             if use_streams:
-                body.append(f"with self.stream({idx-1-i},{i}):")
-                body.append(f"{tab}self.wait_stream({idx-1-i},{i})")
-                body.append(f"{tab}{s}")
+                body.append(f"with self.current_stream({idx-1-i}, chunk_id - {idx-1-i}):")
+                body.append(f"{tab}self.sync_with_prev_tasks({idx-1-i}, chunk_id - {idx-1-i})")
+                body.extend([f"{tab}{s}" for s in sts])
             else:
-                body.append(s)
+                body.extend(sts)
         for o in created_upto_i[idx - 1]:
             body.append(f"{o}_chunks.append({o})")
+        body.append("chunk_id += 1")
         body.append("")
 
     # create steady stage
-    body.append(f"# steady phase")
-    body.append(f"for idx in range(self.num_chunks - {n_parts}):")
-    for i in get_inputs:
-        body.append(f"{tab}{i}")
-    for i, s in enumerate(statements):
+    body.append(f"# steady phase pipeline is full every stage processes a chunk in parallel")
+    body.append(f"for _ in range(num_chunks - {n_parts-1}):")
+
+    for i, sts in enumerate(statements):
         if use_streams:
-            body.append(f"{tab}with self.stream({n_parts-i-1},idx+{i+1}):")
+            body.append(f"{tab}with self.current_stream({n_parts-i-1}, chunk_id - {n_parts-1-i}):")
             body.append(
-                f"{dtab}self.wait_stream({n_parts-i-1},idx+{i+1})")
-            body.append(f"{dtab}{s}")
+                f"{dtab}self.sync_with_prev_tasks({n_parts-i-1},chunk_id - {n_parts-1-i})")
+            body.extend([f"{dtab}{s}" for s in sts])
         else:
-            body.append(f"{tab}{s}")
+            body.extend([f"{tab}{s}" for s in sts])
     for o in collect_outputs:
         body.append(f"{tab}{o}")
+    body.append(f"{tab}chunk_id += 1")
 
     # create emptying stage
-    body.append(f"\n{dtab}# empty the pipeline")
+    body.append(f"\n{dtab}# empty the pipeline until the last chunk leaves the last stage")
     for idx in range(1, n_parts):
-        for i, s in enumerate(statements[:n_parts - idx]):
+        for i, sts in enumerate(statements[:n_parts - idx]):
             if use_streams:
                 body.append(
-                    f"with self.stream({n_parts-i-1},{idx+i-n_parts}):")
+                    f"with self.current_stream({n_parts-i-1}, chunk_id - {n_parts-1-i}):")
                 body.append(
-                    f"{tab}self.wait_stream({n_parts-i-1},{idx+i-n_parts})")
-                body.append(f"{tab}{s}")
+                    f"{tab}self.sync_with_prev_tasks({n_parts-i-1}, chunk_id - {n_parts-1-i})")
+                body.extend([f"{tab}{s}" for s in sts])
             else:
-                body.append(s)
+                body.extend(sts)
+        
         for o in created_after_i[idx]:
             body.append(f"{o}_chunks.append({o})")
+        
+        for a in delayed_activations:
+            if created[a] < idx:
+                body.append(f"{activations[a]}_buff.appendleft(None)")
+        
+        body.append("chunk_id += 1")
         body.append("")
+    
+    if use_streams:
+        body.append("torch.cuda.current_stream().wait_stream(self.streams[-1][-1])")
 
-    body.extend(generate_merge_mb(graph, model_outputs))
-
-    pipelined_forward_function = [decleration] + body + [f"return {outputs}"]
+    pipelined_forward_function = [decleration] + body + [return_statement(model_outputs)]
 
     return f"\n{dtab}".join(pipelined_forward_function)
 
 
-def generate_get_inputs_splits_and_aggeragators(model_inputs: List[str], model_outputs: List[str]) -> Tuple[List[str], List[str], List[str]]:
+def generate_chunk_inputs_splits_and_aggeragators(config:Dict,model_inputs: List[str], model_outputs: List[str]) -> Tuple[List[str], List[str]]:
     # split inputs and and create input generators
     body = [f"# chunk inputs"]
-    get_inputs = []
     for i in model_inputs:
-        body.extend([f"assert {i}.size(self.batch_dim) >= self.num_chunks",
-                     f"{i}_chunks = iter({i}.split({i}.size(self.batch_dim) // self.num_chunks, dim=self.batch_dim))"])
-        get_inputs.append(f"{i} = next({i}_chunks)")
+        body.append(f"{i} = self.chunk_inputs({i}, {config['model_inputs'][i]['is_batched']}, num_chunks)")
 
     # create chunk aggregators
     body.append(f"\n{dtab}# create output chunk placeholders")
@@ -199,22 +223,7 @@ def generate_get_inputs_splits_and_aggeragators(model_inputs: List[str], model_o
         body.append(f"{o}_chunks = []")
         collect_outputs.append(f"{o}_chunks.append({o})")
 
-    return get_inputs, body, collect_outputs
-
-
-def generate_merge_mb(graph: Graph, model_outputs: List[str]) -> List[str]:
-    # cat chunks
-    l = []
-    l.append(f"# merge output chunks")
-    for n, o in zip(graph.outputs, model_outputs):
-        if len(n.tensor_shape) == 1 and len(n.tensor_shape) == 1:
-            # scalar
-            l.append(f"{o} = sum({o}_chunks)")
-        else:
-            # tensor
-            l.append(f"{o} = torch.cat({o}_chunks,dim=self.batch_dim)")
-    l.append("")
-    return l
+    return body, collect_outputs
 
 
 def simple_forward(model_inputs: List[str], body: List[str], outputs: str) -> str:
@@ -223,41 +232,137 @@ def simple_forward(model_inputs: List[str], body: List[str], outputs: str) -> st
     return f"\n{dtab}".join(forward_function)
 
 
-def forward_statements(ios: Dict[int, Dict[str, List[str]]],
-                       model_inputs: List[str]) -> Tuple[List[str], Dict[str, str]]:
+def forward_statements(config: Dict,
+                       model_inputs: List[str],pipelined=False) -> Tuple[List[str], Dict[str, str]]:
     '''generates the forward nethod of the model parallel version of the config
     '''
-    visited=set(model_inputs)
-    for i,d in ios.items():
-        for a in d['inputs']:
-            assert a in visited,(a,visited)
-        visited |= set(d['outputs'])
+    if pipelined:
+        created,delayed_activations,_ = delay(config)
+    else:
+        delayed_activations = set()
 
-    n_partitions = len(ios)
+    n_partitions = len(config['stages'])
     arg_gen = variableNameGenerator()
 
     activations = dict(zip(model_inputs, model_inputs))
-
+    
     parts = deque(range(n_partitions))
-
+    ios = config['stages']
     body = []
-    while len(parts) > 0:
+    while parts:
         idx = parts.popleft()
 
         if all(tensor in activations for tensor in ios[idx]['inputs']):
-            inputs = ", ".join(f"{activations[tensor]}"
-                               for tensor in ios[idx]['inputs'])
+            if not pipelined:
+                inputs = (f"{activations[tensor]}"
+                                for tensor in ios[idx]['inputs'])
+            else:
+                inputs = []
+                for tensor in ios[idx]['inputs']:
+                    if tensor in model_inputs:
+                        inputs.append(activations[tensor]+f"[chunk_id - {idx}]")
+                    elif tensor in delayed_activations and (idx-created[tensor]) > 1:
+                        inputs.append(activations[tensor]+f"_buff[{idx-created[tensor]-1}]")
+                    else:
+                        inputs.append(activations[tensor])
+            
+            inputs = ", ".join(inputs)
+
+            delay_statements=[]
             outputs = []
             for o, t in zip(ios[idx]['outputs'], arg_gen):
                 activations[o] = t
+                if o in delayed_activations:
+                    delay_statements.append(f"{t}_buff.appendleft({t})")
                 outputs.append(t)
 
             outputs = ", ".join(outputs)
 
-            body.append(f"{outputs} = self.stage{idx}({inputs})")
+            delay_statements = [f"{outputs} = self.stage{idx}({inputs})"] + delay_statements
             if len(ios[idx]['outputs']) == 1:
-                body[-1] += '[0]'
+                delay_statements[-1] += '[0]'
+            if pipelined:
+                body.append(delay_statements)
+            else:
+                assert len(delay_statements) == 1
+                body.extend(delay_statements)
         else:
             parts.append(idx)
 
     return body, activations
+
+
+def return_statement(model_outputs:List[str])->str:
+    #TODO merge outputs
+    #TODO support nested outputs
+    outs = ", ".join([f"{o}_chunks" for o in model_outputs])
+
+    return f"return {outs}"
+
+
+def chunk_inputs(self,inputs,batched,num_chunks):
+    chunks = [[] for _ in range(num_chunks)]
+    for input,is_batched in zip(flatten(inputs),flatten(batched)):
+        if is_batched:
+            sizes = torch.full((num_chunks,), input.size(self.batch_dim) // num_chunks, dtype=torch.int32)
+            sizes[:input.size(self.batch_dim) % num_chunks] += 1
+            xs = [x.contiguous() for x in torch.split(input, sizes.tolist(), dim=self.batch_dim)]
+        else:
+            xs = [x for _ in range(num_chunks)]
+
+        for i,x in enumerate(xs):
+            chunks[i].append(x)
+    
+    return [unflatten(chunk,batched) for chunk in chunks]
+
+
+def delay(config):
+    consumers = defaultdict(list)
+
+    created = dict()
+    for idx,stage in config['stages'].items():
+        for o in stage['outputs']:
+            created[o] = idx
+        for i in stage['inputs']:
+            if i in config['model_inputs']:
+                continue
+            consumers[i].append(idx)
+    
+    delayed_activations = set()
+    max_delay = defaultdict(lambda: 0)
+    for o,c in consumers.items():
+        for i in c:
+            if (i - created[o]) > 1:
+                delayed_activations.add(o)
+                max_delay[o] = max(max_delay[o],i - created[o]-1)
+
+    return created,delayed_activations,max_delay
+
+# config structure
+# batch_dim
+# depth
+# basic_blocks
+# model_inputs
+    # id
+    # shape
+    #    dtype
+    # is_batched
+# model_outputs
+    # id
+    # shape
+    #    dtype
+    # is_batched
+
+# stages:
+#   id
+    # inputs
+    #   id
+    #    shape
+    #    dtype
+    #    req_grad
+    #    is_batched
+    # outputs
+    #    id
+    #    shape
+    #    dtype
+    #    is_batched

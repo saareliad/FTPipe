@@ -10,13 +10,15 @@ def generate_init_method(class_name: str, layers: List[Node],
                          is_param_dict: Dict[str, bool], buff_params: List[Node]) -> Tuple[str, Dict[Node, str]]:
     '''creates the partition constructor and the mapping between layers and field ids
     '''
+    
+    device_id = re.search(r'\d+$', class_name).group()
     class_decl = f"class {class_name}(nn.Module):"
 
     layer_scopes_field, tensor_scope_field = generate_layer_and_tensor_scopes(layers,
                                                                               buff_params)
     basic_blocks_field = generate_basic_blocks_field(layers)
 
-    init_dec = f"{tab}def __init__(self, layers, tensors):"
+    init_dec = f"{tab}def __init__(self, layers, tensors, device='cuda:{device_id}'):"
     super_init = f'{dtab}super({class_name}, self).__init__()'
     layers_init, partition_fields = generate__init__layersStatements(layers)
 
@@ -32,12 +34,11 @@ def generate_init_method(class_name: str, layers: List[Node],
     lookup = generateLookup(partition_fields, tensor_ids)
     partition_fields.update(tensor_ids)
 
-    device_id = re.search(r'\d+$', class_name).group()
+    # initialize device and move
+    device = f"{dtab}self.device = torch.device(device)"
+    move = f"{dtab}self.to(self.device)"
 
-    # we initialize it to expected device if DEBUG then the pipeline will set it to cpu device
-    device = f"{dtab}self.device = torch.device('cuda:{device_id}')"
-
-    return '\n'.join([class_decl, basic_blocks_field, layer_scopes_field, tensor_scope_field, init_dec, super_init, layers_init, tensor_init, device, lookup]) + '\n', partition_fields
+    return '\n'.join([class_decl, basic_blocks_field, layer_scopes_field, tensor_scope_field, init_dec, super_init, layers_init, tensor_init, device, lookup,move]) + '\n', partition_fields
 
 
 def generate_layer_and_tensor_scopes(layers: List[Node], buff_params: List[Node]):
@@ -75,11 +76,6 @@ def generate__init__layersStatements(layers: List[Node]) -> Tuple[str, Dict[Node
     ''' generates partition field initialization statements\n
         and save the layer scopes in the self.scopes field
     '''
-    # statements = [f'{dtab}# initializing partition layers']
-
-    # for field, full_name in zip(layer_names, full_names):
-    #     statements.append(f"{field} = layers['{full_name}']")
-
     statements = ["#initialize partition layers",
                   "for idx,layer_scope in enumerate(self.LAYER_SCOPES):",
                   f"{tab}self.add_module(f'l_{{idx}}',layers[layer_scope])"]
@@ -94,21 +90,6 @@ def generate__init__BuffParamStatements(buffers: List[Node], parameters: List[No
     ''' generate the init statements to initialize the partitions free floating bufferes and parameters
         free floating means tat those tensors are not part of any layer in this partition
     '''
-    # tensor_ids = {}
-    # statements = []
-    # if buffers:
-    #     statements.append(f"\n{dtab}# initializing partition buffers")
-    #     for idx, b_node in enumerate(buffers):
-    #         statements.append(
-    #             f"self.register_buffer('b_{idx}',tensors['{b_node.scope}'])")
-    #         tensor_ids[b_node] = f'self.b_{idx}'
-    # if parameters:
-    #     statements.append(f"\n{dtab}# initializing partition parameters")
-    #     for idx, p_node in enumerate(parameters):
-    #         statements.append(
-    #             f"self.register_parameter('p_{idx}', tensors['{p_node.scope}'])")
-    #         tensor_ids[p_node] = f'self.p_{idx}'
-
     statements = ["#initialize partition tensors",
                   "b=p=0",
                   "for tensor_scope in self.TENSORS:",

@@ -13,6 +13,8 @@ import importlib
 from itertools import chain
 from pytorch_Gpipe.utils import nested_map
 
+#TODO req_grad not included
+#TODO not correct at all for nested
 
 class PipelineConfig():
     def __init__(self, batch_dim: int, depth: int, basic_blocks: Tuple[nn.Module, ...]):
@@ -284,7 +286,7 @@ class PipelineConfig():
             stage_config = dict()
             stage_config['inputs'] = stage.inputs
             stage_config['outputs'] = stage.outputs
-            model = stage._stage_class(layers, tensors).to(stage.devices[0])
+            model = stage._stage_class(layers, tensors,device=stage.devices[0])
             stage_config['model'] = model
             old_config[idx] = stage_config
 
@@ -562,8 +564,12 @@ class StageConfig():
 
         return config
 
+
+
+
 def nested_serialize(obj):
     return nested_map(serialize_python_class_or_function,obj)
+
 
 def nested_deserialize(obj):
     def f(o):
@@ -571,6 +577,7 @@ def nested_deserialize(obj):
             return deserialize_python_class_or_function(o)
         return o
     return nested_map(f,obj)
+
 
 def serialize_python_class_or_function(class_or_function):
     if class_or_function is None:
@@ -609,12 +616,12 @@ def deserialize_python_class_or_function(path: str):
 
 # stages:
 #   id
-    # model_inputs
+    # inputs
     #   id
     #    shape
     #    dtype
     #    is_batched
-    # model_outputs
+    # outputs
     #    id
     #    shape
     #    dtype
