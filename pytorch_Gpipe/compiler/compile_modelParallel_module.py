@@ -79,9 +79,12 @@ def create_model_parallel_module(config: Dict) -> str:
 
     chunk = f"\n{tab}".join([s[:-1] for s in inspect.getsourcelines(chunk_inputs)[0]])
 
+    merge = f"\n{tab}".join([s[:-1] for s in inspect.getsourcelines(merge_outputs)[0]])
+
+
     return "\n" + f"\n\n{tab}".join([
         class_decl_and_init, create_streams, current_stream, sync_with_prev_tasks,
-        chunk,*forwards, state_dict, load_state_dict,
+        chunk,merge,*forwards, state_dict, load_state_dict,
         named_buffers, named_parameters, buffers, parameters
     ]) + "\n\n"
 
@@ -205,7 +208,7 @@ def pipelined_forward(config: Dict, model_inputs: List[str],activations:Dict[str
     if use_streams:
         body.append("torch.cuda.current_stream().wait_stream(self.streams[-1][-1])")
 
-    pipelined_forward_function = [decleration] + body + [return_statement(model_outputs)]
+    pipelined_forward_function = [decleration] + body + [return_statement(config,activations)]
 
     return f"\n{dtab}".join(pipelined_forward_function)
 
@@ -292,12 +295,15 @@ def forward_statements(config: Dict,
     return body, activations
 
 
-def return_statement(model_outputs:List[str])->str:
-    #TODO merge outputs
-    #TODO support nested outputs
-    outs = ", ".join([f"{o}_chunks" for o in model_outputs])
+def return_statement(config:Dict,activations:Dict[str,str])->str:
+    sts=[]
+    for o,info in config['model_outputs'].items():
+        variable_name = activations[o]
+        is_batched = info['is_batched']
+        sts.append(f"self.merge_outputs({variable_name}_chunks,{is_batched})")
 
-    return f"return {outs}"
+    sts = ", ".join(sts)
+    return f"return {sts}"
 
 
 def chunk_inputs(self,inputs,batched,num_chunks):
@@ -314,6 +320,24 @@ def chunk_inputs(self,inputs,batched,num_chunks):
             chunks[i].append(x)
     
     return [unflatten(chunk,batched) for chunk in chunks]
+
+
+def merge_outputs(self,chunks, batched):
+    flattened_is_batched = list(flatten(batched))
+    buckets = [[] for _ in flattened_is_batched]
+
+    for chunk in chunks:
+        for idx,x in enumerate(flatten(chunk)):
+            buckets[idx].append(x)
+    
+    merged = []
+    for xs,is_batched in zip(buckets,flattened_is_batched):
+        if is_batched:
+            merged.append(torch.cat(xs,dim=self.batch_dim))
+        else:
+            merged.append(sum(xs))
+    
+    return unflatten(merged,batched)
 
 
 def delay(config):
