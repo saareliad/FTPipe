@@ -270,6 +270,12 @@ def create_pipeline_configuration(DEBUG=False):
         },
         8: {
             "inputs": {
+                    'input1': {
+                    'shape': torch.Size([1, 1024]),
+                    'dtype': torch.int64,
+                    'is_batched': True,
+                    'req_grad': False
+                },
                 'GPT2LMHeadModel/GPT2Model[transformer]/LayerNorm[ln_f]': {
                     'shape': torch.Size([1, 1024, 1600]),
                     'dtype': torch.float32,
@@ -282,12 +288,7 @@ def create_pipeline_configuration(DEBUG=False):
                     'is_batched': False,
                     'req_grad': True
                 },
-                'input1': {
-                    'shape': torch.Size([1, 1024]),
-                    'dtype': torch.int64,
-                    'is_batched': True,
-                    'req_grad': False
-                }
+
             },
             "outputs": {
                 'GPT2LMHeadModel/aten::nll_loss16393': {
@@ -18231,7 +18232,7 @@ class Partition8(nn.Module):
         self.device = torch.device('cuda:0')
         self.lookup = {'l_0': 'stateless_lm_head'}
 
-    def forward(self, x0, x1, x2):
+    def forward(self, x2, x0, x1):
         # GPT2LMHeadModel/StatelessLinear[stateless_lm_head] <=> self.l_0
         # GPT2LMHeadModel/GPT2Model[transformer]/LayerNorm[ln_f] <=> x0
         # GPT2LMHeadModel/Parameter[w_wte] <=> x1

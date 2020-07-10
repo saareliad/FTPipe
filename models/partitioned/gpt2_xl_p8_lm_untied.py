@@ -281,6 +281,12 @@ def create_pipeline_configuration(DEBUG=False):
         },
         7: {
             "inputs": {
+                'input1': {
+                    'shape': torch.Size([1, 1024]),
+                    'dtype': torch.int64,
+                    'is_batched': True,
+                    'req_grad': False
+                },
                 'GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[41]/aten::add26591':
                 {
                     'shape': torch.Size([1, 1024, 1600]),
@@ -288,12 +294,6 @@ def create_pipeline_configuration(DEBUG=False):
                     'is_batched': True,
                     'req_grad': True
                 },
-                'input1': {
-                    'shape': torch.Size([1, 1024]),
-                    'dtype': torch.int64,
-                    'is_batched': True,
-                    'req_grad': False
-                }
             },
             "outputs": {
                 'GPT2LMHeadModel/aten::nll_loss16398': {
@@ -16412,7 +16412,7 @@ class Partition7(nn.Module):
             'b_5': 'transformer.blocks.47.attn.bias'
         }
 
-    def forward(self, x0, x1):
+    def forward(self, x1, x0):
         # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[42]/LayerNorm[ln_1] <=> self.l_0
         # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[42]/Attention[attn]/Conv1D[c_attn] <=> self.l_1
         # GPT2LMHeadModel/GPT2Model[transformer]/Sequential[blocks]/Block[42]/Attention[attn]/Dropout[attn_dropout] <=> self.l_2
