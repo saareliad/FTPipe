@@ -12,6 +12,7 @@ from copy import deepcopy
 from pipeline.util import nested_map
 # NOTE: currently nesting is supported just for tuples and lists
 
+# Used only to assert correct shape dtype
 _SHAPE_CLS = torch.Size
 
 
@@ -35,13 +36,6 @@ class PipelineConfig():
     def add_input(self, input_name: str, shape: Tuple[int, ...],
                   is_batched: bool, dtype: torch.dtype) -> "PipelineConfig":
         self.model_inputs.append(input_name)
-        if is_batched:
-            shape = _SHAPE_CLS(shape)
-        elif isinstance(shape, (tuple, list)):
-            shape = _SHAPE_CLS(shape)
-        elif isinstance(shape, dict):
-            raise NotImplementedError()
-
         self.model_input_shapes.append(shape)
         self.is_batched[input_name] = is_batched
         self.dtypes[input_name] = dtype
@@ -50,13 +44,6 @@ class PipelineConfig():
     def add_output(self, output_name: str, shape: Tuple[int, ...],
                    is_batched: bool, dtype: torch.dtype) -> "PipelineConfig":
         self.model_outputs.append(output_name)
-        if is_batched:
-            shape = _SHAPE_CLS(shape)
-        elif isinstance(shape, (tuple, list)):
-            shape = _SHAPE_CLS(shape)
-        elif isinstance(shape, dict):
-            raise NotImplementedError()
-
         self.model_output_shapes.append(shape)
         self.is_batched[output_name] = is_batched
         self.dtypes[output_name] = dtype
@@ -379,7 +366,6 @@ class StageConfig():
                                                       ...], is_batched: bool,
                   dtype: torch.dtype, req_grad: bool) -> "StageConfig":
         self.inputs.append(input_name)
-        shape = _SHAPE_CLS(shape)
         self.input_shapes.append(shape)
         self.is_batched[input_name] = is_batched
         self.dtypes[input_name] = dtype
@@ -389,7 +375,6 @@ class StageConfig():
     def add_output(self, output_name: str, shape: Tuple[int, ...],
                    is_batched: bool, dtype: torch.dtype) -> "StageConfig":
         self.outputs.append(output_name)
-        shape = _SHAPE_CLS(shape)
         self.output_shapes.append(shape)
         self.is_batched[output_name] = is_batched
         self.dtypes[output_name] = dtype
@@ -545,9 +530,11 @@ def deserialize_python_class_or_function(path: str):
 def atomic_batch_change(atomic_is_batched, atomic_shape, dim, batch_size):
     assert isinstance(atomic_is_batched, bool)
     if atomic_is_batched:
+        TMP_SHAPE_CLS = type(atomic_shape)
+        assert TMP_SHAPE_CLS == _SHAPE_CLS
         atomic_shape = list(atomic_shape)
         atomic_shape[dim] = batch_size
-        atomic_shape = _SHAPE_CLS(atomic_shape)
+        atomic_shape = TMP_SHAPE_CLS(atomic_shape)
         # atomic_shape = torch.Size(atomic_shape)
     return atomic_shape
 
