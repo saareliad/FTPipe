@@ -801,13 +801,9 @@ def single_level_partitioning(
 
     init_sol = initial_divide(work_graph, k, node_weights)
 
-    if objective is Objective.EDGE_CUT:
-        partition_volumes = calculate_partition_volumes(k, node_weights)
-        L_max = (1 + epsilon) * math.ceil(sum(partition_volumes.values()) / k)
-    else:
-        partition_volumes = calculate_stage_times(node_weights, edge_weights)
-        #TODO do not enforce balance total volume is not static (depends on comm)
-        L_max = np.inf
+    partition_volumes = calculate_partition_volumes(k, node_weights)
+    L_max = (1 + epsilon) * math.ceil(sum(partition_volumes.values()) / k)
+
     
     msg = "\n".join([
         "-I- balanced partitioning is not possible",
@@ -817,12 +813,15 @@ def single_level_partitioning(
 
     assert all((v <= L_max for v in node_weights.values())), msg
     try:
+        # NOTE we optimize the more stable edge cut objective
+        # optimizing stage times directly is unstable and can create less partitions than requested
+        # when selecting the best solution it could be according to the stage time objective 
         ALGORITHMS[algorithm](partition_volumes,
                             edge_weights,
                             node_weights,
                             L_max,
                             rounds=rounds,
-                            objective=objective)
+                            objective=Objective.EDGE_CUT)
 
         #refine partition in a greedy fashion
         global_moves(partition_volumes,
@@ -830,7 +829,7 @@ def single_level_partitioning(
                     node_weights,
                     L_max,
                     rounds=1,
-                    objective=objective)
+                    objective=Objective.EDGE_CUT)
     except Exception as e:
         print(f"error {algorithm.name}")
         work_graph.save_as_pdf(f"error_{algorithm.name}",".")
@@ -876,6 +875,9 @@ def multilevel_partitioning(
         rounds: int = 10,
         use_layers_graph=True) -> Tuple[Dict[int,int],Solution]:
 
+    # NOTE we optimize the more stable edge cut objective
+    # optimizing stage times directly is unstable and can create less partitions than requested
+    # when selecting the best solution it could be according to the stage time objective 
     initial_solution,single_level_solution, node_weights, edge_weights = single_level_partitioning(
         graph,
         algorithm=algorithm,
@@ -883,16 +885,13 @@ def multilevel_partitioning(
         epsilon=epsilon,
         node_weight_function=node_weight_function,
         edge_weight_function=edge_weight_function,
-        objective=objective,
+        objective=Objective.EDGE_CUT,
         rounds=rounds,
         use_layers_graph=use_layers_graph)
     partition_volumes = single_level_solution.volumes
     
-    if objective is Objective.EDGE_CUT:
-        L_max = (1 + epsilon) * math.ceil(sum(partition_volumes.values()) / k)
-    else:
-        #TODO do not enforce balance total volume is not static (depends on comm)
-        L_max = np.inf
+    L_max = (1 + epsilon) * math.ceil(sum(partition_volumes.values()) / k)
+
 
     hierarchy = coarsening(graph, node_weights, edge_weights)
     # iterate in reverse order to coarsening
@@ -903,7 +902,7 @@ def multilevel_partitioning(
                               coarse_graph._node_weights,
                               L_max,
                               rounds=rounds,
-                              objective=objective)
+                              objective=Objective.EDGE_CUT)
         refine(fine_graph, coarse_graph, matching)
 
     #update original graph
