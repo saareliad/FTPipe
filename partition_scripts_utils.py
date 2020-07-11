@@ -265,17 +265,6 @@ class ParseAcyclicPartitionerOpts:
                           choices=["edge_cut", "stage_time"],
                           default="edge_cut",
                           help="partitioning optimization objective")
-        opts.add_argument(
-            "--hetrogenous_nodes",
-            action="store_true",
-            default=False,
-            help="use partitioning algorithm with hetrogenous nodes")
-
-        opts.add_argument(
-            "--hetrogenous_bw",
-            action="store_true",
-            default=False,
-            help="use partitioning algorithm with hetrogenous bandwidth")
 
     @staticmethod
     def acyclic_opts_dict_from_parsed_args(args):
@@ -296,17 +285,9 @@ class ParseAcyclicPartitionerOpts:
             "rounds": args.rounds,
             "allocated_seconds": args.allocated_seconds,
             "meta_algorithm": meta_algorithm,
-            "objective": objective,
-            "use_dynamic_node_weights": args.hetrogenous_nodes,
-            "use_dynamic_edge_weights": args.hetrogenous_bw,
+            "objective": objective
         }
 
-
-def parse_machines_and_bw(args):
-    assert len(args.machines_per_level) == len(args.bw_per_level)
-    if len(args.machines_per_level) == 1:
-        args.n_partitions = args.machines_per_level[0]
-        args.bw = args.bw_per_level[0]
 
 
 def choose_blocks(model, args):

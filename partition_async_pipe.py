@@ -7,7 +7,6 @@ from pytorch_Gpipe import trace_module, Graph, GraphProfiler, execute_graph, Exe
 from pytorch_Gpipe.model_profiling import Node
 from pytorch_Gpipe.utils import move_tensors
 from partition_scripts_utils import run_x_tries_until_no_fail
-from heuristics import NodeWeightFunction, UndirectedEdgeWeightFunction, DirectedEdgeWeightFunction, NodeWeightFunctionWithRatioAutoInfer, get_node_and_edge_weight_function_heuristics
 
 FullExecTimes = namedtuple('FullExecTimes', 'recomputation no_recomputation')
 
@@ -18,16 +17,13 @@ def partition_async_pipe(
     batch_dim: int = 0,
     args: tuple = None,
     kwargs: Dict = None,
-    MULT_FACTOR=1e4,
-    penalty=1e4,
+    node_weight_function=None,
+    edge_weight_function=None
 ):
     if args is None:
         args = tuple()
     if kwargs is None:
         kwargs = dict()
-
-    node_weight_function, edge_weight_function = get_node_and_edge_weight_function_heuristics(
-        cmd_args, verbose=True)
 
     # combined node/edge weight function depends on how many parameters are passed
     evaluator = Evaluator(node_weight_function, edge_weight_function)

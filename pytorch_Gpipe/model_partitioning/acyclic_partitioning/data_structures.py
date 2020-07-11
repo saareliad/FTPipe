@@ -4,124 +4,6 @@ from typing import Dict, Iterable, Set, Iterator, List, Tuple, Any, Optional
 import random
 import heapq
 import pickle
-from collections.abc import MutableMapping
-
-###################################################################################################
-
-# The purpose of the following two classes is twofold:
-# (1) Provide dyanmic weights
-# (2) to be transparnt to the algorithm as mucha s possible
-
-
-class DynamicNodeWeights(MutableMapping):
-    def __init__(self, node_weights, node_weight_function):
-
-        self.store = node_weights
-        # self.work_graph = work_graph
-        self.node_weight_function = node_weight_function
-
-    @classmethod
-    def from_graph(cls, work_graph, node_weight_function):
-        node_weights = dict()
-        # Full init
-        for n in work_graph.nodes:
-            node_weights[n] = node_weight_function(n)
-        return cls(node_weights, node_weight_function)
-
-    def __getitem__(self, key):
-        return self.store[key]
-
-    def __setitem__(self, key, value):
-        self.store[key] = value
-
-    def __delitem__(self, key):
-        del self.store[key]
-
-    def __iter__(self):
-        return iter(self.store)
-
-    def __len__(self):
-        return len(self.store)
-
-    def recalculate_weight(self, key):
-        self.store[key] = self.node_weight_function(key)
-
-
-class DynamicEdgeWeights(MutableMapping):
-    def __init__(self,
-                 edge_weights,
-                 edge_weight_function,
-                 backward_edged=True):
-        # TODO: will provide option to turn off backward_edged
-
-        self.store = edge_weights
-        # self.work_graph = work_graph
-        self.edge_weight_function = edge_weight_function
-        
-        if backward_edged:
-            backward_edges = set(
-                (edge[1], edge[0]) for edge in edge_weights.keys())
-            for bwd_edge in backward_edges:
-                edge_weights[bwd_edge] = edge_weight_function(*bwd_edge)
-            self._backward_edges = backward_edges
-        else:
-            self._backward_edges = set()
-
-    @classmethod
-    def from_graph(cls, work_graph, edge_weight_function, backward_edged=True):
-        edge_weights = dict()
-
-        for n in work_graph.nodes:
-            for o in n.out_edges:
-                # Forward (normal) edges
-                edge_weights[(n, o)] = edge_weight_function(n, o)
-
-        return cls(edge_weights, edge_weight_function, backward_edged=backward_edged)
-
-    def __getitem__(self, key):
-        return self.store[key]
-
-    def __setitem__(self, key, value):
-        self.store[key] = value
-
-    def __delitem__(self, key):
-        del self.store[key]
-
-    def __iter__(self):
-        return iter(self.store)
-
-    def __len__(self):
-        return len(self.store)
-
-    def recalculate_weight(self, key):
-        # NOTE: user should call twich in directed case
-        self.store[key] = self.edge_weight_function(key[0], key[1])
-
-    def clear_backward_edges(self):
-        """ backward edges are not part of the original graph,
-            can be used just for (directed) heuristics.
-        """
-        for key in self._backward_edges:
-            del self.store[key]
-
-
-class StaticNodeWeights(DynamicNodeWeights):
-    def __init__(self, *args, **kw):
-        super().__init__(*args, **kw)
-
-    def recalculate_weight(self, key):
-        pass
-
-
-class StaticEdgeWeights(DynamicEdgeWeights):
-    def __init__(self, *args, **kw):
-        super().__init__(*args, **kw)
-
-    def recalculate_weight(self, key):
-        pass
-
-
-###################################################################################################
 
 
 class DoublePriority():
@@ -248,7 +130,7 @@ class QuotientGraph():
             idx: PartitionNode(group, idx)
             for idx, group in groups.items()
         }
-        
+
     @property
     def n_stages(self)->int:
         return len({n.stage_id for n in self.nodes})
@@ -410,6 +292,7 @@ class QuotientGraph():
     def save_as_pdf(self, file_name: str, directory: str):
         '''
         save the rendered graph to a pdf file
+
         Parameters
         ----------
         file_name:
@@ -519,12 +402,12 @@ class VerticeStageConnections():
     def out_connections(self, n, dst: int) -> int:
         return self._out_connections[n][dst]
 
-    def move_node(self, n, src: int, dest: int):
+    def move_node(self, n, dest:int):
         for u in n.in_edges:
-            self.remove_out_connection(u, src)
+            self.remove_out_connection(u, n.stage_id)
             self.add_out_connection(u, dest)
         for o in n.out_edges:
-            self.remove_in_connection(o, src)
+            self.remove_in_connection(o, n.stage_id)
             self.add_in_connection(o, dest)
 
 
@@ -663,7 +546,6 @@ class PathSet():
         return set(paths)
 
 
-# TODO: add weight somehow
 class SimpleNode():
     def __init__(self, idx, stage_id):
         self.id = idx
@@ -678,39 +560,9 @@ class SimpleNode():
         self.out_edges.add(node)
 
 
-# TODO: use this to make the update support dynamic weights.
-class ContractedGraphDynamicNodeWeights(DynamicNodeWeights):
-    def __init__(self, contracted_graph: "ContractedGraph", *args, **kw):
-        super().__init__(*args, **kw)
-        self.contracted_graph = contracted_graph
-
-    def recalculate_weight(self, key):
-        # TODO: get the head node
-        # TODO: update weight of the current node
-        # TODO: update weight of that head node.
-        self.store[key] = self.node_weight_function(key)
-        # Will raise
-
-
-# TODO: make it work with DynamicNodeWeights.
 class ContractedGraph():
-    USING_DIRECTED_EDGES = False
-
-    def __init__(
-        self,
-        in_edges,
-        partition,
-        node_weights,
-        edge_weights,
-        matching,
-        node_weight_function=None,
-        edge_weight_function=None,
-        use_dynamic_node_weights=False,
-        use_dynamic_edge_weights=False,
-    ):
-        self._nodes: Dict[int, SimpleNode] = dict()
-        # FIXME: to support DynamicNodeWeights, something must be changed.
-        # currently, the ommited wieght does not let us use DynamicNodeWeights
+    def __init__(self,in_edges,partition,node_weights,edge_weights,matching):
+        self._nodes:Dict[int, SimpleNode]=dict()
         for n in set(matching.values()):
             self._nodes[n] = SimpleNode(n, partition[n])
 
@@ -730,21 +582,10 @@ class ContractedGraph():
                 self._edge_weights[(self._nodes[matched_i],
                                     self._nodes[matched])] += edge_weights[(i,
                                                                             n)]
-
-        if use_dynamic_node_weights:
-            self._node_weights = ContractedGraphDynamicNodeWeights(
-                self, self._node_weights, node_weight_function)
-        else:
-            self._node_weights = StaticNodeWeights(
-                self._node_weights,
-                node_weight_function)  # NOTE: node_weight_function can be None
-
-        if use_dynamic_edge_weights:
-            self._edge_weights = ContractedGraphDynamicNodeWeights(
-                self, self._edge_weights, edge_weight_function)
-        else:
-            self._edge_weights = StaticEdgeWeights(self._edge_weights,
-                                                   edge_weight_function, backward_edged=self.USING_DIRECTED_EDGES)
+    
+    @property
+    def n_stages(self)->int:
+        return len({n.stage_id for n in self.nodes})
 
     def __len__(self) -> int:
         return len(self._nodes)
@@ -757,10 +598,6 @@ class ContractedGraph():
 
     def edge_weight(self, u, v) -> float:
         return self._edge_weights[u, v]
-
-    @property
-    def n_stages(self)->int:
-        return len({n.stage_id for n in self.nodes})
 
     @property
     def nodes(self) -> Iterable[SimpleNode]:
@@ -786,14 +623,14 @@ class ContractedGraph():
                     assert (n, o) in self._edge_weights
                     assert o in self._node_weights
                     assert o.id in self._nodes
-        except (Exception,AssertionError) as e:
+
+            return self
+        except AssertionError as e:
             self.save_as_pdf("selfcheck_error",".")
             raise e
-        return self
 
     @classmethod
-    def contract(cls, contracted_graph, matching, *args,
-                 **kw) -> "ContractedGraph":
+    def contract(cls, contracted_graph, matching) -> "ContractedGraph":
         in_edges = dict()
         partition = dict()
         node_weights = dict()
@@ -808,12 +645,11 @@ class ContractedGraph():
                 edge_weights[(u.id, n.id)] = contracted_graph.edge_weight(u, n)
             in_edges[n.id] = us
 
-        return cls(in_edges, partition, node_weights, edge_weights, matching,
-                   *args, **kw)
+        return cls(in_edges, partition, node_weights, edge_weights, matching)
 
     @classmethod
-    def from_Graph(cls, graph: Graph, node_weights, edge_weights, *args,
-                   **kw) -> "ContractedGraph":
+    def from_Graph(cls, graph: Graph, node_weights,
+                   edge_weights) -> "ContractedGraph":
         node_weights = {n.id: w for n, w in node_weights.items()}
         edge_weights = {(u.id, v.id): w for (u, v), w in edge_weights.items()}
         in_edges = dict()
@@ -822,9 +658,9 @@ class ContractedGraph():
             in_edges[n.id] = {u.id for u in n.in_edges}
             partition[n.id] = n.stage_id
 
-        matching = {n: n for n in node_weights}
-        return cls(in_edges, partition, node_weights, edge_weights, matching,
-                   *args, **kw)
+        return cls(in_edges, partition, node_weights, edge_weights,
+                   {n: n
+                    for n in node_weights})
 
     def build_dot(self):
         '''
@@ -908,6 +744,7 @@ class ContractedGraph():
     def save_as_pdf(self, file_name: str, directory: str):
         '''
         save the rendered graph to a pdf file
+
         Parameters
         ----------
         file_name:

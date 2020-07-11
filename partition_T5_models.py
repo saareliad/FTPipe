@@ -9,7 +9,7 @@ from pytorch_Gpipe.model_profiling.tracer import register_new_explicit_untraced_
 from pytorch_Gpipe.utils import layerDict, tensorDict
 import argparse
 import importlib
-from heuristics import NodeWeightFunction, UndirectedEdgeWeightFunction, DirectedEdgeWeightFunction, get_node_and_edge_weight_function_heuristics
+from heuristics import get_weight_functions
 import functools
 from partition_async_pipe import partition_async_pipe
 from partition_scripts_utils import choose_blocks, ParseAcyclicPartitionerOpts, ParseMetisOpts, ParsePartitioningOpts, record_cmdline
@@ -385,8 +385,7 @@ if __name__ == "__main__":
     # if the model need multiple inputs pass a tuple
     # if the model needs kwargs pass a dictionary
 
-    node_weight_function, edge_weight_function = get_node_and_edge_weight_function_heuristics(
-        args, verbose=True)
+    node_weight_function, edge_weight_function = get_weight_functions(args, verbose=True)
 
     n_iter = args.n_iter
     recomputation = not args.no_recomputation
@@ -426,7 +425,9 @@ if __name__ == "__main__":
 
     if args.async_pipeline and (not args.no_recomputation):
         print("using async partitioner")
-        graph = partition_async_pipe(args, model, 0, kwargs=sample)
+        graph = partition_async_pipe(args, model, batch_dim=batch_dim, kwargs=sample,
+                                        node_weight_function=node_weight_function,
+                                        edge_weight_function=edge_weight_function)
     else:
         graph = partial_pipe_model()
 

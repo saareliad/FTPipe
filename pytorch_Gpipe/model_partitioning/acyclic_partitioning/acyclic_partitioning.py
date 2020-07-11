@@ -1,9 +1,5 @@
 from pytorch_Gpipe.model_profiling import Graph, NodeWeightFunction, EdgeWeightFunction
-from .data_structures import (QuotientGraph, SimpleNode, PriorityQueue,
-                              DoublePriority, VerticeStageConnections,
-                              DynamicNodeWeights, DynamicEdgeWeights,
-                              StaticNodeWeights, StaticEdgeWeights,
-                              ContractedGraph)
+from .data_structures import QuotientGraph, SimpleNode, PriorityQueue, DoublePriority, VerticeStageConnections
 from .gpa import coarsening, refine
 import random
 import math
@@ -14,15 +10,11 @@ from itertools import chain,islice
 import enum
 from multiprocessing import Pool
 import time
-from functools import partial
 import os
 import json
 
 DEBUG = False
 ###################################################################################################
-# Turned off whenver wanted (currently for multilvevl).
-# Can do it nicer, e.g infer from given edge_weight_function
-USING_DIRECTED_EDGES = True
 
 
 class META_ALGORITH(enum.Enum):
@@ -57,7 +49,6 @@ class Objective(enum.Enum):
 #the blocks are consecutive blocks of nodes acquired by a Khan's algorithm
 def initial_divide(graph: Graph, k: int,
                    node_weights: Dict[SimpleNode, float])->Tuple[int,...]:
-    # TODO: the initial devide does not assume anything about dynamic weights yet.
     random_topo_sort = random_Khan_algorithm(graph)
     node_weights = np.asarray([node_weights[n] for n in random_topo_sort])
     cumulative_node_weights = np.cumsum(node_weights)
@@ -69,7 +60,6 @@ def initial_divide(graph: Graph, k: int,
 
     options = [math.floor(avg_weight), math.ceil(avg_weight)]
     acc = 0
-
     # k partitions require k-1 seperators
     while len(Vs) < k - 1:
         stage_weight = options[random.randint(0, 1)]
@@ -123,35 +113,6 @@ def random_Khan_algorithm(graph: Graph):
 ###################################################################################################
 
 
-def simple_edge_cut_update_function(v, src, dst, partition_volumes,
-                                    node_weights):
-    # TODO: use it instead of code copy
-    # assert v.stage_id == src
-    # (1) remove old weight from partition_volumes
-    partition_volumes[src] -= node_weights[v]
-    # (2) update stage_id, dynamic node weight
-    v.stage_id = dst
-    node_weights.recalculate_weight(v)
-    # (3) add new weight to partition_volumes
-    partition_volumes[dst] += node_weights[v]
-
-
-# NOTE: can turn this off if no dynamic weights.
-# NOTE: its currernrlt not effieicnet and "double" lookhead...
-def check_balance_with_lookhead(n, dst, node_weights, partition_volumes,
-                                L_max):
-    src = n.stage_id
-    n.stage_id = dst
-    old_w = node_weights[n]
-    node_weights.recalculate_weight(n)
-    new_w = node_weights[n]
-    balance_flag = partition_volumes[dst] + new_w < L_max
-    # revert
-    node_weights[n] = old_w
-    n.stage_id = src
-    return balance_flag
-
-
 # move nodes between adjacent partitions as long as edge cut improves and constraints are enforced
 # aka i=>i+1 or i=>i+1
 # a move is aligible as long as it does not overload the target partition and does not create a cycle
@@ -161,33 +122,22 @@ def simple_moves(partition_volumes: Dict[int, float],
                  L_max: float,
                  rounds: int = 1,
                  objective: Objective = Objective.EDGE_CUT):
-
-    # TODO: ideally can include edge weights in VerticeStageConnections,
-    # but it will break the edge-cut ojbective
-    # (edge-cut objective is not correct for NNs)
     connections = VerticeStageConnections(node_weights)
 
     if objective is Objective.EDGE_CUT:
         gain_function = calculate_edge_gain
 
         def update_function(v, dst):
-            src = v.stage_id
-            # (1) remove old weight from partition_volumes
-            partition_volumes[src] -= node_weights[v]
-            # (2) update stage_id, dynamic node weight
-            v.stage_id = dst
-            node_weights.recalculate_weight(v)
-            # (3) add new weight to partition_volumes
+            partition_volumes[v.stage_id] -= node_weights[v]
             partition_volumes[dst] += node_weights[v]
-            connections.move_node(v, src, dst)
+            connections.move_node(v, dst)
     else:
         gain_function = calculate_stage_time_gain
 
         def update_function(v, dst):
-            src = v.stage_id
             update_stage_times(v, dst, node_weights, edge_weights,
                                partition_volumes)
-            connections.move_node(v, src, dst)
+            connections.move_node(v, dst)
 
     state = PartitionState(edge_weights, node_weights, partition_volumes,
                            L_max)
@@ -195,29 +145,23 @@ def simple_moves(partition_volumes: Dict[int, float],
     # we use 0 based indexing
     k = len(partition_volumes) - 1
 
-    # NOTE: can turn this off if no dynamic weights.
-    my_check_balance_with_lookhead = partial(
-        check_balance_with_lookhead,
-        node_weights=node_weights,
-        partition_volumes=partition_volumes,
-        L_max=L_max)
-
     nodes = list(node_weights.keys())
     for _ in range(rounds):
         changed = False
+
         random.shuffle(nodes)
         # O(E)
         for n in nodes:
             gain_left = -np.inf
-            if (n.stage_id > 0) and (not connections.has_in_connection(
-                    n, n.stage_id)) and my_check_balance_with_lookhead(
-                        n, n.stage_id - 1):
+            if (n.stage_id > 0
+                ) and (not connections.has_in_connection(n, n.stage_id)) and (
+                    (partition_volumes[n.stage_id - 1] + node_weights[n]) < L_max):
                 gain_left = gain_function(n, n.stage_id - 1, state)
 
             gain_right = -np.inf
-            if (n.stage_id < k) and (not connections.has_out_connection(
-                    n, n.stage_id)) and my_check_balance_with_lookhead(
-                        n, n.stage_id + 1):
+            if (n.stage_id < k
+                ) and (not connections.has_out_connection(n, n.stage_id)) and (
+                    (partition_volumes[n.stage_id + 1] + node_weights[n]) < L_max):
                 gain_right = gain_function(n, n.stage_id + 1, state)
 
             moves = defaultdict(list)
@@ -254,13 +198,7 @@ def advanced_moves(partition_volumes: Dict[int, float],
         gain_function = calculate_edge_gain
 
         def update_function(v, dst):
-            src = v.stage_id
-            # (1) remove old weight from partition_volumes
-            partition_volumes[src] -= node_weights[v]
-            # (2) update stage_id, dynamic node weight
-            v.stage_id = dst
-            node_weights.recalculate_weight(v)
-            # (3) add new weight to partition_volumes
+            partition_volumes[v.stage_id] -= node_weights[v]
             partition_volumes[dst] += node_weights[v]
     else:
         gain_function = calculate_stage_time_gain
@@ -271,12 +209,6 @@ def advanced_moves(partition_volumes: Dict[int, float],
 
     state = PartitionState(edge_weights, node_weights, partition_volumes,
                            L_max)
-
-    my_check_balance_with_lookhead = partial(
-        check_balance_with_lookhead,
-        node_weights=node_weights,
-        partition_volumes=partition_volumes,
-        L_max=L_max)
 
     nodes = list(node_weights.keys())
     for _ in range(rounds):
@@ -295,13 +227,13 @@ def advanced_moves(partition_volumes: Dict[int, float],
                 continue
 
             moves = defaultdict(list)
-            for j in range(A, B + 1):
-                if j == n.stage_id:
+            for dst in range(A, B + 1):
+                if dst == n.stage_id:
                     continue
-                gain = gain_function(n, j, state)
-                if not my_check_balance_with_lookhead(n, j):
-                    gain = -np.inf
-                moves[gain].append(j)
+                edge_gain = gain_function(n, dst, state)
+                if (partition_volumes[dst] + node_weights[n]) > L_max:
+                    edge_gain = -np.inf
+                moves[edge_gain].append(dst)
 
             max_gain = max(moves.keys())
             if max_gain < 0:
@@ -312,7 +244,7 @@ def advanced_moves(partition_volumes: Dict[int, float],
             dst = random.sample(best_moves, 1)[0]
 
             update_function(n, dst)
-            n.stage_id = dst  # TODO: unneccesary
+            n.stage_id = dst
 
         if not changed:
             break
@@ -332,13 +264,7 @@ def global_moves(partition_volumes: Dict[int, float],
         gain_function = calculate_edge_gain
 
         def update_function(v, dst):
-            src = v.stage_id
-            # (1) remove old weight from partition_volumes
-            partition_volumes[src] -= node_weights[v]
-            # (2) update stage_id, dynamic node weight
-            v.stage_id = dst
-            node_weights.recalculate_weight(v)
-            # (3) add new weight to partition_volumes
+            partition_volumes[v.stage_id] -= node_weights[v]
             partition_volumes[dst] += node_weights[v]
     else:
         gain_function = calculate_stage_time_gain
@@ -350,15 +276,9 @@ def global_moves(partition_volumes: Dict[int, float],
     state = PartitionState(edge_weights, node_weights, partition_volumes,
                            L_max)
 
-    my_check_balance_with_lookhead = partial(
-        check_balance_with_lookhead,
-        node_weights=node_weights,
-        partition_volumes=partition_volumes,
-        L_max=L_max)
-
     quotient_graph = QuotientGraph(node_weights.keys())
     nodes = list(node_weights.keys())
-    
+
     for _ in range(rounds):
         changed = False
         random.shuffle(nodes)
@@ -369,10 +289,9 @@ def global_moves(partition_volumes: Dict[int, float],
                 if dst == n.stage_id:
                     continue
 
-                # TODO: integrate with dynamic
                 gain = gain_function(n, dst, state)
-                if my_check_balance_with_lookhead(
-                        n, dst) or quotient_graph.move_creates_cycle(n, dst):
+                if ((partition_volumes[dst] + node_weights[n]) >
+                        L_max) or quotient_graph.move_creates_cycle(n, dst):
                     gain = -np.inf
 
                 moves[gain].append(dst)
@@ -385,8 +304,8 @@ def global_moves(partition_volumes: Dict[int, float],
             best_moves = moves[max_gain]
             dst = random.sample(best_moves, 1)[0]
 
-            quotient_graph.move_node(n, dst)
             update_function(n, dst)
+            quotient_graph.move_node(n, dst)
 
         if not changed:
             break
@@ -412,26 +331,18 @@ def Fiduccia_Mattheyses_moves(partition_volumes: Dict[int, float],
         gain_function = calculate_edge_gain
 
         def update_function(v, dst):
-            src = v.stage_id
-            # (1) remove old weight from partition_volumes
-            partition_volumes[src] -= node_weights[v]
-            # (2) update stage_id, dynamic node weight
-            v.stage_id = dst
-            node_weights.recalculate_weight(v)
-            # (3) add new weight to partition_volumes
+            partition_volumes[v.stage_id] -= node_weights[v]
             partition_volumes[dst] += node_weights[v]
-
-            partitions[src].discard(v)
+            partitions[v.stage_id].discard(v)
             partitions[dst].add(v)
     else:
         gain_function = calculate_stage_time_gain
 
         def update_function(v, dst):
-            src = v.stage_id
             update_stage_times(v, dst, node_weights, edge_weights,
                                partition_volumes)
 
-            partitions[src].discard(v)
+            partitions[v.stage_id].discard(v)
             partitions[dst].add(v)
 
     state = PartitionState(edge_weights, node_weights, partition_volumes,
@@ -443,12 +354,6 @@ def Fiduccia_Mattheyses_moves(partition_volumes: Dict[int, float],
                                         best_objective)
 
     all_blocks = list(partition_volumes.keys())
-
-    my_check_balance_with_lookhead = partial(
-        check_balance_with_lookhead,
-        node_weights=node_weights,
-        partition_volumes=partition_volumes,
-        L_max=L_max)
 
     for _ in range(rounds):
         active_blocks = set(all_blocks)
@@ -484,13 +389,13 @@ def Fiduccia_Mattheyses_moves(partition_volumes: Dict[int, float],
                 # check if the move is still valid
                 if node in locked_nodes:
                     continue
-                elif not my_check_balance_with_lookhead(node, dst):
+                elif (partition_volumes[dst] + node_weights[node]) > L_max:
                     continue
                 elif (node.stage_id == A) and any(o.stage_id < B
-                                                  for o in node.out_edges):
+                                              for o in node.out_edges):
                     continue
                 elif (node.stage_id == B) and any(i.stage_id > A
-                                                  for i in node.in_edges):
+                                              for i in node.in_edges):
                     continue
 
                 locked_nodes.add(node)
@@ -516,13 +421,13 @@ def Fiduccia_Mattheyses_moves(partition_volumes: Dict[int, float],
                 if src == A:
                     for i in node.in_edges:
                         if i.stage_id == A and all(o.stage_id >= B
-                                                   for o in i.out_edges):
+                                               for o in i.out_edges):
                             gain = gain_function(i, B, state)
                             candidate_moves.push_task(gain, (i, B))
                 else:
                     for o in node.out_edges:
                         if o.stage_id == B and all(i.stage_id <= A
-                                                   for i in o.in_edges):
+                                               for i in o.in_edges):
                             gain = gain_function(o, A, state)
                             candidate_moves.push_task(gain, (o, A))
 
@@ -547,23 +452,16 @@ def calculate_stage_time_gain(v: SimpleNode, dest: int,
     # strict improvement in slowest stage time is too strict
     # most of moves will have a zero gain
 
-    # TODO updating stage time is expensive O(d(v))
+    #TODO updating stage time is expensive O(d(v))
     # think about how to improve amortized complexity
 
     # create copy to not alter the original
-    src = v.stage_id
     tmp = dict(state.partition_volumes)
 
     cur_max = max(tmp.values())
-    # NOTE: just_lookahead=True assures that
-    # node_weights, state.edge_weights, and v.stage_id return won't change after the call
-    # NOTE: when not using dynamic weights this can be left as False.
-    edge_gain = update_stage_times(v,
-                                   dest,
-                                   state.node_weights,
-                                   state.edge_weights,
-                                   tmp,
-                                   just_lookahead=True)
+
+    edge_gain = update_stage_times(v, dest, state.node_weights,
+                                   state.edge_weights, tmp)
 
     new_max = max(tmp.values())
 
@@ -572,135 +470,55 @@ def calculate_stage_time_gain(v: SimpleNode, dest: int,
     return DoublePriority(stage_gain, edge_gain)
 
 
-def update_stage_times(v: SimpleNode,
-                       dest: int,
-                       node_weights: Dict[SimpleNode, float],
+def update_stage_times(v: SimpleNode, dest: int, node_weights: Dict[SimpleNode,
+                                                                    float],
                        edge_weights: Dict[Tuple[SimpleNode, SimpleNode],
                                           float],
-                       stage_times: Dict[int, float],
-                       just_lookahead=False) -> float:
-    # NOTE: just_lookahead=True will return ONLY stage_id, edge and node weights to original,
-    # stage times will still change.
-    src = v.stage_id
-    if just_lookahead:
-        old_node_weight = node_weights[v]
-        old_edge_weights = dict()  # edge -> old_weight
-
-    # (1) remove old weight from partition_volumes
-    stage_times[src] -= node_weights[v]
-    # (2) update stage_id, dynamic node weight
-    v.stage_id = dest
-    node_weights.recalculate_weight(v)
-    # (3) add new weight to partition_volumes
+                       stage_times: Dict[int, float]) -> float:
+    stage_times[v.stage_id] -= node_weights[v]
     stage_times[dest] += node_weights[v]
 
     edge_gain = 0
 
     for u in chain(v.in_edges, v.out_edges):
-        edge = (u, v) if u.id < v.id else (v, u)
-        # Handle dynamic bandwidth change from changing stages
-        v.stage_id = src
-        w_old = edge_weights[edge]
-        if just_lookahead:
-            old_edge_weights[edge] = w_old
-        v.stage_id = dest
-        edge_weights.recalculate_weight(edge)
-        w_new = edge_weights[edge]
+        if u.id < v.id:
+            w = edge_weights[(u, v)]
+        else:
+            w = edge_weights[(v, u)]
 
         # record destinations so we won't overcount comm
         # only once per destination stage
-        # (v->o1 and v->o2 counted once if o1 and o2 are on same stage)
         comms = set()
-        if u.stage_id == src:
+        if u.stage_id == v.stage_id:
             # u and v were at same partition
-            # move adds comm, less gain
-            if (src, w_new, dest, w_new) in comms:
+            # move adds comm less gain
+            if (v.stage_id, w, dest, w) in comms:
                 continue
-            comms.add((src, w_new, dest, w_new))
-            edge_gain -= w_new
+            comms.add((v.stage_id, w, dest, w))
+            edge_gain -= w
         elif u.stage_id == dest:
             # u and v will be at same partition
-            # move reduces comm, more gain
-            if (src, -w_old, dest, -w_old) in comms:
+            # move reduces comm more gain
+            if (v.stage_id, -w, dest, -w) in comms:
                 continue
-            comms.add((src, -w_old, dest, -w_old))
-            edge_gain += w_old
+            comms.add((v.stage_id, -w, dest, -w))
+            edge_gain += w
         else:
             # u and v were and will be at different partitions
             # move comm from src to dst no gain
-            if (src, -w_old, dest, w_new) in comms:
+            if (v.stage_id, -w, dest, w) in comms:
                 continue
-            comms.add((src, -w_old, dest, w_new))
+            comms.add((v.stage_id, -w, dest, w))
 
-        # FIXME: it adds double communication to both partitions
-        # In practice it should add to 1 send activations and 1 send activations gradients.
         for p0, comm0, p1, comm1 in comms:
             stage_times[p0] += comm0
             stage_times[p1] += comm1
-
-    # FIXME: this is turned off because with it speedup for T5 went from 3.4 to 3.2
-    # So maybe I have some bug.
-    BIDERECTIONAL = False
-    if BIDERECTIONAL:
-        # HACK: Another pass for the backward edges.
-        for u in chain(v.in_edges, v.out_edges):
-            edge = (u, v) if u.id < v.id else (v, u)
-            bwd_edge = (edge[1], edge[0])
-            del edge
-            # Handle dynamic bandwidth change from changing stages
-            v.stage_id = src
-            w_old = edge_weights[bwd_edge]
-            if just_lookahead:
-                old_edge_weights[bwd_edge] = w_old
-            v.stage_id = dest
-            edge_weights.recalculate_weight(bwd_edge)
-            w_new = edge_weights[bwd_edge]
-
-            # record destinations so we won't overcount comm
-            # only once per destination stage
-            # (v->o1 and v->o2 counted once if o1 and o2 are on same stage)
-            comms = set()
-            if u.stage_id == src:
-                # u and v were at same partition
-                # move adds comm, less gain
-                if (src, w_new, dest, w_new) in comms:
-                    continue
-                comms.add((src, w_new, dest, w_new))
-                edge_gain -= w_new
-            elif u.stage_id == dest:
-                # u and v will be at same partition
-                # move reduces comm, more gain
-                if (src, -w_old, dest, -w_old) in comms:
-                    continue
-                comms.add((src, -w_old, dest, -w_old))
-                edge_gain += w_old
-            else:
-                # u and v were and will be at different partitions
-                # move comm from src to dst no gain
-                if (src, -w_old, dest, w_new) in comms:
-                    continue
-                comms.add((src, -w_old, dest, w_new))
-
-            # FIXME: it adds double communication to both partitions
-            # In practice it should add to 1 send activations and 1 send activations gradients.
-            for p0, comm0, p1, comm1 in comms:
-                stage_times[p0] += comm0
-                stage_times[p1] += comm1
-
-    if just_lookahead:
-        # Return to prev
-        v.stage_id = src
-        node_weights[v] = old_node_weight
-        for edge, w_old in old_edge_weights.items():
-            edge_weights[edge] = w_old
 
     return edge_gain
 
 
 def calculate_edge_gain(v: SimpleNode, dest: int,
                         state: PartitionState) -> float:
-    # TODO: Handle dynamic bandwidth change from changing stages.
-    # see update_stage_times.
     edge_weights = state.edge_weights
     gain = 0
     stages = set()
@@ -760,21 +578,15 @@ def calculate_stage_times(
     for n, w in node_weights.items():
         stage_times[n.stage_id] += w
 
-        # record sent activation only once per destination
-        # that is : n->o1 and n->o2 is calculated only once.
+        # record sent activation only once per destination stage
         destinations = set()
         for o in n.out_edges:
             if (o.stage_id == n.stage_id) or (o.stage_id in destinations):
                 continue
-            # directed weight
+            e = edge_weights[(n, o)]
             destinations.add(o.stage_id)
-            if USING_DIRECTED_EDGES:
-                stage_times[n.stage_id] += edge_weights[(n, o)]
-                stage_times[o.stage_id] += edge_weights[(o, n)]
-            else:
-                e = edge_weights[(n, o)]
-                stage_times[n.stage_id] += e
-                stage_times[o.stage_id] += e
+            stage_times[n.stage_id] += e
+            stage_times[o.stage_id] += e
 
     return dict(stage_times)
 
@@ -793,7 +605,6 @@ Solution = namedtuple("Solution",
 
 ###################################################################################################
 
-
 def acyclic_partition(
         graph: Graph,
         k: int,
@@ -801,12 +612,10 @@ def acyclic_partition(
         node_weight_function: Optional[NodeWeightFunction] = None,
         edge_weight_function: Optional[EdgeWeightFunction] = None,
         meta_algorithm: META_ALGORITH = META_ALGORITH.SINGLE_LEVEL,
-        objective: Objective = Objective.STAGE_TIME,
+        objective: Objective = Objective.EDGE_CUT,
         rounds: int = 10,
         allocated_seconds: int = 20,
-        use_layers_graph: bool = True,
-        use_dynamic_node_weights=False,
-        use_dynamic_edge_weights=False,
+        use_layers_graph: bool = True
 ) -> Tuple[Graph, float, Dict[int, float]]:
     worker_args = [
         dict(graph=graph.state(),
@@ -819,8 +628,6 @@ def acyclic_partition(
              rounds=rounds,
              allocated_seconds=allocated_seconds,
              objective=objective,
-             use_dynamic_node_weights=use_dynamic_node_weights,
-             use_dynamic_edge_weights=use_dynamic_edge_weights,
              use_layers_graph=use_layers_graph) for alg in ALGORITHM
     ]
 
@@ -861,6 +668,8 @@ def acyclic_partition(
 
     for n in graph.nodes:
         n.stage_id = partition[n.id]
+
+    assert graph.n_stages == k
 
     cutting_edges = 0
     cutting_scopes = []
@@ -913,7 +722,7 @@ def worker(kwargs) -> Tuple[Solution,List[Dict[int,int]],List[Dict[int,int]]]:
                         None, None, None).load_state(kwargs['graph']) 
     meta_algorithm = kwargs.pop("meta_algorithm")
     allocated_seconds = kwargs.pop("allocated_seconds")
-    objective = kwargs['objective']
+    objective = kwargs['objective']    
     start = time.time()
     best_solution = Solution(None, np.inf, np.inf, None, None)
     steps = 0
@@ -968,8 +777,6 @@ def single_level_partitioning(
     edge_weight_function: Optional[EdgeWeightFunction] = None,
     objective: Objective = Objective.EDGE_CUT,
     rounds: int = 10,
-    use_dynamic_node_weights=False,
-    use_dynamic_edge_weights=False,
     use_layers_graph=True
 ) -> Tuple[Dict[int,int],Solution, Dict[SimpleNode, float], Dict[Tuple[SimpleNode,
                                                          SimpleNode], float]]:
@@ -984,26 +791,24 @@ def single_level_partitioning(
     if edge_weight_function is None:
         edge_weight_function = lambda u, v: 1
 
-    node_weights_class = DynamicNodeWeights if use_dynamic_node_weights else StaticNodeWeights
+    node_weights = dict()
+    edge_weights = dict()
 
-    edge_weights_class = DynamicEdgeWeights if use_dynamic_edge_weights else StaticEdgeWeights
+    for n in work_graph.nodes:
+        node_weights[n] = node_weight_function(n)
+        for o in n.out_edges:
+            edge_weights[(n, o)] = edge_weight_function(n, o)
 
-    node_weights = node_weights_class.from_graph(work_graph,
-                                                 node_weight_function)
-    edge_weights = edge_weights_class.from_graph(
-        work_graph, edge_weight_function, backward_edged=USING_DIRECTED_EDGES)
-
-    initial_sol = initial_divide(work_graph, k, node_weights)
+    init_sol = initial_divide(work_graph, k, node_weights)
 
     if objective is Objective.EDGE_CUT:
         partition_volumes = calculate_partition_volumes(k, node_weights)
+        L_max = (1 + epsilon) * math.ceil(sum(partition_volumes.values()) / k)
     else:
         partition_volumes = calculate_stage_times(node_weights, edge_weights)
-
-    # FIXME: for stage_time this has undesired outcome of merging stages
-    # as we take also comm into account and not just computation
-    L_max = (1 + epsilon) * math.ceil(sum(partition_volumes.values()) / k)
-
+        #TODO do not enforce balance total volume is not static (depends on comm)
+        L_max = np.inf
+    
     msg = "\n".join([
         "-I- balanced partitioning is not possible",
         f"   max allowed weight: {L_max:.2f}",
@@ -1035,13 +840,15 @@ def single_level_partitioning(
     # recalculate partition metrics
     if use_layers_graph:
         graph.induce_layer_partition(work_graph, layers_to_original)
-        # calculate metrics on original graph
-        node_weights = node_weights_class.from_graph(graph,
-                                                     node_weight_function)
-        edge_weights = edge_weights_class.from_graph(
-            graph, edge_weight_function, backward_edged=USING_DIRECTED_EDGES)
+        #calculate metrics on original graph
+        node_weights = dict()
+        edge_weights = dict()
+        for n in graph.nodes:
+            node_weights[n] = node_weight_function(n)
+            for o in n.out_edges:
+                edge_weights[(n, o)] = edge_weight_function(n, o)
 
-    # calculate metrics
+    #calculate metrics
     if objective is Objective.EDGE_CUT:
         partition_volumes = calculate_partition_volumes(k, node_weights)
     else:
@@ -1052,31 +859,22 @@ def single_level_partitioning(
         assert graph.n_stages == k
         QuotientGraph(graph.nodes).selfcheck()
 
-    return initial_sol,Solution({n.id: n.stage_id
+    return init_sol,Solution({n.id: n.stage_id
                      for n in graph.nodes}, edge_cut,
                     max(partition_volumes.values()), partition_volumes,
                     algorithm), node_weights, edge_weights
 
 
 def multilevel_partitioning(
-    graph: Graph,
-    algorithm: ALGORITHM = ALGORITHM.FIDUCCIA_MATTHEYSES_MOVES,
-    k: int = 4,
-    epsilon: float = 0.1,
-    node_weight_function: Optional[NodeWeightFunction] = None,
-    edge_weight_function: Optional[EdgeWeightFunction] = None,
-    objective: Objective = Objective.EDGE_CUT,
-    rounds: int = 10,
-    use_layers_graph=True,
-    use_dynamic_node_weights=False,
-    use_dynamic_edge_weights=False,
-) -> Tuple[Dict[int,int],Solution]:
-    if use_dynamic_node_weights or use_dynamic_edge_weights:
-        raise NotImplementedError("multilevel partitioning does not support dynamic weights")
-    # Turn off all extra behavior
-    global USING_DIRECTED_EDGES
-    USING_DIRECTED_EDGES = False
-    ContractedGraph.USING_DIRECTED_EDGES = False
+        graph: Graph,
+        algorithm: ALGORITHM = ALGORITHM.FIDUCCIA_MATTHEYSES_MOVES,
+        k: int = 4,
+        epsilon: float = 0.1,
+        node_weight_function: Optional[NodeWeightFunction] = None,
+        edge_weight_function: Optional[EdgeWeightFunction] = None,
+        objective: Objective = Objective.EDGE_CUT,
+        rounds: int = 10,
+        use_layers_graph=True) -> Tuple[Dict[int,int],Solution]:
 
     initial_solution,single_level_solution, node_weights, edge_weights = single_level_partitioning(
         graph,
@@ -1090,11 +888,13 @@ def multilevel_partitioning(
         use_layers_graph=use_layers_graph)
     partition_volumes = single_level_solution.volumes
     
-    #TODO bad interaction with stage_time objective
-    L_max = (1 + epsilon) * math.ceil(sum(partition_volumes.values()) / k)
+    if objective is Objective.EDGE_CUT:
+        L_max = (1 + epsilon) * math.ceil(sum(partition_volumes.values()) / k)
+    else:
+        #TODO do not enforce balance total volume is not static (depends on comm)
+        L_max = np.inf
 
-    hierarchy = coarsening(graph, node_weights, edge_weights,
-                           node_weight_function, edge_weight_function)
+    hierarchy = coarsening(graph, node_weights, edge_weights)
     # iterate in reverse order to coarsening
     # from smallest graph to largest graph
     for fine_graph, matching, coarse_graph in reversed(hierarchy):
@@ -1125,8 +925,6 @@ def multilevel_partitioning(
 
 
 ###################################################################################################
-
-
 
 
 def dedup_dicts(items: List[dict])->List[dict]:
