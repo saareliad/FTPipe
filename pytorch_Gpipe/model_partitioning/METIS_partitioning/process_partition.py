@@ -59,8 +59,9 @@ def post_process_partition(graph: Graph,edge_weight_function, verbose_on_error=T
     if assert_output_types:
         assert is_valid, error
     else:
-        print("Output between partitons is tricky, but allowing this")
-        print_all_problematic_outputs_between_partitions(graph,edge_weight_function)
+        if not is_valid:
+            print("Output between partitons is tricky, but allowing this")
+            print_all_problematic_outputs_between_partitions(graph,edge_weight_function)
 
     return graph
 

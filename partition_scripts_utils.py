@@ -28,7 +28,7 @@ class ParsePartitioningOpts:
                             help="bwd to fwd ratio for heuristics")
 
         parser.add_argument(
-            "--auto_infer_node_bwd_to_fwd_ratio",
+            "--auto_infer_node_bwd_to_fwd_ratio", 
             action='store_true',
             default=False,
             help=

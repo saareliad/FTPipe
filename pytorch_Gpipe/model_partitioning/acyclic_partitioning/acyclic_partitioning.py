@@ -22,7 +22,8 @@ DEBUG = False
 ###################################################################################################
 # Turned off whenver wanted (currently for multilvevl).
 # Can do it nicer, e.g infer from given edge_weight_function
-USING_DIRECTED_EDGES = True
+# TODO: currently using undirected edges until it works otherwise
+USING_DIRECTED_EDGES = False
 
 
 class META_ALGORITH(enum.Enum):

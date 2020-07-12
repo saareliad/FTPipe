@@ -331,9 +331,7 @@ def parse_cli():
         bw_str = str(args.bw).replace(".", "_")
         model_str = str(args.model_name_or_path).replace("-", "_")
         tied = "tied" if args.stateless_tied else "untied"
-        if tied:
-            model_str += "_tied"
-
+        model_str += f"_{tied}"
 
         args.output_file = f"{model_str}_{args.n_partitions}p_bw{bw_str}"
 

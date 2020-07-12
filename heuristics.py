@@ -29,16 +29,19 @@ _METIS = {
     # '_name': 'metis',
 }
 
+
+_ACYCLEIC_EDGE_FUNCTION = "UndirectedEdgeWeightFunction"
+
 # TODO: write working dedicated heuristics which model what we want.
 _ACYCLIC = {  # None-dynamic
     'node': "NodeWeightFunction",  # FIXME
-    'edge': "DirectedEdgeWeightFunction",
+    'edge': "UndirectedEdgeWeightFunction",
     # '_name': 'acyclic',
 }
 
 _ACYCLIC_AUTOINFER = {
     'node': "NodeWeightFunctionWithRatioAutoInfer",  # FIXME
-    'edge': "DirectedEdgeWeightFunction",
+    'edge': "UndirectedEdgeWeightFunction",
     # '_name': 'acyclic_autoinfer',
 }
 
