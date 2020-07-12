@@ -209,7 +209,8 @@ def get_input_squad1(args, tokenizer, model, analysis=False):
                 "decoder_attention_mask":decoder_attention_mask,
                 'lm_labels': lm_labels,
             }
-
+            
+            # FIXME: according to code it should be dtype isntead of device
             if self.precompute_masks:
                 # precomputed masks
                 inverted_encoder_attention_mask = get_inverted_encoder_attention_mask(input_ids.size(),attention_mask,attention_mask.device)
@@ -247,7 +248,7 @@ def get_input_squad1(args, tokenizer, model, analysis=False):
     return batch
 
 
-def make_nlp_train_ds(train_dataset, model):
+def make_nlp_train_ds(train_dataset, model, precompute_masks=False):
     input_ids = torch.stack(
         [example['input_ids'] for example in train_dataset])
     lm_labels = torch.stack(
@@ -260,6 +261,16 @@ def make_nlp_train_ds(train_dataset, model):
 
     decoder_input_ids = model._shift_right(lm_labels)
     
+
+    # TODO: replace to dtype 
+    # TODO: then test it works doing it at once for all dataset.
+    # at first glance it should work acording to code
+    if precompute_masks:
+        inverted_encoder_attention_mask = get_inverted_encoder_attention_mask(input_ids.size(),attention_mask,attention_mask.device)
+        attention_mask = get_attention_mask(input_ids.size(),attention_mask,attention_mask.device,is_decoder=False)    
+        decoder_attention_mask = get_attention_mask(decoder_input_ids.size(),decoder_attention_mask,decoder_attention_mask.device,is_decoder=True)
+
+
     # NOTE this is according to parameter order in T5. 
     # Order matters
     d = {}
@@ -268,6 +279,7 @@ def make_nlp_train_ds(train_dataset, model):
     d['decoder_input_ids'] = decoder_input_ids
     d['decoder_attention_mask'] = decoder_attention_mask
     d['lm_labels'] = lm_labels
+    # TODO: add precomputed according to correct order
     return TensorDataset(*[torch.tensor(x) for x in d.values()])
 
 
