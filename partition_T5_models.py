@@ -177,7 +177,8 @@ def get_input_squad1(args, tokenizer, model, analysis=False):
 
     # NOTE: slightly changed becase we want to pin memory and huggingface don't do it
     @dataclass
-    class T2TDataCollator(DataCollator):
+    class T2TDataCollator():
+        # NOTE: in transformers 3.02 they changed it to function so it can't be subclassed.
         def __init__(self,precompute_masks):
             super(T2TDataCollator,self).__init__()
             self.precompute_masks = precompute_masks
@@ -234,12 +235,13 @@ def get_input_squad1(args, tokenizer, model, analysis=False):
     # def collate_wrapper(batch):
     #     return T2TDataCollator(batch)
 
-    # collate_fn = T2TDataCollator().collate_batch
+    collate_fn = T2TDataCollator(args.precompute_masks).collate_batch
+
     dl = torch.utils.data.DataLoader(
         dataset=train_dataset,
         shuffle=True,
         batch_size=batch_size,
-        collate_fn=T2TDataCollator(args.precompute_masks).collate_batch,
+        collate_fn=collate_fn,
         pin_memory=False)
 
     batch = next(iter(dl))
