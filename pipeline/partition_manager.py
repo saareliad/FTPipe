@@ -241,7 +241,7 @@ class SinglePartitionManager:
         if self.is_last_partition:
             raise NotImplementedError()
 
-        if self.is_problematic:
+        if self.is_problematic:  # FIXME FIXME FIXME
             if self.PROBLEMATIC_POLICY == 'SAME':
                 if self.weight_predictor is None:
                     weight_stasher.set_problematic(forward=True,
@@ -286,7 +286,7 @@ class SinglePartitionManager:
         x, ctx = self.get_input_data_forward(batch_idx, num_batches)
 
         if (preload_input is not None) and self.is_last_partition:
-            x = (*x, *preload_input)
+            x = (*preload_input, *x)
 
         x = self.partition(x, batch_idx)
         # x = self.partition.unflatten_output(x)
@@ -534,7 +534,7 @@ class SinglePartitionManager:
 
             if self.gap_aware:
                 # Get delay and modify gradients.
-                if self.is_problematic:
+                if self.is_problematic:  # FIXME FIXME FIXME
                     # Take the maximal delay
                     mb = self.get_micro_batch(batch_idx)
                     delay = max([
