@@ -132,11 +132,13 @@ def get_input_squad1(args, tokenizer, model, analysis=False):
         input_encodings = tokenizer.batch_encode_plus(
             example_batch['input_text'],
             pad_to_max_length=True,
+            truncation=True,
             max_length=max_length
         )  # NOTE: I think this could be changed to 384 like bert to save memory.
         target_encodings = tokenizer.batch_encode_plus(
             example_batch['target_text'],
             pad_to_max_length=True,
+            truncation=True,
             max_length=16)
 
         encodings = {
@@ -182,8 +184,6 @@ def get_input_squad1(args, tokenizer, model, analysis=False):
         def __init__(self,precompute_masks):
             super(T2TDataCollator,self).__init__()
             self.precompute_masks = precompute_masks
-        # def __init__(self, batch):
-        #     self.batch = self.collate_batch(batch)
 
         def collate_batch(self, batch: List) -> Dict[str, torch.Tensor]:
             """
@@ -211,7 +211,6 @@ def get_input_squad1(args, tokenizer, model, analysis=False):
                 'lm_labels': lm_labels,
             }
             
-            # FIXME: according to code it should be dtype isntead of device
             if self.precompute_masks:
                 # precomputed masks
                 inverted_encoder_attention_mask = get_inverted_encoder_attention_mask(input_ids.size(),attention_mask,attention_mask.device)
@@ -224,16 +223,12 @@ def get_input_squad1(args, tokenizer, model, analysis=False):
                     "decoder_attention_mask":decoder_attention_mask,
                     "inverted_encoder_attention_mask":inverted_encoder_attention_mask
                 })
+            
+            # truncation=True`
+            if not args.lmhead:
+                del batch['lm_labels']
 
             return batch
-
-        # def pin_memory(self):
-        #     for v in self.batch.values():
-        #         v.pin_memory()
-        #     return self
-
-    # def collate_wrapper(batch):
-    #     return T2TDataCollator(batch)
 
     collate_fn = T2TDataCollator(args.precompute_masks).collate_batch
 
@@ -250,41 +245,6 @@ def get_input_squad1(args, tokenizer, model, analysis=False):
     return batch
 
 
-def make_nlp_train_ds(train_dataset, model, precompute_masks=False):
-    input_ids = torch.stack(
-        [example['input_ids'] for example in train_dataset])
-    lm_labels = torch.stack(
-        [example['target_ids'] for example in train_dataset])
-    lm_labels[lm_labels[:, :] == 0] = -100
-    attention_mask = torch.stack(
-        [example['attention_mask'] for example in train_dataset])
-    decoder_attention_mask = torch.stack(
-        [example['target_attention_mask'] for example in train_dataset])
-
-    decoder_input_ids = model._shift_right(lm_labels)
-    
-
-    # TODO: replace to dtype 
-    # TODO: then test it works doing it at once for all dataset.
-    # at first glance it should work acording to code
-    if precompute_masks:
-        inverted_encoder_attention_mask = get_inverted_encoder_attention_mask(input_ids.size(),attention_mask,attention_mask.device)
-        attention_mask = get_attention_mask(input_ids.size(),attention_mask,attention_mask.device,is_decoder=False)    
-        decoder_attention_mask = get_attention_mask(decoder_input_ids.size(),decoder_attention_mask,decoder_attention_mask.device,is_decoder=True)
-
-
-    # NOTE this is according to parameter order in T5. 
-    # Order matters
-    d = {}
-    d['input_ids'] = input_ids
-    d['attention_mask'] = attention_mask
-    d['decoder_input_ids'] = decoder_input_ids
-    d['decoder_attention_mask'] = decoder_attention_mask
-    d['lm_labels'] = lm_labels
-    # TODO: add precomputed according to correct order
-    return TensorDataset(*[torch.tensor(x) for x in d.values()])
-
-
 T5_TASK_TO_GET_INPUT = {
     "dummy": get_input_dummy,
     'squad1': get_input_squad1,
@@ -293,7 +253,7 @@ T5_TASK_TO_GET_INPUT = {
 
 def get_input(args, tokenizer, model, analysis=False):
 
-    print(f"-I- geeting input for t5_task: {args.t5_task}")
+    print(f"-I- geting input for t5_task: {args.t5_task}")
     return T5_TASK_TO_GET_INPUT[args.t5_task](args, tokenizer, model, analysis)
 
 
@@ -346,6 +306,8 @@ def parse_cli():
         model_str = str(args.model_name_or_path).replace("-", "_")
         tied = "tied" if args.stateless_tied else "untied"
         model_str += f"_{tied}"
+        if args.lmhead:
+            model_str += "_lmhead"
 
         args.output_file = f"{model_str}_{args.n_partitions}p_bw{bw_str}"
 
