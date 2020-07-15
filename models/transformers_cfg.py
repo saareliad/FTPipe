@@ -3,15 +3,20 @@
 # TODO: replace with auto config & tokenizers
 from transformers import (GPT2Config, GPT2Tokenizer)
 from transformers import (BertConfig, BertTokenizer)
+from transformers import (RobertaConfig, RobertaTokenizer)
+from transformers import (T5Config, T5Tokenizer)
 from transformers import (AutoConfig, AutoTokenizer)
 
 from .normal.NLP_models import (GPT2LMHeadModel, GPT2Model,
                                 StatelessGPT2LMHeadModel)
-from .normal.NLP_models import StatelessGPT2LMHeadModel
 from .normal.NLP_models.modeling_bert_old import BertForQuestionAnswering
+
 # from .normal.NLP_models.modeling_roberta import RobertaForQuestionAnswering
 from .normal.NLP_models.modeling_roberta import RobertaForSequenceClassification
 from .normal.NLP_models.modeling_bert import BertForSequenceClassification
+
+from .normal.NLP_models.modeling_t5 import T5ForConditionalGeneration
+from .normal.NLP_models.modeling_t5_tied_weights import T5ForConditionalGeneration as StatelesT5ForConditionalGeneration
 
 import sys
 from inspect import getmembers, isfunction
@@ -24,7 +29,9 @@ MODEL_TYPES = {
     'bert_squad_old': (BertConfig, BertForQuestionAnswering, BertTokenizer),
     'bert_glue': (BertConfig, BertForSequenceClassification, BertTokenizer),
     'roberta_glue':
-    (AutoConfig, RobertaForSequenceClassification, AutoTokenizer),
+    (RobertaConfig, RobertaForSequenceClassification, RobertaTokenizer),
+    't5':  (T5Config, T5ForConditionalGeneration, T5Tokenizer),
+    't5_stateless':  (T5Config, StatelesT5ForConditionalGeneration, T5Tokenizer),
 }
 
 # NOTE: some of these configs are just for this repo, see
@@ -55,6 +62,16 @@ def roberta_large_8p_bw11_0_mnli_glue():
 def bert_large_uncased_whole_word_masking_8p_bw11_0_async_mnli_glue():
     return dict(model_type='bert_glue',
                 model_name_or_path='bert-large-uncased-whole-word-masking',
+                do_lower_case=False,
+                output_past=False,
+                stateless_tied=False,
+                num_labels=3,
+                finetuning_task='mnli')
+
+
+def bert_base_uncased_4p_bw11_0_async_mnli_glue():
+    return dict(model_type='bert_glue',
+                model_name_or_path='bert-base-uncased',
                 do_lower_case=False,
                 output_past=False,
                 stateless_tied=False,
@@ -138,15 +155,9 @@ def gpt2_xl_p8_lm_untied_gpipe():
 #####################
 # T5
 ####################
-def t5_small_p4():
-    return dict(model_type='t5',
-                model_name_or_path='t5-small',
-                do_lower_case=False,
-                output_past=False,
-                stateless_tied=False)
 
 
-def t5_small_p3_squad1():
+def t5_small_untied_4p_bw12_squad1():
     return dict(model_type='t5',
                 model_name_or_path='t5-small',
                 do_lower_case=False,
@@ -156,10 +167,10 @@ def t5_small_p3_squad1():
                 explicitly_set_dict={
                     "output_only": True,
                     "output_attentions": False,
+                    "precomputed_masks": False,
                     "output_hidden_states": False
                 },
                 stateless_tied=False)
-
 
 functions_list = getmembers(
     sys.modules[__name__],

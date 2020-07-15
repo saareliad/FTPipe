@@ -80,7 +80,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             keep_buffers_alive = True
         elif keep_buffers_alive and dtypes_and_shapes_are_equal:
             raise ValueError(
-                f"got keep_buffers_alive=True, but can't because last batch has different size."
+                "got keep_buffers_alive=True, but can't because last batch has different size."
             )  # TODO: maybe more fine grained
 
         self.keep_buffers_alive = keep_buffers_alive
@@ -444,7 +444,6 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         g = self.recv_gradients(None, *args)
         # g = self.fix_after_recv(g)
         return g
-
 
     @staticmethod
     def futures_handler(is_first_partition, is_last_partition, stateless_tied, num_stages):

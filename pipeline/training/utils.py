@@ -18,4 +18,4 @@ def calc_norm(parameters, norm_type=2):
     # if clip_coef < 1:
     #     for p in parameters:
     #         p.grad.detach().mul_(clip_coef)
-    return total_norm
+    return total_norm.item()

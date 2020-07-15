@@ -1,7 +1,7 @@
 from .interface import BaseOutPutIsLossTrainer, BaseLossTrainer
 from .gap_aware_trainer import GapAwareTrainerBase
 
-
+# HACK we layzyly use BaseOutPutIsLossTrainer
 class GlueTrainer(BaseOutPutIsLossTrainer):
     PER_STEP_SCHEDULER = True
 
@@ -29,6 +29,7 @@ class GlueTrainer(BaseOutPutIsLossTrainer):
     def backprop_last_partition(self, x, labels, batch_size):
         # logits = x[0]
         loss = self.loss_fn(x, labels)  # FIXME...
+        # print(loss)
         return super().backprop_last_partition(loss)
         # if self.step_every > 1:
         #     loss /= self.step_every

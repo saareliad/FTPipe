@@ -284,6 +284,7 @@ def mp_queue_matrix(world_size):
 
 
 def mp_recv_queue_per_tensor(args_model, world_size, ushn="_grad"):
+    # FIXME FIXME: this whole thing did not assume nested tuples...
     pc = get_pipe_config(args_model)
     d = {}
     for i, s in pc.stages.items():

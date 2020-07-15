@@ -363,48 +363,6 @@ def get_dataloaders(args, explicit_separated_dataset=False, **kw):
     return train_dl, test_dl, samplers, extra
 
 
-def get_just_test_dataloader(args, explicit_separated_dataset=False, **kw):
-    dl_kw = dict()
-    if args.cpu:
-        dl_kw['pin_memory'] = False
-    else:
-        dl_kw['pin_memory'] = True
-
-    dl_kw['num_workers'] = args.num_data_workers
-    dl_kw['drop_last'] = True
-    if getattr(args, "dont_drop_last", False):
-        dl_kw['drop_last'] = False
-
-    if "lm" in args.task:
-        # NOTE: From the function get_wikitext2_raw_test_ds
-        tokenizer = kw.pop('tokenizer')
-        overwrite_cache = getattr(args, 'overwrite_cache', False)
-        dataset_keywords = dict(model_name_or_path=args.model_name_or_path,
-                                tokenizer=tokenizer,
-                                test_seq_len=args.test_seq_len,
-                                overwrite_cache=overwrite_cache)
-        collate = lm_collate_factory(tokenizer)
-        dl_kw['collate_fn'] = collate
-    elif 'squad' in args.task:
-        raise NotImplementedError()
-    else:
-        dataset_keywords = {}
-
-    if explicit_separated_dataset:
-        test_dl, sampler = get_separate_just_x_or_y_test_dl_from_args(
-            args,
-            verbose=False,
-            test_dataset_keywords=dataset_keywords,
-            **dl_kw)
-    else:
-        # Note: sometimes used to infer all parameters, (by all partitions).
-        raise NotImplementedError()
-        # test_dl, sampler = simplified_get_test_dl_from_args(
-        #     args, verbose=False, dataset_keywords=dataset_keywords, **dl_kw)
-
-    return test_dl, sampler
-
-
 def get_device(args, local_rank):
     if hasattr(args, "stage_to_device_map"):
         stage_to_device_map = args.stage_to_device_map
@@ -471,7 +429,8 @@ def get_optimizer_cls(args, has_gap_aware):
 
 
 def tuplify(listything):
-    if isinstance(listything, list): return tuple(map(tuplify, listything))
+    if isinstance(listything, list):
+        return tuple(map(tuplify, listything))
     if isinstance(listything, dict):
         return {k: tuplify(v) for k, v in listything.items()}
     return listything

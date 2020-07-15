@@ -48,6 +48,7 @@
             "request": "attach",
             "localRoot": "${workspaceRoot}",
             "remoteRoot": "${workspaceRoot}",
+            "subProcess": true,
             "port": 3000,
             // "secret": "my_secret",
             "host": "localhost"
@@ -58,6 +59,7 @@
             "request": "attach",
             "localRoot": "${workspaceRoot}",
             "remoteRoot": "${workspaceRoot}",
+            "subProcess": true,
             "port": 3001,
             // "secret": "my_secret",
             "host": "localhost"
@@ -68,6 +70,7 @@
             "request": "attach",
             "localRoot": "${workspaceRoot}",
             "remoteRoot": "${workspaceRoot}",
+            "subProcess": true,
             "port": 3002,
             // "secret": "my_secret",
             "host": "localhost"
@@ -78,6 +81,7 @@
             "request": "attach",
             "localRoot": "${workspaceRoot}",
             "remoteRoot": "${workspaceRoot}",
+            "subProcess": true,
             "port": 3003,
             // "secret": "my_secret",
             "host": "localhost"
@@ -88,6 +92,7 @@
             "request": "attach",
             "localRoot": "${workspaceRoot}",
             "remoteRoot": "${workspaceRoot}",
+            "subProcess": true,
             "port": 3004,
             // "secret": "my_secret",
             "host": "localhost"
@@ -98,6 +103,7 @@
             "request": "attach",
             "localRoot": "${workspaceRoot}",
             "remoteRoot": "${workspaceRoot}",
+            "subProcess": true,
             "port": 3005,
             // "secret": "my_secret",
             "host": "localhost"
@@ -108,6 +114,7 @@
             "request": "attach",
             "localRoot": "${workspaceRoot}",
             "remoteRoot": "${workspaceRoot}",
+            "subProcess": true,
             "port": 3006,
             // "secret": "my_secret",
             "host": "localhost"
@@ -118,6 +125,7 @@
             "request": "attach",
             "localRoot": "${workspaceRoot}",
             "remoteRoot": "${workspaceRoot}",
+            "subProcess": true,
             "port": 3007,
             // "secret": "my_secret",
             "host": "localhost"

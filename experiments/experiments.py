@@ -45,6 +45,13 @@ def save_experiment(run_name, out_dir, config, fit_res: Dict):
     output_filename = f'{os.path.join(out_dir, run_name)}.json'
     os.makedirs(out_dir, exist_ok=True)
     with open(output_filename, 'w') as f:
-        json.dump(output, f, indent=2)
+        try:
+            json.dump(output, f, indent=2)
+        except Exception as e:
+            print("-E- error saving experiment, printing for easier debug")
+            print("-"*40)
+            print(output)
+            print("-"*40)
+            raise e
 
     print(f'*** Output file {output_filename} written')

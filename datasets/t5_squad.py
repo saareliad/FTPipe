@@ -31,7 +31,7 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
     train_dataset = t5_preproc_nlp_squad_ds(train_dataset, tokenizer, max_length)
     train_dataset = nlp_to_tensor_dataset(train_dataset, config, subset_of_inputs)
 
-    split = nlp.Split.DEV
+    split = nlp.Split.VALIDATION
     dev_dataset = nlp.load_dataset('squad', split=split)
     dev_dataset = t5_preproc_nlp_squad_ds(dev_dataset, tokenizer, max_length)
     dev_dataset = nlp_to_tensor_dataset(dev_dataset, config, subset_of_inputs)
