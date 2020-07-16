@@ -20,3 +20,4 @@ squad2/*
 cached_train_bert*
 results/
 py_sbatch.sh
+glue_ds.*
