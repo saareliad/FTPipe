@@ -276,18 +276,6 @@ class SinglePartitionManager:
             x, *ctx = self.task.unpack_data_for_partition(next(self.dl_iter))
             return x, ctx
         x = self.comm_handler.get_data_forward(batch_idx, num_batches)
-
-        if isinstance(x, torch.Tensor):
-            pass
-        else:
-            t = []
-            for i, v in enumerate(x):
-                if not isinstance(v, torch.Tensor):
-                    t.append("non-tensor"+str(v))
-                else:
-                    t.append(v.shape)
-            print(f"stage {self.stage}: in: {t}")
-
         x, *ctx = self.task.unpack_data_for_partition(x)
         return x, ctx
 
@@ -296,24 +284,14 @@ class SinglePartitionManager:
                               num_batches,
                               preload_input=None):
         x, ctx = self.get_input_data_forward(batch_idx, num_batches)
+        # print_tensors(self.stage, x, "in")
 
         if (preload_input is not None) and self.is_last_partition:
             x = (*preload_input, *x)
 
         x = self.partition(x, batch_idx)
-        
-        if isinstance(x,torch.Tensor):
-            pass
-        else:
-            t = []
-            for i, v in enumerate(x):
-                if not isinstance(v, torch.Tensor):
-                    t.append("non-tensor"+str(v))
-                else:
-                    t.append(v.shape)
-            print(f"stage {self.stage}: out: {t}")
 
-        # x = self.partition.unflatten_output(x)
+        # print_tensors(self.stage, x, "out")
 
         request_objects = None
 
@@ -986,3 +964,17 @@ class GPipePartitionManager(SinglePartitionManager):
         if not self.trainer.PER_STEP_SCHEDULER:
             self.lr_scheduler.step()
         futures_handler.clean_train()
+
+
+def print_tensors(stage, x, in_or_out="out"):
+    if isinstance(x, torch.Tensor):
+        pass
+    else:
+        t = []
+        for i, v in enumerate(x):
+            if not isinstance(v, torch.Tensor):
+                t.append("non-tensor"+str(v))
+            else:
+                t.append(v.shape)
+        print(f"stage {stage}: {in_or_out}: {t}")
+
