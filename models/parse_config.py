@@ -61,9 +61,13 @@ class PartitioningConfigParser:
         self.unflatten_structure = tuple(v for i, v in self.unflatten_structure.items())
 
         # Change pipe_config to pipe_config with no tuples
+
         d = pipe_config.generate_config_without_nested(pipe_config.state_dict())
         pipe_config = pipe_config.fromDict(d)
         self.pipe_config = pipe_config
+        
+        from pprint import pprint
+        pprint(pipe_config.state_dict())
 
         self.model = model
         self.num_stages = len(pipe_config.stages)

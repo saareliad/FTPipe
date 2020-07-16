@@ -79,6 +79,16 @@ def bert_base_uncased_4p_bw11_0_async_mnli_glue():
                 finetuning_task='mnli')
 
 
+def roberta_base_8p_bw11_0_async_mnli_glue():
+    return dict(model_type='roberta_glue',
+                model_name_or_path='roberta-base',
+                do_lower_case=False,
+                output_past=False,
+                stateless_tied=False,
+                num_labels=3,
+                finetuning_task='mnli')
+
+
 def gpt2_p4_lm_untied():
     return dict(model_type='gpt2_lm_stateless',
                 model_name_or_path='gpt2',

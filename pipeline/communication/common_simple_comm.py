@@ -122,8 +122,7 @@ class SimpleCommBase(CommunicationHandlerBase):
             assert isinstance(v, bool)
             if isinstance(v, bool):
                 if not v:
-                    self.tensors_names_with_no_grad.add(i)
-        
+                    self.tensors_names_with_no_grad.add(i) 
         # Do not receive gradients for tensors which do not req grad.
         for i, v in outputs_req_grad.items():
             assert isinstance(v, bool)

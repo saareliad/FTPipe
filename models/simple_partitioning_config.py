@@ -348,7 +348,19 @@ class PipelineConfig():
                 if name in my_outputs:
                     outputs_req_grad[name] = r
         return outputs_req_grad
-    
+
+    def get_dataset_inputs_for_stage(self, stage_id: int):
+        """Enables auto-spliting the dataset """
+        d = {}
+        stage_inputs = self.stages[stage_id].inputs
+        model_inputs = self.model_inputs
+
+        for i, name in enumerate(model_inputs):
+            if name in stage_inputs:
+                d[name] = i
+       
+        return d
+
     @staticmethod
     def generate_config_without_nested(dict_config):
         config_without_nested = deepcopy(dict_config)

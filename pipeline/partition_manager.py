@@ -276,6 +276,18 @@ class SinglePartitionManager:
             x, *ctx = self.task.unpack_data_for_partition(next(self.dl_iter))
             return x, ctx
         x = self.comm_handler.get_data_forward(batch_idx, num_batches)
+
+        if isinstance(x, torch.Tensor):
+            pass
+        else:
+            t = []
+            for i, v in enumerate(x):
+                if not isinstance(v, torch.Tensor):
+                    t.append("non-tensor"+str(v))
+                else:
+                    t.append(v.shape)
+            print(f"stage {self.stage}: in: {t}")
+
         x, *ctx = self.task.unpack_data_for_partition(x)
         return x, ctx
 
@@ -289,6 +301,18 @@ class SinglePartitionManager:
             x = (*preload_input, *x)
 
         x = self.partition(x, batch_idx)
+        
+        if isinstance(x,torch.Tensor):
+            pass
+        else:
+            t = []
+            for i, v in enumerate(x):
+                if not isinstance(v, torch.Tensor):
+                    t.append("non-tensor"+str(v))
+                else:
+                    t.append(v.shape)
+            print(f"stage {self.stage}: out: {t}")
+
         # x = self.partition.unflatten_output(x)
 
         request_objects = None

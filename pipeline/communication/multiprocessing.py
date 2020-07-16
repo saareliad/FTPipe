@@ -5,6 +5,7 @@ import torch
 from collections import defaultdict
 import concurrent
 from functools import partial
+import sys
 
 filter_none = partial(filter, lambda t: t is not None)
 
@@ -197,56 +198,65 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
 
     def _recv_tensors_p2p(self, x, batch_idx, ranks_dict_items,
                           is_activations):
-        request_objects = []
-        for (tensor_name, receive_ranks) in ranks_dict_items:
-            assert len(receive_ranks) == 1
-            receive_rank = receive_ranks[0]
-            q = self.rcv_queues[self.rank][receive_rank]
+        try:
+            request_objects = []
+            for (tensor_name, receive_ranks) in ranks_dict_items:
+                assert len(receive_ranks) == 1
+                receive_rank = receive_ranks[0]
+                q = self.rcv_queues[self.rank][receive_rank]
 
-            if is_activations:
-                is_parameter = is_shared_parameter(tensor_name)
-                if is_parameter:
-                    # we don't use a reuse queue.
-                    if tensor_name in self.rcv_shared_parameters:
-                        # from dict
-                        p = self.rcv_shared_parameters[tensor_name]
-                    else:
-                        # recv first time
-                        p = q.get()
-                        self.rcv_shared_parameters[tensor_name] = p
-                    request_objects.append(p)
-                    continue
-            if self.verbose:
-                tensor_tag = self.tensor_tags[tensor_name] + \
-                    (self.TOTAL_TAGS * batch_idx)
-                self.logger.info(
-                    f"rank={self.local_rank}: q.get(), src={receive_rank}, tag={tensor_tag}, name={tensor_name}"
-                )
+                if is_activations:
+                    is_parameter = is_shared_parameter(tensor_name)
+                    if is_parameter:
+                        # we don't use a reuse queue.
+                        if tensor_name in self.rcv_shared_parameters:
+                            # from dict
+                            p = self.rcv_shared_parameters[tensor_name]
+                        else:
+                            # recv first time
+                            p = q.get()
+                            self.rcv_shared_parameters[tensor_name] = p
+                        request_objects.append(p)
+                        continue
+                if self.verbose:
+                    tensor_tag = self.tensor_tags[tensor_name] + \
+                        (self.TOTAL_TAGS * batch_idx)
+                    self.logger.info(
+                        f"rank={self.local_rank}: q.get(), src={receive_rank}, tag={tensor_tag}, name={tensor_name}"
+                    )
 
-            x = q.get()
+                x = q.get()
 
-            if self.verbose:
-                tensor_tag = self.tensor_tags[tensor_name] + \
-                    (self.TOTAL_TAGS * batch_idx)
-                self.logger.info(
-                    f"rank={self.local_rank}: done q.get(), src={receive_rank}, tag={tensor_tag}, name={tensor_name}"
-                )
+                if self.verbose:
+                    tensor_tag = self.tensor_tags[tensor_name] + \
+                        (self.TOTAL_TAGS * batch_idx)
+                    self.logger.info(
+                        f"rank={self.local_rank}: done q.get(), src={receive_rank}, tag={tensor_tag}, name={tensor_name}"
+                    )
 
+                if isinstance(x, torch.Tensor):
+                    # give the next buffer
+                    # FIXME: un-optimized clones
+                    # NOTE: this happends on the main stream FIXME?
+                    event = torch.cuda.Event(blocking=True)
+                    with torch.no_grad():
+                        t = x.clone()
+                        event.record()
 
-            # give the next buffer
-            # FIXME: un-optimized clones
-            # NOTE: this happends on the main stream FIXME?
-            event = torch.cuda.Event(blocking=True)
-            with torch.no_grad():
-                t = x.clone()
-                event.record()
+                    reuse_q = self.buffer_reuse_queues[receive_rank][self.rank]
+                    # sync clone event
+                    event.synchronize()
+                    reuse_q.put(None)  # TODO: better happen in callback
+                    request_objects.append(t)
+                else:
+                    reuse_q.put(None)
+                    request_objects.append(x)
+        
+        except Exception as e:
+            print("ERROR in recv thread")
+            print(sys.exc_info())
+            raise e
 
-            reuse_q = self.buffer_reuse_queues[receive_rank][self.rank]
-            # sync clone event
-            event.synchronize()
-            reuse_q.put(None)  # TODO: better happen in callback
-
-            request_objects.append(t)
             # TODO: we expect request object os it has to be changed.
         return request_objects
 
@@ -258,50 +268,58 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         return self._recv_tensors_p2p(x, batch_idx, self.grad_rcv_items, False)
 
     def _send_tensors_p2p(self, x, batch_idx, ranks_dict_items, is_grad):
-        # if is_grad:
-        #     print("sending gradients")
-        assert (len(x) == len(ranks_dict_items))
-        torch.cuda.set_device(self.device)  # needed for thread.
-        request_objects = []
+        try:
+            # if is_grad:
+            #     print("sending gradients")
+            assert (len(x) == len(ranks_dict_items))
+            torch.cuda.set_device(self.device)  # needed for thread.
+            request_objects = []
 
-        prev_work_event = torch.cuda.Event(blocking=True)
-        prev_work_event.record()
-        stream = self.grad_send_stream if is_grad else self.acti_send_stream
-        with torch.cuda.stream(stream):
-            prev_work_event.wait()
-        with torch.no_grad():
-            for tensor, (tensor_name, send_ranks) in zip(x, ranks_dict_items):
-                if isinstance(tensor, torch.nn.Parameter):
-                    for send_rank in send_ranks:
-                        if tensor_name not in self.send_shared_parameters or send_rank not in self.send_shared_parameters[
-                                tensor_name]:
-                            tensor.share_memory_()
+            prev_work_event = torch.cuda.Event(blocking=True)
+            prev_work_event.record()
+            stream = self.grad_send_stream if is_grad else self.acti_send_stream
+            with torch.cuda.stream(stream):
+                prev_work_event.wait()
+            with torch.no_grad():
+                for tensor, (tensor_name, send_ranks) in zip(x, ranks_dict_items):
+                    if isinstance(tensor, torch.nn.Parameter):
+                        for send_rank in send_ranks:
+                            if tensor_name not in self.send_shared_parameters or send_rank not in self.send_shared_parameters[
+                                    tensor_name]:
+                                tensor.share_memory_()
+                                out_q = self.rcv_queues[send_rank][self.rank]
+                                out_q.put(tensor)
+                                self.send_shared_parameters[tensor_name].add(
+                                    send_rank)
+                        continue
+                    if isinstance(tensor, torch.Tensor):
+
+                        tensor = tensor.detach()
+                        send_buffers = self.send_buffers[tensor_name]
+                        my_buff_reuse_queues = self.buffer_reuse_queues[self.rank]
+                        for send_rank in send_ranks:
+                            buff_q = my_buff_reuse_queues[send_rank]
+                            buff_q.get()  # sync with sender we can use the buffer
+                            with torch.cuda.stream(stream):
+                                out_q = self.rcv_queues[send_rank][self.rank]
+                                buff = send_buffers[send_rank]
+                                if False and buff is not None and tensor.size() == buff.size():
+                                    buff.copy_(tensor)
+                                else:
+                                    buff = tensor.to(self.local_rank_to_device_map[send_rank])
+                                    send_buffers[send_rank] = buff
+
+                                # pass to next process only when the copy is done
+                                event = torch.cuda.Event(blocking=True)
+                                stream.record_event(event)
+                                event.synchronize()
+                                out_q.put(buff)
+                    else:
+                        for send_rank in send_ranks:
+                            buff_q = my_buff_reuse_queues[send_rank]
+                            buff_q.get()  # sync with sender we can use the buffer
                             out_q = self.rcv_queues[send_rank][self.rank]
                             out_q.put(tensor)
-                            self.send_shared_parameters[tensor_name].add(
-                                send_rank)
-                    continue
-
-                tensor = tensor.detach()
-                send_buffers = self.send_buffers[tensor_name]
-                my_buff_reuse_queues = self.buffer_reuse_queues[self.rank]
-                for send_rank in send_ranks:
-                    buff_q = my_buff_reuse_queues[send_rank]
-                    buff_q.get()  # sync with sender we can use the buffer
-                    with torch.cuda.stream(stream):
-                        out_q = self.rcv_queues[send_rank][self.rank]
-                        buff = send_buffers[send_rank]
-                        if False and buff is not None and tensor.size() == buff.size():
-                            buff.copy_(tensor)
-                        else:
-                            buff = tensor.to(self.local_rank_to_device_map[send_rank])
-                            send_buffers[send_rank] = buff
-
-                        # pass to next process only when the copy is done
-                        event = torch.cuda.Event(blocking=True)
-                        stream.record_event(event)
-                        event.synchronize()
-                        out_q.put(buff)
 
                     if self.verbose:
                         tensor_tag = self.tensor_tags[tensor_name] + (
@@ -309,6 +327,11 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                         self.logger.info(
                             f"rank={self.rank}: done copy_(), dst={send_rank}, tag={tensor_tag}, name={tensor_name}"
                         )
+        except Exception as e:
+            print("ERRRRRORRRRR in thread")
+            print(sys.exc_info())
+            raise e
+
 
         return request_objects
 
