@@ -6,6 +6,7 @@ from collections import defaultdict
 import concurrent
 from functools import partial
 import sys
+import traceback
 
 filter_none = partial(filter, lambda t: t is not None)
 
@@ -249,12 +250,14 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                     reuse_q.put(None)  # TODO: better happen in callback
                     request_objects.append(t)
                 else:
+                    reuse_q = self.buffer_reuse_queues[receive_rank][self.rank]
                     reuse_q.put(None)
                     request_objects.append(x)
         
         except Exception as e:
             print("ERROR in recv thread")
             print(sys.exc_info())
+            traceback.print_exc()
             raise e
 
             # TODO: we expect request object os it has to be changed.
@@ -271,7 +274,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         try:
             # if is_grad:
             #     print("sending gradients")
-            assert (len(x) == len(ranks_dict_items))
+            assert (len(x) == len(ranks_dict_items)), str((len(x), len(ranks_dict_items))) + f"is_grad:{is_grad}" +  f"batch:{batch_idx}" + f"rank:{self.rank}" + str(ranks_dict_items)
             torch.cuda.set_device(self.device)  # needed for thread.
             request_objects = []
 
@@ -292,11 +295,12 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                                 self.send_shared_parameters[tensor_name].add(
                                     send_rank)
                         continue
+                    
+                    my_buff_reuse_queues = self.buffer_reuse_queues[self.rank]
                     if isinstance(tensor, torch.Tensor):
 
                         tensor = tensor.detach()
                         send_buffers = self.send_buffers[tensor_name]
-                        my_buff_reuse_queues = self.buffer_reuse_queues[self.rank]
                         for send_rank in send_ranks:
                             buff_q = my_buff_reuse_queues[send_rank]
                             buff_q.get()  # sync with sender we can use the buffer
@@ -328,8 +332,9 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                             f"rank={self.rank}: done copy_(), dst={send_rank}, tag={tensor_tag}, name={tensor_name}"
                         )
         except Exception as e:
-            print("ERRRRRORRRRR in thread")
+            print("ERRRRRORRRRR in send thread")
             print(sys.exc_info())
+            traceback.print_exec()
             raise e
 
 
@@ -342,8 +347,20 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         return future
 
     def send_gradients(self, x, batch_idx):
+
+
+        b4 = len(x)
+        x_b4 = x
         x = list(filter_none(x))
-        future = self.pool_send_grad.submit(self._send_tensors_p2p, x,
+        after = len(x)
+
+        if b4 != after:
+            for i, (name,r) in zip(x_b4,self.grad_send_items):
+                if i is None:
+                    print(name, "GOT NONE GRADIENT")
+            # raise NotImplementedError()
+        
+        future = self.pool_send_grad.submit(self._send_tensors_p2p, x_b4,
                                             batch_idx, self.grad_send_items,
                                             True)
         return future

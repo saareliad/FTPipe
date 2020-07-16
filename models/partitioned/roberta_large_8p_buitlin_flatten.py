@@ -3982,16 +3982,20 @@ def nested_map(func, ts,full=False):
     return func(ts)
 
 
-def flatten(ts):
-    if isinstance(ts,torch.Size):
-        # size is inheriting from tuple which is stupid
-        yield ts
-    elif isinstance(ts, (list, tuple, set)):
-        yield from chain(*[flatten(t) for t in ts])
-    elif isinstance(ts, dict):
-        yield from chain(*[flatten(t) for k,t in sorted(ts.items(),key=lambda t:t[0])])
+def flatten(x):
+    r"""Returns a flattened list of objects from a nested structure."""
+    l = []
+    if isinstance(x, torch.Size):
+        l.append(x)
+    elif isinstance(x, dict):
+        for i, y in sorted(x.items(), key=lambda t: t[0]):
+            l.extend(flatten(y))
+    elif isinstance(x, list) or isinstance(x, set) or isinstance(x, tuple):
+        for y in x:
+            l.extend(flatten(y))
     else:
-        yield ts
+        l.append(x)
+    return l
 
 
 def unflatten(xs,structure):

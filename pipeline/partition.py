@@ -38,7 +38,6 @@ DEFAULT_CLASSES_LIST_TO_PATCH = [
 ]
 
 
-# TODO: should receive at init the original req_grad (for unflatten), and req_grad
 
 
 def get_buffers_for_ddp_sync(model,
@@ -133,7 +132,7 @@ class Partition(nn.Module):
                         x = x.detach().requires_grad_(self.req_grad[0])
                     self.input_buffer[micro_batch_idx] = x
                     self.rng_stasher.stash_rng_state(micro_batch_idx)
-                    x = flatten(self.layers(x))
+                    x = self.layers(x)
 
                 else:
                     # EXPLICITLY DO CLONE
@@ -144,8 +143,7 @@ class Partition(nn.Module):
                     self.input_buffer[micro_batch_idx] = x
                     self.rng_stasher.stash_rng_state(micro_batch_idx)
                     # UNFLATTEN
-                    x = unflatten(x, self.unflatten_structure)
-                    x = flatten(self.layers(*x))
+                    x = self.layers(*x)
 
                 if self.dummy_forward_monkey_patcher:
                     self.dummy_forward_monkey_patcher.replace_for_forward()
@@ -157,11 +155,10 @@ class Partition(nn.Module):
                     self.dummy_forward_monkey_patcher.replace_for_forward()
 
                 if isinstance(x, Tensor):
-                    x = flatten(self.layers(x))
+                    x = self.layers(x)
                 else:
                     # UNFLATTEN
-                    x = unflatten(x, self.unflatten_structure)
-                    x = flatten(self.layers(*x))
+                    x = self.layers(*x)
                 return x
 
     def recompute(self, micro_batch_idx):
@@ -171,10 +168,8 @@ class Partition(nn.Module):
         # TODO: maybe changing the rng state messes up with MPI?
         with torch.random.fork_rng(devices=self.rng_stasher.devices):
             self.rng_stasher.restore_rng_state(micro_batch_idx)
-
             #  UNFLATTEN
-            x = unflatten(x, self.unflatten_structure)
-            x = flatten(self.layers(*x))
+            x = self.layers(*x)
         # Save for later
         self.bwd_graph_head_buffer[micro_batch_idx] = x
 
@@ -226,11 +221,12 @@ class FirstPartition(Partition):
                     # In pytorch it can happen auto matically with THCCashingAlocator.
                     self.input_buffer[micro_batch_idx] = x
                     self.rng_stasher.stash_rng_state(micro_batch_idx)
-                    x = flatten(self.layers(x))
+                    x = self.layers(x)
+
                 else:
                     self.input_buffer[micro_batch_idx] = x
                     self.rng_stasher.stash_rng_state(micro_batch_idx)
-                    x = flatten(self.layers(*x))
+                    x = self.layers(*x)
 
                 if self.dummy_forward_monkey_patcher:
                     self.dummy_forward_monkey_patcher.replace_for_forward()
@@ -241,9 +237,9 @@ class FirstPartition(Partition):
                 if self.dummy_forward_monkey_patcher:
                     self.dummy_forward_monkey_patcher.replace_for_forward()
                 if isinstance(x, Tensor):
-                    x = flatten(self.layers(x))
+                    x = self.layers(x)
                 else:
-                    x = flatten(self.layers(*x))
+                    x = self.layers(*x)
                 return x
 
     def recompute(self, micro_batch_idx):
@@ -258,9 +254,9 @@ class FirstPartition(Partition):
         with torch.random.fork_rng(devices=self.rng_stasher.devices):
             self.rng_stasher.restore_rng_state(micro_batch_idx)
             if isinstance(x, Tensor):
-                x = flatten(self.layers(x))
+                x = self.layers(x)
             else:
-                x = flatten(self.layers(*x))
+                x = self.layers(*x)
 
         self.bwd_graph_head_buffer[micro_batch_idx] = x
         # #### CODE COPY FROM super().recompute ########
@@ -293,24 +289,21 @@ class LastPartition(Partition):
                 # # See note on option 1 below.
                 x = x.requires_grad_(self.req_grad[0])
                 self.input_buffer[micro_batch_idx] = x
-                x = flatten(self.layers(x))
+                x = self.layers(x)
             else:
                 # Option 2
                 x = list(get_r(x, self.req_grad))
                 self.input_buffer[micro_batch_idx] = x
 
                 # UNFLATEN
-                x = unflatten(x, self.unflatten_structure)
-                x = flatten(self.layers(*x))
+                x = self.layers(*x)
         else:
             with torch.no_grad():
                 if isinstance(x, Tensor):
-                    x = flatten(self.layers(x))
+                    x = self.layers(x)
                 else:
-
                     # UNFLATEN
-                    x = unflatten(x, self.unflatten_structure)
-                    x = flatten(self.layers(*x))
+                    x = self.layers(*x)
 
         #  Last partition outputs should be in a tensor format
         if not isinstance(x, Tensor):
@@ -335,16 +328,14 @@ class LastPartitionWithLabelInput(LastPartition):
             # For backprobpagating gradients
             x = list(get_r(x, self.req_grad))
             self.input_buffer[micro_batch_idx] = list(
-                filter_req_grad_tensors(flatten(x)))
+                filter_req_grad_tensors(x))
 
             # UNFLATEN
-            x = unflatten(x, self.unflatten_structure)
-            x = flatten(self.layers(*x))
+            x = self.layers(*x)
         else:
             with torch.no_grad():
                 # UNFLATEN
-                x = unflatten(x, self.unflatten_structure)
-                x = flatten(self.layers(*x))
+                x = self.layers(*x)
 
         #  Last partition outputs should be in a tensor format
         if not isinstance(x, Tensor):
@@ -419,7 +410,7 @@ class PartitionWithoutRecomputation(nn.Module):
                         x = x.detach().requires_grad_(self.req_grad[0])
 
                     self.input_buffer[micro_batch_idx] = x
-                x = flatten(self.layers(x))
+                x = self.layers(x)
             else:
                 if self._REQ_GRAD:
                     if self._CLONE_INPUTS:
@@ -429,10 +420,7 @@ class PartitionWithoutRecomputation(nn.Module):
                     self.input_buffer[micro_batch_idx] = x
 
                 # UNFLATEN
-                if self._REQ_GRAD:
-                    x = unflatten(x, self.unflatten_structure)
-                # Else: its the first partition!
-                x = flatten(self.layers(*x))
+                x = self.layers(*x)
 
             # save the head.
             self.bwd_graph_head_buffer[micro_batch_idx] = x
@@ -441,13 +429,10 @@ class PartitionWithoutRecomputation(nn.Module):
         else:
             with torch.no_grad():
                 if isinstance(x, Tensor):
-                    x = flatten(self.layers(x))
+                    x = self.layers(x)
                 else:
                     # UNFLATEN
-                    if self._REQ_GRAD:
-                        x = unflatten(x, self.unflatten_structure)
-                    # Else: its the first partition!
-                    x = flatten(self.layers(*x))
+                    x = self.layers(*x)
                 return x
 
     def recompute(self, micro_batch_idx):
@@ -591,16 +576,19 @@ filter_req_grad_tensors = partial(
 def filter_for_backward(x, g):
     # TODO: remove this compeltly, by saving for backward only whats needed.
     # NOTE: we currently build on this behavior  so be careful when removing.
-    x = filter_req_grad_tensors(x)
-    x = list(x)  # FIXME: just for the assert
-    g = list(flatten(g))  # FIXME: just for the assert
+    x = list(filter_req_grad_tensors(x))
+    # x = list(x)  # FIXME: just for the assert
+    # g = list(flatten(g))  # FIXME: just for the assert
     assert len(x) == len(g)
     tensors = []
     grad_tensors = []
     for t, gt in zip(x, g):
         if t.grad_fn is not None:
-            tensors.append(t)
-            grad_tensors.append(gt)
+            if gt is not None:
+                tensors.append(t)
+                grad_tensors.append(gt)
+            else:
+                print("-W- filtering NONE gradeint")
         else:
             if g is not None:
                 print("-W- calculated and sent un-needed grad")

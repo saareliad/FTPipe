@@ -66,8 +66,8 @@ class PartitioningConfigParser:
         pipe_config = pipe_config.fromDict(d)
         self.pipe_config = pipe_config
         
-        from pprint import pprint
-        pprint(pipe_config.state_dict())
+        # from pprint import pprint
+        # pprint(pipe_config.state_dict())
 
         self.model = model
         self.num_stages = len(pipe_config.stages)

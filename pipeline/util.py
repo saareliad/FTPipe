@@ -60,6 +60,7 @@ def flatten(x: Any) -> List[Any]:
     if isinstance(x, torch.Size):
         l.append(x)
     elif isinstance(x, dict):
+        # sorted(x.items(), key=lambda t: t[0])
         for y in x.values():
             l.extend(flatten(y))
     elif isinstance(x, list) or isinstance(x, set) or isinstance(x, tuple):
