@@ -4,6 +4,7 @@ from typing import List, Tuple, Dict, Iterator, Set
 import re
 from ..model_profiling import used_namespaces, Node, NodeTypes,Graph
 from ..utils import inplace_arithmetic_ops, r_arithmetic_ops,arithmetic_ops,logical_ops,conversion_ops,magics,unary_ops
+from .utils import sortedPartitionInputs,sortedPartitionOutputs
 import torch
 
 tab = '    '
@@ -88,8 +89,7 @@ def generateDeclaration(input_ids: List[str], partition_fields: Dict[Node,
                         input_args: Dict[Node, str]) -> str:
     ''' generates the forward function declaration and the variable map of inputs and layers
     '''
-    args = ', '.join(input_ids)
-    lines = [tab + f'def forward(self, {args}):\n']
+    lines = [tab + f'def forward(self, *args):\n']
 
     # comments describing relation between variables and scopes
     for node, field in chain(partition_fields.items(),
@@ -97,7 +97,9 @@ def generateDeclaration(input_ids: List[str], partition_fields: Dict[Node,
         lines.append(f"{dtab}# {node.scope} <=> {field}\n")
 
     lines.extend([f"\n{dtab}# moving inputs to current device no op if already on the correct device\n",
-                f"{dtab}{', '.join(input_ids)} = move_tensors(({', '.join(input_ids)}), self.device)"])
+                f"{dtab}{', '.join(input_ids)} = move_tensors(unflatten(args,self.input_structure), self.device)"])
+    if len(input_ids) == 1:
+        lines[-1]+="[0]"
     return ''.join(lines)
 
 
@@ -317,12 +319,12 @@ def generate_return_statement(output_nodes: List[Node], ready_expressions: Dict[
     if len(output_nodes) == 1:
         output = output_nodes[0]
         if output.value_type in {list, tuple, set}:
-            statement = f"return {ready_expressions[output]}"
+            statement = f"return list(flatten({ready_expressions[output]}))"
         else:
             statement = f"return ({ready_expressions[output]},)"
     else:
         outputs = ", ".join([ready_expressions[o] for o in output_nodes])
-        statement = f"return ({outputs})"
+        statement = f"return list(flatten(({outputs})))"
     return f'{comment}\n{dtab}{statement}'
 
 
@@ -369,40 +371,6 @@ def add_del_statements(statements: List[str]) -> Iterator[str]:
             new_statements.append(s)
 
     return reversed(new_statements)
-
-
-def sortedPartitionInputs(partition: List[Node]) -> List[Node]:
-    '''return a list of all nodes that are input to this partition\n
-       sorted by id
-    '''
-    inputs = set()
-    for node in partition:
-        
-        #NOTE this is for the edge case where we have unused input
-        if node.type is NodeTypes.IN:
-            inputs.add(node)
-        
-        inputs.update([
-            n for n in node.in_edges
-            if (n.stage_id != node.stage_id) or (n.type == NodeTypes.IN)
-        ])
-
-    return sorted(inputs, key=lambda n: n.id)
-
-
-def sortedPartitionOutputs(partition: List[Node],
-                           model_outputs: List[Node]) -> List[Node]:
-    ''' return all nodes that are outputs of the partition\n
-        sorted by id
-    '''
-
-    def isOutput(n):
-        part_output = (n.type != NodeTypes.IN) and any(o.stage_id != n.stage_id for o in n.out_edges)
-        return part_output or (n in model_outputs)
-
-    outputs = {n for n in partition if isOutput(n)}
-
-    return sorted(outputs, key=lambda n: n.id)
 
 
 def node_uses(partition: List[Node], outputs: Set[Node]) -> Dict[str, int]:

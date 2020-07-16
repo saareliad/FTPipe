@@ -132,8 +132,6 @@ def pipe_model(model: nn.Module,
                             save_memory_mode=save_memory_mode
                             )
 
-    infer_req_grad(graph,model,args=args,kwargs=kwargs)
-
     compile_partitioned_model(graph,
                               model,
                               batch_dim,
@@ -338,5 +336,7 @@ def build_graph(model: nn.Module,
         print("model profiled")
         for n in graph.nodes:
             n.weight = weights.get(n.scope, ExecTimes(0, 0))
+
+    infer_req_grad(graph,model,args=args,kwargs=kwargs)
 
     return graph

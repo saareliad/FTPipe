@@ -6,11 +6,13 @@ from .partition_forward_method import generate_forward_method
 from .partition_init_method import generate_init_method
 from .state_methods import get_state_methods, generate_partition_state_methods
 from .compile_modelParallel_module import create_model_parallel_module
+from .utils import pretty_format_obj
 from typing import List, Tuple, Dict, Optional, Callable
 from collections import OrderedDict
 import inspect
 import os
 import pathlib
+from copy import deepcopy
 tab = '    '
 dtab = tab + tab
 
@@ -65,7 +67,7 @@ def compile_partitioned_model(graph: Graph,
             n
             for n in stage if n.type == NodeTypes.BUFF_PARAM
         ]
-        class_decl, scope_to_class_field = generate_init_method(class_name, layers,
+        class_decl, scope_to_class_field = generate_init_method(stage,class_name, layers,
                                                                 is_param_dict, buffs_params)
         state_methods_functions = generate_partition_state_methods()
         forward_function, io = generate_forward_method(graph,
@@ -193,6 +195,9 @@ def create_pipeline_configuration(graph: Graph,
         "model_outputs":model_outputs,
         "stages":stages
     }
+
+    config = generate_config_without_nested(config)
+
     lines.extend([
         "",
         f"config = {pretty_format_obj(config)}",
@@ -321,33 +326,71 @@ def create_model_in_out_config(graph: Graph, is_batched: Callable[[torch.Size], 
     return model_inputs, model_outputs
 
 
-def pretty_format_obj(obj,dict_prefix=dtab):
-    if isinstance(obj,str):
-        return f"'{obj}'"
-    elif isinstance(obj, torch.Size):
-        # size is inheriting from tuple which is stupid
-        return str(obj)
-    elif isinstance(obj, (list, tuple, set)):
-        elements = [pretty_format_obj(t) for t in obj]
-        if len(elements) == 1 and isinstance(obj,tuple):
-            #(a,) one element tuple includs a comma
-            elements[0]+=","
-        elements = ", ".join(elements)
-        if isinstance(obj,tuple):
-            l,r="(",")"
-        elif isinstance(obj,list):
-            l,r="[","]"
+def generate_config_without_nested(dict_config):
+    config_without_nested = deepcopy(dict_config)
+
+    #convert in/out for model
+    new_model_inputs = dict()
+    for input_id,input_cfg in config_without_nested['model_inputs'].items():
+        # found nested activation
+        if not isinstance(input_cfg['is_batched'],bool):
+            flattened_is_batched=flatten(input_cfg['is_batched'])
+            flattened_shape = flatten(input_cfg['shape'])
+            flattened_dtype = flatten(input_cfg['dtype'])
+            for idx,(is_batched,shape,dtype) in enumerate(zip(flattened_is_batched,flattened_shape,flattened_dtype)):
+                cfg = {"shape":shape,"dtype":dtype,"is_batched":is_batched}
+                new_model_inputs[input_id+f"_{idx}"] = cfg
         else:
-            l,r="{","}"
-        return l+elements+r 
-    elif isinstance(obj, dict):
-        items = [f'{pretty_format_obj(k)}: {pretty_format_obj(v,dict_prefix+tab)}' for k, v in obj.items()]
-        items[0]=f"\n{dict_prefix}"+items[0]
-        return "{" + f",\n{dict_prefix}".join(items) + "}"
-    elif obj is type(None):
-        return "None"
-    elif obj in [torch.Size,torch.device,torch.dtype]:
-        return f"torch.{obj.__name__}"
-    elif isinstance(obj,type):
-        return obj.__name__
-    return str(obj)
+            new_model_inputs[input_id] = input_cfg
+    
+    config_without_nested['model_inputs'] = new_model_inputs
+
+    new_model_outputs = dict()
+    for output_id,output_cfg in config_without_nested['model_outputs'].items():
+        # found nested activation
+        if not isinstance(output_cfg['is_batched'],bool):
+            flattened_is_batched=flatten(output_cfg['is_batched'])
+            flattened_shape = flatten(output_cfg['shape'])
+            flattened_dtype = flatten(output_cfg['dtype'])
+            for idx,(is_batched,shape,dtype) in enumerate(zip(flattened_is_batched,flattened_shape,flattened_dtype)):
+                cfg = {"shape":shape,"dtype":dtype,"is_batched":is_batched}
+                new_model_outputs[output_id+f"_{idx}"] = cfg
+        else:
+            new_model_outputs[output_id] = output_cfg
+    
+    config_without_nested['model_outputs'] = new_model_outputs
+
+    #convert in/out for stages
+    for stage_id,stage in config_without_nested['stages'].items():
+        new_stage_outputs = dict()
+        for output_id,output_cfg in stage['outputs'].items():
+            # found nested activation
+            if not isinstance(output_cfg['is_batched'],bool):
+                flattened_is_batched=flatten(output_cfg['is_batched'])
+                flattened_shape = flatten(output_cfg['shape'])
+                flattened_dtype = flatten(output_cfg['dtype'])
+                for idx,(is_batched,shape,dtype) in enumerate(zip(flattened_is_batched,flattened_shape,flattened_dtype)):
+                    cfg = {"shape":shape,"dtype":dtype,"is_batched":is_batched}
+                    new_stage_outputs[output_id+f"_{idx}"] = cfg
+            else:
+                new_stage_outputs[output_id] = output_cfg
+        
+        stage['outputs'] = new_stage_outputs
+
+        new_stage_inputs = dict()
+        for input_id,input_cfg in stage['inputs'].items():
+            # found nested activation
+            if not isinstance(input_cfg['is_batched'],bool):
+                flattened_is_batched=flatten(input_cfg['is_batched'])
+                flattened_shape = flatten(input_cfg['shape'])
+                flattened_dtype = flatten(input_cfg['dtype'])
+                flatten_req_grad = flatten(input_cfg['req_grad'])
+                for idx,(is_batched,shape,dtype,req_grad) in enumerate(zip(flattened_is_batched,flattened_shape,flattened_dtype,flatten_req_grad)):
+                    cfg = {"shape":shape,"dtype":dtype,"req_grad":req_grad,"is_batched":is_batched}
+                    new_stage_inputs[input_id+f"_{idx}"] = cfg
+            else:
+                new_stage_inputs[input_id] = input_cfg
+        stage['inputs'] = new_stage_inputs
+    
+    return config_without_nested
+

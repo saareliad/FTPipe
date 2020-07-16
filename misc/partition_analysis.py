@@ -14,6 +14,7 @@ from typing import List, Set
 from functools import wraps
 from contextlib import contextmanager
 from pytorch_Gpipe.utils import flatten, move_tensors, nested_map
+from pytorch_Gpipe.model_profiling import NodeTypes
 from .analysis_utils import (extra_communication_time_lower_bound,
                              extra_communication_time_upper_bound,
                              upper_utilization_bound, lower_utilization_bound,
@@ -79,7 +80,6 @@ def run_analysis(sample,
         # thoeretical analysis
         sequential_f, sequential_b, parallel_f, parallel_b = theoretical_analysis(
             graph,
-            config,
             recomputation=recomputation,
             async_pipeline=async_pipeline)
         edges = edge_cut(graph)
@@ -901,7 +901,6 @@ def edge_cut(graph):
 
 
 def theoretical_analysis(graph,
-                         partition_config,
                          recomputation=True,
                          async_pipeline=False):
     ''' find execution time of partitions based on the model's graph using 2 a sequential assumption and parallel assumption
@@ -913,8 +912,14 @@ def theoretical_analysis(graph,
     parallel_f = dict()
 
     tensor_names = set()
-    for i in range(n_parts):
-        tensor_names.update(partition_config[i]['outputs'])
+    stage_outputs = defaultdict(list)
+    for n in graph.nodes:
+        if (n.type != NodeTypes.IN) and any (o.stage_id != n.stage_id for o in n.out_edges):
+            tensor_names.add(n.scope)
+            stage_outputs[n.stage_id].append(n.scope)
+        elif n in graph.outputs:
+            tensor_names.add(n.scope)
+            stage_outputs[n.stage_id].append(n.scope)
 
     sequential_f = {i: 0 for i in range(n_parts)}
     sequential_b = {i: 0 for i in range(n_parts)}
@@ -936,7 +941,7 @@ def theoretical_analysis(graph,
         if async_pipeline and is_last_partition:
             partition_sepsific_recomputation = False
 
-        outputs = [nodes[name] for name in partition_config[i]['outputs']]
+        outputs = [nodes[name] for name in stage_outputs[i]]
         cache = dict()
         parallel_f[i] = 0
         parallel_b[i] = 0

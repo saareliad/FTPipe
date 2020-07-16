@@ -2,11 +2,13 @@ from typing import List, Tuple, Dict
 import re
 from itertools import chain
 from ..model_profiling import Node
+from ..utils import nested_map
+from .utils import sortedPartitionInputs,pretty_format_obj
 tab = '    '
 dtab = tab + tab
 
 
-def generate_init_method(class_name: str, layers: List[Node],
+def generate_init_method(nodes:List[Node],class_name: str, layers: List[Node],
                          is_param_dict: Dict[str, bool], buff_params: List[Node]) -> Tuple[str, Dict[Node, str]]:
     '''creates the partition constructor and the mapping between layers and field ids
     '''
@@ -38,7 +40,11 @@ def generate_init_method(class_name: str, layers: List[Node],
     device = f"{dtab}self.device = torch.device(device)"
     move = f"{dtab}self.to(self.device)"
 
-    return '\n'.join([class_decl, basic_blocks_field, layer_scopes_field, tensor_scope_field, init_dec, super_init, layers_init, tensor_init, device, lookup,move]) + '\n', partition_fields
+    structure = nested_map(lambda x:1,[n.req_grad for n in sortedPartitionInputs(nodes)])
+
+    cfg = f"{dtab}self.input_structure = {pretty_format_obj(structure)}"
+
+    return '\n'.join([class_decl, basic_blocks_field, layer_scopes_field, tensor_scope_field, init_dec, super_init, layers_init, tensor_init, device, cfg, lookup,move]) + '\n', partition_fields
 
 
 def generate_layer_and_tensor_scopes(layers: List[Node], buff_params: List[Node]):
