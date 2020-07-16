@@ -2,6 +2,33 @@ from .interface import Stats
 from .utils import AverageMeter
 
 
+def glue_compute_metrics_name(task_name):
+    if task_name == "cola":
+        return "mcc"
+    elif task_name == "sst-2":
+        return "acc"
+    elif task_name == "mrpc":
+        return "acc_and_f1"
+    elif task_name == "sts-b":
+        return "corr"
+    elif task_name == "qqp":
+        return "acc_and_f1"
+    elif task_name == "mnli":
+        return "mnli/acc"
+    elif task_name == "mnli-mm":
+        return "mnli-mm/acc"
+    elif task_name == "qnli":
+        return "acc"
+    elif task_name == "rte":
+        return "acc"
+    elif task_name == "wnli":
+        return "acc"
+    elif task_name == "hans":
+        return "acc"
+    else:
+        raise KeyError(task_name)
+
+
 class GlueStats(Stats):
     """ Class to handle statistics collection for Glue Tasks """
     def __init__(self, record_loss_per_batch=False, is_last_partition=True):
@@ -22,10 +49,13 @@ class GlueStats(Stats):
         self.predictions = []
         self.label_ids = []
 
+    def set_glue_task(self, task_name):
+        self.task = task_name
+        self.metric_name = glue_compute_metrics_name(task_name)
+
     def get_metric_for_early_stop(self):
         num_epochs = self.fit_res.num_epochs
-        # FIXME: by task name
-        v = self.fit_res.glue_results[num_epochs]['acc']
+        v = self.fit_res.glue_results[num_epochs][self.metric_name]
         return v
 
     def last_partition_on_epoch_end(self):

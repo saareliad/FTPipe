@@ -2,6 +2,7 @@ from .cfg_to_model import get_partitioning
 
 from itertools import count
 from collections import OrderedDict
+from copy import deepcopy
 
 def get_my_send_recv_ranks(config, stage, stage_to_rank_map=None):
     def ranks_in_stage(given_stage):
@@ -53,13 +54,19 @@ class PartitioningConfigParser:
                                               rank,
                                               bs_train,
                                               model_instance=model_instance)
+        self.stage = pipe_config.rank_to_stage_idx(rank)
 
-        # Also save config
+        # Save a structure to unflatten stage inputs, as we send/recv flattened stuff.
+        self.unflatten_structure = deepcopy(pipe_config.stages[self.stage].req_grad)
+        self.unflatten_structure = tuple(v for i, v in self.unflatten_structure.items())
+
+        # Change pipe_config to pipe_config with no tuples
+        d = pipe_config.generate_config_without_nested(pipe_config.state_dict())
+        pipe_config = pipe_config.fromDict(d)
         self.pipe_config = pipe_config
 
         self.model = model
         self.num_stages = len(pipe_config.stages)
-        self.stage = pipe_config.rank_to_stage_idx(rank)
 
         counter = count()
         # Create stage_to_rank_map

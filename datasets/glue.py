@@ -120,6 +120,9 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
                                      data_dir=data_dir,
                                      max_seq_length=max_seq_length,
                                      overwrite_cache=overwrite_cache)
+
+    print("-I- creating datasets...")
+
     train_ds = GlueDataset(args, tokenizer, mode="train")
     dev_ds = GlueDataset(args, tokenizer, mode="dev")
     if just == 'x':
@@ -131,6 +134,8 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
 
     train_ds = just_f(train_ds, mode='train')
     dev_ds = just_f(dev_ds, mode='eval')
+
+    print("-I- done creating datasets")
 
     # TODO: handle mnli double eval
     partial_evaluate = build_compute_metrics_fn(task_name)
@@ -161,6 +166,7 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
         trainer.loss_fn = GlueLoss(num_labels)
         trainer.statistics.evaluate_glue = types.MethodType(
             evaluate_glue, trainer.statistics)
+        trainer.statistics.set_glue_task(task_name)
 
     # NOTE: (examples, features) are needed for evaluation
     return train_ds, dev_ds, set_eval

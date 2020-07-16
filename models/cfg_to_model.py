@@ -113,6 +113,7 @@ def get_partitioning(cfg, my_rank, batch_size,
         model_instance = create_normal_model_instance(cfg)
 
     config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
+    # TODO: change it
     pipe_config = PipelineConfig.fromDict(config)
 
     depth = pipe_config.depth

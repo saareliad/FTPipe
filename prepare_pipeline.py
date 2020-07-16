@@ -667,7 +667,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
                                                      False),
                               is_mp=args.is_multiprocessing_worker,
                               req_grad=parsed_config.req_grad,
-                              outputs_req_grad=parsed_config.outputs_req_grad)
+                              unflatten_structure=parsed_config.unflatten_structure)
 
     # support for simulating stage replication (dev)
     if hasattr(args, "ddp_sim_num_gpus") and args.ddp_sim_num_gpus > 1:

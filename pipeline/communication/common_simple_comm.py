@@ -5,100 +5,14 @@ import torch.distributed as dist
 from .interface import CommunicationHandlerBase, FuturesHandlerBase
 from .buffer import make_buff
 from collections import OrderedDict
-from ..util import flatten
 import numpy as np
-from copy import deepcopy
-
-
-def expand_name_for(name, fv):
-    if len(fv) > 1:
-        return [str(i) + name for i, _ in enumerate(fv)]
-    else:
-        return name,
-
-
-def flatten_dict_of_names(in_d):
-    d = dict()
-    for k, v in in_d.items():
-        fv = flatten(v)
-        names = expand_name_for(k, fv)
-        for nn, vv in zip(names, fv):
-            d[nn] = vv
-    return d
-
-
-def old_to_new_name(in_d):
-    d = dict()
-    for k, v in in_d.items():
-        fv = flatten(v)
-        names = expand_name_for(k, fv)
-        d[k] = names
-    return d
-
-
-def expand_dict_of_names_like(in_d, d_like_b4_flatten):
-    d = dict()
-    td = old_to_new_name(d_like_b4_flatten)
-    print(td.items())
-    for n, nn in td.items():
-        for nnn in nn:
-            d[nnn] = in_d[n]
-    return d
-
-
-# def is_baby(x):
-#     """ a baby can't be a parent """
-#     return not isinstance(x, (tuple, list, dict))
-
-
-# def is_young_parent(x):
-#     """all children are babys. i.e not parents"""
-#     if is_baby(x):
-#         return False
-#     else:
-#         if isinstance(x, dict):
-#             x = x.values()
-#         return all([is_baby(a) for a in x])
-
-
-# def all_young_parents(x):
-#     # NOTE: we don't flatten paraents, thats user responsibility
-#     l = []
-#     if is_young_parent(x):
-#         l.append(x)
-#     elif isinstance(x, dict):
-#         for y in x.values():
-#             l.extend(all_young_parents(y))
-#     elif isinstance(x, list) or isinstance(x, set) or isinstance(x, tuple):
-#         for y in x:
-#             l.extend(all_young_parents(y))
-#     return l
-
-
-# def flatten_dict_of_names_to_young_parents(in_d):
-#     d = dict()
-#     for k, v in in_d.items():
-#         fv = all_young_parents(v)
-#         names = expand_name_for(k, fv)
-#         for nn, vv in zip(names, fv):
-#             d[nn] = vv
-#     return d
 
 
 def tensor_tags_from_config(
         config,
-        # outputs_req_grad,
         num_chunks=1,
         target_tensor_names=None,
         GRAD_UGLY_SHAMEFUL_NAME="_grad"):
-    # def get_outputs_req_grad_for_stage(stage_id):
-    #     outputs_req_grad = dict()
-    #     my_outputs = config.stages[stage_id].outputs
-    #     for i, stage in config.stages.items():
-    #         for name, r in stage.req_grad.items():
-    #             if name in my_outputs:
-    #                 outputs_req_grad[name] = r
-    #     return outputs_req_grad
 
     def config_to_tuples_array(config):
         def config_to_tuples_generator(stages):
@@ -120,40 +34,29 @@ def tensor_tags_from_config(
 
         # Create different tags for gradients
         for name_post_addition in ["", GRAD_UGLY_SHAMEFUL_NAME]:
-            for ux_input_tensor, rg in zip(input_tensors, req_grad):
-                
-                if ux_input_tensor not in req_grad:
-                    assert ux_input_tensor in config.model_inputs
+            for input_tensor in input_tensors:
+                if input_tensor not in req_grad:
+                    assert input_tensor in config.model_inputs
                     continue
+                input_tensor += name_post_addition
+                if input_tensor not in tensor_tags:
+                    tensor_tags[input_tensor] = tensor_tag
+                    tensor_tag += num_chunks
 
-                fv = flatten(rg)
-                expanded_input_tensor = expand_name_for(ux_input_tensor, fv)
-                for input_tensor in expanded_input_tensor:
-                    input_tensor += name_post_addition
-                    if input_tensor not in tensor_tags:
-                        tensor_tags[input_tensor] = tensor_tag
-                        tensor_tag += num_chunks
-
-            for ux_output_tensor in output_tensors:
-                
-                if ux_output_tensor not in outputs_req_grad:
-                    assert ux_output_tensor in config.model_outputs
+            for output_tensor in output_tensors:
+                if output_tensor not in outputs_req_grad:
+                    assert output_tensor in config.model_outputs
                     continue
-
-                fv = flatten(outputs_req_grad[ux_output_tensor])
-                expanded_output_tensor = expand_name_for(ux_output_tensor, fv)
-                for output_tensor in expanded_output_tensor:
-                    output_tensor += name_post_addition
-                    if output_tensor not in tensor_tags:
-                        tensor_tags[output_tensor] = tensor_tag
-                        tensor_tag += num_chunks
+                output_tensor += name_post_addition
+                if output_tensor not in tensor_tags:
+                    tensor_tags[output_tensor] = tensor_tag
+                    tensor_tag += num_chunks
 
     if target_tensor_names:
         for target_tensor_name in sorted(target_tensor_names):
             tensor_tags[target_tensor_name] = tensor_tag
             tensor_tag += num_chunks
 
-    # tensor_tags["ack"] = tensor_tag
     tensor_tag += num_chunks
 
     return tensor_tags, tensor_tag
@@ -185,26 +88,16 @@ class SimpleCommBase(CommunicationHandlerBase):
             GRAD_UGLY_SHAMEFUL_NAME="_grad",
             verbose=False):
 
-        # HACK: we flatten dicts of names and send each tensor by itself.
 
         # NOTE: Order is important, must call for send,recv ranks before in/out req grads.
-        tmp_req_grad = deepcopy(req_grad)
-        tmp_outputs_req_grad = deepcopy(outputs_req_grad)
-
-        req_grad = flatten_dict_of_names(req_grad)
-        outputs_req_grad = flatten_dict_of_names(outputs_req_grad)
+        # TODO: original_req_grad somewhere.
 
         # inputs/outputs are not part of send/recv ranks
-        for i in pipe_config.model_inputs:
-            if i in tmp_req_grad:
-                del tmp_req_grad[i]
-            
-        for i in pipe_config.model_outputs:
-            if i in tmp_outputs_req_grad:
-                del tmp_outputs_req_grad[i]
-
-        receive_ranks = expand_dict_of_names_like(receive_ranks, tmp_req_grad)
-        send_ranks = expand_dict_of_names_like(send_ranks, tmp_outputs_req_grad)
+        for to_del in [receive_ranks, send_ranks]:
+            for inout in [pipe_config.model_inputs, pipe_config.model_outputs]:
+                for i in inout:
+                    if i in to_del:
+                        del to_del[i]
 
         assert isinstance(GRAD_UGLY_SHAMEFUL_NAME, str)
         self.GRAD_UGLY_SHAMEFUL_NAME = GRAD_UGLY_SHAMEFUL_NAME
@@ -226,17 +119,11 @@ class SimpleCommBase(CommunicationHandlerBase):
         # Do not calculate and send gradients for tensors which do not req grad.
         self.tensors_names_with_no_grad = set()
         for i, v in req_grad.items():
-            # assert isinstance(v, bool)
             assert isinstance(v, bool)
             if isinstance(v, bool):
                 if not v:
                     self.tensors_names_with_no_grad.add(i)
-            # else:
-
-            # v = flatten(v)
-            # for idx, rg in enumerate(v):
-            #     self.tensors_names_with_no_grad.add(f"_{idx}" + i)
-
+        
         # Do not receive gradients for tensors which do not req grad.
         for i, v in outputs_req_grad.items():
             assert isinstance(v, bool)

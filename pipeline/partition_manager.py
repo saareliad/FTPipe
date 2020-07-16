@@ -49,7 +49,7 @@ class SinglePartitionManager:
                  stateless_tied=False,
                  is_mp=False,
                  req_grad=None,
-                 outputs_req_grad=None):
+                 unflatten_structure=None):
 
         if (gap_aware_just_loss and (not use_recomputation)):
             raise NotImplementedError(
@@ -69,7 +69,7 @@ class SinglePartitionManager:
         self.step_every = step_every
         self.work_scheduler = work_scheduler(step_every)
         self._init_partition(partition, use_recomputation, is_mp, req_grad,
-                             outputs_req_grad)
+                             unflatten_structure)
         if hasattr(comm_handler, "init_ddp_context"):
             ddp = comm_handler.init_ddp_context(self.partition.layers)
             self.partition.layers = ddp
@@ -118,7 +118,7 @@ class SinglePartitionManager:
         self.true_weights_storage: TrueWeightsStorage
 
     def _init_partition(self, partition, use_recomputation, is_mp, req_grad,
-                        outputs_req_grad):
+                        unflatten_structure):
         TO_DEVICE = False
         is_last_partition = self.is_last_partition
         is_first_partition = self.is_first_partition
@@ -137,7 +137,7 @@ class SinglePartitionManager:
                                            device,
                                            to_device=TO_DEVICE,
                                            req_grad=req_grad,
-                                           outputs_req_grad=outputs_req_grad)
+                                           unflatten_structure=unflatten_structure)
         else:
             # Partition without recomputation
             if is_last_partition:
@@ -147,7 +147,7 @@ class SinglePartitionManager:
                     device,
                     to_device=TO_DEVICE,
                     req_grad=req_grad,
-                    outputs_req_grad=outputs_req_grad)
+                    unflatten_structure=unflatten_structure)
             elif is_first_partition:
                 partition_cls = PartitionWithoutRecomputation
                 self.partition = partition_cls(
@@ -156,7 +156,7 @@ class SinglePartitionManager:
                     to_device=TO_DEVICE,
                     _REQ_GRAD=False,
                     req_grad=req_grad,
-                    outputs_req_grad=outputs_req_grad)
+                    unflatten_structure=unflatten_structure)
             else:
                 partition_cls = PartitionWithoutRecomputation
                 self.partition = partition_cls(
@@ -165,7 +165,7 @@ class SinglePartitionManager:
                     to_device=TO_DEVICE,
                     _REQ_GRAD=True,
                     req_grad=req_grad,
-                    outputs_req_grad=outputs_req_grad)
+                    unflatten_structure=unflatten_structure)
         if is_mp:
             # We do the clone ourself.
             # if hasattr(partition_cls, "_CLONE_INPUTS"):
@@ -672,7 +672,7 @@ class GPipePartitionManager(SinglePartitionManager):
         # step_every
 
     def _init_partition(self, partition, use_recomputation, is_mp, req_grad,
-                        outputs_req_grad):
+                        unflatten_structure):
         # NOTE: it will be called from super().__init__
         TO_DEVICE = False
         is_last_partition = self.is_last_partition
@@ -699,7 +699,7 @@ class GPipePartitionManager(SinglePartitionManager):
                                            device,
                                            to_device=TO_DEVICE,
                                            req_grad=req_grad,
-                                           outputs_req_grad=outputs_req_grad)
+                                           unflatten_structure=unflatten_structure)
         else:
             # Partition without recomputation
             # NOTE: its pretty stupied to use GPIPE in this case.
