@@ -356,7 +356,7 @@ class BertLayer(nn.Module):
                                             head_mask=head_mask)
         intermediate_output = self.intermediate(attention_output)
         layer_output = self.output(intermediate_output, attention_output)
-        return layer_output,attention_mask
+        return layer_output
 
 
 class BertEncoder(nn.Module):
@@ -373,7 +373,7 @@ class BertEncoder(nn.Module):
 
         for i,cur_head_mask in enumerate(head_mask):
             layer_module = getattr(self, str(i))
-            hidden_states,attention_mask = layer_module(hidden_states,
+            hidden_states = layer_module(hidden_states,
                                             attention_mask=attention_mask, 
                                             head_mask=cur_head_mask)
         return hidden_states
@@ -591,6 +591,8 @@ class BertModel(BertPreTrainedModel):
         self.encoder = BertEncoder(config)
         self.pooler = BertPooler(config)
 
+        self.precompute_attention_mask = getattr(config,"precompute_attention_mask",False)
+
         self.init_weights()
 
     def get_input_embeddings(self):
@@ -615,26 +617,30 @@ class BertModel(BertPreTrainedModel):
             self.encoder.layer[layer].attention.prune_heads(heads)
 
     def forward(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None):
-        if is_None(attention_mask):# is None:
-            attention_mask = torch.ones_like(input_ids)
         if is_None(token_type_ids):# is None:
             token_type_ids = torch.zeros_like(input_ids)
 
-        # We create a 3D attention mask from a 2D tensor mask.
-        # Sizes are [batch_size, 1, 1, to_seq_length]
-        # So we can broadcast to [batch_size, num_heads, from_seq_length, to_seq_length]
-        # this attention mask is more simple than the triangular masking of causal attention
-        # used in OpenAI GPT, we just need to prepare the broadcast dimension here.
-        extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
 
-        # Since attention_mask is 1.0 for positions we want to attend and 0.0 for
-        # masked positions, this operation will create a tensor which is 0.0 for
-        # positions we want to attend and -10000.0 for masked positions.
-        # Since we are adding it to the raw scores before the softmax, this is
-        # effectively the same as removing these entirely.
-        extended_attention_mask = extended_attention_mask.to(
-            dtype=next(self.parameters()).dtype)  # fp16 compatibility
-        extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
+        if not self.precompute_attention_mask:
+            if is_None(attention_mask):# is None:
+                attention_mask = torch.ones_like(input_ids)
+            # We create a 3D attention mask from a 2D tensor mask.
+            # Sizes are [batch_size, 1, 1, to_seq_length]
+            # So we can broadcast to [batch_size, num_heads, from_seq_length, to_seq_length]
+            # this attention mask is more simple than the triangular masking of causal attention
+            # used in OpenAI GPT, we just need to prepare the broadcast dimension here.
+            extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
+
+            # Since attention_mask is 1.0 for positions we want to attend and 0.0 for
+            # masked positions, this operation will create a tensor which is 0.0 for
+            # positions we want to attend and -10000.0 for masked positions.
+            # Since we are adding it to the raw scores before the softmax, this is
+            # effectively the same as removing these entirely.
+            extended_attention_mask = extended_attention_mask.to(
+                dtype=next(self.parameters()).dtype)  # fp16 compatibility
+            extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
+        else:
+            extended_attention_mask = attention_mask
 
         # Prepare head mask if needed
         # 1.0 in head_mask indicate we keep the head
@@ -660,7 +666,7 @@ class BertModel(BertPreTrainedModel):
                                        head_mask=head_mask)
         pooled_output = self.pooler(sequence_output)
 
-        outputs = (sequence_output, pooled_output,)
+        outputs = (sequence_output, pooled_output)
         # sequence_output, pooled_output,
         return outputs
 
@@ -1226,3 +1232,26 @@ def SQUAD_loss(logits, start_positions, end_positions):
     total_loss = (start_loss + end_loss) / 2
 
     return total_loss
+
+
+
+def get_extended_attention_mask(attention_mask,input_ids,dtype=torch.float32):
+    if is_None(attention_mask):# is None:
+        attention_mask = torch.ones_like(input_ids)
+    # We create a 3D attention mask from a 2D tensor mask.
+    # Sizes are [batch_size, 1, 1, to_seq_length]
+    # So we can broadcast to [batch_size, num_heads, from_seq_length, to_seq_length]
+    # this attention mask is more simple than the triangular masking of causal attention
+    # used in OpenAI GPT, we just need to prepare the broadcast dimension here.
+    extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
+
+    # Since attention_mask is 1.0 for positions we want to attend and 0.0 for
+    # masked positions, this operation will create a tensor which is 0.0 for
+    # positions we want to attend and -10000.0 for masked positions.
+    # Since we are adding it to the raw scores before the softmax, this is
+    # effectively the same as removing these entirely.
+    extended_attention_mask = extended_attention_mask.to(dtype=dtype)  # fp16 compatibility
+    extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
+
+
+    return extended_attention_mask

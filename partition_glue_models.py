@@ -10,7 +10,7 @@ import functools
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 
 from models.normal import BertForSequenceClassification
-from models.normal.NLP_models.modeling_bert import GlueLoss
+from models.normal.NLP_models.modeling_bert import GlueLoss,get_extended_attention_mask
 from models.normal.NLP_models.modeling_roberta import RobertaForSequenceClassification
 from partition_scripts_utils import (ParsePartitioningOpts,
                                      ParseAcyclicPartitionerOpts,
@@ -108,9 +108,14 @@ def get_sample(args, tokenizer, model):
     batch = next(iter(train_dataloader))
     batch = tuple(t.to(args.device) for t in batch)
 
+    if args.precompute_attention_mask:
+        attention_mask = get_extended_attention_mask(batch[1],batch[0])
+    else:
+        attention_mask = batch[1]
+
     inputs = {
         "input_ids": batch[0],
-        "attention_mask": batch[1],
+        "attention_mask": attention_mask,
         # "token_type_ids": batch[2],
         # # NOTE: we explicitly add to match to the signatute
         # "position_ids": None,
@@ -240,6 +245,13 @@ class ParsePartitioningOptsGlue(ParsePartitioningOpts):
             default=False,
             help="evaluate glue on dev set to check weight loading")
 
+        parser.add_argument(
+            "--precompute_attention_mask",
+            action="store_true",
+            default=False,
+            help="wether to compute attention mask inside or outside the model"
+        )
+
     def set_defaults(self, parser):
         d = {
             "partitioning_batch_size": 1,
@@ -301,6 +313,9 @@ def main():
         args.config_name if args.config_name else args.model_name_or_path,
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
+
+    
+    setattr(config,"precompute_attention_mask",args.precompute_attention_mask)
 
     # get correct number of labels.
     config.num_labels = glue_tasks_num_labels.get(args.task_name)
