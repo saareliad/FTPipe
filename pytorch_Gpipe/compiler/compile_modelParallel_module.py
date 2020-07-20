@@ -279,11 +279,10 @@ def forward_statements(config: Dict,
                     delay_statements.append(f"{t}_buff.appendleft({t})")
                 outputs.append(t)
 
+            n_outputs = len(outputs)
             outputs = ", ".join(outputs)
 
-            delay_statements = [f"{outputs} = self.stage{idx}({inputs})"] + delay_statements
-            if len(ios[idx]['outputs']) == 1:
-                delay_statements[-1] += '[0]'
+            delay_statements = [f"{outputs} = self.stage{idx}({inputs})"+ ("[0]" if n_outputs == 1 else "")] + delay_statements
             if pipelined:
                 body.append(delay_statements)
             else:
