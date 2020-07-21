@@ -86,6 +86,7 @@ def roberta_base_8p_bw11_0_async_mnli_glue():
                 output_past=False,
                 stateless_tied=False,
                 num_labels=3,
+                precompute_attention_mask=True,
                 finetuning_task='mnli')
 
 

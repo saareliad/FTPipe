@@ -68,7 +68,37 @@ def make_just_y(ds, mode="train"):
     return TensorDataset(y)
 
 
-def make_just_x(ds, mode="train"):
+def get_extended_attention_mask(attention_mask,
+                                input_ids,
+                                dtype=torch.float32):
+    """ Extented attention mask, removing the preprocessing from inside to outside, bert"""
+    if attention_mask is None:
+        attention_mask = torch.ones_like(input_ids)
+    # We create a 3D attention mask from a 2D tensor mask.
+    # Sizes are [batch_size, 1, 1, to_seq_length]
+    # So we can broadcast to [batch_size, num_heads, from_seq_length, to_seq_length]
+    # this attention mask is more simple than the triangular masking of causal attention
+    # used in OpenAI GPT, we just need to prepare the broadcast dimension here.
+    extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
+
+    # Since attention_mask is 1.0 for positions we want to attend and 0.0 for
+    # masked positions, this operation will create a tensor which is 0.0 for
+    # positions we want to attend and -10000.0 for masked positions.
+    # Since we are adding it to the raw scores before the softmax, this is
+    # effectively the same as removing these entirely.
+    extended_attention_mask = extended_attention_mask.to(
+        dtype=dtype)  # fp16 compatibility
+    extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
+
+    return extended_attention_mask
+
+
+def make_just_x(ds, mode="train", precompute_masks=False):
+    # NOTE: it can be done in few lines with nlp packadge...
+    # keys = ds[0].keys()
+    # d = {k:v for k in keys}
+    # del d["label"
+
     d = defaultdict(list)
     for feature in ds:
         for key, val in vars(feature).items():
@@ -77,7 +107,19 @@ def make_just_x(ds, mode="train"):
             if val is None:
                 continue
             d[key].append(val)
+
     print(d.keys())
+    if "attention_mask" in d:
+        if precompute_masks:
+            print("-I- precomputing attention mask")
+            batch = list(d.values())
+            b1 = torch.tensor(batch[1])
+            b0 = torch.tensor(batch[0])
+            attetion_mask = get_extended_attention_mask(b1, b0)
+            d['attention_mask'] = attetion_mask
+        # else:
+        #     attention_mask = batch[1]
+
     return TensorDataset(*[torch.tensor(x) for x in d.values()])
 
 
