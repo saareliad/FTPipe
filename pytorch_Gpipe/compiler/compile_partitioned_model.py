@@ -253,11 +253,13 @@ def stages_in_out_config(ios: Dict, is_batched: Callable[[torch.Size], bool]) ->
                 dtype
                 is_batched
                 req_grad
+                created_by
             stage_outputs
                 id
                 shape
                 dtype
                 is_batched
+                used_by
     '''
     config = dict()
 
@@ -269,19 +271,23 @@ def stages_in_out_config(ios: Dict, is_batched: Callable[[torch.Size], bool]) ->
         output_dtypes = io['output_dtypes']
         output_shapes = io['output_shapes']
         inputs_req_grad = io['inputs_req_grad']
+        created_by = io['created_by']
+        used_by = io['used_by']
 
         stage_inputs = dict()
-        for i, s, r, d in zip(inputs, input_shapes,inputs_req_grad, input_dtypes):
+        for i, s, r, d,src in zip(inputs, input_shapes,inputs_req_grad, input_dtypes,created_by):
             stage_inputs[i] = {"shape": s,
                                "dtype": d,
                                "req_grad":r,
-                               "is_batched": is_batched(s)}
+                               "is_batched": is_batched(s),
+                               "created_by": src}
 
         stage_outputs = dict()
-        for o, s, d in zip(outputs, output_shapes, output_dtypes):
+        for o, s, d,dsts in zip(outputs, output_shapes, output_dtypes,used_by):
             stage_outputs[o] = {"shape": s,
                                 "dtype": d,
-                                "is_batched": is_batched(s)}
+                                "is_batched": is_batched(s),
+                                "used_by": dsts}
 
         config[idx] = {"inputs": stage_inputs,
                        "outputs": stage_outputs}
@@ -295,33 +301,39 @@ def create_model_in_out_config(graph: Graph, is_batched: Callable[[torch.Size], 
                 shape
                 dtype
                 is_batched
+                used_by
         model_outputs
             id
                 shape
                 dtype
                 is_batched
+                created_by
     """
     sorted_model_inputs = sorted(graph.inputs,key=lambda n: n.id)
     input_ids = [f"{graph.input_kw_ids.get(node.id,node.scope)}" for node in sorted_model_inputs]
     input_shapes = [n.tensor_shape for n in sorted_model_inputs]
     input_dtypes = [n.tensor_dtype for n in sorted_model_inputs]
+    input_destinations = [list({o.stage_id for o in n.out_edges}) for n in sorted_model_inputs]
 
     sorted_model_outputs = sorted(graph.outputs,key=lambda n: n.id)
     output_ids = [n.scope for n in sorted_model_outputs]
     output_shapes = [n.tensor_shape for n in sorted_model_outputs]
     output_dtypes = [n.tensor_dtype for n in sorted_model_outputs]
+    output_sources = [o.stage_id for o in sorted_model_outputs]
 
     model_inputs = dict()
-    for i, s, d in zip(input_ids, input_shapes, input_dtypes):
+    for i, s, d,dsts in zip(input_ids, input_shapes, input_dtypes,input_destinations):
         model_inputs[i] = {"shape": s,
                            "dtype": d,
-                           "is_batched": is_batched(s)}
+                           "is_batched": is_batched(s),
+                           "used_by":dsts}
 
     model_outputs = dict()
-    for o, s, d in zip(output_ids, output_shapes, output_dtypes):
+    for o, s, d,src in zip(output_ids, output_shapes, output_dtypes,output_sources):
         model_outputs[o] = {"shape": s,
                             "dtype": d,
-                            "is_batched": is_batched(s)}
+                            "is_batched": is_batched(s),
+                            "created_by": src}
 
     return model_inputs, model_outputs
 
@@ -338,7 +350,7 @@ def generate_config_without_nested(dict_config):
             flattened_shape = flatten(input_cfg['shape'])
             flattened_dtype = flatten(input_cfg['dtype'])
             for idx,(is_batched,shape,dtype) in enumerate(zip(flattened_is_batched,flattened_shape,flattened_dtype)):
-                cfg = {"shape":shape,"dtype":dtype,"is_batched":is_batched}
+                cfg = {"shape":shape,"dtype":dtype,"is_batched":is_batched,"used_by":input_cfg['used_by']}
                 new_model_inputs[input_id+f"_{idx}"] = cfg
         else:
             new_model_inputs[input_id] = input_cfg
@@ -353,7 +365,7 @@ def generate_config_without_nested(dict_config):
             flattened_shape = flatten(output_cfg['shape'])
             flattened_dtype = flatten(output_cfg['dtype'])
             for idx,(is_batched,shape,dtype) in enumerate(zip(flattened_is_batched,flattened_shape,flattened_dtype)):
-                cfg = {"shape":shape,"dtype":dtype,"is_batched":is_batched}
+                cfg = {"shape":shape,"dtype":dtype,"is_batched":is_batched,"created_by":output_cfg['created_by']}
                 new_model_outputs[output_id+f"_{idx}"] = cfg
         else:
             new_model_outputs[output_id] = output_cfg
@@ -370,7 +382,7 @@ def generate_config_without_nested(dict_config):
                 flattened_shape = flatten(output_cfg['shape'])
                 flattened_dtype = flatten(output_cfg['dtype'])
                 for idx,(is_batched,shape,dtype) in enumerate(zip(flattened_is_batched,flattened_shape,flattened_dtype)):
-                    cfg = {"shape":shape,"dtype":dtype,"is_batched":is_batched}
+                    cfg = {"shape":shape,"dtype":dtype,"is_batched":is_batched,"used_by":output_cfg['used_by']}
                     new_stage_outputs[output_id+f"_{idx}"] = cfg
             else:
                 new_stage_outputs[output_id] = output_cfg
@@ -386,7 +398,7 @@ def generate_config_without_nested(dict_config):
                 flattened_dtype = flatten(input_cfg['dtype'])
                 flatten_req_grad = flatten(input_cfg['req_grad'])
                 for idx,(is_batched,shape,dtype,req_grad) in enumerate(zip(flattened_is_batched,flattened_shape,flattened_dtype,flatten_req_grad)):
-                    cfg = {"shape":shape,"dtype":dtype,"req_grad":req_grad,"is_batched":is_batched}
+                    cfg = {"shape":shape,"dtype":dtype,"req_grad":req_grad,"is_batched":is_batched,"created_by":input_cfg['created_by']}
                     new_stage_inputs[input_id+f"_{idx}"] = cfg
             else:
                 new_stage_inputs[input_id] = input_cfg

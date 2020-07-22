@@ -30,12 +30,18 @@ def generate_forward_method(graph:Graph,
     part_inputs = sortedPartitionInputs(partition_nodes)
     i=0
     input_ids=[]
+    input_sources=[]
     for n in part_inputs:
         if n.id in graph.input_kw_ids:
             input_ids.append(graph.input_kw_ids[n.id])
         else:
             input_ids.append(f"x{i}")
             i+=1
+
+        if n.type is NodeTypes.IN:
+            input_sources.append(-1)
+        else:
+            input_sources.append(n.stage_id)
 
     ready_expressions = dict()
     # partition buffers and params are also ready
@@ -55,6 +61,17 @@ def generate_forward_method(graph:Graph,
         generateDeclaration(input_ids, partition_fields,
                             ready_expressions))
     outputs = sortedPartitionOutputs(partition_nodes, model_outputs)
+
+    output_destinations = []
+    for n in outputs:
+        dsts=[]
+        if n.id in graph.output_ids:
+            dsts.append(-1)
+        dsts.extend(o.stage_id for o in n.out_edges)
+        dsts = set(dsts)
+        dsts.discard(n.stage_id)
+        output_destinations.append(list(dsts))
+
     out_scopes = [graph.input_kw_ids.get(n.id,n.scope) for n in outputs]
     body = generateBody(outputs,
                         partition_nodes,
@@ -79,7 +96,9 @@ def generate_forward_method(graph:Graph,
           "output_shapes": output_shapes,
           "input_dtypes": input_dtypes,
           "output_dtypes": output_dtypes,
-          "inputs_req_grad":inputs_req_grad}
+          "inputs_req_grad":inputs_req_grad,
+          "created_by":input_sources,
+          "used_by":output_destinations}
 
     return lines, io
 
