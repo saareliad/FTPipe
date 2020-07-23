@@ -1,9 +1,10 @@
 import torch
 from misc.filelogger import FileLogger
 from pipeline import dp_sim
-from datasets import (simplified_get_train_valid_dl_from_args,
-                      get_separate_just_x_or_y_train_test_dl_from_args,
-                      get_separate_just_x_or_y_test_dl_from_args)
+from datasets import (
+    simplified_get_train_valid_dl_from_args,
+    get_separate_just_x_or_y_train_test_dl_from_args,
+)
 
 import optimizers.lr_scheduler
 from pipeline.work_schedulers import AVAILABLE_WORK_SCHEDULERS
@@ -13,9 +14,6 @@ from pipeline import TrueWeightsStorage
 import models
 from pipeline import CommunicationHandlerBase, get_auto_comm_handler_cls
 from pipeline.communication.multiprocessing import MultiprocessingCommunicationHandler
-
-# TODO: deprecated.
-# from pipeline.communication.multiprocessing_pull import MultiprocessingCommunicationHandler as PullMultiprocessingCommunicationHandler
 
 from pipeline.partition_manager import SinglePartitionManager
 
@@ -129,7 +127,7 @@ def get_lr_scheduler(args, optimizer):
                     num_steps = attr['args']['num_training_steps']
                     given_ratio = attr['args'][arg_name]
                     assert given_ratio >= 0 and given_ratio <= 1
-                    warmup_steps = int(given_ratio*num_steps)
+                    warmup_steps = int(given_ratio * num_steps)
                     attr['args'][arg_name] = warmup_steps
                     print(
                         f"preprocessed {arg_name} from ratio {given_ratio} to {warmup_steps} steps."
@@ -323,15 +321,22 @@ def get_data_keywords_by_task(args, dl_kw, **kw):
             overwrite_cache=getattr(args, 'overwrite_cache', False),
             task_name=getattr(args, 'glue_task_name'),
             max_seq_length=getattr(args, 'max_seq_length', 128),
-        )
+            precompute_masks=getattr(args, 'precompute_masks', False),
+            precompute_attention_mask=getattr(args,
+                                              "precompute_attention_mask",
+                                              False),
+            is_last_partition=args.stage == args.num_stages - 1)
 
     else:
         dataset_keywords = {}
-    
+
     return dataset_keywords
 
 
-def get_dataloaders(args, explicit_separated_dataset=False, **kw):
+def get_dataloaders(args,
+                    pipe_config=None,
+                    explicit_separated_dataset=False,
+                    **kw):
     # TODO: currently assuming that only 1 rank is x or y.
     # will have to fix this for replicated.
     dl_kw = dict()
@@ -352,11 +357,20 @@ def get_dataloaders(args, explicit_separated_dataset=False, **kw):
         # TODO: this does it just for x and y.
         # print("dataset_keywords", dataset_keywords)
         train_dl, test_dl, samplers, extra = get_separate_just_x_or_y_train_test_dl_from_args(
-            args, verbose=False, dataset_keywords=dataset_keywords, **dl_kw)
+            args,
+            pipe_config=pipe_config,
+            verbose=False,
+            dataset_keywords=dataset_keywords,
+            dataloader_keywords=dl_kw,
+        )
     else:
         # Note: sometimes used to infer all parameters, (by all partitions).
         train_dl, test_dl, *samplers = simplified_get_train_valid_dl_from_args(
-            args, verbose=False, dataset_keywords=dataset_keywords, **dl_kw)
+            args,
+            verbose=False,
+            dataset_keywords=dataset_keywords,
+            dataloader_keywords=dl_kw,
+        )
         # TODO: support extra
         extra = None
 
@@ -492,7 +506,9 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         args.bs_train,
         args.bs_test,  # NOTE: changed name
         model_instance=model_instance,
-        send_target_in_pipe=not ("_sep" in args.task))
+        send_target_in_pipe=("_nonsep" in args.task))
+
+    pipe_config = parsed_config.pipe_config
 
     comm_init_args = parsed_config.comm_init_args()
 
@@ -534,15 +550,13 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         raise NotImplementedError("In progress")
 
     # Try getting separate X,Y dataloaders
-    if is_first_partition or is_last_partition:
-        explicit_separated_dataset = "_sep" in args.task
+    explicit_separated_dataset = not "_nonsep" in args.task
+    train_dl, test_dl, samplers, extra = get_dataloaders(
+        args,
+        pipe_config=pipe_config,
+        explicit_separated_dataset=explicit_separated_dataset,
+        **dataset_keywords)
 
-        train_dl, test_dl, samplers, extra = get_dataloaders(
-            args,
-            explicit_separated_dataset=explicit_separated_dataset,
-            **dataset_keywords)
-    else:
-        train_dl, test_dl, samplers, extra = None, None, [], None
     del dataset_keywords
 
     # instead of loading dl on every device,
@@ -646,28 +660,25 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
                         "gap_aware_just_loss works only with recomputation on")
 
     # Init the partition manager itself, warping the model and loading it to device.
-    partition = partition_cls(args.stage,
-                              args.num_stages,
-                              model,
-                              comm_handler,
-                              work_scheduler,
-                              device,
-                              is_last_partition,
-                              is_first_partition,
-                              log_frequency=args.log_frequency,
-                              step_every=args.step_every,
-                              use_recomputation=(not args.no_recomputation),
-                              gap_aware_just_loss=gap_aware_just_loss,
-                              use_pre_loaded_label_input=getattr(
-                                  args, "use_pre_loaded_label_input", False),
-                              weight_stashing_just_for_stats=getattr(
-                                  args, "weight_stashing_just_for_stats",
-                                  False),
-                              stateless_tied=getattr(args, "stateless_tied",
-                                                     False),
-                              is_mp=args.is_multiprocessing_worker,
-                              req_grad=parsed_config.req_grad,
-                              unflatten_structure=parsed_config.unflatten_structure)
+    partition = partition_cls(
+        args.stage,
+        args.num_stages,
+        model,
+        comm_handler,
+        work_scheduler,
+        device,
+        is_last_partition,
+        is_first_partition,
+        log_frequency=args.log_frequency,
+        step_every=args.step_every,
+        use_recomputation=(not args.no_recomputation),
+        gap_aware_just_loss=gap_aware_just_loss,
+        weight_stashing_just_for_stats=getattr(
+            args, "weight_stashing_just_for_stats", False),
+        stateless_tied=getattr(args, "stateless_tied", False),
+        is_mp=args.is_multiprocessing_worker,
+        req_grad=parsed_config.req_grad,
+        unflatten_structure=parsed_config.unflatten_structure)
 
     # support for simulating stage replication (dev)
     if hasattr(args, "ddp_sim_num_gpus") and args.ddp_sim_num_gpus > 1:
@@ -794,7 +805,8 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
             assert (getattr(args, "weight_stashing", False))
 
     # Set Task
-    task = task_cls(device, is_last_partition, is_first_partition)
+    task = task_cls(device, is_last_partition, is_first_partition, args.stage,
+                    pipe_config)
     partition.set_task(task)
 
     if hasattr(args, "auto_file_name"):

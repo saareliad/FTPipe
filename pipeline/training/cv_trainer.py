@@ -10,17 +10,17 @@ class CVTrainer(BaseLossTrainer):
     def __init__(self, *args, **kw):
         super().__init__(*args, loss_fn=torch.nn.CrossEntropyLoss(), **kw)
 
-    def calc_test_stats(self, x, y):
+    def calc_test_stats(self, x, y, batch_size):
         # print("Called calc_test_stats")
         loss = self.loss_fn(x, y)
-        batch_size = len(y)
+        assert(batch_size == len(y))
         y_pred = torch.argmax(x, 1)
         num_correct = torch.sum(y == y_pred).item()
 
         self.statistics.update_on_batch("loss", loss.item(), batch_size)
         self.statistics.update_on_batch("acc", num_correct, batch_size)
 
-    def last_partition_step_and_statistics(self, x, y, loss, step=True, old_lrs=None):
+    def last_partition_step_and_statistics(self, x, y, batch_size, loss, step=True, old_lrs=None):
         """
         step
         stats
@@ -28,7 +28,7 @@ class CVTrainer(BaseLossTrainer):
         step can be used later for grad accumulations
         """
 
-        batch_size = len(y)
+        assert(batch_size == len(y))
         y_pred = torch.argmax(x, 1)
         num_correct = torch.sum(y == y_pred).item()
 

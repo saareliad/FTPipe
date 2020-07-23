@@ -6,7 +6,7 @@
     "auto_file_name": true,
     "out_filename": "tst",
     "distributed_backend": "mpi",
-    "task": "glue_sep",
+    "task": "glue",
     "model": "bert_large_uncased_whole_word_masking_8p_bw11_0_async_mnli_glue",
     "dataset": "glue",
     "trainer": {
@@ -61,7 +61,6 @@
     "valid_seq_len": 128,
     "test_seq_len": 128,
     "overwrite_cache": false,
-    "use_pre_loaded_label_input": false,
     "dont_drop_last": true,
     "model_type": "bert",
     "output_dir": "results/glue/out_dir/"

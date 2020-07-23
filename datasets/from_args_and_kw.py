@@ -18,18 +18,44 @@ from .datasets import (
 # From args and key words.
 ###################################
 
+HARDCODED_JUST_XY = {"lm", "cv"}  # HACK: used to hardcode this.
+# TODO: it should be by datasets actually and not task, will handle it later
+
+
+def get_just(args, pipe_config=None):
+
+    is_hardcoded_xy = args.task in HARDCODED_JUST_XY
+    if is_hardcoded_xy or pipe_config is None:  # legacy
+        print("-I- using hardcoded xy")
+        if args.stage == 0:
+            just = 'x'
+        elif args.stage == args.num_stages - 1:
+            just = 'y'
+        else:
+            just = None
+    else:
+        pcs = pipe_config.stages[args.stage]
+        inputs_from_dl = [
+            i for i in pcs.inputs if i in pipe_config.model_inputs
+        ]
+        just = inputs_from_dl
+        print(f"stage{args.stage}: infered inputs from config: {just}")
+
+    return just
+
 
 def get_separate_just_x_or_y_train_test_dl_from_args(args, **kw):
     # TODO: according to ranks, for replicated stages.
     DATA_DIR = getattr(args, "data_dir", DEFAULT_DATA_DIR)
     DATA_DIR = DATA_DIR if DATA_DIR else DEFAULT_DATA_DIR
 
-    # Just:
-    # HACK: avoid asking "is last partition?"  
-    # FIXME: need to ask that for comined IntraLayer and Pipeline.
-    just = 'x' if args.stage == 0 else 'y'
+    just = get_just(args, pipe_config=kw.pop("pipe_config", None))
+    if not just and not getattr(args, "load_extra_inputs", False):  # Empty
+        return None, None, [], None
 
+    # kw['is_last_partition'] = args.stage == args.num_stages - 1
     # num_replicas=None, rank=None
+    assert 'dataloader_keywords' in kw
     return get_separate_just_x_or_y_train_test_dl(
         args.dataset,
         args.bs_train,
@@ -40,25 +66,23 @@ def get_separate_just_x_or_y_train_test_dl_from_args(args, **kw):
         **kw)
 
 
-def get_separate_just_x_or_y_test_dl_from_args(args, **kw):
-    """ get just the test dataset.
-    kw can have
-    test_dataset_keywords=dict()
-    to help with it
-    """
-    DATA_DIR = getattr(args, "data_dir", DEFAULT_DATA_DIR)
-    DATA_DIR = DATA_DIR if DATA_DIR else DEFAULT_DATA_DIR
+# def get_separate_just_x_or_y_test_dl_from_args(args, **kw):
+#     """ get just the test dataset.
+#     kw can have
+#     test_dataset_keywords=dict()
+#     to help with it
+#     """
+#     DATA_DIR = getattr(args, "data_dir", DEFAULT_DATA_DIR)
+#     DATA_DIR = DATA_DIR if DATA_DIR else DEFAULT_DATA_DIR
 
-    # Just:
-    # HACK: avoid asking "is last partition?"
-    just = 'x' if args.stage == 0 else 'y'
+#     just = get_just(args, pipe_config=kw.get("pipe_config", None))
 
-    # num_replicas=None, rank=None
-    return get_separate_just_x_or_y_test_dl(args.dataset,
-                                            args.bs_test,
-                                            just,
-                                            DATA_DIR=DATA_DIR,
-                                            **kw)
+#     # num_replicas=None, rank=None
+#     return get_separate_just_x_or_y_test_dl(args.dataset,
+#                                             args.bs_test,
+#                                             just,
+#                                             DATA_DIR=DATA_DIR,
+#                                             **kw)
 
 
 def add_dataset_argument(parser, default='cifar10', required=False):

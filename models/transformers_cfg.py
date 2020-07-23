@@ -30,8 +30,9 @@ MODEL_TYPES = {
     'bert_glue': (BertConfig, BertForSequenceClassification, BertTokenizer),
     'roberta_glue':
     (RobertaConfig, RobertaForSequenceClassification, RobertaTokenizer),
-    't5':  (T5Config, T5ForConditionalGeneration, T5Tokenizer),
-    't5_stateless':  (T5Config, StatelesT5ForConditionalGeneration, T5Tokenizer),
+    't5': (T5Config, T5ForConditionalGeneration, T5Tokenizer),
+    't5_stateless':
+    (T5Config, StatelesT5ForConditionalGeneration, T5Tokenizer),
 }
 
 # NOTE: some of these configs are just for this repo, see
@@ -86,7 +87,9 @@ def roberta_base_8p_bw11_0_async_mnli_glue():
                 output_past=False,
                 stateless_tied=False,
                 num_labels=3,
-                precompute_attention_mask=True,
+                explicitly_set_dict={
+                    "precompute_attention_mask": True
+                },
                 finetuning_task='mnli')
 
 
@@ -98,6 +101,7 @@ def roberta_large_8p_buitlin_flatten():
                 stateless_tied=False,
                 num_labels=3,
                 finetuning_task='mnli')
+
 
 def gpt2_p4_lm_untied():
     return dict(model_type='gpt2_lm_stateless',
@@ -191,6 +195,7 @@ def t5_small_untied_4p_bw12_squad1():
                     "output_hidden_states": False
                 },
                 stateless_tied=False)
+
 
 functions_list = getmembers(
     sys.modules[__name__],

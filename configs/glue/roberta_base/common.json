@@ -2,12 +2,12 @@
 
     "logdir": "logs/glue/",
     "data_dir": "/home_local/saareliad/data/glue_data",
-    "out_dir": "results/glue/",
+    "out_dir": "results/glue/roberta_base/",
     "auto_file_name": true,
     "out_filename": "tst",
     "distributed_backend": "mpi",
     "task": "glue",
-    "model": "roberta_large_8p_buitlin_flatten",
+    "model": "roberta_base_8p_bw11_0_async_mnli_glue",
     "dataset": "glue",
     "trainer": {
         "type": "glue",
@@ -31,12 +31,11 @@
     "lr_scheduler": {
         "type": "get_linear_schedule_with_warmup",
         "preproc_args": {
-            "num_training_steps": "epochs_to_steps",	
             "num_warmup_steps": "ratio_from_num_training_steps"
         },
         "args": {
             "num_warmup_steps": 0.06,
-            "num_training_steps": -1,
+            "num_training_steps": 123873,
             "last_epoch": -1
         }
     },
@@ -57,7 +56,7 @@
     "keep_buffers_alive": false,
     "train_batches_limit": -1,
     "log_frequency": 200,
-    "model_name_or_path": "roberta-large",
+    "model_name_or_path": "roberta-base",
     "max_seq_length": 128,
     "glue_task_name": "mnli",
     "train_seq_len": 128,
@@ -66,5 +65,6 @@
     "overwrite_cache": false,
     "dont_drop_last": true,
     "model_type": "roberta",
+    "precompute_attention_mask": true,
     "output_dir": "results/glue/out_dir/"
 }

@@ -61,7 +61,7 @@ def glue_data_dir(DATA_DIR):
     return os.path.join(DATA_DIR, "glue_data")
 
 
-def make_just_y(ds, mode="train"):
+def make_just_y(ds, **kw):
     # NOTE: I made it output example ids in eval for conviniece
     y = [feature.label for feature in ds]
     y = torch.tensor(y)
@@ -93,7 +93,7 @@ def get_extended_attention_mask(attention_mask,
     return extended_attention_mask
 
 
-def make_just_x(ds, mode="train", precompute_masks=False):
+def make_just_x(ds, **kw):
     # NOTE: it can be done in few lines with nlp packadge...
     # keys = ds[0].keys()
     # d = {k:v for k in keys}
@@ -110,7 +110,7 @@ def make_just_x(ds, mode="train", precompute_masks=False):
 
     print(d.keys())
     if "attention_mask" in d:
-        if precompute_masks:
+        if kw['precompute_attention_mask']:
             print("-I- precomputing attention mask")
             batch = list(d.values())
             b1 = torch.tensor(batch[1])
@@ -119,6 +119,46 @@ def make_just_x(ds, mode="train", precompute_masks=False):
             d['attention_mask'] = attetion_mask
         # else:
         #     attention_mask = batch[1]
+
+    return TensorDataset(*[torch.tensor(x) for x in d.values()])
+
+
+MAP_NAMES_TO_FEATURES = {
+    'input0': 'input_ids',
+    'input1': 'attention_mask',
+}
+
+LAST_PARTITION_EXTRA_LABELS = {
+    'label',
+}
+
+
+def make_just_by_ds(ds, just, **kw):
+    assert isinstance(just, list)
+
+    A = set(MAP_NAMES_TO_FEATURES[i] for i in just)
+    if kw['is_last_partition']:
+        A |= LAST_PARTITION_EXTRA_LABELS
+
+    d = defaultdict(list)
+    for feature in ds:
+        for key, val in vars(feature).items():
+            if key in A:
+                d[key].append(val)
+            #     if key in LAST_PARTITION_EXTRA_LABELS:
+            #         d[key].append(val)
+
+    print(d.keys())
+    if "attention_mask" in d:
+        if kw['precompute_attention_mask']:
+            print("-I- precomputing attention mask")
+            b1 = torch.tensor(d['attention_mask'])
+            if 'input_ids' in d:
+                b0 = torch.tensor(d['input_ids'])
+            else:
+                b0 = torch.tensor([feature.input_ids for feature in ds])
+            attetion_mask = get_extended_attention_mask(b1, b0)
+            d['attention_mask'] = attetion_mask
 
     return TensorDataset(*[torch.tensor(x) for x in d.values()])
 
@@ -157,6 +197,8 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
     task_name = kw['task_name']
     max_seq_length = kw['max_seq_length']
     overwrite_cache = kw['overwrite_cache']
+    is_last_partition = kw.get('is_last_partition')
+    precompute_attention_mask = kw['precompute_attention_mask']
     data_dir = os.path.join(DATA_DIR, TASK_NAME_TO_DATA_DIR[task_name])
     args = GlueDataTrainingArguments(task_name=task_name,
                                      data_dir=data_dir,
@@ -171,11 +213,20 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
         just_f = make_just_x
     elif just == 'y':
         just_f = make_just_y
+    elif isinstance(just, list):
+        just_f = make_just_by_ds
+
     else:
         raise NotImplementedError()
 
-    train_ds = just_f(train_ds, mode='train')
-    dev_ds = just_f(dev_ds, mode='eval')
+    train_ds = just_f(train_ds,
+                      just=just,
+                      precompute_attention_mask=precompute_attention_mask,
+                      is_last_partition=is_last_partition)
+    dev_ds = just_f(dev_ds,
+                    just=just,
+                    precompute_attention_mask=precompute_attention_mask,
+                    is_last_partition=is_last_partition)
 
     print("-I- done creating datasets")
 

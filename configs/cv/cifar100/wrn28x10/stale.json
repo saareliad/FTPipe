@@ -4,5 +4,7 @@
         "stale_optimizer.json"
     ],
     "base_config_path_is_relative": true,
-    "weight_stashing": false
+    "weight_stashing": false,
+    "train_batches_limit":-1
+
 }

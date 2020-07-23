@@ -6,8 +6,7 @@
     "out_filename": "cv",
     "statistics": "cv",
     "distributed_backend": "mpi",
-    "task": "cv_sep",
-    "use_pre_loaded_label_input": false,
+    "task": "cv",
     "model": "wrn_16x4_p2",
     "dataset": "cifar10",
     "trainer": {

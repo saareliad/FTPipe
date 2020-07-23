@@ -20,14 +20,12 @@ __all__ = [
     'Partition',
     'FirstPartition',
     'LastPartition',
-    'LastPartitionWithLabelInput',
     'PartitionWithoutRecomputation',
     'get_buffers_for_ddp_sync',
     # GPipe:
     'GPipePartition',
     'GPipeFirstPartition',
     'GPipeLastPartition',
-    'GPipeLastPartitionWithLabelInput'
 ]
 
 # TODO: LayerNorm? GroupNorm?
@@ -293,7 +291,8 @@ class LastPartition(Partition):
             else:
                 # Option 2
                 x = list(get_r(x, self.req_grad))
-                self.input_buffer[micro_batch_idx] = x
+
+                self.input_buffer[micro_batch_idx] = list(filter_req_grad_tensors(x))
 
                 # UNFLATEN
                 x = self.layers(*x)
@@ -311,37 +310,8 @@ class LastPartition(Partition):
             return x[0]
         return x
 
-
-class LastPartitionWithLabelInput(LastPartition):
-    """A assuming that given x is tuple in which last idx is the label.
-        We don't store the label, because we don't need gradient on it.
-        
-        In use for our partitoned transformers with LMhead.
-    """
-
-    # TODO:
-    # _REQ_GRAD = True
-    # _HAS_DUMMY_FORWARD = False
-    def forward(self, x: TensorOrTensors, micro_batch_idx):
-        assert not isinstance(x, Tensor)
-        if self.training:
-            # For backprobpagating gradients
-            x = list(get_r(x, self.req_grad))
-            self.input_buffer[micro_batch_idx] = list(
-                filter_req_grad_tensors(x))
-
-            # UNFLATEN
-            x = self.layers(*x)
-        else:
-            with torch.no_grad():
-                # UNFLATEN
-                x = self.layers(*x)
-
-        #  Last partition outputs should be in a tensor format
-        if not isinstance(x, Tensor):
-            assert (len(x) == 1)
-            return x[0]
-        return x
+    def recompute(self, micro_batch_idx):
+        raise NotImplementedError()
 
 
 class PartitionWithoutRecomputation(nn.Module):
@@ -550,24 +520,14 @@ class GPipeLastPartition(GPipePartition):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
 
+    # TODO: when loss is included in the model (e.g some of huggingface transformers) it is very stupied that we calculate loss for all micro batches in the dummy forward,
+
     def forward(self, x: TensorOrTensors, micro_batch_idx):
         x = super().forward(x, micro_batch_idx)
         if not isinstance(x, Tensor):
             assert (len(x) == 1)
             return x[0]
         return x
-
-
-class GPipeLastPartitionWithLabelInput(GPipeLastPartition):
-    RECOMP_PARTITION_CLS = Partition
-    NO_RECOMP_PARTITION_CLS = LastPartitionWithLabelInput
-    _CLONE_INPUTS = True
-
-    # TODO: it is very stupied that we calculate loss for all micro batches in the dummy forward,
-    # but its very anoying to fix this.
-    def __init__(self, *args, **kw):
-        super().__init__(*args, **kw)
-
 
 filter_req_grad_tensors = partial(
     filter, lambda a: isinstance(a, Tensor) and a.requires_grad)
@@ -606,7 +566,7 @@ def req_grad_dict_to_tuple(req_grad: dict):
 
 
 def assert_same_size(x, g):
-    assert len(list(flatten(x))) == len(list(flatten(g)))
+    assert len(list(flatten(x))) == len(list(flatten(g))), str((len(list(flatten(x))), len(list(flatten(g)))))
 
 
 def get_dcr(x, req_grad):
@@ -623,7 +583,12 @@ def get_dcr(x, req_grad):
 
 
 def get_dr(x, req_grad):
-    assert_same_size(x, req_grad)
+    try:
+        assert_same_size(x, req_grad)
+    except Exception as e:
+        print(x)
+        print(req_grad)
+        raise e
     res = []
     for t, r in zip(flatten(x), flatten(req_grad)):
         if isinstance(t, Tensor):

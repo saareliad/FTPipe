@@ -165,8 +165,8 @@ class SimpleCommBase(CommunicationHandlerBase):
                                          ranks_in_previous_stage,
                                          ranks_in_next_stage)  # If needed.
 
-        self.logger.debug(f"Send ranks: {self.send_ranks}")
-        self.logger.debug(f"Receive ranks: {self.receive_ranks}")
+        # self.logger.debug(f"Send ranks: {self.send_ranks}")
+        # self.logger.debug(f"Receive ranks: {self.receive_ranks}")
 
     def init_process_group(self, *args, **kw):
 

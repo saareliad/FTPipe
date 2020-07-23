@@ -5,7 +5,7 @@
     "auto_file_name": true,
     "out_filename": "e1",
     "distributed_backend": "mpi",
-    "task": "cv_sep",
+    "task": "cv",
     "statistics": "cv",
     "model": "resnet50_imagenet_p8",
     "dataset": "imagenet",

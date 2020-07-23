@@ -34,7 +34,9 @@ from .hardcoded_dirs import DEFAULT_DATA_DIR
 # get_separate_just_x_or_y_train_test_dl_from_args  (train, valid)
 # get_separate_just_x_or_y_test_dl_from_args: (just the test dataloader)
 
-AVAILABLE_DATASETS = {'cifar10', 'cifar100', 'imagenet', 'wt2', 'squad1', 'squad2', 'glue'}
+AVAILABLE_DATASETS = {
+    'cifar10', 'cifar100', 'imagenet', 'wt2', 'squad1', 'squad2', 'glue'
+}
 
 # NOTE: these are functions which returns train and test/validation datasets.
 DATASET_TO_DS_FN = {
@@ -247,6 +249,7 @@ def get_separate_just_x_or_y_train_test_dl(dataset,
                                            DATA_DIR=DEFAULT_DATA_DIR,
                                            pin_memory=True,
                                            dataset_keywords=dict(),
+                                           dataloader_keywords=dict(),
                                            **kw):
 
     experiment_manual_seed = torch.initial_seed()
@@ -279,18 +282,22 @@ def get_separate_just_x_or_y_train_test_dl(dataset,
         shuffle=False) if ds_test is not None else None
 
     # Note: explicitly set shuffle to False, its handled by samplers.
-    dl_train = DataLoader(ds_train,
-                          bs_train,
-                          shuffle=False,
-                          pin_memory=pin_memory,
-                          sampler=train_sampler,
-                          **kw)
-    dl_test = DataLoader(ds_test,
-                         bs_test,
-                         shuffle=False,
-                         pin_memory=pin_memory,
-                         sampler=test_sampler,
-                         **kw) if ds_test is not None else None
+    assert 'pin_memory' in dataloader_keywords, str(dataloader_keywords)
+    assert 'shuffle' not in dataloader_keywords
+    dl_train = DataLoader(
+        ds_train,
+        bs_train,
+        shuffle=False,
+        #   pin_memory=pin_memory,
+        sampler=train_sampler,
+        **dataloader_keywords)
+    dl_test = DataLoader(
+        ds_test,
+        bs_test,
+        shuffle=False,
+        #  pin_memory=pin_memory,
+        sampler=test_sampler,
+        **dataloader_keywords) if ds_test is not None else None
 
     if verbose:
         print(f'Train: {len(dl_train) * bs_train} samples')
@@ -301,5 +308,6 @@ def get_separate_just_x_or_y_train_test_dl(dataset,
     if extra:
         assert len(extra) == 1
         extra = extra[0]
-    
-    return dl_train, dl_test, list(filter(None, [train_sampler, test_sampler])), extra
+
+    return dl_train, dl_test, list(filter(
+        None, [train_sampler, test_sampler])), extra

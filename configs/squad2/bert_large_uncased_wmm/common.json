@@ -6,7 +6,7 @@
     "auto_file_name": true,
     "out_filename": "s2",
     "distributed_backend": "mpi",
-    "task": "squad_sep",
+    "task": "squad",
     "model": "bert_large_uncased_squad_8p",
     "dataset": "squad2",
     "trainer": {
@@ -31,7 +31,7 @@
         "type": "get_linear_schedule_with_warmup",
         "preproc_args": {
             "num_training_steps": "epochs_to_steps",
-            "num_warmup_steps": "epochs_to_steps"
+            "num_warmup_steps": "ratio_from_num_training_steps"
         },
         "args": {
             "num_warmup_steps": 0,
@@ -66,7 +66,6 @@
     "max_query_length": 64,
     "threads": 60,
     "overwrite_cache": false,
-    "use_pre_loaded_label_input": false,
     "dont_drop_last": true,
     "model_type": "bert",
     "version_2_with_negative": true,

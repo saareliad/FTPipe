@@ -131,3 +131,17 @@ def move_tensors(ts, device):
         return t
 
     return nested_map(move, ts)
+
+
+# helper for debugging
+def print_tensors(stage, x, in_or_out="out"):
+    if isinstance(x, torch.Tensor):
+        pass
+    else:
+        t = []
+        for i, v in enumerate(x):
+            if not isinstance(v, torch.Tensor):
+                t.append("non-tensor" + str(v))
+            else:
+                t.append(v.shape)
+        print(f"stage {stage}: {in_or_out}: {t}")

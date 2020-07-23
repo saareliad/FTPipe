@@ -5,10 +5,10 @@ import logging
 from . import CommunicationHandlerBase
 from .partition import (Partition, LastPartition, FirstPartition,
                         PartitionWithoutRecomputation,
-                        LastPartitionWithLabelInput)
+                        )
 
 from .partition import (GPipePartition, GPipeFirstPartition,
-                        GPipeLastPartition, GPipeLastPartitionWithLabelInput)
+                        GPipeLastPartition)
 
 from .partition import get_buffers_for_ddp_sync
 from .training.interface import PartitionedTrainer  # , GradNormStepper
@@ -44,7 +44,6 @@ class SinglePartitionManager:
                  use_recomputation=True,
                  gap_aware_just_loss=False,
                  sync_buffers=False,
-                 use_pre_loaded_label_input=False,
                  weight_stashing_just_for_stats=False,
                  stateless_tied=False,
                  is_mp=False,
@@ -54,7 +53,6 @@ class SinglePartitionManager:
         if (gap_aware_just_loss and (not use_recomputation)):
             raise NotImplementedError(
                 "gap_aware_just_loss works only with recomputation on")
-        self.use_pre_loaded_label_input = use_pre_loaded_label_input
         self.logger = logging.getLogger("msnag")  # FIXME
         self.gap_aware_just_loss = gap_aware_just_loss
         self.weight_stashing_just_for_stats = weight_stashing_just_for_stats
@@ -122,13 +120,12 @@ class SinglePartitionManager:
         TO_DEVICE = False
         is_last_partition = self.is_last_partition
         is_first_partition = self.is_first_partition
-        use_pre_loaded_label_input = self.use_pre_loaded_label_input
         device = self.device
 
         # Set partition.
         if use_recomputation:
             if is_last_partition:
-                partition_cls = LastPartition if not use_pre_loaded_label_input else LastPartitionWithLabelInput
+                partition_cls = LastPartition
             elif is_first_partition:
                 partition_cls = FirstPartition
             else:
@@ -141,7 +138,7 @@ class SinglePartitionManager:
         else:
             # Partition without recomputation
             if is_last_partition:
-                partition_cls = LastPartition if not use_pre_loaded_label_input else LastPartitionWithLabelInput
+                partition_cls = LastPartition
                 self.partition = partition_cls(
                     partition,
                     device,
@@ -218,7 +215,6 @@ class SinglePartitionManager:
                        dataloader,
                        run_limit=-1,
                        fake_draw=DEBUG_FAKE_DRAW):
-        assert self.is_first_partition or self.is_last_partition
         self.dl_iter = iter(dataloader)
 
         if fake_draw and (run_limit < len(dataloader)):
@@ -269,38 +265,30 @@ class SinglePartitionManager:
         if self.is_replicated and self.sync_buffers:
             self.comm_handler.sync_buffers(self.buffers_to_sync)
 
-    def get_input_data_forward(self, batch_idx, num_batches):
-        """ Get the data to do forward on """
-        if self.is_first_partition:
-            # this also handle getting y with separate dataloader.
-            x, *ctx = self.task.unpack_data_for_partition(next(self.dl_iter))
-            return x, ctx
-        x = self.comm_handler.get_data_forward(batch_idx, num_batches)
-        x, *ctx = self.task.unpack_data_for_partition(x)
-        return x, ctx
-
     def forward_pass_and_send(self,
                               batch_idx,
                               num_batches,
-                              preload_input=None):
-        x, ctx = self.get_input_data_forward(batch_idx, num_batches)
-        # print_tensors(self.stage, x, "in")
+                              preload_input_partition):
 
-        if (preload_input is not None) and self.is_last_partition:
-            x = (*preload_input, *x)
-
+        # Get data
+        if self.is_first_partition:
+            x = preload_input_partition
+        else:
+            # Get input data from previous pipeline stage
+            x = self.comm_handler.get_data_forward(batch_idx, num_batches)
+            # Unify with preloaded data
+            x = (*preload_input_partition, *x)
+        # In case we send labels in pipeline: extract them from the output.
+        # For last partition: what is loaded for outside loss and statistics (e.g: batch size, ...)
+        x, *ctx = self.task.unpack_data_for_partition(x)
+        # Run the stage
         x = self.partition(x, batch_idx)
-
-        # print_tensors(self.stage, x, "out")
-
         request_objects = None
-
         # For non last partition - send forward.
         if not self.is_last_partition:
             send_ctx = self.task.pack_send_context(x, *ctx)
             request_objects = self.comm_handler.send_activations(
                 send_ctx, batch_idx)
-
         return request_objects, x, ctx
 
     def run_batch_forward(self, batch_idx, num_batches, done_bwds=None):
@@ -334,14 +322,9 @@ class SinglePartitionManager:
             expected_staleness = self.expected_staleness(batch_idx, done_bwds)
             self.delay_at_batch[batch_idx] = expected_staleness
 
-        # Get the data to run forward on, (and target)
-        preload_input = None
-        if self.is_last_partition:
-            preload_ctx = self.task.preload_last_partition(
-                getattr(self, "dl_iter", None), self.device)
-            if self.use_pre_loaded_label_input:
-                preload_input = preload_ctx
-                preload_ctx = tuple()
+
+        # TODO: preload stuff from dataloader.
+        preload_input_partition, preload_input_to_outside_loss = self.task.preload_from_dataloader(getattr(self, "dl_iter", None))
 
         # Do the forward pass with optionals
         # optional (1): Weight Prediction
@@ -367,7 +350,7 @@ class SinglePartitionManager:
                         pg['lr'] = old_lr
 
                 request_objects, x, ctx = self.forward_pass_and_send(
-                    batch_idx, num_batches, preload_input=preload_input)
+                    batch_idx, num_batches, preload_input_partition)
 
                 if weight_stasher is not None:
                     # Stash parameters for later.
@@ -387,13 +370,13 @@ class SinglePartitionManager:
             else:
                 # No weight predictor
                 request_objects, x, ctx = self.forward_pass_and_send(
-                    batch_idx, num_batches, preload_input=preload_input)
+                    batch_idx, num_batches, preload_input_partition)
                 if weight_stasher is not None:
                     weight_stasher.stash_current(batch_idx, expected_staleness)
         else:
             # Not training. just go on as usual
             request_objects, x, ctx = self.forward_pass_and_send(
-                batch_idx, num_batches, preload_input=preload_input)
+                batch_idx, num_batches, preload_input_partition)
 
         if not self.is_last_partition:
             # For the last partition - we restore later.
@@ -405,7 +388,7 @@ class SinglePartitionManager:
         ############################
         else:
             # Last partition - also do backward.
-            ctx = (*preload_ctx, *ctx)
+            ctx = (*preload_input_to_outside_loss, *ctx)
             if not is_training:
                 # In Eval: Just calculate statistics.
                 self.trainer.calc_test_stats(x, *ctx)
@@ -679,16 +662,12 @@ class GPipePartitionManager(SinglePartitionManager):
         TO_DEVICE = False
         is_last_partition = self.is_last_partition
         is_first_partition = self.is_first_partition
-        use_pre_loaded_label_input = self.use_pre_loaded_label_input
         device = self.device
 
         # Set partition.
         if use_recomputation:
             if is_last_partition:
-                if use_pre_loaded_label_input:
-                    partition_cls = GPipeLastPartitionWithLabelInput
-                else:
-                    partition_cls = GPipeLastPartition
+                partition_cls = GPipeLastPartition
             elif is_first_partition:
                 partition_cls = GPipeFirstPartition
             else:
@@ -735,24 +714,17 @@ class GPipePartitionManager(SinglePartitionManager):
                                == 0) or batch_idx == num_batches - 1
         partition.is_last_micro_batch = is_last_micro_batch
 
-        # Get the data to run forward on, (and target)
-        preload_input = None
-        if self.is_last_partition:
-            preload_ctx = self.task.preload_last_partition(
-                getattr(self, "dl_iter", None), self.device)
-            if self.use_pre_loaded_label_input:
-                preload_input = preload_ctx
-                preload_ctx = tuple()
+        preload_input_partition, preload_input_to_outside_loss = self.task.preload_from_dataloader(getattr(self, "dl_iter", None))
 
         request_objects, x, ctx = self.forward_pass_and_send(
-            batch_idx, num_batches, preload_input=preload_input)
+            batch_idx, num_batches, preload_input_partition)
 
         if not self.is_last_partition:
             return request_objects
 
         else:
             # Last partition - also do backward.
-            ctx = (*preload_ctx, *ctx)
+            ctx = (*preload_input_to_outside_loss, *ctx)
             if not is_training:
                 # In Eval: Just calculate statistics.
                 self.trainer.calc_test_stats(x, *ctx)
@@ -966,15 +938,4 @@ class GPipePartitionManager(SinglePartitionManager):
         futures_handler.clean_train()
 
 
-def print_tensors(stage, x, in_or_out="out"):
-    if isinstance(x, torch.Tensor):
-        pass
-    else:
-        t = []
-        for i, v in enumerate(x):
-            if not isinstance(v, torch.Tensor):
-                t.append("non-tensor"+str(v))
-            else:
-                t.append(v.shape)
-        print(f"stage {stage}: {in_or_out}: {t}")
 
