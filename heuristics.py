@@ -21,7 +21,9 @@ def get_weight_functions(args, verbose=True):
         node = NodeWeightFunction(bwd_to_fwd_ratio=args.bwd_to_fwd_ratio)
 
     edge = EdgeWeightFunction(args.bw,
-                            bwd_to_fwd_ratio=args.bwd_to_fwd_ratio)
+                            bwd_to_fwd_ratio=args.bwd_to_fwd_ratio,
+                            penalize_non_tensors=args.penalize_non_tensors,
+                            penalty=args.edge_penalty)
 
     if verbose:
         print(f"-I- using heuristics {type(node).__name__} , {type(edge).__name__}")

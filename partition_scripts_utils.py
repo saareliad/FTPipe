@@ -35,6 +35,22 @@ class ParsePartitioningOpts:
             "Automatically infer bwd to fwd ratio for nodes (computation). Expected Ratio for edges should be given `by bwd_to_fwd_ratio`"
         )
 
+        parser.add_argument(
+            "--penalize_non_tensors", 
+            action='store_true',
+            default=False,
+            help=
+            "penalize edges with non tensor outputs by default no penalties are applied"
+        )        
+        
+        parser.add_argument(
+            "--edge_penalty", 
+            type=float,
+            default=1e4,
+            help=
+            "multipicative penalty for edges if `penalize_non_tensors` is set"
+        )        
+
     def add_partitioning_arguments(self, parser):
         # parser = parser.add_argument_group("Partitioning options")
         self._extra(parser)
