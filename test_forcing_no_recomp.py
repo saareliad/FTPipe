@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import importlib
 from partition_async_pipe import AsyncPipePartitioner
 from functools import partial
-from heuristics import NodeWeightFunction, UndirectedEdgeWeightFunction
+from heuristics import NodeWeightFunction, EdgeWeightFunction
 import os
 
 from models.normal.NLP_models.stateless import StatelessLinear, StatelessEmbedding, StatelessSequential, CompositionStatelessSequential
@@ -66,7 +66,7 @@ else:
 #graph = pipe_model(model, 0, sample, n_iter=1, output_file=args.output_file)
 
 nwf = NodeWeightFunction(bwd_to_fwd_ratio=args.bwd_to_fwd_ratio)
-ewf = UndirectedEdgeWeightFunction(args.bw_GBps,
+ewf = EdgeWeightFunction(args.bw_GBps,
                            bwd_to_fwd_ratio=args.bwd_to_fwd_ratio)
 
 partial_pipe_model = partial(pipe_model,

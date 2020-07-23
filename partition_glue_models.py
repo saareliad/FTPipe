@@ -17,7 +17,7 @@ from partition_scripts_utils import (ParsePartitioningOpts,
                                      ParseMetisOpts, record_cmdline,
                                      choose_blocks, run_x_tries_until_no_fail)
 from partition_async_pipe import partition_async_pipe
-from heuristics import get_node_and_edge_weight_function_heuristics
+from heuristics import get_weight_functions
 from misc import run_analysis, run_partitions
 from pytorch_Gpipe import PipelineConfig, pipe_model
 from pytorch_Gpipe.model_profiling import register_new_traced_function, register_new_explicit_untraced_function
@@ -358,7 +358,7 @@ def main():
     args.basic_blocks = choose_blocks(model, args)
     bw = args.bw
 
-    node_weight_function, edge_weight_function = get_node_and_edge_weight_function_heuristics(
+    node_weight_function, edge_weight_function = get_weight_functions(
         args, verbose=True)
 
     print("-I- partitioning...")
@@ -388,7 +388,9 @@ def main():
 
     if args.async_pipeline and (not args.no_recomputation):
         print("using async partitioner")
-        graph = partition_async_pipe(args, model, 0, sample)
+        graph = partition_async_pipe(args, model, 0, sample,
+                                    node_weight_function=node_weight_function,
+                                    edge_weight_function=edge_weight_function,)
     else:
         graph = partial_pipe_model()
     if args.dot:

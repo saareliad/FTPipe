@@ -31,7 +31,7 @@ from torch.utils.data import DataLoader, Dataset, RandomSampler
 import warnings
 import sys
 from partition_scripts_utils import ParseMetisOpts,ParseAcyclicPartitionerOpts, ParsePartitioningOpts, record_cmdline,choose_blocks
-from heuristics import NodeWeightFunction, UndirectedEdgeWeightFunction, DirectedEdgeWeightFunction, get_node_and_edge_weight_function_heuristics
+from heuristics import NodeWeightFunction, UndirectedEdgeWeightFunction, DirectedEdgeWeightFunction, get_weight_functions
 from transformers import (
     GPT2Config,
     GPT2Tokenizer,
@@ -175,7 +175,7 @@ def partition_model(args,
     args.basic_blocks = choose_blocks(model,args)
     bw = args.bw
 
-    node_weight_function, edge_weight_function = get_node_and_edge_weight_function_heuristics(args, verbose=True)
+    node_weight_function, edge_weight_function = get_weight_functions(args, verbose=True)
     
     partial_pipe_model = functools.partial(
         pipe_model,
@@ -203,7 +203,9 @@ def partition_model(args,
 
     if args.async_pipeline and (not args.no_recomputation):
         print("using async partitioner")
-        graph=partition_async_pipe(args,model,0,sample)
+        graph=partition_async_pipe(args,model,0,sample,
+                                    node_weight_function=node_weight_function,
+                                    edge_weight_function=edge_weight_function,)
     else:
         graph = partial_pipe_model(
             force_no_recomp_scopes=force_no_recomputation_fn)
