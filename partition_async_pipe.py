@@ -20,6 +20,12 @@ def partition_async_pipe(
     node_weight_function=None,
     edge_weight_function=None
 ):
+
+    allowed_mistakes = 0
+    # HACK: allow mistakes for multilevel and acyclic...
+    if not cmd_args.use_METIS:
+        allowed_mistakes += 2
+
     if args is None:
         args = tuple()
     if kwargs is None:
@@ -38,7 +44,6 @@ def partition_async_pipe(
 
     last_partition_scopes = set()
 
-    allowed_mistakes = 0
     current_mistakes = allowed_mistakes + 1
     n_runs = 0
 
