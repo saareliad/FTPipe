@@ -6,7 +6,7 @@ from pytorch_Gpipe import PipelineConfig, pipe_model
 import argparse
 import importlib
 from misc import run_analysis, run_partitions
-from heuristics import DirectedEdgeWeightFunction, UndirectedEdgeWeightFunction, NodeWeightFunction, get_node_and_edge_weight_function_heuristics
+from heuristics import DirectedEdgeWeightFunction, UndirectedEdgeWeightFunction, NodeWeightFunction, get_weight_functions
 from partition_scripts_utils import ParseMetisOpts, ParseAcyclicPartitionerOpts, ParsePartitioningOpts, record_cmdline, choose_blocks
 import functools
 from partition_async_pipe import partition_async_pipe
@@ -182,8 +182,7 @@ if __name__ == "__main__":
     bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
     args.basic_blocks = choose_blocks(model, args)
 
-    node_weight_function, edge_weight_function = get_node_and_edge_weight_function_heuristics(
-        args, verbose=True)
+    node_weight_function, edge_weight_function = get_weight_functions(args, verbose=True)
 
     partial_pipe_model = functools.partial(
         pipe_model,
@@ -212,7 +211,9 @@ if __name__ == "__main__":
 
     if args.async_pipeline and (not args.no_recomputation):
         print("using async partitioner")
-        graph = partition_async_pipe(args, model, 0, sample)
+        graph = partition_async_pipe(args, model, 0, sample,
+                                    node_weight_function=node_weight_function,
+                                    edge_weight_function=edge_weight_function,)
     else:
         graph = partial_pipe_model()
 

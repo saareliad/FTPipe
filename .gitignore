@@ -21,3 +21,5 @@ cached_train_bert*
 results/
 py_sbatch.sh
 glue_ds.*
+original_acyclic_partitioning/*
+dynamic_acyclic_partitioning/*
