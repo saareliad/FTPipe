@@ -79,9 +79,7 @@ def run_analysis(sample,
     if graph is not None:
         # thoeretical analysis
         sequential_f, sequential_b, parallel_f, parallel_b = theoretical_analysis(
-            graph,
-            recomputation=recomputation,
-            async_pipeline=async_pipeline)
+            graph, recomputation=recomputation, async_pipeline=async_pipeline)
         edges = edge_cut(graph)
         # theoretical analysis based on the graph assuming the computation is sequential
         theoretical_sequential_b_balance = worst_balance(sequential_b)
@@ -114,31 +112,23 @@ def run_analysis(sample,
          add_comm_times_to_balance=add_comm_times_to_balance,
          stages_on_same_gpu=stages_on_same_gpu)
 
+    def add_dicts(d1, d2):
+        d = {}
+        for (i1, v1), (i2, v2) in zip(d1.items(), d2.items()):
+            assert i1 == i2
+            d[i1] = v1 + v2
+        return d
+
     def get_seq_no_recomp_no_comm_times():
-        ((real_f_times, f_vars,
-          f_deviance), (real_b_times, b_vars,
-                        b_deviance), comm_volume_stats, nocomm_real_f_times,
-         nocomm_real_b_times, warnings_list) = profile_execution(
-             sample,
-             config,
-             n_iter + 1,
-             recomputation=False,
-             bw_GBps=bw_GBps,  # don't care
-             async_pipeline=False,  # don't care
-             add_comm_times_to_balance=add_comm_times_to_balance,  # don't care
-             stages_on_same_gpu=stages_on_same_gpu)  # don't care
-
-        b_seq_no_recomp_no_comm_times = sum(nocomm_real_b_times.values())
-        f_seq_no_recomp_no_comm_times = sum(nocomm_real_f_times.values())
-
-        # with commm
-        b_seq_no_recomp_with_comm_times = sum(real_b_times.values())
-        f_seq_no_recomp_with_comm_times = sum(real_f_times.values())
-
-        seq_times = ((b_seq_no_recomp_no_comm_times,
-                      f_seq_no_recomp_no_comm_times),
-                     (b_seq_no_recomp_with_comm_times,
-                      f_seq_no_recomp_with_comm_times))
+        seq_times = profile_execution(
+            sample,
+            config,
+            n_iter + 1,
+            recomputation=False,
+            bw_GBps=bw_GBps,  # don't care
+            async_pipeline=False,  # don't care
+            add_comm_times_to_balance=add_comm_times_to_balance,  # don't care
+            stages_on_same_gpu=stages_on_same_gpu)  # don't care
         return seq_times
 
     def get_comm_vol_str(comm_volume_stats):
@@ -216,8 +206,9 @@ def run_analysis(sample,
 
     expected_speedup = expected_speedup_after_partitioning(*pipe_times)
 
+    tuple_seq_no_recom_times = get_seq_no_recomp_no_comm_times()
     expected_speedup_compared_to_seq_no_comm = expected_speedup_compared_to_seq(
-        pipe_times, get_seq_no_recomp_no_comm_times())
+        pipe_times, tuple_seq_no_recom_times)
 
     comp_comm_ratio_f = rounddict(comp_comm_ratio_f)
     comp_comm_ratio_b = rounddict(comp_comm_ratio_b)
@@ -225,15 +216,43 @@ def run_analysis(sample,
     real_b_utilization = rounddict(real_b_utilization)
     real_f_utilization = rounddict(real_f_utilization)
 
-
     d_param_count = parameter_count(config)
-    
     with io.StringIO() as buf, redirect_stdout(buf):
         pprint(d_param_count)
         s_param_count = buf.getvalue()
 
+    fwd_plus_backward = dict()
+    fwd_plus_backward['pipeline_with_non_parallel_comm'] = add_dicts(
+        real_f_times, real_b_times)
+    fwd_plus_backward['pipeline_no_comm'] = add_dicts(nocomm_real_f_times,
+                                                      nocomm_real_b_times)
+    fwd_plus_backward['seq_no_comm_no_recomp'] = add_dicts(
+        tuple_seq_no_recom_times[-3], tuple_seq_no_recom_times[-2])
 
+    for i, v in fwd_plus_backward.items():
+        if i == 'seq_no_comm_no_recomp':
+            continue
+        worstcase = max(v.values())
+        v['worstcase'] = worstcase
 
+    fwd_plus_backward['pipeline_vs_seq_no_comm'] = sum(
+        fwd_plus_backward['seq_no_comm_no_recomp'].values(
+        )) / fwd_plus_backward['pipeline_no_comm']['worstcase']
+
+    fwd_plus_backward['expected_compute_utilization'] = {
+        i: v / fwd_plus_backward['pipeline_no_comm']['worstcase']
+        for i, v in fwd_plus_backward['pipeline_no_comm'].items()
+        if i != 'worstcase'
+    }
+    
+    for i in list(fwd_plus_backward.keys()):
+        v = fwd_plus_backward[i]
+        fwd_plus_backward[i] = rounddict(v, 2) if isinstance(
+            v, dict) else round(v, 2)
+
+    with io.StringIO() as buf, redirect_stdout(buf):
+        pprint(fwd_plus_backward)
+        s_fwd_plus_backward = buf.getvalue()
 
     # TODO: save this into some data structure
     # where we could analyze it later, compare between partitions, etc.
@@ -261,11 +280,15 @@ def run_analysis(sample,
             s += f"\nsequential forward {sequential_f}\nsequential backward {sequential_b}\n"
             s += f"parallel forward {parallel_f}\nparallel backward {parallel_b}\n"
 
+        s += f"\nStage parameter count:\n {s_param_count}"
 
-        s += f"\nStage parameter count:\n {s_param_count}\n"
-        s += f"\nreal times are based on real measurements of execution time of generated partitions ms\n"
+        with_comm_str = "with" if add_comm_times_to_balance else "without"
 
+        s += f"\nreal times are based on real measurements of execution time ({with_comm_str} communication) of generated partitions ms\n"
         s += f"forward {rounddict(real_f_times)}\nbackward {rounddict(real_b_times)}\n"
+
+        s += f"\nAnalysis for T=fwd+bwd time:\n {s_fwd_plus_backward}"
+
         if PRINT_VAR_STD:
             s += f"variance of real execution times ms\n"
             s += f"forward{rounddict(f_vars)}\nbackward{rounddict(b_vars)}\n"
@@ -284,17 +307,17 @@ def run_analysis(sample,
         s += f"\nreal balance:\n"
         s += f"forward {real_f_balance:.3f}\nbackward {real_b_balance:.3f}\n"
 
-        if TOPO_AWARE:
-            s += f"\ntopology aware balance is worst balance between 2 connected partitions\n"
-            s += f"theoretical sequential topology aware balance:\n"
-            s += f"forwad {topology_aware_sequential_f_balance:.3f}\n"
-            s += f"backward {topology_aware_sequential_b_balance:.3f}\n"
-            s += f"theoretical parallel topology aware balance:\n"
-            s += f"forwad {topology_aware_parallel_f_balance:.3f}\n"
-            s += f"backward {topology_aware_parallel_b_balance:.3f}\n"
+        # if TOPO_AWARE:
+        #     s += f"\ntopology aware balance is worst balance between 2 connected partitions\n"
+        #     s += f"theoretical sequential topology aware balance:\n"
+        #     s += f"forwad {topology_aware_sequential_f_balance:.3f}\n"
+        #     s += f"backward {topology_aware_sequential_b_balance:.3f}\n"
+        #     s += f"theoretical parallel topology aware balance:\n"
+        #     s += f"forwad {topology_aware_parallel_f_balance:.3f}\n"
+        #     s += f"backward {topology_aware_parallel_b_balance:.3f}\n"
 
-            s += f"\nreal topology aware balance:\n"
-            s += f"forwad {topology_aware_real_f_balance:.3f}\nbackward {topology_aware_real_b_balance:.3f}\n"
+        #     s += f"\nreal topology aware balance:\n"
+        #     s += f"forwad {topology_aware_real_f_balance:.3f}\nbackward {topology_aware_real_b_balance:.3f}\n"
 
         s += f"\nAssuming bandwidth of {bw_GBps} GBps between GPUs\n"
         s += f"\ncommunication volumes size of activations of each partition\n"
@@ -912,9 +935,7 @@ def edge_cut(graph):
     return edges
 
 
-def theoretical_analysis(graph,
-                         recomputation=True,
-                         async_pipeline=False):
+def theoretical_analysis(graph, recomputation=True, async_pipeline=False):
     ''' find execution time of partitions based on the model's graph using 2 a sequential assumption and parallel assumption
         the sequential assumption is that in the partition all operation are linear.
         the parallel assumption assumes that all computation paths are concurrent.
@@ -926,7 +947,8 @@ def theoretical_analysis(graph,
     tensor_names = set()
     stage_outputs = defaultdict(list)
     for n in graph.nodes:
-        if (n.type != NodeTypes.IN) and any (o.stage_id != n.stage_id for o in n.out_edges):
+        if (n.type != NodeTypes.IN) and any(o.stage_id != n.stage_id
+                                            for o in n.out_edges):
             tensor_names.add(n.scope)
             stage_outputs[n.stage_id].append(n.scope)
         elif n in graph.outputs:
@@ -1090,16 +1112,32 @@ def expected_speedup_after_partitioning(fwd_times, bwd_times,
 
 
 def expected_speedup_compared_to_seq(pipe_times, seq_times):
+    def extract_seq_stuff(seq_times):
+        ((real_f_times, f_vars, f_deviance), (real_b_times, b_vars,
+                                              b_deviance), comm_volume_stats,
+         nocomm_real_f_times, nocomm_real_b_times, warnings_list) = seq_times
+
+        b_seq_no_recomp_no_comm_times = sum(nocomm_real_b_times.values())
+        f_seq_no_recomp_no_comm_times = sum(nocomm_real_f_times.values())
+
+        # with commm
+        b_seq_no_recomp_with_comm_times = sum(real_b_times.values())
+        f_seq_no_recomp_with_comm_times = sum(real_f_times.values())
+
+        seq_times = ((b_seq_no_recomp_no_comm_times,
+                      f_seq_no_recomp_no_comm_times),
+                     (b_seq_no_recomp_with_comm_times,
+                      f_seq_no_recomp_with_comm_times))
+        return seq_times
 
     # Unpack: pipe
     # NOTE: its a dict
     (fwd_times, bwd_times, fwd_times_wo_comm, bwd_times_wo_comm) = pipe_times
-
     # Unpack: seq
     # NOTE: its sum of values
     ((b_seq_no_recomp_no_comm_times, f_seq_no_recomp_no_comm_times),
      (b_seq_no_recomp_with_comm_times,
-      f_seq_no_recomp_with_comm_times)) = seq_times
+      f_seq_no_recomp_with_comm_times)) = extract_seq_stuff(seq_times)
 
     # pipe:
     worst_fwd = max(fwd_times.values())
@@ -1135,6 +1173,7 @@ def topology_aware_balance(f_times, b_times, cutting_edges):
             b_balance = b_ratio
 
     return f_balance, b_balance
+
 
 # FIXME: this is infinte loop for None in outputs
 def run_partitions(model_inputs, partition_config):
@@ -1240,5 +1279,8 @@ def parameter_count(partition_config):
         model = partition_config[i]['model']
         n_params = sum(p.numel() for p in model.parameters())
         d[i] = n_params
+
+    total = sum(d.values())
+    d['total'] = total
 
     return d
