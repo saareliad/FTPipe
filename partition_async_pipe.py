@@ -59,7 +59,7 @@ def partition_async_pipe(
                               **cmd_args.acyclic_opt)
         else:
             # can fail due to cycles so we try 10 times
-            run_x_tries_until_no_fail(METIS_partition,100,
+            run_x_tries_until_no_fail(METIS_partition,1000,
                                       graph,
                                       cmd_args.n_partitions,
                                       node_weight_function=evaluator,

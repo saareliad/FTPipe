@@ -225,6 +225,16 @@ def run_analysis(sample,
     real_b_utilization = rounddict(real_b_utilization)
     real_f_utilization = rounddict(real_f_utilization)
 
+
+    d_param_count = parameter_count(config)
+    
+    with io.StringIO() as buf, redirect_stdout(buf):
+        pprint(d_param_count)
+        s_param_count = buf.getvalue()
+
+
+
+
     # TODO: save this into some data structure
     # where we could analyze it later, compare between partitions, etc.
     # TODO: change the printing to lines.append(), than join with \n.
@@ -251,6 +261,8 @@ def run_analysis(sample,
             s += f"\nsequential forward {sequential_f}\nsequential backward {sequential_b}\n"
             s += f"parallel forward {parallel_f}\nparallel backward {parallel_b}\n"
 
+
+        s += f"\nStage parameter count:\n {s_param_count}\n"
         s += f"\nreal times are based on real measurements of execution time of generated partitions ms\n"
 
         s += f"forward {rounddict(real_f_times)}\nbackward {rounddict(real_b_times)}\n"
@@ -1218,3 +1230,15 @@ def trace_partitions(model_inputs, partition_config):
             parts.append(idx)
 
     return partition_config
+
+
+def parameter_count(partition_config):
+
+    n_partitions = sum(1 for k in partition_config if isinstance(k, int))
+    d = {}
+    for i in range(n_partitions):
+        model = partition_config[i]['model']
+        n_params = sum(p.numel() for p in model.parameters())
+        d[i] = n_params
+
+    return d

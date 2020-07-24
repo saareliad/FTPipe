@@ -68,16 +68,38 @@ def make_just_y(ds, mode="train"):
     return TensorDataset(y)
 
 
+# TODO:    "diagnostic"
+TASK_NAME_TO_DATA_DIR = {
+    'cola': 'CoLA',
+    'mnli': 'MNLI',
+    'mnli-mm': 'MNLI',
+    'mrpc': 'MPRC',
+    'sst-2': 'SST-2',
+    'sts-b': 'STS-B',
+    'qqp': 'QQP',
+    'qnli': 'QNLI',
+    'rte': 'RTE',
+    'wnli': 'WNLI'
+}
+
+
 def get_dataset(args, tokenizer, cache_name="glue_ds.pt"):
     cache_name += args.model_name_or_path
     if os.path.exists(cache_name) and not args.overwrite_cache:
-        print(f"-I- loading dataset from cahce {cache_name}")
-        ds = torch.load(cache_name)
-        return ds
+        print(f"-I- loading dataset from cahce {cache_name}...")
+        flag = False
+        try:
+            ds = torch.load(cache_name)
+        except Exception as e:
+            print("-I- loading from cache failed, creating new dataset. will not overwrite_cache.")
+            flag = True
+        if not flag:
+            return ds
 
     print("-I- creating dataset")
     data_dir = args.data_dir
-    data_dir = os.path.join(data_dir, "MNLI")
+    task_dir = TASK_NAME_TO_DATA_DIR.get(args.task_name)
+    data_dir = os.path.join(data_dir, task_dir)
 
     glue_args = GlueDataTrainingArguments(task_name=args.task_name,
                                           data_dir=data_dir,
@@ -450,7 +472,8 @@ def main():
             model.to(args.device)
             model.eval()
             data_dir = args.data_dir
-            data_dir = os.path.join(data_dir, "MNLI")
+            task_dir = TASK_NAME_TO_DATA_DIR.get(args.task_name)
+            data_dir = os.path.join(data_dir, task_dir)
 
             glue_args = GlueDataTrainingArguments(
                 task_name=args.task_name,
@@ -529,19 +552,7 @@ def main():
             result = partial_evaluate(ep)
             print(result)
 
-
-# def _example():
-#     data_dir = "/home_local/saareliad/data/glue_data/"
-#     data_dir = os.path.join(data_dir, "MNLI")
-#     args = GlueDataTrainingArguments(task_name='mnli',
-#                                      data_dir=data_dir,
-#                                      max_seq_length=128,
-#                                      overwrite_cache=False)
-#     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-#     ds = GlueDataset(args, tokenizer, mode="train")
-#     # NOTE: this is problematic as we have our own implementation
-#     model = AutoModelForSequenceClassification.from_pretrained(
-#         "bert-base-uncased")
+    print(f"-I- Done: {args.output_file}.py")
 
 
 def build_compute_metrics_fn(
@@ -574,4 +585,8 @@ if __name__ == "__main__":
         print("attached")
 
     main()
+
+
+
+
     #  python partition_glue_models.py --model_type bert --objective stage_time --model_name_or_path bert-base-uncased --n_partitions 2
