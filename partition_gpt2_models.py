@@ -31,7 +31,7 @@ from torch.utils.data import DataLoader, Dataset, RandomSampler
 import warnings
 import sys
 from partition_scripts_utils import ParseMetisOpts,ParseAcyclicPartitionerOpts, ParsePartitioningOpts, record_cmdline,choose_blocks
-from heuristics import NodeWeightFunction, UndirectedEdgeWeightFunction, DirectedEdgeWeightFunction, get_weight_functions
+from heuristics import get_weight_functions
 from transformers import (
     GPT2Config,
     GPT2Tokenizer,
