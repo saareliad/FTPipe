@@ -2,12 +2,12 @@
 
     "logdir": "logs/glue/",
     "data_dir": "/home_local/saareliad/data/glue_data",
-    "out_dir": "results/glue/",
+    "out_dir": "results/glue/bert-base/",
     "auto_file_name": true,
     "out_filename": "tst",
     "distributed_backend": "mpi",
     "task": "glue",
-    "model": "roberta_large_8p_bw11_0_async_mnli_glue",
+    "model": "bert_base_uncased_4p_bw11_0_async_mnli_glue",
     "dataset": "glue",
     "trainer": {
         "type": "glue",
@@ -20,28 +20,26 @@
     "bs_test": 32,
     "num_data_workers": 10,
     "optimizer": {
-        "type": "adam",
+        "type": "adamw",
         "args": {
-            "lr": 1e-5,
+            "lr": 2e-5,
             "weight_decay": 0.1,
-            "eps": 1e-6,
-            "betas": [0.9, 0.98]
+            "eps": 1e-8
         }
     },
     "lr_scheduler": {
         "type": "get_linear_schedule_with_warmup",
         "preproc_args": {
-            "num_warmup_steps": "ratio_from_num_training_steps"
+            "num_training_steps": "epochs_to_steps",
+            "num_warmup_steps": "epochs_to_steps"
         },
         "args": {
-            "num_warmup_steps": 0.06,
-            "num_training_steps": 123873,
+            "num_warmup_steps": 0,
+            "num_training_steps": -1,
             "last_epoch": -1
         }
     },
-    "maximize_best_checkpoint_metric": true,
-    "patience": 1,
-    "epochs": 10,
+    "epochs": 3,
     "steps": -1,
     "seed_from_cmd": true,
     "bs_train_from_cmd": false,
@@ -56,15 +54,14 @@
     "keep_buffers_alive": false,
     "train_batches_limit": -1,
     "log_frequency": 200,
-    "model_name_or_path": "roberta-large",
+    "model_name_or_path": "bert-base-uncased",
     "max_seq_length": 128,
     "glue_task_name": "mnli",
     "train_seq_len": 128,
     "valid_seq_len": 128,
     "test_seq_len": 128,
-    "overwrite_cache": true,
+    "overwrite_cache": false,
     "dont_drop_last": true,
-    "model_type": "roberta",
-    "precompute_attention_mask": true,
+    "model_type": "bert",
     "output_dir": "results/glue/out_dir/"
 }
