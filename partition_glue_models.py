@@ -305,8 +305,12 @@ def parse_cli():
     return args
 
 
-def main():
+def main(override_dict={}):
     args = parse_cli()
+    if override_dict:
+        for i,v in override_dict.items():
+            setattr(args, i, v)
+
     args.METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
     args.acyclic_opt = ParseAcyclicPartitionerOpts.acyclic_opts_dict_from_parsed_args(
         args)
@@ -589,49 +593,65 @@ if __name__ == "__main__":
         ptvsd.enable_attach(address=address)
         ptvsd.wait_for_attach()
         print("attached")
+    
+    override_dicts = []  # list of dicts to override args with...
 
+    # TODO: put all hyper parameters here, a dict for each setting we want to try.
+    # d1 = dict(basic_blocks=[])
+    # ovverride_dicts.append(d1)
+    
     NUM_RUNS = 2
-    counter = 0
     results = {}
     best = None
     TMP = "/tmp/partitioning_outputs/"
 
-    while counter < NUM_RUNS:
-        out = main()
- 
-        try:
-            os.makedirs(TMP, exist_ok=True)
-            (analysis_result, args) = out
+    if not override_dicts:
+        override_dicts = [{}]
 
-            name = args.output_file
-            orig_name = name
-            flag = False
+    DICT_PREFIX = "_d%d"
+    current_dict_prefix = ""
+    for i, override_dict in enumerate(override_dicts):
+        if i>0:
+            currect_dict_prefix = DICT_PREFIX.format(i)
 
-            if name in results:
-                if name.endswith(".py"):
-                    name = name[:-3]
-                flag = True
+        counter = 0
+        while counter < NUM_RUNS:
+            out = main(override_dict)
+     
+            try:
+                os.makedirs(TMP, exist_ok=True)
+                (analysis_result, args) = out
 
-            while (name+".py" in results) or flag:
+                name = args.output_file
+                orig_name = name
                 flag = False
-                name += f"_{counter}"
 
-            new_path = os.path.join(TMP, name+".py")
-            copyfile(orig_name+".py",  new_path)
+                if name in results:
+                    if name.endswith(".py"):
+                        name = name[:-3]
+                    flag = True
 
-            results[name] = analysis_result
+                while (name+".py" in results) or flag:
+                    flag = False
+                    name += f"_{counter}"
+                
+                name += current_dict_prefix
+                new_path = os.path.join(TMP, name+".py")
+                copyfile(orig_name+".py",  new_path)  # Save the last generated file
 
-            if best is None:
-                best = (new_path, analysis_result)
-            else:
-                if analysis_result > best[1]:
+                results[name] = analysis_result
+
+                if best is None:
                     best = (new_path, analysis_result)
+                else:
+                    if analysis_result > best[1]:
+                        best = (new_path, analysis_result)
 
-        except Exception as e:
-            print("-E- running multiple times failed")
-            raise e
+            except Exception as e:
+                print("-E- running multiple times failed")
+                raise e
 
-        counter += 1
+            counter += 1
 
     print(results)
     print(f"best: {best}")
