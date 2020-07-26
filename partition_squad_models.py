@@ -13,7 +13,7 @@ from models.normal import BertForQuestionAnswering
 from models.normal.NLP_models.modeling_bert import SQUAD_loss,get_extended_attention_mask
 from partition_scripts_utils import ParsePartitioningOpts, ParseAcyclicPartitionerOpts, ParseMetisOpts, record_cmdline, choose_blocks, run_x_tries_until_no_fail
 from partition_async_pipe import partition_async_pipe
-from heuristics import NodeWeightFunction, UndirectedEdgeWeightFunction, DirectedEdgeWeightFunction, get_weight_functions
+from heuristics import get_weight_functions
 from misc import run_analysis
 from pytorch_Gpipe import PipelineConfig, pipe_model
 from pytorch_Gpipe.model_profiling import register_new_traced_function, register_new_explicit_untraced_function

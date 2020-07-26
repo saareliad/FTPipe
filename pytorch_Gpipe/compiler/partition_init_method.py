@@ -18,7 +18,6 @@ def generate_init_method(nodes:List[Node],class_name: str, layers: List[Node],
 
     layer_scopes_field, tensor_scope_field = generate_layer_and_tensor_scopes(layers,
                                                                               buff_params)
-    basic_blocks_field = generate_basic_blocks_field(layers)
 
     init_dec = f"{tab}def __init__(self, layers, tensors, device='cuda:{device_id}'):"
     super_init = f'{dtab}super({class_name}, self).__init__()'
@@ -44,7 +43,7 @@ def generate_init_method(nodes:List[Node],class_name: str, layers: List[Node],
 
     cfg = f"{dtab}self.input_structure = {pretty_format_obj(structure)}"
 
-    return '\n'.join([class_decl, basic_blocks_field, layer_scopes_field, tensor_scope_field, init_dec, super_init, layers_init, tensor_init, device, cfg, lookup,move]) + '\n', partition_fields
+    return '\n'.join([class_decl, layer_scopes_field, tensor_scope_field, init_dec, super_init, layers_init, tensor_init, device, cfg, lookup,move]) + '\n', partition_fields
 
 
 def generate_layer_and_tensor_scopes(layers: List[Node], buff_params: List[Node]):
@@ -61,21 +60,6 @@ def generate_layer_and_tensor_scopes(layers: List[Node], buff_params: List[Node]
     tensor_field = tab + f"\n{dtab}".join(tensor_field)
 
     return scope_field, tensor_field
-
-
-def generate_basic_blocks_field(layers: List[Node]):
-    basic_blocks = set()
-    for n in layers:
-        layer_cls = n.scope.rsplit("/", maxsplit=1)[1]
-        layer_cls = layer_cls.rsplit("[", maxsplit=1)[0]
-        basic_blocks.add(layer_cls)
-
-    field = ["BASIC_BLOCKS=("]
-    for b in basic_blocks:
-        field.append(f"{tab}{b},")
-    field.append(")")
-
-    return tab + f"\n{dtab}".join(field)
 
 
 def generate__init__layersStatements(layers: List[Node]) -> Tuple[str, Dict[Node, str]]:

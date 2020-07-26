@@ -6,7 +6,7 @@ from pytorch_Gpipe import PipelineConfig, pipe_model
 import argparse
 import importlib
 from misc import run_analysis, run_partitions
-from heuristics import DirectedEdgeWeightFunction, UndirectedEdgeWeightFunction, NodeWeightFunction, get_weight_functions
+from heuristics import get_weight_functions
 from partition_scripts_utils import ParseMetisOpts, ParseAcyclicPartitionerOpts, ParsePartitioningOpts, record_cmdline, choose_blocks
 import functools
 from partition_async_pipe import partition_async_pipe
