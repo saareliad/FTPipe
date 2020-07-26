@@ -15,7 +15,7 @@ from models.normal.NLP_models.modeling_roberta import RobertaForSequenceClassifi
 from partition_scripts_utils import (ParsePartitioningOpts,
                                      ParseAcyclicPartitionerOpts,
                                      ParseMetisOpts, record_cmdline,
-                                     choose_blocks, run_x_tries_until_no_fail)
+                                     choose_blocks, run_x_tries_until_no_fail, bruteforce_main)
 from partition_async_pipe import partition_async_pipe
 from heuristics import get_weight_functions
 from misc import run_analysis, run_partitions
@@ -308,7 +308,7 @@ def parse_cli():
 def main(override_dict={}):
     args = parse_cli()
     if override_dict:
-        for i,v in override_dict.items():
+        for i, v in override_dict.items():
             setattr(args, i, v)
 
     args.METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
@@ -605,58 +605,7 @@ if __name__ == "__main__":
     best = None
     TMP = "/tmp/partitioning_outputs/"
 
-    if not override_dicts:
-        override_dicts = [{}]
-
-    DICT_PREFIX = "_d%d"
-    current_dict_prefix = ""
-    for i, override_dict in enumerate(override_dicts):
-        if i>0:
-            currect_dict_prefix = DICT_PREFIX.format(i)
-
-        counter = 0
-        while counter < NUM_RUNS:
-            out = main(override_dict)
-     
-            try:
-                os.makedirs(TMP, exist_ok=True)
-                (analysis_result, args) = out
-
-                name = args.output_file
-                orig_name = name
-                flag = False
-
-                if name in results:
-                    if name.endswith(".py"):
-                        name = name[:-3]
-                    flag = True
-
-                while (name+".py" in results) or flag:
-                    flag = False
-                    name += f"_{counter}"
-                
-                name += current_dict_prefix
-                new_path = os.path.join(TMP, name+".py")
-                copyfile(orig_name+".py",  new_path)  # Save the last generated file
-
-                results[name] = analysis_result
-
-                if best is None:
-                    best = (new_path, analysis_result)
-                else:
-                    if analysis_result > best[1]:
-                        best = (new_path, analysis_result)
-
-            except Exception as e:
-                print("-E- running multiple times failed")
-                raise e
-
-            counter += 1
-
-    print(results)
-    print(f"best: {best}")
-    copyfile(os.path.join(TMP, best[0]), orig_name+".py")
-    print(f"-I- copied best to {orig_name}.py")
+    bruteforce_main(main, override_dicts, NUM_RUNS, TMP)
 
     #  python partition_glue_models.py --model_type bert --objective stage_time --model_name_or_path bert-base-uncased --n_partitions 2
 
