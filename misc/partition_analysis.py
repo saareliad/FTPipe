@@ -422,7 +422,7 @@ def run_analysis(sample,
 
     # Choose a metric to maximize and return it
     if async_pipeline:
-        metric_to_maximize = 1.0 / fwd_plus_backward['pipeline_no_comm']['worstcase']
+        metric_to_maximize = -fwd_plus_backward['pipeline_no_comm']['worstcase']
     else:
         metric_to_maximize = expected_speedup
 

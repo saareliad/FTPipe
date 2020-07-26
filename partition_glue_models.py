@@ -10,7 +10,7 @@ import functools
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 
 from models.normal import BertForSequenceClassification
-from models.normal.NLP_models.modeling_bert import GlueLoss,get_extended_attention_mask
+from models.normal.NLP_models.modeling_bert import GlueLoss, get_extended_attention_mask
 from models.normal.NLP_models.modeling_roberta import RobertaForSequenceClassification
 from partition_scripts_utils import (ParsePartitioningOpts,
                                      ParseAcyclicPartitionerOpts,
@@ -22,7 +22,7 @@ from misc import run_analysis, run_partitions
 from pytorch_Gpipe import PipelineConfig, pipe_model
 from pytorch_Gpipe.model_profiling import register_new_traced_function, register_new_explicit_untraced_function
 from pytorch_Gpipe.utils import layerDict, tensorDict
-import os
+from shutil import copyfile
 
 from transformers import (MODEL_FOR_SEQUENCE_CLASSIFICATION_MAPPING,
                           AutoConfig, AutoModelForSequenceClassification,
@@ -36,8 +36,7 @@ from torch.utils.data import TensorDataset
 import numpy as np
 from transformers import EvalPrediction
 from transformers.data.metrics import glue_compute_metrics
-from transformers.data.processors.glue import (glue_output_modes,
-                                               glue_tasks_num_labels)
+from transformers.data.processors.glue import (glue_output_modes)
 from typing import Callable, Dict
 
 logger = logging.getLogger(__name__)
@@ -554,6 +553,13 @@ def main():
 
     print(f"-I- Done: {args.output_file}.py")
 
+    try:
+        out = (analysis_result, args)
+    except:
+        out = args
+
+    return out
+
 
 def build_compute_metrics_fn(
         task_name: str) -> Callable[[EvalPrediction], Dict]:
@@ -584,9 +590,54 @@ if __name__ == "__main__":
         ptvsd.wait_for_attach()
         print("attached")
 
-    main()
+    NUM_RUNS = 2
+    counter = 0
+    results = {}
+    best = None
+    TMP = "/tmp/partitioning_outputs/"
 
+    while counter < NUM_RUNS:
+        out = main()
+ 
+        try:
+            os.makedirs(TMP, exist_ok=True)
+            (analysis_result, args) = out
 
+            name = args.output_file
+            orig_name = name
+            flag = False
 
+            if name in results:
+                if name.endswith(".py"):
+                    name = name[:-3]
+                flag = True
+
+            while (name+".py" in results) or flag:
+                flag = False
+                name += f"_{counter}"
+
+            new_path = os.path.join(TMP, name+".py")
+            copyfile(orig_name+".py",  new_path)
+
+            results[name] = analysis_result
+
+            if best is None:
+                best = (new_path, analysis_result)
+            else:
+                if analysis_result > best[1]:
+                    best = (new_path, analysis_result)
+
+        except Exception as e:
+            print("-E- running multiple times failed")
+            raise e
+
+        counter += 1
+
+    print(results)
+    print(f"best: {best}")
+    copyfile(os.path.join(TMP, best[0]), orig_name+".py")
+    print(f"-I- copied best to {orig_name}.py")
 
     #  python partition_glue_models.py --model_type bert --objective stage_time --model_name_or_path bert-base-uncased --n_partitions 2
+
+
