@@ -181,9 +181,9 @@ class GraphProfiler():
         vs = times
         
         max_v = max(vs)
-        vs = [t for t in times if t < max_v]
+        vs = [t for t in vs if t < max_v]
         max_v = max(vs)
-        vs = [t for t in times if t < max_v]
+        vs = [t for t in vs if t < max_v]
 
         total = sum(vs)
         return total / (len(vs))
