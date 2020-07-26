@@ -10,8 +10,9 @@ class GraphProfiler():
         self.forward_times = defaultdict(list)
         self.backward_times = defaultdict(list)
         self.recomputation = recomputation
+        NUM_OUTLIERS = 2
         assert n_iter > 0
-        self.n_iter = n_iter + 1
+        self.n_iter = n_iter + NUM_OUTLIERS
 
         if force_no_recomp_scopes is None:
             self.force_no_recomp_scopes = lambda s: False
@@ -177,9 +178,15 @@ class GraphProfiler():
 
     @staticmethod
     def avg_time(times):
-        max_v = max(times)
-        total = sum([t for t in times if t < max_v])
-        return total / (len(times) - 1)
+        vs = times
+        
+        max_v = max(vs)
+        vs = [t for t in times if t < max_v]
+        max_v = max(vs)
+        vs = [t for t in times if t < max_v]
+
+        total = sum(vs)
+        return total / (len(vs))
 
     def should_profile(self, node, function, args, kwargs, output=None):
         if node.type not in [NodeTypes.LAYER, NodeTypes.OP]:
