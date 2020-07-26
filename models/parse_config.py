@@ -62,8 +62,8 @@ class PartitioningConfigParser:
 
         # Change pipe_config to pipe_config with no tuples
 
-        d = pipe_config.generate_config_without_nested(pipe_config.state_dict())
-        pipe_config = pipe_config.fromDict(d)
+        # d = pipe_config.generate_config_without_nested(pipe_config.state_dict())
+        # pipe_config = pipe_config.fromDict(d)
         self.pipe_config = pipe_config
         
         # from pprint import pprint
