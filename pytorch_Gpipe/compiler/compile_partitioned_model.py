@@ -179,7 +179,7 @@ def create_pipeline_configuration(graph: Graph,
 
     # function header
     lines = [
-        f"def create_pipeline_configuration(DEBUG=False):",
+        f"def create_pipeline_configuration(DEBUG=False, batch_size={batch_size}):",
         f"basic_blocks = ({basic_blocks})",
         f"module_path = {module_path}",
     ]
@@ -206,6 +206,10 @@ def create_pipeline_configuration(graph: Graph,
     lines.extend([f"config['stages'][{i}]['stage_cls'] = module_path+'.Partition{i}'" for i in stages.keys()])
     lines.append("")
     lines.extend([f"config['stages'][{i}]['devices'] = ['cpu' if DEBUG else 'cuda:{i}']" for i in stages.keys()])
+
+    lines.append(f"\n{tab}# switching batch size")
+    lines.append(generate_switch_batch_size())
+
     lines.append(f"\n{tab}return config")
     return "\n" + f"\n{tab}".join(lines) + "\n", config
 
@@ -336,6 +340,21 @@ def create_model_in_out_config(graph: Graph, is_batched: Callable[[torch.Size], 
                             "created_by": src}
 
     return model_inputs, model_outputs
+
+
+def generate_switch_batch_size():
+    s="""batch_dim = config['batch_dim']
+    for d in chain(config['model_inputs'].values(),config['model_outputs'].values()):
+        if d['is_batched']:
+            shape = d['shape']
+            d['shape'] = torch.Size(shape[:batch_dim] + (batch_size,) + shape[batch_dim+1:])
+    
+    for s in config['stages'].values():
+        for d in chain(s['inputs'].values(),s['outputs'].values()):
+            if d['is_batched']:
+                shape = d['shape']
+                d['shape'] = torch.Size(shape[:batch_dim] + (batch_size,) + shape[batch_dim+1:])"""
+    return s
 
 
 def generate_config_without_nested(dict_config):
