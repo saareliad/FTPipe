@@ -336,7 +336,9 @@ class PipelineConfig():
                   for idx, s in state['stages'].items()}
         depth = state['depth']
         
-        basic_blocks = nested_deserialize(state['basic_blocks'])
+        basic_blocks = state['basic_blocks']
+        if basic_blocks and isinstance(basic_blocks[0],str):
+            basic_blocks = nested_deserialize(basic_blocks)
         batch_dim = state['batch_dim']
         config = cls(batch_dim, depth, basic_blocks)
 
@@ -519,13 +521,16 @@ class StageConfig():
 
     @classmethod
     def fromDict(cls, state) -> 'StageConfig':
-        stage_path = state['stage_cls']
-        module_path, stage_name = stage_path.rsplit(".", 1)
-        # fix relative imports on windows
-        module_path = module_path.replace("\\", ".")
+        if isinstance(state['stage_cls'],str):
+            stage_path = state['stage_cls']
+            module_path, stage_name = stage_path.rsplit(".", 1)
+            # fix relative imports on windows
+            module_path = module_path.replace("\\", ".")
 
-        stage_module = importlib.import_module(module_path)
-        stage_cls = getattr(stage_module, stage_name)
+            stage_module = importlib.import_module(module_path)
+            stage_cls = getattr(stage_module, stage_name)
+        else:
+            stage_cls = state['stage_cls']
 
         # optional optimizer and lr_scheduler
         if 'optimizer' in state:

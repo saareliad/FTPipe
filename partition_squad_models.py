@@ -14,8 +14,8 @@ from models.normal.NLP_models.modeling_bert import SQUAD_loss,get_extended_atten
 from partition_scripts_utils import ParsePartitioningOpts, ParseAcyclicPartitionerOpts, ParseMetisOpts, record_cmdline, choose_blocks, run_x_tries_until_no_fail
 from partition_async_pipe import partition_async_pipe
 from heuristics import get_weight_functions
-from misc import run_analysis
-from pytorch_Gpipe import PipelineConfig, pipe_model
+from misc import run_analysis,convert_to_analysis_format
+from pytorch_Gpipe import pipe_model
 from pytorch_Gpipe.model_profiling import register_new_traced_function, register_new_explicit_untraced_function
 from pytorch_Gpipe.utils import layerDict, tensorDict
 
@@ -451,12 +451,11 @@ def main():
         sample = tuple(t.to("cpu") for t in sample)
     config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
 
-    pipe_config = PipelineConfig.fromDict(config)
 
     if not (args.no_test_run and args.no_analysis):
-        depth = pipe_config.depth
-        blocks = pipe_config.basic_blocks
-        analysis_config = pipe_config._to_old_format(
+        depth = args.depth
+        blocks = args.basic_blocks
+        analysis_config =convert_to_analysis_format(config,
             layerDict(model, depth=depth, basic_blocks=blocks),
             tensorDict(model))
 

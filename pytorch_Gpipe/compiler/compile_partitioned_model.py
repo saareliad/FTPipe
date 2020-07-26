@@ -125,7 +125,6 @@ def generateImports(layer_classes: Dict[str, Module]) -> List[str]:
                     'from itertools import chain',
                     'from typing import Optional, Tuple, Iterator, Iterable, OrderedDict, Dict',
                     'import collections',
-                    'import os'
                     ''])
     unique_classes = set(layer_classes.values())
 
@@ -174,23 +173,19 @@ def create_pipeline_configuration(graph: Graph,
     basic_blocks = ",".join(
         map(lambda block: block.__name__, set(model_blocks.values())))
 
-    serialized_basic_blocks = [f"{inspect.getmodule(cls).__name__}.{cls.__name__}"
-                                                     for cls in set(model_blocks.values())]
 
     # function header
     lines = [
-        f"def create_pipeline_configuration(DEBUG=False, batch_size={batch_size}):",
-        f"basic_blocks = ({basic_blocks})",
-        f"module_path = {module_path}",
+        f"def create_pipeline_configuration(DEBUG=False, batch_size={batch_size}):"
     ]
 
     # create and return the partition config
     model_inputs, model_outputs = create_model_in_out_config(graph, is_batched)
-    stages = stages_in_out_config(ios, is_batched)
+    stages = create_stages_config(ios, is_batched)
     config = {
         "batch_dim":batch_dim,
         "depth":graph.depth,
-        "basic_blocks":serialized_basic_blocks,
+        "basic_blocks":f'({basic_blocks})',
         "model_inputs":model_inputs,
         "model_outputs":model_outputs,
         "stages":stages
@@ -199,13 +194,9 @@ def create_pipeline_configuration(graph: Graph,
     config = generate_config_without_nested(config)
 
     lines.extend([
-        "",
         f"config = {pretty_format_obj(config)}",
         ""
     ])
-    lines.extend([f"config['stages'][{i}]['stage_cls'] = module_path+'.Partition{i}'" for i in stages.keys()])
-    lines.append("")
-    lines.extend([f"config['stages'][{i}]['devices'] = ['cpu' if DEBUG else 'cuda:{i}']" for i in stages.keys()])
 
     lines.append(f"\n{tab}# switching batch size")
     lines.append(generate_switch_batch_size())
@@ -247,10 +238,11 @@ def connections(graph: Graph) -> str:
     return '\n'.join(lines) + '\n'
 
 
-def stages_in_out_config(ios: Dict, is_batched: Callable[[torch.Size], bool]) -> Dict:
+def create_stages_config(ios: Dict, is_batched: Callable[[torch.Size], bool]) -> Dict:
     '''generates the stages portion of the config
      stages:
        id
+            stage_cls
             stage_inputs
                 id
                 shape
@@ -264,6 +256,7 @@ def stages_in_out_config(ios: Dict, is_batched: Callable[[torch.Size], bool]) ->
                 dtype
                 is_batched
                 used_by
+            devices
     '''
     config = dict()
 
@@ -293,8 +286,10 @@ def stages_in_out_config(ios: Dict, is_batched: Callable[[torch.Size], bool]) ->
                                 "is_batched": is_batched(s),
                                 "used_by": dsts}
 
-        config[idx] = {"inputs": stage_inputs,
-                       "outputs": stage_outputs}
+        config[idx] = {"stage_cls":f"Partition{idx}",
+                       "inputs": stage_inputs,
+                       "outputs": stage_outputs,
+                       "devices":f"['cpu' if DEBUG else 'cuda:{idx}']"}
     return config
 
 

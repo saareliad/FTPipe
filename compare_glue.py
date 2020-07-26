@@ -1,8 +1,8 @@
 import transformers
 from models.normal.NLP_models.modeling_roberta import RobertaForSequenceClassification
 from models.partitioned.roberta.roberta_builtin_flatten import create_pipeline_configuration,layerDict,tensorDict
-from pytorch_Gpipe import PipelineConfig
 from misc.partition_analysis import run_partitions
+from misc.analysis_utils import convert_to_analysis_format
 
 import torch
 import sys
@@ -43,7 +43,7 @@ if __name__ == "__main__":
     for i in range(8):
         config['stages'][i]['devices'] = [modified_device]
     
-    config = PipelineConfig.fromDict(config)._to_old_format(layerDict(modified_model),tensorDict(modified_model))
+    config = convert_to_analysis_format(config,layerDict(modified_model,basic_blocks=config['basic_blocks']),tensorDict(modified_model))
 
     assert modified_model.device == modified_device
     assert original_model.device == original_device

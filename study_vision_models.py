@@ -6,7 +6,6 @@ import argparse
 import importlib
 from misc import run_analysis, run_partitions
 from pytorch_Gpipe.utils import layerDict, tensorDict
-from pytorch_Gpipe import PipelineConfig, pipe_model
 # TODO: instea of code copy, do repeated calls to exisitng functions...
 from types import SimpleNamespace
 

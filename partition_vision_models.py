@@ -2,10 +2,10 @@ import torch
 from models.normal import WideResNet, amoebanetd, vgg16_bn
 from models.normal.vision_models import ResNet
 from pytorch_Gpipe.utils import layerDict, tensorDict
-from pytorch_Gpipe import PipelineConfig, pipe_model
+from pytorch_Gpipe import pipe_model
 import argparse
 import importlib
-from misc import run_analysis, run_partitions
+from misc import run_analysis, run_partitions,convert_to_analysis_format
 from heuristics import get_weight_functions
 from partition_scripts_utils import ParseMetisOpts, ParseAcyclicPartitionerOpts, ParsePartitioningOpts, record_cmdline, choose_blocks
 import functools
@@ -232,12 +232,11 @@ if __name__ == "__main__":
         sample = sample.to('cpu')
     config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
 
-    pipe_config = PipelineConfig.fromDict(config)
 
     if not (args.no_test_run and args.no_analysis):
-        depth = pipe_config.depth
-        blocks = pipe_config.basic_blocks
-        analysis_config = pipe_config._to_old_format(
+        depth = args.depth
+        blocks = args.basic_blocks
+        analysis_config = convert_to_analysis_format(config,
             layerDict(model, depth=depth, basic_blocks=blocks),
             tensorDict(model))
 

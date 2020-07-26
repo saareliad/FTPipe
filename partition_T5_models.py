@@ -4,7 +4,7 @@ from transformers import T5Tokenizer, T5Config
 import torch
 import operator
 import math
-from pytorch_Gpipe import PipelineConfig, pipe_model
+from pytorch_Gpipe import pipe_model
 from pytorch_Gpipe.model_profiling.tracer import register_new_explicit_untraced_function, register_new_traced_function
 from pytorch_Gpipe.utils import layerDict, tensorDict
 import argparse
@@ -14,6 +14,7 @@ import functools
 from partition_async_pipe import partition_async_pipe
 from partition_scripts_utils import choose_blocks, ParseAcyclicPartitionerOpts, ParseMetisOpts, ParsePartitioningOpts, record_cmdline
 from misc import run_analysis, run_partitions
+from misc.analysis_utils import convert_to_analysis_format
 import nlp
 import dataclasses
 from dataclasses import dataclass, field
@@ -417,14 +418,14 @@ if __name__ == "__main__":
 
     config = create_pipeline_configuration(DEBUG=True)
 
-    pipe_config = PipelineConfig.fromDict(config)
-
     if not (args.no_test_run and args.no_analysis):
-        depth = pipe_config.depth
-        blocks = pipe_config.basic_blocks
-        analysis_config = pipe_config._to_old_format(
-            layerDict(model, depth=depth, basic_blocks=blocks),
-            tensorDict(model))
+        depth = args.depth
+        blocks = args.basic_blocks
+        layers = layerDict(model, depth=depth, basic_blocks=blocks)
+        tensors = tensorDict(model)
+        analysis_config = convert_to_analysis_format(config,
+                                                    layers,
+                                                    tensors)
 
     if not args.no_test_run and not args.model_too_big:
         _ = run_partitions(sample, analysis_config)

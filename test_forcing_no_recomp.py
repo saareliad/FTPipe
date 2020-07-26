@@ -1,5 +1,5 @@
-from pytorch_Gpipe import pipe_model, PipelineConfig
-from misc import run_analysis
+from pytorch_Gpipe import pipe_model
+from misc import run_analysis,convert_to_analysis_format
 from models.normal import alexnet
 import torch
 from types import SimpleNamespace
@@ -113,16 +113,15 @@ if GET_PARTITIONS_ON_CPU:
     sample = sample.to('cpu')
 config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
 
-pipe_config = PipelineConfig.fromDict(config)
-pipe_config.toJson(f"{args.output_file}.json")
 
-depth = pipe_config.depth
-blocks = pipe_config.basic_blocks
-analysis_config = pipe_config._to_old_format(
+
+depth = config['depth']
+blocks = config['basic_blocks']
+analysis_config = convert_to_analysis_format(config,
     layerDict(model, depth=depth, basic_blocks=blocks), tensorDict(model))
 
 stages_on_same_gpu = set()
-if args.stateless_tied and len(pipe_config.stages) == args.n_partitions + 1:
+if args.stateless_tied and len(config['stages']) == args.n_partitions + 1:
     stages_on_same_gpu = [{0, args.n_partitions}]
 
 analysis_result, summary = run_analysis(

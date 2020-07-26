@@ -7,9 +7,7 @@ tab = "    "
 dtab = tab + tab
 
 def pretty_format_obj(obj,dict_prefix=dtab)->str:
-    if isinstance(obj,str):
-        return f"'{obj}'"
-    elif isinstance(obj, torch.Size):
+    if isinstance(obj, torch.Size):
         # size is inheriting from tuple which is stupid
         return str(obj)
     elif isinstance(obj, (list, tuple, set)):
@@ -26,7 +24,13 @@ def pretty_format_obj(obj,dict_prefix=dtab)->str:
             l,r="{","}"
         return l+elements+r 
     elif isinstance(obj, dict):
-        items = [f'{pretty_format_obj(k)}: {pretty_format_obj(v,dict_prefix+tab)}' for k, v in obj.items()]
+        items=[]
+        for k,v in obj.items():
+            if isinstance(k,str):
+                k = f"'{k}'"
+            else:
+                assert isinstance(k,int)
+            items.append(f'{k}: {pretty_format_obj(v,dict_prefix+tab)}')
         items[0]=f"\n{dict_prefix}"+items[0]
         return "{" + f",\n{dict_prefix}".join(items) + "}"
     elif obj is type(None):

@@ -56,8 +56,7 @@ from models.normal import StatelessGPT2LMHeadModel  # , StatelessGPT2Model
 
 
 from misc import run_analysis, run_partitions
-from pytorch_Gpipe import PipelineConfig
-
+from misc.analysis_utils import convert_to_analysis_format
 
 MODEL_CLASSES_LM_HEAD = {
     'gpt2': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
@@ -207,15 +206,14 @@ def compare_models(args,
     GET_PARTITIONS_ON_CPU = True
     config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
 
-    pipe_config = PipelineConfig.fromDict(config)
     print()
 
     ######################
     print("comparing our model to partitioned")
     # ####################
-    depth = pipe_config.depth
-    blocks = pipe_config.basic_blocks
-    analysis_config = pipe_config._to_old_format(
+    depth = args.depth
+    blocks = args.basic_blocks
+    analysis_config = convert_to_analysis_format(config,
         layerDict(our_baseline_model, depth=depth, basic_blocks=blocks),
         tensorDict(our_baseline_model))
     print("comparing train")
