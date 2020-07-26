@@ -462,7 +462,7 @@ def main():
 
             # NOTE: this is the original model
             # With the original model we get sota valid results.
-            #otherwise- its random chance
+            # otherwise- its random chance
             TAKE_ORIGINAL_MODEL = False
 
             if TAKE_ORIGINAL_MODEL:

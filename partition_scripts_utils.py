@@ -148,6 +148,11 @@ class ParsePartitioningOpts:
             help="Save memory during profiling by storing everything on cpu," +
             " but sending each layer to GPU before the profiling.")
 
+        parser.add_argument("-c", "--profiles_cache_name", default="", type=str, help="Profile cache to use in case of multiple runs")
+
+        parser.add_argument("--overwrite_profiles_cache", action="store_true", default=False, help="overwrite prilfes cache")
+
+
         self._add_heurisitc_arguments(parser)
         self._add_analysis_arguments(parser)
         self.set_defaults(parser)

@@ -2,6 +2,8 @@ import torch
 from collections import namedtuple
 from typing import Dict, Optional
 import functools
+import pickle
+import os
 
 from pytorch_Gpipe import trace_module, Graph, GraphProfiler, execute_graph, ExecTimes, acyclic_partition, infer_req_grad, compile_partitioned_model, METIS_partition, profile_network
 from pytorch_Gpipe.model_profiling import Node
@@ -18,7 +20,10 @@ def partition_async_pipe(
     args: tuple = None,
     kwargs: Dict = None,
     node_weight_function=None,
-    edge_weight_function=None
+    edge_weight_function=None,
+    # CACHE
+    profiles_cache_name="",
+    overwrite_profiles_cache=False,
 ):
 
     allowed_mistakes = 0
@@ -34,13 +39,33 @@ def partition_async_pipe(
     # combined node/edge weight function depends on how many parameters are passed
     evaluator = Evaluator(node_weight_function, edge_weight_function)
 
-    graph = trace_module(model,
-                         args=args,
-                         kwargs=kwargs,
-                         depth=cmd_args.depth,
-                         basic_blocks=cmd_args.basic_blocks)
+    profiles_cache_name = getattr(cmd_args, "profiles_cache_name", None)
+    overwrite_profiles_cache = getattr(cmd_args, "overwrite_profiles_cache", False)
 
-    weights = full_profile(graph, model, args, kwargs, cmd_args)
+    if profiles_cache_name and os.path.exists(profiles_cache_name) and not overwrite_profiles_cache:
+        print(f"-V- loading profiles from cache: {profiles_cache_name}")
+        with open(profiles_cache_name, "rb") as f:
+            graph, weights = pickle.load(f)
+    else:
+        graph = trace_module(model,
+                             args=args,
+                             kwargs=kwargs,
+                             depth=cmd_args.depth,
+                             basic_blocks=cmd_args.basic_blocks)
+
+        weights = full_profile(graph, model, args, kwargs, cmd_args)
+
+        if profiles_cache_name and os.path.exists(profiles_cache_name):
+            if not overwrite_profiles_cache:
+                print("-V- will not overrite cache with current graph and weights")
+            else:
+                print(f"-V- overwriting to cache: {profiles_cache_name}")
+                with open(profiles_cache_name, "wb") as f:
+                    pickle.dump((graph, weights), f)
+        elif profiles_cache_name:
+            print(f"-V- writing to new cache: {profiles_cache_name}")
+            with open(profiles_cache_name, "wb") as f:
+                pickle.dump((graph, weights), f)
 
     last_partition_scopes = set()
 

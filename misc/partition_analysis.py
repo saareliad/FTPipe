@@ -25,6 +25,8 @@ def rounddict(d, x=2):
     return {k: round(v, x) for k, v in d.items()}
 
 
+
+
 def run_analysis(sample,
                  graph,
                  config,
@@ -44,9 +46,14 @@ def run_analysis(sample,
     # NOTE: setting add_comm_times_to_balance, is for only debug porpuses
 
     TOPO_AWARE = False
-    UTILIZATION_SLOWDOWN_SPEEDUP = True
     PRINT_THEORETICAL = False
+    PRINT_MIN_MAX_BALANCE = False
+    
     PRINT_VAR_STD = False
+    
+    UTILIZATION_SLOWDOWN_SPEEDUP = True
+    PRINT_1F1B = True
+
     TRY_SSGD_ANALYSIS = False
     TRY_ASGD_ANALYSIS = True
 
@@ -287,7 +294,6 @@ def run_analysis(sample,
         s += f"\nreal times are based on real measurements of execution time ({with_comm_str} communication) of generated partitions ms\n"
         s += f"forward {rounddict(real_f_times)}\nbackward {rounddict(real_b_times)}\n"
 
-        s += f"\nAnalysis for T=fwd+bwd time:\n {s_fwd_plus_backward}"
 
         if PRINT_VAR_STD:
             s += f"variance of real execution times ms\n"
@@ -296,28 +302,29 @@ def run_analysis(sample,
             s += f"avg diviation from the mean of real execution times ms\n"
             s += f"forward{rounddict(f_deviance)}\nbackward{rounddict(b_deviance)}\n"
 
-        s += f"\nbalance is ratio of computation time between fastest and slowest parts."
-        s += " (between 0 and 1 higher is better)\n"
-        if PRINT_THEORETICAL:
-            s += f"theoretical sequential balance:\n"
-            s += f"forward {theoretical_sequential_f_balance:.3f}\nbackward {theoretical_sequential_b_balance:.3f}\n"
-            s += f"theoretical parallel balance:\n"
-            s += f"forward {theoretical_parallel_f_balance:.3f}\nbackward {theoretical_parallel_b_balance:.3f}\n"
+        if PRINT_MIN_MAX_BALANCE:
+            s += f"\nbalance is ratio of computation time between fastest and slowest parts."
+            s += " (between 0 and 1 higher is better)\n"
+            if PRINT_THEORETICAL:
+                s += f"theoretical sequential balance:\n"
+                s += f"forward {theoretical_sequential_f_balance:.3f}\nbackward {theoretical_sequential_b_balance:.3f}\n"
+                s += f"theoretical parallel balance:\n"
+                s += f"forward {theoretical_parallel_f_balance:.3f}\nbackward {theoretical_parallel_b_balance:.3f}\n"
 
-        s += f"\nreal balance:\n"
-        s += f"forward {real_f_balance:.3f}\nbackward {real_b_balance:.3f}\n"
+            s += f"\nreal balance:\n"
+            s += f"forward {real_f_balance:.3f}\nbackward {real_b_balance:.3f}\n"
 
-        # if TOPO_AWARE:
-        #     s += f"\ntopology aware balance is worst balance between 2 connected partitions\n"
-        #     s += f"theoretical sequential topology aware balance:\n"
-        #     s += f"forwad {topology_aware_sequential_f_balance:.3f}\n"
-        #     s += f"backward {topology_aware_sequential_b_balance:.3f}\n"
-        #     s += f"theoretical parallel topology aware balance:\n"
-        #     s += f"forwad {topology_aware_parallel_f_balance:.3f}\n"
-        #     s += f"backward {topology_aware_parallel_b_balance:.3f}\n"
+            # if TOPO_AWARE:
+            #     s += f"\ntopology aware balance is worst balance between 2 connected partitions\n"
+            #     s += f"theoretical sequential topology aware balance:\n"
+            #     s += f"forwad {topology_aware_sequential_f_balance:.3f}\n"
+            #     s += f"backward {topology_aware_sequential_b_balance:.3f}\n"
+            #     s += f"theoretical parallel topology aware balance:\n"
+            #     s += f"forwad {topology_aware_parallel_f_balance:.3f}\n"
+            #     s += f"backward {topology_aware_parallel_b_balance:.3f}\n"
 
-        #     s += f"\nreal topology aware balance:\n"
-        #     s += f"forwad {topology_aware_real_f_balance:.3f}\nbackward {topology_aware_real_b_balance:.3f}\n"
+            #     s += f"\nreal topology aware balance:\n"
+            #     s += f"forwad {topology_aware_real_f_balance:.3f}\nbackward {topology_aware_real_b_balance:.3f}\n"
 
         s += f"\nAssuming bandwidth of {bw_GBps} GBps between GPUs\n"
         s += f"\ncommunication volumes size of activations of each partition\n"
@@ -327,7 +334,12 @@ def run_analysis(sample,
         s += f"\nCompuatation Communication ratio (comp/(comp+comm)):\n"
         s += f"forward {comp_comm_ratio_f} \nbackward {comp_comm_ratio_b}\n"
 
+        if PRINT_1F1B:
+            s += f"\nAnalysis for T = fwd + bwd:\n {s_fwd_plus_backward}"
+
+        
         if UTILIZATION_SLOWDOWN_SPEEDUP:
+            s += f"\nAnalysis for T = (1-R)fwd + R*bwd:\n"
             s += f"\nPipeline Slowdown: (compared to sequential executation with no communication, and same recompute policy)\n"
             s += f"forward {real_f_slowdown:.3f}\nbackward {real_b_slowdown:.3f}\n"
 
@@ -408,7 +420,13 @@ def run_analysis(sample,
                 # raise
         print(s)
 
-    return expected_speedup, s  # real_f_balance, real_b_balance
+    # Choose a metric to maximize and return it
+    if async_pipeline:
+        metric_to_maximize = 1.0 / fwd_plus_backward['pipeline_no_comm']['worstcase']
+    else:
+        metric_to_maximize = expected_speedup
+
+    return metric_to_maximize, s
 
 
 #################################
