@@ -255,6 +255,7 @@ def create_stages_config(ios: Dict, is_batched: Callable[[torch.Size], bool]) ->
                 shape
                 dtype
                 is_batched
+                req_grad
                 used_by
             devices
     '''
@@ -268,6 +269,7 @@ def create_stages_config(ios: Dict, is_batched: Callable[[torch.Size], bool]) ->
         output_dtypes = io['output_dtypes']
         output_shapes = io['output_shapes']
         inputs_req_grad = io['inputs_req_grad']
+        outputs_req_grad = io['outputs_req_grad']
         created_by = io['created_by']
         used_by = io['used_by']
 
@@ -280,9 +282,10 @@ def create_stages_config(ios: Dict, is_batched: Callable[[torch.Size], bool]) ->
                                "created_by": src}
 
         stage_outputs = dict()
-        for o, s, d,dsts in zip(outputs, output_shapes, output_dtypes,used_by):
+        for o, s, r, d, dsts in zip(outputs, output_shapes,outputs_req_grad, output_dtypes,used_by):
             stage_outputs[o] = {"shape": s,
                                 "dtype": d,
+                                "req_grad":r,
                                 "is_batched": is_batched(s),
                                 "used_by": dsts}
 
@@ -395,8 +398,9 @@ def generate_config_without_nested(dict_config):
                 flattened_is_batched=flatten(output_cfg['is_batched'])
                 flattened_shape = flatten(output_cfg['shape'])
                 flattened_dtype = flatten(output_cfg['dtype'])
-                for idx,(is_batched,shape,dtype) in enumerate(zip(flattened_is_batched,flattened_shape,flattened_dtype)):
-                    cfg = {"shape":shape,"dtype":dtype,"is_batched":is_batched,"used_by":output_cfg['used_by']}
+                flatten_req_grad = flatten(output_cfg['req_grad'])
+                for idx,(is_batched,shape,dtype,req_grad) in enumerate(zip(flattened_is_batched,flattened_shape,flattened_dtype,flatten_req_grad)):
+                    cfg = {"shape":shape,"dtype":dtype,"req_grad":req_grad,"is_batched":is_batched,"used_by":output_cfg['used_by']}
                     new_stage_outputs[output_id+f"_{idx}"] = cfg
             else:
                 new_stage_outputs[output_id] = output_cfg
