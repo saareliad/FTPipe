@@ -79,9 +79,9 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
     def evaluate_squad(self):
         global_step = self.fit_res.num_epochs  # TODO
         result = partial_evaluate(self.all_results, prefix=global_step)
-        print(dict(
-            (k + ("_{}".format(global_step) if global_step else ""), getitem(v))
-            for k, v in result.items()))
+        print(
+            dict((k + ("_{}".format(global_step) if global_step else ""),
+                  getitem(v)) for k, v in result.items()))
         if not hasattr(self.fit_res, 'squad_results'):
             self.fit_res.squad_results = dict()
 
@@ -165,10 +165,16 @@ def load_and_cache_examples_just_x_or_y(
 
     # Doesnt this cause problem wehn switching from squad 1 to squad 2?
     # NOTE: we do seperate cache for just x and just y...
+
+    if isinstance(just, list):
+        just_name_for_cached = "_".join(just)
+    else:
+        just_name_for_cached = just
+
     cached_features_file = os.path.join(
         input_dir,
         "cached_just_{}_{}_{}_{}".format(
-            just,
+            just_name_for_cached,
             "dev" if evaluate else "train",
             list(filter(None, model_name_or_path.split("/"))).pop(),
             str(max_seq_length),
@@ -210,6 +216,7 @@ def load_and_cache_examples_just_x_or_y(
             return_dataset="pt",
             threads=threads,
             **do_all_lw,
+            **kw,
         )
 
         if save:
@@ -242,7 +249,8 @@ def squad_convert_examples_to_features_just_x_or_y(just,
                                                    threads=1,
                                                    do_all_cls_index=False,
                                                    do_all_p_mask=False,
-                                                   do_all_is_impossible=False):
+                                                   do_all_is_impossible=False,
+                                                   **kw):
     """
     Converts a list of examples into a list of features that can be directly given as input to a model.
     It is model-dependant and takes advantage of many of the tokenizer's features to create the model's inputs.
@@ -384,6 +392,48 @@ def squad_convert_examples_to_features_just_x_or_y(just,
             #     all_input_ids, all_attention_masks, all_token_type_ids,
             #     all_example_index, all_cls_index, all_p_mask
             # ]))
+        elif isinstance(just, list):
+
+            dd = dict(
+                input0=all_input_ids,
+                input1=all_attention_masks,
+                input2=all_token_type_ids,
+                # NOTE: intentionaly deleted
+                # all_start_positions,
+                # all_end_positions,
+                input3=all_cls_index,
+                input4=all_p_mask,
+                # input5=all_is_impossible,
+            )
+            d = {i: v for i, v in dd.items() if i in just}
+            print(d.keys())
+            if "input1" in d:
+                if kw.get('precompute_attention_mask', False):
+                    print("-I- precomputing attention mask")
+                    # b1 = torch.tensor(d['attention_mask'])
+                    # if 'input_ids' in d:
+                    #     b0 = torch.tensor(d['input_ids'])
+                    # else:
+                    #     b0 = torch.tensor([feature.input_ids for feature in ds])
+                    attetion_mask = get_extended_attention_mask(
+                        all_attention_masks, all_input_ids)
+                    d['input1'] = attetion_mask
+
+            if kw['is_last_partition']:
+
+                all_start_positions = torch.tensor(
+                    [f.start_position for f in features], dtype=torch.long)
+                all_end_positions = torch.tensor(
+                    [f.end_position for f in features], dtype=torch.long)
+
+                all_example_index = torch.arange(all_input_ids.size(0),
+                                                 dtype=torch.long)
+
+                d['all_start_positions'] = all_start_positions
+                d['all_end_positions'] = all_end_positions
+                d['all_example_index'] = all_example_index
+
+            dataset = TensorDataset(*[x for x in d.values()])
         else:
             raise ValueError(f"just should be x or y, got {just}")
 
@@ -411,6 +461,43 @@ def squad_convert_examples_to_features_just_x_or_y(just,
                 all_start_positions,
                 all_end_positions,
             )
+        elif isinstance(just, list):
+
+            dd = dict(
+                input0=all_input_ids,
+                input1=all_attention_masks,
+                input2=all_token_type_ids,
+                # NOTE: intentionaly deleted
+                # all_start_positions,
+                # all_end_positions,
+                input3=all_cls_index,
+                input4=all_p_mask,
+                input5=all_is_impossible,
+            )
+            d = {i: v for i, v in dd.items() if i in just}
+            print(d.keys())
+            if "input1" in d:
+                if kw.get('precompute_attention_mask', False):
+                    print("-I- precomputing attention mask")
+                    # b1 = torch.tensor(d['attention_mask'])
+                    # if 'input_ids' in d:
+                    #     b0 = torch.tensor(d['input_ids'])
+                    # else:
+                    #     b0 = torch.tensor([feature.input_ids for feature in ds])
+                    attetion_mask = get_extended_attention_mask(
+                        all_attention_masks, all_input_ids)
+                    d['input1'] = attetion_mask
+
+            if kw['is_last_partition']:
+                all_start_positions = torch.tensor(
+                    [f.start_position for f in features], dtype=torch.long)
+                all_end_positions = torch.tensor(
+                    [f.end_position for f in features], dtype=torch.long)
+
+                d['all_start_positions'] = all_start_positions
+                d['all_end_positions'] = all_end_positions
+
+            dataset = TensorDataset(*[x for x in d.values()])
 
         else:
             raise ValueError(f"just should be x or y, got {just}")
@@ -527,3 +614,28 @@ if __name__ == "__main__":
         save=False,  # Ranks
         version_2_with_negative=False,
     )
+
+
+def get_extended_attention_mask(attention_mask,
+                                input_ids,
+                                dtype=torch.float32):
+    """ Extented attention mask, removing the preprocessing from inside to outside, bert"""
+    if attention_mask is None:
+        attention_mask = torch.ones_like(input_ids)
+    # We create a 3D attention mask from a 2D tensor mask.
+    # Sizes are [batch_size, 1, 1, to_seq_length]
+    # So we can broadcast to [batch_size, num_heads, from_seq_length, to_seq_length]
+    # this attention mask is more simple than the triangular masking of causal attention
+    # used in OpenAI GPT, we just need to prepare the broadcast dimension here.
+    extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
+
+    # Since attention_mask is 1.0 for positions we want to attend and 0.0 for
+    # masked positions, this operation will create a tensor which is 0.0 for
+    # positions we want to attend and -10000.0 for masked positions.
+    # Since we are adding it to the raw scores before the softmax, this is
+    # effectively the same as removing these entirely.
+    extended_attention_mask = extended_attention_mask.to(
+        dtype=dtype)  # fp16 compatibility
+    extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
+
+    return extended_attention_mask
