@@ -125,7 +125,7 @@ class SimpleCommBase(CommunicationHandlerBase):
                     self.tensors_names_with_no_grad.add(i) 
         # Do not receive gradients for tensors which do not req grad.
         for i, v in outputs_req_grad.items():
-            assert isinstance(v, bool)
+            assert isinstance(v, bool), str((i,v))
             if not v:
                 self.tensors_names_with_no_grad.add(i)
 

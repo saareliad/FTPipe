@@ -311,7 +311,8 @@ def get_data_keywords_by_task(args, dl_kw, **kw):
                  version_2_with_negative=version_2_with_negative,
                  null_score_diff_threshold=null_score_diff_threshold,
                  model_type=model_type,
-                 output_dir=output_dir)
+                 output_dir=output_dir,
+                 is_last_partition=args.stage == args.num_stages - 1)
 
         dataset_keywords.update(d)
 
@@ -678,7 +679,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         stateless_tied=getattr(args, "stateless_tied", False),
         is_mp=args.is_multiprocessing_worker,
         req_grad=parsed_config.req_grad,
-        unflatten_structure=parsed_config.unflatten_structure)
+        )
 
     # support for simulating stage replication (dev)
     if hasattr(args, "ddp_sim_num_gpus") and args.ddp_sim_num_gpus > 1:

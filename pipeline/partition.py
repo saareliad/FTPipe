@@ -74,8 +74,7 @@ class Partition(nn.Module):
                  device,
                  to_device=True,
                  classes_list_to_patch=DEFAULT_CLASSES_LIST_TO_PATCH,
-                 req_grad=None,
-                 unflatten_structure=None):
+                 req_grad=None):
         """
         :param layers: list of layers (or a single module)
         :param device: device of the partition
@@ -106,7 +105,6 @@ class Partition(nn.Module):
         self.bwd_graph_head_buffer = {}  # For recompute
         self.rng_stasher = PartitionRngStasher(device=self.device)
         self.req_grad = req_grad_dict_to_tuple(req_grad)
-        self.unflatten_structure = unflatten_structure
         if to_device:
             self.to(self.device)
 
@@ -324,8 +322,7 @@ class PartitionWithoutRecomputation(nn.Module):
                  device,
                  to_device=True,
                  _REQ_GRAD=True,
-                 req_grad=None,
-                 unflatten_structure=None):
+                 req_grad=None):
         """
             Intermidiate partition which does not do recomputation.
             HACK: has misleading names to be used with existing code.
@@ -359,7 +356,6 @@ class PartitionWithoutRecomputation(nn.Module):
 
         self.bwd_graph_head_buffer = {}  # For recompute
         self.req_grad = req_grad_dict_to_tuple(req_grad)
-        self.unflatten_structure = unflatten_structure
         if to_device:
             self.to(self.device)
 

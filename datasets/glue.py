@@ -34,7 +34,12 @@ class GlueLoss(torch.nn.Module):
             #  We are doing regression
             loss = self.loss(logits.view(-1), labels.view(-1))
         else:
-            loss = self.loss(logits.view(-1, self.num_labels), labels.view(-1))
+            try:
+                loss = self.loss(logits.view(-1, self.num_labels), labels.view(-1))
+            except Exception as e:
+                print(self.num_labels, logits.shape, logits.view(-1, self.num_labels).shape, labels.shape, labels.view(-1).shape)
+                raise e
+
         return loss
 
 
@@ -126,6 +131,7 @@ def make_just_x(ds, **kw):
 MAP_NAMES_TO_FEATURES = {
     'input0': 'input_ids',
     'input1': 'attention_mask',
+    'input2': 'token_type_ids'  # bert
 }
 
 LAST_PARTITION_EXTRA_LABELS = {
@@ -139,10 +145,14 @@ def make_just_by_ds(ds, just, **kw):
     A = set(MAP_NAMES_TO_FEATURES[i] for i in just)
     if kw['is_last_partition']:
         A |= LAST_PARTITION_EXTRA_LABELS
-
+    
+    # cache_name = "_".join(sorted(list(A)))
+    
     d = defaultdict(list)
     for feature in ds:
         for key, val in vars(feature).items():
+            if val is None:
+                continue   # For exmple, token_type_ids are None for roberta.
             if key in A:
                 d[key].append(val)
             #     if key in LAST_PARTITION_EXTRA_LABELS:
@@ -160,7 +170,13 @@ def make_just_by_ds(ds, just, **kw):
             attetion_mask = get_extended_attention_mask(b1, b0)
             d['attention_mask'] = attetion_mask
 
-    return TensorDataset(*[torch.tensor(x) for x in d.values()])
+    ll = []
+    for x in d.values():
+        if not isinstance(x, torch.Tensor):
+            x = torch.tensor(x)
+        ll.append(x)
+
+    return TensorDataset(*ll)
 
 
 def getitem(t):
