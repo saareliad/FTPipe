@@ -1,4 +1,5 @@
 import importlib
+import os
 
 from .normal.WideResNet_GN import WideResNet as WideResNet_GN
 from .normal import WideResNet, Bottleneck, ResNet
@@ -8,6 +9,7 @@ from inspect import signature
 from torch.nn import Module
 from typing import Tuple
 from .transformers_cfg import MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS
+
 _PARTITIONED_MODELS_PACKAGE = "models.partitioned"
 
 # TODO: do this automatically...
@@ -97,10 +99,8 @@ def normal_model_class(cfg):
 def get_partitioning(cfg, my_rank, batch_size,
                      model_instance=None) -> Tuple[PipelineConfig, Module]:
     GET_PARTITIONS_ON_CPU = True
-
-    generated_file_name = CFG_TO_GENERATED_FILE_NAME[cfg]
-    generated = importlib.import_module("." + generated_file_name,
-                                        package=_PARTITIONED_MODELS_PACKAGE)
+    # Get Generated file
+    generated = get_generated_module(cfg)
     create_pipeline_configuration = generated.create_pipeline_configuration
     layerDict = generated.layerDict
     tensorDict = generated.tensorDict
@@ -130,11 +130,34 @@ def get_partitioning(cfg, my_rank, batch_size,
 def get_pipe_config(cfg: str) -> PipelineConfig:
     """ returns just the configuration"""
     GET_PARTITIONS_ON_CPU = True
-
-    generated_file_name = CFG_TO_GENERATED_FILE_NAME[cfg]
-    generated = importlib.import_module("." + generated_file_name,
-                                        package=_PARTITIONED_MODELS_PACKAGE)
+   
+    generated = get_generated_module(cfg)
     create_pipeline_configuration = generated.create_pipeline_configuration
     config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
     pipe_config = PipelineConfig.fromDict(config)
     return pipe_config
+
+
+def load_module(full_path: str):
+    # "/path/to/file.py"
+    spec = importlib.util.spec_from_file_location("module.name", full_path)
+    foo = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(foo)
+    return foo
+
+
+def get_generated_module(cfg):
+    is_full_path = os.path.exists(cfg)
+    try:
+        if is_full_path:
+            generated = load_module(cfg)
+        else:
+            generated_file_name = CFG_TO_GENERATED_FILE_NAME[cfg]
+            generated = importlib.import_module("." + generated_file_name,
+                                                package=_PARTITIONED_MODELS_PACKAGE)
+    except Exception as e:
+        print(f"-E- error loading generated config given {cfg}. is_full_path={is_full_path}")
+        raise e
+
+    return generated
+

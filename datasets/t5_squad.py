@@ -1,6 +1,7 @@
 import nlp
 import torch
 import operator
+from torch.utils.data import TensorDataset
 
 
 def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
@@ -10,7 +11,6 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
     tokenizer = kw['tokenizer']
     config = kw['config']
 
-    # TODO: Get subset of inputs according to "just":
     if just == 'x':
         subset_of_inputs = {
                 "input_ids",
@@ -23,9 +23,12 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
         subset_of_inputs = {
                 "lm_labels",
                 }
+    elif isinstance(just, list):
+        subset_of_inputs = set(just)
     else:
         raise NotImplementedError()
-
+    
+    # TODO: allow squad2
     split = nlp.Split.TRAIN
     train_dataset = nlp.load_dataset('squad', split=split)
     train_dataset = t5_preproc_nlp_squad_ds(train_dataset, tokenizer, max_length)
@@ -33,12 +36,18 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
 
     split = nlp.Split.VALIDATION
     dev_dataset = nlp.load_dataset('squad', split=split)
-    dev_dataset = t5_preproc_nlp_squad_ds(dev_dataset, tokenizer, max_length)
+    dev_dataset = t5_preproc_nlp_squad_ds(dev_dataset, tokenizer, max_length, load_from_cache_file=False)
     dev_dataset = nlp_to_tensor_dataset(dev_dataset, config, subset_of_inputs)
 
     # TODO: evaluation (see squad.py)
 
-    return train_dataset, dev_dataset
+    def set_eval(trainer):
+        pass
+        # trainer.features = features
+        # trainer.statistics.evaluate_squad = types.MethodType(
+        #    evaluate_squad, trainer.statistics)
+
+    return train_dataset, dev_dataset, set_eval
 
 
 #########################
@@ -51,10 +60,9 @@ def nlp_to_tensor_dataset(ds, config, subset_of_inputs):
     attention_mask = ds['attention_mask']
     decoder_attention_mask = ds['target_attention_mask']
 
-
     decoder_input_ids = _shift_right(config, lm_labels)
 
-    precompute_masks = getattr(config, "precompute_masks", False)
+    precompute_masks = getattr(config, "precomputed_masks", False)
     if precompute_masks:
         print("-I- precomputing t5 masks on CPU")
 
@@ -62,7 +70,7 @@ def nlp_to_tensor_dataset(ds, config, subset_of_inputs):
         attention_mask = get_attention_mask(input_ids.size(),attention_mask,attention_mask.device,is_decoder=False)    
         decoder_attention_mask = get_attention_mask(decoder_input_ids.size(),decoder_attention_mask,decoder_attention_mask.device,is_decoder=True)
     else:
-        print("-W- preprocessing will happen inside the model..."
+        print("-W- preprocessing will happen inside the model...")
         inverted_encoder_attention_mask = None
         decoder_attention_mask = None
 
@@ -85,7 +93,7 @@ def nlp_to_tensor_dataset(ds, config, subset_of_inputs):
     # too lazy to do it selectivly...
     keys = tuple(d.keys())
     for k in keys():
-        if not in subset_of_inputs:
+        if k not in subset_of_inputs:
             del d[k]
 
     keys = tuple(d.keys())
@@ -95,6 +103,7 @@ def nlp_to_tensor_dataset(ds, config, subset_of_inputs):
 
     return TensorDataset(*[torch.tensor(x) for x in d.values()])
 
+
 def t5_preproc_nlp_squad_ds(ds,
                             tokenizer,
                             max_length=384,
@@ -102,6 +111,7 @@ def t5_preproc_nlp_squad_ds(ds,
                                 'input_ids', 'target_ids', 'attention_mask',
                                 'target_attention_mask'
                             ],
+                            load_from_cache_file=False,
                             **kw):
     """ preprocess nlp squad dataset to T5 format. 
         Returns: dataset of examples.
@@ -141,9 +151,9 @@ def t5_preproc_nlp_squad_ds(ds,
         }
         return encodings
 
-    ds = ds.map(add_eos_to_examples)
+    ds = ds.map(add_eos_to_examples, load_from_cache_file=load_from_cache_file)
     # map convert_to_features batch wise
-    ds = ds.map(convert_to_features, batched=True)
+    ds = ds.map(convert_to_features, batched=True, load_from_cache_file=load_from_cache_file)
 
     # set the tensor type and the columns which the dataset should return
     columns = [

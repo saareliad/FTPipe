@@ -56,7 +56,14 @@ def pretrained_model_config_and_tokenizer(
 
     if stateless_tied:
         model_to_resize = model.module if hasattr(model, 'module') else model
-        model_to_resize.make_stateless_after_loaded_tied_and_resized()
+        
+        if hasattr(model_to_resize, "make_stateless_after_loaded_tied_and_resized"):
+            model_to_resize.make_stateless_after_loaded_tied_and_resized()
+        elif hasattr(model_to_resize, "make_stateless"):
+            # because someone changed the name I gave it and made dangerous code look normal...
+            model_to_resize.make_stateless()
+        else:
+            raise ValueError(f"Problem making model stateless. model_type: {model_type}")
 
     return model, tokenizer, config
 

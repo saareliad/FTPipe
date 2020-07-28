@@ -253,7 +253,15 @@ def get_weight_predictor(args,
 
 def get_data_keywords_by_task(args, dl_kw, **kw):
 
-    if "lm" in args.task:
+    if args.task == "t5_squad":
+        
+        dataset_keywords = dict(tokenizer=kw.pop('tokenizer'),
+        config=kw.pop('config'),
+        max_seq_length=args.max_seq_length)
+
+
+
+    elif "lm" in args.task:
         # FIXME
         # NOTE: From the function get_wikitext2_raw_train_valid_ds
         tokenizer = kw.pop('tokenizer')
@@ -500,6 +508,8 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         model_instance, tokenizer, config = models.transformers_utils.get_model_tokenizer_and_config_by_name(
             args.model)
         dataset_keywords['tokenizer'] = tokenizer
+        dataset_keywords['config'] = config
+
 
     parsed_config = parse_config.PartitioningConfigParser(
         args.model,
