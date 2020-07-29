@@ -20,7 +20,7 @@ def generate_init_method(nodes:List[Node],class_name: str, layers: List[Node],
                                                                               buff_params)
 
     init_dec = f"{tab}def __init__(self, layers, tensors, device='cuda:{device_id}'):"
-    super_init = f'{dtab}super({class_name}, self).__init__()'
+    super_init = f'{dtab}super().__init__()'
     layers_init, partition_fields = generate__init__layersStatements(layers)
 
     params, buffs = [], []
