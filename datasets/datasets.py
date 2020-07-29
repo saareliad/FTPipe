@@ -22,6 +22,7 @@ from .lm import (get_wt2_just_x_or_y_train_valid_ds,
 # TODO: train and dev, currently dev is None.
 from .squad import get_just_x_or_y_train_dev_dataset as get_just_x_or_y_train_dev_dataset_squad
 from .glue import get_just_x_or_y_train_dev_dataset as get_just_x_or_y_train_dev_dataset_glue
+from .t5_squad import get_just_x_or_y_train_dev_dataset as get_just_x_or_y_train_dev_dataset_t5_squad
 
 # Dataloaders
 from .cv import get_cv_train_test_dl
@@ -35,7 +36,7 @@ from .hardcoded_dirs import DEFAULT_DATA_DIR
 # get_separate_just_x_or_y_test_dl_from_args: (just the test dataloader)
 
 AVAILABLE_DATASETS = {
-    'cifar10', 'cifar100', 'imagenet', 'wt2', 'squad1', 'squad2', 'glue'
+    'cifar10', 'cifar100', 'imagenet', 'wt2', 'squad1', 'squad2', 'glue', "t5_squad"
 }
 
 # NOTE: these are functions which returns train and test/validation datasets.
@@ -253,6 +254,7 @@ def get_separate_just_x_or_y_train_test_dl(dataset,
                                            **kw):
 
     experiment_manual_seed = torch.initial_seed()
+    print(experiment_manual_seed, "experiment_manual_seed")
 
     DICT_DATASET_JUST_XY_FUNC = {
         'cifar10': get_cifar_10_just_x_or_y_train_test_ds,
@@ -262,6 +264,7 @@ def get_separate_just_x_or_y_train_test_dl(dataset,
         'squad1': get_just_x_or_y_train_dev_dataset_squad,
         'squad2': get_just_x_or_y_train_dev_dataset_squad,
         'glue': get_just_x_or_y_train_dev_dataset_glue,
+        't5_squad': get_just_x_or_y_train_dev_dataset_t5_squad,
         # 'wt2': get_wt2_just_x_or_y_train_valid_ds
     }
 

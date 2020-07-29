@@ -7,4 +7,5 @@ AVAILABLE_TASKS = {
     'lm': AutomaticPipelineTask,
     "squad": AutomaticPipelineTask,
     "glue": AutomaticPipelineTask,
+    "t5_squad": AutomaticPipelineTask, 
 }

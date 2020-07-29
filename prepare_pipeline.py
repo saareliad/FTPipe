@@ -35,6 +35,7 @@ from datasets.lm import lm_collate_factory
 
 
 def auto_file_name(args):
+    """This is used to distinguish different configurations by file name """
     assert hasattr(args, "auto_file_name")
     wp = args.weight_prediction['type'] if hasattr(
         args, "weight_prediction") else 'stale'
@@ -51,6 +52,16 @@ def auto_file_name(args):
         s = f'{args.model}_{args.dataset}_{wp}_{ws}{ga}{bs}_{se}_{ga_just_for_loss}seed_{args.seed}'
     args.out_filename = f"{args.out_filename}_{s}"
     print(f"Out File Name will be: {args.out_filename}")
+
+
+def get_task_cls(args):
+    task_cls = AVAILABLE_TASKS.get(args.task)
+    return task_cls
+
+
+def get_trainer_cls(args):
+    trainer_cls = AVAILABLE_TRAINERS.get(args.trainer['type'])
+    return trainer_cls
 
 
 def create_comm_handler(args, comm_init_args,
@@ -460,16 +471,14 @@ def tuplify(listything):
 
 
 def get_optimizer(args, optimizer_cls, parameters):
-    # without the list, python 3.8 pytorch 1.5: TypeError: object of type 'generator' has no len()
-    parameters = list(parameters)
+    assert isinstance(parameters, list)
     if len(parameters) == 0:
         if not getattr(args, "allow_stateless", False):
             raise ValueError(f"Got stateless partition {args.stage}")
 
     # HACK: tuplify all optimizer paramerets, just in case...
     # https://stackoverflow.com/questions/15721363/preserve-python-tuples-with-json
-    opt_args = args.optimizer['args']
-    tuplified_opt_args = tuplify(opt_args)
+    tuplified_opt_args = tuplify(args.optimizer['args'])
 
     optimizer = optimizer_cls(parameters, **tuplified_opt_args)
 
@@ -651,8 +660,8 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     if partition_using_gap_aware:
         logger.info(f"Stage {args.stage} will use Gap Aware")
 
-    trainer_cls = AVAILABLE_TRAINERS.get(args.trainer['type'])
-    task_cls = AVAILABLE_TASKS.get(args.task)
+    trainer_cls = get_trainer_cls(args)
+    task_cls = get_task_cls(args)
     optimizer_cls = get_optimizer_cls(args, partition_using_gap_aware)
     statistics = get_statistics(args.statistics,
                                 is_last_partition=is_last_partition)
@@ -704,7 +713,6 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     if 'lm' in args.task or 'squad' in args.task or 'glue' in args.task:
         # No weight decay for some parameters.
         model = partition.partition
-        # NOTE: it works even if len(model.paramerters()) == 0
         opt_args = args.optimizer['args']
         no_decay = ["bias", "LayerNorm.weight"]
         optimizer_grouped_parameters = [
@@ -734,7 +742,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         # total_length = lengths['decay'] + lengths['no_decay']
         print(f"-I- optimizer_grouped_parameters: {lengths}")
     else:
-        optimizer_grouped_parameters = partition.partition.parameters()
+        optimizer_grouped_parameters = list(partition.partition.parameters())
 
     # if we replace wp with nesterov, we save the wp arg, and set it back for config and auto experiment naming.
     stashed_wp_arg = None
@@ -816,8 +824,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
             assert (getattr(args, "weight_stashing", False))
 
     # Set Task
-    task = task_cls(device, is_last_partition, is_first_partition, args.stage,
-                    pipe_config)
+    task = task_cls(device, is_last_partition, is_first_partition, args.stage, pipe_config)
     partition.set_task(task)
 
     if hasattr(args, "auto_file_name"):
@@ -833,6 +840,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
 
     return (logger, train_dl, test_dl, is_first_partition, is_last_partition,
             partition, statistics, train_dl_len, test_dl_len, samplers)
+
 
 
 if __name__ == "__main__":
