@@ -443,6 +443,19 @@ def main():
         graph.serialize(args.output_file)
 
     record_cmdline(args.output_file)
+
+    #record model creation args
+    with open(f"{args.output_file}.py", "a") as f:
+        model_args = {"model_type":args.model_type,
+                     "model_name_or_path":args.model_name_or_path,
+                     "precompute_attention_mask":args.precompute_attention_mask,
+                     "max_seq_length":args.max_seq_length,
+                     "do_lower_case":args.do_lower_case,
+                     "max_query_length":args.max_query_length
+                    }
+        f.write("\n")
+        f.write(f"model_args = {model_args}")
+        
     module_path = args.output_file.replace("/", ".")
     generated = importlib.import_module(module_path)
     create_pipeline_configuration = generated.create_pipeline_configuration

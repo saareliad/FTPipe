@@ -224,10 +224,16 @@ if __name__ == "__main__":
     # Add cmdline to generate output file.
     record_cmdline(args.output_file)
 
+    #record model creation args
+    with open(f"{args.output_file}.py", "a") as f:
+        model_args = {"model":args.model}
+        f.write("\n")
+        f.write(f"model_args = {model_args}")
+
     module_path = args.output_file.replace("/", ".")
     generated = importlib.import_module(module_path)
     create_pipeline_configuration = generated.create_pipeline_configuration
-
+    
     if GET_PARTITIONS_ON_CPU:
         sample = sample.to('cpu')
     config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
