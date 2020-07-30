@@ -130,14 +130,21 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
     train_dataset = train_dataset.map(add_eos_to_examples, load_from_cache_file=False)
     train_dataset = train_dataset.map(convert_to_features, batched=True, load_from_cache_file=False)
     
-    train_dataset = train_dataset.map(preproc, batched=True, load_from_cache_file=False)
+    train_dataset = train_dataset.map(preproc, batched=True, load_from_cache_file=False, batch_size=128)
     train_dataset.set_format(type='torch', columns=just)
 
     dev_dataset = nlp.load_dataset('squad', split=nlp.Split.VALIDATION)
     dev_dataset = dev_dataset.map(add_eos_to_examples, load_from_cache_file=False)
     dev_dataset = dev_dataset.map(convert_to_features, batched=True, load_from_cache_file=False) 
-    dev_dataset = dev_dataset.map(preproc, batched=True, load_from_cache_file=False)
+    dev_dataset = dev_dataset.map(preproc, batched=True, load_from_cache_file=False, batch_size=128)
     dev_dataset.set_format(type='torch', columns=just)
+    
+    
+    to_drop = [i for i in dev_dataset.column_names if i not in subset_of_inputs]
+    dev_dataset.drop(to_drop)
+    
+    to_drop = [i for i in train_dataset.column_names if i not in subset_of_inputs]
+    train_dataset.drop(to_drop)
 
     # TODO: evaluation (see squad.py)
 
@@ -151,120 +158,8 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
 
 
 #########################
-# Yucky squad stuff
+# TODO: get unique cahce file name.
 #########################
-def nlp_to_tensor_dataset(ds, config, subset_of_inputs):
-    input_ids = ds['input_ids']
-    lm_labels = ds['target_ids']
-    ds['target_ids'][ds['target_ids'][:, :] == 0] = -100
-    attention_mask = ds['attention_mask']
-    decoder_attention_mask = ds['target_attention_mask']
-
-    decoder_input_ids = _shift_right(config, lm_labels)
-
-    precompute_masks = getattr(config, "precomputed_masks", False)
-    if precompute_masks:
-        print("-I- precomputing t5 masks on CPU", end ="...")
-
-        inverted_encoder_attention_mask = get_inverted_encoder_attention_mask(input_ids.size(),attention_mask,attention_mask.device)
-        attention_mask = get_attention_mask(input_ids.size(),attention_mask,attention_mask.device,is_decoder=False)    
-        decoder_attention_mask = get_attention_mask(decoder_input_ids.size(),decoder_attention_mask,decoder_attention_mask.device,is_decoder=True)
-        print("-I- done")
-    else:
-        print("-W- preprocessing will happen inside the model...")
-        inverted_encoder_attention_mask = None
-        decoder_attention_mask = None
-
-    # Now, we order according to signature
-    # input_ids,
-    # attention_mask=None,
-    # decoder_input_ids=None,
-    # decoder_attention_mask=None,
-    # inverted_encoder_attention_mask=None,
-    # lm_labels=None
-
-    d = {}
-    d['input_ids'] = input_ids
-    d['attention_mask'] = attention_mask
-    d['decoder_input_ids'] = decoder_input_ids
-    d['decoder_attention_mask'] = decoder_attention_mask
-    d['inverted_encoder_attention_mask'] = inverted_encoder_attention_mask
-    d['lm_labels'] = lm_labels
-    
-    # too lazy to do it selectivly...
-    keys = tuple(d.keys())
-    for k in keys:
-        if k not in subset_of_inputs:
-            del d[k]
-
-    keys = tuple(d.keys())
-    for k in keys:
-        if d[k] is None:
-            del d[k]
-    
-    ll = []
-    for x in d.values():
-        if not isinstance(x, torch.Tensor):
-            x = torch.tensor(x)
-        ll.append(x)
-
-    return TensorDataset(*ll)
-
-
-def t5_preproc_nlp_squad_ds(ds,
-                            tokenizer,
-                            max_length=384,
-                            columns=[
-                                'input_ids', 'target_ids', 'attention_mask',
-                                'target_attention_mask'
-                            ],
-                            load_from_cache_file=True,
-                            **kw):
-    """ preprocess nlp squad dataset to T5 format. 
-        Returns: dataset of examples.
-
-        (The next step is making this dataset a normal tensordataset,
-        as I think its a better practice until I master nlp packadge)
-    """
-
-    # process the examples in input and target text format and the eos token at the end
-    def add_eos_to_examples(example):
-        example['input_text'] = 'question: %s  context: %s </s>' % (
-            example['question'], example['context'])
-        example['target_text'] = '%s </s>' % example['answers']['text'][0]
-        return example
-
-    # tokenize the examples
-    # NOTE: they use global tokenizer
-
-    def convert_to_features(example_batch):
-        input_encodings = tokenizer.batch_encode_plus(
-            example_batch['input_text'],
-            pad_to_max_length=True,
-            truncation=True,
-            max_length=max_length
-        )  # NOTE: I think this could be changed to 384 like bert to save memory.
-        target_encodings = tokenizer.batch_encode_plus(
-            example_batch['target_text'],
-            pad_to_max_length=True,
-            truncation=True,
-            max_length=16)
-
-        encodings = {
-            'input_ids': input_encodings['input_ids'],
-            'attention_mask': input_encodings['attention_mask'],
-            'target_ids': target_encodings['input_ids'],
-            'target_attention_mask': target_encodings['attention_mask']
-        }
-        return encodings
-
-    ds = ds.map(add_eos_to_examples, load_from_cache_file=load_from_cache_file)
-    # map convert_to_features batch wise
-    ds = ds.map(convert_to_features, batched=True, load_from_cache_file=load_from_cache_file)
-
-    # set the tensor type and the columns which the dataset should return
-    ds.set_format(type='torch', columns=columns)
-    return ds
 
 
 ######################
