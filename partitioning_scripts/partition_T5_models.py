@@ -1,29 +1,25 @@
+import sys
+sys.path.append("../")
+
 from models.normal.NLP_models.modeling_t5 import T5ForConditionalGeneration, T5Model,get_attention_mask,get_inverted_encoder_attention_mask
 from models.normal.NLP_models.modeling_t5_tied_weights import T5ForConditionalGeneration as TiedT5ForConditionalGeneration, T5Model as TiedT5Model
 from transformers import T5Tokenizer, T5Config
 import torch
 import operator
 import math
-from pytorch_Gpipe import pipe_model
+from pytorch_Gpipe import pipe_model,get_weight_functions
 from pytorch_Gpipe.model_profiling.tracer import register_new_explicit_untraced_function, register_new_traced_function
 from pytorch_Gpipe.utils import layerDict, tensorDict
 import argparse
 import importlib
-from heuristics import get_weight_functions
 import functools
 from partition_async_pipe import partition_async_pipe
-from partition_scripts_utils import choose_blocks, ParseAcyclicPartitionerOpts, ParseMetisOpts, ParsePartitioningOpts, record_cmdline
-from misc import run_analysis, run_partitions
+from partition_scripts_utils import choose_blocks, record_cmdline,Parser
+from misc import run_analysis
 from misc.analysis_utils import convert_to_analysis_format
 import nlp
-import dataclasses
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional
-import numpy as np
-import torch
-from transformers import (
-    DataCollator, )
-from torch.utils.data import TensorDataset
+from dataclasses import dataclass
+from typing import Dict, List
 
 # See https://huggingface.co/models
 T5_PRETRAINED_MODELS = {'t5-small', 't5-base', 't5-large', 't5-3b', 't5-11b'}
@@ -56,7 +52,7 @@ def get_model_and_tokenizer(args):
     else:
         model_cls = T5ForConditionalGeneration
     model = model_cls.from_pretrained(args.model_name_or_path,
-                                      config=config).to(args.device).train()
+                                      config=config).train()
 
     if tied:
         model.make_stateless()
@@ -66,16 +62,16 @@ def get_model_and_tokenizer(args):
 
 def get_input_dummy(args, tokenizer, model=None, analysis=False):
     input_ids = tokenizer.encode("Hello, my dog is cute",
-                                 return_tensors="pt").to(
-                                     args.device)  # Batch (1,6)
+                                 return_tensors="pt")  # Batch (1,6)
 
     if analysis:
-        input_ids = input_ids.repeat(args.analysis_batch_size,
-                                     10).contiguous()  #Batch (ab,60)
+        batch_size = args.analysis_batch_size
     else:
-        input_ids = input_ids.repeat(args.partitioning_batch_size,
-                                     10).contiguous()  #Batch (pb,60)
+        batch_size = args.partitioning_batch_size
 
+    input_ids = input_ids.repeat(batch_size,
+                                     10).contiguous()  #Batch (ab,60)
+    
     decoder_input_ids = input_ids
 
     attention_mask = None
@@ -242,7 +238,7 @@ def get_input_squad1(args, tokenizer, model, analysis=False):
 
     batch = next(iter(dl))
 
-    batch = {i: batch[i].to(args.device) for i in batch}
+    batch = {i: batch[i] for i in batch}
     return batch
 
 
@@ -258,26 +254,29 @@ def get_input(args, tokenizer, model, analysis=False):
     return T5_TASK_TO_GET_INPUT[args.t5_task](args, tokenizer, model, analysis)
 
 
-class ParsePartitioningT5Opts(ParsePartitioningOpts):
-    def _extra(self, parser):
-        parser.add_argument("--model_name_or_path",
+class ParsePartitioningT5Opts(Parser):
+    def _add_model_args(self,group):
+        group.add_argument("--model_name_or_path",
                             choices=T5_PRETRAINED_MODELS,
                             default='t5-small')
-        parser.add_argument("--max_seq_length", type=int, default=512)
-        parser.add_argument("--stateless_tied",
+        group.add_argument("--max_seq_length", type=int, default=512)
+        group.add_argument("--stateless_tied",
                             action="store_true",
                             default=False)
-        parser.add_argument("--lmhead", action="store_true", default=False)
+        group.add_argument("--lmhead", action="store_true", default=False)      
+        group.add_argument("--precompute_masks",action="store_true",default=False)
 
-        parser.add_argument("--t5_task",
-                            type=str,
-                            choices=T5_TASK_TO_GET_INPUT.keys(),
-                            default="dummy")
-        parser.add_argument("--precompute_masks",action="store_true",default=False)
-        parser.add_argument("--debug", action="store_true", default=False)
+    def _add_data_args(self,group):
+        group.add_argument("--t5_task",
+                    type=str,
+                    choices=T5_TASK_TO_GET_INPUT.keys(),
+                    default="dummy")
 
-    def set_defaults(self, parser):
-        d = {
+    def _extra(self, group):
+        group.add_argument("--debug", action="store_true", default=False)
+
+    def _default_values(self):
+        return {
             "model_name_or_path": "t5-small",
             "partitioning_batch_size": 16,
             "n_iter": 50,
@@ -286,23 +285,16 @@ class ParsePartitioningT5Opts(ParsePartitioningOpts):
             "analysis_batch_size": 16,
             "basic_blocks": ["T5Attention"]
         }
-        parser.set_defaults(**d)
 
 
 def parse_cli():
-    parser = argparse.ArgumentParser(
+    parser = ParsePartitioningT5Opts(
         description="Partitioning models",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
-    ParsePartitioningT5Opts().add_partitioning_arguments(parser)
-    ParseMetisOpts.add_metis_arguments(parser)
-    ParseAcyclicPartitionerOpts.add_acyclic_partitioner_arguments(parser)
-
     
-
     args = parser.parse_args()
-    if not args.output_file:
 
+    if not args.output_file:
         bw_str = str(args.bw).replace(".", "_")
         model_str = str(args.model_name_or_path).replace("-", "_")
         tied = "tied" if args.stateless_tied else "untied"
@@ -320,15 +312,6 @@ def parse_cli():
     if args.output_file.endswith(".py"):
         args.output_file = args.output_file[:-3]
 
-    args.METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
-    args.acyclic_opt = ParseAcyclicPartitionerOpts.acyclic_opts_dict_from_parsed_args(
-        args)
-
-    device = "cuda" if (torch.cuda.is_available() and
-                        (not args.model_too_big)) else "cpu"
-    device = torch.device(device)
-    args.device = device
-
     return args
 
 
@@ -345,15 +328,13 @@ if __name__ == "__main__":
         ptvsd.wait_for_attach()
         print("attached")
 
-    if args.save_memory_mode:
-        tmp = args.device
-        args.device = torch.device("cpu")
     model, tokenizer = get_model_and_tokenizer(args)
-    if args.save_memory_mode:
-        args.device = tmp
-        del tmp
-
     sample = get_input(args, tokenizer, model, analysis=False)
+
+    if not args.save_memory_mode:
+        model = model.to(args.device)
+        sample = {k:v.to(args.device) for k,v in sample.items()}
+    
 
     register_functions()
     # partition the model using our profiler
@@ -370,17 +351,13 @@ if __name__ == "__main__":
     bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
     args.basic_blocks = choose_blocks(model, args)
 
-    # kwargs = {i:v for i,v in sample.items() if i != 'input_ids'}
-    kwargs = sample
-
     partial_pipe_model = functools.partial(
         pipe_model,
         model,
         batch_dim,
         basic_blocks=args.basic_blocks,
         depth=args.depth,
-        # args=(sample['input_ids']),
-        kwargs=kwargs,
+        kwargs=sample,
         nparts=n_partitions,
         output_file=args.output_file,
         generate_model_parallel=args.generate_model_parallel,
@@ -418,7 +395,7 @@ if __name__ == "__main__":
 
     config = create_pipeline_configuration(DEBUG=True)
 
-    if not (args.no_test_run and args.no_analysis):
+    if not args.no_analysis:
         depth = args.depth
         blocks = args.basic_blocks
         layers = layerDict(model, depth=depth, basic_blocks=blocks)
@@ -427,10 +404,6 @@ if __name__ == "__main__":
                                                     layers,
                                                     tensors)
 
-    if not args.no_test_run and not args.model_too_big:
-        _ = run_partitions(sample, analysis_config)
-
-    if not args.no_analysis:
         sample = get_input(args, tokenizer, model, analysis=True)
         analysis_result, summary = run_analysis(
             sample,

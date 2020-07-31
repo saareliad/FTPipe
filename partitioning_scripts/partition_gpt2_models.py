@@ -28,10 +28,9 @@ import importlib
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset, RandomSampler
-import warnings
 import sys
-from partition_scripts_utils import ParseMetisOpts,ParseAcyclicPartitionerOpts, ParsePartitioningOpts, record_cmdline,choose_blocks
-from heuristics import get_weight_functions
+sys.path.append("../")
+from partition_scripts_utils import Parser, record_cmdline,choose_blocks
 from transformers import (
     GPT2Config,
     GPT2Tokenizer,
@@ -44,7 +43,7 @@ from models.normal import StatelessGPT2LMHeadModel
 from models.normal import CTRLLMHeadModel, CTRLModel
 from models.normal import StatelessCTRLLMHeadModel
 
-from pytorch_Gpipe import pipe_model
+from pytorch_Gpipe import pipe_model,get_weight_functions
 from misc import run_analysis,convert_to_analysis_format
 from pytorch_Gpipe.utils import layerDict, tensorDict
 import functools
@@ -123,8 +122,6 @@ def set_seed(args):
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
-    if args.n_gpu > 0:
-        torch.cuda.manual_seed_all(args.seed)
 
 
 def partition_model(args,
@@ -147,13 +144,14 @@ def partition_model(args,
     set_seed(args)  # Added here for reproducibility (even between python 2 and 3)
     batch = next(iter(train_dataloader))
 
-    inputs = batch.to(args.device)
-    
     if lm:
-        labels = batch.to(args.device)
-        sample = (inputs, labels)
+        sample = {"input_ids":batch,"labels":batch}
     else:
-        sample = inputs
+        sample = {"input_ids":batch}
+    
+    if not args.save_memory_mode:
+        model = model.to(args.device)
+        sample ={k:v.to(args.device) for k,v in sample.items()}
 
     model.train()
     batch_dim = 0
@@ -180,7 +178,7 @@ def partition_model(args,
         pipe_model,
         model,
         batch_dim,
-        sample,
+        kwargs=sample,
         basic_blocks=args.basic_blocks,
         depth=args.depth,
         n_iter=args.n_iter,
@@ -202,7 +200,7 @@ def partition_model(args,
 
     if args.async_pipeline and (not args.no_recomputation):
         print("using async partitioner")
-        graph=partition_async_pipe(args,model,0,sample,
+        graph=partition_async_pipe(args,model,0,kwargs=sample,
                                     node_weight_function=node_weight_function,
                                     edge_weight_function=edge_weight_function,)
     else:
@@ -243,15 +241,15 @@ def partition_model(args,
             layerDict(model, depth=depth, basic_blocks=blocks),
             tensorDict(model))
 
-        shape = (args.analysis_batch_size, inputs.shape[1])
-        expanded_inputs = inputs[0].unsqueeze(0).expand(shape)
+        shape = (args.analysis_batch_size, batch.shape[1])
+        expanded_inputs = batch[0].unsqueeze(0).expand(shape)
 
         if lm: 
-            shape = (args.analysis_batch_size, labels.shape[1])
-            expanded_labels = labels[0].unsqueeze(0).expand(shape)
-            analysis_sample = (expanded_inputs, expanded_labels)
+            shape = (args.analysis_batch_size, batch[0].shape[1])
+            expanded_labels = batch[0].unsqueeze(0).expand(shape)
+            analysis_sample = {"input_ids":expanded_inputs, "labels":expanded_labels}
         else:
-            analysis_sample = expanded_inputs
+            analysis_sample = {"input_ids":expanded_inputs}
         
         stages_on_same_gpu = set()
         if args.lmhead and args.stateless_tied and len(
@@ -293,41 +291,29 @@ def auto_file_name(args):
     return s
 
 
-class ParsePartitioningOptsLM(ParsePartitioningOpts):
-    def _extra(self, parser):
-        parser.add_argument("--train_data_file",
-                            default=None,
-                            type=str,
-                            required=True,
-                            help="The input training data file (a text file).")
-        parser.add_argument("--model_type",
+class ParsePartitioningOptsLM(Parser):
+    def _add_model_args(self,group):
+        group.add_argument("--model_type",
                             default="gpt2",
                             type=str,
                             help="The model architecture to be fine-tuned.")
-        parser.add_argument(
+        group.add_argument(
             "--model_name_or_path",
             default="gpt2",
             type=str,
             help="The model checkpoint for weights initialization.")
-        parser.add_argument(
-            "--config_name",
-            default="",
-            type=str,
-            help="Optional pretrained config name or path if not the same as model_name_or_path"
+        group.add_argument("--lmhead",
+                            default=False,
+                            action="store_true",
+                            help="Partition a model with LM head")
+
+        group.add_argument(
+            "--stateless_tied",
+            default=False,
+            action="store_true",
+            help="Tie weights stateless trick. Note that shared weight may be sent in pipe"
         )
-        parser.add_argument(
-            "--tokenizer_name",
-            default="",
-            type=str,
-            help="Optional pretrained tokenizer name or path if not the same as model_name_or_path"
-        )
-        parser.add_argument(
-            "--cache_dir",
-            default="",
-            type=str,
-            help="Optional directory to store the pre-trained models downloaded from s3 (instread of the default one)"
-        )
-        parser.add_argument(
+        group.add_argument(
             "--block_size",
             default=-1,
             type=int,
@@ -335,32 +321,36 @@ class ParsePartitioningOptsLM(ParsePartitioningOpts):
             "The training dataset will be truncated in block of this size for training."
             "Default to the model max input length for single sentence inputs (take into account special tokens)."
         )
-        parser.add_argument(
+        group.add_argument(
             "--do_lower_case",
             action='store_true',
             help="Set this flag if you are using an uncased model.")
-        parser.add_argument(
+
+    def _add_data_args(self, group):
+        group.add_argument("--train_data_file",
+                            default=None,
+                            type=str,
+                            required=True,
+                            help="The input training data file (a text file).")
+        group.add_argument(
+            "--cache_dir",
+            default="",
+            type=str,
+            help="Optional directory to store the pre-trained models downloaded from s3 (instread of the default one)"
+        )
+        group.add_argument(
             '--overwrite_cache',
             action='store_true',
             help="Overwrite the cached training and evaluation sets")
-        parser.add_argument('--seed',
+        
+    def _add_extra(self,group):
+        group.add_argument('--seed',
                             type=int,
                             default=42,
                             help="random seed for initialization")
 
-        parser.add_argument("--lmhead",
-                            default=False,
-                            action="store_true",
-                            help="Partition a model with LM head")
 
-        parser.add_argument(
-            "--stateless_tied",
-            default=False,
-            action="store_true",
-            help="Tie weights stateless trick. Note that shared weight may be sent in pipe"
-        )
-
-    def set_defaults(self, parser):
+    def _default_values(self):
         d = {
             # "threads": 20,
             "partitioning_batch_size": 1,
@@ -370,17 +360,12 @@ class ParsePartitioningOptsLM(ParsePartitioningOpts):
             "analysis_batch_size": 1,
         }
 
-        parser.set_defaults(**d)
+        return d
 
 
 def parse_cli():
-    parser = argparse.ArgumentParser(
+    parser = ParsePartitioningOptsLM(description="Partitioning models",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
-    ParsePartitioningOptsLM().add_partitioning_arguments(parser)
-
-    ParseMetisOpts.add_metis_arguments(parser)
-    ParseAcyclicPartitionerOpts.add_acyclic_partitioner_arguments(parser)
 
     args = parser.parse_args()
 
@@ -389,22 +374,14 @@ def parse_cli():
 
     if args.output_file.endswith(".py"):
         args.output_file = args.output_file[:-3]
-
+    
+    assert False
     return args
 
 
 def main():
 
     args = parse_cli()
-    args.METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
-    args.acyclic_opt = ParseAcyclicPartitionerOpts.acyclic_opts_dict_from_parsed_args(args)
-
-
-    # Setup CUDA, GPU
-    device = torch.device("cuda" if torch.cuda.is_available()
-                          and not args.model_too_big else "cpu")
-    args.n_gpu = torch.cuda.device_count()
-    args.device = device
 
     # Set seed
     set_seed(args)
@@ -421,13 +398,10 @@ def main():
 
     config_class, model_class, tokenizer_class = model_class_dict_to_use[
         args.model_type]
-    config = config_class.from_pretrained(
-        args.config_name if args.config_name else args.model_name_or_path,
+    config = config_class.from_pretrained(args.model_name_or_path,
         cache_dir=args.cache_dir if args.cache_dir else None)
 
-    tokenizer = tokenizer_class.from_pretrained(
-        args.tokenizer_name
-        if args.tokenizer_name else args.model_name_or_path,
+    tokenizer = tokenizer_class.from_pretrained(args.model_name_or_path,
         do_lower_case=args.do_lower_case,
         cache_dir=args.cache_dir if args.cache_dir else None)
     if args.block_size <= 0:
@@ -441,8 +415,6 @@ def main():
         config=config,
         cache_dir=args.cache_dir if args.cache_dir else None)
 
-    if not args.save_memory_mode:
-        model.to(args.device)
     print("model built")
     train_dataset = load_and_cache_examples(args, tokenizer)
     partition_model(args,

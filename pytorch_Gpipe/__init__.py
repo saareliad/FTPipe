@@ -3,7 +3,7 @@ from typing import Any, Callable, List, Dict, Optional, Union
 import torch
 import torch.nn as nn
 
-from .model_partitioning import METIS_partition,acyclic_partition
+from .model_partitioning import METIS_partition,acyclic_partition,get_weight_functions
 from .compiler import compile_partitioned_model
 from .model_profiling import Graph, profile_network, GraphProfiler, trace_module, ExecTimes, NodeWeightFunction, EdgeWeightFunction
 from .model_profiling.infer_req_grad import infer_req_grad

@@ -4,18 +4,18 @@ import os
 import logging
 import importlib
 import sys
+sys.path.append("../")
 import math
 import operator
 import functools
 from torch.utils.data import DataLoader, RandomSampler
 
 from models.normal import BertForQuestionAnswering
-from models.normal.NLP_models.modeling_bert import SQUAD_loss,get_extended_attention_mask
-from partition_scripts_utils import ParsePartitioningOpts, ParseAcyclicPartitionerOpts, ParseMetisOpts, record_cmdline, choose_blocks, run_x_tries_until_no_fail
+from models.normal.NLP_models.modeling_bert import get_extended_attention_mask
+from partition_scripts_utils import Parser, record_cmdline, choose_blocks
 from partition_async_pipe import partition_async_pipe
-from heuristics import get_weight_functions
 from misc import run_analysis,convert_to_analysis_format
-from pytorch_Gpipe import pipe_model
+from pytorch_Gpipe import pipe_model,get_weight_functions
 from pytorch_Gpipe.model_profiling import register_new_traced_function, register_new_explicit_untraced_function
 from pytorch_Gpipe.utils import layerDict, tensorDict
 
@@ -110,23 +110,16 @@ def load_and_cache_examples(args,
     return dataset
 
 
-class ParsePartitioningOptsSquad(ParsePartitioningOpts):
-    # TODO:
-    def __init__(self):
-        super().__init__()
-
-    def _extra(self, parser):
-        # NOTE: copy and paste from run_squard script.
-        # Required parameters
-        parser.add_argument("--debug", action="store_true", default=False)
-        parser.add_argument(
+class ParsePartitioningOptsSquad(Parser):
+    def _add_model_args(self,group):
+        group.add_argument(
             "--model_type",
             default=None,
             type=str,
             required=True,
             help="Model type selected in the list: " + ", ".join(MODEL_TYPES),
         )
-        parser.add_argument(
+        group.add_argument(
             "--model_name_or_path",
             default=None,
             type=str,
@@ -134,9 +127,35 @@ class ParsePartitioningOptsSquad(ParsePartitioningOpts):
             help=
             "Path to pre-trained model or shortcut name in huggingface/models"
         )
+        group.add_argument(
+            "--precompute_attention_mask",
+            action="store_true",
+            default=False,
+            help="wether to compute attention mask inside or outside the model"
+        )
+        group.add_argument(
+            "--max_seq_length",
+            default=384,
+            type=int,
+            help=
+            "The maximum total input sequence length after WordPiece tokenization. Sequences "
+            "longer than this will be truncated, and sequences shorter than this will be padded.",
+        )
+        group.add_argument(
+            "--max_query_length",
+            default=64,
+            type=int,
+            help=
+            "The maximum number of tokens for the question. Questions longer than this will "
+            "be truncated to this length.",
+        )
+        group.add_argument(
+            "--do_lower_case",
+            action="store_true",
+            help="Set this flag if you are using an uncased model.")
 
-        # Other parameters
-        parser.add_argument(
+    def _add_data_args(self,group):
+        group.add_argument(
             "--data_dir",
             default=None,
             type=str,
@@ -145,7 +164,7 @@ class ParsePartitioningOptsSquad(ParsePartitioningOpts):
             +
             "If no data dir or train/predict files are specified, will run with tensorflow_datasets.",
         )
-        parser.add_argument(
+        group.add_argument(
             "--train_file",
             default=None,
             type=str,
@@ -154,7 +173,7 @@ class ParsePartitioningOptsSquad(ParsePartitioningOpts):
             +
             "If no data dir or train/predict files are specified, will run with tensorflow_datasets.",
         )
-        parser.add_argument(
+        group.add_argument(
             "--predict_file",
             default=None,
             type=str,
@@ -163,92 +182,55 @@ class ParsePartitioningOptsSquad(ParsePartitioningOpts):
             +
             "If no data dir or train/predict files are specified, will run with tensorflow_datasets.",
         )
-        parser.add_argument(
-            "--config_name",
-            default="",
-            type=str,
-            help="Pretrained config name or path if not the same as model_name"
-        )
-        parser.add_argument(
-            "--tokenizer_name",
-            default="",
-            type=str,
-            help=
-            "Pretrained tokenizer name or path if not the same as model_name",
-        )
-        parser.add_argument(
+        group.add_argument(
             "--cache_dir",
             default="",
             type=str,
             help=
             "Where do you want to store the pre-trained models downloaded from s3",
         )
-
-        parser.add_argument(
+        group.add_argument(
             "--version_2_with_negative",
             action="store_true",
             help=
             "If true, the SQuAD examples contain some that do not have an answer.",
         )
-        parser.add_argument(
-            "--max_seq_length",
-            default=384,
-            type=int,
-            help=
-            "The maximum total input sequence length after WordPiece tokenization. Sequences "
-            "longer than this will be truncated, and sequences shorter than this will be padded.",
-        )
-        parser.add_argument(
+        group.add_argument(
             "--doc_stride",
             default=128,
             type=int,
             help=
             "When splitting up a long document into chunks, how much stride to take between chunks.",
         )
-        parser.add_argument(
-            "--max_query_length",
-            default=64,
-            type=int,
-            help=
-            "The maximum number of tokens for the question. Questions longer than this will "
-            "be truncated to this length.",
-        )
-        parser.add_argument(
-            "--do_lower_case",
+        group.add_argument(
+            "--overwrite_cache",
             action="store_true",
-            help="Set this flag if you are using an uncased model.")
+            help="Overwrite the cached training and evaluation sets")
+        group.add_argument("--seed",
+                            type=int,
+                            default=42,
+                            help="random seed for initialization")
 
-        parser.add_argument(
+        group.add_argument(
+            "--threads",
+            type=int,
+            default=1,
+            help="multiple threads for converting example to features")
+        group.add_argument(
             "--lang_id",
             default=0,
             type=int,
             help=
             "language id of input for language-specific xlm models (see tokenization_xlm.PRETRAINED_INIT_CONFIGURATION)",
         )
-        parser.add_argument(
-            "--overwrite_cache",
-            action="store_true",
-            help="Overwrite the cached training and evaluation sets")
-        parser.add_argument("--seed",
-                            type=int,
-                            default=42,
-                            help="random seed for initialization")
 
-        parser.add_argument(
-            "--threads",
-            type=int,
-            default=1,
-            help="multiple threads for converting example to features")
-
-        parser.add_argument(
-            "--precompute_attention_mask",
-            action="store_true",
-            default=False,
-            help="wether to compute attention mask inside or outside the model"
-        )
-
-    def set_defaults(self, parser):
-        d = {
+    def _extra(self, group):
+        # NOTE: copy and paste from run_squard script.
+        # Required parameters
+        group.add_argument("--debug", action="store_true", default=False)
+    
+    def _default_values(self):
+        return {
             # "threads": 20,
             "partitioning_batch_size": 1,
             "n_iter": 1,
@@ -257,20 +239,18 @@ class ParsePartitioningOptsSquad(ParsePartitioningOpts):
             "analysis_batch_size": 1,
         }
 
-        parser.set_defaults(**d)
-
 
 def parse_cli():
-    parser = argparse.ArgumentParser(
+    parser = ParsePartitioningOptsSquad(
         description="Partitioning models",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    ParsePartitioningOptsSquad().add_partitioning_arguments(parser)
-    ParseMetisOpts.add_metis_arguments(parser)
-    ParseAcyclicPartitionerOpts.add_acyclic_partitioner_arguments(parser)
-
     args = parser.parse_args()
+    args.model_type = args.model_type.lower()
 
+    if not args.output_file:
+        args.output_file = f"{args.model_type}_{args.n_partitions}p"
+    
     if args.output_file.endswith(".py"):
         args.output_file = args.output_file[:-3]
 
@@ -335,8 +315,7 @@ def get_inputs_squad(args, tokenizer, model, analysis=False):
                           args.lang_id).to(args.device)
             })
 
-    sample = tuple(inputs[i] for i in signature_order)
-    return sample
+    return inputs
 
 
 def main():
@@ -350,28 +329,10 @@ def main():
         ptvsd.wait_for_attach()
         print("attached")
 
-    args.METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
-    args.acyclic_opt = ParseAcyclicPartitionerOpts.acyclic_opts_dict_from_parsed_args(
-        args)
-    args.model_type = args.model_type.lower()
-
-    if not args.output_file:
-        args.output_file = f"{args.model_type}_{args.n_partitions}p"
-
-    #####
-    device = torch.device("cuda" if torch.cuda.is_available()
-                          and not args.model_too_big else "cpu")
-    args.n_gpu = torch.cuda.device_count()
-    args.device = device
-    #####
-
-    config = AutoConfig.from_pretrained(
-        args.config_name if args.config_name else args.model_name_or_path,
+    config = AutoConfig.from_pretrained(args.model_name_or_path,
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
-    tokenizer = AutoTokenizer.from_pretrained(
-        args.tokenizer_name
-        if args.tokenizer_name else args.model_name_or_path,
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path,
         do_lower_case=args.do_lower_case,
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
@@ -383,11 +344,8 @@ def main():
         from_tf=bool(".ckpt" in args.model_name_or_path),
         config=config,
         cache_dir=args.cache_dir if args.cache_dir else None,
-    )
-    # TODO: if not args.save_memory_mode:
-    model.to(args.device)
-    model.train()
-
+    ).train()
+    
     # Partition the model
     GET_PARTITIONS_ON_CPU = True
     register_new_explicit_untraced_function(operator.is_, operator)
@@ -395,6 +353,10 @@ def main():
     register_new_traced_function(math.sqrt, math)
 
     sample = get_inputs_squad(args, tokenizer, model, analysis=False)
+
+    if not args.save_memory_mode:
+        model = model.to(args.device)
+        sample = {k:t.to(args.device) for k,t in sample.items()}
 
     n_iter = args.n_iter
     recomputation = not args.no_recomputation
@@ -411,7 +373,7 @@ def main():
         pipe_model,
         model,
         batch_dim,
-        args=sample,
+        kwargs=sample,
         basic_blocks=args.basic_blocks,
         depth=args.depth,
         n_iter=args.n_iter,
@@ -433,7 +395,7 @@ def main():
 
     if args.async_pipeline and (not args.no_recomputation):
         print("using async partitioner")
-        graph = partition_async_pipe(args, model, 0, sample,
+        graph = partition_async_pipe(args, model, 0, kwargs=sample,
                         node_weight_function=node_weight_function,
                         edge_weight_function=edge_weight_function,)
     else:
@@ -447,19 +409,18 @@ def main():
     generated = importlib.import_module(module_path)
     create_pipeline_configuration = generated.create_pipeline_configuration
 
-    if GET_PARTITIONS_ON_CPU:
-        sample = tuple(t.to("cpu") for t in sample)
+    sample = get_inputs_squad(args, tokenizer, model, analysis=True)
+
     config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
 
 
-    if not (args.no_test_run and args.no_analysis):
+    if not args.no_analysis:
         depth = args.depth
         blocks = args.basic_blocks
         analysis_config =convert_to_analysis_format(config,
             layerDict(model, depth=depth, basic_blocks=blocks),
             tensorDict(model))
 
-    if not args.no_analysis:
         analysis_result, summary = run_analysis(
             sample,
             graph,

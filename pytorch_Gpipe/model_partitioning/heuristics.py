@@ -1,13 +1,10 @@
 import torch
 from functools import reduce
 import operator
-from pytorch_Gpipe.model_profiling import Node, NodeTypes, ExecTimes
-from pytorch_Gpipe.utils import flatten
+from ..model_profiling import Node, NodeTypes, ExecTimes
+from ..utils import flatten
 
-__all__ = [
-    "NodeWeightFunction", "EdgeWeightFunction",
-    "NodeWeightFunctionWithRatioAutoInfer","get_weight_functions"
-]
+__all__ = ["get_weight_functions"]
 
 
 def get_weight_functions(args, verbose=True):
@@ -15,15 +12,17 @@ def get_weight_functions(args, verbose=True):
     # (2) get keyrowrds, parse special arguments
     # (3) create and return instance
 
+    MULT_FACTOR = args.weight_mult_factor
     if args.auto_infer_node_bwd_to_fwd_ratio:
-        node = NodeWeightFunctionWithRatioAutoInfer()
+        node = NodeWeightFunctionWithRatioAutoInfer(MULT_FACTOR=MULT_FACTOR)
     else:
-        node = NodeWeightFunction(bwd_to_fwd_ratio=args.bwd_to_fwd_ratio)
+        node = NodeWeightFunction(bwd_to_fwd_ratio=args.bwd_to_fwd_ratio,MULT_FACTOR=MULT_FACTOR)
 
     edge = EdgeWeightFunction(args.bw,
                             bwd_to_fwd_ratio=args.bwd_to_fwd_ratio,
                             penalize_non_tensors=args.penalize_non_tensors,
-                            penalty=args.edge_penalty)
+                            penalty=args.edge_penalty,
+                            MULT_FACTOR=MULT_FACTOR)
 
     if verbose:
         print(f"-I- using heuristics {type(node).__name__} , {type(edge).__name__}")

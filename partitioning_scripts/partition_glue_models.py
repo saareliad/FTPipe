@@ -4,28 +4,25 @@ import os
 import logging
 import importlib
 import sys
+sys.path.append("../")
 import math
 import operator
 import functools
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
+from torch.utils.data import DataLoader, RandomSampler
 
 from models.normal import BertForSequenceClassification
-from models.normal.NLP_models.modeling_bert import GlueLoss, get_extended_attention_mask
+from models.normal.NLP_models.modeling_bert import  get_extended_attention_mask
 from models.normal.NLP_models.modeling_roberta import RobertaForSequenceClassification
-from partition_scripts_utils import (ParsePartitioningOpts,
-                                     ParseAcyclicPartitionerOpts,
-                                     ParseMetisOpts, record_cmdline,
-                                     choose_blocks, run_x_tries_until_no_fail, bruteforce_main)
+from partition_scripts_utils import (Parser, record_cmdline,
+                                     choose_blocks, bruteforce_main)
 from partition_async_pipe import partition_async_pipe
-from heuristics import get_weight_functions
-from misc import run_analysis, run_partitions,convert_to_analysis_format
-from pytorch_Gpipe import pipe_model
+from misc import run_analysis,convert_to_analysis_format
+from pytorch_Gpipe import pipe_model,get_weight_functions
 from pytorch_Gpipe.model_profiling import register_new_traced_function, register_new_explicit_untraced_function
 from pytorch_Gpipe.utils import layerDict, tensorDict
-from shutil import copyfile
 
 from transformers import (MODEL_FOR_SEQUENCE_CLASSIFICATION_MAPPING,
-                          AutoConfig, AutoModelForSequenceClassification,
+                          AutoConfig,
                           AutoTokenizer, glue_tasks_num_labels)
 
 from transformers import GlueDataset, GlueDataTrainingArguments
@@ -59,12 +56,6 @@ def make_just_x(ds, mode="train"):
     print(d.keys())
     return TensorDataset(*[torch.tensor(x) for x in d.values()])
 
-
-def make_just_y(ds, mode="train"):
-    # NOTE: I made it output example ids in eval for conviniece
-    y = [feature.label for feature in ds]
-    y = torch.tensor(y)
-    return TensorDataset(y)
 
 
 # TODO:    "diagnostic"
@@ -119,15 +110,14 @@ def get_dataset(args, tokenizer, cache_name="glue_ds.pt"):
     return ds
 
 
-def get_sample(args, tokenizer, model):
+def get_sample(args, tokenizer, model,analysis=False):
     train_dataset = get_dataset(args, tokenizer)
     train_sampler = RandomSampler(train_dataset)
     # TODO: create a dataloader like they do in transformers...
     train_dataloader = DataLoader(train_dataset,
                                   sampler=train_sampler,
-                                  batch_size=args.partitioning_batch_size)
+                                  batch_size=args.analysis_batch_size if analysis else args.partitioning_batch_size)
     batch = next(iter(train_dataloader))
-    batch = tuple(t.to(args.device) for t in batch)
 
     if args.precompute_attention_mask:
         attention_mask = get_extended_attention_mask(batch[1],batch[0])
@@ -171,66 +161,37 @@ def get_sample(args, tokenizer, model):
                           args.lang_id).to(args.device)
             })
 
-    sample = tuple(inputs[i] for i in signature_order)
-    return sample
+    return inputs
 
 
-class ParsePartitioningOptsGlue(ParsePartitioningOpts):
-    # TODO:
-    def __init__(self):
-        super().__init__()
-
-    def _extra(self, parser):
-        # Me adding manually...
-        parser.add_argument("--task_name",
-                            type=str,
-                            default="mnli",
-                            help="Glue task")
-
+class ParsePartitioningOptsGlue(Parser):
+    def _add_model_args(self,group):
+        group.add_argument("--task_name",
+                    type=str,
+                    default="mnli",
+                    help="Glue task")
         # Required parameters
-        parser.add_argument(
+        group.add_argument(
             "--model_type",
             default=None,
             type=str,
             required=True,
             help="Model type selected in the list: " + ", ".join(MODEL_TYPES),
         )
-        parser.add_argument(
+        group.add_argument(
             "--model_name_or_path",
             default=None,
             type=str,
             required=True,
             help="Path to pre-trained model or shortcut name.",
         )
-
-        # Other parameters
-        parser.add_argument(
-            "--data_dir",
-            default="/home_local/saareliad/data/glue_data/",
-            type=str,
-            help="The input data dir. Should contain the files for the task.")
-
-        parser.add_argument(
-            "--config_name",
-            default="",
-            type=str,
-            help="Pretrained config name or path if not the same as model_name"
-        )
-        parser.add_argument(
-            "--tokenizer_name",
-            default="",
-            type=str,
-            help=
-            "Pretrained tokenizer name or path if not the same as model_name",
-        )
-        parser.add_argument(
-            "--cache_dir",
-            default="",
-            type=str,
-            help=
-            "Where do you want to store the pre-trained models downloaded from s3",
-        )
-        parser.add_argument(
+        group.add_argument(
+                "--precompute_attention_mask",
+                action="store_true",
+                default=False,
+                help="wether to compute attention mask inside or outside the model"
+            )
+        group.add_argument(
             "--max_seq_length",
             default=128,
             type=int,
@@ -238,42 +199,42 @@ class ParsePartitioningOptsGlue(ParsePartitioningOpts):
             "The maximum total input sequence length after WordPiece tokenization. Sequences "
             "longer than this will be truncated, and sequences shorter than this will be padded.",
         )
-
-        parser.add_argument(
+        group.add_argument(
             "--do_lower_case",
             action="store_true",
             help="Set this flag if you are using an uncased model.")
 
-        parser.add_argument(
-            "--lang_id",
-            default=0,
-            type=int,
-            help=
-            "language id of input for language-specific xlm models (see tokenization_xlm.PRETRAINED_INIT_CONFIGURATION)",
-        )
-        parser.add_argument(
-            "--overwrite_cache",
-            action="store_true",
-            help="Overwrite the cached training and evaluation sets")
-        parser.add_argument("--seed",
-                            type=int,
-                            default=42,
-                            help="random seed for initialization")
+        def _add_data_args(self,group):
+            group.add_argument(
+                "--data_dir",
+                default="/home_local/saareliad/data/glue_data/",
+                type=str,
+                help="The input data dir. Should contain the files for the task.")
 
-        parser.add_argument(
-            "--eval_glue",
-            action="store_true",
-            default=False,
-            help="evaluate glue on dev set to check weight loading")
+            group.add_argument(
+                "--cache_dir",
+                default="",
+                type=str,
+                help=
+                "Where do you want to store the pre-trained models downloaded from s3",
+            )
+            group.add_argument(
+                "--lang_id",
+                default=0,
+                type=int,
+                help=
+                "language id of input for language-specific xlm models (see tokenization_xlm.PRETRAINED_INIT_CONFIGURATION)",
+            )
+            group.add_argument(
+                "--overwrite_cache",
+                action="store_true",
+                help="Overwrite the cached training and evaluation sets")
+            group.add_argument("--seed",
+                                type=int,
+                                default=42,
+                                help="random seed for initialization")
 
-        parser.add_argument(
-            "--precompute_attention_mask",
-            action="store_true",
-            default=False,
-            help="wether to compute attention mask inside or outside the model"
-        )
-
-    def set_defaults(self, parser):
+    def _default_values(self):
         d = {
             "partitioning_batch_size": 1,
             "n_iter": 1,
@@ -281,26 +242,18 @@ class ParsePartitioningOptsGlue(ParsePartitioningOpts):
             # "model_type": 'bert',
             "n_partitions": 2,
             "bw": 12,
-            "analysis_batch_size": 1,
-            'eval_glue': False # FIXME: currently always on until bug is solved
+            "analysis_batch_size": 1
         }
-
-        parser.set_defaults(**d)
+        return d
 
 
 def parse_cli():
-    parser = argparse.ArgumentParser(
+    parser = ParsePartitioningOptsGlue(
         description="Partitioning models",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    ParsePartitioningOptsGlue().add_partitioning_arguments(parser)
-    ParseMetisOpts.add_metis_arguments(parser)
-    ParseAcyclicPartitionerOpts.add_acyclic_partitioner_arguments(parser)
-
     args = parser.parse_args()
 
-    if args.output_file.endswith(".py"):
-        args.output_file = args.output_file[:-3]
 
     return args
 
@@ -311,9 +264,6 @@ def main(override_dict={}):
         for i, v in override_dict.items():
             setattr(args, i, v)
 
-    args.METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
-    args.acyclic_opt = ParseAcyclicPartitionerOpts.acyclic_opts_dict_from_parsed_args(
-        args)
     args.model_type = args.model_type.lower()
 
     if not args.output_file:
@@ -326,16 +276,11 @@ def main(override_dict={}):
 
         args.output_file += f"_{args.task_name}"
         args.output_file += "_glue"
+    
+    if args.output_file.endswith(".py"):
+        args.output_file = args.output_file[:-3]
 
-    #####
-    device = torch.device("cuda" if torch.cuda.is_available()
-                          and not args.model_too_big else "cpu")
-    args.n_gpu = torch.cuda.device_count()
-    args.device = device
-    #####
-
-    config = AutoConfig.from_pretrained(
-        args.config_name if args.config_name else args.model_name_or_path,
+    config = AutoConfig.from_pretrained(args.model_name_or_path,
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
 
@@ -346,8 +291,7 @@ def main(override_dict={}):
     config.num_labels = glue_tasks_num_labels.get(args.task_name)
 
     tokenizer = AutoTokenizer.from_pretrained(
-        args.tokenizer_name
-        if args.tokenizer_name else args.model_name_or_path,
+       args.model_name_or_path,
         do_lower_case=args.do_lower_case,
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
@@ -364,11 +308,12 @@ def main(override_dict={}):
         config=config,
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
-    # TODO: if not args.save_memory_mode:
-    model.to(args.device)
     model.train()
+    sample = get_sample(args, tokenizer, model,analysis=False)
 
-    sample = get_sample(args, tokenizer, model)
+    if not args.save_memory_mode:
+        model = model.to(args.device)
+        sample = {k:v.to(args.device) for k,v in sample.items()}
 
     # Partition the model
     GET_PARTITIONS_ON_CPU = True
@@ -391,7 +336,7 @@ def main(override_dict={}):
         pipe_model,
         model,
         batch_dim,
-        args=sample,
+        kwargs=sample,
         basic_blocks=args.basic_blocks,
         depth=args.depth,
         n_iter=args.n_iter,
@@ -413,7 +358,7 @@ def main(override_dict={}):
 
     if args.async_pipeline and (not args.no_recomputation):
         print("using async partitioner")
-        graph = partition_async_pipe(args, model, 0, sample,
+        graph = partition_async_pipe(args, model, 0, kwargs=sample,
                                     node_weight_function=node_weight_function,
                                     edge_weight_function=edge_weight_function,)
     else:
@@ -427,19 +372,17 @@ def main(override_dict={}):
     generated = importlib.import_module(module_path)
     create_pipeline_configuration = generated.create_pipeline_configuration
 
-    if GET_PARTITIONS_ON_CPU:
-        sample = tuple(t.to("cpu") for t in sample)
+    sample = get_sample(args, tokenizer, model,analysis=True)
     config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
 
 
-    if not (args.no_test_run and args.no_analysis):
+    if not args.no_analysis:
         depth = args.depth
         blocks = args.basic_blocks
         analysis_config = convert_to_analysis_format(config,
             layerDict(model, depth=depth, basic_blocks=blocks),
             tensorDict(model))
 
-    if not args.no_analysis:
         analysis_result, summary = run_analysis(
             sample,
             graph,
@@ -453,106 +396,6 @@ def main(override_dict={}):
         with open(f"{args.output_file}.py", "a") as f:
             f.write("\n")
             f.write('"""analysis summary\n' + summary + "\n" + '"""')
-
-        if getattr(args, "eval_glue", False):
-            n_partitions = sum(1 for k in analysis_config
-                               if isinstance(k, int))
-            for i in range(n_partitions):
-                analysis_config[i]['model'] = analysis_config[i]['model'].eval(
-                )
-                analysis_config[i]['model'].device = device
-
-            # NOTE: this is the original model
-            # With the original model we get sota valid results.
-            # otherwise- its random chance
-            TAKE_ORIGINAL_MODEL = False
-
-            if TAKE_ORIGINAL_MODEL:
-                model = AutoModelForSequenceClassification.from_pretrained(
-                    args.model_name_or_path)
-
-            model.to(args.device)
-            model.eval()
-            data_dir = args.data_dir
-            task_dir = TASK_NAME_TO_DATA_DIR.get(args.task_name)
-            data_dir = os.path.join(data_dir, task_dir)
-
-            glue_args = GlueDataTrainingArguments(
-                task_name=args.task_name,
-                data_dir=data_dir,
-                max_seq_length=args.max_seq_length,
-                overwrite_cache=args.overwrite_cache)
-
-            print("creating datasets")
-
-            CACHE_NAME = "glue_dev" + "_" + args.model_name_or_path
-            ds = GlueDataset(
-                glue_args,
-                tokenizer,
-                mode="dev",
-            )
-
-            if not os.path.exists(CACHE_NAME + "x.pt"):
-                dsx = make_just_x(ds, mode="eval")
-                torch.save(dsx, CACHE_NAME + "x.pt")
-            else:
-                dsx = torch.load(CACHE_NAME + "x.pt")
-
-            if not os.path.exists(CACHE_NAME + "y.pt"):
-                dsy = make_just_y(ds, mode="eval")
-                torch.save(dsy, CACHE_NAME + "y.pt")
-            else:
-                dsy = torch.load(CACHE_NAME + "y.pt")
-
-            # TODO: create a dataloader like they do in transformers...
-            dlx = DataLoader(dsx,
-                             sampler=SequentialSampler(dsx),
-                             batch_size=args.analysis_batch_size)
-
-            dly = DataLoader(dsy,
-                             sampler=SequentialSampler(dsy),
-                             batch_size=args.analysis_batch_size)
-
-            preds = []
-            labels = []
-            print("running partitions")
-            with torch.no_grad():
-                for bx, by in zip(dlx, dly):
-
-                    def to_device(a):
-                        if isinstance(a, torch.Tensor):
-                            return a.to(args.device),
-                        else:
-                            return [t.to(args.device) for t in a]
-
-                    bx = to_device(bx)
-                    # by = to_device(by)
-
-                    logits = model(*bx)
-
-                    if isinstance(logits, tuple):
-                        logits = logits[0]
-
-                    # logits = run_partitions(bx, analysis_config)
-                    # assert len(logits) == 1
-                    # logits = logits[0]
-
-                    preds.append(logits.detach().cpu())
-                    labels.append(by[0].detach().cpu())
-
-            preds = torch.cat(preds, dim=0).cpu().numpy()
-            labels = torch.cat(labels, dim=0).cpu().numpy()
-
-            print(preds)
-            print(labels)
-
-            ep = EvalPrediction(preds, labels)
-
-            print("evaluating on CPU")
-            partial_evaluate = build_compute_metrics_fn(args.task_name)
-
-            result = partial_evaluate(ep)
-            print(result)
 
     print(f"-I- Done: {args.output_file}.py")
 

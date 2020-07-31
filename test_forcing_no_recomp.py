@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import importlib
 from partition_async_pipe import AsyncPipePartitioner
 from functools import partial
-from heuristics import NodeWeightFunction, EdgeWeightFunction
+from pytorch_Gpipe.model_partitioning.heuristics import NodeWeightFunction, EdgeWeightFunction
 import os
 
 from models.normal.NLP_models.stateless import StatelessLinear, StatelessEmbedding, StatelessSequential, CompositionStatelessSequential
@@ -108,9 +108,6 @@ layerDict = generated.layerDict
 tensorDict = generated.tensorDict
 
 GET_PARTITIONS_ON_CPU = True
-if GET_PARTITIONS_ON_CPU:
-    # TODO: not sure about this...
-    sample = sample.to('cpu')
 config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
 
 
@@ -134,5 +131,4 @@ analysis_result, summary = run_analysis(
     verbose=True,
     async_pipeline=args.async_pipeline,
     sequential_model=model,
-    analyze_traced_model=args.analyze_traced_model,
     stages_on_same_gpu=stages_on_same_gpu)

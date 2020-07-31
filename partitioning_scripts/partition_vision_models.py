@@ -1,3 +1,5 @@
+import sys
+sys.path.append("../")
 import torch
 from models.normal import WideResNet, amoebanetd, vgg16_bn
 from models.normal.vision_models import ResNet
@@ -5,9 +7,9 @@ from pytorch_Gpipe.utils import layerDict, tensorDict
 from pytorch_Gpipe import pipe_model
 import argparse
 import importlib
-from misc import run_analysis, run_partitions,convert_to_analysis_format
-from heuristics import get_weight_functions
-from partition_scripts_utils import ParseMetisOpts, ParseAcyclicPartitionerOpts, ParsePartitioningOpts, record_cmdline, choose_blocks
+from misc import run_partitions,convert_to_analysis_format
+from pytorch_Gpipe import get_weight_functions
+from partition_scripts_utils import Parser, record_cmdline, choose_blocks
 import functools
 from partition_async_pipe import partition_async_pipe
 
@@ -98,25 +100,20 @@ def create_random_sample(args, analysis=False):
     return sample
 
 
-class ParsePartitioningOptsVision(ParsePartitioningOpts):
-    def __init__(self,
-                 model_choices=MODEL_CONFIGS.keys(),
-                 dataset_choices=DATASETS):
-        super().__init__()
-        self.model_choices = model_choices
-        self.dataset_choices = dataset_choices
-
-    def _extra(self, parser):
-        parser.add_argument('--model',
-                            choices=self.model_choices,
+class ParsePartitioningOptsVision(Parser):
+    def _add_model_args(self,group):
+        group.add_argument('--model',
+                            choices=MODEL_CONFIGS.keys(),
                             default='wrn_16x4')
-        parser.add_argument('-d',
+                            
+    def _add_data_args(self, group):
+        group.add_argument('-d',
                             '--dataset',
-                            choices=self.dataset_choices,
+                            choices=DATASETS,
                             default='cifar10')
 
-    def set_defaults(self, parser):
-        d = {
+    def _default_values(self):
+        return {
             # "model": 'wrn_16x4',
             "partitioning_batch_size": 128,
             "n_iter": 100,
@@ -125,18 +122,12 @@ class ParsePartitioningOptsVision(ParsePartitioningOpts):
             "analysis_batch_size": 32,
         }
 
-        parser.set_defaults(**d)
 
 
 def parse_cli():
-
-    parser = argparse.ArgumentParser(
+    parser = ParsePartitioningOptsVision(
         description="Partitioning models",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
-    ParsePartitioningOptsVision().add_partitioning_arguments(parser)
-    ParseMetisOpts.add_metis_arguments(parser)
-    ParseAcyclicPartitionerOpts.add_acyclic_partitioner_arguments(parser)
 
     args = parser.parse_args()
     if not args.output_file:
@@ -145,9 +136,6 @@ def parse_cli():
     if args.output_file.endswith(".py"):
         args.output_file = args.output_file[:-3]
 
-    args.METIS_opt = ParseMetisOpts.metis_opts_dict_from_parsed_args(args)
-    args.acyclic_opt = ParseAcyclicPartitionerOpts.acyclic_opts_dict_from_parsed_args(
-        args)
     return args
 
 
@@ -161,15 +149,9 @@ if __name__ == "__main__":
     model = create_model(args.model)
     sample = create_random_sample(args, analysis=False)
 
-    # TODO: combine the save_memory_mode with this...
-    if args.model_too_big:
-        model = model.cpu()
-        sample = sample.cpu()
-    else:
-        if not args.save_memory_mode:
-            # Will be sent to cuda when needed.
-            model = model.cuda()
-        sample = sample.cuda()
+    if not args.save_memory_mode:
+        model = model.to(args.device)
+        sample = sample.to(args.device)
 
     # partition the model using our profiler
     # if the model need multiple inputs pass a tuple
@@ -228,23 +210,16 @@ if __name__ == "__main__":
     generated = importlib.import_module(module_path)
     create_pipeline_configuration = generated.create_pipeline_configuration
 
-    if GET_PARTITIONS_ON_CPU:
-        sample = sample.to('cpu')
     config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
 
 
-    if not (args.no_test_run and args.no_analysis):
+    if not args.no_analysis:
         depth = args.depth
         blocks = args.basic_blocks
         analysis_config = convert_to_analysis_format(config,
             layerDict(model, depth=depth, basic_blocks=blocks),
             tensorDict(model))
 
-    # Test # TODO: can do it on GPU...
-    if not args.no_test_run:
-        _ = run_partitions(sample, analysis_config)
-
-    if not args.no_analysis:
         sample = create_random_sample(args, analysis=True)
         analysis_result, summary = run_analysis(
             sample,

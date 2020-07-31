@@ -2,51 +2,101 @@ import shlex
 import sys
 from pytorch_Gpipe.model_partitioning.acyclic_partitioning import Objective, META_ALGORITH
 import os
-import pickle
 from shutil import copyfile
+import argparse
+import torch
 
 
-class ParsePartitioningOpts:
-    def __init__(self):
+class Parser(argparse.ArgumentParser):
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
+        model_args = self.add_argument_group("model_args")
+        self._add_model_args(model_args)
+
+        data_args = self.add_argument_group("data_args")
+        self._add_data_args(data_args)
+
+        partitioning_args = self.add_argument_group("partitioning_args")
+        self._add_partitioning_args(partitioning_args)
+
+        heuristics_args = self.add_argument_group("heuristics_args")
+        self._add_heurisitcs_args(heuristics_args)
+
+        METIS_args = self.add_argument_group("METIS_args")
+        self._add_METIS_args(METIS_args)
+
+        acyclic_args = self.add_argument_group("acyclic_args")
+        self._add_acyclic_args(acyclic_args)
+
+        analysis_args = self.add_argument_group("analysis_args")
+        self._add_analysis_args(analysis_args)
+
+        extra_args = self.add_argument_group("extra_args")
+        self._extra(extra_args)
+
+        self.set_defaults(**self._default_values())
+
+    def _extra(self, group):
         pass
 
-    def _extra(self, parser):
-        raise NotImplementedError()
+    def _default_values(self):
+        return dict()
 
-    def set_defaults(self, parser):
+    def _add_model_args(self,group):
+        raise NotImplementedError() 
+
+    def _add_data_args(self,group):
         pass
 
-    def _add_analysis_arguments(self, parser):
-        # NOTE: also --async_pipeline, but I plan to use this in partitioning too.
-        parser.add_argument(
+    def _add_analysis_args(self, group):
+        analysis_mode = group.add_mutually_exclusive_group()
+        analysis_mode.add_argument('--no_analysis',
+                            action='store_true',
+                            default=False,
+                            help="disable partition analysis")
+        group.add_argument(
             "--analysis_batch_size",
             default=32,
             type=int,
             help="batch size to use during the post partition analysis")
 
-    def _add_heurisitc_arguments(self, parser):
-        parser.add_argument("--bwd_to_fwd_ratio",
+    def _add_heurisitcs_args(self, group):
+        group.add_argument(
+            '--bw',
+            type=float,
+            default=12,
+            help=
+            "data transfer rate between gpus in GBps (Gigabytes per second)")
+        
+        ratio_options = group.add_mutually_exclusive_group()
+        ratio_options.add_argument("--bwd_to_fwd_ratio",
                             type=float,
                             default=-1,
                             help="bwd to fwd ratio for heuristics")
-
-        parser.add_argument(
+        ratio_options.add_argument(
             "--auto_infer_node_bwd_to_fwd_ratio", 
             action='store_true',
             default=False,
             help=
-            "Automatically infer bwd to fwd ratio for nodes (computation). Expected Ratio for edges should be given `by bwd_to_fwd_ratio`"
+            "Automatically infer bwd to fwd ratio for nodes (computation)"
         )
 
-        parser.add_argument(
+        group.add_argument(
             "--penalize_non_tensors", 
             action='store_true',
             default=False,
             help=
             "penalize edges with non tensor outputs by default no penalties are applied"
         )        
-        
-        parser.add_argument(
+        group.add_argument(
+            "--weight_mult_factor", 
+            type=float,
+            default=1e4,
+            help=
+            "a constant to multiply weights with (usefull if weights are really small)"
+        )
+
+        group.add_argument(
             "--edge_penalty", 
             type=float,
             default=1e4,
@@ -54,160 +104,130 @@ class ParsePartitioningOpts:
             "multipicative penalty for edges if `penalize_non_tensors` is set"
         )        
 
-    def add_partitioning_arguments(self, parser):
-        # parser = parser.add_argument_group("Partitioning options")
-        self._extra(parser)
-
-        parser.add_argument('-b',
+    def _add_partitioning_args(self, group):
+        group.add_argument('-b',
                             '--partitioning_batch_size',
                             type=int,
                             default=128)
-        parser.add_argument(
+        group.add_argument(
             '--model_too_big',
             action='store_true',
             default=False,
             help=
             "if the model is too big run the whole partitioning process on CPU, "
             "and drink a cup of coffee in the meantime")
-        parser.add_argument('-p', '--n_partitions', type=int, default=4)
-        parser.add_argument('-o', '--output_file', default='')
-        parser.add_argument(
+        group.add_argument('-p', '--n_partitions', type=int, default=4)
+        group.add_argument('-o', '--output_file', default='')
+        group.add_argument(
             '--n_iter',
             type=int,
             help=
             "number of iteration used in order to profile the network and run analysis"
         )
-        parser.add_argument(
-            '--bw',
-            type=float,
-            default=12,
-            help=
-            "data transfer rate between gpus in GBps (Gigabytes per second)")
-        parser.add_argument(
+        group.add_argument(
             '--no_recomputation',
             action='store_true',
             default=False,
             help="whether to (not) use recomputation for the backward pass")
-        parser.add_argument('--no_analysis',
-                            action='store_true',
-                            default=False,
-                            help="disable partition analysis")
-        parser.add_argument(
+        group.add_argument(
             "--depth",
             default=10000,
             type=int,
             help="the depth in which we will partition the model")
-        parser.add_argument('--basic_blocks', nargs='*')
-        parser.add_argument(
+        group.add_argument('--basic_blocks', nargs='*')
+        group.add_argument(
             "--use_network_profiler",
             default=False,
             action="store_true",
             help=
             "wether to use the old network_profiler instead of the newer graph based profiler"
         )
-        parser.add_argument(
+        group.add_argument(
             "--disable_op_profiling",
             default=False,
             action="store_true",
             help="weheter to not profile ops when using the GraphProfiler")
-        parser.add_argument(
+        group.add_argument(
             "--use_METIS",
             default=False,
             action="store_true",
             help=
             "wether to use METIS partitioning instead of the acyclic partitioner"
         )
-        parser.add_argument(
+        group.add_argument(
             "--generate_model_parallel",
             action="store_true",
             default=False,
             help=
             "wether to generate a modelParallel version of the partitioning")
-        parser.add_argument(
+        group.add_argument(
             "--generate_explicit_del",
             action="store_true",
             default=False,
             help="wether to generate del statements in partitioned code")
 
-        parser.add_argument("-a",
+        group.add_argument("-a",
                             "--async_pipeline",
                             default=False,
                             action="store_true",
                             help="Do analysis for async pipeline")
-        parser.add_argument("--dot",
+        group.add_argument("--dot",
                             default=False,
                             action="store_true",
                             help="Save and plot it using graphviz")
 
-        parser.add_argument("--no_test_run",
-                            default=False,
-                            action="store_true",
-                            help="Do not try to run partitions after done")
-
-        parser.add_argument(
+        group.add_argument(
             "--save_memory_mode",
             default=False,
             action="store_true",
             help="Save memory during profiling by storing everything on cpu," +
             " but sending each layer to GPU before the profiling.")
 
-        parser.add_argument("-c", "--profiles_cache_name", default="", type=str, help="Profile cache to use in case of multiple runs")
+        group.add_argument("-c", "--profiles_cache_name", default="", type=str, help="Profile cache to use in case of multiple runs")
 
-        parser.add_argument("--overwrite_profiles_cache", action="store_true", default=False, help="overwrite prilfes cache")
+        group.add_argument("--overwrite_profiles_cache", action="store_true", default=False, help="overwrite prilfes cache")
 
-
-        self._add_heurisitc_arguments(parser)
-        self._add_analysis_arguments(parser)
-        self.set_defaults(parser)
-
-
-class ParseMetisOpts:
-    def __init__(self):
-        pass
-
-    @staticmethod
-    def add_metis_arguments(parser):
-        metis_opts = parser.add_argument_group("METIS options")
-        metis_opts.add_argument("--metis_seed",
+    def _add_METIS_args(self,group):
+        group.add_argument("--metis_seed",
                                 required=False,
                                 type=int,
                                 help="Random seed for Metis algorithm")
-        metis_opts.add_argument(
+        group.add_argument(
             '--metis_compress',
             default=False,
             action='store_true',
             help="Compress")  # NOTE: this is differnt from default!
-        metis_opts.add_argument(
+        group.add_argument(
             '--metis_niter',
             type=int,
             help=
             "Specifies the number of iterations for the refinement algorithms at each stage of the uncoarsening process."
             "Default is 10.")
-        metis_opts.add_argument(
+        group.add_argument(
             '--metis_nseps',
             type=int,
             help=
             "Specifies the number of different separators that it will compute at each level of nested dissection."
             "The final separator that is used is the smallest one. Default is 1."
         )
-        metis_opts.add_argument(
+        group.add_argument(
             "--metis_ncuts",
             type=int,
             help=
             "Specifies the number of different partitionings that it will compute."
             " The final partitioning is the one that achieves the best edgecut or communication volume."
             "Default is 1.")
-        metis_opts.add_argument(
+        group.add_argument(
             '--metis_dbglvl',
             type=int,
             help="Metis debug level. Refer to the docs for explanation")
-        metis_opts.add_argument(
+        group.add_argument(
             '--metis_objtype',
             type=int,
             help=
             "Extra objective type to miminize (0: edgecut, 1: vol, default: edgecut)"
         )
-        metis_opts.add_argument(
+        group.add_argument(
             '--metis_contig',
             default=False,
             action='store_true',
@@ -215,27 +235,70 @@ class ParseMetisOpts:
             # see http://glaros.dtc.umn.edu/gkhome/metis/metis/faq"
         )
 
+    def _add_acyclic_args(self,group):
+        group.add_argument("--epsilon",
+                          default=0.1,
+                          type=float,
+                          help="imbalance factor")
+        group.add_argument("--rounds",
+                          default=10,
+                          type=int,
+                          help="number of optimization rounds default is 10")
+        group.add_argument(
+            "--allocated_seconds",
+            default=20,
+            type=int,
+            help=
+            "run time allocated to the partitioning algorithm default is 20 seconds"
+        )
+        group.add_argument(
+            "--multilevel",
+            action="store_true",
+            default=False,
+            help="wether to use multilevel partitioning algorithm")
+        group.add_argument("--objective",
+                          choices=["edge_cut", "stage_time"],
+                          default="edge_cut",
+                          help="partitioning optimization objective")
+
+    def parse_args(self,args=None, namespace=None):
+        args = super().parse_args(args, namespace)
+
+        args.acyclic_opt = self._acyclic_opts_dict_from_parsed_args(args)
+        args.METIS_opt = self._metis_opts_dict_from_parsed_args(args)
+
+        device = torch.device("cuda" if torch.cuda.is_available()
+                          and not args.model_too_big else "cpu")
+        args.device = device
+
+
+        return args
+
     @staticmethod
-    def metis_opts_dict_from_parsed_args(args):
-        """ build metis options """
+    def _acyclic_opts_dict_from_parsed_args(args):
+        """ build acyclic partitioner options """
 
-        # We can set to None to get the default
-        # See : https://github.com/networkx/networkx-metis/blob/master/nxmetis/enums.py
-        METIS_opt = {
-            'seed': getattr(args, "metis_seed", None),
-            'nseps': getattr(args, "nseps", None),
-            'niter': getattr(args, "metis_niter", None),
-            'compress': getattr(args, "metis_compress",
-                                None),  # NOTE: this is differnt from default!
-            'ncuts': getattr(args, "metis_ncuts", None),
-            # 0, edgecut, 1 Vol minimization! # NOTE: this is differnt from default edgecut.
-            'objtype': getattr(args, 'metis_objtype', None),
-            'contig': getattr(args, 'metis_contig', None),
-            # NOTE: default is -1, # TODO: add getattr getattr(args, "metis_dbglvl", None),
-            '_dbglvl': 1  # TODO: can't make it print...
+        if args.objective == "edge_cut":
+            objective = Objective.EDGE_CUT
+        else:
+            objective = Objective.STAGE_TIME
+
+        if args.multilevel:
+            meta_algorithm = META_ALGORITH.MULTI_LEVEL
+        else:
+            meta_algorithm = META_ALGORITH.SINGLE_LEVEL
+
+        return {
+            "epsilon": args.epsilon,
+            "rounds": args.rounds,
+            "allocated_seconds": args.allocated_seconds,
+            "meta_algorithm": meta_algorithm,
+            "objective": objective
         }
-
-        return METIS_opt
+    
+    @staticmethod
+    def _metis_opts_dict_from_parsed_args(args):
+        """ build metis options """
 
         #     {'ptype': -1,
         #  'objtype': -1,
@@ -257,61 +320,23 @@ class ParseMetisOpts:
         #  '_dbglvl': -1,
         #  }
 
-
-class ParseAcyclicPartitionerOpts:
-    def __init__(self):
-        pass
-
-    @staticmethod
-    def add_acyclic_partitioner_arguments(parser):
-        opts = parser.add_argument_group("AcyclicPartitioner options")
-        opts.add_argument("--epsilon",
-                          default=0.1,
-                          type=float,
-                          help="imbalance factor")
-        opts.add_argument("--rounds",
-                          default=10,
-                          type=int,
-                          help="number of optimization rounds default is 10")
-        opts.add_argument(
-            "--allocated_seconds",
-            default=20,
-            type=int,
-            help=
-            "run time allocated to the partitioning algorithm default is 20 seconds"
-        )
-        opts.add_argument(
-            "--multilevel",
-            action="store_true",
-            default=False,
-            help="wether to use multilevel partitioning algorithm")
-        opts.add_argument("--objective",
-                          choices=["edge_cut", "stage_time"],
-                          default="edge_cut",
-                          help="partitioning optimization objective")
-
-    @staticmethod
-    def acyclic_opts_dict_from_parsed_args(args):
-        """ build acyclic partitioner options """
-
-        if args.objective == "edge_cut":
-            objective = Objective.EDGE_CUT
-        else:
-            objective = Objective.STAGE_TIME
-
-        if args.multilevel:
-            meta_algorithm = META_ALGORITH.MULTI_LEVEL
-        else:
-            meta_algorithm = META_ALGORITH.SINGLE_LEVEL
-
-        return {
-            "epsilon": args.epsilon,
-            "rounds": args.rounds,
-            "allocated_seconds": args.allocated_seconds,
-            "meta_algorithm": meta_algorithm,
-            "objective": objective
+        # We can set to None to get the default
+        # See : https://github.com/networkx/networkx-metis/blob/master/nxmetis/enums.py
+        METIS_opt = {
+            'seed': getattr(args, "metis_seed", None),
+            'nseps': getattr(args, "nseps", None),
+            'niter': getattr(args, "metis_niter", None),
+            'compress': getattr(args, "metis_compress",
+                                None),  # NOTE: this is differnt from default!
+            'ncuts': getattr(args, "metis_ncuts", None),
+            # 0, edgecut, 1 Vol minimization! # NOTE: this is differnt from default edgecut.
+            'objtype': getattr(args, 'metis_objtype', None),
+            'contig': getattr(args, 'metis_contig', None),
+            # NOTE: default is -1, # TODO: add getattr getattr(args, "metis_dbglvl", None),
+            '_dbglvl': 1  # TODO: can't make it print...
         }
 
+        return METIS_opt
 
 
 def choose_blocks(model, args):
@@ -367,13 +392,16 @@ def run_x_tries_until_no_fail(func, number_of_tries, *args, **kw):
     return res
 
 
-def bruteforce_main(main, override_dicts=[], NUM_RUNS=2, TMP="/tmp/partitioning_outputs/") :
+def bruteforce_main(main, override_dicts=None, NUM_RUNS=2, TMP="/tmp/partitioning_outputs/") :
     # TODO: put all hyper parameters here, a dict for each setting we want to try.
     # d1 = dict(basic_blocks=[])
     # ovverride_dicts.append(d1)
     results = {}
     best = None
- 
+    
+    if override_dicts is None:
+        override_dicts = []
+
     if not override_dicts:
         override_dicts = [{}]
 

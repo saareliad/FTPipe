@@ -37,8 +37,7 @@ def run_analysis(sample,
                  async_pipeline=False,
                  add_comm_times_to_balance=True,
                  sequential_model=None,
-                 stages_on_same_gpu: List[Set[int]] = list(),
-                 analyze_traced_model=False):
+                 stages_on_same_gpu: List[Set[int]] = list()):
     #kwarg input
     if isinstance(sample, dict):
         sample = tuple([sample[i] for i in config['model inputs']])
@@ -57,13 +56,6 @@ def run_analysis(sample,
     TRY_SSGD_ANALYSIS = False
     TRY_ASGD_ANALYSIS = True
 
-    # NOTE tracing ignores our generated state_methods
-    # cpu,cuda,to,state_dict etc.
-    # NOTE tracing ignores the device and lookup attributes of the partition
-    # can run traced partition only on the same device it was profiled and traced on
-    # NOTE scritping does not support the del keyword
-    if analyze_traced_model:
-        config = trace_partitions(sample, config)
 
     # given:
     # stages_on_same_gpu = [{0, 4}]
@@ -1193,7 +1185,6 @@ def topology_aware_balance(f_times, b_times, cutting_edges):
     return f_balance, b_balance
 
 
-# FIXME: this is infinte loop for None in outputs
 def run_partitions(model_inputs, partition_config):
     #kwarg input
     if isinstance(model_inputs, dict):
@@ -1229,64 +1220,12 @@ def run_partitions(model_inputs, partition_config):
                 for tensor in partition_config[idx]['inputs']
             ]
             outs = partition_config[idx]['model'](*inputs)
-            if len(partition_config[idx]['outputs']) == len(outs):
-                for o, t in zip(partition_config[idx]['outputs'], outs):
-                    activations[o] = t
-            else:
-                assert len(partition_config[idx]['outputs']) == 1
-                activations[partition_config[idx]['outputs'][0]] = outs
+            for o, t in zip(partition_config[idx]['outputs'], outs):
+                activations[o] = t
         else:
             parts.append(idx)
 
     return [activations[o] for o in partition_config['model outputs']]
-
-
-def trace_partitions(model_inputs, partition_config):
-    # NOTE tracing ignores our generated state_methods
-    # cpu,cuda,to,state_dict etc.
-    # NOTE tracing ignores the device and lookup attributes of the partition
-    # can run traced partition only on the same device it was profiled and traced on
-    # NOTE scritping does not support the del keyword
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    device = torch.device(device)
-
-    n_partitions = sum(1 for k in partition_config if isinstance(k, int))
-
-    if not isinstance(model_inputs, tuple):
-        model_inputs = (model_inputs, )
-
-    activations = dict()
-
-    for i in range(n_partitions):
-        partition_config[i]['model'] = partition_config[i]['model'].cpu()
-
-    for i, t in zip(partition_config['model inputs'], model_inputs):
-        activations[i] = move_tensors(t, 'cpu')
-
-    parts = deque(range(n_partitions))
-
-    while len(parts) > 0:
-        idx = parts.popleft()
-
-        # if all inputs are ready run partition
-        if all(tensor in activations
-               for tensor in partition_config[idx]['inputs']):
-            inputs = [
-                move_tensors(activations[tensor], device)
-                for tensor in partition_config[idx]['inputs']
-            ]
-            partition = partition_config[idx]['model'].to(device)
-            with torch.no_grad():
-                outs = partition(*inputs)
-                for o, t in zip(partition_config[idx]['outputs'], outs):
-                    activations[o] = move_tensors(t, 'cpu')
-
-                partition = torch.jit.trace(partition, inputs).cpu()
-                partition_config[idx]['model'] = partition
-        else:
-            parts.append(idx)
-
-    return partition_config
 
 
 def parameter_count(partition_config):
