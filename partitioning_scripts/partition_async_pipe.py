@@ -1,3 +1,5 @@
+import sys
+sys.path.append("../")
 import torch
 from collections import namedtuple
 from typing import Dict, Optional

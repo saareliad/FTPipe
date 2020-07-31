@@ -1,5 +1,7 @@
+import sys
+sys.path.append("../")
 from pytorch_Gpipe import pipe_model
-from misc import run_analysis,convert_to_analysis_format
+from analysis import run_analysis,convert_to_analysis_format
 from models.normal import alexnet
 import torch
 from types import SimpleNamespace

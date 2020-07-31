@@ -1,10 +1,12 @@
 """ This is a skeleton for running bw vs speedup experiments, 
     while overriding some parmeters """
+import sys
+sys.path.append("../")
 import torch
 from pytorch_Gpipe.model_profiling import Node, NodeTypes
 import argparse
 import importlib
-from misc import run_analysis, run_partitions
+from analysis import run_analysis
 from pytorch_Gpipe.utils import layerDict, tensorDict
 # TODO: instea of code copy, do repeated calls to exisitng functions...
 from types import SimpleNamespace

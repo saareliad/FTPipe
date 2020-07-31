@@ -1,3 +1,5 @@
+import sys
+sys.path.append("../")
 import torch
 import math
 from pytorch_Gpipe.utils import move_tensors,flatten

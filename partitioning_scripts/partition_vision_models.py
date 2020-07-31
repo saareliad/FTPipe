@@ -7,7 +7,7 @@ from pytorch_Gpipe.utils import layerDict, tensorDict
 from pytorch_Gpipe import pipe_model
 import argparse
 import importlib
-from misc import run_partitions,convert_to_analysis_format
+from analysis import run_analysis,convert_to_analysis_format
 from pytorch_Gpipe import get_weight_functions
 from partition_scripts_utils import Parser, record_cmdline, choose_blocks
 import functools

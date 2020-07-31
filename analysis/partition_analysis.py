@@ -1,3 +1,5 @@
+import sys
+sys.path.append("../")
 import torch
 from collections import deque, defaultdict
 import time
@@ -1183,49 +1185,6 @@ def topology_aware_balance(f_times, b_times, cutting_edges):
             b_balance = b_ratio
 
     return f_balance, b_balance
-
-
-def run_partitions(model_inputs, partition_config):
-    #kwarg input
-    if isinstance(model_inputs, dict):
-        model_inputs = tuple(
-            [model_inputs[i] for i in partition_config['model inputs']])
-
-    n_partitions = sum(1 for k in partition_config if isinstance(k, int))
-
-    if not isinstance(model_inputs, tuple):
-        model_inputs = (model_inputs, )
-
-    activations = {}
-
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-    for i in range(n_partitions):
-        partition_config[i]['model'] = partition_config[i]['model'].to(device)
-        partition_config[i]['model'].device = device
-
-    for i, t in zip(partition_config['model inputs'], model_inputs):
-        activations[i] = move_tensors(t, device)
-
-    parts = deque(range(n_partitions))
-
-    while len(parts) > 0:
-        idx = parts.popleft()
-
-        # if all inputs are ready run partition
-        if all(tensor in activations
-               for tensor in partition_config[idx]['inputs']):
-            inputs = [
-                activations[tensor]
-                for tensor in partition_config[idx]['inputs']
-            ]
-            outs = partition_config[idx]['model'](*inputs)
-            for o, t in zip(partition_config[idx]['outputs'], outs):
-                activations[o] = t
-        else:
-            parts.append(idx)
-
-    return [activations[o] for o in partition_config['model outputs']]
 
 
 def parameter_count(partition_config):

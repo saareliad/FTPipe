@@ -44,7 +44,7 @@ from models.normal import CTRLLMHeadModel, CTRLModel
 from models.normal import StatelessCTRLLMHeadModel
 
 from pytorch_Gpipe import pipe_model,get_weight_functions
-from misc import run_analysis,convert_to_analysis_format
+from analysis import run_analysis,convert_to_analysis_format
 from pytorch_Gpipe.utils import layerDict, tensorDict
 import functools
 from partition_async_pipe import partition_async_pipe

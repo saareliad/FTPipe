@@ -15,8 +15,8 @@ import importlib
 import functools
 from partition_async_pipe import partition_async_pipe
 from partition_scripts_utils import choose_blocks, record_cmdline,Parser
-from misc import run_analysis
-from misc.analysis_utils import convert_to_analysis_format
+from analysis import run_analysis
+from analysis.analysis_utils import convert_to_analysis_format
 import nlp
 from dataclasses import dataclass
 from typing import Dict, List

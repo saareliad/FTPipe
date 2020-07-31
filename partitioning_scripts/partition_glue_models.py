@@ -16,7 +16,7 @@ from models.normal.NLP_models.modeling_roberta import RobertaForSequenceClassifi
 from partition_scripts_utils import (Parser, record_cmdline,
                                      choose_blocks, bruteforce_main)
 from partition_async_pipe import partition_async_pipe
-from misc import run_analysis,convert_to_analysis_format
+from analysis import run_analysis,convert_to_analysis_format
 from pytorch_Gpipe import pipe_model,get_weight_functions
 from pytorch_Gpipe.model_profiling import register_new_traced_function, register_new_explicit_untraced_function
 from pytorch_Gpipe.utils import layerDict, tensorDict
