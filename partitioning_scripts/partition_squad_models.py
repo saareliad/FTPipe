@@ -214,7 +214,7 @@ class ParsePartitioningOptsSquad(Parser):
         group.add_argument(
             "--threads",
             type=int,
-            default=1,
+            default=4,
             help="multiple threads for converting example to features")
         group.add_argument(
             "--lang_id",

@@ -204,35 +204,35 @@ class ParsePartitioningOptsGlue(Parser):
             action="store_true",
             help="Set this flag if you are using an uncased model.")
 
-        def _add_data_args(self,group):
-            group.add_argument(
-                "--data_dir",
-                default="/home_local/saareliad/data/glue_data/",
-                type=str,
-                help="The input data dir. Should contain the files for the task.")
+    def _add_data_args(self,group):
+        group.add_argument(
+            "--data_dir",
+            default="/home_local/saareliad/data/glue_data/",
+            type=str,
+            help="The input data dir. Should contain the files for the task.")
 
-            group.add_argument(
-                "--cache_dir",
-                default="",
-                type=str,
-                help=
-                "Where do you want to store the pre-trained models downloaded from s3",
-            )
-            group.add_argument(
-                "--lang_id",
-                default=0,
-                type=int,
-                help=
-                "language id of input for language-specific xlm models (see tokenization_xlm.PRETRAINED_INIT_CONFIGURATION)",
-            )
-            group.add_argument(
-                "--overwrite_cache",
-                action="store_true",
-                help="Overwrite the cached training and evaluation sets")
-            group.add_argument("--seed",
-                                type=int,
-                                default=42,
-                                help="random seed for initialization")
+        group.add_argument(
+            "--cache_dir",
+            default="",
+            type=str,
+            help=
+            "Where do you want to store the pre-trained models downloaded from s3",
+        )
+        group.add_argument(
+            "--lang_id",
+            default=0,
+            type=int,
+            help=
+            "language id of input for language-specific xlm models (see tokenization_xlm.PRETRAINED_INIT_CONFIGURATION)",
+        )
+        group.add_argument(
+            "--overwrite_cache",
+            action="store_true",
+            help="Overwrite the cached training and evaluation sets")
+        group.add_argument("--seed",
+                            type=int,
+                            default=42,
+                            help="random seed for initialization")
 
     def _default_values(self):
         d = {

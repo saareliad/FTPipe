@@ -245,7 +245,7 @@ def partition_model(args,
         expanded_inputs = batch[0].unsqueeze(0).expand(shape)
 
         if lm: 
-            shape = (args.analysis_batch_size, batch[0].shape[1])
+            shape = (args.analysis_batch_size, batch.shape[1])
             expanded_labels = batch[0].unsqueeze(0).expand(shape)
             analysis_sample = {"input_ids":expanded_inputs, "labels":expanded_labels}
         else:
@@ -343,7 +343,7 @@ class ParsePartitioningOptsLM(Parser):
             action='store_true',
             help="Overwrite the cached training and evaluation sets")
         
-    def _add_extra(self,group):
+    def _extra(self,group):
         group.add_argument('--seed',
                             type=int,
                             default=42,
@@ -375,7 +375,6 @@ def parse_cli():
     if args.output_file.endswith(".py"):
         args.output_file = args.output_file[:-3]
     
-    assert False
     return args
 
 
