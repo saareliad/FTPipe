@@ -222,7 +222,21 @@ def partition_model(args,
         except:
             print("Failed to replaced tied dummy partition device")
 
-    record_cmdline(args.output_file)
+    record_cmdline(args.output_file)    
+    
+    #record model creation args
+    with open(f"{args.output_file}.py", "a") as f:
+        model_args = {"model_type":args.model_type,
+                     "model_name_or_path":args.model_name_or_path,
+                     "lmhead":args.lmhead,
+                     "stateless_tied":args.stateless_tied,
+                     "do_lower_case":args.do_lower_case,
+                     "block_size":args.block_size
+                    }
+        f.write("\n")
+        f.write(f"model_args = {model_args}")
+    
+
     module_path = args.output_file.replace("/", ".")
     generated = importlib.import_module(module_path)
 

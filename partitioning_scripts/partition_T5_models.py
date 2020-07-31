@@ -388,10 +388,25 @@ if __name__ == "__main__":
 
     # Add cmdline to generate output file.
     record_cmdline(args.output_file)
+    
+    #record model creation args
+    with open(f"{args.output_file}.py", "a") as f:
+        model_args = {"model_name_or_path":args.model_name_or_path,
+                     "max_seq_length":args.max_seq_length,
+                    "lmhead":args.lmhead,
+                    "stateless_tied":args.stateless_tied,
+                    "precompute_masks":args.precompute_masks,
+                    "output_only":True,
+                    "output_hidden_states":False,
+                    "output_attentions":False,
+                    }
+        f.write("\n")
+        f.write(f"model_args = {model_args}")
 
     module_path = args.output_file.replace("/", ".")
     generated = importlib.import_module(module_path)
     create_pipeline_configuration = generated.create_pipeline_configuration
+
 
     config = create_pipeline_configuration(DEBUG=True)
 
