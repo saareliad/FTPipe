@@ -24,3 +24,5 @@ glue_ds.*
 original_acyclic_partitioning/*
 dynamic_acyclic_partitioning/*
 datasets/*
+megatron/data/*
+megatron/megatron_11b.tar.gz
