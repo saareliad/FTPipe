@@ -10,7 +10,7 @@ from datasets import add_dataset_argument
 from parse_json_config import parse_json_config
 from train import training_loop
 from experiments import save_experiment, load_experiment_for_update
-from prepare_pipeline import prepare_pipeline
+from prepare_pipeline import prepare_pipeline, preproc_data
 import torch.multiprocessing as mp
 
 from models.cfg_to_model import get_pipe_config
@@ -75,7 +75,7 @@ def parse_cli():
         description='PyTorch partition as part of Async Pipeline')
 
     parser.add_argument("--mode",
-                        choices=["mp", "dist"],
+                        choices=["mp", "dist", "preproc"],
                         default="dist",
                         help="Running mode")
     parse_distributed_cli(parser)
@@ -287,6 +287,7 @@ def mp_queue_matrix(world_size):
 
 
 def mp_recv_queue_per_tensor(args_model, world_size, ushn="_grad"):
+    # FIXME: unused.
     # FIXME FIXME: this whole thing did not assume nested tuples...
     pc = get_pipe_config(args_model)
     d = {}
@@ -449,6 +450,20 @@ def start_mpi_overlay():
     # TODO: distributed save experiment...
 
 
+def start_preproc():
+    args = parse_cli()
+    parse_json_config(args, args.config, first=True)
+    args.world_size = args.nprocs  # HACK
+    
+    for rank in range(args.world_size):
+        print(f"-I- preprocessing data for rank {rank}/{args.world_size-1} (word size is {args.world_size})...")
+        local_rank = rank
+        args.rank = rank
+        args.local_rank = local_rank
+        args.is_multiprocessing_worker = False
+        preproc_data(args)
+
+
 if __name__ == "__main__":
     # TODO set OMP_NUM_THREADS automatically
     print(f"Using {torch.get_num_threads()} Threads")
@@ -459,6 +474,9 @@ if __name__ == "__main__":
     elif args.mode == 'mpi_overlay':
         print("Running in mpi overlay mode")
         start_mpi_overlay()
+    elif args.mode == 'preproc':
+        print("Running in preproc mode: Preprocessing datasets...")
+        start_preproc()
     else:
         print("Running in distributed mode")
         start_distributed()

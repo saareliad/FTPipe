@@ -1,6 +1,7 @@
 import nlp
 import torch
 import operator
+import os
 from torch.utils.data import TensorDataset
 from .datasets import CommonDatasetHandler, register_dataset
 
@@ -115,31 +116,61 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, args, **kw):
         for k in keys:
             if d[k] is None:
                 del d[k]
-        
-        
+         
         keys = tuple(d.keys())
         for k in keys:
             d[k] = d[k].tolist()
         
         return d
-        
-        
-        
-    # TODO: allow squad2
-    train_dataset = nlp.load_dataset('squad', split=nlp.Split.TRAIN)
-    # train_dataset.cleanup_cache_files()  # Returns the number of removed cache files
-    train_dataset = train_dataset.map(add_eos_to_examples, load_from_cache_file=False)
-    train_dataset = train_dataset.map(convert_to_features, batched=True, load_from_cache_file=False)
     
-    train_dataset = train_dataset.map(preproc, batched=True, load_from_cache_file=False, batch_size=128)
-    train_dataset.set_format(type='torch', columns=just)
+    # tmp = "_".join(subset_of_inputs)
+    tmp = "FULL"
+    ww = ['train', 'val']
+    do_train = True
+    do_val = True
+    for w in ww:
+        cache_file_name = os.path.join(DATA_DIR, f"cache_{w}.t5_squad_just_{tmp}.pt")
 
-    dev_dataset = nlp.load_dataset('squad', split=nlp.Split.VALIDATION)
-    dev_dataset = dev_dataset.map(add_eos_to_examples, load_from_cache_file=False)
-    dev_dataset = dev_dataset.map(convert_to_features, batched=True, load_from_cache_file=False) 
-    dev_dataset = dev_dataset.map(preproc, batched=True, load_from_cache_file=False, batch_size=128)
-    dev_dataset.set_format(type='torch', columns=just)
+        if os.path.exists(cache_file_name) and not args.overwrite_cache:
+            if w == 'train':
+                do_train = False
+                print(f"loading from cache: {cache_file_name}")
+                train_dataset = torch.load(cache_file_name)
+            elif w == 'val':
+                do_val = False
+                print(f"loading from cache: {cache_file_name}")
+                dev_dataset = torch.load(cache_file_name)
     
+    # TODO: allow squad2
+    if do_train:
+        train_dataset = nlp.load_dataset('squad', split=nlp.Split.TRAIN)
+        # train_dataset.cleanup_cache_files()  # Returns the number of removed cache files
+        train_dataset = train_dataset.map(add_eos_to_examples, load_from_cache_file=False)
+        train_dataset = train_dataset.map(convert_to_features, batched=True, load_from_cache_file=False)
+        
+        train_dataset = train_dataset.map(preproc, batched=True, load_from_cache_file=False, batch_size=128)
+        train_dataset.set_format(type='torch', columns=just)
+
+        cache_file_name = os.path.join(DATA_DIR, f"cache_{ww[0]}.t5_squad_just_{tmp}.pt")
+
+        if not os.path.exists(cache_file_name) or args.overwrite_cache:
+            print(f"saving to cache: {cache_file_name}")
+            torch.save(train_dataset, cache_file_name)
+
+    
+    if do_val:
+        dev_dataset = nlp.load_dataset('squad', split=nlp.Split.VALIDATION)
+        dev_dataset = dev_dataset.map(add_eos_to_examples, load_from_cache_file=False)
+        dev_dataset = dev_dataset.map(convert_to_features, batched=True, load_from_cache_file=False) 
+        dev_dataset = dev_dataset.map(preproc, batched=True, load_from_cache_file=False, batch_size=128)
+        dev_dataset.set_format(type='torch', columns=just)
+    
+        cache_file_name = os.path.join(DATA_DIR, f"cache_{ww[1]}.t5_squad_just_{tmp}.pt")
+
+        if not os.path.exists(cache_file_name) or args.overwrite_cache:
+            print(f"saving to cache: {cache_file_name}")
+            torch.save(dev_dataset, cache_file_name)
+
     
     to_drop = [i for i in dev_dataset.column_names if i not in subset_of_inputs]
     dev_dataset.drop(to_drop)
@@ -313,7 +344,7 @@ class SEP_T5_SQUAD_DatasetHandler(CommonDatasetHandler):
         super().__init__()
         train_ds, test_ds, extra = get_just_x_or_y_train_dev_dataset(**kw)
         self.train_ds = train_ds
-        self.dev_ds = dev_ds
+        self.dev_ds = test_ds
         self.extra = extra
 
     def get_train_ds(self, **kw):
@@ -327,5 +358,6 @@ class SEP_T5_SQUAD_DatasetHandler(CommonDatasetHandler):
         
     def get_modify_trainer_fn(self):
         return self.extra
+
 
 register_dataset("t5_squad", SEP_T5_SQUAD_DatasetHandler)

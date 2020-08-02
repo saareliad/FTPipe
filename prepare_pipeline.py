@@ -69,21 +69,6 @@ def is_explicit_non_seperated_dataset(args):
     return "_nonsep" in args.task
 
 
-def get_dataloader_keywords(args):
-    dl_kw = dict()
-    if args.cpu:
-        dl_kw['pin_memory'] = False
-    else:
-        dl_kw['pin_memory'] = True
-
-    dl_kw['num_workers'] = args.num_data_workers
-    dl_kw['drop_last'] = True
-
-    if getattr(args, "dont_drop_last", False):
-        dl_kw['drop_last'] = False
-
-    return dl_kw
-
 
 def create_comm_handler(args, comm_init_args,
                         device) -> CommunicationHandlerBase:
@@ -283,115 +268,17 @@ def get_weight_predictor(args,
     return weight_predictor, nag_with_predictor
 
 
-def get_data_keywords_by_task(args, dl_kw, kw):
-    # TODO: move to dataset file...
-    # FIXME
-    # FIXME
-    # FIXME
-    # FIXME
-
-    if args.task == "t5_squad":
-        
-        dataset_keywords = dict(tokenizer=kw.pop('tokenizer'),
-        config=kw.pop('config'),
-        max_seq_length=args.max_seq_length)
-
-    elif "lm" in args.task:
-        # FIXME
-        # NOTE: From the function get_wikitext2_raw_train_valid_ds
-        tokenizer = kw.pop('tokenizer')
-        overwrite_cache = getattr(args, 'overwrite_cache', False)
-        dataset_keywords = dict(model_name_or_path=args.model_name_or_path,
-                                tokenizer=tokenizer,
-                                train_seq_len=args.train_seq_len,
-                                test_seq_len=args.test_seq_len,
-                                overwrite_cache=overwrite_cache)
-        collate = lm_collate_factory(tokenizer)
-        dl_kw['collate_fn'] = collate
-    elif 'squad' in args.task:
-        tokenizer = kw.pop('tokenizer')
-        overwrite_cache = getattr(args, 'overwrite_cache', False)
-
-        version_2_with_negative = args.dataset == 'squad2'
-        # version_2_with_negative = args.version_2_with_negative
-
-        if hasattr(args, "version_2_with_negative"):
-            assert version_2_with_negative == args.version_2_with_negative, (
-                version_2_with_negative, args.version_2_with_negative)
-        else:
-            print(
-                f"-W- version_2_with_negative infered automaticaly as {version_2_with_negative}. args.dataset: {args.dataset}. args.task: {args.task}"
-            )
-
-        dataset_keywords = dict(
-            model_name_or_path=args.model_name_or_path,
-            tokenizer=tokenizer,
-            max_seq_length=args.max_seq_length,
-            doc_stride=args.doc_stride,
-            max_query_length=args.max_query_length,
-            threads=args.threads,
-            version_2_with_negative=version_2_with_negative,
-            save=True,  # TODO: according to Ranks for stage replication
-            # NOTE: deleted
-            # train_seq_len=args.train_seq_len,
-            # test_seq_len=args.test_seq_len,
-            overwrite_cache=overwrite_cache)
-
-        # For evaluate
-        n_best_size = getattr(args, "n_best_size", 20)
-        max_answer_length = getattr(args, "max_answer_length", 30)
-        do_lower_case = getattr(args, "do_lower_case", False)
-        verbose_logging = getattr(args, "verbose_logging", False)
-        # NOTE: using version_2_with_negative to check for squad2
-        null_score_diff_threshold = getattr(args, "null_score_diff_threshold",
-                                            0.0)
-        model_type = getattr(args, "model_type")
-        output_dir = getattr(args, "output_dir")
-        d = dict(n_best_size=n_best_size,
-                 max_answer_length=max_answer_length,
-                 do_lower_case=do_lower_case,
-                 verbose_logging=verbose_logging,
-                 version_2_with_negative=version_2_with_negative,
-                 null_score_diff_threshold=null_score_diff_threshold,
-                 model_type=model_type,
-                 output_dir=output_dir,
-                 is_last_partition=args.stage == args.num_stages - 1)
-
-        dataset_keywords.update(d)
-
-    elif 'glue' in args.task:
-        dataset_keywords = dict(
-            tokenizer=kw.pop('tokenizer'),
-            overwrite_cache=getattr(args, 'overwrite_cache', False),
-            task_name=getattr(args, 'glue_task_name'),
-            max_seq_length=getattr(args, 'max_seq_length', 128),
-            precompute_masks=getattr(args, 'precompute_masks', False),
-            precompute_attention_mask=getattr(args,
-                                              "precompute_attention_mask",
-                                              False),
-            is_last_partition=args.stage == args.num_stages - 1)
-
-    else:
-        dataset_keywords = {}
-
-    return dataset_keywords
-
-
 def get_dataloaders(args,
                     pipe_config=None,
                     explicit_separated_dataset=False,
                     dataset_keywords=dict()):
     # TODO: replicated
-    #dl_kw = get_dataloader_keywords(args)
-    # dataset_keywords = get_data_keywords_by_task(args, dl_kw, dataset_keywords)
-
     if not is_explicit_non_seperated_dataset(args):
         train_dl, test_dl, samplers, extra = get_separate_dls_from_args(
             args,
             pipe_config=pipe_config,
             verbose=False,
             dataset_keywords=dataset_keywords,
-            # dataloader_keywords=dl_kw,
         )
     else:
         raise NotImplementedError("now deprecated")
@@ -486,6 +373,41 @@ def get_optimizer(args, optimizer_cls, parameters):
     return optimizer
 
 
+def preproc_data(args):
+    # Parse partitioning config and requires args
+    print(f"Loading partitioned model and dataset...")
+    model_instance = None
+    dataset_keywords = {}
+    if is_huggingface_transformer(args):
+        # TODO: some easier way to get original model and the config used during partitioning (WIP)
+        model_instance, tokenizer, config = models.transformers_utils.get_model_tokenizer_and_config_by_name(
+            args.model)
+        dataset_keywords['tokenizer'] = tokenizer
+        dataset_keywords['config'] = config
+
+    parsed_config = parse_config.PartitioningConfigParser(
+        args.model,
+        args.rank,
+        args.bs_train,
+        args.bs_test,  # NOTE: changed name
+        model_instance=model_instance,
+        send_target_in_pipe=("_nonsep" in args.task))
+
+    pipe_config = parsed_config.pipe_config
+    args.num_stages = parsed_config.num_stages
+    args.stage = parsed_config.stage
+    
+    # TODO: a for loop for all stages?
+    train_dl, test_dl, samplers, extra = get_dataloaders(
+            args,
+            pipe_config=pipe_config,
+            dataset_keywords=dataset_keywords)
+    # TODO
+    # TODO
+    # TODO
+
+
+
 def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
 
     is_gpipe = "gpipe" == args.work_scheduler.lower()
@@ -538,7 +460,12 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
 
     args.num_stages = parsed_config.num_stages
     args.stage = parsed_config.stage
+
+    # NOTE: here its the sliced model.
     model = parsed_config.model
+    # del parsed_config.model  # NOTE: can delete the extra reference to possibly save mem.
+    del model_instance
+
     model.device = device
 
     is_first_partition = args.stage == 0
@@ -556,6 +483,14 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
 
     eval_tensor_dtypes = training_tensor_dtypes  # HACK, TODO
 
+    # Get dataloaders needed for this stage
+    train_dl, test_dl, samplers, extra = get_dataloaders(
+        args,
+        pipe_config=pipe_config,
+        dataset_keywords=dataset_keywords)
+
+    del dataset_keywords
+
     # Comm handler
     if COMM_VERSION == 1:
         comm_handler = create_comm_handler(args, comm_init_args, device)
@@ -568,14 +503,6 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
                                               v2_args)
     else:
         raise NotImplementedError("In progress")
-
-    # Get dataloaders needed for this stage
-    train_dl, test_dl, samplers, extra = get_dataloaders(
-        args,
-        pipe_config=pipe_config,
-        dataset_keywords=dataset_keywords)
-
-    del dataset_keywords
 
     # instead of loading dl on every device just to get its length
     # we synchronize length as a message, from first stage

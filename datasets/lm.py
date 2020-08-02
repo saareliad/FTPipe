@@ -389,30 +389,12 @@ def get_lm_train_valid_dl(ds_train,
     return train_dl, valid_dl
 
 
-#############################################
-# get x separate from y, both with same seed
-#############################################
-
-
-def get_wt2_just_x_or_y_train_valid_ds(just, DATA_DIR=DEFAULT_DATA_DIR, **kw):
-    # we don't use the just. its the same for all.
-    return get_wikitext2_raw_train_valid_ds(DATA_DIR=DATA_DIR, **kw)
-
-
-def get_wt2_just_x_or_y_train_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR, **kw):
-    # we don't use the just. its the same for all.
-    return get_wikitext2_raw_train_test_ds(DATA_DIR=DATA_DIR, **kw)
-
-
-def get_wt2_just_x_or_y_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR, **kw):
-    return get_wikitext2_raw_test_ds(DATA_DIR=DATA_DIR, **kw)
-
-
-
 class SEP_WIKITEXT2_DatasetHandler(CommonDatasetHandler):
     def __init__(self, **kw):
         super().__init__()
-        train_ds, test_ds = get_wt2_just_x_or_y_train_test_ds(**kw)
+        d = extract_needed_keywords(**kw)
+        # train_ds, test_ds = get_wikitext2_raw_train_valid_ds(**d)
+        train_ds, test_ds = get_wikitext2_raw_train_test_ds(**d)
         self.train_ds = train_ds
         self.test_ds = test_ds
 
@@ -434,3 +416,17 @@ class SEP_WIKITEXT2_DatasetHandler(CommonDatasetHandler):
 
 
 register_dataset("wt2", SEP_WIKITEXT2_DatasetHandler)
+
+
+def extract_needed_keywords(**kw):
+    # here for backward compatibility
+    args = kw['args']
+    # dataset_keywords = kw['dataset_keywords']
+    tokenizer = kw['tokenizer']
+    overwrite_cache = getattr(args, 'overwrite_cache', False)
+    d = dict(model_name_or_path=args.model_name_or_path,
+             tokenizer=tokenizer,
+             train_seq_len=args.train_seq_len,
+             test_seq_len=args.test_seq_len,
+             overwrite_cache=overwrite_cache)
+    return d

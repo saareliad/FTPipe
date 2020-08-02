@@ -645,7 +645,8 @@ def get_extended_attention_mask(attention_mask,
 class SEP_SQUAD_DatasetHandler(CommonDatasetHandler):
     def __init__(self, **kw):
         super().__init__()
-        train_ds, test_ds, extra = get_just_x_or_y_train_dev_dataset(**kw)
+        d = extract_needed_keywords(**kw)
+        train_ds, test_ds, extra = get_just_x_or_y_train_dev_dataset(**d)
         self.train_ds = train_ds
         self.dev_ds = test_ds
         self.extra = extra
@@ -667,3 +668,57 @@ register_dataset("squad", SEP_SQUAD_DatasetHandler)
 # For backward compatibility...
 register_dataset("squad1", SEP_SQUAD_DatasetHandler)
 register_dataset("squad2", SEP_SQUAD_DatasetHandler)
+
+
+def extract_needed_keywords(**kw):
+    # here for backward compatibility
+    args = kw['args']
+    tokenizer = kw['tokenizer']
+    overwrite_cache = getattr(args, 'overwrite_cache', False)
+    version_2_with_negative = args.dataset == 'squad2'
+    # version_2_with_negative = args.version_2_with_negative
+
+    if hasattr(args, "version_2_with_negative"):
+        assert version_2_with_negative == args.version_2_with_negative, (
+            version_2_with_negative, args.version_2_with_negative)
+    else:
+        print(
+            f"-W- version_2_with_negative infered automaticaly as {version_2_with_negative}. args.dataset: {args.dataset}. args.task: {args.task}"
+        )
+
+    dataset_keywords = dict(
+        model_name_or_path=args.model_name_or_path,
+        tokenizer=tokenizer,
+        max_seq_length=args.max_seq_length,
+        doc_stride=args.doc_stride,
+        max_query_length=args.max_query_length,
+        threads=args.threads,
+        version_2_with_negative=version_2_with_negative,
+        save=True,  # TODO: according to Ranks for stage replication
+        # NOTE: deleted
+        # train_seq_len=args.train_seq_len,
+        # test_seq_len=args.test_seq_len,
+        overwrite_cache=overwrite_cache)
+
+    # For evaluate
+    n_best_size = getattr(args, "n_best_size", 20)
+    max_answer_length = getattr(args, "max_answer_length", 30)
+    do_lower_case = getattr(args, "do_lower_case", False)
+    verbose_logging = getattr(args, "verbose_logging", False)
+    # NOTE: using version_2_with_negative to check for squad2
+    null_score_diff_threshold = getattr(args, "null_score_diff_threshold",
+                                        0.0)
+    model_type = getattr(args, "model_type")
+    output_dir = getattr(args, "output_dir")
+    d = dict(n_best_size=n_best_size,
+             max_answer_length=max_answer_length,
+             do_lower_case=do_lower_case,
+             verbose_logging=verbose_logging,
+             version_2_with_negative=version_2_with_negative,
+             null_score_diff_threshold=null_score_diff_threshold,
+             model_type=model_type,
+             output_dir=output_dir,
+             is_last_partition=args.stage == args.num_stages - 1)
+
+    dataset_keywords.update(d)
+    return dataset_keywords

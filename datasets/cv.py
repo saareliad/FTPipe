@@ -433,15 +433,16 @@ class SEP_CIFAR100_DatasetHandler(CommonDatasetHandler):
         NotImplementedError()
 
 register_dataset("cifar100", SEP_CIFAR100_DatasetHandler)
-        
+
 #############################################################
 # CIFAR 10
 ############################################################
 
+
 def get_cifar_10_just_x_or_y_test_ds(**kw):
     just = kw['just']
     DATA_DIR = kw.get("DATA_DIR", DEFAULT_DATA_DIR)
-    
+ 
     _, test_transform = cifar10_transformations()
     just = just.lower()
     if just == 'x':
@@ -464,7 +465,7 @@ def get_cifar_10_just_x_or_y_test_ds(**kw):
 def get_cifar_10_just_x_or_y_train_ds(**kw):
     just = kw['just']
     DATA_DIR = kw.get("DATA_DIR", DEFAULT_DATA_DIR)
-    
+
     train_transform, _ = cifar10_transformations()
     just = just.lower()
     if just == 'x':
@@ -482,6 +483,7 @@ def get_cifar_10_just_x_or_y_train_ds(**kw):
     else:
         raise ValueError(f"'just' should be in x,y. Got {just} instead.")
 
+
 class SEP_CIFAR10_DatasetHandler(CommonDatasetHandler):
     def __init__(self, **kw):
         super().__init__()
@@ -495,7 +497,7 @@ class SEP_CIFAR10_DatasetHandler(CommonDatasetHandler):
     def get_validation_ds(self, **kw):
         NotImplementedError()
 
-register_dataset("cifar10", SEP_CIFAR10_DatasetHandler)        
+register_dataset("cifar10", SEP_CIFAR10_DatasetHandler)
 
 
 #############################################################

@@ -286,7 +286,8 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
 class SEP_GLUE_DatasetHandler(CommonDatasetHandler):
     def __init__(self, **kw):
         super().__init__()
-        train_ds, test_ds, extra = get_just_x_or_y_train_dev_dataset(**kw)
+        d = extract_needed_keywords(**kw)
+        train_ds, test_ds, extra = get_just_x_or_y_train_dev_dataset(**d)
         self.train_ds = train_ds
         self.dev_ds = dev_ds
         self.extra = extra
@@ -304,6 +305,24 @@ class SEP_GLUE_DatasetHandler(CommonDatasetHandler):
         return self.extra
 
 register_dataset("glue", SEP_GLUE_DatasetHandler)
+
+
+
+def extract_needed_keywords(**kw):
+    # here for backward compatibility
+    args = kw['args']
+    dataset_keywords = dict(
+        tokenizer=kw['tokenizer'],
+        overwrite_cache=getattr(args, 'overwrite_cache', False),
+        task_name=getattr(args, 'glue_task_name'),
+        max_seq_length=getattr(args, 'max_seq_length', 128),
+        precompute_masks=getattr(args, 'precompute_masks', False),
+        precompute_attention_mask=getattr(args,
+                                          "precompute_attention_mask",
+                                          False),
+        is_last_partition=args.stage == args.num_stages - 1)
+
+    return dataset_keywords
 
 
 if __name__ == "__main__":

@@ -74,7 +74,6 @@ def get_data_dir(args):
     DATA_DIR = DATA_DIR if DATA_DIR else DEFAULT_DATA_DIR
     return DATA_DIR
 
-
 # TODO: handle dl_kw being propegated
 def get_separate_dls_from_args(args,
                                pipe_config=None,
@@ -130,8 +129,9 @@ def get_separate_dls_from_args(args,
         print(f'Test: {n_samples_test} samples')
 
     if extra:
-        assert len(extra) == 1
-        extra = extra[0]
+        if isinstance(extra, list):
+            assert len(extra) == 1
+            extra = extra[0]
 
     return dl_train, dl_test, list(filter(
         None, [train_sampler, test_sampler])), extra
