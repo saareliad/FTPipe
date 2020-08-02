@@ -4,6 +4,7 @@ from itertools import count
 from collections import OrderedDict
 from copy import deepcopy
 
+
 def get_my_send_recv_ranks(config, stage, stage_to_rank_map=None):
     def ranks_in_stage(given_stage):
         if stage_to_rank_map:

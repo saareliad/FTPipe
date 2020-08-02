@@ -74,7 +74,10 @@ def parse_cli():
     parser = argparse.ArgumentParser(
         description='PyTorch partition as part of Async Pipeline')
 
-    parser.add_argument("--mode", choices=["mp", "dist"], default="dist", help="Running mode")
+    parser.add_argument("--mode",
+                        choices=["mp", "dist"],
+                        default="dist",
+                        help="Running mode")
     parse_distributed_cli(parser)
     parse_multiprocessing_cli(parser)
 
@@ -421,6 +424,31 @@ def start_mutiprocessing():
                        start_method='fork')
 
 
+def start_mpi_overlay():
+    args = parse_cli()
+    parse_mpi_env_vars(args)
+    prefix = "_overaly_"
+    for x in ['rank', 'local_rank', 'world_size']:
+        setattr(args, f"{prefix}{x}", getattr(args, x))
+        delattr(args, x)
+
+    args.mpi_overlay_local_ranks = tuple(
+        os.environ['OVERLAY_LOCAL_RANKS'].split(","))
+    print(f"-I- Parsed: OVERLAY_LOCAL_RANKS: {args.mpi_overlay_local_ranks}")
+
+    A = set(args.mpi_overlay_local_ranks)
+
+    raise NotImplementedError("WIP")
+
+    # local vars
+
+    # TODO: quques
+    # TODO: threads
+    # TODO: start_mutiprocessing()
+    # TODO: re-write version for barier.
+    # TODO: distributed save experiment...
+
+
 if __name__ == "__main__":
     # TODO set OMP_NUM_THREADS automatically
     print(f"Using {torch.get_num_threads()} Threads")
@@ -428,6 +456,9 @@ if __name__ == "__main__":
     if args.mode == "mp":
         print("Running in multiprocessing mode")
         start_mutiprocessing()
+    elif args.mode == 'mpi_overlay':
+        print("Running in mpi overlay mode")
+        start_mpi_overlay()
     else:
         print("Running in distributed mode")
         start_distributed()

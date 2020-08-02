@@ -1,10 +1,7 @@
 import torch
 from misc.filelogger import FileLogger
 from pipeline import dp_sim
-from datasets import (
-    simplified_get_train_valid_dl_from_args,
-    get_separate_just_x_or_y_train_test_dl_from_args,
-)
+from datasets import get_separate_dls_from_args
 
 import optimizers.lr_scheduler
 from pipeline.work_schedulers import AVAILABLE_WORK_SCHEDULERS
@@ -62,6 +59,30 @@ def get_task_cls(args):
 def get_trainer_cls(args):
     trainer_cls = AVAILABLE_TRAINERS.get(args.trainer['type'])
     return trainer_cls
+
+
+def is_huggingface_transformer(args):
+    return args.model in models.transformers_cfg.MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS.keys()
+
+
+def is_explicit_non_seperated_dataset(args):
+    return "_nonsep" in args.task
+
+
+def get_dataloader_keywords(args):
+    dl_kw = dict()
+    if args.cpu:
+        dl_kw['pin_memory'] = False
+    else:
+        dl_kw['pin_memory'] = True
+
+    dl_kw['num_workers'] = args.num_data_workers
+    dl_kw['drop_last'] = True
+
+    if getattr(args, "dont_drop_last", False):
+        dl_kw['drop_last'] = False
+
+    return dl_kw
 
 
 def create_comm_handler(args, comm_init_args,
@@ -262,15 +283,18 @@ def get_weight_predictor(args,
     return weight_predictor, nag_with_predictor
 
 
-def get_data_keywords_by_task(args, dl_kw, **kw):
+def get_data_keywords_by_task(args, dl_kw, kw):
+    # TODO: move to dataset file...
+    # FIXME
+    # FIXME
+    # FIXME
+    # FIXME
 
     if args.task == "t5_squad":
         
         dataset_keywords = dict(tokenizer=kw.pop('tokenizer'),
         config=kw.pop('config'),
         max_seq_length=args.max_seq_length)
-
-
 
     elif "lm" in args.task:
         # FIXME
@@ -356,44 +380,21 @@ def get_data_keywords_by_task(args, dl_kw, **kw):
 def get_dataloaders(args,
                     pipe_config=None,
                     explicit_separated_dataset=False,
-                    **kw):
-    # TODO: currently assuming that only 1 rank is x or y.
-    # will have to fix this for replicated.
-    dl_kw = dict()
-    if args.cpu:
-        dl_kw['pin_memory'] = False
-    else:
-        dl_kw['pin_memory'] = True
+                    dataset_keywords=dict()):
+    # TODO: replicated
+    #dl_kw = get_dataloader_keywords(args)
+    # dataset_keywords = get_data_keywords_by_task(args, dl_kw, dataset_keywords)
 
-    dl_kw['num_workers'] = args.num_data_workers
-    dl_kw['drop_last'] = True
-
-    if getattr(args, "dont_drop_last", False):
-        dl_kw['drop_last'] = False
-
-    dataset_keywords = get_data_keywords_by_task(args, dl_kw, **kw)
-
-    if explicit_separated_dataset:
-        # TODO: this does it just for x and y.
-        # print("dataset_keywords", dataset_keywords)
-        train_dl, test_dl, samplers, extra = get_separate_just_x_or_y_train_test_dl_from_args(
+    if not is_explicit_non_seperated_dataset(args):
+        train_dl, test_dl, samplers, extra = get_separate_dls_from_args(
             args,
             pipe_config=pipe_config,
             verbose=False,
             dataset_keywords=dataset_keywords,
-            dataloader_keywords=dl_kw,
+            # dataloader_keywords=dl_kw,
         )
     else:
-        # Note: sometimes used to infer all parameters, (by all partitions).
-        train_dl, test_dl, *samplers = simplified_get_train_valid_dl_from_args(
-            args,
-            verbose=False,
-            dataset_keywords=dataset_keywords,
-            dataloader_keywords=dl_kw,
-        )
-        # TODO: support extra
-        extra = None
-
+        raise NotImplementedError("now deprecated")
     return train_dl, test_dl, samplers, extra
 
 
@@ -512,13 +513,12 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     print(f"Loading partitioned model and dataset...")
     model_instance = None
     dataset_keywords = {}
-    if args.model in models.transformers_cfg.MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS.keys(
-    ):
+    if is_huggingface_transformer(args):
+        # TODO: some easier way to get original model and the config used during partitioning (WIP)
         model_instance, tokenizer, config = models.transformers_utils.get_model_tokenizer_and_config_by_name(
             args.model)
         dataset_keywords['tokenizer'] = tokenizer
         dataset_keywords['config'] = config
-
 
     parsed_config = parse_config.PartitioningConfigParser(
         args.model,
@@ -546,15 +546,15 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
 
     assert (args.epochs >= 1 or args.steps >= 1)
     assert (not (args.stage is None))
-
+    # FIXME: real name
     logger = FileLogger(args.logdir,
                         global_rank=args.rank,
                         local_rank=args.local_rank,
                         name='msnag',
                         world_size=args.world_size,
-                        name_prefix=args.out_filename)  # FIXME: real name
+                        name_prefix=args.out_filename)  
 
-    eval_tensor_dtypes = training_tensor_dtypes  # HACK, FIXME
+    eval_tensor_dtypes = training_tensor_dtypes  # HACK, TODO
 
     # Comm handler
     if COMM_VERSION == 1:
@@ -569,18 +569,16 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     else:
         raise NotImplementedError("In progress")
 
-    # Try getting separate X,Y dataloaders
-    explicit_separated_dataset = not "_nonsep" in args.task
+    # Get dataloaders needed for this stage
     train_dl, test_dl, samplers, extra = get_dataloaders(
         args,
         pipe_config=pipe_config,
-        explicit_separated_dataset=explicit_separated_dataset,
-        **dataset_keywords)
+        dataset_keywords=dataset_keywords)
 
     del dataset_keywords
 
-    # instead of loading dl on every device,
-    # when not needed - can just send the length as a message
+    # instead of loading dl on every device just to get its length
+    # we synchronize length as a message, from first stage
     if args.rank == 0:
         assert is_first_partition
         train_dl_len, test_dl_len = len(train_dl), len(test_dl)
@@ -592,7 +590,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         logger.info(f"train_dataset_len {train_dataset_len}")
         logger.info(f"test_dataset_len {test_dataset_len}")
 
-        # TODO: also support replicated
+        # TODO: support replicated
         last_batch_diff_train = train_dataset_len % args.bs_train if not train_dl.drop_last else 0
         last_batch_diff_test = test_dataset_len % args.bs_test if not test_dl.drop_last else 0
 
@@ -622,7 +620,6 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         last_batch_test_shapes = None
 
     # Get expected training steps:
-
     if args.epochs > 0 and args.steps < 0:
         steps_per_epoch = train_dl_len // args.step_every
         if train_dl_len % args.step_every > 0:

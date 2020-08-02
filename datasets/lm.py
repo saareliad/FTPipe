@@ -8,6 +8,7 @@ from torch.nn.utils.rnn import pad_sequence
 from typing import List, Tuple
 from .hardcoded_dirs import DEFAULT_DATA_DIR
 import functools
+from .datasets import CommonDatasetHandler, register_dataset
 
 
 class TextDataset(Dataset):
@@ -16,10 +17,11 @@ class TextDataset(Dataset):
     # (but without the args thing...)
     def __init__(self,
                  tokenizer,
-                 model_name_or_path,
+                 model_name_or_path,  # used for cache
                  overwrite_cache=False,
                  file_path='train',
                  block_size=512):
+        
         assert os.path.isfile(file_path), file_path
         directory, filename = os.path.split(file_path)
         cached_features_file = os.path.join(
@@ -230,6 +232,7 @@ def get_wikitext2_raw_train_valid_test_ds(
         overwrite_cache=False,
         DATA_DIR=DEFAULT_DATA_DIR,
         split='all'):
+
     wt2_data_path = os.path.join(DATA_DIR, "wikitext-2-raw")
     train_file = os.path.join(wt2_data_path, "wiki.train.raw")
     valid_file = os.path.join(wt2_data_path, "wiki.valid.raw")
@@ -239,8 +242,7 @@ def get_wikitext2_raw_train_valid_test_ds(
         return TextDataset(tokenizer,
                            model_name_or_path,
                            overwrite_cache=overwrite_cache,
-                           file_path=file_path,
-                           block_size=block_size)
+                           file_path=file_path,block_size=block_size)
 
     if split == 'all':
         train_ds = get_ds(train_file)
@@ -387,19 +389,6 @@ def get_lm_train_valid_dl(ds_train,
     return train_dl, valid_dl
 
 
-#     # UNUSED
-# def get_lm_train_valid_test_dl(ds_train, ds_valid, ds_test,
-#                                bs_train, bs_valid, bs_test, tokenizer=None):
-#     # HACK: tokenizer as kwarg.
-#     collate = lm_collate_factory(tokenizer)
-
-#     train_dl = get_lm_train_dl(ds_train, bs_train, collate_fn=collate)
-#     valid_dl = get_lm_eval_dl(ds_valid, bs_valid, collate_fn=collate)
-#     test_dl = get_lm_eval_dl(ds_test, bs_test, collate_fn=collate)
-
-#     return train_dl, valid_dl, test_dl
-
-
 #############################################
 # get x separate from y, both with same seed
 #############################################
@@ -417,3 +406,31 @@ def get_wt2_just_x_or_y_train_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR, **kw):
 
 def get_wt2_just_x_or_y_test_ds(just, DATA_DIR=DEFAULT_DATA_DIR, **kw):
     return get_wikitext2_raw_test_ds(DATA_DIR=DATA_DIR, **kw)
+
+
+
+class SEP_WIKITEXT2_DatasetHandler(CommonDatasetHandler):
+    def __init__(self, **kw):
+        super().__init__()
+        train_ds, test_ds = get_wt2_just_x_or_y_train_test_ds(**kw)
+        self.train_ds = train_ds
+        self.test_ds = test_ds
+
+        tokenizer = kw['tokenizer']
+        self.collate_fn = lm_collate_factory(tokenizer)
+    
+    def get_train_ds(self, **kw):
+        return self.train_ds
+    
+    def get_test_ds(self, **kw):
+        return self.test_ds
+    
+    def get_validation_ds(self, **kw):
+        NotImplementedError()
+
+    def modify_dataloader_keywords(self, dataloader_keywords):
+        dataloader_keywords['collate_fn'] = self.collate_fn
+        return dataloader_keywords
+
+
+register_dataset("wt2", SEP_WIKITEXT2_DatasetHandler)

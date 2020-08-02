@@ -79,9 +79,11 @@ pytorch_install() {
     # 	('Volta', '7.0+PTX'),
     # 	('Turing', '7.5+PTX'),
     # ])
+    # NOTE: must avoid conda env polution.
     export TORCH_CUDA_ARCH_LIST="7.5+PTX"
     export TORCH_NVCC_FLAGS="-Xfatbin -compress-all"
     export CMAKE_PREFIX_PATH=${CONDA_PREFIX:-"$(dirname $(which conda))/../"}
+    export CFLAGS="-D_GLIBCXX_USE_CXX11_ABI=0 $CFLAGS"
     python setup.py install
 }
 

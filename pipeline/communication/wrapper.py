@@ -3,7 +3,7 @@ from torch import Tensor
 import torch.nn as nn
 
 from functools import partial
-from .util import flatten, unflatten, nested_map
+# from .util import flatten, unflatten, nested_map
 from typing import Tuple, Union
 
 filter_none = partial(filter, None)
@@ -30,18 +30,4 @@ class TensorWrapper:
 
         return ts
 
-    def reconstruct_activations(self, x):
 
-        ts = []
-        ix = iter(x)
-        for fs in self.flattened_structure:
-            if fs is None:
-                ts.append(None)
-            else:
-                ts.append(next(ix))
-        return unflatten(ts, self.structure)
-
-    def reconstruct_gradients(self, x):
-        # None are not sent.
-        assert (len(x) == len(self.flattenned_filtered_none))
-        return unflatten(x, self.structure)

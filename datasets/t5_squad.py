@@ -2,12 +2,13 @@ import nlp
 import torch
 import operator
 from torch.utils.data import TensorDataset
+from .datasets import CommonDatasetHandler, register_dataset
 
 
-def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
+def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, args, **kw):
     """ get x or y datset. """
 
-    max_length = kw['max_seq_length']
+    max_length = args.max_seq_length
     tokenizer = kw['tokenizer']
     config = kw['config']
 
@@ -306,3 +307,25 @@ def get_extended_attention_mask(attention_mask, input_shape,is_decoder=False,dty
     return extended_attention_mask
 
 
+
+class SEP_T5_SQUAD_DatasetHandler(CommonDatasetHandler):
+    def __init__(self, **kw):
+        super().__init__()
+        train_ds, test_ds, extra = get_just_x_or_y_train_dev_dataset(**kw)
+        self.train_ds = train_ds
+        self.dev_ds = dev_ds
+        self.extra = extra
+
+    def get_train_ds(self, **kw):
+        return self.train_ds
+    
+    def get_test_ds(self, **kw):
+        return self.dev_ds
+    
+    def get_validation_ds(self, **kw):
+        NotImplementedError()
+        
+    def get_modify_trainer_fn(self):
+        return self.extra
+
+register_dataset("t5_squad", SEP_T5_SQUAD_DatasetHandler)

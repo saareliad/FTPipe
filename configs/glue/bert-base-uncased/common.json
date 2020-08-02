@@ -7,7 +7,7 @@
     "out_filename": "tst",
     "distributed_backend": "mpi",
     "task": "glue",
-    "model": "bert_base_uncased_4p_bw11_0_async_mnli_glue",
+    "model": "bert_base_uncased_8p_bw11_0_async_mnli_glue",
     "dataset": "glue",
     "trainer": {
         "type": "glue",
@@ -60,8 +60,9 @@
     "train_seq_len": 128,
     "valid_seq_len": 128,
     "test_seq_len": 128,
-    "overwrite_cache": false,
+    "overwrite_cache": true,
     "dont_drop_last": true,
     "model_type": "bert",
+    "precompute_attention_mask": true,
     "output_dir": "results/glue/out_dir/"
 }

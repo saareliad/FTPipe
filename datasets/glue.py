@@ -17,6 +17,7 @@ from transformers import EvalPrediction
 from typing import Callable, Dict
 
 from collections import defaultdict
+from .datasets import CommonDatasetHandler, register_dataset
 
 
 # This being here is HACK is to allow one model for all glue tasks...
@@ -279,6 +280,30 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
 
     # NOTE: (examples, features) are needed for evaluation
     return train_ds, dev_ds, set_eval
+
+
+
+class SEP_GLUE_DatasetHandler(CommonDatasetHandler):
+    def __init__(self, **kw):
+        super().__init__()
+        train_ds, test_ds, extra = get_just_x_or_y_train_dev_dataset(**kw)
+        self.train_ds = train_ds
+        self.dev_ds = dev_ds
+        self.extra = extra
+
+    def get_train_ds(self, **kw):
+        return self.train_ds
+    
+    def get_test_ds(self, **kw):
+        return self.dev_ds
+    
+    def get_validation_ds(self, **kw):
+        NotImplementedError()
+        
+    def get_modify_trainer_fn(self):
+        return self.extra
+
+register_dataset("glue", SEP_GLUE_DatasetHandler)
 
 
 if __name__ == "__main__":

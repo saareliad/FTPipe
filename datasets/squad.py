@@ -20,6 +20,7 @@ from transformers.data.metrics.squad_metrics import (
     squad_evaluate,
 )
 from types import SimpleNamespace
+from .datasets import CommonDatasetHandler, register_dataset
 
 
 def train_just(just, DATA_DIR, **kw):
@@ -639,3 +640,30 @@ def get_extended_attention_mask(attention_mask,
     extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
 
     return extended_attention_mask
+
+
+class SEP_SQUAD_DatasetHandler(CommonDatasetHandler):
+    def __init__(self, **kw):
+        super().__init__()
+        train_ds, test_ds, extra = get_just_x_or_y_train_dev_dataset(**kw)
+        self.train_ds = train_ds
+        self.dev_ds = test_ds
+        self.extra = extra
+
+    def get_train_ds(self, **kw):
+        return self.train_ds
+    
+    def get_test_ds(self, **kw):
+        return self.dev_ds
+    
+    def get_validation_ds(self, **kw):
+        NotImplementedError()
+        
+    def get_modify_trainer_fn(self):
+        return self.extra
+
+
+register_dataset("squad", SEP_SQUAD_DatasetHandler)
+# For backward compatibility...
+register_dataset("squad1", SEP_SQUAD_DatasetHandler)
+register_dataset("squad2", SEP_SQUAD_DatasetHandler)
