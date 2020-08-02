@@ -92,11 +92,11 @@ def main(args):
         quantizer = None
 
     # Build trainer
-    if args.model_parallel_size == 1:
-        trainer = Trainer(args, task, model, criterion, quantizer)
-    else:
-        trainer = MegatronTrainer(args, task, model, criterion)
-
+    # if args.model_parallel_size == 1:
+    #     trainer = Trainer(args, task, model, criterion, quantizer)
+    # else:
+    #     trainer = MegatronTrainer(args, task, model, criterion)
+    trainer = MegatronTrainer(args, task, model, criterion)
     logger.info(
         "training on {} devices (GPUs/TPUs)".format(args.distributed_world_size)
     )
