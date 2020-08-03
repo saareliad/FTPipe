@@ -373,15 +373,21 @@ def get_optimizer(args, optimizer_cls, parameters):
     return optimizer
 
 
-def preproc_data(args):
+def preproc_data(args, cache=None, save_cache=True):
     # Parse partitioning config and requires args
     print(f"Loading partitioned model and dataset...")
     model_instance = None
     dataset_keywords = {}
     if is_huggingface_transformer(args):
+        if cache is None:
         # TODO: some easier way to get original model and the config used during partitioning (WIP)
-        model_instance, tokenizer, config = models.transformers_utils.get_model_tokenizer_and_config_by_name(
-            args.model)
+            model_instance, tokenizer, config = models.transformers_utils.get_model_tokenizer_and_config_by_name(
+                args.model)
+            if save_cache:
+                cache = (model_instance, tokenizer, config)
+        else:
+            model_instance, tokenizer, config = cache
+
         dataset_keywords['tokenizer'] = tokenizer
         dataset_keywords['config'] = config
 
@@ -402,6 +408,8 @@ def preproc_data(args):
             args,
             pipe_config=pipe_config,
             dataset_keywords=dataset_keywords)
+
+    return cache
     # TODO
     # TODO
     # TODO

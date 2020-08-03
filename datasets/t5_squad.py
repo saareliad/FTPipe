@@ -6,6 +6,45 @@ from torch.utils.data import TensorDataset
 from .datasets import CommonDatasetHandler, register_dataset
 
 
+class TorchCache:
+    def __init__(self, cache_name, overwrite=False):
+        self.cache_name = cache_name
+        self.exists = os.path.exists(cache_name)
+        self.overwrite = overwrite
+        self.v = None
+        
+    def __enter__(self):
+        if self.exists:
+            print(f"loading from cache: {self.cache_name}")
+            self.v = torch.load(self.cache_name)
+        else:
+            print(f"computing value for {self.cache_name}")
+        return self
+    
+    def __exit__(self, type, value, traceback):
+        if not self.exists or self.overwrite:
+            print(f"saving to cache: {self.cache_name}") 
+            assert self.v is not None, "You should enter a value"
+            torch.save(self.v, self.cache_name)
+
+
+def compute_and_cache(compute_function, cache_name, overwrite=False, *args, **kw):
+    """
+    Compute or load from cache, optionaly save results to cache.
+    Return computed value
+    Examples:
+        # compute big
+        # compute_and_cache(lambda: torch.ones(10), "big")
+        # compute big, then small
+        # compute_and_cache(lambda: torch.randn(10) * compute_and_cache(lambda: torch.ones(10), "big"), "small")
+    """
+
+    with TorchCache(cache_name) as big:
+        if not big.exists:
+            big.v = compute_function(*args, **kw)
+    return big.v
+
+
 def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, args, **kw):
     """ get x or y datset. """
 
@@ -107,78 +146,68 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, args, **kw):
         d['lm_labels'] = lm_labels
 
         # too lazy to do it selectivly...
-        keys = tuple(d.keys())
-        for k in keys:
-            if k not in subset_of_inputs:
-                del d[k]
+        if False:
+            keys = tuple(d.keys())
+            for k in keys:
+                if k not in subset_of_inputs:
+                    del d[k]
+
+            keys = tuple(d.keys())
+            for k in keys:
+                if d[k] is None:
+                    del d[k]
 
         keys = tuple(d.keys())
         for k in keys:
-            if d[k] is None:
-                del d[k]
-         
-        keys = tuple(d.keys())
-        for k in keys:
-            d[k] = d[k].tolist()
-        
+            if isinstance(d[k], torch.Tensor):
+                d[k] = d[k].tolist()
+
         return d
-    
-    # tmp = "_".join(subset_of_inputs)
-    tmp = "FULL"
-    ww = ['train', 'val']
-    do_train = True
-    do_val = True
-    for w in ww:
-        cache_file_name = os.path.join(DATA_DIR, f"cache_{w}.t5_squad_just_{tmp}.pt")
 
-        if os.path.exists(cache_file_name) and not args.overwrite_cache:
-            if w == 'train':
-                do_train = False
-                print(f"loading from cache: {cache_file_name}")
-                train_dataset = torch.load(cache_file_name)
-            elif w == 'val':
-                do_val = False
-                print(f"loading from cache: {cache_file_name}")
-                dev_dataset = torch.load(cache_file_name)
+
+    # tmp = "_".join(subset_of_inputs)
+    small_cache = "_".join(subset_of_inputs)
+    big_cache = "FULL"
+    ww = ['train', 'val']
     
-    # TODO: allow squad2
-    if do_train:
+    small_cache_name_train = os.path.join(DATA_DIR, f"cache_{ww[0]}.t5_squad_just_{small_cache}.pt")
+    small_cache_name_eval = os.path.join(DATA_DIR, f"cache_{ww[1]}.t5_squad_just_{small_cache}.pt")
+    big_cache_name_train = os.path.join(DATA_DIR, f"cache_{ww[0]}.t5_squad_just_{big_cache}.pt")
+    big_cache_name_eval = os.path.join(DATA_DIR, f"cache_{ww[1]}.t5_squad_just_{big_cache}.pt")
+
+    def compute_full_train():
         train_dataset = nlp.load_dataset('squad', split=nlp.Split.TRAIN)
         # train_dataset.cleanup_cache_files()  # Returns the number of removed cache files
         train_dataset = train_dataset.map(add_eos_to_examples, load_from_cache_file=False)
-        train_dataset = train_dataset.map(convert_to_features, batched=True, load_from_cache_file=False)
-        
+        train_dataset = train_dataset.map(convert_to_features, batched=True, load_from_cache_file=False)     
         train_dataset = train_dataset.map(preproc, batched=True, load_from_cache_file=False, batch_size=128)
-        train_dataset.set_format(type='torch', columns=just)
+        return train_dataset
 
-        cache_file_name = os.path.join(DATA_DIR, f"cache_{ww[0]}.t5_squad_just_{tmp}.pt")
-
-        if not os.path.exists(cache_file_name) or args.overwrite_cache:
-            print(f"saving to cache: {cache_file_name}")
-            torch.save(train_dataset, cache_file_name)
-
-    
-    if do_val:
+    def compute_full_eval():
         dev_dataset = nlp.load_dataset('squad', split=nlp.Split.VALIDATION)
         dev_dataset = dev_dataset.map(add_eos_to_examples, load_from_cache_file=False)
         dev_dataset = dev_dataset.map(convert_to_features, batched=True, load_from_cache_file=False) 
         dev_dataset = dev_dataset.map(preproc, batched=True, load_from_cache_file=False, batch_size=128)
-        dev_dataset.set_format(type='torch', columns=just)
-    
-        cache_file_name = os.path.join(DATA_DIR, f"cache_{ww[1]}.t5_squad_just_{tmp}.pt")
+        return dev_dataset
 
-        if not os.path.exists(cache_file_name) or args.overwrite_cache:
-            print(f"saving to cache: {cache_file_name}")
-            torch.save(dev_dataset, cache_file_name)
+    def compute_subset_train():
+        train_dataset = compute_and_cache(compute_full_train, big_cache_name_train)
+        to_drop = [i for i in train_dataset.column_names if i not in subset_of_inputs]
+        train_dataset.drop(to_drop)
+        d = [torch.tensor(train_dataset[i]) for i in just]
+        train_dataset = TensorDataset(*d)
+        return train_dataset
+ 
+    def compute_subset_eval():
+        dev_dataset = compute_and_cache(compute_full_eval, big_cache_name_eval)
+        to_drop = [i for i in dev_dataset.column_names if i not in subset_of_inputs]
+        dev_dataset.drop(to_drop)
+        d = [torch.tensor(dev_dataset[i]) for i in just]
+        dev_dataset = TensorDataset(*d)
+        return dev_dataset
 
-    
-    to_drop = [i for i in dev_dataset.column_names if i not in subset_of_inputs]
-    dev_dataset.drop(to_drop)
-    
-    to_drop = [i for i in train_dataset.column_names if i not in subset_of_inputs]
-    train_dataset.drop(to_drop)
-
-    # TODO: evaluation (see squad.py)
+    train_dataset = compute_and_cache(compute_subset_train, small_cache_name_train)
+    dev_dataset = compute_and_cache(compute_subset_eval, small_cache_name_eval)
 
     def set_eval(trainer):
         pass
@@ -187,6 +216,8 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, args, **kw):
         #    evaluate_squad, trainer.statistics)
 
     return train_dataset, dev_dataset, set_eval
+
+
 
 
 #########################

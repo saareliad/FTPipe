@@ -454,14 +454,14 @@ def start_preproc():
     args = parse_cli()
     parse_json_config(args, args.config, first=True)
     args.world_size = args.nprocs  # HACK
-    
+    cache = None
     for rank in range(args.world_size):
         print(f"-I- preprocessing data for rank {rank}/{args.world_size-1} (word size is {args.world_size})...")
         local_rank = rank
         args.rank = rank
         args.local_rank = local_rank
         args.is_multiprocessing_worker = False
-        preproc_data(args)
+        cache = preproc_data(args, cache, save_cache=True)
 
 
 if __name__ == "__main__":
