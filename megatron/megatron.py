@@ -13,6 +13,7 @@ import math
 import random
 import sys
 
+from collections import Counter
 import numpy as np
 import torch
 from fairseq import (
@@ -58,6 +59,7 @@ def main(args):
 
     # # Setup task, e.g., translation, language modeling, etc.
     task = tasks.setup_task(args)
+    print("task setup")
 
     # # Load valid dataset (we load training data below, based on the latest checkpoint)
     # for valid_sub_split in args.valid_subset.split(","):
@@ -65,12 +67,9 @@ def main(args):
     
     # # Build model and criterion
     model = task.build_model(args)
-    # model = ModelParallelTransformerLanguageModel.build_model(args,None)
-    if distributed_utils.is_master(args):
-        print(model)
-    return
+    print("model built")
     criterion = task.build_criterion(args)
-    logger.info(model)
+    # logger.info(model)
     logger.info(
         "model {}, criterion {}".format(args.arch, criterion.__class__.__name__)
     )
@@ -92,11 +91,11 @@ def main(args):
         quantizer = None
 
     # Build trainer
-    # if args.model_parallel_size == 1:
-    #     trainer = Trainer(args, task, model, criterion, quantizer)
-    # else:
-    #     trainer = MegatronTrainer(args, task, model, criterion)
-    trainer = MegatronTrainer(args, task, model, criterion)
+    if args.model_parallel_size == 1:
+        trainer = Trainer(args, task, model, criterion, quantizer)
+    else:
+        trainer = MegatronTrainer(args, task, model, criterion)
+    print("created trainer")
     logger.info(
         "training on {} devices (GPUs/TPUs)".format(args.distributed_world_size)
     )
@@ -124,6 +123,8 @@ def main(args):
     while lr > args.min_lr and epoch_itr.next_epoch_idx <= max_epoch:
         # train for one epoch
         valid_losses, should_stop = train(args, trainer, task, epoch_itr)
+        print("done")
+        return
         if should_stop:
             break
 
@@ -219,9 +220,43 @@ def train(args, trainer, task, epoch_itr):
         with metrics.aggregate("train_inner"), torch.autograd.profiler.record_function(
             "train_step-%d" % i
         ):
+            for s in samples:
+                for k,v in s.items():
+                    d = f"input:{k}"
+                    if isinstance(v,torch.Tensor):
+                        d+=f" shape:{v.shape} dtype:{v.dtype} device:{v.device}"
+                        if v.shape == torch.Size([1]):
+                            d += f" with value {v.item()}"
+                        print(d)
+                    elif isinstance(v,dict):
+                        print(f"size of {k} dict {len(v)}")
+                        for k0,v0 in v.items():
+                            d0 = d + f"[{k0}] of type:{type(v0)}"
+                            if isinstance(v0,torch.Tensor):
+                                d0+=f" shape:{v0.shape} dtype:{v0.dtype} device:{v0.device}"
+                                if v0.shape == torch.Size([1]):
+                                    d0 += f" with value {v0.item()}"
+                            print(d0)
+                    else:
+                        d+=f" of type:{type(v)} value {v}"
+                        print(d)
+            print()
+            print(type(trainer._model))
+            blocks = Counter(type(m).__name__ for m in trainer._model.modules())
+            print()
+            print("basic blocks:")
+            for b,n in blocks.items():
+                print(b,n)
+            print()
+
+            trainer._model(**samples[0]['net_input'])
+
+
+            return None,None
             log_output = trainer.train_step(samples)
             if log_output is None:  # OOM, overflow, ...
                 continue
+            break
 
         # log mid-epoch stats
         num_updates = trainer.get_num_updates()
