@@ -23,7 +23,7 @@ class TorchCache:
     
     def __exit__(self, type, value, traceback):
         if not self.exists or self.overwrite:
-            print(f"saving to cache: {self.cache_name}") 
+            print(f"saving to cache: {self.cache_name}")
             assert self.v is not None, "You should enter a value"
             torch.save(self.v, self.cache_name)
 
@@ -165,8 +165,7 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, args, **kw):
         return d
 
 
-    # tmp = "_".join(subset_of_inputs)
-    small_cache = "_".join(subset_of_inputs)
+    small_cache = "_".join(just) if isinstance(just, list) else just
     big_cache = "FULL"
     ww = ['train', 'val']
     
