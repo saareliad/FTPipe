@@ -247,8 +247,6 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                         event.synchronize()
                         reuse_q.put(None)  # TODO: better happen in callback
                         request_objects.append(t)
-                        if tensor_name == "T5ForConditionalGeneration/T5Stack[encoder]/tuple::__getitem___40":
-                            print("RECVED: T5ForConditionalGeneration/T5Stack[encoder]/tuple::__getitem___40", f"shape: {t.shape}", f"buff: {x.shape}")
                     else:
                         reuse_q = self.buffer_reuse_queues[receive_rank][self.rank]
                         reuse_q.put(None)

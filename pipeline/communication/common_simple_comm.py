@@ -386,8 +386,8 @@ class SimpleCommBase(CommunicationHandlerBase):
             ix = iter(x)
             for name, ranks in self.grad_rcv_items:
                 if len(ranks) > 1:
-                    tensors = [t.unsqueeze() for t in [next(ix) for _ in range(len(ranks))] if t is not None]
-                    out.append(torch.stack(tensors).sum())
+                    tensors = [t for t in [next(ix) for _ in range(len(ranks))] if t is not None]
+                    out.append(torch.stack(tensors).sum(0))
                 else:
                     out.append(next(ix))
             return out

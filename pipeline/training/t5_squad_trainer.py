@@ -43,9 +43,6 @@ class SquadTrainer(BaseOutPutIsLossTrainer):
 
     def advanced_test_stats(self, x, example_indices):
         raise NotImplementedError()
-        
-    
-    
 
     def calc_test_stats(self, x, batch_size=None):
 
@@ -68,8 +65,6 @@ class SquadTrainer(BaseOutPutIsLossTrainer):
 
     def last_partition_step_and_statistics(self,
                                            x,
-                                           start_positions,
-                                           end_positions,
                                            batch_size,
                                            loss,
                                            step=True,
