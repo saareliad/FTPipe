@@ -321,7 +321,6 @@ class SinglePartitionManager:
             expected_staleness = self.expected_staleness(batch_idx, done_bwds)
             self.delay_at_batch[batch_idx] = expected_staleness
 
-
         # TODO: preload stuff from dataloader.
         preload_input_partition, preload_input_to_outside_loss = self.task.preload_from_dataloader(getattr(self, "dl_iter", None))
 

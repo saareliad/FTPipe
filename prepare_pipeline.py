@@ -374,13 +374,15 @@ def get_optimizer(args, optimizer_cls, parameters):
 
 
 def preproc_data(args, cache=None, save_cache=True):
+    # TODO: currently runs as an outside for loop for all stages
+
     # Parse partitioning config and requires args
     print(f"Loading partitioned model and dataset...")
     model_instance = None
     dataset_keywords = {}
     if is_huggingface_transformer(args):
         if cache is None:
-        # TODO: some easier way to get original model and the config used during partitioning (WIP)
+            # TODO: some easier way to get original model and the config used during partitioning (WIP)
             model_instance, tokenizer, config = models.transformers_utils.get_model_tokenizer_and_config_by_name(
                 args.model)
             if save_cache:
@@ -402,18 +404,12 @@ def preproc_data(args, cache=None, save_cache=True):
     pipe_config = parsed_config.pipe_config
     args.num_stages = parsed_config.num_stages
     args.stage = parsed_config.stage
-    
-    # TODO: a for loop for all stages?
     train_dl, test_dl, samplers, extra = get_dataloaders(
             args,
             pipe_config=pipe_config,
             dataset_keywords=dataset_keywords)
 
     return cache
-    # TODO
-    # TODO
-    # TODO
-
 
 
 def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):

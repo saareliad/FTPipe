@@ -8,6 +8,12 @@ from functools import partial
 import sys
 import traceback
 
+# TODO: send parameters to multiply targets
+# TODO: making copy_() work can spare clones (internal pytorch bug)
+# TODO: rename "create_xxx_buffers"
+# TODO: send to the closest stage first (priority)
+# TODO: recv queue per tensor can potentially make life easier
+
 filter_none = partial(filter, lambda t: t is not None)
 
 
@@ -87,17 +93,6 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
 
         self.keep_buffers_alive = keep_buffers_alive
 
-        # if keep_buffers_alive:
-        #     self._fwd_send_buffers_train()
-        #     if not dtypes_and_shapes_are_equal:
-        #         self.save_send_buffers(name="train")
-        #         self.clear_send_buffers()
-        #         self._fwd_send_buffers_eval()
-        #         self.save_send_buffers(name="eval")
-        #         self.use_send_buffers("train")
-        # else:
-        #     self._fwd_send_buffers_train()
-
         self.dtypes_and_shapes_are_equal = dtypes_and_shapes_are_equal
         # Its just "Ack on start", nothing more.
         # can spase some according to partition.
@@ -127,7 +122,9 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                              tensor_names,
                              is_activations,
                              requires_grad=False):
-        """ the rcver creates the buffer for the sender """
+        """ The receiver sends an initial "ack" to the sender.
+            No buffer is actually created.
+        """
         if is_activations:
             sending = self.receive_ranks
         else:
@@ -144,14 +141,16 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
 
             if tensor_name.endswith(self.GRAD_UGLY_SHAMEFUL_NAME):
                 cname = tensor_name[:-(len(self.GRAD_UGLY_SHAMEFUL_NAME))]
-                sending_rank = sending[cname]
+                sending_ranks = sending[cname]
             else:
-                sending_rank = sending[tensor_name]
-
-            assert len(sending_rank) == 1
-            sending_rank = sending_rank[0]
-            reuse_q = self.buffer_reuse_queues[sending_rank][self.rank]
-            reuse_q.put(None)
+                sending_ranks = sending[tensor_name]
+            
+            if is_activations:
+                assert len(sending_ranks) == 1
+            
+            for sending_rank in sending_ranks:
+                reuse_q = self.buffer_reuse_queues[sending_rank][self.rank]
+                reuse_q.put(None)
 
     def _create_send_buffers(self,
                              tensor_send_ranks,
@@ -166,8 +165,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
 
             d = {}
             for rank in tensor_send_ranks[tensor_name]:
-                d[rank] = None  # FIXME
-                continue  # FIXME
+                d[rank] = None
 
             self.send_buffers[tensor_name] = d
 
@@ -194,73 +192,74 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
     def init_process_group(self, *args, **kw):
         pass
 
-    def fix_after_recv(self, x):
-        return x  # No-op.
-
     def _recv_tensors_p2p(self, x, batch_idx, ranks_dict_items,
                           is_activations):
         try:
+            # ix = iter(x)
             request_objects = []
             for (tensor_name, receive_ranks) in ranks_dict_items:
-                assert len(receive_ranks) == 1
-                receive_rank = receive_ranks[0]
-                q = self.rcv_queues[self.rank][receive_rank]
+                for receive_rank in receive_ranks:
+                    # tensor = next(ix)
+                    # assert len(receive_ranks) == 1
+                    # receive_rank = receive_ranks[0]
+                    q = self.rcv_queues[self.rank][receive_rank]
 
-                if is_activations:
-                    is_parameter = is_shared_parameter(tensor_name)
-                    if is_parameter:
-                        # we don't use a reuse queue.
-                        if tensor_name in self.rcv_shared_parameters:
-                            # from dict
-                            p = self.rcv_shared_parameters[tensor_name]
-                        else:
-                            # recv first time
-                            p = q.get()
-                            self.rcv_shared_parameters[tensor_name] = p
-                        request_objects.append(p)
-                        continue
-                if self.verbose:
-                    tensor_tag = self.tensor_tags[tensor_name] + \
-                        (self.TOTAL_TAGS * batch_idx)
-                    self.logger.info(
-                        f"rank={self.local_rank}: q.get(), src={receive_rank}, tag={tensor_tag}, name={tensor_name}"
-                    )
+                    if is_activations:
+                        is_parameter = is_shared_parameter(tensor_name)
+                        if is_parameter:
+                            # we don't use a reuse queue.
+                            if tensor_name in self.rcv_shared_parameters:
+                                # from dict
+                                p = self.rcv_shared_parameters[tensor_name]
+                            else:
+                                # recv first time
+                                p = q.get()
+                                self.rcv_shared_parameters[tensor_name] = p
+                            request_objects.append(p)
+                            continue
+                    if self.verbose:
+                        tensor_tag = self.tensor_tags[tensor_name] + \
+                            (self.TOTAL_TAGS * batch_idx)
+                        self.logger.info(
+                            f"rank={self.local_rank}: q.get(), src={receive_rank}, tag={tensor_tag}, name={tensor_name}"
+                        )
 
-                x = q.get()
+                    x = q.get()
 
-                if self.verbose:
-                    tensor_tag = self.tensor_tags[tensor_name] + \
-                        (self.TOTAL_TAGS * batch_idx)
-                    self.logger.info(
-                        f"rank={self.local_rank}: done q.get(), src={receive_rank}, tag={tensor_tag}, name={tensor_name}"
-                    )
+                    if self.verbose:
+                        tensor_tag = self.tensor_tags[tensor_name] + \
+                            (self.TOTAL_TAGS * batch_idx)
+                        self.logger.info(
+                            f"rank={self.local_rank}: done q.get(), src={receive_rank}, tag={tensor_tag}, name={tensor_name}"
+                        )
 
-                if isinstance(x, torch.Tensor):
-                    # give the next buffer
-                    # FIXME: un-optimized clones
-                    # NOTE: this happends on the main stream FIXME?
-                    event = torch.cuda.Event(blocking=True)
-                    with torch.no_grad():
-                        t = x.clone()
-                        event.record()
+                    if isinstance(x, torch.Tensor):
+                        # give the next buffer
+                        # FIXME: un-optimized clones
+                        # NOTE: this happends on the main stream FIXME?
+                        event = torch.cuda.Event(blocking=True)
+                        with torch.no_grad():
+                            t = x.clone()
+                            event.record()
 
-                    reuse_q = self.buffer_reuse_queues[receive_rank][self.rank]
-                    # sync clone event
-                    event.synchronize()
-                    reuse_q.put(None)  # TODO: better happen in callback
-                    request_objects.append(t)
-                else:
-                    reuse_q = self.buffer_reuse_queues[receive_rank][self.rank]
-                    reuse_q.put(None)
-                    request_objects.append(x)
-        
+                        reuse_q = self.buffer_reuse_queues[receive_rank][self.rank]
+                        # sync clone event
+                        event.synchronize()
+                        reuse_q.put(None)  # TODO: better happen in callback
+                        request_objects.append(t)
+                        if tensor_name == "T5ForConditionalGeneration/T5Stack[encoder]/tuple::__getitem___40":
+                            print("RECVED: T5ForConditionalGeneration/T5Stack[encoder]/tuple::__getitem___40", f"shape: {t.shape}", f"buff: {x.shape}")
+                    else:
+                        reuse_q = self.buffer_reuse_queues[receive_rank][self.rank]
+                        reuse_q.put(None)
+                        request_objects.append(x)
+            
         except Exception as e:
             print("ERROR in recv thread")
             print(sys.exc_info())
             traceback.print_exc()
             raise e
 
-            # TODO: we expect request object os it has to be changed.
         return request_objects
 
     def recv_activations(self, x, batch_idx, is_last_batch):
@@ -274,7 +273,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         try:
             # if is_grad:
             #     print("sending gradients")
-            assert (len(x) == len(ranks_dict_items)), str((len(x), len(ranks_dict_items))) + f"is_grad:{is_grad}" +  f"batch:{batch_idx}" + f"rank:{self.rank}" + str(ranks_dict_items)
+            assert (len(x) == len(ranks_dict_items)), str((len(x), len(ranks_dict_items))) + f"is_grad:{is_grad}" + f"batch:{batch_idx}" + f"rank:{self.rank}" + str(ranks_dict_items)
             torch.cuda.set_device(self.device)  # needed for thread.
             request_objects = []
 
@@ -337,7 +336,6 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             traceback.print_exec()
             raise e
 
-
         return request_objects
 
     def send_activations(self, x, batch_idx):
@@ -347,8 +345,6 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         return future
 
     def send_gradients(self, x, batch_idx):
-
-
         b4 = len(x)
         x_b4 = x
         x = list(filter_none(x))
@@ -482,7 +478,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         # TODO: args are design mistake.
         # None is probably design mistake too.
         g = self.recv_gradients(None, *args)
-        # g = self.fix_after_recv(g)
+        g = self.fix_after_recv(g, True)
         return g
 
     @staticmethod

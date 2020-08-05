@@ -1,7 +1,7 @@
 from .cfg_to_model import get_partitioning
 
 from itertools import count
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from copy import deepcopy
 
 
@@ -11,10 +11,9 @@ def get_my_send_recv_ranks(config, stage, stage_to_rank_map=None):
             return stage_to_rank_map[given_stage]
         else:
             return [given_stage]
-
     stages = config.stages
     receive_ranks = OrderedDict()
-    send_ranks = OrderedDict()
+    send_ranks = defaultdict(list)
 
     for i in range(len(stages)):
         for j in range(i + 1, len(stages)):
@@ -26,9 +25,10 @@ def get_my_send_recv_ranks(config, stage, stage_to_rank_map=None):
             for tensor_name in stage_i.outputs:
                 if tensor_name in stage_j.inputs:
                     if stage == j:
+                        assert tensor_name not in receive_ranks
                         receive_ranks[tensor_name] = ranks_in_stage(i)
                     else:
-                        send_ranks[tensor_name] = ranks_in_stage(j)
+                        send_ranks[tensor_name].extend(ranks_in_stage(j))
 
     # Enusure the sort order is like config.
     send_ranks = OrderedDict(
@@ -38,6 +38,39 @@ def get_my_send_recv_ranks(config, stage, stage_to_rank_map=None):
                                 if k in receive_ranks)
 
     return send_ranks, receive_ranks
+
+
+def get_stage_to_rank_map(pipe_config, stage_to_device_map=None, stateless_tied_same_process=False):
+    counter = count()
+    # Create stage_to_rank_map
+    # (1) normal
+    # (2) tied wieghts, using the same process (And multithreading)
+    if not stateless_tied_same_process:
+        stage_to_rank_map = {
+            i: [next(counter) for _ in stage.devices]
+            for i, stage in pipe_config.stages.items()
+        }
+    else:
+        assert stage_to_device_map is not None
+        assert len(stage_to_device_map) == len(pipe_config.stages)
+        stage_to_rank_map = {}
+        record_ranks = {}
+        for i, stage in pipe_config.stages.items():
+            tied_to = [
+                k for k, j in enumerate(stage_to_device_map)
+                if j == stage_to_device_map[i]
+            ]
+            if len(tied_to) > 1 and i == min(tied_to):
+                my_ranks = [next(counter) for _ in stage.devices]
+                for k in tied_to:
+                    record_ranks[i] = my_ranks
+            elif len(tied_to) > 1 and i != min(tied_to):
+                my_ranks = record_ranks[i]
+            else:
+                my_ranks = record_ranks[i]
+
+            stage_to_rank_map[i] = my_ranks
+    return stage_to_rank_map
 
 
 class PartitioningConfigParser:
@@ -56,56 +89,17 @@ class PartitioningConfigParser:
                                               bs_train,
                                               model_instance=model_instance)
         self.stage = pipe_config.rank_to_stage_idx(rank)
-
-        # Save a structure to unflatten stage inputs, as we send/recv flattened stuff.
-        self.unflatten_structure = deepcopy(pipe_config.stages[self.stage].req_grad)
-        self.unflatten_structure = tuple(v for i, v in self.unflatten_structure.items())
-
-        # Change pipe_config to pipe_config with no tuples
-
-        # d = pipe_config.generate_config_without_nested(pipe_config.state_dict())
-        # pipe_config = pipe_config.fromDict(d)
         self.pipe_config = pipe_config
-        
-        # from pprint import pprint
-        # pprint(pipe_config.state_dict())
 
         self.model = model
         self.num_stages = len(pipe_config.stages)
 
-        counter = count()
-        # Create stage_to_rank_map
-        # (1) normal
-        # (2) tied wieghts, using the same process (And multithreading)
-        if not stateless_tied_same_process:
-            stage_to_rank_map = {
-                i: [next(counter) for _ in stage.devices]
-                for i, stage in pipe_config.stages.items()
-            }
-        else:
-            assert stage_to_device_map is not None
-            assert len(stage_to_device_map) == len(pipe_config.stages)
-            stage_to_rank_map = {}
-            record_ranks = {}
-            for i, stage in pipe_config.stages.items():
-                tied_to = [
-                    k for k, j in enumerate(stage_to_device_map)
-                    if j == stage_to_device_map[i]
-                ]
-                if len(tied_to) > 1 and i == min(tied_to):
-                    my_ranks = [next(counter) for _ in stage.devices]
-                    for k in tied_to:
-                        record_ranks[i] = my_ranks
-                elif len(tied_to) > 1 and i != min(tied_to):
-                    my_ranks = record_ranks[i]
-                else:
-                    my_ranks = record_ranks[i]
-
-                stage_to_rank_map[i] = my_ranks
+        stage_to_rank_map = get_stage_to_rank_map(pipe_config, stage_to_device_map=stage_to_device_map, stateless_tied_same_process=stateless_tied_same_process)
 
         self.send_ranks, self.receive_ranks = get_my_send_recv_ranks(
             pipe_config, self.stage, stage_to_rank_map=stage_to_rank_map)
-
+        
+        # Handle sending target in pipe. (deprecated)
         if send_target_in_pipe:
             self.target_tensor_names = pipe_config.model_outputs  # else None
             if self.stage > 0:

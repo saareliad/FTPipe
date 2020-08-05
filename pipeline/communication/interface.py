@@ -30,6 +30,7 @@ class CommunicationHandlerBase(abc.ABC):
         pass
 
     def init_buffers_ctx(self, buffers_ctx):
+        # Called with:
         #     buffers_ctx = (
         #     training_tensor_shapes,
         #     eval_tensor_shapes,
@@ -81,7 +82,7 @@ class CommunicationHandlerBase(abc.ABC):
 
     @abc.abstractmethod
     def init_process_group(self, *args, **kw):
-        # TODO: arguments.
+        # TODO: arguments it is called with
         pass
 
     def train(self):

@@ -7,6 +7,8 @@ from .buffer import make_buff
 from collections import OrderedDict
 import numpy as np
 
+# TODO tags for tensors we send multiple times
+
 
 def tensor_tags_from_config(
         config,
@@ -77,8 +79,8 @@ class SimpleCommBase(CommunicationHandlerBase):
             receive_ranks,
             send_ranks,
             target_tensor_names,
-            ranks_in_previous_stage,  # TODO: Remove these
-            ranks_in_next_stage,  # TODO: Remove these
+            ranks_in_previous_stage,  # NOTE: deprecated
+            ranks_in_next_stage,  # NOTE: deprecated
             req_grad,
             outputs_req_grad,
             pipe_config,
@@ -87,7 +89,6 @@ class SimpleCommBase(CommunicationHandlerBase):
             device,
             GRAD_UGLY_SHAMEFUL_NAME="_grad",
             verbose=False):
-
 
         # NOTE: Order is important, must call for send,recv ranks before in/out req grads.
         # TODO: original_req_grad somewhere.
@@ -122,10 +123,10 @@ class SimpleCommBase(CommunicationHandlerBase):
             assert isinstance(v, bool)
             if isinstance(v, bool):
                 if not v:
-                    self.tensors_names_with_no_grad.add(i) 
+                    self.tensors_names_with_no_grad.add(i)
         # Do not receive gradients for tensors which do not req grad.
         for i, v in outputs_req_grad.items():
-            assert isinstance(v, bool), str((i,v))
+            assert isinstance(v, bool), str((i, v))
             if not v:
                 self.tensors_names_with_no_grad.add(i)
 
@@ -149,7 +150,16 @@ class SimpleCommBase(CommunicationHandlerBase):
         self.grad_rcv_items = [(i + GRAD_UGLY_SHAMEFUL_NAME, v)
                                for i, v in self.send_ranks.items()
                                if not (i in self.tensors_names_with_no_grad)]
+
         self.grad_send_items = [(i + GRAD_UGLY_SHAMEFUL_NAME, v)
+                                for i, v in self.receive_ranks.items()
+                                if not (i in self.tensors_names_with_no_grad)]
+        
+        self.grad_rcv_items_without_extention = [(i, v)
+                               for i, v in self.send_ranks.items()
+                               if not (i in self.tensors_names_with_no_grad)]
+
+        self.grad_send_items_without_extention = [(i, v)
                                 for i, v in self.receive_ranks.items()
                                 if not (i in self.tensors_names_with_no_grad)]
 
@@ -201,39 +211,44 @@ class SimpleCommBase(CommunicationHandlerBase):
     def set_tensor_dtypes(self, tensor_dtypes):
         self.tensor_dtypes = tensor_dtypes
 
-    def _create_recv_buffers(self, tensor_names, requires_grad=False):
+    def _create_recv_buffers(self, tensor_ranks, requires_grad=False, for_grads=False):
+        # FIXME: for gradient recv buffers:
+        # FIXME
+        # FIXME
+        # FIXME
+        # FIXME
+        # FIXME
+        # FIXME
         with torch.no_grad():
             buffers = []
-            for tensor_name in tensor_names:
+            for tensor_name, ranks in tensor_ranks:
                 dtype = self.tensor_dtypes[tensor_name]
                 shape = self.tensor_shapes[tensor_name]
                 # TODO: handle None dtype
                 if dtype is None:
                     raise NotImplementedError()
-                rcv_buffer = torch.zeros(shape,
-                                         dtype=dtype,
-                                         device=self.device,
-                                         requires_grad=requires_grad)
-                # # NOTE: if we use this we need to do fix after recv, and also send in chunks
-                # TODO: generally we would like pinned + shared memory for this...  (actually depends on send/recv )
-                # Alocate for double buffering
-                for chunk in rcv_buffer.chunk(self.num_chunks):
-                    # buffers.append(chunk.pin_memory().to(device))
-                    buffers.append(chunk.requires_grad_(requires_grad))
+                if len(ranks) > 1:
+                    print(f"-V- creating double buffers for {tensor_name} which is sent/receved to/from multiple ranks: {ranks}")
+                    assert for_grads
+                for _ in ranks:
+                    rcv_buffer = torch.zeros(shape,
+                                             dtype=dtype,
+                                             device=self.device,
+                                             requires_grad=requires_grad).share_memory_()
+
+                    # NOTE: double buffring used to be here.
+                    buffers.append(rcv_buffer)
         return buffers
 
     def create_activations_recv_buffers(self, requires_grad=False):
-        return self._create_recv_buffers(self.receive_ranks.keys(),
+        return self._create_recv_buffers(list(self.receive_ranks.items()),
                                          requires_grad=requires_grad)
 
     def create_gradients_rcv_buffers(self, requires_grad=False):
-        # FIXME chunks
-        tensor_names = [
-            i for i in self.send_ranks.keys()
-            if not (i in self.tensors_names_with_no_grad)
-        ]
-        return self._create_recv_buffers(tensor_names,
-                                         requires_grad=requires_grad)
+        tensor_ranks = self.grad_rcv_items_without_extention
+        return self._create_recv_buffers(tensor_ranks,
+                                         requires_grad=requires_grad,
+                                         for_grads=True)
 
     def init_buffers_ctx(self, buffers_ctx):
         (
@@ -313,7 +328,9 @@ class SimpleCommBase(CommunicationHandlerBase):
             fwd_recv_buffers.recv_all(batch_idx, num_batches)
             recved_all = True
 
+        # print(f"rank {self.rank} get_data_forward, waiting")
         x = fwd_recv_buffers.wait_first()
+        # print(f"rank {self.rank} get_data_forward, got {x}")
         x = self.fix_after_recv(x)
 
         # pre-Start the next fwd Irecv:
@@ -332,8 +349,8 @@ class SimpleCommBase(CommunicationHandlerBase):
     def pre_recv_gradients(self, batch_idx, num_batches):
         """ can be used to start the recv before recomputation.
         Call at the beggining of "backward"
-        
-        TODO: what do we recomand for non recomputing partitions?
+
+        TODO: what do we want for non recomputing partitions?
         just call it.
         """
         last_due_end = batch_idx + 1 == num_batches
@@ -352,7 +369,7 @@ class SimpleCommBase(CommunicationHandlerBase):
         # TODO: the *args are design mistake.
         # its due to multiprocessing comm handler
         g = self.bwd_recv_buffers.wait_first()
-        g = self.fix_after_recv(g)
+        g = self.fix_after_recv(g, True)
         return g
 
     def post_recv_gradients(self, batch_idx, num_batches):
@@ -361,6 +378,20 @@ class SimpleCommBase(CommunicationHandlerBase):
                 batch_idx - 1 + self.bwd_recv_buffers.max_buffers <
                 num_batches):
             self.bwd_recv_buffers.recv_next(batch_idx - 1)
+
+    def fix_after_recv(self, x, is_grad=False):
+        """ Fixes recved buffer after sync wait ends"""
+        if is_grad:
+            out = []
+            ix = iter(x)
+            for name, ranks in self.grad_rcv_items:
+                if len(ranks) > 1:
+                    tensors = [t.unsqueeze() for t in [next(ix) for _ in range(len(ranks))] if t is not None]
+                    out.append(torch.stack(tensors).sum())
+                else:
+                    out.append(next(ix))
+            return out
+        return x
 
     def train(self):
         self.training = True
@@ -562,15 +593,14 @@ class FuturesHandler(FuturesHandlerBase):
             return
 
         # Pop the item that was increased first.
-        _, (sent_request_objects,
-            tmp_sent_items) = obj_holder.popitem(last=False)
+        _, sent_request_objects = obj_holder.popitem(last=False)
         for i in sent_request_objects:
             i.wait()
 
     def clean_sent_requests(self, obj_holder):
         to_del = []
         for i in obj_holder:
-            a, b = obj_holder[i]
+            a = obj_holder[i]
             to_remove = [i for i, r in enumerate(a) if r.is_completed()]
             for x in sorted(to_remove, reverse=True):
                 del a[x]
