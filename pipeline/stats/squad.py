@@ -23,8 +23,13 @@ class SquadStats(Stats):
 
     def last_partition_on_epoch_end(self):
         super().last_partition_on_epoch_end()
+
         if not self.training:
-            self.evaluate_squad()  # FIXME: set by dataset
+            if hasattr(self,"evaluate_squad"):
+                self.evaluate_squad()  # FIXME: set by dataset
+            else:
+                print(f"-W- {type(self)} does not have `evaluate_squad()` method, which should e set by dataset script. Will calculate loss.")
+
         self.all_results.clear()  # Clear results for next time
 
     def get_epoch_info_str(self, is_train):
