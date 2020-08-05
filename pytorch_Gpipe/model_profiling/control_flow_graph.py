@@ -183,20 +183,16 @@ class Graph():
         return G
 
     def build_dot(self,
-                  show_buffs_params: bool = True,
-                  show_profiles: bool = True,
-                  edge_weight_function=None,
-                  node_weight_function=None):
+                node_weight_function:Optional[NodeWeightFunction]=None,
+                edge_weight_function:Optional[EdgeWeightFunction]=None):
         '''
         return a graphviz representation of the graph
         Parameters
         ----------
-        show_buffs_params:
-            whether to display also buffers and parameters which are not encased in the graph scopes
-        show_profiles:
-            whether to display the nodes weight
+        node_weight_function:
+            optional function to get node weights
         edge_weight_function:
-            function to get edge weights
+            optional function to get edge weights
         '''
         theme = {
             "background_color": "#FFFFFF",
@@ -239,8 +235,6 @@ class Graph():
                  fontcolor=theme["font_color"],
                  fontname=theme["font_name"])
 
-        # TODO split big graphs to multiple pdfs
-
         colors = {
             0: 'grey',
             1: 'green',
@@ -261,29 +255,26 @@ class Graph():
             16: 'tan'
         }
 
-        def predicate(n):
-            return (n.type != NodeTypes.BUFF_PARAM) or show_buffs_params
-
         # add nodes
         for node in self.nodes:
             node_id = node.id
-            if predicate(node):
-                scope = node.scope
-                value_type = node.value_type
-                node_label = f"{scope}\nidx: {node_id}\nvalue type: {value_type}"
-                if node in self.outputs:
-                    node_label += "\nmodel output"
-                if node.type is NodeTypes.IN:
-                    node_label += "\nmodel input"
-                if node.id in self.input_kw_ids:
-                    node_label += f"\nkwarg: {self.input_kw_ids[node.id]}"
-                if node.type is NodeTypes.CONSTANT:
-                    node_label += f"\nvalue: {node.constant_value}"
+            
+            scope = node.scope
+            value_type = node.value_type
+            node_label = f"{scope}\nidx: {node_id}\nvalue type: {value_type}"
+            if node in self.outputs:
+                node_label += "\nmodel output"
+            if node.type is NodeTypes.IN:
+                node_label += "\nmodel input"
+            if node.id in self.input_kw_ids:
+                node_label += f"\nkwarg: {self.input_kw_ids[node.id]}"
+            if node.type is NodeTypes.CONSTANT:
+                node_label += f"\nvalue: {node.constant_value}"
 
-                if issubclass(node.value_type, Tensor):
-                    node_label += f"\ntensor of type: {node.tensor_dtype}\nshape: {node.tensor_shape}"
+            if issubclass(node.value_type, Tensor):
+                node_label += f"\ntensor of type: {node.tensor_dtype}\nshape: {node.tensor_shape}"
 
-                if show_profiles and node.weight:
+                if node.weight:
                     node_label = f"{node_label}\nProfile:"
                     for k, v in node.weight._asdict().items():
                         node_label += f"\n{k}:{v}"
@@ -294,47 +285,41 @@ class Graph():
                 if node_weight_function:
                     node_label += f"\nweight: {node_weight_function(node)}"
 
-                dot.node(str(node_id), label=node_label,
-                         fillcolor=colors[node.stage_id])
+            dot.node(str(node_id), label=node_label,
+                        fillcolor=colors[node.stage_id])
 
-                # add edges
-                args, kwargs = node.args, node.kwargs
-                for idx, i in enumerate(args):
-                    if predicate(i):
-                        edge_label = f"arg: {idx}"
-                        if edge_weight_function:
-                            edge_label += f"\nweight: {edge_weight_function(i,node)}"
-                        dot.edge(str(i.id), str(node_id), label=edge_label)
+            # add edges
+            args, kwargs = node.args, node.kwargs
+            for idx, i in enumerate(args):
+                edge_label = f"arg: {idx}"
+                if edge_weight_function:
+                    edge_label += f"\nweight: {edge_weight_function(i,node)}"
+                dot.edge(str(i.id), str(node_id), label=edge_label)
 
-                for i, kw in kwargs.items():
-                    if predicate(i):
-                        edge_label = f"kwarg: {kw}"
-                        if edge_weight_function:
-                            edge_label += f"\nweight: {edge_weight_function(i,node)}"
-                        dot.edge(str(i.id), str(node_id), label=edge_label)
+            for i, kw in kwargs.items():
+                edge_label = f"kwarg: {kw}"
+                if edge_weight_function:
+                    edge_label += f"\nweight: {edge_weight_function(i,node)}"
+                dot.edge(str(i.id), str(node_id), label=edge_label)
 
         return dot
 
     def display(self,
-                show_buffs_params: bool = True,
-                show_profiles: bool = True,
-                edge_weight_function=None):
+                node_weight_function:Optional[NodeWeightFunction]=None,
+                edge_weight_function:Optional[EdgeWeightFunction]=None):
         '''
         display the graph in Jupyter
 
         Parameters
         ----------
-        show_buffs_params:
-            whether to display also buffers and parameters which are not encased in the graph scopes
-        show_profiles:
-            whether to display the nodes weight
         edge_weight_function:
-            edge weight function to use
+            optional edge weight function
+        node_weight_function:
+            optional node weight function
         '''
         try:
             from IPython.core.display import display_svg
-            display_svg(self.build_dot(show_buffs_params,
-                                       show_profiles=show_profiles,
+            display_svg(self.build_dot(node_weight_function=node_weight_function,
                                        edge_weight_function=edge_weight_function),
                         raw=False)
         except ImportError:
@@ -343,10 +328,8 @@ class Graph():
     def save_as_pdf(self,
                     file_name: str,
                     directory: str,
-                    show_buffs_params: bool = True,
-                    show_profiles: bool = True,
-                    edge_weight_function=None,
-                    node_weight_function=None):
+                    node_weight_function:Optional[NodeWeightFunction]=None,
+                    edge_weight_function:Optional[EdgeWeightFunction]=None):
         '''
         save the rendered graph to a pdf file
 
@@ -356,13 +339,8 @@ class Graph():
             the name of the saved file
         directory:
             directory to store the file in
-        show_buffs_params:
-            whether to display also buffers and parameters which are not encased in the graph scopes
-        show_profiles:
-            whether to display the nodes weight
         '''
-        dot = self.build_dot(show_buffs_params, show_profiles=show_profiles,
-                             edge_weight_function=edge_weight_function, node_weight_function=node_weight_function)
+        dot = self.build_dot(edge_weight_function=edge_weight_function, node_weight_function=node_weight_function)
         dot.format = "pdf"
         import os
         if os.path.exists(f"{directory}/{file_name}.pdf"):
@@ -389,7 +367,6 @@ class Graph():
         '''
         returns a dicitionary containing the graphs state
         '''
-
         node_states = dict()
         for node in self.nodes:
             state = dict(id=node.id,
@@ -465,6 +442,7 @@ class Graph():
 
         return cls(None, None, None, None, None).load_state(graph_data)
 
+
     def layers_graph(self) -> Tuple["Graph", Dict[int, int]]:
         '''
         creates a graph g with nodes of type CONSTANT 
@@ -525,9 +503,11 @@ class Graph():
 
         return self
 
+
     def __getitem__(self,idx):
         return self._nodes[idx]
     
+
     def selfcheck(self):
         visited = set()
         try:
@@ -548,6 +528,7 @@ class Graph():
             self.save_as_pdf("selfcheck_error",".")
             raise e
         return self
+
 
     def split_to_stages(self)->Dict[int,"Graph"]:
         """return a sub graph for each stage in the graph

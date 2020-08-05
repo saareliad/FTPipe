@@ -24,7 +24,7 @@ def post_process_partition(graph: Graph,edge_weight_function, verbose_on_error=T
     if has_cycles(graph):
         if os.environ.get("DEBUG", False):
             graph.save_as_pdf(f"{graph.model_name}_before_fix",
-                              ".", show_profiles=True)
+                              ".")
 
         break_partition_cycles(graph)
 
@@ -39,7 +39,7 @@ def post_process_partition(graph: Graph,edge_weight_function, verbose_on_error=T
     if has_cycles(graph):
         if os.environ.get("DEBUG", False):
             graph.save_as_pdf(f"{graph.model_name}_after_fix",
-                              ".", show_profiles=True)
+                              ".")
 
         if verbose_on_error:
             problems, info = get_problematic_partitions(graph)
