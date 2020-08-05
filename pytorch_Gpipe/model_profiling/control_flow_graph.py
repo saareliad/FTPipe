@@ -608,3 +608,21 @@ class Graph():
             stages[stage_id] = Graph(stage_nodes, stage_input_kws, stage_output_ids, self.depth,self.basic_blocks)
 
         return stages
+    
+
+    def _remove_parallel_edges(self)->"Graph":
+        """the control flow graph can contain parallel in/out edges
+        those edges are important for control flow but are detrimental for partitioning
+        this function creates a new Graph without parallel edges"""
+
+        copy = Graph(None, None, None, None,
+                          None).load_state(self.state())
+        
+
+        for n in copy.nodes:
+            n.out_edges = set(n.out_edges)
+            in_edges = n.in_edges
+            n.args = set(in_edges)
+            n.kwargs.clear()
+        
+        return copy

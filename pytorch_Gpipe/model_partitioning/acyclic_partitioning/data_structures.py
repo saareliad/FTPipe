@@ -6,41 +6,6 @@ import heapq
 import pickle
 
 
-class DoublePriority():
-    def __init__(self, a, b):
-        self.a = a
-        self.b = b
-
-    def __neg__(self):
-        return DoublePriority(-self.a, -self.b)
-
-    def __lt__(self, other):
-        if isinstance(other, (int, float)):
-            return self.a < other
-        return (self.a < other.a) or ((self.a == other.a) and
-                                      (self.b < other.b))
-
-    def __gt__(self, other):
-        if isinstance(other, (int, float)):
-            return self.a > other
-        return (self.a > other.a) or ((self.a == other.a) and
-                                      (self.b > other.b))
-
-    def __isub__(self, other):
-        self.a -= other.a
-        self.b -= other.b
-        return self
-
-    def __le__(self, other):
-        return not (self > other)
-
-    def __str__(self):
-        return f"(a:{self.a},b:{self.b})"
-
-    def __repr__(self):
-        return str(self)
-
-
 class PriorityQueue():
     #heapq is a min heap and we need a max heap
     #so we push the negative gain
