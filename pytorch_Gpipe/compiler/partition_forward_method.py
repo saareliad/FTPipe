@@ -272,6 +272,8 @@ def generate_constant(node):
     elif isinstance(v,str) and ("__getattribute__" not in list(node.out_edges)[0].scope):
         #this is a string argument and not a attribute access
         return f"'{v}'"
+    elif isinstance(v,float) and v in [float("inf"),float("-inf")]:
+        return f"float('{v}')"
     else:
         return str(v)
 
