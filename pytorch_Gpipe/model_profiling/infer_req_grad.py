@@ -1,7 +1,7 @@
 from typing import Callable,Dict,Any
 import torch
 from .graph_executor import execute_graph
-from .control_flow_graph import Node,NodeTypes,Graph
+from .control_flow_graph import Node,Graph
 from ..utils import nested_map,detach_tensors
 
 
@@ -23,8 +23,8 @@ class Visitor():
             # the or statement should not be necessary
             n.req_grad =  n.req_grad or Visitor.req_grad(a)
 
-        for n,k in node.kwargs.items():
-            v = kwargs[k]
+        for n,kws in node.kwargs.items():
+            v = kwargs[kws[0]]
             # the or statement should not be necessary
             n.req_grad = n.req_grad or Visitor.req_grad(v)
         

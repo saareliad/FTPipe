@@ -19,7 +19,6 @@ class NodeTypes(IntEnum):
     def __repr__(self):
         return self.name
 
-
 class Node():
     def __init__(self, node_type, idx, scope):
         self.type = node_type
@@ -28,10 +27,9 @@ class Node():
 
         self.stage_id = 0
         self.weight = None
-
-        self.out_edges:Set[Node] = set()
+        self.out_edges:List[Node] = []
         self.args = []
-        self.kwargs = dict()
+        self.kwargs = defaultdict(list)
         self.value_type = None
 
         self.tensor_dtype = None
@@ -42,13 +40,13 @@ class Node():
 
 
     def add_kwarg(self, kwarg, kwarg_node):
-        self.kwargs[kwarg_node] = kwarg
+        self.kwargs[kwarg_node].append(kwarg)
 
     def add_arg(self, arg_node):
         self.args.append(arg_node)
 
     def add_out_edge(self, dest_node):
-        self.out_edges.add(dest_node)
+        self.out_edges.append(dest_node)
 
     def remove_output(self, out_node):
         self.out_edges.remove(out_node)
@@ -71,7 +69,7 @@ class Node():
         node.stage_id = other.stage_id
         node.weight = other.weight
 
-        node.out_edges = set(other.out_edges)
+        node.out_edges = list(other.out_edges)
         node.args = list(other.args)
         node.kwargs = dict(other.kwargs)
         node.value_type = other.value_type
@@ -141,6 +139,7 @@ class Graph():
         each node will have a scope,partition idx and weight associated with it.\n
         each weight will be weighted\n
         graph can be directed or undirected for a directed graph weighting functions can be given
+        parallel edges will be discarded\n
         if not then weight will be set to 1.\n
 
         Parameters:
@@ -166,7 +165,13 @@ class Graph():
             G = nx.Graph()
 
         for u in self.nodes:
+            dsts = set()
             for v in u.out_edges:
+                # disallow parallel in edges
+                # disallow parllel out edges
+                if v.id in dsts:
+                    continue
+                dsts.add(v.id)
                 if edge_weight_function is None:
                     w = 1
                 else:
@@ -296,11 +301,12 @@ class Graph():
                     edge_label += f"\nweight: {edge_weight_function(i,node)}"
                 dot.edge(str(i.id), str(node_id), label=edge_label)
 
-            for i, kw in kwargs.items():
-                edge_label = f"kwarg: {kw}"
-                if edge_weight_function:
-                    edge_label += f"\nweight: {edge_weight_function(i,node)}"
-                dot.edge(str(i.id), str(node_id), label=edge_label)
+            for i, kws in kwargs.items():
+                for kw in kws:
+                    edge_label = f"kwarg: {kw}"
+                    if edge_weight_function:
+                        edge_label += f"\nweight: {edge_weight_function(i,node)}"
+                    dot.edge(str(i.id), str(node_id), label=edge_label)
 
         return dot
 
