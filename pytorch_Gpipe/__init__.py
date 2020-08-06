@@ -316,7 +316,7 @@ def build_graph(model: nn.Module,
 
         torch.cuda.reset_max_memory_allocated()
         profiler = GraphProfiler(recomputation=recomputation, n_iter=n_iter, profile_ops=profile_ops,
-                                 force_no_recomp_scopes=force_no_recomp_scopes)
+                                 force_no_recomp_scopes=force_no_recomp_scopes,save_memory_mode=save_memory_mode)
         execute_graph(model, graph, model_args=args, model_kwargs=kwargs,
                       pre_hook=profiler.time_forward, post_hook=profiler.time_backward,enforce_out_of_place=True)
         print(f"profiling mem {torch.cuda.max_memory_allocated()/1e9} GB")
