@@ -1,6 +1,7 @@
 from collections import defaultdict
 import torch
 from torch import Tensor
+import re
 from .tracer import NodeTypes
 from ..utils import detach_tensors, flatten, move_tensors, set_grad_mode, inplace_arithmetic_ops, ExecTimes,force_out_of_place
 
@@ -18,6 +19,8 @@ class GraphProfiler():
             self.force_no_recomp_scopes = lambda s: False
         else:
             self.force_no_recomp_scopes = force_no_recomp_scopes
+
+        self.torch_function_matcher = re.compile(r"torch|Tensor")
 
         self.profile_ops = profile_ops
         self.save_memory_mode = save_memory_mode
@@ -42,10 +45,8 @@ class GraphProfiler():
                         start.record()
                         function(*args, **kwargs)
                         end.record()
-
                         torch.cuda.synchronize(device='cuda')
                         self.forward_times[node].append(start.elapsed_time(end))
-
                 # NOTE we do not move the the inputs to the cpu
                 # because the graph executor stores them on the cpu anyway
                 # using save_memory_mode = True should be used with the model and initial inputs on the cpu
@@ -87,7 +88,6 @@ class GraphProfiler():
 
             tensors = self.only_tensors_that_require_grad(output)
             grads = GraphProfiler.get_grads(tensors)
-
             torch.cuda.synchronize(device='cuda')
             start.record()
             torch.autograd.backward(tensors=tensors,
@@ -199,7 +199,11 @@ class GraphProfiler():
             # we cannot profile inplace ops
             op_path = node.scope.rsplit("/", maxsplit=1)[1].rsplit("_",maxsplit=1)[0]
             namespace, func_name = op_path.split("::")
-            if func_name in inplace_arithmetic_ops:
+
+            inplace_torch_operation = (func_name[-1] == '_')
+            inplace_torch_operation &= (self.torch_function_matcher.match(namespace) is not None)
+
+            if func_name in inplace_arithmetic_ops or inplace_torch_operation:
                 return False
 
         if output is None:

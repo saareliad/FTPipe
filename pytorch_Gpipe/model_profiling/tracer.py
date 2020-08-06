@@ -197,6 +197,9 @@ def tracing_not_supported(func):
     """a decortaor to have pretty error messages when accessing an unsupported
     __magic__ method
     """
+    
+    #TODO add general warning
+    # show file name, actual line, operator
     @wraps(func)
     def wrapper(*args, **kwargs):
         namespace = type(args[0]._data).__name__
@@ -324,7 +327,10 @@ class TracedValue(object):
 
     #NOTE this must return an integer
     def __len__(self):
-        print(f"{self.scope}::__len__ is treated as constant")
+        #TODO add general warning
+        # show file name, actual line, operator
+        # print(f"{self.scope}::__len__ is treated as constant")
+        # print_call_site(__file__)
         return len(self._data)
 
     @tracing_not_supported
