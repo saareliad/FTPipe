@@ -457,16 +457,14 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         #         self.changed_shapes_last_batch_fwd = False
         #         self._fwd_send_buffers_eval()
 
-    def get_data_forward(self, batch_idx, num_batches):
-        last_due_end = batch_idx + 1 == num_batches
+    def get_data_forward(self, batch_idx, num_batches, last_due_end):
 
         self._ensure_fwd_send_buffers_size_set(last_due_end)
         x = self.recv_activations(None, batch_idx, last_due_end)
         # x = self.fix_after_recv(x)
         return x
 
-    def pre_recv_gradients(self, batch_idx, num_batches):
-        last_due_end = batch_idx + 1 == num_batches
+    def pre_recv_gradients(self, batch_idx, num_batches, last_due_end):
         self._ensure_bwd_send_buffers_size_set(last_due_end)
     
     def post_recv_gradients(self, *args):

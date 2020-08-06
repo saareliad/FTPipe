@@ -91,7 +91,8 @@ class CommunicationHandlerBase(abc.ABC):
     def eval(self):
         pass
 
-    def pre_recv_gradients(self, batch_idx, num_batches):
+    def pre_recv_gradients(self, batch_idx, num_batches, last_due_end):
+        # NOTE: last_due_end is used to indicate we max except a smaller batch
         pass
 
     def wait_recv_gradients(self, *args):
@@ -100,7 +101,7 @@ class CommunicationHandlerBase(abc.ABC):
     def post_recv_gradients(self, batch_idx, num_batches):
         pass
 
-    def get_data_forward(self, batch_idx, num_batches):
+    def get_data_forward(self, batch_idx, num_batches, last_due_end):
         pass
 
     @staticmethod

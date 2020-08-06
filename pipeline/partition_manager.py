@@ -212,14 +212,22 @@ class SinglePartitionManager:
 
     def set_dataloader(self,
                        dataloader,
-                       run_limit=-1,
-                       fake_draw=DEBUG_FAKE_DRAW):
-        self.dl_iter = iter(dataloader)
+                       debug_run_limit=-1,
+                       fake_draw=DEBUG_FAKE_DRAW,
+                       dl_iter=None):
+        if dl_iter is not None:
+            self.dl_iter = dl_iter
+        else:
+            self.dl_iter = iter(dataloader)
+        
+            # FOR DEBUG
+            if fake_draw and debug_run_limit > 0 and (debug_run_limit < len(dataloader)):
+                fake_draw = len(dataloader) - debug_run_limit
+                for _ in range(fake_draw):
+                    next(self.dl_iter)
 
-        if fake_draw and (run_limit < len(dataloader)):
-            fake_draw = len(dataloader) - run_limit
-            for _ in range(fake_draw):
-                next(self.dl_iter)
+    def get_current_dataloader_iter(self):
+        return getattr(self, "dl_iter", None)
 
     def set_weight_predictor(self, weight_predictor: WeightPredictor,
                              nag_with_predictor: bool):
@@ -274,7 +282,7 @@ class SinglePartitionManager:
             x = preload_input_partition
         else:
             # Get input data from previous pipeline stage
-            x = self.comm_handler.get_data_forward(batch_idx, num_batches)
+            x = self.comm_handler.get_data_forward(batch_idx, num_batches, last_due_end)
             # Unify with preloaded data
             x = (*preload_input_partition, *x)
         # In case we send labels in pipeline: extract them from the output.
@@ -449,7 +457,7 @@ class SinglePartitionManager:
     def run_batch_backward(self, batch_idx, num_batches):
         """ Runs the backwards pass + step for all except the last partition """
         last_due_end = batch_idx + 1 == num_batches
-        self.comm_handler.pre_recv_gradients(batch_idx, num_batches)
+        self.comm_handler.pre_recv_gradients(batch_idx, num_batches, last_due_end)
 
         weight_stasher = self.weight_stasher
         #  Recompute before waiting to the first, so parallelize communication and computation
@@ -573,7 +581,12 @@ class SinglePartitionManager:
         run_batch_forward = self.run_batch_forward
         futures_handler = self.futures_handler
 
-        for done_fwds in range(num_batches):
+        if self.is_last_partition:
+            b_tqdm = tqdm(range(num_batches), desc="Eval")
+        else:
+            b_tqdm = range(num_batches)
+ 
+        for done_fwds in b_tqdm:
             ro = run_batch_forward(done_fwds, num_batches)
             futures_handler.after_forward(ro, done_fwds, False)
         futures_handler.clean_eval()
@@ -602,8 +615,9 @@ class SinglePartitionManager:
 
         # sets warmpup state for PipeDream. Else no-op.
         self.work_scheduler.reset()
-        if self.is_last_partition:
-            b_tqdm = tqdm(range(num_batches))
+
+        if is_last_partition:
+            b_tqdm = tqdm(range(num_batches), desc="Train")
             b_tqdm_it = iter(b_tqdm)
 
         while done_bwds < num_batches:
@@ -635,6 +649,7 @@ class SinglePartitionManager:
                     done_bwds += 1
 
         # Do a scheduler step at the end of epoch if not already doing so each step.
+        # TODO: do it only when epoch is done
         if not self.trainer.PER_STEP_SCHEDULER:
             self.lr_scheduler.step()
         futures_handler.clean_train()
@@ -837,7 +852,7 @@ class GPipePartitionManager(SinglePartitionManager):
         is_final_shorter_batch = (batch_idx + self.step_every > num_batches)
         # change_lr = do_step and is_final_shorter_batch
 
-        self.comm_handler.pre_recv_gradients(batch_idx, num_batches)
+        self.comm_handler.pre_recv_gradients(batch_idx, num_batches, last_due_end)
 
         # TODO: consider switching order.
         if not is_last_micro_batch:
@@ -904,6 +919,10 @@ class GPipePartitionManager(SinglePartitionManager):
 
         mark_bwd_start = 0  # To handle LIFO
 
+        if is_last_partition:
+            b_tqdm = tqdm(range(num_batches), desc="Train")
+            b_tqdm_it = iter(b_tqdm)
+        
         while done_bwds < num_batches:
             # Act according to some policy
             action_is_fwd = work_scheduler(stage, num_stages, num_batches,
@@ -929,6 +948,10 @@ class GPipePartitionManager(SinglePartitionManager):
                 futures_handler.after_backward(ro, done_fwds)
 
                 done_bwds += 1
+
+                if is_last_partition:
+                    # NOTE: its more accurate to measure by first partition, actually.
+                    next(b_tqdm_it)
 
         # Do a scheduler step at the end of epoch if not already doing so each step.
         if not self.trainer.PER_STEP_SCHEDULER:

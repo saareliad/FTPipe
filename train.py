@@ -59,16 +59,17 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
         partition.train()
         if statistics:
             statistics.train()
-        # if args.flush_rate > 0:
-        #     for _ in range(0, train_batches_to_run, args.flush_rate):
-        #         partition.run_until_flush(
-        #             min(args.flush_rate, len(train_dl)))
 
-        #     reminder = len(train_dl) % args.flush_rate
-        #     if reminder > 0:
-        #         partition.run_until_flush(reminder)
-        # else:
-        partition.run_until_flush(train_batches_to_run)
+        if args.flush_rate > 0:
+            for _ in range(0, train_batches_to_run, args.flush_rate):
+                partition.run_until_flush(args.flush_rate)
+            reminder = train_batches_to_run % args.flush_rate
+            if reminder > 0:
+                logger.info(f"Warning: will run for reminder {reminder} to finish epoch")
+                partition.run_until_flush(reminder)
+        else:
+            partition.run_until_flush(train_batches_to_run)
+
         train_epochs_times_list.append(time.time() - train_epoch_start_time)
 
         if is_last_partition:

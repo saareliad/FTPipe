@@ -318,8 +318,7 @@ class SimpleCommBase(CommunicationHandlerBase):
             self.fwd_recv_buffers = fwd_recv_buffers_train
             self.bwd_recv_buffers = bwd_recv_buffers
 
-    def get_data_forward(self, batch_idx, num_batches):
-        last_due_end = batch_idx + 1 == num_batches
+    def get_data_forward(self, batch_idx, num_batches, last_due_end):
         self._ensure_fwd_recv_buffers_size_set(last_due_end)
         fwd_recv_buffers = self.fwd_recv_buffers
 
@@ -346,14 +345,13 @@ class SimpleCommBase(CommunicationHandlerBase):
 
         return x
 
-    def pre_recv_gradients(self, batch_idx, num_batches):
+    def pre_recv_gradients(self, batch_idx, num_batches, last_due_end):
         """ can be used to start the recv before recomputation.
         Call at the beggining of "backward"
 
         TODO: what do we want for non recomputing partitions?
         just call it.
         """
-        last_due_end = batch_idx + 1 == num_batches
         # Special case: Last batch with differnt size
         self._ensure_bwd_recv_buffers_size_set(last_due_end)
 
