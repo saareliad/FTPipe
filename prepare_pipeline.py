@@ -1,54 +1,32 @@
 import torch
+
+from experiments.experiments import ArgsStasher, auto_file_name
 from misc.filelogger import FileLogger
-from pipeline import dp_sim
 from datasets import get_separate_dls_from_args
 
-import optimizers.lr_scheduler
-from pipeline.work_schedulers import AVAILABLE_WORK_SCHEDULERS
-from pipeline.weight_stashing import WeightStasher
-from pipeline import TrueWeightsStorage
-
 import models
+from models import parse_config
+
+from pipeline.partition_manager import (SinglePartitionManager, GPipePartitionManager)
 from pipeline import CommunicationHandlerBase, get_auto_comm_handler_cls
 from pipeline.communication.multiprocessing import MultiprocessingCommunicationHandler
-
-from pipeline.partition_manager import SinglePartitionManager
-
-from pipeline.partition_manager import GPipePartitionManager
-
-from pipeline.training import AVAILABLE_TRAINERS
-from pipeline.tasks import AVAILABLE_TASKS
 from pipeline.stats import get_statistics  # , Stats
 from pipeline.weight_prediction import get_sched_predictor
-
 from pipeline.weight_prediction import get_weight_predictor as get_weight_predictor_partial
-
 from pipeline.gap_aware import (get_sgd_gap_aware_cls, get_adam_gap_aware_cls,
                                 get_adamw_gap_aware_cls)
+from pipeline.weight_stashing import WeightStasher
+from pipeline import TrueWeightsStorage
+from pipeline import dp_sim
+
+import optimizers.lr_scheduler
+
+# TODO: migrate to `register_xxx()` convention
+from pipeline.work_schedulers import AVAILABLE_WORK_SCHEDULERS
+from pipeline.training import AVAILABLE_TRAINERS
+from pipeline.tasks import AVAILABLE_TASKS
 from optimizers import AVAILBALE_OPTIMIZERS
-
-from models import parse_config
-from datasets.lm import lm_collate_factory
-
-
-def auto_file_name(args):
-    """This is used to distinguish different configurations by file name """
-    assert hasattr(args, "auto_file_name")
-    wp = args.weight_prediction['type'] if hasattr(
-        args, "weight_prediction") else 'stale'
-    ws = "ws_" if getattr(args, "weight_stashing", False) else ""
-    ga = "ga_" if hasattr(args, "gap_aware") else ""
-    bs = f"bs_{args.bs_train * args.step_every}"
-    se = f"se_{args.step_every}"
-    ga_just_for_loss = "gaJFL_" if getattr(args, 'gap_aware_just_loss',
-                                           False) else ""
-
-    if 'gpipe' == args.work_scheduler.lower():
-        s = f'{args.model}_{args.dataset}_gpipe_{bs}_{se}_seed_{args.seed}'
-    else:
-        s = f'{args.model}_{args.dataset}_{wp}_{ws}{ga}{bs}_{se}_{ga_just_for_loss}seed_{args.seed}'
-    args.out_filename = f"{args.out_filename}_{s}"
-    print(f"Out File Name will be: {args.out_filename}")
+# from datasets import AVAILABLE_DATASETS
 
 
 def get_task_cls(args):
@@ -69,10 +47,8 @@ def is_explicit_non_seperated_dataset(args):
     return "_nonsep" in args.task
 
 
-
 def create_comm_handler(args, comm_init_args,
                         device) -> CommunicationHandlerBase:
-
     # get the parameters to create the comm handler
     handler_cls = get_auto_comm_handler_cls(args.distributed_backend, args.cpu)
     comm_handler = handler_cls(args.rank,
@@ -112,65 +88,69 @@ def create_comm_handler_v2(args, comm_init_args, device,
 
 
 def get_lr_scheduler(args, optimizer):
+    # NOTE: in some optimizers version we can benefit from lr=0 (build momentum in place)
     if hasattr(args, "lr_scheduler"):
-        # should_step = False
-        # TODO: auto-calculate numbers like num_training_steps
         attr = getattr(args, 'lr_scheduler')
-
-        preproc_args = attr.get("preproc_args", None)
-        if preproc_args:
-            for arg_name, preproc_command in preproc_args.items():
-                if preproc_command == "epochs_to_steps":
-                    if args.steps > 0:
-                        raise NotImplementedError(
-                            "Expected to be limited by number of epochs")
-
-                    # Get the given number of epochs
-                    given_epochs = attr['args'][arg_name]
-                    if given_epochs < 0:
-                        # Taking from epoch args
-                        if args.epochs < 0:
-                            raise ValueError(
-                                "Expected a concrete number of epochs")
-                        given_epochs = args.epochs
-
-                    # Translate epochs to steps
-                    num_steps = args.steps_per_epoch * given_epochs
-                    attr['args'][arg_name] = num_steps
-                    print(
-                        f"preprocessed {arg_name} from {given_epochs} epochs to {num_steps} steps."
-                    )
-                elif preproc_command == "ratio_from_num_training_steps":
-                    num_steps = attr['args']['num_training_steps']
-                    given_ratio = attr['args'][arg_name]
-                    assert given_ratio >= 0 and given_ratio <= 1
-                    warmup_steps = int(given_ratio * num_steps)
-                    attr['args'][arg_name] = warmup_steps
-                    print(
-                        f"preprocessed {arg_name} from ratio {given_ratio} to {warmup_steps} steps."
-                    )
-                else:
-                    raise NotImplementedError(
-                        f"Unsupported preprocess argument {preproc_command}")
-
-        if attr['type'] in optimizers.lr_scheduler.AVAILABLE_LR_SCHEDULERS:
-            scheduler_cls = getattr(optimizers.lr_scheduler, attr['type'])
-            # should_step = True
-        else:
-            scheduler_cls = getattr(torch.optim.lr_scheduler, attr['type'])
-
+        preproc_lr_scheduler_args(args)
+        scheduler_cls = get_lr_scheduler_class(args)
         scheduler = scheduler_cls(optimizer, **attr['args'])
+        return scheduler
 
-        # TODO: also get scheduler for sched aware prediction.
-        sched_aware_stuff = (scheduler_cls, attr['args'])
 
-        # TODO: in some optimizers version we can bendfit from lr=0 (build momentum in place)
-        # while on others we don't, and better step.
-        # For now I just leave it as is.
-        # OPTIONAL: Perform a dummy step to avoid lr=0 at the start of the training.
-        # if should_step:
-        #     scheduler.step()
-        return scheduler, sched_aware_stuff
+def preproc_lr_scheduler_args(args):
+    attr = getattr(args, 'lr_scheduler')
+    preproc_args = attr.get("preproc_args", None)
+    if preproc_args:
+        # auto-calculate numbers like num_training_steps, num_warmup_steps
+        for arg_name, preproc_command in preproc_args.items():
+            if preproc_command == "epochs_to_steps":
+                if args.steps > 0:
+                    raise NotImplementedError(
+                        "Expected to be limited by number of epochs")
+
+                # Get the given number of epochs
+                given_epochs = attr['args'][arg_name]
+                if given_epochs < 0:
+                    # Taking from epoch args
+                    if args.epochs < 0:
+                        raise ValueError(
+                            "Expected a concrete number of epochs")
+                    given_epochs = args.epochs
+
+                # Translate epochs to steps
+                num_steps = args.steps_per_epoch * given_epochs
+                attr['args'][arg_name] = num_steps
+                print(
+                    f"preprocessed {arg_name} from {given_epochs} epochs to {num_steps} steps."
+                )
+            elif preproc_command == "ratio_from_num_training_steps":
+                num_steps = attr['args']['num_training_steps']
+                given_ratio = attr['args'][arg_name]
+                assert given_ratio >= 0 and given_ratio <= 1
+                warmup_steps = int(given_ratio * num_steps)
+                attr['args'][arg_name] = warmup_steps
+                print(
+                    f"preprocessed {arg_name} from ratio {given_ratio} to {warmup_steps} steps."
+                )
+            else:
+                raise NotImplementedError(
+                    f"Unsupported preprocess argument {preproc_command}")
+
+
+def get_lr_scheduler_class(args):
+    attr = getattr(args, 'lr_scheduler')
+    if attr['type'] in optimizers.lr_scheduler.AVAILABLE_LR_SCHEDULERS:
+        scheduler_cls = getattr(optimizers.lr_scheduler, attr['type'])
+    else:
+        scheduler_cls = getattr(torch.optim.lr_scheduler, attr['type'])
+    return scheduler_cls
+
+
+def get_sched_aware_stuff(args):
+    attr = getattr(args, 'lr_scheduler')
+    scheduler_cls = get_lr_scheduler_class(args)
+    sched_aware_stuff = (scheduler_cls, attr['args'])
+    return sched_aware_stuff
 
 
 def get_gap_aware(args, optimizer):
@@ -211,23 +191,24 @@ def try_replace_prediction_with_nesterov(args):
                 args.nesterov_set_for_last_partition = True
                 print("-I- Setting nesterov=True for last partition")
                 res = getattr(args, 'weight_prediction')
+                # For naming purposes
+                ArgsStasher.stash_to_args(args, replaced_key='weight_prediction', old_value=res)
                 delattr(args, 'weight_prediction')
-                # Return, so we can use it for stuff like file nameing, etc.
-                return res
+
+
 
 
 def get_weight_predictor(args,
                          optimizer,
                          scheduler=None,
-                         true_weights_storage=None,
-                         sched_aware_stuff=None):
+                         true_weights_storage=None):
     """
         Returns:
             weight_predictor,
             nag_with_predictor: bool
     """
     assert (true_weights_storage is not None
-            )  # TODO: this should be normal argument when its stable
+            )  # TODO: should be normal argument when its stable
     if not hasattr(args, 'weight_prediction'):
         return None, None
 
@@ -241,18 +222,7 @@ def get_weight_predictor(args,
     assert (pred_type in {"msnag", "aggmsnag"})
     assert ('sgd' in optimizer_type or 'adam' in optimizer_type)
 
-    sched_predictor = None
-    # If we have sched aware:
-    if pred['args'].get("sched_aware", False):
-        print("-I- using sched aware weight prediction")
-        assert scheduler is not None
-        assert sched_aware_stuff is not None
-        scheduler_class = sched_aware_stuff[0]
-        scheduler_kw = sched_aware_stuff[1]
-        sched_predictor = get_sched_predictor(optimizer, scheduler_class,
-                                              **scheduler_kw)
-        sched_predictor.patch_scheduler(scheduler)
-        assert 'adam' in optimizer_type  # Remove after we implement for sgd.
+    sched_predictor = get_sched_aware_predictor(args, optimizer, scheduler)
 
     weight_predictor = get_weight_predictor_partial(
         optimizer_type,
@@ -268,9 +238,26 @@ def get_weight_predictor(args,
     return weight_predictor, nag_with_predictor
 
 
+def get_sched_aware_predictor(args, optimizer, scheduler):
+    optimizer_type = getattr(args, 'optimizer')['type']
+    pred = getattr(args, 'weight_prediction')
+    sched_predictor = None
+    if pred['args'].get("sched_aware", False):
+        print("-I- using sched aware weight prediction")
+        assert scheduler is not None
+        sched_aware_stuff = get_sched_aware_stuff(args)
+        assert sched_aware_stuff is not None
+        scheduler_class = sched_aware_stuff[0]
+        scheduler_kw = sched_aware_stuff[1]
+        sched_predictor = get_sched_predictor(optimizer, scheduler_class,
+                                              **scheduler_kw)
+        sched_predictor.patch_scheduler(scheduler)
+        assert 'adam' in optimizer_type  # Remove after we implement for sgd.
+    return sched_predictor
+
+
 def get_dataloaders(args,
                     pipe_config=None,
-                    explicit_separated_dataset=False,
                     dataset_keywords=dict()):
     # TODO: replicated
     if not is_explicit_non_seperated_dataset(args):
@@ -307,7 +294,6 @@ def hack_trainer_type_to_gap_aware(args):
         args.trainer['type'] += "_gap_aware"
 
     if hasattr(args, 'gap_aware'):
-        # on = args.gap_aware['on']
         if args.gap_aware['policy'] == 'almost_last_partition':
             is_almost_last_partition = args.local_rank == args.world_size - 2
 
@@ -364,12 +350,10 @@ def get_optimizer(args, optimizer_cls, parameters):
         if not getattr(args, "allow_stateless", False):
             raise ValueError(f"Got stateless partition {args.stage}")
 
-    # HACK: tuplify all optimizer paramerets, just in case...
+    # HACK: tuplify all optimizer paramerets, just in case. [0.9, 0.98] -> (0.9, 0.98)
     # https://stackoverflow.com/questions/15721363/preserve-python-tuples-with-json
     tuplified_opt_args = tuplify(args.optimizer['args'])
-
     optimizer = optimizer_cls(parameters, **tuplified_opt_args)
-
     return optimizer
 
 
@@ -382,7 +366,6 @@ def preproc_data(args, cache=None, save_cache=True):
     dataset_keywords = {}
     if is_huggingface_transformer(args):
         if cache is None:
-            # TODO: some easier way to get original model and the config used during partitioning (WIP)
             model_instance, tokenizer, config = models.transformers_utils.get_model_tokenizer_and_config_by_name(
                 args.model)
             if save_cache:
@@ -405,15 +388,14 @@ def preproc_data(args, cache=None, save_cache=True):
     args.num_stages = parsed_config.num_stages
     args.stage = parsed_config.stage
     train_dl, test_dl, samplers, extra = get_dataloaders(
-            args,
-            pipe_config=pipe_config,
-            dataset_keywords=dataset_keywords)
+        args,
+        pipe_config=pipe_config,
+        dataset_keywords=dataset_keywords)
 
     return cache
 
 
 def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
-
     is_gpipe = "gpipe" == args.work_scheduler.lower()
     # select a partition manager
     if is_gpipe:
@@ -436,11 +418,11 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         torch.cuda.set_device(device)
 
     # Parse partitioning config and requires args
+    # TODO: some easier way to get original model and the config used during partitioning (WIP)
     print(f"Loading partitioned model and dataset...")
     model_instance = None
     dataset_keywords = {}
     if is_huggingface_transformer(args):
-        # TODO: some easier way to get original model and the config used during partitioning (WIP)
         model_instance, tokenizer, config = models.transformers_utils.get_model_tokenizer_and_config_by_name(
             args.model)
         dataset_keywords['tokenizer'] = tokenizer
@@ -483,7 +465,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
                         local_rank=args.local_rank,
                         name='msnag',
                         world_size=args.world_size,
-                        name_prefix=args.out_filename)  
+                        name_prefix=args.out_filename)
 
     eval_tensor_dtypes = training_tensor_dtypes  # HACK, TODO
 
@@ -510,35 +492,14 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
 
     # instead of loading dl on every device just to get its length
     # we synchronize length as a message, from first stage
-    if args.rank == 0:
-        assert is_first_partition
-        train_dl_len, test_dl_len = len(train_dl), len(test_dl)
-        logger.info(f"train_dl_len {train_dl_len}")
-        logger.info(f"test_dl_len {test_dl_len}")
-
-        train_dataset_len, test_dataset_len = len(train_dl.dataset), len(
-            test_dl.dataset)
-        logger.info(f"train_dataset_len {train_dataset_len}")
-        logger.info(f"test_dataset_len {test_dataset_len}")
-
-        # TODO: support replicated
-        last_batch_diff_train = train_dataset_len % args.bs_train if not train_dl.drop_last else 0
-        last_batch_diff_test = test_dataset_len % args.bs_test if not test_dl.drop_last else 0
-
-        data = [
-            train_dl_len, test_dl_len, last_batch_diff_train,
-            last_batch_diff_test
-        ]
-        data = torch.tensor(data, dtype=torch.long)
-    else:
-        data = torch.zeros(4, dtype=torch.long)
-
-    torch.distributed.broadcast(data, 0)
-    train_dl_len = data[0].item()
-    test_dl_len = data[1].item()
-    last_batch_diff_train = data[2].item()
-    last_batch_diff_test = data[3].item()
-
+    (last_batch_diff_test,
+     last_batch_diff_train,
+     test_dl_len,
+     train_dl_len) = synchronize_dataloaders_length(args,
+                                                    is_first_partition,
+                                                    logger,
+                                                    test_dl,
+                                                    train_dl)
     if last_batch_diff_train > 0:
         last_batch_train_shapes = parsed_config.get_shapes(
             last_batch_diff_train)
@@ -580,7 +541,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     # To GPipe too.
     ##############################
 
-    # Will automtomatically change trainer to gap aware compatible trainer
+    # Will automatically change trainer to gap aware compatible trainer
     partition_using_gap_aware = False
     if not is_gpipe:
         partition_using_gap_aware = hack_trainer_type_to_gap_aware(args)
@@ -626,7 +587,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         stateless_tied=getattr(args, "stateless_tied", False),
         is_mp=args.is_multiprocessing_worker,
         req_grad=parsed_config.req_grad,
-        )
+    )
 
     # support for simulating stage replication (dev)
     if hasattr(args, "ddp_sim_num_gpus") and args.ddp_sim_num_gpus > 1:
@@ -637,60 +598,20 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
 
     # After the partition is on its device:
     # Set optimizer
-    # If is transformer, use grouped parameters.
-    if 'lm' in args.task or 'squad' in args.task or 'glue' in args.task:
-        # No weight decay for some parameters.
-        model = partition.partition
-        opt_args = args.optimizer['args']
-        no_decay = ["bias", "LayerNorm.weight"]
-        optimizer_grouped_parameters = [
-            {
-                "params": [
-                    p for n, p in model.named_parameters()
-                    if not any(nd in n for nd in no_decay)
-                ],
-                "weight_decay":
-                opt_args['weight_decay'],
-            },
-            {
-                "params": [
-                    p for n, p in model.named_parameters()
-                    if any(nd in n for nd in no_decay)
-                ],
-                "weight_decay":
-                0.0
-            },
-        ]
-        lengths = {
-            "no_decay":
-            sum(p.numel() for p in optimizer_grouped_parameters[1]['params']),
-            "decay":
-            sum(p.numel() for p in optimizer_grouped_parameters[0]['params'])
-        }
-        # total_length = lengths['decay'] + lengths['no_decay']
-        print(f"-I- optimizer_grouped_parameters: {lengths}")
-    else:
-        optimizer_grouped_parameters = list(partition.partition.parameters())
+    optimizer_grouped_parameters = get_optimizer_parameter_groups(args, partition)
 
     # if we replace wp with nesterov, we save the wp arg, and set it back for config and auto experiment naming.
-    stashed_wp_arg = None
-    if not is_gpipe:
-        if is_last_partition:
-            stashed_wp_arg = try_replace_prediction_with_nesterov(args)
+    if not is_gpipe and is_last_partition:
+        try_replace_prediction_with_nesterov(args)
 
     optimizer = get_optimizer(args, optimizer_cls,
                               optimizer_grouped_parameters)
 
-    if not is_gpipe:
-        true_weights_storage = TrueWeightsStorage(optimizer)
-        partition.set_true_weights_storage(true_weights_storage)
-
-    if args.flush_rate > 0 and args.flush_rate < args.step_every:
+    if 0 < args.flush_rate < args.step_every:
         raise NotImplementedError()
 
-    # Set Scheduler
-    # TODO: scheduler for sched aware prediction
-    scheduler, sched_aware_stuff = get_lr_scheduler(args, optimizer)
+    # Get Learning Rate Scheduler
+    scheduler = get_lr_scheduler(args, optimizer)
 
     # Set Trainer (and Gap Aware)
     trainer_kwds = dict(model=partition.partition,
@@ -716,13 +637,16 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     partition.set_lr_scheduler(scheduler)
 
     if not is_gpipe:
+        # True weights storage
+        true_weights_storage = TrueWeightsStorage(optimizer)
+        partition.set_true_weights_storage(true_weights_storage)
+
         # Set Weight predictor
         weight_predictor, nag_with_predictor = get_weight_predictor(
             args,
             optimizer,
             scheduler=scheduler,
             true_weights_storage=true_weights_storage,
-            sched_aware_stuff=sched_aware_stuff,
         )
         if weight_predictor:
             partition.set_weight_predictor(weight_predictor,
@@ -736,7 +660,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
                 has_weight_predictor = weight_predictor is not None
                 if has_weight_predictor:
                     using_clone_weight_predictor = args.weight_prediction[
-                        'args']['pred_mem'] == 'clone'
+                                                       'args']['pred_mem'] == 'clone'
                 else:
                     using_clone_weight_predictor = False
 
@@ -756,24 +680,86 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     partition.set_task(task)
 
     if hasattr(args, "auto_file_name"):
-        # make sure this specific replacement does not ruin experiment name
-        if is_last_partition and stashed_wp_arg:
-            args.weight_prediction = stashed_wp_arg
-
         auto_file_name(args)
-
-        if is_last_partition and stashed_wp_arg:
-            del args.weight_prediction
-            del stashed_wp_arg
 
     return (logger, train_dl, test_dl, is_first_partition, is_last_partition,
             partition, statistics, train_dl_len, test_dl_len, samplers)
 
 
+def synchronize_dataloaders_length(args, is_first_partition, logger, test_dl, train_dl):
+    if args.rank == 0:
+        assert is_first_partition
+        train_dl_len, test_dl_len = len(train_dl), len(test_dl)
+        logger.info(f"train_dl_len {train_dl_len}")
+        logger.info(f"test_dl_len {test_dl_len}")
+
+        train_dataset_len, test_dataset_len = len(train_dl.dataset), len(
+            test_dl.dataset)
+        logger.info(f"train_dataset_len {train_dataset_len}")
+        logger.info(f"test_dataset_len {test_dataset_len}")
+
+        # TODO: support replicated
+        last_batch_diff_train = train_dataset_len % args.bs_train if not train_dl.drop_last else 0
+        last_batch_diff_test = test_dataset_len % args.bs_test if not test_dl.drop_last else 0
+
+        data = [
+            train_dl_len, test_dl_len, last_batch_diff_train,
+            last_batch_diff_test
+        ]
+        data = torch.tensor(data, dtype=torch.long)
+    else:
+        data = torch.zeros(4, dtype=torch.long)
+    torch.distributed.broadcast(data, 0)
+    train_dl_len = data[0].item()
+    test_dl_len = data[1].item()
+    last_batch_diff_train = data[2].item()
+    last_batch_diff_test = data[3].item()
+    return last_batch_diff_test, last_batch_diff_train, test_dl_len, train_dl_len
+
+
+def get_optimizer_parameter_groups(args, partition):
+    # If is transformer, use grouped parameters.
+    if is_huggingface_transformer(args):
+        # No weight decay for some parameters.
+        model = partition.partition
+        opt_args = args.optimizer['args']
+        no_decay = ["bias", "LayerNorm.weight"]
+        optimizer_grouped_parameters = [
+            {
+                "params": [
+                    p for n, p in model.named_parameters()
+                    if not any(nd in n for nd in no_decay)
+                ],
+                "weight_decay":
+                    opt_args['weight_decay'],
+            },
+            {
+                "params": [
+                    p for n, p in model.named_parameters()
+                    if any(nd in n for nd in no_decay)
+                ],
+                "weight_decay":
+                    0.0
+            },
+        ]
+        parameters_count = {
+            "no_decay":
+                sum(p.numel() for p in optimizer_grouped_parameters[1]['params']),
+            "decay":
+                sum(p.numel() for p in optimizer_grouped_parameters[0]['params'])
+        }
+        total_parameters = parameters_count['decay'] + parameters_count['no_decay']
+        parameters_count['total'] = total_parameters
+    else:
+        optimizer_grouped_parameters = list(partition.partition.parameters())
+        parameters_count = sum(p.numel() for p in optimizer_grouped_parameters)
+    print(f"-I- optimized parameters count: {parameters_count}")
+    return optimizer_grouped_parameters
+
 
 if __name__ == "__main__":
-
     import argparse
+
     parser = argparse.ArgumentsParser()
 
     args = parser.parse_args()

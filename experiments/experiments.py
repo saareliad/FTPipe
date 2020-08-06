@@ -55,3 +55,66 @@ def save_experiment(run_name, out_dir, config, fit_res: Dict):
             raise e
 
     print(f'*** Output file {output_filename} written')
+
+
+class ArgsStasher:
+    """
+    used for naming and reproducibility conventions,
+    (as sometimes we change the args inplace)
+    """
+    STASH_NAME = "_tmp_stashed"
+
+    @staticmethod
+    def stash_to_args(args, replaced_key, old_value):
+        # make sure this specific replacement does not ruin experiment name
+        if not hasattr(args, "auto_file_name"):
+            return
+
+        # replaced_key : Union[str, Tuple[str]], List[str]],
+        STASH_NAME = ArgsStasher.STASH_NAME
+        if isinstance(replaced_key, list):
+            replaced_key = tuple(replaced_key)
+        if not hasattr(args, STASH_NAME):
+            setattr(args, STASH_NAME, dict())
+        sd = getattr(args, STASH_NAME)
+        sd[replaced_key] = old_value
+
+    @staticmethod
+    def reload_stashed_args(args):
+        STASH_NAME = ArgsStasher.STASH_NAME
+        if not hasattr(args, STASH_NAME):
+            return
+        sd = getattr(args, STASH_NAME)
+        for replaced_key,old_value in sd.items():
+            attr = args
+            if isinstance(replaced_key, tuple):
+                for a in replaced_key[:-1]:
+                    attr = getattr(attr, a)
+                last_key = replaced_key[-1]
+            else:
+                last_key = replaced_key
+
+            assert isinstance(last_key, str)
+            setattr(attr, last_key, old_value)
+        delattr(args, STASH_NAME)
+
+
+def auto_file_name(args):
+    ArgsStasher.reload_stashed_args(args)
+    """This is used to distinguish different configurations by file name """
+    assert hasattr(args, "auto_file_name")
+    wp = args.weight_prediction['type'] if hasattr(
+        args, "weight_prediction") else 'stale'
+    ws = "ws_" if getattr(args, "weight_stashing", False) else ""
+    ga = "ga_" if hasattr(args, "gap_aware") else ""
+    bs = f"bs_{args.bs_train * args.step_every}"
+    se = f"se_{args.step_every}"
+    ga_just_for_loss = "gaJFL_" if getattr(args, 'gap_aware_just_loss',
+                                           False) else ""
+
+    if 'gpipe' == args.work_scheduler.lower():
+        s = f'{args.model}_{args.dataset}_gpipe_{bs}_{se}_seed_{args.seed}'
+    else:
+        s = f'{args.model}_{args.dataset}_{wp}_{ws}{ga}{bs}_{se}_{ga_just_for_loss}seed_{args.seed}'
+    args.out_filename = f"{args.out_filename}_{s}"
+    print(f"Out File Name will be: {args.out_filename}")

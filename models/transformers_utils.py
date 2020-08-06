@@ -7,14 +7,6 @@ def resize_token_embeddings(model, tokenizer):
     model_to_resize.resize_token_embeddings(len(tokenizer))
 
 
-def get_block_size(tokenizer, block_size=-1):
-    if block_size <= 0:
-        # Our input block size will be the max possible for the model
-        block_size = tokenizer.max_len_single_sentence
-    block_size = min(block_size, tokenizer.max_len_single_sentence)
-    return block_size
-
-
 def pretrained_model_config_and_tokenizer(
         model_type: str,
         model_name_or_path: str,
@@ -33,8 +25,6 @@ def pretrained_model_config_and_tokenizer(
         config_name if config_name else model_name_or_path,
         cache_dir=cache_dir if cache_dir else None,
         **config_kw
-        # num_labels=num_labels,
-        # finetuning_task=data_args.task_name,
         )
 
     config.output_past = output_past  # FIXME: deprecated

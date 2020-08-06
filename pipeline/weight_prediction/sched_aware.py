@@ -11,7 +11,7 @@ __all__ = ["get_sched_predictor", "SchedulerPredictor"]
 
 
 def get_sched_predictor(optimizer, sched_creator_cls, **kw):
-    """ Get scher predictor from optimizer and scheduler class and kwargs """
+    """ Get sched predictor from optimizer and scheduler class and kwargs """
     n_param_groups = len(optimizer.param_groups)
     lrs = [pg['lr'] for pg in optimizer.param_groups]
     d = {
