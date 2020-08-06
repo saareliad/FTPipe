@@ -150,10 +150,7 @@ class GapAware(GapAwareBase):
                     continue
                 weight_decay = pg['weight_decay']
                 for p in pg['params']:
-                    # if p.grad is None:
-                    #     continue
                     # calculate C coefficient per-element
-                    # Note: can remove the "data". but whatever.
                     avg_steps_needed = max_lr * \
                         (((ra[id(p)] / bias_correction) ** 0.5) + eps)
 

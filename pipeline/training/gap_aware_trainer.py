@@ -21,7 +21,7 @@ class GapAwareTrainerBase(PartitionedTrainer):
         ga = self.gap_aware
         # NOTE: runing stats shoud record the step size per parameter and step count
         # if they are not already recored otherwise.
-        ga.update_running_stats()
+        ga.update_running_stats()  # NOTE: SGD, like paper's implementation
         if delay:
             if real_theta:
                 ga.apply_on_theta(real_theta)
@@ -33,3 +33,5 @@ class GapAwareTrainerBase(PartitionedTrainer):
                 # This means: for the "gap_aware.json" configs !!!
                 assert delay == 1
                 ga.apply_from_grad()
+
+        # NOTE: SGD, like paper's implementation
