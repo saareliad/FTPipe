@@ -56,7 +56,7 @@ def get_model_and_tokenizer(args):
     else:
         model_cls = T5ForConditionalGeneration
     model = model_cls.from_pretrained(args.model_name_or_path,
-                                      config=config).to(args.device).train()
+                                      config=config).train()
 
     if tied:
         model.make_stateless()
@@ -66,8 +66,7 @@ def get_model_and_tokenizer(args):
 
 def get_input_dummy(args, tokenizer, model=None, analysis=False):
     input_ids = tokenizer.encode("Hello, my dog is cute",
-                                 return_tensors="pt").to(
-                                     args.device)  # Batch (1,6)
+                                 return_tensors="pt") # Batch (1,6)
 
     if analysis:
         input_ids = input_ids.repeat(args.analysis_batch_size,
@@ -97,9 +96,9 @@ def get_input_dummy(args, tokenizer, model=None, analysis=False):
     
     if args.precompute_masks:
         # precomputed masks
-        inverted_encoder_attention_mask = get_inverted_encoder_attention_mask(input_ids.size(),attention_mask,args.device)
-        attention_mask = get_attention_mask(input_ids.size(),attention_mask,args.device,is_decoder=False)    
-        decoder_attention_mask = get_attention_mask(decoder_input_ids.size(),decoder_attention_mask,args.device,is_decoder=True)
+        inverted_encoder_attention_mask = get_inverted_encoder_attention_mask(input_ids.size(),attention_mask,input_ids.device)
+        attention_mask = get_attention_mask(input_ids.size(),attention_mask,input_ids.device,is_decoder=False)    
+        decoder_attention_mask = get_attention_mask(decoder_input_ids.size(),decoder_attention_mask,input_ids.device,is_decoder=True)
 
         kwargs.update({
             "attention_mask":attention_mask,
@@ -242,7 +241,6 @@ def get_input_squad1(args, tokenizer, model, analysis=False):
 
     batch = next(iter(dl))
 
-    batch = {i: batch[i].to(args.device) for i in batch}
     return batch
 
 
@@ -324,11 +322,6 @@ def parse_cli():
     args.acyclic_opt = ParseAcyclicPartitionerOpts.acyclic_opts_dict_from_parsed_args(
         args)
 
-    device = "cuda" if (torch.cuda.is_available() and
-                        (not args.model_too_big)) else "cpu"
-    device = torch.device(device)
-    args.device = device
-
     return args
 
 
@@ -345,13 +338,8 @@ if __name__ == "__main__":
         ptvsd.wait_for_attach()
         print("attached")
 
-    if args.save_memory_mode:
-        tmp = args.device
-        args.device = torch.device("cpu")
     model, tokenizer = get_model_and_tokenizer(args)
-    if args.save_memory_mode:
-        args.device = tmp
-        del tmp
+
 
     sample = get_input(args, tokenizer, model, analysis=False)
 
@@ -370,8 +358,11 @@ if __name__ == "__main__":
     bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
     args.basic_blocks = choose_blocks(model, args)
 
-    # kwargs = {i:v for i,v in sample.items() if i != 'input_ids'}
     kwargs = sample
+
+    if torch.cuda.is_available() and not (args.save_memory_mode or args.model_too_big):
+        model = model.cuda()
+        kwargs = {k:v.cuda() for k,v in kwargs.items()}
 
     partial_pipe_model = functools.partial(
         pipe_model,
