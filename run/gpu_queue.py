@@ -56,10 +56,6 @@ def pop_from_cfg(cfg, name):
     return cfg, attr
 
 
-def pop_COMMAND_from_cfg(cfg):
-    return pop_from_cfg(cfg, name='COMMAND')
-
-
 def pop_FUNC_from_cfg(cfg):
     return pop_from_cfg(cfg, name='FUNC')
 

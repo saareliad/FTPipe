@@ -282,6 +282,7 @@ class SinglePartitionManager:
             x = preload_input_partition
         else:
             # Get input data from previous pipeline stage
+            last_due_end = batch_idx + 1 == num_batches
             x = self.comm_handler.get_data_forward(batch_idx, num_batches, last_due_end)
             # Unify with preloaded data
             x = (*preload_input_partition, *x)
@@ -406,8 +407,12 @@ class SinglePartitionManager:
             old_lrs = None
             do_step = self.should_do_step(batch_idx)
             # Backprop
-            # For the last batch, we must scale down the learning rate, and then restore.
-            if (not do_step) and (batch_idx == (num_batches - 1)):
+            last_due_end = batch_idx + 1 == num_batches
+            if (not do_step) and last_due_end:
+                # For the last batch, we must scale down the learning rate, and then restore.
+                # Because the "step_every" policy: we won't usually step,
+                # but since its the last batch - we just scale down LR and take a smaller step.
+                # TODO: ability to run it off
                 do_step = True
                 old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
 
@@ -440,19 +445,21 @@ class SinglePartitionManager:
             if do_step:
                 self.true_weights_storage.reset_on_step()
 
-            # Print training statistics.
-            self.batches += 1
-            if self.batches % self.log_frequency == 0:
-                batch_log_str = ''
-                if hasattr(trainer, "scheduler"):
-                    # Note: could be more than one LR, but we ignore this for simplicity.
-                    lr = trainer.scheduler.get_last_lr()[0]
-                    batch_log_str += '| lr {:02.9f}'.format(lr)
-
-                # TODO: add more stats. e.g can print here time, ' ms/batch {:5.2f} | ' ,...
-                self.logger.info(batch_log_str)
+            self.log_training_stats()
 
         return request_objects
+
+    def log_training_stats(self):
+        # Print training statistics.
+        self.batches += 1
+        if self.batches % self.log_frequency == 0:
+            batch_log_str = ''
+            if hasattr(self.trainer, "scheduler"):
+                # Note: could be more than one LR, but we ignore this for simplicity.
+                lr = self.trainer.scheduler.get_last_lr()[0]
+                batch_log_str += '| lr {:02.9f}'.format(lr)
+            # TODO: add more stats. e.g can print here time, ' ms/batch {:5.2f} | ' ,...
+            self.logger.info(batch_log_str)
 
     def run_batch_backward(self, batch_idx, num_batches):
         """ Runs the backwards pass + step for all except the last partition """
@@ -722,9 +729,10 @@ class GPipePartitionManager(SinglePartitionManager):
         """
         partition = self.partition
         is_training = partition.training
+        last_due_end = batch_idx + 1 == num_batches
+        last_due_step_every = ((batch_idx + 1) % self.step_every) == 0
+        is_last_micro_batch = last_due_step_every or last_due_end
 
-        is_last_micro_batch = (((batch_idx + 1) % self.step_every)
-                               == 0) or batch_idx == num_batches - 1
         partition.is_last_micro_batch = is_last_micro_batch
 
         preload_input_partition, preload_input_to_outside_loss = self.task.preload_from_dataloader(getattr(self, "dl_iter", None))
@@ -763,7 +771,7 @@ class GPipePartitionManager(SinglePartitionManager):
         ##############################
 
         last_due_step_every = ((batch_idx + 1) % self.step_every) == 0
-        last_due_end = batch_idx == (num_batches - 1)
+        last_due_end = batch_idx + 1 == num_batches
         is_last_micro_batch = last_due_step_every or last_due_end
         partition = self.partition
         trainer = self.trainer
@@ -821,17 +829,7 @@ class GPipePartitionManager(SinglePartitionManager):
                                                    old_lrs=old_lrs)
 
         # Print training statistics.
-        self.batches += 1
-        if self.batches % self.log_frequency == 0:
-            batch_log_str = ''
-            if hasattr(trainer, "scheduler"):
-                # Note: could be more than one LR, but we ignore this for simplicity.
-                lr = trainer.scheduler.get_last_lr()[0]
-                batch_log_str += '| lr {:02.9f}'.format(lr)
-
-            # TODO: add more stats. e.g can print here time, ' ms/batch {:5.2f} | ' ,...
-            self.logger.info(batch_log_str)
-
+        self.log_training_stats()
         return request_objects
 
     def run_batch_backward(self, batch_idx, num_batches):
@@ -840,7 +838,7 @@ class GPipePartitionManager(SinglePartitionManager):
         partition = self.partition
 
         last_due_step_every = ((batch_idx + 1) % self.step_every) == 0
-        last_due_end = batch_idx == (num_batches - 1)
+        last_due_end = batch_idx + 1 == num_batches
         is_last_micro_batch = last_due_step_every or last_due_end
         partition.is_last_micro_batch = is_last_micro_batch
 

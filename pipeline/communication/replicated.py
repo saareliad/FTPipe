@@ -1,3 +1,5 @@
+# FIXME: this is completely deprecated. will re-write this when needed.
+
 from typing import List, Optional, Union, Tuple, Iterable, Dict
 import torch
 from torch import Tensor
@@ -17,7 +19,6 @@ __all__ = [
 # P2PRankIO is the actuall comm handler here.
 # RequestsWrapper is just a wrapper for request with same intefrace.
 # create_replicated_comm_handler_args is a function for creating this handler with the neccesary arguments.
-
 
 def tensor_chunk(t: Tensor, n: int, dim: int = 0) -> Tuple[Tensor, ...]:
     if t is None:

@@ -1,17 +1,21 @@
 from .interface import CommunicationHandlerBase
-# from .common_simple_comm import SimpleCommBase
-from .bcast import BCASTCommunicationHandler
 from .p2p import P2PCommunicationHandler
-from .replicated import P2PRankIO as ReplicatedCommunicationHandler
-from .replicated import create_replicated_comm_handler_args
+
+# from .common_simple_comm import SimpleCommBase
+# from .bcast import BCASTCommunicationHandler
+# from .replicated import P2PRankIO as ReplicatedCommunicationHandler
+# from .replicated import create_replicated_comm_handler_args
 
 # TODO: We want to support hybrid comm
-# TODO: Add alon's generic comm.
+# TODO: Add replicated comm.
+# TODO: gloo will raise notimplementer error, it can be used for testing though.
+
 
 __all__ = [
     "get_auto_comm_handler_cls", "CommunicationHandlerBase",
-    "P2PCommunicationHandler", "ReplicatedCommunicationHandler",
+    "P2PCommunicationHandler",
 ]
+# "ReplicatedCommunicationHandler"
 
 from enum import Enum, auto
 
@@ -27,14 +31,14 @@ def to_policy(backend, cpu):
     if backend == 'mpi' or cpu:
         return CommPolicy.P2P
 
-    raise NotImplementedError("CommPolicy.BCAST")
-    return CommPolicy.BCAST
+    raise NotImplementedError()
+    # return CommPolicy.BCAST
 
 
 # TODO: add replicated somewhow.
 POLICY_TO_COMM = {
     CommPolicy.P2P: P2PCommunicationHandler,
-    CommPolicy.BCAST: BCASTCommunicationHandler,
+    # CommPolicy.BCAST: BCASTCommunicationHandler,
 }
 
 
