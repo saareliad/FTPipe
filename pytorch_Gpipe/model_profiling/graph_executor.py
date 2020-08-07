@@ -172,7 +172,11 @@ def call_function(namespaces, node, args, kwargs, pre_hook, post_hook,enforce_ou
 
 def fetch_args_kwargs(node, ready_expressions):
     args = [ready_expressions[n] for n in node.args]
-    kwargs = {k: ready_expressions[n] for n, k in node.kwargs.items()}
+    kwargs = dict()
+
+    for n,kws in node.kwargs.items():
+        for k in kws:
+            kwargs[k] = ready_expressions[n]
 
     return args, kwargs
 

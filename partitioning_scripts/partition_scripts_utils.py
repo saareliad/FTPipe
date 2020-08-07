@@ -343,12 +343,11 @@ def choose_blocks(model, args):
     blocks = dict()
 
     for m in model.modules():
-        block = type(m)
-        blocks[block.__name__] = block
+        m_superclasses = {c.__name__:c for c in type(m).mro()}
+        blocks.update(m_superclasses)
 
     if args.basic_blocks is None:
         args.basic_blocks = []
-
     return tuple([blocks[name] for name in args.basic_blocks])
 
 

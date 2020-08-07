@@ -62,7 +62,7 @@ def get_model_and_tokenizer(args):
 
 def get_input_dummy(args, tokenizer, model=None, analysis=False):
     input_ids = tokenizer.encode("Hello, my dog is cute",
-                                 return_tensors="pt")  # Batch (1,6)
+                                 return_tensors="pt") # Batch (1,6)
 
     if analysis:
         batch_size = args.analysis_batch_size
@@ -93,9 +93,9 @@ def get_input_dummy(args, tokenizer, model=None, analysis=False):
     
     if args.precompute_masks:
         # precomputed masks
-        inverted_encoder_attention_mask = get_inverted_encoder_attention_mask(input_ids.size(),attention_mask,args.device)
-        attention_mask = get_attention_mask(input_ids.size(),attention_mask,args.device,is_decoder=False)    
-        decoder_attention_mask = get_attention_mask(decoder_input_ids.size(),decoder_attention_mask,args.device,is_decoder=True)
+        inverted_encoder_attention_mask = get_inverted_encoder_attention_mask(input_ids.size(),attention_mask,input_ids.device)
+        attention_mask = get_attention_mask(input_ids.size(),attention_mask,input_ids.device,is_decoder=False)    
+        decoder_attention_mask = get_attention_mask(decoder_input_ids.size(),decoder_attention_mask,input_ids.device,is_decoder=True)
 
         kwargs.update({
             "attention_mask":attention_mask,
@@ -238,7 +238,6 @@ def get_input_squad1(args, tokenizer, model, analysis=False):
 
     batch = next(iter(dl))
 
-    batch = {i: batch[i] for i in batch}
     return batch
 
 

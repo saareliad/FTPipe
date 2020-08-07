@@ -230,9 +230,10 @@ def generate_container_construct(ready_expressions, node, variable_name):
     '''generate a dict/list/tuple/set/etc. object which has special syntax
     '''
     if "prim::DictConstruct" in node.scope:
-
-        kwargs = ", ".join([f"'{k}':{ready_expressions[a]}"
-                            for a, k in node.kwargs.items()])
+        kwargs = []
+        for a,kws in node.kwargs.items():
+            for k in kws:
+                kwargs.append(f"'{k}':{ready_expressions[a]}")
         statement = f"{variable_name} = {{{kwargs}}}"
 
     elif "prim::SetConstruct" in node.scope:
@@ -272,6 +273,8 @@ def generate_constant(node):
     elif isinstance(v,str) and ("__getattribute__" not in list(node.out_edges)[0].scope):
         #this is a string argument and not a attribute access
         return f"'{v}'"
+    elif isinstance(v,float) and v in [float("inf"),float("-inf")]:
+        return f"float('{v}')"
     else:
         return str(v)
 
@@ -324,8 +327,10 @@ def generate_magic(variable_name, self_arg, func_name, param_list):
 
 def generate_parameter_list(node_args, node_kwargs, ready_expressions, string=True):
     args = [ready_expressions[a] for a in node_args]
-    kwargs = [f"{k}={ready_expressions[a]}"
-              for a, k in node_kwargs.items()]
+    kwargs = []
+    for a,kws in node_kwargs.items():
+        for k in kws:
+            kwargs.append(f"{k}={ready_expressions[a]}")
     if string:
         return ", ".join(args + kwargs)
     return args + kwargs

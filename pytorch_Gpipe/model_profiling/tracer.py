@@ -197,6 +197,9 @@ def tracing_not_supported(func):
     """a decortaor to have pretty error messages when accessing an unsupported
     __magic__ method
     """
+    
+    #TODO add general warning
+    # show file name, actual line, operator
     @wraps(func)
     def wrapper(*args, **kwargs):
         namespace = type(args[0]._data).__name__
@@ -322,8 +325,17 @@ class TracedValue(object):
     def __setitem__(self, idx, value):
         pass
 
+    #NOTE this must return an integer
     def __len__(self):
+        #TODO add general warning
+        # show file name, actual line, operator
+        # print(f"{self.scope}::__len__ is treated as constant")
+        # print_call_site(__file__)
         return len(self._data)
+
+    @tracing_not_supported
+    def __contains__(self,key):
+        pass
 
         
     ##############################
@@ -731,8 +743,10 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
 
 def find_reachable_nodes(nodes,output_id):
     '''do a bfs from the output on the undirected graph to find all nodes that are 
-    reachable from the output node
+    reachable from the output node this is really conservative some unused nodes will still remain
     '''
+
+    #TODO make this more strict, we still allow nodes that should be removed
     open = {nodes[output_id]}
     reachable=set()
 
@@ -741,7 +755,6 @@ def find_reachable_nodes(nodes,output_id):
 
         if node in reachable:
             continue
-        
         open.update(node.in_edges)
         for n in node.out_edges:
             if ("__i" in n.scope) or (n.value_type is torch.Tensor):
@@ -1190,7 +1203,6 @@ def record_non_terminal_output(out):
 def record_kwarg(node_id, kwarg, kwarg_id):
     assert kwarg_id < node_id
     # record the edge
-
     NODES[kwarg_id].add_out_edge(NODES[node_id])
     NODES[node_id].add_kwarg(kwarg, NODES[kwarg_id])
 

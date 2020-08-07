@@ -162,7 +162,9 @@ def full_profile(graph: Graph, model: torch.nn.Module, args: tuple,
                 recomputation=recomputation,
                 n_iter=cmd_args.n_iter,
                 profile_ops=not cmd_args.disable_op_profiling,
-                force_no_recomp_scopes=None)
+                force_no_recomp_scopes=None,
+                save_memory_mode = cmd_args.save_memory_mode,
+                )
             execute_graph(model,
                           graph,
                           model_args=args,

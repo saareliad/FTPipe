@@ -938,11 +938,14 @@ def edge_cut(graph):
     '''
     find the cutting edges of the graph
     '''
+    # disallow parallel out edges
     edges = []
     for n in graph.nodes:
-        for u in n.out_edges:
-            if n.stage_id != u.stage_id:
-                edges.append((n, u))
+        stages = set()
+        for o in n.out_edges:
+            if (n.stage_id != o.stage_id) and (o.id not in stages):
+                stages.add(o.id)
+                edges.append((n, o))
 
     return edges
 
