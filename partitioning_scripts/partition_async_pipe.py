@@ -10,7 +10,6 @@ import os
 from pytorch_Gpipe import trace_module, Graph, GraphProfiler, execute_graph, ExecTimes, acyclic_partition, infer_req_grad, compile_partitioned_model, METIS_partition, profile_network
 from pytorch_Gpipe.model_profiling import Node
 from pytorch_Gpipe.utils import move_tensors
-from partitioning_scripts.partition_scripts_utils import run_x_tries_until_no_fail
 
 FullExecTimes = namedtuple('FullExecTimes', 'recomputation no_recomputation')
 
@@ -90,14 +89,12 @@ def partition_async_pipe(
                               use_layers_graph=True,
                               **cmd_args.acyclic_opt)
         else:
-            # can fail due to cycles so we try 10 times
-            run_x_tries_until_no_fail(METIS_partition,1000,
-                                      graph,
-                                      cmd_args.n_partitions,
-                                      node_weight_function=evaluator,
-                                      edge_weight_function=evaluator,
-                                      use_layers_graph=True,
-                                      **cmd_args.METIS_opt)
+            METIS_partition(graph,
+                            cmd_args.n_partitions,
+                            node_weight_function=evaluator,
+                            edge_weight_function=evaluator,
+                            use_layers_graph=True,
+                            **cmd_args.METIS_opt)
         n_runs += 1
 
         # Load last partition last stage scopes

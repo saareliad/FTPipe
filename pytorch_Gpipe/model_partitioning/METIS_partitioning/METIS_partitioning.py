@@ -44,39 +44,57 @@ def METIS_partition(graph: Graph,
                      node_weight_function=node_weight_function,
                      edge_weight_function=edge_weight_function)
 
+    attempts = METIS_opts.pop("attempts",1)
+    verbose_on_error = METIS_opts.pop("verbose_on_error",False)
     options = nxmetis.MetisOptions(**METIS_opts)
-    objval, parts = nxmetis.partition(G,
-                                      num_partitions,
-                                      options=options,
-                                      node_weight='weight',
-                                      node_size='size',
-                                      edge_weight='weight',
-                                      recursive=False)
-    parts = sorted((idx, n) for n, p in enumerate(parts) for idx in p)
-    parts = [n for _, n in parts]
+    fail = True
+    last_exception = None
 
-    if use_layers_only_graph:
-        for node, stage_id in zip(layers_graph.nodes, parts):
-            node.stage_id = stage_id
-        graph.induce_layer_partition(layers_graph, layers_to_original)
-    else:
-        for node, stage_id in zip(graph.nodes, parts):
-            node.stage_id = stage_id
+    # METIS partitioning does not enforce an acyclic constraint between partitions
+    # which is a must for partitioning computation graphs
+    # so we do multiple attempts in the hopes that one of them will give a valid result
+    # not that the Acyclic_partitoning does not suffer from this issue (but it can also give an inferior solution)
+    for _ in range(attempts):
+        objval, parts = nxmetis.partition(G,
+                                        num_partitions,
+                                        options=options,
+                                        node_weight='weight',
+                                        node_size='size',
+                                        edge_weight='weight',
+                                        recursive=False)
+        parts = sorted((idx, n) for n, p in enumerate(parts) for idx in p)
+        parts = [n for _, n in parts]
 
+        if use_layers_only_graph:
+            for node, stage_id in zip(layers_graph.nodes, parts):
+                node.stage_id = stage_id
+            graph.induce_layer_partition(layers_graph, layers_to_original)
+        else:
+            for node, stage_id in zip(graph.nodes, parts):
+                node.stage_id = stage_id
+
+        try:
+            post_process_partition(graph,edge_weight_function, assert_output_types=False,verbose_on_error=verbose_on_error)
+            fail = False
+            break
+        except (Exception,RuntimeError,AssertionError) as e:
+            last_exception = e
+
+    if fail:
+        print(f"-I- METIS could not find a valid partitioning")
+        raise last_exception
+    
     n_parts = set(parts)
-    post_process_partition(graph,edge_weight_function, assert_output_types=False)
-
     actual_nparts = len({n.stage_id for n in graph.nodes})
 
     if (actual_nparts < num_partitions):
         print(
-            f"expected {num_partitions} partitions but only {actual_nparts} found"
+            f"-I- expected {num_partitions} partitions but only {actual_nparts} found"
             " implicating that the model to partition is too small")
         print(
             "consider increasing the depth of graph or disabling the basic blocks option"
         )
         print(f"before post processing there were {n_parts} partitions")
     return graph
-
 
 
