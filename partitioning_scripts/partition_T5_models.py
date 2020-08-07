@@ -13,8 +13,8 @@ from pytorch_Gpipe.utils import layerDict, tensorDict
 import argparse
 import importlib
 import functools
-from partition_async_pipe import partition_async_pipe
-from partition_scripts_utils import choose_blocks, record_cmdline,Parser
+from partitioning_scripts.partition_async_pipe import partition_async_pipe
+from partitioning_scripts.partition_scripts_utils import choose_blocks, record_cmdline,Parser
 from analysis import run_analysis
 from analysis.analysis_utils import convert_to_analysis_format
 import nlp
@@ -337,18 +337,10 @@ if __name__ == "__main__":
     
 
     register_functions()
-    # partition the model using our profiler
-    # if the model need multiple inputs pass a tuple
-    # if the model needs kwargs pass a dictionary
 
     node_weight_function, edge_weight_function = get_weight_functions(args, verbose=True)
 
-    n_iter = args.n_iter
-    recomputation = not args.no_recomputation
-    bw = args.bw
-    n_partitions = args.n_partitions
     batch_dim = 0
-    bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
     args.basic_blocks = choose_blocks(model, args)
 
     partial_pipe_model = functools.partial(
@@ -358,18 +350,18 @@ if __name__ == "__main__":
         basic_blocks=args.basic_blocks,
         depth=args.depth,
         kwargs=sample,
-        nparts=n_partitions,
+        nparts=args.n_partitions,
         output_file=args.output_file,
         generate_model_parallel=args.generate_model_parallel,
         generate_explicit_del=args.generate_explicit_del,
-        use_layers_only_graph=True,  # FIXME:
+        use_layers_only_graph=True,
         use_graph_profiler=not args.use_network_profiler,
         use_network_profiler=args.use_network_profiler,
         profile_ops=not args.disable_op_profiling,
         node_weight_function=node_weight_function,
         edge_weight_function=edge_weight_function,
-        n_iter=n_iter,
-        recomputation=recomputation,
+        n_iter=args.n_iter,
+        recomputation=not args.no_recomputation,
         save_memory_mode=args.save_memory_mode,
         use_METIS=args.use_METIS,
         acyclic_opt=args.acyclic_opt,
@@ -411,9 +403,7 @@ if __name__ == "__main__":
     config = create_pipeline_configuration(DEBUG=True)
 
     if not args.no_analysis:
-        depth = args.depth
-        blocks = args.basic_blocks
-        layers = layerDict(model, depth=depth, basic_blocks=blocks)
+        layers = layerDict(model, depth=args.depth, basic_blocks=args.basic_blocks)
         tensors = tensorDict(model)
         analysis_config = convert_to_analysis_format(config,
                                                     layers,
@@ -424,9 +414,9 @@ if __name__ == "__main__":
             sample,
             graph,
             analysis_config,
-            n_iter,
-            recomputation=recomputation,
-            bw_GBps=bw,
+            args.n_iter,
+            recomputation=not args.no_recomputation,
+            bw_GBps=args.bw,
             verbose=True,
             async_pipeline=args.async_pipeline,
             sequential_model=model)

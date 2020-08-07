@@ -30,43 +30,20 @@ import torch
 from torch.utils.data import DataLoader, Dataset, RandomSampler
 import sys
 sys.path.append("../")
-from partition_scripts_utils import Parser, record_cmdline,choose_blocks
-from transformers import (
-    GPT2Config,
-    GPT2Tokenizer,
-    CTRLConfig,
-    CTRLTokenizer,
-)
+from partitioning_scripts.partition_scripts_utils import Parser, record_cmdline,choose_blocks
+from transformers import GPT2Config,GPT2Tokenizer
 
 from models.normal import GPT2LMHeadModel, GPT2Model
-from models.normal import StatelessGPT2LMHeadModel
-from models.normal import CTRLLMHeadModel, CTRLModel
-from models.normal import StatelessCTRLLMHeadModel
+from models.normal import StatelessGPT2LMHeadModel,StatelessGPT2Model
 
 from pytorch_Gpipe import pipe_model,get_weight_functions
 from analysis import run_analysis,convert_to_analysis_format
 from pytorch_Gpipe.utils import layerDict, tensorDict
 import functools
-from partition_async_pipe import partition_async_pipe
+from partitioning_scripts.partition_async_pipe import partition_async_pipe
 import math
 from pytorch_Gpipe.model_profiling.tracer import register_new_traced_function,register_new_explicit_untraced_function
 import operator
-
-MODEL_CLASSES_LM_HEAD = {
-    'gpt2': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
-    'ctrl': (CTRLConfig, CTRLLMHeadModel, CTRLTokenizer)
-}
-
-MODEL_CLASSES = {
-    'gpt2': (GPT2Config, GPT2Model, GPT2Tokenizer),
-    'ctrl': (CTRLConfig, CTRLModel, CTRLTokenizer)
-}
-
-MODEL_CLASSES_LM_HEAD_STATELESS_TIED = {
-    'gpt2': (GPT2Config, StatelessGPT2LMHeadModel, GPT2Tokenizer),
-    'ctrl': (CTRLConfig, StatelessCTRLLMHeadModel, CTRLTokenizer)
-}
-
 
 class TextDataset(Dataset):
     def __init__(self, tokenizer, args, file_path='train', block_size=512):
@@ -111,24 +88,16 @@ class TextDataset(Dataset):
 
 
 def load_and_cache_examples(args, tokenizer):
-    dataset = TextDataset(tokenizer,
+    return TextDataset(tokenizer,
                           args,
                           file_path=args.train_data_file,
                           block_size=args.block_size)
-    return dataset
-
-
-def set_seed(args):
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
 
 
 def partition_model(args,
                     train_dataset,
                     model,
-                    tokenizer,
-                    lm=True):
+                    tokenizer):
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset,
                                   sampler=train_sampler,
@@ -141,10 +110,9 @@ def partition_model(args,
     if args.stateless_tied:
         model_to_resize.make_stateless_after_loaded_tied_and_resized()
 
-    set_seed(args)  # Added here for reproducibility (even between python 2 and 3)
     batch = next(iter(train_dataloader))
 
-    if lm:
+    if args.lmhead:
         sample = {"input_ids":batch,"labels":batch}
     else:
         sample = {"input_ids":batch}
@@ -155,9 +123,6 @@ def partition_model(args,
 
     model.train()
     batch_dim = 0
-    bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
-
-    recomputation = not args.no_recomputation
 
     # so we could trace math.sqrt in gpt2 attention
     register_new_traced_function(math.sqrt, namespace=math)
@@ -170,8 +135,6 @@ def partition_model(args,
         if "stateless_lm_head" in scope or "lm_head" in scope:
             return True
     args.basic_blocks = choose_blocks(model,args)
-    bw = args.bw
-
     node_weight_function, edge_weight_function = get_weight_functions(args, verbose=True)
     
     partial_pipe_model = functools.partial(
@@ -185,7 +148,7 @@ def partition_model(args,
         nparts=args.n_partitions,
         node_weight_function=node_weight_function,
         edge_weight_function=edge_weight_function,
-        use_layers_only_graph=True,  # FIXME:
+        use_layers_only_graph=True,
         use_graph_profiler=not args.use_network_profiler,
         use_network_profiler=args.use_network_profiler,
         profile_ops=not args.disable_op_profiling,
@@ -193,7 +156,7 @@ def partition_model(args,
         generate_model_parallel=args.generate_model_parallel,
         generate_explicit_del=args.generate_explicit_del,
         save_memory_mode=args.save_memory_mode,
-        recomputation=recomputation,
+        recomputation=not args.no_recomputation,
         use_METIS=args.use_METIS,
         acyclic_opt=args.acyclic_opt,
         METIS_opt=args.METIS_opt)
@@ -209,7 +172,6 @@ def partition_model(args,
 
     if args.dot:
         graph.save_as_pdf(args.output_file, ".")
-        graph.serialize(args.output_file)
 
     # Replace the dummy partition wtih cuda:0.
     if args.stateless_tied:
@@ -226,8 +188,7 @@ def partition_model(args,
     
     #record model creation args
     with open(f"{args.output_file}.py", "a") as f:
-        model_args = {"model_type":args.model_type,
-                     "model_name_or_path":args.model_name_or_path,
+        model_args = {"model_name_or_path":args.model_name_or_path,
                      "lmhead":args.lmhead,
                      "stateless_tied":args.stateless_tied,
                      "do_lower_case":args.do_lower_case,
@@ -246,7 +207,6 @@ def partition_model(args,
 
     config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
 
-    bw = args.bw
 
     if not args.no_analysis:
         depth = args.depth
@@ -258,7 +218,7 @@ def partition_model(args,
         shape = (args.analysis_batch_size, batch.shape[1])
         expanded_inputs = batch[0].unsqueeze(0).expand(shape)
 
-        if lm: 
+        if args.lmhead:
             shape = (args.analysis_batch_size, batch.shape[1])
             expanded_labels = batch[0].unsqueeze(0).expand(shape)
             analysis_sample = {"input_ids":expanded_inputs, "labels":expanded_labels}
@@ -274,8 +234,8 @@ def partition_model(args,
                                   graph,
                                   analysis_config,
                                   args.n_iter,
-                                  recomputation=recomputation,
-                                  bw_GBps=bw,
+                                  recomputation=not args.no_recomputation,
+                                  bw_GBps=args.bw,
                                   async_pipeline=args.async_pipeline,
                                   sequential_model=model,
                                   stages_on_same_gpu=stages_on_same_gpu)
@@ -307,10 +267,6 @@ def auto_file_name(args):
 
 class ParsePartitioningOptsLM(Parser):
     def _add_model_args(self,group):
-        group.add_argument("--model_type",
-                            default="gpt2",
-                            type=str,
-                            help="The model architecture to be fine-tuned.")
         group.add_argument(
             "--model_name_or_path",
             default="gpt2",
@@ -356,12 +312,6 @@ class ParsePartitioningOptsLM(Parser):
             '--overwrite_cache',
             action='store_true',
             help="Overwrite the cached training and evaluation sets")
-        
-    def _extra(self,group):
-        group.add_argument('--seed',
-                            type=int,
-                            default=42,
-                            help="random seed for initialization")
 
 
     def _default_values(self):
@@ -393,24 +343,21 @@ def parse_cli():
 
 
 def main():
-
     args = parse_cli()
 
-    # Set seed
-    set_seed(args)
-
     # Load pretrained model and tokenizer
-
+    config_class = GPT2Config
+    tokenizer_class = GPT2Tokenizer
     if args.lmhead:
         if args.stateless_tied:
-            model_class_dict_to_use = MODEL_CLASSES_LM_HEAD_STATELESS_TIED
+            model_class = StatelessGPT2LMHeadModel
         else:
-            model_class_dict_to_use = MODEL_CLASSES_LM_HEAD
+            model_class = GPT2LMHeadModel
+    elif args.stateless_tied:
+        model_class = StatelessGPT2Model
     else:
-        model_class_dict_to_use = MODEL_CLASSES
+        model_class = GPT2Model
 
-    config_class, model_class, tokenizer_class = model_class_dict_to_use[
-        args.model_type]
     config = config_class.from_pretrained(args.model_name_or_path,
         cache_dir=args.cache_dir if args.cache_dir else None)
 
@@ -433,8 +380,7 @@ def main():
     partition_model(args,
                     train_dataset,
                     model,
-                    tokenizer,
-                    lm=args.lmhead)
+                    tokenizer)
 
 
 # download dataset from https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip
@@ -453,4 +399,4 @@ if __name__ == "__main__":
 
     main()
 
-# python partition_gpt2_models.py --use_graph_profiler --profile_ops --analysis_batch_size 1 --async_pipeline --block_size -1 --bwd_to_fwd_ratio 3 --lmhead --model_name_or_path t5-small --train_data_file wikitext-2-raw/wiki.train.raw --model_type t5 --n_iter 50 --n_partitions 2 --output_file results/t5_p2/ --overwrite_cache --partitioning_batch_size 1 --seed 42 --train_data_file wikitext-2-raw/wiki.train.raw
+# python partition_gpt2_models.py --use_graph_profiler --profile_ops --analysis_batch_size 1 --async_pipeline --block_size -1 --bwd_to_fwd_ratio 3 --lmhead --model_name_or_path t5-small --train_data_file wikitext-2-raw/wiki.train.raw --model_type t5 --n_iter 50 --n_partitions 2 --output_file results/t5_p2/ --overwrite_cache --partitioning_batch_size 1 --train_data_file wikitext-2-raw/wiki.train.raw

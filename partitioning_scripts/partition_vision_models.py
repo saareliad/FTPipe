@@ -9,9 +9,9 @@ import argparse
 import importlib
 from analysis import run_analysis,convert_to_analysis_format
 from pytorch_Gpipe import get_weight_functions
-from partition_scripts_utils import Parser, record_cmdline, choose_blocks
+from partitioning_scripts.partition_scripts_utils import Parser, record_cmdline, choose_blocks
 import functools
-from partition_async_pipe import partition_async_pipe
+from partitioning_scripts.partition_async_pipe import partition_async_pipe
 
 _VGG16_BN = dict(vgg16_bn=dict())
 
@@ -83,8 +83,6 @@ def create_model(cfg='wrn_16x4'):
     return MODEL_CFG_TO_SAMPLE_MODEL[cfg](**MODEL_CONFIGS[cfg])
 
 
-# TODO: option to be more accurate if we use real data,
-# taking stuff like sparsity in considuration.
 def create_random_sample(args, analysis=False):
     dataset = args.dataset
     if analysis:
@@ -153,15 +151,7 @@ if __name__ == "__main__":
         model = model.to(args.device)
         sample = sample.to(args.device)
 
-    # partition the model using our profiler
-    # if the model need multiple inputs pass a tuple
-    # if the model needs kwargs pass a dictionary
-    n_iter = args.n_iter
-    recomputation = not args.no_recomputation
-    bw = args.bw
-    n_partitions = args.n_partitions
     batch_dim = 0
-    bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
     args.basic_blocks = choose_blocks(model, args)
 
     node_weight_function, edge_weight_function = get_weight_functions(args, verbose=True)
@@ -174,18 +164,18 @@ if __name__ == "__main__":
         basic_blocks=args.basic_blocks,
         depth=args.depth,
         kwargs=None,
-        nparts=n_partitions,
+        nparts=args.n_partitions,
         output_file=args.output_file,
         generate_model_parallel=args.generate_model_parallel,
         generate_explicit_del=args.generate_explicit_del,
-        use_layers_only_graph=True,  # FIXME:
+        use_layers_only_graph=True,
         use_graph_profiler=not args.use_network_profiler,
         use_network_profiler=args.use_network_profiler,
         profile_ops=not args.disable_op_profiling,
         node_weight_function=node_weight_function,
         edge_weight_function=edge_weight_function,
-        n_iter=n_iter,
-        recomputation=recomputation,
+        n_iter=args.n_iter,
+        recomputation=not args.no_recomputation,
         save_memory_mode=args.save_memory_mode,
         use_METIS=args.use_METIS,
         acyclic_opt=args.acyclic_opt,
@@ -201,7 +191,6 @@ if __name__ == "__main__":
 
     if args.dot:
         graph.save_as_pdf(args.output_file, ".")
-        graph.serialize(args.output_file)
 
     # Add cmdline to generate output file.
     record_cmdline(args.output_file)
@@ -219,10 +208,8 @@ if __name__ == "__main__":
 
 
     if not args.no_analysis:
-        depth = args.depth
-        blocks = args.basic_blocks
         analysis_config = convert_to_analysis_format(config,
-            layerDict(model, depth=depth, basic_blocks=blocks),
+            layerDict(model, depth=args.depth, basic_blocks=args.basic_blocks),
             tensorDict(model))
 
         sample = create_random_sample(args, analysis=True)
@@ -230,9 +217,9 @@ if __name__ == "__main__":
             sample,
             graph,
             analysis_config,
-            n_iter,
-            recomputation=recomputation,
-            bw_GBps=bw,
+            args.n_iter,
+            recomputation=not args.no_recomputation,
+            bw_GBps=args.bw,
             verbose=True,
             async_pipeline=args.async_pipeline,
             sequential_model=model)

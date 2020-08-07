@@ -24,7 +24,7 @@ def download_file(url, DATA_DIR=""):
     return local_filename
 
 
-def download_wiki2():
+def download_wiki2(DATA_DIR=""):
     URL = "https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip"
     path_to_zip_file = download_file(URL)
     print(f"-I- Donwloaded wikitext2 to {path_to_zip_file}. Extracting...")
@@ -34,7 +34,7 @@ def download_wiki2():
     print("-I- Done")
 
 
-def download_wiki103():
+def download_wiki103(DATA_DIR=""):
     # FIXME: raw or not? in my other dir I used without the raw.
     # "https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-103-v1.zip"
     # raw dir has tokens

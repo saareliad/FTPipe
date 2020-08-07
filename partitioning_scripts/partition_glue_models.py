@@ -13,37 +13,28 @@ from torch.utils.data import DataLoader, RandomSampler
 from models.normal import BertForSequenceClassification
 from models.normal.NLP_models.modeling_bert import  get_extended_attention_mask
 from models.normal.NLP_models.modeling_roberta import RobertaForSequenceClassification
-from partition_scripts_utils import (Parser, record_cmdline,
+from partitioning_scripts.partition_scripts_utils import (Parser, record_cmdline,
                                      choose_blocks, bruteforce_main)
-from partition_async_pipe import partition_async_pipe
+from partitioning_scripts.partition_async_pipe import partition_async_pipe
 from analysis import run_analysis,convert_to_analysis_format
 from pytorch_Gpipe import pipe_model,get_weight_functions
 from pytorch_Gpipe.model_profiling import register_new_traced_function, register_new_explicit_untraced_function
 from pytorch_Gpipe.utils import layerDict, tensorDict
 
-from transformers import (MODEL_FOR_SEQUENCE_CLASSIFICATION_MAPPING,
-                          AutoConfig,
-                          AutoTokenizer, glue_tasks_num_labels)
+from transformers import AutoConfig,AutoTokenizer,glue_tasks_num_labels
 
 from transformers import GlueDataset, GlueDataTrainingArguments
 
 from collections import defaultdict
 from torch.utils.data import TensorDataset
 
-import numpy as np
-from transformers import EvalPrediction
-from transformers.data.metrics import glue_compute_metrics
-from transformers.data.processors.glue import (glue_output_modes)
-from typing import Callable, Dict
 
 logger = logging.getLogger(__name__)
 
-# FIXME
-MODEL_CONFIG_CLASSES = list(MODEL_FOR_SEQUENCE_CLASSIFICATION_MAPPING.keys())
-MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
+MODEL_TYPES = ['bert','roberta']
 
 
-def make_just_x(ds, mode="train"):
+def make_just_x(ds):
     d = defaultdict(list)
     for feature in ds:  # no reason to go over everything...
         for key, val in vars(feature).items():
@@ -100,7 +91,7 @@ def get_dataset(args, tokenizer, cache_name="glue_ds.pt"):
         tokenizer,
         mode="train",
     )
-    ds = make_just_x(ds, mode="train")
+    ds = make_just_x(ds)
 
     if (not os.path.exists(cache_name)) or args.overwrite_cache:
         print("-I- dataset saved")
@@ -110,7 +101,7 @@ def get_dataset(args, tokenizer, cache_name="glue_ds.pt"):
     return ds
 
 
-def get_sample(args, tokenizer, model,analysis=False):
+def get_sample(args, tokenizer,analysis=False):
     train_dataset = get_dataset(args, tokenizer)
     train_sampler = RandomSampler(train_dataset)
     # TODO: create a dataloader like they do in transformers...
@@ -127,39 +118,10 @@ def get_sample(args, tokenizer, model,analysis=False):
     inputs = {
         "input_ids": batch[0],
         "attention_mask": attention_mask,
-        # "token_type_ids": batch[2],
-        # # NOTE: we explicitly add to match to the signatute
-        # "position_ids": None,
-        # "head_mask": None,
-        # "start_positions": batch[3],
-        # "end_positions": batch[4],
     }
 
-    signature_order = [
-        "input_ids",
-        "attention_mask",
-        # "token_type_ids",
-        # "position_ids",
-        # "head_mask",
-        # "start_positions",
-        # "end_positions",
-    ]
-
-    if args.model_type in ["xlm", "roberta", "distilbert", "camembert"]:
-        # del inputs["token_type_ids"]
-        pass
-    else:
+    if args.model_type == "bert":
         inputs["token_type_ids"] = batch[2]
-        signature_order.append("token_type_ids")
-
-    if args.model_type in ["xlnet", "xlm"]:
-        raise NotImplementedError()
-        inputs.update({"cls_index": batch[5], "p_mask": batch[6]})
-        if hasattr(model, "config") and hasattr(model.config, "lang2id"):
-            inputs.update({
-                "langs": (torch.ones(batch[0].shape, dtype=torch.int64) *
-                          args.lang_id).to(args.device)
-            })
 
     return inputs
 
@@ -219,27 +181,14 @@ class ParsePartitioningOptsGlue(Parser):
             "Where do you want to store the pre-trained models downloaded from s3",
         )
         group.add_argument(
-            "--lang_id",
-            default=0,
-            type=int,
-            help=
-            "language id of input for language-specific xlm models (see tokenization_xlm.PRETRAINED_INIT_CONFIGURATION)",
-        )
-        group.add_argument(
             "--overwrite_cache",
             action="store_true",
             help="Overwrite the cached training and evaluation sets")
-        group.add_argument("--seed",
-                            type=int,
-                            default=42,
-                            help="random seed for initialization")
 
     def _default_values(self):
         d = {
             "partitioning_batch_size": 1,
             "n_iter": 1,
-            # "model_name_or_path": 'bert',
-            # "model_type": 'bert',
             "n_partitions": 2,
             "bw": 12,
             "analysis_batch_size": 1
@@ -309,7 +258,7 @@ def main(override_dict={}):
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
     model.train()
-    sample = get_sample(args, tokenizer, model,analysis=False)
+    sample = get_sample(args, tokenizer,analysis=False)
 
     if not args.save_memory_mode:
         model = model.to(args.device)
@@ -321,12 +270,8 @@ def main(override_dict={}):
     register_new_explicit_untraced_function(operator.is_not, operator)
     register_new_traced_function(math.sqrt, math)
 
-    n_iter = args.n_iter
-    recomputation = not args.no_recomputation
-    bw = args.bw
     batch_dim = 0
     args.basic_blocks = choose_blocks(model, args)
-    bw = args.bw
 
     node_weight_function, edge_weight_function = get_weight_functions(
         args, verbose=True)
@@ -343,7 +288,7 @@ def main(override_dict={}):
         nparts=args.n_partitions,
         node_weight_function=node_weight_function,
         edge_weight_function=edge_weight_function,
-        use_layers_only_graph=True,  # FIXME:
+        use_layers_only_graph=True,
         use_graph_profiler=not args.use_network_profiler,
         use_network_profiler=args.use_network_profiler,
         profile_ops=not args.disable_op_profiling,
@@ -351,7 +296,7 @@ def main(override_dict={}):
         generate_model_parallel=args.generate_model_parallel,
         generate_explicit_del=args.generate_explicit_del,
         save_memory_mode=args.save_memory_mode,
-        recomputation=recomputation,
+        recomputation=not args.no_recomputation,
         use_METIS=args.use_METIS,
         acyclic_opt=args.acyclic_opt,
         METIS_opt=args.METIS_opt)
@@ -365,7 +310,6 @@ def main(override_dict={}):
         graph = partial_pipe_model()
     if args.dot:
         graph.save_as_pdf(args.output_file, ".")
-        graph.serialize(args.output_file)
 
     record_cmdline(args.output_file)
 
@@ -385,24 +329,22 @@ def main(override_dict={}):
     generated = importlib.import_module(module_path)
     create_pipeline_configuration = generated.create_pipeline_configuration
 
-    sample = get_sample(args, tokenizer, model,analysis=True)
+    sample = get_sample(args, tokenizer,analysis=True)
     config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
 
 
     if not args.no_analysis:
-        depth = args.depth
-        blocks = args.basic_blocks
         analysis_config = convert_to_analysis_format(config,
-            layerDict(model, depth=depth, basic_blocks=blocks),
+            layerDict(model, depth=args.depth, basic_blocks=args.basic_blocks),
             tensorDict(model))
 
         analysis_result, summary = run_analysis(
             sample,
             graph,
             analysis_config,
-            n_iter,
-            recomputation=recomputation,
-            bw_GBps=bw,
+            args.n_iter,
+            recomputation=not args.no_recomputation,
+            bw_GBps=args.bw,
             verbose=True,
             async_pipeline=args.async_pipeline,
             sequential_model=model)
@@ -418,25 +360,6 @@ def main(override_dict={}):
         out = args
 
     return out
-
-
-def build_compute_metrics_fn(
-        task_name: str) -> Callable[[EvalPrediction], Dict]:
-
-    try:
-        # num_labels = glue_tasks_num_labels[task_name]
-        output_mode = glue_output_modes[task_name]
-    except KeyError:
-        raise ValueError("Task not found: %s" % (task_name))
-
-    def compute_metrics_fn(p: EvalPrediction):
-        if output_mode == "classification":
-            preds = np.argmax(p.predictions, axis=1)
-        elif output_mode == "regression":
-            preds = np.squeeze(p.predictions)
-        return glue_compute_metrics(task_name, preds, p.label_ids)
-
-    return compute_metrics_fn
 
 
 if __name__ == "__main__":

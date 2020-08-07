@@ -12,48 +12,33 @@ from torch.utils.data import DataLoader, RandomSampler
 
 from models.normal import BertForQuestionAnswering
 from models.normal.NLP_models.modeling_bert import get_extended_attention_mask
-from partition_scripts_utils import Parser, record_cmdline, choose_blocks
-from partition_async_pipe import partition_async_pipe
+from partitioning_scripts.partition_scripts_utils import Parser, record_cmdline, choose_blocks
+from partitioning_scripts.partition_async_pipe import partition_async_pipe
 from analysis import run_analysis,convert_to_analysis_format
 from pytorch_Gpipe import pipe_model,get_weight_functions
 from pytorch_Gpipe.model_profiling import register_new_traced_function, register_new_explicit_untraced_function
 from pytorch_Gpipe.utils import layerDict, tensorDict
 
 from transformers import (
-    MODEL_FOR_QUESTION_ANSWERING_MAPPING,
-    # WEIGHTS_NAME,
-    # AdamW,
-    AutoConfig,
-    # AutoModelForQuestionAnswering,
-    AutoTokenizer,
-    # get_linear_schedule_with_warmup,
+    BertConfig,
+    BertTokenizer,
     squad_convert_examples_to_features,
 )
-# from transformers.data.metrics.squad_metrics import (
-#     compute_predictions_log_probs,
-#     compute_predictions_logits,
-#     squad_evaluate,
-# )
+
 
 from transformers.data.processors.squad import SquadV1Processor, SquadV2Processor
 
 logger = logging.getLogger(__name__)
 
-# FIXME
-MODEL_CONFIG_CLASSES = list(MODEL_FOR_QUESTION_ANSWERING_MAPPING.keys())
-MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
-
 #############################
 def load_and_cache_examples(args,
-                            tokenizer,
-                            evaluate=False,
-                            output_examples=False):
+                            tokenizer):
     # Load data features from cache or dataset file
     input_dir = args.data_dir if args.data_dir else "."
     cached_features_file = os.path.join(
         input_dir,
         "cached_{}_{}_{}".format(
-            "dev" if evaluate else "train",
+            "train",
             list(filter(None, args.model_name_or_path.split("/"))).pop(),
             str(args.max_seq_length),
         ),
@@ -72,17 +57,11 @@ def load_and_cache_examples(args,
     else:
         logger.info("Creating features from dataset file at %s", input_dir)
 
-        if not args.data_dir and ((evaluate and not args.predict_file) or
-                                  (not evaluate and not args.train_file)):
+        if not args.data_dir and (not args.train_file):
             raise NotImplementedError()
         else:
-            processor = SquadV2Processor(
-            ) if args.version_2_with_negative else SquadV1Processor()
-            if evaluate:
-                examples = processor.get_dev_examples(
-                    args.data_dir, filename=args.predict_file)
-            else:
-                examples = processor.get_train_examples(
+            processor = SquadV2Processor() if args.version_2_with_negative else SquadV1Processor()
+            examples = processor.get_train_examples(
                     args.data_dir, filename=args.train_file)
 
         features, dataset = squad_convert_examples_to_features(
@@ -91,7 +70,7 @@ def load_and_cache_examples(args,
             max_seq_length=args.max_seq_length,
             doc_stride=args.doc_stride,
             max_query_length=args.max_query_length,
-            is_training=not evaluate,
+            is_training=True,
             return_dataset="pt",
             threads=args.threads,
         )
@@ -105,20 +84,11 @@ def load_and_cache_examples(args,
                 "examples": examples
             }, cached_features_file)
 
-    if output_examples:
-        return dataset, examples, features
     return dataset
 
 
 class ParsePartitioningOptsSquad(Parser):
     def _add_model_args(self,group):
-        group.add_argument(
-            "--model_type",
-            default=None,
-            type=str,
-            required=True,
-            help="Model type selected in the list: " + ", ".join(MODEL_TYPES),
-        )
         group.add_argument(
             "--model_name_or_path",
             default=None,
@@ -174,15 +144,6 @@ class ParsePartitioningOptsSquad(Parser):
             "If no data dir or train/predict files are specified, will run with tensorflow_datasets.",
         )
         group.add_argument(
-            "--predict_file",
-            default=None,
-            type=str,
-            help=
-            "The input evaluation file. If a data dir is specified, will look for the file there"
-            +
-            "If no data dir or train/predict files are specified, will run with tensorflow_datasets.",
-        )
-        group.add_argument(
             "--cache_dir",
             default="",
             type=str,
@@ -206,23 +167,11 @@ class ParsePartitioningOptsSquad(Parser):
             "--overwrite_cache",
             action="store_true",
             help="Overwrite the cached training and evaluation sets")
-        group.add_argument("--seed",
-                            type=int,
-                            default=42,
-                            help="random seed for initialization")
-
         group.add_argument(
             "--threads",
             type=int,
             default=4,
             help="multiple threads for converting example to features")
-        group.add_argument(
-            "--lang_id",
-            default=0,
-            type=int,
-            help=
-            "language id of input for language-specific xlm models (see tokenization_xlm.PRETRAINED_INIT_CONFIGURATION)",
-        )
 
     def _extra(self, group):
         # NOTE: copy and paste from run_squard script.
@@ -246,10 +195,9 @@ def parse_cli():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     args = parser.parse_args()
-    args.model_type = args.model_type.lower()
 
     if not args.output_file:
-        args.output_file = f"{args.model_type}_{args.n_partitions}p"
+        args.output_file = f"bert_{args.n_partitions}p"
     
     if args.output_file.endswith(".py"):
         args.output_file = args.output_file[:-3]
@@ -257,13 +205,11 @@ def parse_cli():
     return args
 
 
-def get_inputs_squad(args, tokenizer, model, analysis=False):
+def get_inputs_squad(args, tokenizer, analysis=False):
     batch_size = args.analysis_batch_size if analysis else args.partitioning_batch_size
 
     train_dataset = load_and_cache_examples(args,
-                                            tokenizer,
-                                            evaluate=False,
-                                            output_examples=False)
+                                            tokenizer)
 
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset,
@@ -278,43 +224,11 @@ def get_inputs_squad(args, tokenizer, model, analysis=False):
     else:
         attention_mask = batch[1]
 
-
     inputs = {
         "input_ids": batch[0],
         "attention_mask": attention_mask,
         "token_type_ids": batch[2],
-        # # NOTE: we explicitly add to match to the signatute
-        # "position_ids": None,
-        # "head_mask": None,
-        # "start_positions": batch[3],
-        # "end_positions": batch[4],
     }
-
-    signature_order = [
-        "input_ids",
-        "attention_mask",
-        "token_type_ids",
-        # "position_ids",
-        # "head_mask",
-        # "start_positions",
-        # "end_positions",
-    ]
-
-    if args.model_type in ["xlm", "roberta", "distilbert", "camembert"]:
-        raise NotImplementedError()
-        del inputs["token_type_ids"]
-
-    if args.model_type in ["xlnet", "xlm"]:
-        raise NotImplementedError()
-        inputs.update({"cls_index": batch[5], "p_mask": batch[6]})
-        if args.version_2_with_negative:
-            inputs.update({"is_impossible": batch[7]})
-        if hasattr(model, "config") and hasattr(model.config, "lang2id"):
-            inputs.update({
-                "langs": (torch.ones(batch[0].shape, dtype=torch.int64) *
-                          args.lang_id).to(args.device)
-            })
-
     return inputs
 
 
@@ -329,15 +243,15 @@ def main():
         ptvsd.wait_for_attach()
         print("attached")
 
-    config = AutoConfig.from_pretrained(args.model_name_or_path,
+    config = BertConfig.from_pretrained(args.model_name_or_path,
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path,
+    setattr(config,"precompute_attention_mask",args.precompute_attention_mask)
+
+    tokenizer = BertTokenizer.from_pretrained(args.model_name_or_path,
         do_lower_case=args.do_lower_case,
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
-
-    setattr(config,"precompute_attention_mask",args.precompute_attention_mask)
 
     model = BertForQuestionAnswering.from_pretrained(
         args.model_name_or_path,
@@ -352,18 +266,14 @@ def main():
     register_new_explicit_untraced_function(operator.is_not, operator)
     register_new_traced_function(math.sqrt, math)
 
-    sample = get_inputs_squad(args, tokenizer, model, analysis=False)
+    sample = get_inputs_squad(args, tokenizer, analysis=False)
 
     if not args.save_memory_mode:
         model = model.to(args.device)
         sample = {k:t.to(args.device) for k,t in sample.items()}
 
-    n_iter = args.n_iter
-    recomputation = not args.no_recomputation
-    bw = args.bw
     batch_dim = 0
     args.basic_blocks = choose_blocks(model, args)
-    bw = args.bw
 
     node_weight_function, edge_weight_function = get_weight_functions(
         args, verbose=True)
@@ -380,7 +290,7 @@ def main():
         nparts=args.n_partitions,
         node_weight_function=node_weight_function,
         edge_weight_function=edge_weight_function,
-        use_layers_only_graph=True,  # FIXME:
+        use_layers_only_graph=True,
         use_graph_profiler=not args.use_network_profiler,
         use_network_profiler=args.use_network_profiler,
         profile_ops=not args.disable_op_profiling,
@@ -388,7 +298,7 @@ def main():
         generate_model_parallel=args.generate_model_parallel,
         generate_explicit_del=args.generate_explicit_del,
         save_memory_mode=args.save_memory_mode,
-        recomputation=recomputation,
+        recomputation=not args.no_recomputation,
         use_METIS=args.use_METIS,
         acyclic_opt=args.acyclic_opt,
         METIS_opt=args.METIS_opt)
@@ -402,14 +312,12 @@ def main():
         graph = partial_pipe_model()
     if args.dot:
         graph.save_as_pdf(args.output_file, ".")
-        graph.serialize(args.output_file)
 
     record_cmdline(args.output_file)
 
     #record model creation args
     with open(f"{args.output_file}.py", "a") as f:
-        model_args = {"model_type":args.model_type,
-                     "model_name_or_path":args.model_name_or_path,
+        model_args = {"model_name_or_path":args.model_name_or_path,
                      "precompute_attention_mask":args.precompute_attention_mask,
                      "max_seq_length":args.max_seq_length,
                      "do_lower_case":args.do_lower_case,
@@ -422,25 +330,23 @@ def main():
     generated = importlib.import_module(module_path)
     create_pipeline_configuration = generated.create_pipeline_configuration
 
-    sample = get_inputs_squad(args, tokenizer, model, analysis=True)
+    sample = get_inputs_squad(args, tokenizer, analysis=True)
 
     config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
 
 
     if not args.no_analysis:
-        depth = args.depth
-        blocks = args.basic_blocks
         analysis_config =convert_to_analysis_format(config,
-            layerDict(model, depth=depth, basic_blocks=blocks),
+            layerDict(model, depth=args.depth, basic_blocks=args.basic_blocks),
             tensorDict(model))
 
-        analysis_result, summary = run_analysis(
+        _, summary = run_analysis(
             sample,
             graph,
             analysis_config,
-            n_iter,
-            recomputation=recomputation,
-            bw_GBps=bw,
+            args.n_iter,
+            recomputation=not args.no_recomputation,
+            bw_GBps=args.bw,
             verbose=True,
             async_pipeline=args.async_pipeline,
             sequential_model=model)

@@ -10,7 +10,7 @@ import os
 from pytorch_Gpipe import trace_module, Graph, GraphProfiler, execute_graph, ExecTimes, acyclic_partition, infer_req_grad, compile_partitioned_model, METIS_partition, profile_network
 from pytorch_Gpipe.model_profiling import Node
 from pytorch_Gpipe.utils import move_tensors
-from partition_scripts_utils import run_x_tries_until_no_fail
+from partitioning_scripts.partition_scripts_utils import run_x_tries_until_no_fail
 
 FullExecTimes = namedtuple('FullExecTimes', 'recomputation no_recomputation')
 
