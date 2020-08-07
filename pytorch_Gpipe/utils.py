@@ -7,9 +7,20 @@ from torch import Tensor
 from itertools import chain
 from contextlib import contextmanager
 import inspect
+import re
+import operator
 
 __all__ = ["traverse_model", "traverse_params_buffs",
            "layerDict", "tensorDict"]
+
+def is_None(a):
+    return operator.is_(a, None)
+
+
+def is_not_None(a):
+    return operator.is_not(a, None)
+
+
 
 ExecTimes = collections.namedtuple(
     'ExecTimes',
@@ -267,3 +278,50 @@ def print_call_site(*ignored_files):
         if (frameinfo.filename not in ignored_files):
             print(frameinfo.filename+", line "+str(frameinfo.lineno)+"\n")
             break
+
+
+
+def convert_none_checks(input_file:str,output_file:str):
+    """utility to convert None checks which are unsupported by the traced to
+       a convention we support
+
+       we match patters like:
+       if identifier is None  => if is_None(identified)
+       if identified is not None => if is_not_None(identifier)
+
+    Args:
+    ---------------------------------------------------------------
+        input_file: str
+        path to the python file we wish to convert
+        
+        output_file:str:
+        path to the python output file to which write the result
+    """
+    res=[]
+    modifed = False
+    with open(input_file,'r') as f:
+        for idx,original in enumerate(f.readlines()):
+            is_None_pattern = r'([a-zA-Z0-9\.\(\)\[\]\-\+\*\/]+) is None'
+            is_not_None_pattern = r'([a-zA-Z0-9\.\(\)\[\]\-\+\*\/]+) is not None'
+            line = re.sub(is_None_pattern,r'is_None(\1)',original)
+            line = re.sub(is_not_None_pattern,r'is_not_None(\1)',line)
+            if line != original:
+                modifed = True
+                print(f"-I- changed line {idx}")
+                print(f"from {original.lstrip().rstrip()}")
+                print(f"to {line.lstrip().rstrip()}")
+                print()
+
+            res.append(line)
+    
+    if modifed:
+        lines = ['import operator\n']
+        lines.append(inspect.getsource(is_None))
+        lines.append(inspect.getsource(is_not_None))
+        lines.append("\n")
+        res = lines + res
+
+    
+    with open(output_file,"w") as f:
+        f.writelines(res)
+
