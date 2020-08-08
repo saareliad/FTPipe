@@ -1,3 +1,4 @@
+from partitioning_scripts.partitioning_script import partitioner
 import sys
 sys.path.append("../")
 import torch
@@ -9,7 +10,7 @@ import argparse
 import importlib
 from analysis import run_analysis,convert_to_analysis_format
 from pytorch_Gpipe import get_weight_functions
-from partitioning_scripts.partition_scripts_utils import Parser, record_cmdline, choose_blocks
+from partitioning_scripts.partition_scripts_utils import Parser,Partitioner, record_cmdline, choose_blocks
 import functools
 from partitioning_scripts.partition_async_pipe import partition_async_pipe
 
@@ -79,25 +80,6 @@ _register_model(_VGG16_BN, vgg16_bn)
 DATASETS = ['cifar10', 'cifar100', 'imagenet']
 
 
-def create_model(cfg='wrn_16x4'):
-    return MODEL_CFG_TO_SAMPLE_MODEL[cfg](**MODEL_CONFIGS[cfg])
-
-
-def create_random_sample(args, analysis=False):
-    dataset = args.dataset
-    if analysis:
-        batch_size = args.analysis_batch_size
-    else:
-        batch_size = args.partitioning_batch_size
-
-    if dataset == 'cifar10' or dataset == 'cifar100':
-        sample = torch.randn(batch_size, 3, 32, 32)
-    elif dataset == 'imagenet':
-        sample = torch.randn(batch_size, 3, 224, 224)
-
-    return sample
-
-
 class ParsePartitioningOptsVision(Parser):
     def _add_model_args(self,group):
         group.add_argument('--model',
@@ -119,7 +101,31 @@ class ParsePartitioningOptsVision(Parser):
             "bw": 12,
             "analysis_batch_size": 32,
         }
+    
+    def _auto_file_name(self, args) -> str:
+        return f"{args.model}_p{args.n_partitions}"
 
+
+class VisionPartioner(Partitioner):
+    def get_model(self, args) -> torch.nn.Module:
+        return MODEL_CFG_TO_SAMPLE_MODEL[args.model](**MODEL_CONFIGS[args.model]).train()
+
+    @property
+    def batch_dim(self) -> int:
+        return 0
+    
+    def get_input(self, args, analysis):
+        dataset = args.dataset
+        if analysis:
+            batch_size = args.analysis_batch_size
+        else:
+            batch_size = args.partitioning_batch_size
+
+        if dataset == 'cifar10' or dataset == 'cifar100':
+            sample = torch.randn(batch_size, 3, 32, 32)
+        elif dataset == 'imagenet':
+            sample = torch.randn(batch_size, 3, 224, 224)
+        return sample
 
 
 def parse_cli():
@@ -128,30 +134,27 @@ def parse_cli():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     args = parser.parse_args()
-    if not args.output_file:
-        args.output_file = f"{args.model}_p{args.n_partitions}"
 
-    if args.output_file.endswith(".py"):
-        args.output_file = args.output_file[:-3]
 
     return args
 
 
 if __name__ == "__main__":
     args = parse_cli()
+    partitioner = VisionPartioner(args)
     GET_PARTITIONS_ON_CPU = True
 
     # if the model is too big run the whole partitioning process on CPU
     # and drink a cup of coffee in the meantime
     # define model and sample batch
-    model = create_model(args.model)
-    sample = create_random_sample(args, analysis=False)
+    model = partitioner.get_model(args)
+    sample = partitioner.get_input(args, analysis=False)
 
     if not args.save_memory_mode:
         model = model.to(args.device)
         sample = sample.to(args.device)
 
-    batch_dim = 0
+    batch_dim = partitioner.batch_dim
     args.basic_blocks = choose_blocks(model, args)
 
     node_weight_function, edge_weight_function = get_weight_functions(args, verbose=True)
@@ -212,7 +215,7 @@ if __name__ == "__main__":
             layerDict(model, depth=args.depth, basic_blocks=args.basic_blocks),
             tensorDict(model))
 
-        sample = create_random_sample(args, analysis=True)
+        sample = partitioner.get_input(args, analysis=True)
         analysis_result, summary = run_analysis(
             sample,
             graph,

@@ -14,7 +14,7 @@ import argparse
 import importlib
 import functools
 from partitioning_scripts.partition_async_pipe import partition_async_pipe
-from partitioning_scripts.partition_scripts_utils import choose_blocks, record_cmdline,Parser
+from partitioning_scripts.partition_scripts_utils import choose_blocks, record_cmdline,Parser,Partitioner
 from analysis import run_analysis
 from analysis.analysis_utils import convert_to_analysis_format
 import nlp
@@ -25,42 +25,8 @@ from typing import Dict, List
 T5_PRETRAINED_MODELS = {'t5-small', 't5-base', 't5-large', 't5-3b', 't5-11b'}
 
 
-def register_functions():
-    register_new_explicit_untraced_function(operator.is_, operator)
-    register_new_explicit_untraced_function(operator.is_not, operator)
-    register_new_traced_function(math.log, math)
-    register_new_traced_function(torch.einsum, torch)
 
-
-def get_model_and_tokenizer(args):
-    config = T5Config.from_pretrained(args.model_name_or_path)
-    config.output_attentions = False
-    config.output_hidden_states = False
-    setattr(config, "output_only", True)
-    setattr(config,"precomputed_masks",args.precompute_masks)
-    tokenizer = T5Tokenizer.from_pretrained(args.model_name_or_path)
-
-    base = not args.lmhead
-    tied = args.stateless_tied
-
-    if base and tied:
-        model_cls = TiedT5Model
-    elif base and not tied:
-        model_cls = T5Model
-    elif not base and tied:
-        model_cls = TiedT5ForConditionalGeneration
-    else:
-        model_cls = T5ForConditionalGeneration
-    model = model_cls.from_pretrained(args.model_name_or_path,
-                                      config=config).train()
-
-    if tied:
-        model.make_stateless()
-
-    return model, tokenizer
-
-
-def get_input_dummy(args, tokenizer, model=None, analysis=False):
+def get_input_dummy(args, tokenizer, analysis=False):
     input_ids = tokenizer.encode("Hello, my dog is cute",
                                  return_tensors="pt") # Batch (1,6)
 
@@ -106,10 +72,10 @@ def get_input_dummy(args, tokenizer, model=None, analysis=False):
     return kwargs
 
 
-def get_input_squad1(args, tokenizer, model, analysis=False):
+def get_input_squad1(args, tokenizer, analysis=False):
     # see https://colab.research.google.com/github/patil-suraj/exploring-T5/blob/master/T5_on_TPU.ipynb#scrollTo=2ZWE4addfSmi
     batch_size = args.analysis_batch_size if analysis else args.partitioning_batch_size
-
+    config = T5Config.from_pretrained(args.model_name_or_path)
     #########################
     # Yucky squad stuff
     #########################
@@ -178,9 +144,10 @@ def get_input_squad1(args, tokenizer, model, analysis=False):
     @dataclass
     class T2TDataCollator():
         # NOTE: in transformers 3.02 they changed it to function so it can't be subclassed.
-        def __init__(self,precompute_masks):
+        def __init__(self,config,precompute_masks):
             super(T2TDataCollator,self).__init__()
             self.precompute_masks = precompute_masks
+            self.config = config
 
         def collate_batch(self, batch: List) -> Dict[str, torch.Tensor]:
             """
@@ -198,7 +165,7 @@ def get_input_squad1(args, tokenizer, model, analysis=False):
             decoder_attention_mask = torch.stack(
                 [example['target_attention_mask'] for example in batch])
 
-            decoder_input_ids = model._shift_right(lm_labels)
+            decoder_input_ids = self._shift_right(lm_labels)
 
             batch = {
                 'input_ids': input_ids,
@@ -227,7 +194,28 @@ def get_input_squad1(args, tokenizer, model, analysis=False):
 
             return batch
 
-    collate_fn = T2TDataCollator(args.precompute_masks).collate_batch
+        def _shift_right(self, input_ids):
+            decoder_start_token_id = self.config.decoder_start_token_id
+            pad_token_id = self.config.pad_token_id
+
+            assert (
+                decoder_start_token_id is not None
+            ), "self.model.config.decoder_start_token_id has to be defined. In T5 it is usually set to the pad_token_id. See T5 docs for more information"
+
+            # shift inputs to the right
+            shifted_input_ids = input_ids.new_zeros(input_ids.shape)
+            shifted_input_ids[..., 1:] = input_ids[..., :-1].clone()
+            shifted_input_ids[..., 0] = decoder_start_token_id
+
+            # assert pad_token_id is not None, "self.model.config.pad_token_id has to be defined."
+            # replace possible -100 values in lm_labels by `pad_token_id`
+            shifted_input_ids.masked_fill_(shifted_input_ids == -100, pad_token_id)
+
+            assert torch.all(shifted_input_ids >= 0).item(), "Verify that `lm_labels` has only positive values and -100"
+
+            return shifted_input_ids
+
+    collate_fn = T2TDataCollator(config,args.precompute_masks).collate_batch
 
     dl = torch.utils.data.DataLoader(
         dataset=train_dataset,
@@ -247,10 +235,9 @@ T5_TASK_TO_GET_INPUT = {
 }
 
 
-def get_input(args, tokenizer, model, analysis=False):
-
-    print(f"-I- geting input for t5_task: {args.t5_task}")
-    return T5_TASK_TO_GET_INPUT[args.t5_task](args, tokenizer, model, analysis)
+def get_input(args, tokenizer, analysis=False):
+    print(f"-I- getting input for t5_task: {args.t5_task}")
+    return T5_TASK_TO_GET_INPUT[args.t5_task](args, tokenizer, analysis)
 
 
 class ParsePartitioningT5Opts(Parser):
@@ -271,9 +258,6 @@ class ParsePartitioningT5Opts(Parser):
                     choices=T5_TASK_TO_GET_INPUT.keys(),
                     default="dummy")
 
-    def _extra(self, group):
-        group.add_argument("--debug", action="store_true", default=False)
-
     def _default_values(self):
         return {
             "model_name_or_path": "t5-small",
@@ -285,15 +269,7 @@ class ParsePartitioningT5Opts(Parser):
             "basic_blocks": ["T5Attention"]
         }
 
-
-def parse_cli():
-    parser = ParsePartitioningT5Opts(
-        description="Partitioning models",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    
-    args = parser.parse_args()
-
-    if not args.output_file:
+    def _auto_file_name(self, args) -> str:
         bw_str = str(args.bw).replace(".", "_")
         model_str = str(args.model_name_or_path).replace("-", "_")
         tied = "tied" if args.stateless_tied else "untied"
@@ -301,16 +277,70 @@ def parse_cli():
         if args.lmhead:
             model_str += "_lmhead"
 
-        args.output_file = f"{model_str}_{args.n_partitions}p_bw{bw_str}"
+        output_file = f"{model_str}_{args.n_partitions}p_bw{bw_str}"
 
         if args.async_pipeline:
-            args.output_file += "_async"
+            output_file += "_async"
 
-        args.output_file += f"_{args.t5_task}"
+        output_file += f"_{args.t5_task}"
 
-    if args.output_file.endswith(".py"):
-        args.output_file = args.output_file[:-3]
+        return output_file
 
+class T5Partitioner(Partitioner):
+    def __init__(self,args) -> None:
+        super().__init__(args)
+        self.tokenizer = T5Tokenizer.from_pretrained(args.model_name_or_path)
+
+
+    @property
+    def batch_dim(self) -> int:
+        return 0
+    
+    def register_functions(self):
+        register_new_explicit_untraced_function(operator.is_, operator)
+        register_new_explicit_untraced_function(operator.is_not, operator)
+        register_new_traced_function(math.log, math)
+        register_new_traced_function(torch.einsum, torch)
+
+    def get_model(self, args) -> torch.nn.Module:
+        config = T5Config.from_pretrained(args.model_name_or_path)
+        config.output_attentions = False
+        config.output_hidden_states = False
+        setattr(config, "output_only", True)
+        setattr(config,"precomputed_masks",args.precompute_masks)
+
+        base = not args.lmhead
+        tied = args.stateless_tied
+
+        if base and tied:
+            model_cls = TiedT5Model
+        elif base and not tied:
+            model_cls = T5Model
+        elif not base and tied:
+            model_cls = TiedT5ForConditionalGeneration
+        else:
+            model_cls = T5ForConditionalGeneration
+        model = model_cls.from_pretrained(args.model_name_or_path,
+                                        config=config).train()
+
+        if tied:
+            model.make_stateless()
+        
+        return model
+
+    def get_input(self, args, analysis):
+        tokenizer =self.tokenizer
+        return get_input(args,tokenizer,analysis=analysis)
+
+
+
+
+def parse_cli():
+    parser = ParsePartitioningT5Opts(
+        description="Partitioning models",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    
+    args = parser.parse_args()
     return args
 
 
@@ -318,6 +348,7 @@ if __name__ == "__main__":
     #    python partition_T5_models.py --objective stage_time --bwd_to_fwd_ratio -1 --n_iter 1 --t5_task squad1 --lmhead
 
     args = parse_cli()
+    partitioner = T5Partitioner(args)
 
     if args.debug:
         import ptvsd
@@ -327,19 +358,19 @@ if __name__ == "__main__":
         ptvsd.wait_for_attach()
         print("attached")
 
-    model, tokenizer = get_model_and_tokenizer(args)
-    sample = get_input(args, tokenizer, model, analysis=False)
+    model = partitioner.get_model(args)
+    sample = partitioner.get_input(args, analysis=False)
 
     if not args.save_memory_mode:
         model = model.to(args.device)
         sample = {k:v.to(args.device) for k,v in sample.items()}
     
 
-    register_functions()
+    partitioner.register_functions()
 
     node_weight_function, edge_weight_function = get_weight_functions(args, verbose=True)
 
-    batch_dim = 0
+    batch_dim = partitioner.batch_dim
     args.basic_blocks = choose_blocks(model, args)
 
     partial_pipe_model = functools.partial(
@@ -408,7 +439,7 @@ if __name__ == "__main__":
                                                     layers,
                                                     tensors)
 
-        sample = get_input(args, tokenizer, model, analysis=True)
+        sample = partitioner.get_input(args, analysis=True)
         analysis_result, summary = run_analysis(
             sample,
             graph,

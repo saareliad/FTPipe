@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader, RandomSampler
 from models.normal import BertForSequenceClassification
 from models.normal.NLP_models.modeling_bert import  get_extended_attention_mask
 from models.normal.NLP_models.modeling_roberta import RobertaForSequenceClassification
-from partitioning_scripts.partition_scripts_utils import (Parser, record_cmdline,
+from partitioning_scripts.partition_scripts_utils import (Parser, Partitioner, record_cmdline,
                                      choose_blocks, bruteforce_main)
 from partitioning_scripts.partition_async_pipe import partition_async_pipe
 from analysis import run_analysis,convert_to_analysis_format
@@ -194,6 +194,65 @@ class ParsePartitioningOptsGlue(Parser):
             "analysis_batch_size": 1
         }
         return d
+    
+    def _post_parse(self, args):
+        args.model_type = args.model_type.lower()
+    
+    def _auto_file_name(self, args) -> str:
+        bw_str = str(args.bw).replace(".", "_")
+        model_str = str(args.model_name_or_path).replace("-", "_")
+        output_file = f"{model_str}_{args.n_partitions}p_bw{bw_str}"
+
+        if args.async_pipeline:
+            output_file += "_async"
+
+        output_file += f"_{args.task_name}"
+        output_file += "_glue"
+
+        return output_file
+
+
+class GluePartitioner(Partitioner):
+    def __init__(self,args) -> None:
+        super().__init__(args)
+
+        self.tokenizer = AutoTokenizer.from_pretrained(
+       args.model_name_or_path,
+        do_lower_case=args.do_lower_case,
+        cache_dir=args.cache_dir if args.cache_dir else None,
+    )
+
+
+    @property
+    def batch_dim(self) -> int:
+        return 0
+    
+    def get_input(self, args, analysis):
+        return get_sample(args, self.tokenizer,analysis=analysis)
+
+    def get_model(self, args) -> torch.nn.Module:
+        config = AutoConfig.from_pretrained(args.model_name_or_path,
+        cache_dir=args.cache_dir if args.cache_dir else None)
+
+        setattr(config,"precompute_attention_mask",args.precompute_attention_mask)
+
+        # get correct number of labels.
+        config.num_labels = glue_tasks_num_labels.get(args.task_name)
+        model_cls = {
+            'bert': BertForSequenceClassification,
+            'roberta': RobertaForSequenceClassification
+        }
+        model_cls = model_cls[args.model_type]
+
+        model = model_cls.from_pretrained(
+            args.model_name_or_path,
+            from_tf=bool(".ckpt" in args.model_name_or_path),
+            config=config,
+            cache_dir=args.cache_dir if args.cache_dir else None,
+        ).train()
+
+        return model
+
 
 
 def parse_cli():
@@ -212,22 +271,6 @@ def main(override_dict={}):
     if override_dict:
         for i, v in override_dict.items():
             setattr(args, i, v)
-
-    args.model_type = args.model_type.lower()
-
-    if not args.output_file:
-        bw_str = str(args.bw).replace(".", "_")
-        model_str = str(args.model_name_or_path).replace("-", "_")
-        args.output_file = f"{model_str}_{args.n_partitions}p_bw{bw_str}"
-
-        if args.async_pipeline:
-            args.output_file += "_async"
-
-        args.output_file += f"_{args.task_name}"
-        args.output_file += "_glue"
-    
-    if args.output_file.endswith(".py"):
-        args.output_file = args.output_file[:-3]
 
     config = AutoConfig.from_pretrained(args.model_name_or_path,
         cache_dir=args.cache_dir if args.cache_dir else None,

@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader, RandomSampler
 
 from models.normal import BertForQuestionAnswering
 from models.normal.NLP_models.modeling_bert import get_extended_attention_mask
-from partitioning_scripts.partition_scripts_utils import Parser, record_cmdline, choose_blocks
+from partitioning_scripts.partition_scripts_utils import Parser, Partitioner, record_cmdline, choose_blocks
 from partitioning_scripts.partition_async_pipe import partition_async_pipe
 from analysis import run_analysis,convert_to_analysis_format
 from pytorch_Gpipe import pipe_model,get_weight_functions
@@ -172,11 +172,6 @@ class ParsePartitioningOptsSquad(Parser):
             type=int,
             default=4,
             help="multiple threads for converting example to features")
-
-    def _extra(self, group):
-        # NOTE: copy and paste from run_squard script.
-        # Required parameters
-        group.add_argument("--debug", action="store_true", default=False)
     
     def _default_values(self):
         return {
@@ -188,21 +183,44 @@ class ParsePartitioningOptsSquad(Parser):
             "analysis_batch_size": 1,
         }
 
+    def _auto_file_name(self, args) -> str:
+        return f"bert_{args.n_partitions}p"
 
-def parse_cli():
-    parser = ParsePartitioningOptsSquad(
-        description="Partitioning models",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    args = parser.parse_args()
+class BertPartitioner(Partitioner):
+    def __init__(self,args) -> None:
+        super().__init__(args)
+        self.tokenizer = BertTokenizer.from_pretrained(args.model_name_or_path,
+        do_lower_case=args.do_lower_case,
+        cache_dir=args.cache_dir if args.cache_dir else None)
 
-    if not args.output_file:
-        args.output_file = f"bert_{args.n_partitions}p"
+
+    @property
+    def batch_dim(self) -> int:
+        return 0
     
-    if args.output_file.endswith(".py"):
-        args.output_file = args.output_file[:-3]
+    def get_model(self, args) -> torch.nn.Module:
+        config = BertConfig.from_pretrained(args.model_name_or_path,
+        cache_dir=args.cache_dir if args.cache_dir else None)
+        setattr(config,"precompute_attention_mask",args.precompute_attention_mask)
 
-    return args
+        model = BertForQuestionAnswering.from_pretrained(
+        args.model_name_or_path,
+        from_tf=bool(".ckpt" in args.model_name_or_path),
+        config=config,
+        cache_dir=args.cache_dir if args.cache_dir else None).train()
+
+        return model
+
+    def get_input(self, args, analysis):
+        return get_inputs_squad(args,self.tokenizer,analysis=analysis)
+    
+    
+
+    def register_functions(self):
+        register_new_explicit_untraced_function(operator.is_, operator)
+        register_new_explicit_untraced_function(operator.is_not, operator)
+        register_new_traced_function(math.sqrt, math)
 
 
 def get_inputs_squad(args, tokenizer, analysis=False):
@@ -230,6 +248,18 @@ def get_inputs_squad(args, tokenizer, analysis=False):
         "token_type_ids": batch[2],
     }
     return inputs
+
+
+
+def parse_cli():
+    parser = ParsePartitioningOptsSquad(
+        description="Partitioning models",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    args = parser.parse_args()
+
+    return args
+
 
 
 def main():
@@ -262,9 +292,7 @@ def main():
     
     # Partition the model
     GET_PARTITIONS_ON_CPU = True
-    register_new_explicit_untraced_function(operator.is_, operator)
-    register_new_explicit_untraced_function(operator.is_not, operator)
-    register_new_traced_function(math.sqrt, math)
+    
 
     sample = get_inputs_squad(args, tokenizer, analysis=False)
 
