@@ -41,7 +41,8 @@ def pipe_model(model: nn.Module,
                save_memory_mode:bool=False,
                use_graph_profiler:bool=True,
                use_network_profiler:bool=False,
-               profile_ops:bool=True) -> Graph:
+               profile_ops:bool=True,
+               graph:Optional[Graph]=None) -> Graph:
     '''attemps to partition a model to given number of parts using our profiler
        this will produce a python file with the partition config
 
@@ -106,6 +107,9 @@ def pipe_model(model: nn.Module,
         minimize memory footprint during profiling
         sacrifice speed for memory
         default False
+    graph:
+        an existing graph to repartition
+        default None
     '''
 
     if basic_blocks is None:
@@ -129,7 +133,8 @@ def pipe_model(model: nn.Module,
                             use_graph_profiler=use_graph_profiler,
                             use_network_profiler=use_network_profiler,
                             profile_ops=profile_ops,
-                            save_memory_mode=save_memory_mode
+                            save_memory_mode=save_memory_mode,
+                            graph = graph
                             )
 
     compile_partitioned_model(graph,
@@ -160,7 +165,8 @@ def partition_model(model: nn.Module,
                     use_graph_profiler:bool=True,
                     use_network_profiler:bool=False,
                     profile_ops:bool=True,
-                    save_memory_mode:bool=False) -> Graph:
+                    save_memory_mode:bool=False,
+                    graph:Optional[Graph] = None) -> Graph:
     '''
     profiles the network and return a graph representing the partition
 
@@ -212,18 +218,19 @@ def partition_model(model: nn.Module,
     if acyclic_opt is None:
         acyclic_opt = dict()
 
-    graph = build_graph(model,
-                        args=args,
-                        kwargs=kwargs,
-                        max_depth=max_depth,
-                        basic_blocks=basic_blocks,
-                        n_iter=n_iter,
-                        use_graph_profiler=use_graph_profiler,
-                        use_network_profiler=use_network_profiler,
-                        profile_ops=profile_ops,
-                        recomputation=recomputation,
-                        force_no_recomp_scopes=force_no_recomp_scopes,
-                        save_memory_mode=save_memory_mode)
+    if graph is None:
+        graph = build_graph(model,
+                            args=args,
+                            kwargs=kwargs,
+                            max_depth=max_depth,
+                            basic_blocks=basic_blocks,
+                            n_iter=n_iter,
+                            use_graph_profiler=use_graph_profiler,
+                            use_network_profiler=use_network_profiler,
+                            profile_ops=profile_ops,
+                            recomputation=recomputation,
+                            force_no_recomp_scopes=force_no_recomp_scopes,
+                            save_memory_mode=save_memory_mode)
     if use_METIS:
         print("-I- using METIS partitioning algorithm")
         graph = METIS_partition(graph,
