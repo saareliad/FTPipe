@@ -2,7 +2,7 @@ import shlex
 import sys
 from typing import Tuple
 import os
-from shutil import copyfile
+from shutil import copyfile,rmtree
 
 import torch
 
@@ -17,8 +17,10 @@ def choose_blocks(model, args)->Tuple[torch.nn.Module]:
 
     if args.basic_blocks is None:
         args.basic_blocks = []
-    return tuple([blocks[name] for name in args.basic_blocks])
-
+    try:
+        return tuple([blocks[name] for name in args.basic_blocks])
+    except KeyError:
+        raise ValueError(f"invalid basic blocks possible blocks are {list(blocks.keys())}")
 
 def record_cmdline(output_file):
     """Add cmdline to generated python output file."""
@@ -31,10 +33,13 @@ def record_cmdline(output_file):
         f.write(cmdline.rstrip('\r\n') + '\n' + content)
 
 
-def bruteforce_main(main, override_dicts=None, NUM_RUNS=2, TMP="/tmp/partitioning_outputs/") :
+def bruteforce_main(main,main_kwargs=None, override_dicts=None, NUM_RUNS=2, TMP="/tmp/partitioning_outputs/") :
     # TODO: put all hyper parameters here, a dict for each setting we want to try.
     # d1 = dict(basic_blocks=[])
     # ovverride_dicts.append(d1)
+    if main_kwargs is None:
+        main_kwargs = dict()
+
     results = {}
     best = None
     
@@ -43,54 +48,49 @@ def bruteforce_main(main, override_dicts=None, NUM_RUNS=2, TMP="/tmp/partitionin
 
     if not override_dicts:
         override_dicts = [{}]
-
+    
+    os.makedirs(TMP, exist_ok=True)
     DICT_PREFIX = "_d%d"
     current_dict_prefix = ""
     for i, override_dict in enumerate(override_dicts):
         if i > 0:
             current_dict_prefix = DICT_PREFIX.format(i)
 
-        counter = 0
-        while counter < NUM_RUNS:
-            out = main(override_dict)
-     
+        for counter in range(NUM_RUNS):
+            main_kwargs['override_dict'] = override_dict
             try:
-                os.makedirs(TMP, exist_ok=True)
-                (analysis_result, args) = out
+                out = main(**main_kwargs)
+            except (Exception,RuntimeError,AssertionError) as e:
+                continue
 
-                name = args.output_file
-                orig_name = name
+            (analysis_result, output_file) = out
+
+            name = output_file
+            orig_name = name
+            flag = False
+
+            if name in results:
+                if name.endswith(".py"):
+                    name = name[:-3]
+                flag = True
+
+            while (name+".py" in results) or flag:
                 flag = False
+                name += f"_{counter}"
+            
+            name += current_dict_prefix
+            new_path = os.path.join(TMP, name+".py")
+            copyfile(orig_name+".py",  new_path)  # Save the last generated file
 
-                if name in results:
-                    if name.endswith(".py"):
-                        name = name[:-3]
-                    flag = True
+            results[name] = analysis_result
 
-                while (name+".py" in results) or flag:
-                    flag = False
-                    name += f"_{counter}"
-                
-                name += current_dict_prefix
-                new_path = os.path.join(TMP, name+".py")
-                copyfile(orig_name+".py",  new_path)  # Save the last generated file
-
-                results[name] = analysis_result
-
-                if best is None:
+            if best is None:
+                best = (new_path, analysis_result)
+            else:
+                if analysis_result > best[1]:
                     best = (new_path, analysis_result)
-                else:
-                    if analysis_result > best[1]:
-                        best = (new_path, analysis_result)
 
-            except Exception as e:
-                print("-E- running multiple times failed")
-                raise e
-
-            counter += 1
-
-    print(results)
     print(f"best: {best}")
-    copyfile(os.path.join(TMP, best[0]), orig_name+".py")
+    copyfile(best[0], orig_name+".py")
     print(f"-I- copied best to {orig_name}.py")
-
+    rmtree(TMP)

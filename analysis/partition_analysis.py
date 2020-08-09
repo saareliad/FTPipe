@@ -8,7 +8,6 @@ from .ssgd_analysis import run_analysis as ssgd_run_analysis
 from .asgd_analysis import run_analysis as asgd_run_analysis
 
 from pprint import pprint
-import sys
 import io
 from contextlib import redirect_stdout
 import warnings
@@ -43,6 +42,8 @@ def run_analysis(sample,
     #kwarg input
     if isinstance(sample, dict):
         sample = tuple([sample[i] for i in config['model inputs']])
+    elif not isinstance(sample,tuple):
+        sample = (sample,)
 
     # NOTE: setting add_comm_times_to_balance, is for only debug porpuses
 

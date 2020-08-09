@@ -25,7 +25,7 @@ def partition_async_pipe(
     # CACHE
     profiles_cache_name="",
     overwrite_profiles_cache=False,
-):
+)->Graph:
 
     allowed_mistakes = 0
     # HACK: allow mistakes for multilevel and acyclic...
