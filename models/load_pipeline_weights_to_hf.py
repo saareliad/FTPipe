@@ -3,9 +3,8 @@ import re
 import os
 import abc
 from transformers import AutoModel, AutoConfig, AutoTokenizer, T5ForConditionalGeneration
-from .transformers_utils import get_model_tokenizer_and_config_by_name
+from .transformers_utils import get_model_tokenizer_and_config_by_name, resize_token_embeddings
 from .cfg_to_model import get_layers_tensors_and_pipe_config, get_generated_module, get_pipe_config
-
 
 class Loader(abc.ABC):
     ALLOW_UNSHARED = {}
@@ -16,7 +15,6 @@ class Loader(abc.ABC):
         # returns: model, extra (dict)
         raise NotImplementedError()
 
-    @abc.abstractmethod
     def _check_load_matching(self, original_state, unified_state):
         # Reruns if loading is strict
         if not (self.ALLOW_UNSHARED or self.ALLOW_UNLOADEDED):
@@ -93,6 +91,7 @@ class HFLoader(Loader):
                               tokenizer_name=None,
                               tokenizer_kw=dict(do_lower_case=False),
                               config_kw=dict(),
+                              resize_embeds=True,
                               ):
         """Get Huggingface model, tokenizer and config we want to load to."""
         config, unsed = AutoConfig.from_pretrained(
@@ -119,6 +118,9 @@ class HFLoader(Loader):
             from_tf=bool('.ckpt' in model_name_or_path),
             config=config,
             cache_dir=cache_dir if cache_dir else None)
+
+        if resize_embeds:
+            resize_token_embeddings(model, tokenizer)
 
         return model, tokenizer, config
 
@@ -150,25 +152,24 @@ class T5HFLoader(HFLoader):
 
 
 if __name__ == "__main__":
-    import typing
+    import types
 
     args = dict(model_name_or_path="t5-small",
                 save_name_prefix="tst_t5_",
                 model="t5_small_tied_lmhead_4p_bw12_async_squad1",
                 save_dir="tstloading")
-    typing.SimpleNamespace(**args)
+    args = types.SimpleNamespace(**args)
     to_original = True
-
 
     cfg = args.model
     generated = get_generated_module(cfg)
     model, tokenizer, config = get_model_tokenizer_and_config_by_name(cfg)
     layers, tensors, pipe_config = get_layers_tensors_and_pipe_config(cfg, model_instance=model)
     n_stages = pipe_config.n_stages
-    partitions = [getattr(generated, f"Partition{i}")(layers, tensors, device='cpu') for i in range(n_stages)]
-
+    partitions = [getattr(generated, f"Partition{i}")(layers, tensors, device='cpu') for i in range(n_stages)] 
+    os.makedirs(args.save_dir, exist_ok=True)
     name_prefix = args.save_name_prefix
-    for n, i in enumerate(partitions):
+    for i, n in enumerate(partitions):
         fn = os.path.join(args.save_dir, f"{name_prefix}_Partition{i}.pt")
         torch.save(n.state_dict(), fn)
         print(f"-I- saved to {fn}")
@@ -183,3 +184,4 @@ if __name__ == "__main__":
     print("generating output")
     input_ids = tokenizer.encode("summarize: Hello, my dog is cute", return_tensors="pt")  # Batch size 1
     outputs = hugg.generate(input_ids)
+    print(outputs)
