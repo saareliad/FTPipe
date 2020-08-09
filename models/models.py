@@ -12,15 +12,11 @@ from .transformers_cfg import MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS
 
 _PARTITIONED_MODELS_PACKAGE = "models.partitioned"
 
-# TODO: do this automatically...
-# HACK: called with a ready model instance.
-_TRANSFORMERS = {k: dict() for k in MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS}
-
 MODEL_CFG_TO_SAMPLE_MODEL = {}
 MODEL_CONFIGS = {}
 CFG_TO_GENERATED_FILE_NAME = {}
 
-
+# TODO: evolve to this or simillar API at 2nd phase
 # def register_model(name, generated_file_name_or_path, get_model_fn):
 
 
@@ -33,33 +29,6 @@ def register_model(name, dict_params, model_class, generated_file_name_or_path):
     MODEL_CFG_TO_SAMPLE_MODEL[name] = model_class
     CFG_TO_GENERATED_FILE_NAME[name] = generated_file_name_or_path
 
-register_model(name='wrn_28x10_c100_dr03_p4',
-               dict_params=dict(depth=28,
-                                num_classes=100,
-                                widen_factor=10,
-                                drop_rate=0.3),
-               model_class=WideResNet,
-               generated_file_name_or_path='wrn_28x10_c100_dr03_p4')
-
-
-register_model(name='wrn_28x10_c100_dr03_p4_group_norm',
-               dict_params=dict(depth=28,
-                                num_classes=100,
-                                widen_factor=10,
-                                drop_rate=0.3),
-               model_class=WideResNet_GN,
-               generated_file_name_or_path='wrn_28x10_c100_dr03_p4_group_norm')
-
-
-register_model(name='resnet50_imagenet_p8',
-               dict_params=dict(block=Bottleneck, layers=[3, 4, 6, 3], num_classes=1000),
-               model_class=ResNet,
-               generated_file_name_or_path='resnet50_imagenet_p8')
-
-
-for name in _TRANSFORMERS:
-    # HACK: called with a ready model instance.
-    register_model(name=name, dict_params={}, model_class=None, generated_file_name_or_path=name)
 
 def create_normal_model_instance(cfg):
     """ Example : cfg='wrn_16x4' """

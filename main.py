@@ -13,7 +13,7 @@ from experiments import save_experiment, load_experiment_for_update
 from prepare_pipeline import prepare_pipeline, preproc_data
 import torch.multiprocessing as mp
 
-from models.cfg_to_model import get_pipe_config
+from models.models import get_pipe_config
 
 # TODO: support multiple servers,
 # TODO heterogenous servers
