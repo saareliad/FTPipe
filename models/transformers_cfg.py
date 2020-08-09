@@ -1,5 +1,6 @@
 # See https://huggingface.co/models
 # GPT2_NAMES_OR_PATHES = {'gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'}
+from .models import register_model
 # TODO: replace with auto config & tokenizers
 from transformers import (GPT2Config, GPT2Tokenizer)
 from transformers import (BertConfig, BertTokenizer)
@@ -245,3 +246,7 @@ functions_list = getmembers(
 # dict of all functions in current file.
 # name --> function
 MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS = {i: v for i, v in functions_list}
+
+for name in MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS:
+    # HACK: called with a ready model instance.
+    register_model(name=name, dict_params={}, model_class=None, generated_file_name_or_path=name)

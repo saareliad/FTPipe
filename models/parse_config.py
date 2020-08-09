@@ -1,4 +1,4 @@
-from .cfg_to_model import get_partitioning
+from .models import get_partitioning
 
 from itertools import count
 from collections import OrderedDict, defaultdict
