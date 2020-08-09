@@ -128,7 +128,8 @@ def gpt2_p4_lm_untied():
     return dict(model_type='gpt2_lm_stateless',
                 model_name_or_path='gpt2',
                 do_lower_case=False,
-                output_past=False,
+                explicitly_set_dict=dict(
+                        output_past=False,),
                 stateless_tied=False)
 
 
@@ -136,7 +137,8 @@ def gpt2_p4_lm_tied():
     return dict(model_type='gpt2_lm_stateless',
                 model_name_or_path='gpt2',
                 do_lower_case=False,
-                output_past=False,
+                explicitly_set_dict=dict(
+                        output_past=False,),
                 stateless_tied=True)
 
 
@@ -144,7 +146,8 @@ def new_gpt2_xl_tied_lm_p8_seq_512():
     return dict(model_type='gpt2_lm',
                 model_name_or_path='gpt2-xl',
                 do_lower_case=False,
-                output_past=False,
+                explicitly_set_dict=dict(
+                        output_past=False,),
                 stateless_tied=False)
 
 
@@ -152,7 +155,8 @@ def old_gpt2xl_8p_untied():
     return dict(model_type='gpt2_lm_stateless',
                 model_name_or_path='gpt2-xl',
                 do_lower_case=False,
-                output_past=False,
+                explicitly_set_dict=dict(
+                        output_past=False,),
                 stateless_tied=False)
 
 
@@ -160,7 +164,8 @@ def gpt2_xl_p8_lm_untied():
     return dict(model_type='gpt2_lm_stateless',
                 model_name_or_path='gpt2-xl',
                 do_lower_case=False,
-                output_past=False,
+                explicitly_set_dict=dict(
+                        output_past=False,),
                 stateless_tied=False)
 
 
@@ -168,7 +173,8 @@ def gpt2_xl_p8_lm_tied():
     return dict(model_type='gpt2_lm_stateless',
                 model_name_or_path='gpt2-xl',
                 do_lower_case=False,
-                output_past=False,
+                explicitly_set_dict=dict(
+                        output_past=False,),
                 stateless_tied=True)
 
 

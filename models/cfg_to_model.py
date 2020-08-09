@@ -98,33 +98,34 @@ def normal_model_class(cfg):
 
 def get_partitioning(cfg, my_rank, batch_size,
                      model_instance=None) -> Tuple[PipelineConfig, Module]:
+    layers, tensors, pipe_config = get_layers_tensors_and_pipe_config(cfg, model_instance)
+
+    model = pipe_config.realize_stage_for_rank(layers, tensors, batch_size, my_rank)
+
+    return pipe_config, model
+
+
+def get_layers_tensors_and_pipe_config(cfg, model_instance=None):
     GET_PARTITIONS_ON_CPU = True
     # Get Generated file
     generated = get_generated_module(cfg)
     create_pipeline_configuration = generated.create_pipeline_configuration
     layerDict = generated.layerDict
     tensorDict = generated.tensorDict
-
     # Create instance of normal model
     if model_instance:
         # assert isinstance(model_instance, normal_model_class(cfg))
         pass
     else:
         model_instance = create_normal_model_instance(cfg)
-
     config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
     # TODO: change it
     pipe_config = PipelineConfig.fromDict(config)
-
     depth = pipe_config.depth
     blocks = pipe_config.basic_blocks
     layers = layerDict(model_instance, depth=depth, basic_blocks=blocks)
     tensors = tensorDict(model_instance)
-
-    model = pipe_config.realize_stage_for_rank(layers, tensors, batch_size,
-                                               my_rank)
-
-    return pipe_config, model
+    return layers, tensors, pipe_config
 
 
 def get_pipe_config(cfg: str) -> PipelineConfig:
@@ -160,4 +161,7 @@ def get_generated_module(cfg):
         raise e
 
     return generated
+
+
+
 
