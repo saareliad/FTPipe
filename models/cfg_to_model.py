@@ -16,76 +16,50 @@ _PARTITIONED_MODELS_PACKAGE = "models.partitioned"
 # HACK: called with a ready model instance.
 _TRANSFORMERS = {k: dict() for k in MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS}
 
-_RESENETS = dict(resnet50_imagenet_p8=dict(
-    block=Bottleneck, layers=[3, 4, 6, 3], num_classes=1000))
-
-_WIDE_RESNETS = dict(
-    wrn_16x4_p2=dict(depth=16, num_classes=10, widen_factor=4, drop_rate=0.0),
-    wrn_16x4_p4=dict(depth=16, num_classes=10, widen_factor=4, drop_rate=0.0),
-    wrn_28x10_c100_dr03_p4=dict(depth=28,
-                                num_classes=100,
-                                widen_factor=10,
-                                drop_rate=0.3),
-    wrn_16x4_c100_p2=dict(depth=16,
-                          num_classes=100,
-                          widen_factor=4,
-                          drop_rate=0.0),
-    wrn_16x4_c100_p4=dict(depth=16,
-                          num_classes=100,
-                          widen_factor=4,
-                          drop_rate=0.0),
-    wrn_28x10_c100_dr03_p2=dict(depth=28,
-                                num_classes=100,
-                                widen_factor=10,
-                                drop_rate=0.3),
-    # wrn_16x4_c10=dict(depth=16, num_classes=10, widen_factor=4, drop_rate=0.0),
-    # wrn_28x10_c10_dr03=dict(depth=28, num_classes=10, widen_factor=10, drop_rate=0.3),
-    # wrn_28x10_c10=dict(depth=28, num_classes=10, widen_factor=10, drop_rate=0),
-    # wrn_28x10_c100_p2
-    # wrn_28x10_c100_dr03=dict(depth=28, num_classes=100, widen_factor=10, drop_rate=0.3),
-    # wrn_28x10_c100=dict(depth=28, num_classes=100, widen_factor=10, drop_rate=0),
-)
-
-_WIDE_RESNETS_GN = dict(
-    wrn_28x10_c100_dr03_p4_group_norm=dict(depth=28,
-                                           num_classes=100,
-                                           widen_factor=10,
-                                           drop_rate=0.3),
-
-        )
-# MODEL_CFG_TO_SAMPLE_MODEL = {
-#     **{k: WideResNet
-#        for k in _WIDE_RESNETS.keys()},
-#     **{k: ResNet
-#        for k in _RESENETS.keys()}
-# }
-# MODEL_CONFIGS = {**_WIDE_RESNETS, **_RESENETS}
-# CFG_TO_GENERATED_FILE_NAME = {i: i for i in MODEL_CONFIGS.keys()}
-
 MODEL_CFG_TO_SAMPLE_MODEL = {}
 MODEL_CONFIGS = {}
 CFG_TO_GENERATED_FILE_NAME = {}
 
 
-def _register_model(dict_params, model_cls):
+# def register_model(name, generated_file_name_or_path, get_model_fn):
+
+
+def register_model(name, dict_params, model_class, generated_file_name_or_path):
     global MODEL_CFG_TO_SAMPLE_MODEL
     global MODEL_CONFIGS
     global CFG_TO_GENERATED_FILE_NAME
 
-    MODEL_CONFIGS.update(dict_params)
-    MODEL_CFG_TO_SAMPLE_MODEL.update(
-        {k: model_cls
-         for k in dict_params.keys()})
+    MODEL_CONFIGS[name] = dict_params
+    MODEL_CFG_TO_SAMPLE_MODEL[name] = model_class
+    CFG_TO_GENERATED_FILE_NAME[name] = generated_file_name_or_path
 
-    CFG_TO_GENERATED_FILE_NAME = {i: i for i in MODEL_CONFIGS.keys()}
+register_model(name='wrn_28x10_c100_dr03_p4',
+               dict_params=dict(depth=28,
+                                num_classes=100,
+                                widen_factor=10,
+                                drop_rate=0.3),
+               model_class=WideResNet,
+               generated_file_name_or_path='wrn_28x10_c100_dr03_p4')
 
 
-_register_model(_WIDE_RESNETS, WideResNet)
-_register_model(_WIDE_RESNETS_GN, WideResNet_GN)
-_register_model(_RESENETS, ResNet)
-# HACK: called with a ready model instance.
-_register_model(_TRANSFORMERS, None)
+register_model(name='wrn_28x10_c100_dr03_p4_group_norm',
+               dict_params=dict(depth=28,
+                                num_classes=100,
+                                widen_factor=10,
+                                drop_rate=0.3),
+               model_class=WideResNet_GN,
+               generated_file_name_or_path='wrn_28x10_c100_dr03_p4_group_norm')
 
+
+register_model(name='resnet50_imagenet_p8',
+               dict_params=dict(block=Bottleneck, layers=[3, 4, 6, 3], num_classes=1000),
+               model_class=ResNet,
+               generated_file_name_or_path='resnet50_imagenet_p8')
+
+
+for name in _TRANSFORMERS:
+    # HACK: called with a ready model instance.
+    register_model(name=name, dict_params={}, model_class=None, generated_file_name_or_path=name)
 
 def create_normal_model_instance(cfg):
     """ Example : cfg='wrn_16x4' """
