@@ -366,7 +366,7 @@ def preproc_data(args, cache=None, save_cache=True):
     dataset_keywords = {}
     if is_huggingface_transformer(args):
         if cache is None:
-            handler = models.AVAILABLE_MODELS.get(args.name)
+            handler = models.AVAILABLE_MODELS.get(args.model)
             model_instance = handler.get_normal_model_instance()
             tokenizer = handler.tokenizer
             config = handler.config
@@ -426,7 +426,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     model_instance = None
     dataset_keywords = {}
     if is_huggingface_transformer(args):
-        handler = models.AVAILABLE_MODELS.get(args.name)
+        handler = models.AVAILABLE_MODELS.get(args.model)
         model_instance = handler.get_normal_model_instance()
         tokenizer = handler.tokenizer
         config = handler.config

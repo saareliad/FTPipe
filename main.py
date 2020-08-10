@@ -13,7 +13,7 @@ from experiments import save_experiment, load_experiment_for_update
 from prepare_pipeline import prepare_pipeline, preproc_data
 import torch.multiprocessing as mp
 
-from models.models import get_pipe_config
+from models import AVAILABLE_MODELS
 
 # TODO: support multiple servers,
 # TODO heterogenous servers
@@ -289,7 +289,10 @@ def mp_queue_matrix(world_size):
 def mp_recv_queue_per_tensor(args_model, world_size, ushn="_grad"):
     # FIXME: unused.
     # FIXME FIXME: this whole thing did not assume nested tuples...
-    pc = get_pipe_config(args_model)
+    handler = AVAILABLE_MODELS.get(args_model)
+    pc = handler.get_pipe_config()
+
+
     d = {}
     for i, s in pc.stages.items():
         recv_inputs = [
