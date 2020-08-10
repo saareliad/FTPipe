@@ -1,12 +1,11 @@
-from typing import Dict
+from argparse import Namespace
+from typing import Dict, List, Tuple
 from pytorch_Gpipe.model_partitioning.acyclic_partitioning import Objective, META_ALGORITH
 
 import argparse
 import torch
 from abc import ABC,abstractmethod
-
-
-
+from gettext import gettext
 class Parser(argparse.ArgumentParser,ABC):
     def __init__(self,*args,**kwargs):
         super().__init__(*args,**kwargs)
@@ -111,6 +110,7 @@ class Parser(argparse.ArgumentParser,ABC):
         group.add_argument(
             '--n_iter',
             type=int,
+            default=10,
             help=
             "number of iteration used in order to profile the network and run analysis"
         )
@@ -179,6 +179,8 @@ class Parser(argparse.ArgumentParser,ABC):
 
         group.add_argument("--overwrite_profiles_cache", action="store_true", default=False, help="overwrite profile cache")
 
+    #TODO should use sub parsers as those 2 groups are mutaully exclusive
+    #also reveales intent better --use_METIS --use_ACYCLIC
     def _add_METIS_args(self,group):
         group.add_argument("--metis_attempts",type=int,default=1000,help="number of attempts for running the METIS partitioning algorithm")
         group.add_argument("--metis_verbose_on_error",action="store_true",default=False,help="wether to print the cause of the error")
@@ -261,15 +263,18 @@ class Parser(argparse.ArgumentParser,ABC):
     def _default_values(self):
         return dict()
 
-    def _post_parse(self,args):
+    def _post_parse(self,args,argv):
+        # taken from argparse.ArgumentParser.parse_args
+        if argv:
+            msg = gettext('unrecognized arguments: %s')
+            self.error(msg % ' '.join(argv))
         return args
 
     def _auto_file_name(self,args)->str:
         return ""
 
-    def parse_args(self,args=None, namespace=None):
-        args = super().parse_args(args, namespace)
-
+    def parse_args(self,args=None, namespace=None)->Namespace:
+        args,extra = super().parse_known_args(args, namespace)
         args.acyclic_opt = self._acyclic_opts_dict_from_parsed_args(args)
         args.METIS_opt = self._metis_opts_dict_from_parsed_args(args)
 
@@ -283,7 +288,7 @@ class Parser(argparse.ArgumentParser,ABC):
 
         args.force_no_recomputation_scopes_fn = lambda scope: any(s in scope for s in args.force_no_recomputation_scopes)
 
-        return self._post_parse(args)
+        return self._post_parse(args,extra)
 
     
 

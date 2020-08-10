@@ -6,14 +6,13 @@ import importlib
 from typing import Dict, Optional, Tuple
 sys.path.append("../")
 
-
 from pytorch_Gpipe.model_profiling.control_flow_graph import Graph
 from pytorch_Gpipe import pipe_model,get_weight_functions
 from pytorch_Gpipe.utils import layerDict, tensorDict,move_tensors
 
 from partitioning_scripts.partition_async_pipe import partition_async_pipe
 from partitioning_scripts.partition_scripts_utils import bruteforce_main, choose_blocks, record_cmdline
-from partitioning_scripts.tasks import Partitioner,get_parser_and_partitioner
+from partitioning_scripts.tasks import Partitioner,Parser,get_parser_and_partitioner
 from analysis import run_analysis
 from analysis.analysis_utils import convert_to_analysis_format
 
@@ -26,7 +25,7 @@ def parse_cli()->Tuple[Namespace,Dict,Partitioner]:
 
     parser_cls,partitioner_cls = get_parser_and_partitioner(task.partitioning_task)
     
-    parser = parser_cls()
+    parser:Parser = parser_cls()
 
     cmd_args = parser.parse_args(args=rest)
     cmd_args.partitioning_task = task.partitioning_task
@@ -86,7 +85,6 @@ def main(cmd_args:Namespace,model_args:Dict,partitioner:Partitioner,override_dic
             graph = Graph.deserialize(profiles_cache_name)
         else:
             graph = None
-
         #apply partitioning either from scratch or from a cached graph
         graph = pipe_model(model,
                         partitioner.batch_dim,
@@ -183,7 +181,7 @@ def main(cmd_args:Namespace,model_args:Dict,partitioner:Partitioner,override_dic
 
 if __name__ == "__main__":
     cmd_args,model_args, partitioner = parse_cli() 
-
+    #TODO we can cache the models when doing hyper parameter searching
     #setup remote debugging
     if cmd_args.debug:
         import ptvsd

@@ -189,8 +189,9 @@ class ParsePartitioningOptsGlue(Parser):
         }
         return d
     
-    def _post_parse(self, args):
+    def _post_parse(self, args,argv):
         args.model_type = args.model_type.lower()
+        return super()._post_parse(args,argv)
     
     def _auto_file_name(self, args) -> str:
         bw_str = str(args.bw).replace(".", "_")

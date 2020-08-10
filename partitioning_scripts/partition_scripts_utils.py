@@ -52,17 +52,17 @@ def bruteforce_main(main,main_kwargs=None, override_dicts=None, NUM_RUNS=2, TMP=
     os.makedirs(TMP, exist_ok=True)
     DICT_PREFIX = "_d%d"
     current_dict_prefix = ""
+    last_exception = None
     for i, override_dict in enumerate(override_dicts):
         if i > 0:
             current_dict_prefix = DICT_PREFIX.format(i)
-
         for counter in range(NUM_RUNS):
             main_kwargs['override_dict'] = override_dict
             try:
                 out = main(**main_kwargs)
             except (Exception,RuntimeError,AssertionError) as e:
+                last_exception = e
                 continue
-
             (analysis_result, output_file) = out
 
             name = output_file
@@ -86,11 +86,13 @@ def bruteforce_main(main,main_kwargs=None, override_dicts=None, NUM_RUNS=2, TMP=
 
             if best is None:
                 best = (new_path, analysis_result)
-            else:
-                if analysis_result > best[1]:
+            elif analysis_result > best[1]:
                     best = (new_path, analysis_result)
 
     print(f"best: {best}")
+    if best is None:
+        print("-I- hyper parameter search failed raising last exception")
+        raise last_exception
     copyfile(best[0], orig_name+".py")
     print(f"-I- copied best to {orig_name}.py")
     rmtree(TMP)
