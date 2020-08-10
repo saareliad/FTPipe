@@ -1,5 +1,4 @@
 from .interface import BaseOutPutIsLossTrainer, BaseLossTrainer
-from .gap_aware_trainer import GapAwareTrainerBase
 
 # HACK we layzyly use BaseOutPutIsLossTrainer
 class GlueTrainer(BaseOutPutIsLossTrainer):
@@ -56,9 +55,3 @@ class GlueTrainer(BaseOutPutIsLossTrainer):
 
         loss = loss.item()
         self.statistics.update_on_batch("loss", loss, batch_size)
-
-
-class GapAwareGlueTrainer(GlueTrainer, GapAwareTrainerBase):
-    def __init__(self, gap_aware, scheduler=None, **kw):
-        GlueTrainer.__init__(self, scheduler=scheduler, **kw)
-        GapAwareTrainerBase.__init__(self, gap_aware, scheduler=scheduler)

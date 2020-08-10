@@ -1,20 +1,22 @@
 from .interface import AnyTrainer
-from .cv_trainer import CVTrainer, GapAwareCVTrainer
-from .lm_trainer import LMTrainer, GapAwareLMTrainer
-from .squad_trainer import SquadTrainer, GapAwareSquadTrainer
+from .gap_aware_trainer import gap_aware_trainer_factory
+from .cv_trainer import CVTrainer
+from .lm_trainer import LMTrainer
+from .squad_trainer import SquadTrainer
 from .t5_squad_trainer import SquadTrainer as T5SquadTrainer
-from .t5_squad_trainer import GapAwareSquadTrainer as T5GapAwareSquadTrainer
-from .glue_trainer import GlueTrainer, GapAwareGlueTrainer
+from .glue_trainer import GlueTrainer
 
-AVAILABLE_TRAINERS = {
-    'cv': CVTrainer,
-    'cv_gap_aware': GapAwareCVTrainer,
-    'lm': LMTrainer,
-    'lm_gap_aware': GapAwareLMTrainer,
-    'squad': SquadTrainer,
-    'squad_gap_aware': GapAwareSquadTrainer,
-    'glue': GlueTrainer,
-    'glue_gap_aware': GapAwareGlueTrainer,
-    't5_squad': T5SquadTrainer,
-    't5_squad_gap_aware': T5GapAwareSquadTrainer,
-}
+AVAILABLE_TRAINERS = {}
+
+
+def register_trainer(name, trainer_cls: AnyTrainer):
+    AVAILABLE_TRAINERS[name] = trainer_cls
+    ga_trainer_cls = gap_aware_trainer_factory(trainer_cls=trainer_cls)
+    AVAILABLE_TRAINERS[name + "_gap_aware"] = ga_trainer_cls
+
+
+register_trainer("cv", CVTrainer)
+register_trainer("lm", LMTrainer)
+register_trainer("squad", SquadTrainer)
+register_trainer("glue", GlueTrainer)
+register_trainer("t5_squad", T5SquadTrainer)

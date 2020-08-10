@@ -10,52 +10,12 @@ from .interface import Stats
 
 # TODO: change the way of getting stats
 
-CV_STATS = {
-    'cv': CVStats,
-    'cv_loss_per_batch': NormCVstats,
-    'cv_grad_norm': NormCVstats,
-    'cv_grad_norm_loss_per_batch': NormCVstats,
-    'cv_theta_dist_grad_norm': CVDistanceNorm,
-    'cv_theta_dist_grad_norm_loss_per_batch': CVDistanceNorm,
-    'cv_theta_dist': CVDistance,
-    'cv_theta_dist_loss_per_batch': CVDistance,
-}
-
-LM_STATS = {
-    'lm': LMStats,
-    'lm_loss_per_batch': NormLMstats,
-    'lm_grad_norm': NormLMstats,
-    'lm_grad_norm_loss_per_batch': NormLMstats,
-    'lm_theta_dist_grad_norm': LMDistanceNorm,
-    'lm_theta_dist_grad_norm_loss_per_batch': LMDistanceNorm,
-    'lm_theta_dist': LMDistance,
-    'lm_theta_dist_loss_per_batch': LMDistance,
-}
-
-SQAUD_STATS = {
-    'squad': SquadStats,
-    'squad_loss_per_batch': NormSquadstats,
-    'squad_grad_norm': NormSquadstats,
-    'squad_grad_norm_loss_per_batch': NormSquadstats,
-    'squad_theta_dist_grad_norm': SquadDistanceNorm,
-    'squad_theta_dist_grad_norm_loss_per_batch': SquadDistanceNorm,
-    'squad_theta_dist': SquadDistance,
-    'squad_theta_dist_loss_per_batch': SquadDistance,
-}
+AVAILBALE_STATS = {}
 
 
-GLUE_STATS = {
-    'glue': GlueStats,
-    'glue_loss_per_batch': NormGluestats,
-    'glue_grad_norm': NormGluestats,
-    'glue_grad_norm_loss_per_batch': NormGluestats,
-    'glue_theta_dist_grad_norm': GlueDistanceNorm,
-    'glue_theta_dist_grad_norm_loss_per_batch': GlueDistanceNorm,
-    'glue_theta_dist': GlueDistance,
-    'glue_theta_dist_loss_per_batch': GlueDistance,
-}
-
-AVAILBALE_STATS = {**CV_STATS, **LM_STATS, **SQAUD_STATS, **GLUE_STATS}
+def register_statistics(name: str, stats_cls: Stats):
+    AVAILBALE_STATS[name] = stats_cls
+    AVAILBALE_STATS[name + "_loss_per_batch"] = stats_cls
 
 
 #  is_last_partition=True
@@ -63,3 +23,24 @@ def get_statistics(name: str, *args, **kw) -> Stats:
     record_loss_per_batch = "loss_per_batch" in name
     st_cls = AVAILBALE_STATS.get(name)
     return st_cls(*args, record_loss_per_batch=record_loss_per_batch, **kw)
+
+
+register_statistics("cv", CVStats)
+register_statistics("cv_grad_norm", NormCVstats)
+register_statistics("cv_theta_dist", CVDistance)
+register_statistics("cv_dist_grad_norm", CVDistanceNorm)
+
+register_statistics("lm", LMStats)
+register_statistics("lm_grad_norm", NormLMstats)
+register_statistics("lm_theta_dist", LMDistance)
+register_statistics("lm_dist_grad_norm", LMDistanceNorm)
+
+register_statistics("squad", SquadStats)
+register_statistics("squad_grad_norm", NormSquadstats)
+register_statistics("squad_theta_dist", SquadDistance)
+register_statistics("squad_dist_grad_norm", SquadDistanceNorm)
+
+register_statistics("glue", GlueStats)
+register_statistics("glue_grad_norm", NormGluestats)
+register_statistics("glue_theta_dist", GlueDistance)
+register_statistics("glue_dist_grad_norm", GlueDistanceNorm)

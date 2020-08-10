@@ -1,6 +1,5 @@
 # import torch
 from .interface import BaseOutPutIsLossTrainer
-from .gap_aware_trainer import GapAwareTrainerBase
 # TODO: typehint for statistics. maybe it should actually sit under stats
 
 
@@ -37,10 +36,3 @@ class LMTrainer(BaseOutPutIsLossTrainer):
         self.statistics.update_on_batch("loss", loss, batch_size)
         # Same as loos, we just get the statisitc differently...
         self.statistics.update_on_batch("ppl", loss, batch_size)
-
-
-class GapAwareLMTrainer(LMTrainer, GapAwareTrainerBase):
-    def __init__(self, gap_aware, scheduler=None, **kw):
-        # super(GapAwareLMTrainer, self).__init__(**kw)
-        LMTrainer.__init__(self, scheduler=scheduler, **kw)
-        GapAwareTrainerBase.__init__(self, gap_aware, scheduler=scheduler)

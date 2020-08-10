@@ -1,5 +1,4 @@
 from .interface import BaseOutPutIsLossTrainer, BaseLossTrainer
-from .gap_aware_trainer import GapAwareTrainerBase
 from collections import defaultdict
 from transformers.data.processors.squad import SquadResult
 # TODO: typehint for statistics. maybe it should actually sit under stats
@@ -125,9 +124,3 @@ class SquadTrainer(BaseOutPutIsLossTrainer):
 
         loss = loss.item()
         self.statistics.update_on_batch("loss", loss, batch_size)
-
-
-class GapAwareSquadTrainer(SquadTrainer, GapAwareTrainerBase):
-    def __init__(self, gap_aware, scheduler=None, **kw):
-        SquadTrainer.__init__(self, scheduler=scheduler, **kw)
-        GapAwareTrainerBase.__init__(self, gap_aware, scheduler=scheduler)

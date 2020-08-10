@@ -82,9 +82,3 @@ class SquadTrainer(BaseOutPutIsLossTrainer):
 
         loss = loss.item()
         self.statistics.update_on_batch("loss", loss, batch_size)
-
-
-class GapAwareSquadTrainer(SquadTrainer, GapAwareTrainerBase):
-    def __init__(self, gap_aware, scheduler=None, **kw):
-        SquadTrainer.__init__(self, scheduler=scheduler, **kw)
-        GapAwareTrainerBase.__init__(self, gap_aware, scheduler=scheduler)

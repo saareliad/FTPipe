@@ -1,8 +1,6 @@
 import torch
 from .interface import BaseLossTrainer
-from .gap_aware_trainer import GapAwareTrainerBase
 # TODO: typehint for statistics. maybe it should actually sit under stats
-
 
 class CVTrainer(BaseLossTrainer):
     PER_STEP_SCHEDULER = False
@@ -40,10 +38,3 @@ class CVTrainer(BaseLossTrainer):
 
 # TODO: it is also possible to do the entire thing on activation gradients,
 #  avoiding the need to do it over all gradeints.
-
-
-class GapAwareCVTrainer(CVTrainer, GapAwareTrainerBase):
-    def __init__(self, gap_aware, scheduler=None, **kw):
-        # super(GapAwareCVTrainer, self).__init__(**kw)
-        CVTrainer.__init__(self, scheduler=scheduler, **kw)
-        GapAwareTrainerBase.__init__(self, gap_aware, scheduler=scheduler)
