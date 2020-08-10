@@ -41,6 +41,7 @@ class Parser(argparse.ArgumentParser,ABC):
     def _add_model_args(self,group):
         pass
 
+    @abstractmethod
     def _add_data_args(self,group):
         pass
 

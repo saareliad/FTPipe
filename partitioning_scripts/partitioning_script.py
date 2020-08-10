@@ -133,7 +133,7 @@ def main(cmd_args:Namespace,model_args:Dict,partitioner:Partitioner,override_dic
         f.write("\n")
         f.write(f"model_args = {model_args}")
 
-#record overriden args as a override_dict variable
+    #record overriden args as a override_dict variable
     if override_dict:
         with open(f"{cmd_args.output_file}.py", "a") as f:
             f.write("\n")
@@ -180,6 +180,7 @@ def main(cmd_args:Namespace,model_args:Dict,partitioner:Partitioner,override_dic
 
     return analysis_result,cmd_args.output_file
 
+
 if __name__ == "__main__":
     cmd_args,model_args, partitioner = parse_cli() 
 
@@ -198,7 +199,7 @@ if __name__ == "__main__":
     # d1 = dict(basic_blocks=["T5LayerCrossAttention","T5LayerSelfAttention"])
     # override_dicts.append(d1)
     
-    NUM_RUNS = 2
+    NUM_RUNS = 1
     TMP = "tmp/"
 
     main_kwargs=dict(cmd_args=cmd_args,model_args=model_args,partitioner=partitioner)

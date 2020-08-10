@@ -29,7 +29,8 @@ def get_parser_and_partitioner(task_name)->Tuple[Parser,Partitioner]:
 
 
 
-# automatically import any Python files in the tasks/ directory
+# automatically import any Python files in the tasks directory
+# in order to automatically register all available tasks
 tasks_dir = os.path.dirname(__file__)
 for file in os.listdir(tasks_dir):
     path = os.path.join(tasks_dir, file)

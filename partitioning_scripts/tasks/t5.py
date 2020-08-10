@@ -338,4 +338,4 @@ class T5Partitioner(Partitioner):
 
 
 
-register_task("T5",ParsePartitioningT5Opts,T5Partitioner)
+register_task("t5",ParsePartitioningT5Opts,T5Partitioner)
