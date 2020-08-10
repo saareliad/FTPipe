@@ -366,8 +366,11 @@ def preproc_data(args, cache=None, save_cache=True):
     dataset_keywords = {}
     if is_huggingface_transformer(args):
         if cache is None:
-            model_instance, tokenizer, config = models.transformers_utils.get_model_tokenizer_and_config_by_name(
-                args.model)
+            handler = models.AVAILABLE_MODELS.get(args.name)
+            model_instance = handler.get_normal_model_instance()
+            tokenizer = handler.tokenizer
+            config = handler.config
+
             if save_cache:
                 cache = (model_instance, tokenizer, config)
         else:
@@ -423,8 +426,13 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     model_instance = None
     dataset_keywords = {}
     if is_huggingface_transformer(args):
-        model_instance, tokenizer, config = models.transformers_utils.get_model_tokenizer_and_config_by_name(
-            args.model)
+        handler = models.AVAILABLE_MODELS.get(args.name)
+        model_instance = handler.get_normal_model_instance()
+        tokenizer = handler.tokenizer
+        config = handler.config
+        del handler.config
+        del handler.tokenizer
+
         dataset_keywords['tokenizer'] = tokenizer
         dataset_keywords['config'] = config
 
@@ -451,6 +459,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     model = parsed_config.model
     # del parsed_config.model  # NOTE: can delete the extra reference to possibly save mem.
     del model_instance
+    del handler.normal_model_instance
 
     model.device = device
 

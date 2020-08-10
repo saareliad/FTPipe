@@ -3,8 +3,8 @@ import re
 import os
 import abc
 from transformers import AutoModel, AutoConfig, AutoTokenizer, T5ForConditionalGeneration
-from .transformers_utils import get_model_tokenizer_and_config_by_name, resize_token_embeddings
-from .models import get_layers_tensors_and_pipe_config, get_generated_module, get_pipe_config
+from .transformers_utils import resize_token_embeddings
+from .models import AVAILABLE_MODELS
 
 
 class Loader(abc.ABC):
@@ -72,10 +72,12 @@ class HFLoader(Loader):
         else:
             # load the model used for training/finetuning.
             # generated = get_generated_module(cfg)
-            model, tokenizer, config = self.get_model_tokenizer_and_config_by_name(
-                cfg)
-            # layers, tensors, pipe_config = get_layers_tensors_and_pipe_config(cfg, model_instance=model)
-            # partitions = [getattr(generated, f"Partition{i}")(layers, tensors, device='cpu') for i in range(n_stages)]
+            handler = AVAILABLE_MODELS.get(cfg)
+
+            model = handler.get_normal_model_instance()
+            tokenizer = handler.tokenizer
+            config = handler.config
+
             # TODO: tested without make stateless
             strict = self._check_load_matching(
                 original_state=model.state_dict(), unified_state=unified_state)
@@ -85,7 +87,7 @@ class HFLoader(Loader):
         return model, extra
 
     def get_unified_state_dict(self, cfg, name_prefix, partitions_saved_dir):
-        n_stages = get_pipe_config(cfg).n_stages
+        n_stages = AVAILABLE_MODELS.get(cfg).get_pipe_config().n_stages
         names = [f"{name_prefix}_Partition{i}.pt" for i in range(n_stages)]
         names = [os.path.join(partitions_saved_dir, name) for name in names]
         loaded = [torch.load(name) for name in names]
@@ -93,10 +95,6 @@ class HFLoader(Loader):
         for d in loaded:
             unified_state.update(d)
         return unified_state
-
-    def get_model_tokenizer_and_config_by_name(self, *args, **kw):
-        """Get what we used during training. Can override this"""
-        return get_model_tokenizer_and_config_by_name(*args, **kw)
 
     def get_hf_original_model_tokenizer_and_config(
             self,
@@ -179,10 +177,15 @@ if __name__ == "__main__":
     to_original = True
 
     cfg = args.model
-    generated = get_generated_module(cfg)
-    model, tokenizer, config = get_model_tokenizer_and_config_by_name(cfg)
-    layers, tensors, pipe_config = get_layers_tensors_and_pipe_config(
-        cfg, model_instance=model)
+    handler = AVAILABLE_MODELS.get(cfg)
+    generated = handler.get_generated_module()
+    model = handler.get_normal_model_instance()
+    tokenizer = handler.tokenizer
+    config = handler.config
+
+    layers, tensors = handler.get_layers_and_tensors()
+    pipe_config = handler.get_pipe_config()
+
     n_stages = pipe_config.n_stages
     partitions = [
         getattr(generated, f"Partition{i}")(layers, tensors, device='cpu')

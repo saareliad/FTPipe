@@ -1,8 +1,7 @@
-from .models import get_partitioning
+from .models import AVAILABLE_MODELS
 
 from itertools import count
 from collections import OrderedDict, defaultdict
-from copy import deepcopy
 
 
 def get_my_send_recv_ranks(config, stage, stage_to_rank_map=None):
@@ -84,10 +83,10 @@ class PartitioningConfigParser:
                  stage_to_device_map=None,
                  stateless_tied_same_process=False):
 
-        pipe_config, model = get_partitioning(cfg,
-                                              rank,
-                                              bs_train,
-                                              model_instance=model_instance)
+        handler = AVAILABLE_MODELS.get(cfg)
+        pipe_config = handler.get_pipe_config()
+        model = handler.realize_stage_for_rank(batch_size=bs_train, my_rank=rank)
+
         self.stage = pipe_config.rank_to_stage_idx(rank)
         self.pipe_config = pipe_config
 

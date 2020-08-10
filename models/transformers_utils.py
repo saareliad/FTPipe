@@ -1,5 +1,51 @@
 from .transformers_cfg import MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS, MODEL_TYPES
+from .models import CommonModelHandler
+from transformers import AutoModel, AutoConfig, AutoTokenizer
+from enum import Enum, auto
+import os
 
+class GetConfigFrom(Enum):
+    HardCoded = auto()
+    ParsedArgs = auto()
+    Generated = auto()
+
+
+class HFModelHandler(CommonModelHandler):
+    def __init__(self,
+                 method: GetConfigFrom = GetConfigFrom.HardCoded,
+                 *args, **kw):
+        super().__init__(*args, **kw)
+        self.pipeline_transformer_config = None
+        self.method = method
+
+        self.tokenizer = None
+        self.config = None
+
+    def get_normal_model_instance(self, *args, **kw):
+        cfg = self.get_pipeline_transformer_config()
+        model, tokenizer, config = pretrained_model_config_and_tokenizer(**cfg)
+
+        self.tokenizer = tokenizer
+        self.config = config
+        return model
+
+    def get_pipeline_transformer_config(self):
+        if self.pipeline_transformer_config is None:
+            if self.method == GetConfigFrom.Generated:
+                raise NotImplementedError()
+            elif self.method == GetConfigFrom.ParsedArgs:
+                raise NotImplementedError()
+            elif self.method == GetConfigFrom.HardCoded:
+                assert not os.path.exists(self.generated_file_name_or_path)
+                cfg = MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS.get(self.generated_file_name_or_path)()
+            self.pipeline_transformer_config = cfg
+        return self.pipeline_transformer_config
+
+    def get_extra(self, *args, **kw):
+        return dict(config=self.config, tokenizer=self.tokenizer)
+
+    def get_loader(self, *args, **kw):
+        raise NotImplementedError()
 
 def resize_token_embeddings(model, tokenizer):
     # NOTE: must use the same tokenizer used at partitioning.
@@ -12,7 +58,7 @@ def pretrained_model_config_and_tokenizer(
         model_name_or_path: str,
         config_name: str = "",
         tokenizer_name: str = "",
-        do_lower_case: bool = True,
+        do_lower_case: bool = False,
         cache_dir: str = "",
         stateless_tied=False,
         explicitly_set_dict={},
@@ -52,13 +98,5 @@ def pretrained_model_config_and_tokenizer(
             model_to_resize.make_stateless()
         else:
             raise ValueError(f"Problem making model stateless. model_type: {model_type}")
-
-    return model, tokenizer, config
-
-
-def get_model_tokenizer_and_config_by_name(name):
-    cfg = MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS.get(name)()
-
-    model, tokenizer, config = pretrained_model_config_and_tokenizer(**cfg)
 
     return model, tokenizer, config

@@ -1,6 +1,7 @@
 import importlib
 import os
-
+import abc
+from typing import Dict
 from .simple_partitioning_config import PipelineConfig
 
 from torch.nn import Module
@@ -8,74 +9,83 @@ from typing import Tuple
 
 _PARTITIONED_MODELS_PACKAGE = "models.partitioned"
 
-MODEL_CFG_TO_SAMPLE_MODEL = {}
-MODEL_CONFIGS = {}
-CFG_TO_GENERATED_FILE_NAME = {}
 
-# TODO: evolve to this or simillar API at 2nd phase
-# def register_model(name, generated_file_name_or_path, get_model_fn):
+class CommonModelHandler(abc.ABC):
+    def __init__(self, generated_file_name_or_path: str, partitioned_models_package=_PARTITIONED_MODELS_PACKAGE):
+        self.generated_file_name_or_path = generated_file_name_or_path
+        self.partitioned_models_package = partitioned_models_package
+        self.normal_model_instance = None
+        self.generated = None
+        self.pipe_config = None
+
+    @abc.abstractmethod
+    def get_normal_model_instance(self, *args, **kw):
+        # if self.normal_model_instance is None:
+        #     self.normal_model_instance = self.get_normal_model_instance()
+        # return  self.normal_model_instance
+        raise NotImplementedError()
+
+    def get_generated_module(self):
+        if self.generated is None:
+            cfg = self.generated_file_name_or_path
+
+            is_full_path = os.path.exists(cfg)
+            try:
+                if is_full_path:
+                    generated = load_module(cfg)
+                else:
+                    generated_file_name = self.generated_file_name_or_path
+                    generated = importlib.import_module("." + generated_file_name,
+                                                        package=self.partitioned_models_package)
+            except Exception as e:
+                print(f"-E- error loading generated config given {cfg}. is_full_path={is_full_path}")
+                raise e
+
+            self.generated = generated
+
+        return self.generated
+
+    def get_pipe_config(self):
+        if self.pipe_config is None:
+            generated = self.get_generated_module()
+            GET_PARTITIONS_ON_CPU = True
+            create_pipeline_configuration = generated.create_pipeline_configuration
+            config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
+            pipe_config = PipelineConfig.fromDict(config)
+            self.pipe_config = pipe_config
+        return self.pipe_config
+
+    def realize_stage_for_rank(self, batch_size, my_rank):
+        pipe_config = self.get_pipe_config()
+        layers, tensors = self.get_layers_and_tensors()
+        return pipe_config.realize_stage_for_rank(layers, tensors, batch_size, my_rank)
+
+    def get_layers_and_tensors(self, *args, **kw):
+        if self.normal_model_instance is None:
+            self.normal_model_instance = self.get_normal_model_instance()
+        model_instance = self.normal_model_instance
+        pipe_config = self.get_pipe_config()
+        generated = self.get_generated_module()
+        layerDict = generated.layerDict
+        tensorDict = generated.tensorDict
+        depth = pipe_config.depth
+        blocks = pipe_config.basic_blocks
+        layers = layerDict(model_instance, depth=depth, basic_blocks=blocks)
+        tensors = tensorDict(model_instance)
+        return layers, tensors
 
 
-def register_model(name, dict_params, model_class, generated_file_name_or_path):
-    global MODEL_CFG_TO_SAMPLE_MODEL
-    global MODEL_CONFIGS
-    global CFG_TO_GENERATED_FILE_NAME
+    def get_loader(self, *args, **kw):
+        NotImplementedError()
 
-    MODEL_CONFIGS[name] = dict_params
-    MODEL_CFG_TO_SAMPLE_MODEL[name] = model_class
-    CFG_TO_GENERATED_FILE_NAME[name] = generated_file_name_or_path
-
-
-def create_normal_model_instance(cfg):
-    """ Example : cfg='wrn_16x4' """
-    return MODEL_CFG_TO_SAMPLE_MODEL[cfg](**MODEL_CONFIGS[cfg])
-
-
-def normal_model_class(cfg):
-    return MODEL_CFG_TO_SAMPLE_MODEL[cfg]
-
-
-def get_partitioning(cfg, my_rank, batch_size,
-                     model_instance=None) -> Tuple[PipelineConfig, Module]:
-    layers, tensors, pipe_config = get_layers_tensors_and_pipe_config(cfg, model_instance)
-
-    model = pipe_config.realize_stage_for_rank(layers, tensors, batch_size, my_rank)
-
-    return pipe_config, model
-
-
-def get_layers_tensors_and_pipe_config(cfg, model_instance=None):
-    GET_PARTITIONS_ON_CPU = True
-    # Get Generated file
-    generated = get_generated_module(cfg)
-    create_pipeline_configuration = generated.create_pipeline_configuration
-    layerDict = generated.layerDict
-    tensorDict = generated.tensorDict
-    # Create instance of normal model
-    if model_instance:
-        # assert isinstance(model_instance, normal_model_class(cfg))
+    def get_extra(self):
         pass
-    else:
-        model_instance = create_normal_model_instance(cfg)
-    config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
-    # TODO: change it
-    pipe_config = PipelineConfig.fromDict(config)
-    depth = pipe_config.depth
-    blocks = pipe_config.basic_blocks
-    layers = layerDict(model_instance, depth=depth, basic_blocks=blocks)
-    tensors = tensorDict(model_instance)
-    return layers, tensors, pipe_config
 
+AVAILABLE_MODELS: Dict[str, CommonModelHandler] = {}
 
-def get_pipe_config(cfg: str) -> PipelineConfig:
-    """ returns just the configuration"""
-    GET_PARTITIONS_ON_CPU = True
-   
-    generated = get_generated_module(cfg)
-    create_pipeline_configuration = generated.create_pipeline_configuration
-    config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
-    pipe_config = PipelineConfig.fromDict(config)
-    return pipe_config
+def register_model(name, handler):
+    global AVAILABLE_MODELS
+    AVAILABLE_MODELS[name] = handler
 
 
 def load_module(full_path: str):
@@ -84,19 +94,3 @@ def load_module(full_path: str):
     foo = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(foo)
     return foo
-
-
-def get_generated_module(cfg):
-    is_full_path = os.path.exists(cfg)
-    try:
-        if is_full_path:
-            generated = load_module(cfg)
-        else:
-            generated_file_name = CFG_TO_GENERATED_FILE_NAME[cfg]
-            generated = importlib.import_module("." + generated_file_name,
-                                                package=_PARTITIONED_MODELS_PACKAGE)
-    except Exception as e:
-        print(f"-E- error loading generated config given {cfg}. is_full_path={is_full_path}")
-        raise e
-
-    return generated

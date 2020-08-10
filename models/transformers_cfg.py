@@ -223,6 +223,7 @@ def t5_small_tied_lmhead_4p_bw12_async_squad1():
                 },
                 stateless_tied=True)
 
+
 def t5_small_untied_4p_bw12_squad1():
     return dict(model_type='t5',
                 model_name_or_path='t5-small',
@@ -247,6 +248,12 @@ functions_list = getmembers(
 # name --> function
 MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS = {i: v for i, v in functions_list}
 
-for name in MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS:
-    # HACK: called with a ready model instance.
-    register_model(name=name, dict_params={}, model_class=None, generated_file_name_or_path=name)
+
+def _register_hardcoded(name, dict):
+    global MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS
+    MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS[name] = dict
+
+
+# for name in MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS:
+#     # HACK: called with a ready model instance.
+#     register_model(name=name, dict_params={}, model_class=None, generated_file_name_or_path=name)
