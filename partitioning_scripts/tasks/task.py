@@ -7,6 +7,7 @@ import torch
 from abc import ABC,abstractmethod
 from gettext import gettext
 class Parser(argparse.ArgumentParser,ABC):
+    """ArgumentParser for partitoning tasks"""
     def __init__(self,*args,**kwargs):
         super().__init__(*args,**kwargs)
         model_args = self.add_argument_group("model_args")
@@ -38,11 +39,11 @@ class Parser(argparse.ArgumentParser,ABC):
 
     @abstractmethod
     def _add_model_args(self,group):
-        pass
+        """add cmd args required for building the model that will be partitioned"""
 
     @abstractmethod
     def _add_data_args(self,group):
-        pass
+        """add cmd args required for providing input samples for partitinoing"""
 
     def _add_analysis_args(self, group):
         analysis_mode = group.add_mutually_exclusive_group()
@@ -64,17 +65,16 @@ class Parser(argparse.ArgumentParser,ABC):
             help=
             "data transfer rate between gpus in GBps (Gigabytes per second)")
         
-        ratio_options = group.add_mutually_exclusive_group()
-        ratio_options.add_argument("--bwd_to_fwd_ratio",
+        group.add_argument("--bwd_to_fwd_ratio",
                             type=float,
                             default=-1,
                             help="bwd to fwd ratio for heuristics")
-        ratio_options.add_argument(
+        group.add_argument(
             "--auto_infer_node_bwd_to_fwd_ratio", 
             action='store_true',
             default=False,
             help=
-            "Automatically infer bwd to fwd ratio for nodes (computation)"
+            "Automatically infer bwd to fwd ratio for nodes (computation). Expected Ratio for edges should be given `by bwd_to_fwd_ratio`"
         )
 
         group.add_argument(
@@ -180,7 +180,7 @@ class Parser(argparse.ArgumentParser,ABC):
         group.add_argument("--overwrite_profiles_cache", action="store_true", default=False, help="overwrite profile cache")
 
     #TODO should use sub parsers as those 2 groups are mutaully exclusive
-    #also reveales intent better --use_METIS --use_ACYCLIC
+    #also reveales intent better --use_METIS metis_args... or  --use_ACYCLIC acyclic_args...
     def _add_METIS_args(self,group):
         group.add_argument("--metis_attempts",type=int,default=1000,help="number of attempts for running the METIS partitioning algorithm")
         group.add_argument("--metis_verbose_on_error",action="store_true",default=False,help="wether to print the cause of the error")
@@ -258,12 +258,17 @@ class Parser(argparse.ArgumentParser,ABC):
                           help="partitioning optimization objective")
 
     def _extra(self, group):
-        pass
+        """add any extra cmd args which are task specific"""
 
     def _default_values(self):
+        """ provide default cmd args values"""
         return dict()
 
     def _post_parse(self,args,argv):
+        """handler for parsing unkonwn cmd args
+        """
+        #NOTE currently the use case is mainly for megatron in order to pass arguments to their parser
+
         # taken from argparse.ArgumentParser.parse_args
         if argv:
             msg = gettext('unrecognized arguments: %s')
@@ -271,6 +276,7 @@ class Parser(argparse.ArgumentParser,ABC):
         return args
 
     def _auto_file_name(self,args)->str:
+        """ provide a file name if args.output_file was not specified"""
         return ""
 
     def parse_args(self,args=None, namespace=None)->Namespace:
@@ -379,11 +385,22 @@ class Partitioner(ABC):
     def get_input(self,args,analysis=False):
         pass
 
+    
+    #TODO maybe we want to always register operator.is and operator.is_not as untraced
     def register_functions(self):
-        pass
+        """ register explicit_traced/untraced_functions
+        
+        for example if we wish to trace math.log and not trace operator.is
+
+        then it should be done here
+        """
+        
     
     def update_analysis_kwargs(self,args,config,analysis_kwargs:Dict)->Dict:
+        """enable modifications of the analysis_kwargs which are passed to run_analysis
+        for example set stages_on_same_gpu for gpt2 stateless
+        """
         return analysis_kwargs
 
     def post_partitioning(self,args,graph,analysis_result,summary):
-        pass
+        """ hook which is called after the partitoning process is done"""
