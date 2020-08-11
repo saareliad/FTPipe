@@ -68,7 +68,7 @@ def main(cmd_args:Namespace,model_args:Dict,partitioner:Partitioner,override_dic
 
     node_weight_function, edge_weight_function = get_weight_functions(cmd_args, verbose=True)
 
-    basic_blocks = choose_blocks(model, cmd_args)
+    cmd_args.basic_blocks = choose_blocks(model, cmd_args)
 
     profiles_cache_name = cmd_args.profiles_cache_name
     overwrite_profiles_cache = cmd_args.overwrite_profiles_cache
@@ -88,7 +88,7 @@ def main(cmd_args:Namespace,model_args:Dict,partitioner:Partitioner,override_dic
         #apply partitioning either from scratch or from a cached graph
         graph = pipe_model(model,
                         partitioner.batch_dim,
-                        basic_blocks=basic_blocks,
+                        basic_blocks=cmd_args.basic_blocks,
                         depth=cmd_args.depth,
                         args = args,
                         kwargs=kwargs,
@@ -144,7 +144,7 @@ def main(cmd_args:Namespace,model_args:Dict,partitioner:Partitioner,override_dic
         generated = importlib.import_module(module_path)
         create_pipeline_configuration = generated.create_pipeline_configuration
         config = create_pipeline_configuration(DEBUG=True)
-        layers = layerDict(model, depth=cmd_args.depth, basic_blocks=basic_blocks)
+        layers = layerDict(model, depth=cmd_args.depth, basic_blocks=cmd_args.basic_blocks)
         tensors = tensorDict(model)
         analysis_config = convert_to_analysis_format(config,
                                                     layers,
