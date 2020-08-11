@@ -12,7 +12,7 @@ from torch._overrides import get_overridable_functions
 
 from pytorch_Gpipe.utils import traverse_model
 from .control_flow_graph import Node, NodeTypes, Graph
-from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops,logical_ops, nested_map,print_call_site
+from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops,logical_ops, nested_map,print_call_site, tensor_creation_ops
 ##############################
 # Tracing Metadata
 ##############################
@@ -240,22 +240,18 @@ class TracedValue(object):
     def set_data(self, data):
         assert isTracedValue(
             data), f"TracedValue expects a basic type got {type(data)} scope {self.scope}"
-        self._ensure_no_hardcoded_device(data)
+
+        #target device is managed by the stage and is not dynamic
+        #so we will convert this node to a CONSTANT
+        if isinstance(data,torch.device) or (data == "cpu") or (isinstance(data,str) and "cuda" in data):
+            data = torch.device(data)
+            self.node.constant_value = data
+
         self._data = data
         self.namespace = f"{type(self._data).__name__}"
         self.node.value_type = type(data)
         self.node.tensor_dtype = get_tensor_dtypes(data)
         self.node.tensor_shape = get_tensor_shapes(data)
-
-        #target device is managed by the stage and is not dynamic
-        #so we will convert this node to a CONSTANT
-        if isinstance(data,torch.device):
-            self.node.constant_value = data
-        
-    def _ensure_no_hardcoded_device(self,data):
-        if self.node.type is NodeTypes.CONSTANT:
-            if isinstance(data,torch.device) or (data == "cpu") or (isinstance(data,str) and "cuda" in data):
-                warnings.warn(f"device {data} is hardcoded and cannot be generalized")
 
     def __repr__(self):
         return f"Node ID:{self.id}\nScope:{self.scope}\nvalue: {self._data}\n"
@@ -808,35 +804,7 @@ def register_new_explicit_untraced_function(function, namespace):
 
 
 def register_torch_functions():
-    for f, namespace in {
-        torch.as_tensor: torch,
-        torch.from_numpy: torch,
-        torch.tensor: torch,
-        torch.align_tensors: torch,
-        torch.arange: torch,
-        torch.as_strided: torch,
-        torch.bartlett_window: torch,
-        torch.blackman_window: torch,
-        torch.empty: torch,
-        torch.empty_strided: torch,
-        torch.eye: torch,
-        torch.from_file: torch,
-        torch.full: torch,
-        torch.hamming_window: torch,
-        torch.hann_window: torch,
-        torch.linspace: torch,
-        torch.logspace: torch,
-        torch.ones: torch,
-        torch.rand: torch,
-        torch.randn: torch,
-        torch.randint: torch,
-        torch.randperm: torch,
-        torch.range: torch,
-        torch.sparse_coo_tensor: torch,
-        torch.zeros: torch,
-        torch.cat: torch,
-        torch.stack: torch
-    }.items():
+    for f, namespace in tensor_creation_ops.items():
         register_new_traced_function(f, namespace=namespace)
 
 

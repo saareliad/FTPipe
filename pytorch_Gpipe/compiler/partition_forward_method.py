@@ -3,7 +3,7 @@ from itertools import chain
 from typing import List, Tuple, Dict, Iterator, Set
 import re
 from ..model_profiling import used_namespaces, Node, NodeTypes,Graph
-from ..utils import inplace_arithmetic_ops, r_arithmetic_ops,arithmetic_ops,logical_ops,conversion_ops,magics,unary_ops
+from ..utils import inplace_arithmetic_ops, r_arithmetic_ops,arithmetic_ops,logical_ops,conversion_ops,magics, tensor_creation_ops,unary_ops
 from .utils import sortedPartitionInputs,sortedPartitionOutputs
 import torch
 
@@ -13,6 +13,11 @@ dtab = tab + tab
 __all__ = ['generate_forward_method']
 
 
+# TODO force out of place for nodes on partiton borders
+# the folowing will cause an error because when we detach we make x0 a leaf
+# while in the original model x0 was just an intermediary value
+# def forward(self,x0):
+    # x0+=1
 def generate_forward_method(graph:Graph,
         partition_nodes: List[Node],
         model_outputs: List[Node],
@@ -159,6 +164,10 @@ def generate_statements(partition_nodes: List[Node],
     variable_name_generator = variableNameGenerator()
     namespaces = used_namespaces()
 
+    #if we have a call for a function like torch.zeros() we need to explicitly add a device
+    # arg to ensure it's being created at the right place
+    tensor_creation_ops_names = {f.__name__ for f in tensor_creation_ops.keys()}
+
     for node in sorted(partition_nodes, key=lambda n: n.id):
         if node in ready_expressions:
             # node is a partition input or a partition buffer/parameter
@@ -191,9 +200,17 @@ def generate_statements(partition_nodes: List[Node],
             namespace, func_name = op_path.split("::")
             # function call
             if namespace in namespaces:
+                # NOTE for cases like torch.zeros() without device arg      
+                # for example partitinoing code like
+                # def f():
+                #  x = torch.arange(10)
+                #  y = x - torch.arange(12)
+                # it those 2 statements are on different stages we will have an error for device mismatch (y was created on cpu, and x was moved to GPU)
+
+                inject_device =  (namespace == "torch") and (func_name in tensor_creation_ops_names)
 
                 parameter_list = generate_parameter_list(node.args, node.kwargs,
-                                                         ready_expressions)
+                                                         ready_expressions,inject_device=inject_device)
                 statements.append(
                     f"{variable_name} = {namespace}.{func_name}({parameter_list})")
 
@@ -325,12 +342,18 @@ def generate_magic(variable_name, self_arg, func_name, param_list):
     return statement
 
 
-def generate_parameter_list(node_args, node_kwargs, ready_expressions, string=True):
+def generate_parameter_list(node_args, node_kwargs, ready_expressions,inject_device=False, string=True):
+    has_device_arg = any(a.value_type is torch.device for a in node_args)
+    has_device_arg |= any(a.value_type is torch.device for a in node_kwargs.keys())
     args = [ready_expressions[a] for a in node_args]
     kwargs = []
     for a,kws in node_kwargs.items():
         for k in kws:
             kwargs.append(f"{k}={ready_expressions[a]}")
+    
+    if inject_device and (not has_device_arg):
+        kwargs.append("device = self.device")
+
     if string:
         return ", ".join(args + kwargs)
     return args + kwargs
