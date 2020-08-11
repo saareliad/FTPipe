@@ -7,12 +7,15 @@ from itertools import chain
 
 from typing import Dict
 
-from fairseq import (
-    distributed_utils,
-    options,
-    tasks
-)
-
+try:
+    from fairseq import (
+        distributed_utils,
+        options,
+        tasks
+    )
+    has_fairseq = True
+except (ImportError,ModuleNotFoundError):
+    has_fairseq = False
 
 from pytorch_Gpipe.model_profiling.tracer import (
     register_new_explicit_untraced_function, register_new_traced_function)
@@ -34,6 +37,14 @@ from .task import Parser, Partitioner
 from math import log,sqrt
 
 class MegatronParser(Parser):
+    def __init__(self) -> None:
+        if not has_fairseq:
+            raise ImportError(
+                '\n\nPlease install fairseq_for_pipeline:'
+            ) 
+        super().__init__()
+
+
     def _auto_file_name(self, args) -> str:
         bw_str = str(args.bw).replace(".", "_")
         model_str = str(args.arch)
@@ -98,7 +109,10 @@ class MegatronParser(Parser):
 class MegatronPartitioner(Partitioner):
     def __init__(self,args):
         super().__init__(args)
-        
+        if not has_fairseq:
+            raise ImportError(
+                '\n\nPlease install fairseq_for_pipeline:'
+            ) 
         #init fairseq distributed stuff
         distributed_utils.infer_init_method(args, force_distributed=True)
         args.device_id = 0
