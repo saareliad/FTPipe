@@ -293,6 +293,6 @@ csv/
 nsys_profile.sh
 py38_from_history.yml
 py38.yml
-analysis/load_experiment.py
+experiments/analysis/load_experiment.py
 my_pdb.py
 pipeline/work_schedulers/report.txt

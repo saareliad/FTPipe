@@ -43,7 +43,7 @@ There are several options:
 
 ### From source (new)
 
-Follow instruction in [create_env.sh](create_env.sh), then run it to build pytorch from source with cuda-aware openmpi.
+Follow instruction in [create_env.sh](env_utils/create_env.sh), then run it to build pytorch from source with cuda-aware openmpi.
 
 ```bash
 cp create_env.sh $BUILD_DIR
@@ -56,12 +56,16 @@ vim create_env.sh
 ### docker (experimental)
 
 need to edit it...
-[docker/Dockerfile_from_source](docker/Dockerfile_from_source)
+[docker/Dockerfile_from_source](env_utils/docker/Dockerfile_from_source)
 
 ### conda (deprecated)
 
 ```bash
 make env  # (or run it step by step)
+```
+## Get data
+```bash
+python download/datasets/download_datasets.py
 ```
 
 ## Run
@@ -74,6 +78,11 @@ To choose a spesific config, add it:
 
 ```bash
 mpirun -np 2 python main.py --config $PATH_TO_CONFIG
+```
+### Preprocess
+if preprocessing is needed, run the selected config with:
+```bash
+python main.py --mode preproc --config $PATH_TO_CONFIG ...
 ```
 
 ### MPI
@@ -123,7 +132,7 @@ python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_nod
 
 ### Example for a transformer model
 
-may change in the future.
+TODO: add the new way, below is deprecated
 
 1. partition the model
 2. add the model under `modles.partitioned.FN`
@@ -136,6 +145,7 @@ may change in the future.
   ```
 
 ## Adding a new learning task [WIP]
+TODO: update this.
 
 A major design change is needed before letting other humans do it
 

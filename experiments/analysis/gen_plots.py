@@ -1,7 +1,6 @@
 from . import plot
 import matplotlib.pyplot as plt
 import os
-import numpy as np
 
 import sys
 sys.path.append("..")

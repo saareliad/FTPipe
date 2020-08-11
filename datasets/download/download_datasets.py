@@ -85,6 +85,8 @@ def download_glue():
     
 
 if __name__ == "__main__":
+    # Call from main repo:
+
     CIFAR100(root=DATA_DIR, download=True, train=True)
     CIFAR100(root=DATA_DIR, download=True, train=False)
 

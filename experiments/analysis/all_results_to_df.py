@@ -209,14 +209,14 @@ if __name__ == "__main__":
     def two_partitions():
         path = "results/2partitions"
         csv_name = "2partitions.csv"
-        csv_out_dir = "."
+        csv_out_dir = ""
         csv_name = os.path.join(csv_out_dir, csv_name)
         all_results_to_csv(path, csv_name)
 
     def four_partitions():
         path = "results/4partitions"
         csv_name = "4partitions.csv"
-        csv_out_dir = "."
+        csv_out_dir = ""
         csv_name = os.path.join(csv_out_dir, csv_name)
         all_results_to_csv(path, csv_name)
 
@@ -225,7 +225,7 @@ if __name__ == "__main__":
                  "results/4partitions", 'results/sequential']
         # csv_name = "2p_4p_seq_ddpsim"
         csv_name = "4p_seq_ddpsim.csv"
-        csv_out_dir = "."
+        csv_out_dir = ""
         csv_name = os.path.join(csv_out_dir, csv_name)
         all_results_to_csv(paths, csv_name)
         print_uniques(csv_name)
@@ -239,7 +239,7 @@ if __name__ == "__main__":
         "results/4partitions/msnag_ga/",
          'results/ddp_all']     
         csv_name = "for_meeting.csv"
-        csv_out_dir = "."
+        csv_out_dir = ""
         csv_name = os.path.join(csv_out_dir, csv_name)
         all_results_to_csv(paths, csv_name)
         print_uniques(csv_name)

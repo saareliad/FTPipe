@@ -7,7 +7,7 @@ import time
 from pipeline.util import get_world_size
 from datasets import add_dataset_argument
 
-from parse_json_config import parse_json_config
+from configs.parse_json_config import parse_json_config
 from train import training_loop
 from experiments import save_experiment, load_experiment_for_update
 from prepare_pipeline import prepare_pipeline, preproc_data
