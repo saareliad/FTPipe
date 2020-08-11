@@ -15,13 +15,13 @@
         }
     },
     "statistics": "squad_loss_per_batch",
-    "bs_train": 24,
-    "bs_test": 24,
+    "bs_train": 128,
+    "bs_test": 128,
     "num_data_workers": 10,
     "optimizer": {
         "type": "adam",
         "args": {
-            "lr": 3e-5,
+            "lr": 0.001,
             "weight_decay": 0,
             "eps": 1e-8
         }
