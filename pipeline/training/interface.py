@@ -3,6 +3,9 @@ from itertools import chain
 import torch
 from torch.nn.utils import clip_grad_norm_
 from .utils import calc_norm
+from ..stats.interface import Stats
+from torch.optim.optimizer import Optimizer
+from torch.nn import Module
 
 
 class AnyTrainer(abc.ABC):
@@ -146,10 +149,10 @@ class GradNormStepper:
 class BaseLossTrainer(GradNormStepper, PartitionedSupervisedTrainer):
     """Trainer assuming loss is calculated *outside* the model """
     def __init__(self,
-                 model,
-                 optimizer,
+                 model: Module,
+                 optimizer: Optimizer,
                  scheduler,
-                 statistics,
+                 statistics: Stats,
                  max_grad_norm=None,
                  always_calc_grad_norm=False,
                  loss_fn=torch.nn.CrossEntropyLoss(),
@@ -182,10 +185,10 @@ class BaseOutPutIsLossTrainer(GradNormStepper,
                               PartitionedSupervisedLossIncludedTrainer):
     """Trainer assuming loss is calculated *inside* the model """
     def __init__(self,
-                 model,
-                 optimizer,
+                 model: Module,
+                 optimizer: Optimizer,
                  scheduler,
-                 statistics,
+                 statistics: Stats,
                  max_grad_norm=None,
                  always_calc_grad_norm=False,
                  step_every=1):

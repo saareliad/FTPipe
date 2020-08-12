@@ -4,45 +4,16 @@ import operator
 import os
 from torch.utils.data import TensorDataset
 from .datasets import CommonDatasetHandler, register_dataset
+from .t5_squad_eval import get_answers, get_squad_validation_dataset, evaluate_squad_answers
 
+# Type hint
+from pipeline.training import T5SquadTrainer
 
-class TorchCache:
-    def __init__(self, cache_name, overwrite=False):
-        self.cache_name = cache_name
-        self.exists = os.path.exists(cache_name)
-        self.overwrite = overwrite
-        self.v = None
-        
-    def __enter__(self):
-        if self.exists:
-            print(f"loading from cache: {self.cache_name}")
-            self.v = torch.load(self.cache_name)
-        else:
-            print(f"computing value for {self.cache_name}")
-        return self
-    
-    def __exit__(self, type, value, traceback):
-        if not self.exists or self.overwrite:
-            print(f"saving to cache: {self.cache_name}")
-            assert self.v is not None, "You should enter a value"
-            torch.save(self.v, self.cache_name)
+# For loading
+from models.load_pipeline_weights_to_hf import T5HFLoader
+from transformers import T5ForConditionalGeneration
 
-
-def compute_and_cache(compute_function, cache_name, overwrite=False, *args, **kw):
-    """
-    Compute or load from cache, optionaly save results to cache.
-    Return computed value
-    Examples:
-        # compute big
-        # compute_and_cache(lambda: torch.ones(10), "big")
-        # compute big, then small
-        # compute_and_cache(lambda: torch.randn(10) * compute_and_cache(lambda: torch.ones(10), "big"), "small")
-    """
-
-    with TorchCache(cache_name) as big:
-        if not big.exists:
-            big.v = compute_function(*args, **kw)
-    return big.v
+from .utils import compute_and_cache
 
 
 def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, args, **kw):
@@ -208,15 +179,62 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, args, **kw):
     train_dataset = compute_and_cache(compute_subset_train, small_cache_name_train)
     dev_dataset = compute_and_cache(compute_subset_eval, small_cache_name_eval)
 
-    def set_eval(trainer):
-        pass
-        # trainer.features = features
+    def set_eval(trainer: T5SquadTrainer):
+        # TODO: set squad evaluation method
+        # TODO: can do this paralle by getting answers parallel.
+
         # trainer.statistics.evaluate_squad = types.MethodType(
         #    evaluate_squad, trainer.statistics)
 
     return train_dataset, dev_dataset, set_eval
 
+def save_huggingface_model_for_generation(args, model, add_to_prefix=""):
+    name_prefix = getattr(args, "checkpoints_save_name_prefix", "")
+    name_prefix += add_to_prefix
+    partitions_saved_dir = args.checkpoints_save_dir
+    fn = os.path.join(partitions_saved_dir, f"{name_prefix}_Partition{args.stage}.pt")
+    torch.save(model.state_dict(), fn)
+    print(f"-I- model checkpoint saved: {fn}")
 
+
+def load_huggingface_model_for_generation(args, add_to_prefix=""):
+    loader = T5HFLoader(hf_transformers_model_class=T5ForConditionalGeneration)
+    hugg, extra = loader.load_from_saved_pipeline(args, to_original=True, add_to_prefix=add_to_prefix)
+    config = extra['config']
+    tokenizer = extra['tokenizer']
+
+    return hugg, config, tokenizer
+    #
+    # print("generating output")
+    # input_ids = tokenizer.encode("summarize: Hello, my dog is cute",
+    #                              return_tensors="pt")  # Batch size 1
+    # outputs = hugg.generate(input_ids)
+
+
+# TODO: call somewhere (e.g from stats or somewhere else..)
+def evaluate_squad(args, cp_number):
+    # Get current eval:
+    add_to_prefix = f"_{cp_number}"
+    hugg, config, tokenizer = load_huggingface_model_for_generation(args, add_to_prefix=add_to_prefix)
+    valid_dataset = compute_and_cache(get_squad_validation_dataset, 'squad_valid_data.pt', args=args, tokenizer=tokenizer)
+
+    # TODO: this can be done smarter, distributed
+    dataloader = torch.utils.data.DataLoader(valid_dataset, batch_size=32)
+    answers = get_answers(hugg, tokenizer, dataloader=dataloader)
+
+    squad_result = evaluate_squad_answers(valid_dataset=valid_dataset, answers=answers)
+    print(squad_result)
+    return squad_result
+
+
+class DistributedGenerator:
+    @staticmethod
+    def get_answers(cmd_args, *args, **kw):
+        raise NotImplementedError
+
+    @staticmethod
+    def get_eval_dataloader():
+        raise NotImplementedError()
 
 
 #########################
@@ -366,7 +384,6 @@ def get_extended_attention_mask(attention_mask, input_shape,is_decoder=False,dty
     extended_attention_mask = extended_attention_mask.to(dtype=dtype)  # fp16 compatibility
     extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
     return extended_attention_mask
-
 
 
 class SEP_T5_SQUAD_DatasetHandler(CommonDatasetHandler):

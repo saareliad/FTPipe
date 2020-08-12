@@ -1,16 +1,19 @@
 import math
 import time
 import torch
+import os
+from pipeline import SinglePartitionManager
+from pipeline.stats import Stats
 
 
 def training_loop(args, logger, train_dl, test_dl, is_first_partition,
-                  is_last_partition, partition, statistics, train_dl_len,
+                  is_last_partition, partition: SinglePartitionManager, statistics: Stats, train_dl_len,
                   test_dl_len, samplers):
     epochs = 0
     steps = 0
     total_epoch_times_list = []
     train_epochs_times_list = []
-    # eval_epochs_times_list = []
+    cp_saver = CheckpointsSaver(args)
 
     logger.info(f"flush rate {args.flush_rate}")
     logger.info(f"Running for {args.epochs} epochs and {args.steps} steps")
@@ -95,8 +98,11 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
                     break
 
         epoch_start_time = time.time()
+
+        # TODO: flush every 1000
         did_train = run_train(train_batches_limit)
         did_eval = run_eval(test_batches_limit)
+        cp_saver.maybe_save_checkpoint(partition.partition)
 
         epochs += 1
         if did_train:
@@ -165,3 +171,29 @@ def should_stop_early(args, valid_loss, logger):
             return True
         else:
             return False
+
+
+class CheckpointsSaver:
+    def __init__(self, args):
+        self.args = args
+        self.num_saved_checkpoints = 0
+
+        if getattr(args, "save_checkpoints", False):
+            assert hasattr(args, "checkpoints_save_dir")
+        else:
+            print("-W- will not save checkpoints")
+            # (To change this, set: args.save_checkpoints=True, args.checkpoints_save_dir")
+
+    def maybe_save_checkpoint(self, model):
+        args = self.args
+        if getattr(args, "save_checkpoints", False):
+            return
+
+        name_prefix = getattr(args, "checkpoints_save_name_prefix", "")
+        name_prefix += f"_{self.num_saved_checkpoints}"
+        # name_prefix += add_to_prefix
+        fn = os.path.join(args.checkpoints_save_dir, f"{name_prefix}_Partition{args.stage}.pt")
+        torch.save(model.state_dict(), fn)
+
+        self.num_saved_checkpoints +=1
+        print(f"-I- model checkpoint saved: {fn}")

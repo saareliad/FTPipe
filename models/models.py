@@ -74,7 +74,6 @@ class CommonModelHandler(abc.ABC):
         tensors = tensorDict(model_instance)
         return layers, tensors
 
-
     def get_loader(self, *args, **kw):
         NotImplementedError()
 

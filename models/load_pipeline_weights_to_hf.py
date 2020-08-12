@@ -39,6 +39,8 @@ class Loader(abc.ABC):
 
         return False
 
+def base_checkoint_name(name_prefix, stage):
+    return f"{name_prefix}_Partition{stage}.pt"
 
 class HFLoader(Loader):
     IS_HUGGINFACE_TRANSFORMER = True
@@ -49,8 +51,10 @@ class HFLoader(Loader):
 
     def load_from_saved_pipeline(self, args, to_original=True, **kw):
         cfg = args.model
-        partitions_saved_dir = args.save_dir
-        name_prefix = getattr(args, "save_name_prefix", "")
+        partitions_saved_dir = args.checkpoints_save_dir
+        name_prefix = getattr(args, "checkpoints_save_name_prefix", "")
+        add_to_prefix = kw.pop("add_to_prefix", "")
+        name_prefix += add_to_prefix
 
         # Get unified state dict
         unified_state = self.get_unified_state_dict(cfg, name_prefix,
@@ -88,7 +92,7 @@ class HFLoader(Loader):
 
     def get_unified_state_dict(self, cfg, name_prefix, partitions_saved_dir):
         n_stages = AVAILABLE_MODELS.get(cfg).get_pipe_config().n_stages
-        names = [f"{name_prefix}_Partition{i}.pt" for i in range(n_stages)]
+        names = [base_checkoint_name(name_prefix, stage=i) for i in range(n_stages)]
         names = [os.path.join(partitions_saved_dir, name) for name in names]
         loaded = [torch.load(name) for name in names]
         unified_state = dict()
@@ -170,9 +174,9 @@ if __name__ == "__main__":
     import types
 
     args = dict(model_name_or_path="t5-small",
-                save_name_prefix="tst_t5_",
+                checkpoints_save_name_prefix="tst_t5_",
                 model="t5_small_tied_lmhead_4p_bw12_async_squad1",
-                save_dir="tstloading")
+                checkpoints_save_dir="tstloading")
     args = types.SimpleNamespace(**args)
     to_original = True
 
@@ -191,11 +195,11 @@ if __name__ == "__main__":
         getattr(generated, f"Partition{i}")(layers, tensors, device='cpu')
         for i in range(n_stages)
     ]
-    os.makedirs(args.save_dir, exist_ok=True)
-    name_prefix = args.save_name_prefix
-    for i, n in enumerate(partitions):
-        fn = os.path.join(args.save_dir, f"{name_prefix}_Partition{i}.pt")
-        torch.save(n.state_dict(), fn)
+    os.makedirs(args.checkpoints_save_dir, exist_ok=True)
+    name_prefix = args.checkpoints_save_name_prefix
+    for i, partition in enumerate(partitions):
+        fn = os.path.join(args.checkpoints_save_dir, base_checkoint_name(name_prefix, stage=i))
+        torch.save(partition.state_dict(), fn)
         print(f"-I- saved to {fn}")
 
     print("-I- loading")

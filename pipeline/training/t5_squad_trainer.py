@@ -1,36 +1,4 @@
 from .interface import BaseOutPutIsLossTrainer, BaseLossTrainer
-from .gap_aware_trainer import GapAwareTrainerBase
-from collections import defaultdict
-from transformers.data.processors.squad import SquadResult
-# TODO: typehint for statistics. maybe it should actually sit under stats
-import torch
-import torch.nn.functional as F
-
-
-def SQUAD_loss(logits, start_positions, end_positions):
-    start_logits, end_logits = logits.split(1, dim=-1)
-    start_logits = start_logits.squeeze(-1)
-    end_logits = end_logits.squeeze(-1)
-
-    ignored_index = start_logits.size(1)
-    start_positions.clamp_(0, ignored_index)
-    end_positions.clamp_(0, ignored_index)
-
-    start_loss = F.cross_entropy(start_logits,
-                                 start_positions,
-                                 ignore_index=ignored_index)
-
-    end_loss = F.cross_entropy(end_logits,
-                               end_positions,
-                               ignore_index=ignored_index)
-
-    total_loss = (start_loss + end_loss) / 2
-
-    return total_loss
-
-
-def to_list(tensor):
-    return tensor.detach().cpu().tolist()
 
 
 class SquadTrainer(BaseOutPutIsLossTrainer):

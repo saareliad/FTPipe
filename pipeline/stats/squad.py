@@ -21,6 +21,10 @@ class SquadStats(Stats):
         # Squad results
         self.all_results = []
 
+    def non_last_partition_on_epoch_end(self):
+        pass
+
+
     def last_partition_on_epoch_end(self):
         super().last_partition_on_epoch_end()
 

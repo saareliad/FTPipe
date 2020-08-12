@@ -86,5 +86,7 @@
     "train_seq_len": 1024,
     "valid_seq_len": 1024,
     "test_seq_len": 1024,
-    "dont_drop_last": true
+    "dont_drop_last": true,
+    "checkpoints_save_dir": "results/saved_checkpoints",
+    "checkpoints_save_name_prefix": "my_checkpint_prefix"
 }
