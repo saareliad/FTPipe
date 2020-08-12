@@ -15,8 +15,8 @@
         }
     },
     "statistics": "squad_loss_per_batch",
-    "bs_train": 128,
-    "bs_test": 128,
+    "bs_train": 32,
+    "bs_test": 32,
     "num_data_workers": 10,
     "optimizer": {
         "type": "adam",
@@ -49,7 +49,7 @@
     "work_scheduler": "1F1B",
     "cudnn_benchmark": true,
     "max_buffers": 1,
-    "step_every": 1,
+    "step_every": 4,
     "keep_buffers_alive": false,
     "train_batches_limit": -1,
     "log_frequency": 200,
