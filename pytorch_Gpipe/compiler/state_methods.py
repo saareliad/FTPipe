@@ -22,9 +22,9 @@ def generate_partition_state_methods() -> str:
 def generateStateDictFunction() -> str:
     '''generates the state_dict function ensuring same keys are used as in the base model
     '''
-    state_dict_function = ["def state_dict(self,device=None):",
+    state_dict_function = ["def state_dict(self,*args,**kwargs):",
                            f"# we return the state dict of this part as it should be in the original model",
-                           "return state_dict(self,device=device)"]
+                           "return state_dict(self,*args,**kwargs)"]
 
     return f"{tab}" + f"\n{dtab}".join(state_dict_function)
 
@@ -82,19 +82,19 @@ def get_state_methods():
     return [state_dict, load_state_dict, named_buffers, named_parameters, cpu, cuda, to]
 
 
-def state_dict(partition, device=None):
+def state_dict(partition, *args,**kwargs):
     # we return the state dict of this part as it should be in the original model
-    state = nn.Module.state_dict(partition)
+    state = nn.Module.state_dict(partition,*args,**kwargs)
     lookup = partition.lookup
     result = dict()
     for k, v in state.items():
         if k in lookup:
-            result[lookup[k]] = v if device is None else v.to(device)
+            result[lookup[k]] = v
         else:
             assert '.' in k
             split_idx = k.find('.')
             new_k = lookup[k[:split_idx]] + k[split_idx:]
-            result[new_k] = v if device is None else v.to(device)
+            result[new_k] = v
     return result
 
 

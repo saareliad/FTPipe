@@ -48,12 +48,12 @@ def create_model_parallel_module(config: Dict) -> str:
     sync_with_prev_tasks = f"\n{dtab}".join(sync_with_prev_tasks)
 
     states = f",\n{dtab}{dtab}".join(
-        [f"**self.stage{i}.state_dict()" for i in range(n_stages)])
+        [f"**self.stage{i}.state_dict(*args,**kwargs)" for i in range(n_stages)])
 
     states = f"{{{states}}}"
 
     state_dict = f"\n{dtab}".join(
-        ["def state_dict(self):", f"return {states}"])
+        ["def state_dict(self,*args,**kwargs):", f"return {states}"])
 
     loads = f"\n{dtab}".join([f"self.stage{i}.load_state_dict(state)" for i in range(n_stages)])
     load_state_dict = f"\n{tab}{tab}".join(
