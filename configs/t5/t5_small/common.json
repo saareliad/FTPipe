@@ -55,6 +55,7 @@
     "log_frequency": 200,
     "model_name_or_path": "t5-small",
     "max_seq_length": 512,
+    "answer_max_seq_length": 16,
     "do_lower_case": true,
     "doc_stride": 128,
     "max_query_length": 64,

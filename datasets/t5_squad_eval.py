@@ -99,7 +99,6 @@ def evaluate_squad_answers(valid_dataset, answers):
 
 # compute_and_cache(get_squad_validation_dataset, 'squad_valid_data.pt', overwrite=False, args, tokenizer)
 def get_squad_validation_dataset(args, tokenizer):
-    max_length = args.max_seq_length
 
     # process the examples in input and target text format and the eos token at the end
     def add_eos_to_examples(example):
@@ -111,10 +110,10 @@ def get_squad_validation_dataset(args, tokenizer):
     def convert_to_features(example_batch):
         input_encodings = tokenizer.batch_encode_plus(example_batch['input_text'], pad_to_max_length=True,
                                                       truncation=True,
-                                                      max_length=max_length)
+                                                      max_length=args.max_seq_length)
         target_encodings = tokenizer.batch_encode_plus(example_batch['target_text'], pad_to_max_length=True,
                                                        truncation=True,
-                                                       max_length=16)
+                                                       max_length=args.answer_max_seq_length)
 
         encodings = {
             'input_ids': input_encodings['input_ids'],
