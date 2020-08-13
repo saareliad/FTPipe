@@ -1,17 +1,18 @@
 from bisect import bisect_right
 from torch.optim.lr_scheduler import LambdaLR
 from transformers import (
-    # get_constant_schedule_with_warmup,
-    # get_constant_schedule,
+    get_constant_schedule_with_warmup,
+    get_constant_schedule,
     get_linear_schedule_with_warmup,
-    # get_cosine_schedule_with_warmup,
+    get_cosine_schedule_with_warmup,
     # get_cosine_with_hard_restarts_schedule_with_warmup
 )
 
 # TODO: add the rest when we want to use them.
 AVAILABLE_LR_SCHEDULERS = {
     "get_multi_step_lr_schedule_with_warmup", "WarmupMultiStepLR",
-    "get_linear_schedule_with_warmup"
+    "get_linear_schedule_with_warmup", "get_constant_schedule",
+    "get_constant_schedule_with_warmup", "get_cosine_schedule_with_warmup"
 }
 # Note: can take the number of steps in epoch (dl length) so that
 # LR schedulers can be called every step instead of every epoch.
