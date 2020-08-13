@@ -229,7 +229,7 @@ def evaluate_squad_checkpoint(args, cp_number):
 
     # TODO: this can be done smarter, distributed
     dataloader = torch.utils.data.DataLoader(valid_dataset, batch_size=32)
-    answers = get_answers(hugg, tokenizer, dataloader=dataloader)
+    answers = get_answers(args, hugg, tokenizer, dataloader=dataloader)
 
     squad_result = evaluate_squad_answers(valid_dataset=valid_dataset, answers=answers)
     print(squad_result)

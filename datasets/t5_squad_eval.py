@@ -74,12 +74,12 @@ def evaluate(gold_answers, predictions):
 # TODO: can get answers distributed on CPUs...
 
 
-def get_answers(model, tokenizer, dataloader):
+def get_answers(args, model, tokenizer, dataloader):
     answers = []
     for batch in tqdm(dataloader):
         outs = model.generate(input_ids=batch['input_ids'],
                               attention_mask=batch['attention_mask'],
-                              max_length=97,
+                              max_length=args.answer_max_seq_length,
                               early_stopping=True)
         outs = [tokenizer.decode(ids) for ids in outs]
         answers.extend(outs)
