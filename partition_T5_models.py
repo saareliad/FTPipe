@@ -126,20 +126,19 @@ def get_input_squad1(args, tokenizer, model, analysis=False):
 
     # tokenize the examples
     # NOTE: they use global tokenizer
-    max_length = args.max_seq_length
 
     def convert_to_features(example_batch):
         input_encodings = tokenizer.batch_encode_plus(
             example_batch['input_text'],
             pad_to_max_length=True,
             truncation=True,
-            max_length=max_length
+            max_length=args.max_seq_length
         )  # NOTE: I think this could be changed to 384 like bert to save memory.
         target_encodings = tokenizer.batch_encode_plus(
             example_batch['target_text'],
             pad_to_max_length=True,
             truncation=True,
-            max_length=16)
+            max_length=args.answer_max_seq_length)
 
         encodings = {
             'input_ids': input_encodings['input_ids'],
@@ -261,7 +260,12 @@ class ParsePartitioningT5Opts(ParsePartitioningOpts):
         parser.add_argument("--model_name_or_path",
                             choices=T5_PRETRAINED_MODELS,
                             default='t5-small')
-        parser.add_argument("--max_seq_length", type=int, default=512)
+
+        # Paper parameters for squad (512, 97):
+        # Practically (384, 32) should be good.
+        parser.add_argument("--max_seq_length", type=int, default=384)
+        parser.add_argument("--answer_max_seq_length", type=int, default=32)
+
         parser.add_argument("--stateless_tied",
                             action="store_true",
                             default=False)
