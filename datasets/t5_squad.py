@@ -2,12 +2,15 @@ import nlp
 import torch
 import operator
 import os
+import types
+from itertools import count
 from torch.utils.data import TensorDataset
 from .datasets import CommonDatasetHandler, register_dataset
 from .t5_squad_eval import get_answers, get_squad_validation_dataset, evaluate_squad_answers
 
 # Type hint
 from pipeline.training import T5SquadTrainer
+from pipeline.stats import SquadStats
 
 # For loading
 from models.load_pipeline_weights_to_hf import T5HFLoader
@@ -179,12 +182,19 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, args, **kw):
     train_dataset = compute_and_cache(compute_subset_train, small_cache_name_train)
     dev_dataset = compute_and_cache(compute_subset_eval, small_cache_name_eval)
 
-    def set_eval(trainer: T5SquadTrainer):
-        # TODO: set squad evaluation method
-        # TODO: can do this paralle by getting answers parallel.
+    def stats_eval_squad(self:  SquadStats):
+        if not hasattr(self, "_cp_number"):
+            setattr(self, "_cp_number", 0)
+        cp_number = getattr(self, "_cp_number")
+        setattr(self, "_cp_number", cp_number+1)
+        return evaluate_squad_checkpoint(args, cp_number=cp_number)
 
-        # trainer.statistics.evaluate_squad = types.MethodType(
-        #    evaluate_squad, trainer.statistics)
+    # TODO: currently this will eval squad every epoch (but jsut checkint it works)
+    def set_eval(trainer: T5SquadTrainer):
+        # set squad evaluation method
+        # TODO: can do this parallel by getting answers parallel.
+        trainer.statistics.evaluate_squad = types.MethodType(
+           stats_eval_squad, trainer.statistics)
 
     return train_dataset, dev_dataset, set_eval
 
@@ -212,7 +222,7 @@ def load_huggingface_model_for_generation(args, add_to_prefix=""):
 
 
 # TODO: call somewhere (e.g from stats or somewhere else..)
-def evaluate_squad(args, cp_number):
+def evaluate_squad_checkpoint(args, cp_number):
     # Get current eval:
     add_to_prefix = f"_{cp_number}"
     hugg, config, tokenizer = load_huggingface_model_for_generation(args, add_to_prefix=add_to_prefix)
