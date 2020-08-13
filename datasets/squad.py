@@ -683,7 +683,7 @@ def extract_needed_keywords(**kw):
             version_2_with_negative, args.version_2_with_negative)
     else:
         print(
-            f"-W- version_2_with_negative infered automaticaly as {version_2_with_negative}. args.dataset: {args.dataset}. args.task: {args.task}"
+            f"-W- version_2_with_negative inferred automatically as {version_2_with_negative}. args.dataset: {args.dataset}. args.task: {args.task}"
         )
 
     dataset_keywords = dict(
@@ -695,9 +695,6 @@ def extract_needed_keywords(**kw):
         threads=args.threads,
         version_2_with_negative=version_2_with_negative,
         save=True,  # TODO: according to Ranks for stage replication
-        # NOTE: deleted
-        # train_seq_len=args.train_seq_len,
-        # test_seq_len=args.test_seq_len,
         overwrite_cache=overwrite_cache)
 
     # For evaluate

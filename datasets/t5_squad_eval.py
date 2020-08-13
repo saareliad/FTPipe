@@ -79,7 +79,7 @@ def get_answers(model, tokenizer, dataloader):
     for batch in tqdm(dataloader):
         outs = model.generate(input_ids=batch['input_ids'],
                               attention_mask=batch['attention_mask'],
-                              max_length=16,
+                              max_length=97,
                               early_stopping=True)
         outs = [tokenizer.decode(ids) for ids in outs]
         answers.extend(outs)

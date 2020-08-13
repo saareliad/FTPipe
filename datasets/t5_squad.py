@@ -66,7 +66,7 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, args, **kw):
             example_batch['target_text'],
             pad_to_max_length=True,
             truncation=True,
-            max_length=16)
+            max_length=97)
 
         encodings = {
             'input_ids': input_encodings['input_ids'],

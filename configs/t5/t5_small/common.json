@@ -55,9 +55,6 @@
     "log_frequency": 200,
     "model_name_or_path": "t5-small",
     "max_seq_length": 512,
-    "train_seq_len": 384,
-    "valid_seq_len": 384,
-    "test_seq_len": 384,
     "do_lower_case": true,
     "doc_stride": 128,
     "max_query_length": 64,
@@ -66,5 +63,8 @@
     "dont_drop_last": true,
     "model_type": "t5",
     "precomputed_masks": true,
-    "output_dir": "results/squad/t5/out_dir/"
+    "output_dir": "results/squad/t5/out_dir/",
+    "save_checkpoints":  true,
+    "checkpoints_save_name_prefix": "stale",
+    "checkpoints_save_dir": "checkpoints"
 }

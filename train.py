@@ -180,13 +180,14 @@ class CheckpointsSaver:
 
         if getattr(args, "save_checkpoints", False):
             assert hasattr(args, "checkpoints_save_dir")
+            os.makedirs(args.checkpoints_save_dir, exist_ok=True)
         else:
             print("-W- will not save checkpoints")
             # (To change this, set: args.save_checkpoints=True, args.checkpoints_save_dir")
 
     def maybe_save_checkpoint(self, model):
         args = self.args
-        if getattr(args, "save_checkpoints", False):
+        if not getattr(args, "save_checkpoints", False):
             return
 
         name_prefix = getattr(args, "checkpoints_save_name_prefix", "")
