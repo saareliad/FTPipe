@@ -270,6 +270,36 @@ magics={"__len__":"len",
         "__iter__":"iter"}
 
 
+tensor_creation_ops = {
+        torch.as_tensor: torch,
+        torch.from_numpy: torch,
+        torch.tensor: torch,
+        torch.align_tensors: torch,
+        torch.arange: torch,
+        torch.as_strided: torch,
+        torch.bartlett_window: torch,
+        torch.blackman_window: torch,
+        torch.empty: torch,
+        torch.empty_strided: torch,
+        torch.eye: torch,
+        torch.from_file: torch,
+        torch.full: torch,
+        torch.hamming_window: torch,
+        torch.hann_window: torch,
+        torch.linspace: torch,
+        torch.logspace: torch,
+        torch.ones: torch,
+        torch.rand: torch,
+        torch.randn: torch,
+        torch.randint: torch,
+        torch.randperm: torch,
+        torch.range: torch,
+        torch.sparse_coo_tensor: torch,
+        torch.zeros: torch,
+        torch.cat: torch,
+        torch.stack: torch
+    }
+
 
 def print_call_site(*ignored_files):
     ignored_files = (__file__,) + ignored_files

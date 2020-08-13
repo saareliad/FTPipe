@@ -395,7 +395,7 @@ if __name__ == "__main__":
 
     if args.async_pipeline and (not args.no_recomputation):
         print("using async partitioner")
-        graph = partition_async_pipe(args, model, batch_dim=batch_dim, kwargs=sample,
+        graph = partition_async_pipe(args, model, batch_dim=batch_dim, kwargs=kwargs,
                                         node_weight_function=node_weight_function,
                                         edge_weight_function=edge_weight_function)
     else:
