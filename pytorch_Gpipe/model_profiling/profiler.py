@@ -184,8 +184,8 @@ class GraphProfiler():
         vs = [t for t in vs if t < max_v]
         max_v = max(vs)
         vs = [t for t in vs if t < max_v]
-
         total = sum(vs)
+        assert len(vs) > 0,times
         return total / (len(vs))
 
     def should_profile(self, node, function, args, kwargs, output=None):
