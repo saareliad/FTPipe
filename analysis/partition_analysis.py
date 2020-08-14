@@ -102,6 +102,8 @@ def run_analysis(sample,
         PRINT_THEORETICAL = False
 
     # real statistics based on generated partitions
+    if torch.cuda.is_available():
+        torch.cuda.reset_max_memory_allocated()
     ((real_f_times, f_vars, f_deviance), (real_b_times, b_vars, b_deviance),
      comm_volume_stats, nocomm_real_f_times, nocomm_real_b_times,
      warnings_list) = profile_execution(
@@ -113,6 +115,10 @@ def run_analysis(sample,
          async_pipeline=async_pipeline,
          add_comm_times_to_balance=add_comm_times_to_balance,
          stages_on_same_gpu=stages_on_same_gpu)
+
+    #max memory
+    if torch.cuda.is_available():
+        max_memory_allocated = torch.cuda.max_memory_allocated()
 
     def add_dicts(d1, d2):
         d = {}
@@ -413,7 +419,11 @@ def run_analysis(sample,
             except Exception as e:
                 print(f"ASGD analysis failed: {sys.exc_info()[0]}", str(e))
                 # raise
-        print(s)
+        
+        
+    if torch.cuda.is_available():
+        s+= f"\nmax cuda memory used {max_memory_allocated/1e9:.2f}GB"
+    print(s)
 
     # Choose a metric to maximize and return it
     if async_pipeline:
