@@ -27,7 +27,7 @@
         }
     },
     "lr_scheduler": {
-        "type": "get_linear_schedule_with_warmup",
+        "type": "get_cosine_schedule_with_warmup",
         "preproc_args": {
             "num_training_steps": "epochs_to_steps",
             "num_warmup_steps": "epochs_to_steps"
@@ -38,7 +38,7 @@
             "last_epoch": -1
         }
     },
-    "epochs": 2,
+    "epochs": 3,
     "steps": -1,
     "seed_from_cmd": true,
     "bs_train_from_cmd": false,
@@ -49,7 +49,7 @@
     "work_scheduler": "1F1B",
     "cudnn_benchmark": true,
     "max_buffers": 1,
-    "step_every": 4,
+    "step_every": 8,
     "keep_buffers_alive": false,
     "train_batches_limit": -1,
     "log_frequency": 200,
