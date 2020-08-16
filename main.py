@@ -65,7 +65,7 @@ def parse_multiprocessing_cli(parser):
     parser.add_argument("--verbose_comm_from_cmd", action="store_true")
 
 
-def parse_cli():
+def parse_cli(add_fn=None):
     # TODO: note, some arguments are supported only through config and not argparse.
     # TODO: replace all this
     # with a function to tell the available options to the user,
@@ -75,7 +75,7 @@ def parse_cli():
         description='PyTorch partition as part of Async Pipeline')
 
     parser.add_argument("--mode",
-                        choices=["mp", "dist", "preproc"],
+                        choices=["mp", "dist", "preproc", "eval"],
                         default="dist",
                         help="Running mode")
     parse_distributed_cli(parser)
@@ -83,6 +83,8 @@ def parse_cli():
 
     parser.add_argument('--model', type=str, required=False)
     parser.add_argument('--model_from_cmd', action="store_true")
+    if add_fn is not None:
+        add_fn(parser)
 
     parser.add_argument(
         '--debug',
@@ -467,6 +469,20 @@ def start_preproc():
         cache = preproc_data(args, cache, save_cache=True)
 
 
+def start_eval_checkpoint():
+    def add_fn(parser):
+        parser.add_argument("--cp_number", type=int, default=0)
+        parser.add_argument("--eval_on_cuda", action="set_true", default=False)
+
+    args = parse_cli(add_fn=add_fn)
+    parse_json_config(args, args.config, first=True)
+
+    # TODO: alow others...
+    from datasets import t5_squad
+    squad_result = t5_squad.evaluate_squad_checkpoint(args, cp_number=args.cp_number)
+
+
+
 if __name__ == "__main__":
     # TODO set OMP_NUM_THREADS automatically
     print(f"Using {torch.get_num_threads()} Threads")
@@ -480,6 +496,9 @@ if __name__ == "__main__":
     elif args.mode == 'preproc':
         print("Running in preproc mode: Preprocessing datasets...")
         start_preproc()
+    elif args.mode == 'eval':
+        print("Running in eval mode: Evaluating checkpoints...")
+        start_eval_checkpoint()
     else:
         print("Running in distributed mode")
         start_distributed()

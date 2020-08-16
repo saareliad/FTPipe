@@ -75,10 +75,14 @@ def evaluate(gold_answers, predictions):
 
 
 def get_answers(args, model, tokenizer, dataloader):
+    device = torch.device("cpu")
+    if getattr(args, "eval_on_cuda", False):
+        device = torch.device("cuda:0")
+        model = model.to(device)
     answers = []
     for batch in tqdm(dataloader):
-        outs = model.generate(input_ids=batch['input_ids'],
-                              attention_mask=batch['attention_mask'],
+        outs = model.generate(input_ids=batch['input_ids'].to(device),
+                              attention_mask=batch['attention_mask'].to(device),
                               max_length=args.answer_max_seq_length,
                               early_stopping=True)
         outs = [tokenizer.decode(ids) for ids in outs]
