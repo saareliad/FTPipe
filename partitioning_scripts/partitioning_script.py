@@ -17,7 +17,6 @@ from analysis import run_analysis
 from analysis.analysis_utils import convert_to_analysis_format
 
 
-
 def parse_cli()->Tuple[Namespace,Dict,Partitioner]:
     task_parser = argparse.ArgumentParser(description="partitioning task parser",add_help=False)
     task_parser.add_argument("--partitioning_task",help="partitioning task to perform")
@@ -74,68 +73,71 @@ def main(cmd_args:Namespace,model_args:Dict,partitioner:Partitioner,override_dic
     overwrite_profiles_cache = cmd_args.overwrite_profiles_cache
 
     partitioner.register_functions()
-    if cmd_args.async_pipeline and (not cmd_args.no_recomputation):
-        print("-I- using async partitioner")
-        graph = partition_async_pipe(cmd_args, model, batch_dim=partitioner.batch_dim,args=args, kwargs=kwargs,
-                                        node_weight_function=node_weight_function,
-                                        edge_weight_function=edge_weight_function)
-    else:
-        if profiles_cache_name and os.path.exists(profiles_cache_name) and not overwrite_profiles_cache:
-            print(f"-V- loading profiles from cache: {profiles_cache_name}")
-            graph = Graph.deserialize(profiles_cache_name)
+    if not cmd_args.analysis_only:
+        if cmd_args.async_pipeline and (not cmd_args.no_recomputation):
+            print("-I- using async partitioner")
+            graph = partition_async_pipe(cmd_args, model, batch_dim=partitioner.batch_dim,args=args, kwargs=kwargs,
+                                            node_weight_function=node_weight_function,
+                                            edge_weight_function=edge_weight_function)
         else:
-            graph = None
-        #apply partitioning either from scratch or from a cached graph
-        graph = pipe_model(model,
-                        partitioner.batch_dim,
-                        basic_blocks=cmd_args.basic_blocks,
-                        depth=cmd_args.depth,
-                        args = args,
-                        kwargs=kwargs,
-                        nparts=cmd_args.n_partitions,
-                        output_file=cmd_args.output_file,
-                        generate_model_parallel=cmd_args.generate_model_parallel,
-                        generate_explicit_del=cmd_args.generate_explicit_del,
-                        use_layers_only_graph=True,
-                        use_graph_profiler=not cmd_args.use_network_profiler,
-                        use_network_profiler=cmd_args.use_network_profiler,
-                        profile_ops=not cmd_args.disable_op_profiling,
-                        node_weight_function=node_weight_function,
-                        edge_weight_function=edge_weight_function,
-                        n_iter=cmd_args.n_iter,
-                        recomputation=not cmd_args.no_recomputation,
-                        save_memory_mode=cmd_args.save_memory_mode,
-                        use_METIS=cmd_args.use_METIS,
-                        acyclic_opt=cmd_args.acyclic_opt,
-                        METIS_opt=cmd_args.METIS_opt,
-                        force_no_recomp_scopes=cmd_args.force_no_recomputation_scopes_fn,
-                        graph=graph)
+            if profiles_cache_name and os.path.exists(profiles_cache_name) and not overwrite_profiles_cache:
+                print(f"-V- loading profiles from cache: {profiles_cache_name}")
+                graph = Graph.deserialize(profiles_cache_name)
+            else:
+                graph = None
+            #apply partitioning either from scratch or from a cached graph
+            graph = pipe_model(model,
+                            partitioner.batch_dim,
+                            basic_blocks=cmd_args.basic_blocks,
+                            depth=cmd_args.depth,
+                            args = args,
+                            kwargs=kwargs,
+                            nparts=cmd_args.n_partitions,
+                            output_file=cmd_args.output_file,
+                            generate_model_parallel=cmd_args.generate_model_parallel,
+                            generate_explicit_del=cmd_args.generate_explicit_del,
+                            use_layers_only_graph=True,
+                            use_graph_profiler=not cmd_args.use_network_profiler,
+                            use_network_profiler=cmd_args.use_network_profiler,
+                            profile_ops=not cmd_args.disable_op_profiling,
+                            node_weight_function=node_weight_function,
+                            edge_weight_function=edge_weight_function,
+                            n_iter=cmd_args.n_iter,
+                            recomputation=not cmd_args.no_recomputation,
+                            save_memory_mode=cmd_args.save_memory_mode,
+                            use_METIS=cmd_args.use_METIS,
+                            acyclic_opt=cmd_args.acyclic_opt,
+                            METIS_opt=cmd_args.METIS_opt,
+                            force_no_recomp_scopes=cmd_args.force_no_recomputation_scopes_fn,
+                            graph=graph)
 
-        # cache graph         
-        if profiles_cache_name and not os.path.exists(profiles_cache_name):
-            print(f"-V- writing to new cache: {profiles_cache_name}")
-            graph.serialize(profiles_cache_name)
-        elif profiles_cache_name and os.path.exists(profiles_cache_name) and overwrite_profiles_cache:
-            print(f"-V- overwriting to cache: {profiles_cache_name}")
-            graph.serialize(profiles_cache_name)
+            # cache graph         
+            if profiles_cache_name and not os.path.exists(profiles_cache_name):
+                print(f"-V- writing to new cache: {profiles_cache_name}")
+                graph.serialize(profiles_cache_name)
+            elif profiles_cache_name and os.path.exists(profiles_cache_name) and overwrite_profiles_cache:
+                print(f"-V- overwriting to cache: {profiles_cache_name}")
+                graph.serialize(profiles_cache_name)
 
-    del args,kwargs
+        del args,kwargs
 
-    if cmd_args.dot:
-        graph.save_as_pdf(cmd_args.output_file, ".")
+        if cmd_args.dot:
+            graph.save_as_pdf(cmd_args.output_file, ".")
 
-    # Add cmdline to generate output file.
-    record_cmdline(cmd_args.output_file)
-    #record model creation args as a model_args variable
-    with open(f"{cmd_args.output_file}.py", "a") as f:
-        f.write("\n")
-        f.write(f"model_args = {model_args}")
-
-    #record overriden args as a override_dict variable
-    if override_dict:
+        # Add cmdline to generate output file.
+        record_cmdline(cmd_args.output_file)
+        #record model creation args as a model_args variable
         with open(f"{cmd_args.output_file}.py", "a") as f:
             f.write("\n")
-            f.write(f"override_dict = {override_dict}")
+            f.write(f"model_args = {model_args}")
+
+        #record overriden args as a override_dict variable
+        if override_dict:
+            with open(f"{cmd_args.output_file}.py", "a") as f:
+                f.write("\n")
+                f.write(f"override_dict = {override_dict}")
+    else:
+        graph = None
         
 
     if not cmd_args.no_analysis:
@@ -144,7 +146,7 @@ def main(cmd_args:Namespace,model_args:Dict,partitioner:Partitioner,override_dic
         generated = importlib.import_module(module_path)
         create_pipeline_configuration = generated.create_pipeline_configuration
         config = create_pipeline_configuration(DEBUG=True)
-        layers = layerDict(model, depth=cmd_args.depth, basic_blocks=cmd_args.basic_blocks)
+        layers = layerDict(model, depth=config['depth'], basic_blocks=config['basic_blocks'])
         tensors = tensorDict(model)
         analysis_config = convert_to_analysis_format(config,
                                                     layers,

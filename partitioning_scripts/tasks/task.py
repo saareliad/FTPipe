@@ -51,6 +51,10 @@ class Parser(argparse.ArgumentParser,ABC):
                             action='store_true',
                             default=False,
                             help="disable partition analysis")
+        analysis_mode.add_argument('--analysis_only',
+                    action='store_true',
+                    default=False,
+                    help="run only analysis for partitioned model")
         group.add_argument(
             "--analysis_batch_size",
             default=32,
