@@ -101,8 +101,8 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
 
         # TODO: flush every 1000
         did_train = run_train(train_batches_limit)
+        cp_saver.maybe_save_checkpoint(partition.partition.layers)
         did_eval = run_eval(test_batches_limit)
-        cp_saver.maybe_save_checkpoint(partition.partition)
 
         epochs += 1
         if did_train:
@@ -196,5 +196,5 @@ class CheckpointsSaver:
         fn = os.path.join(args.checkpoints_save_dir, f"{name_prefix}_Partition{args.stage}.pt")
         torch.save(model.state_dict(), fn)
 
-        self.num_saved_checkpoints +=1
+        self.num_saved_checkpoints += 1
         print(f"-I- model checkpoint saved: {fn}")

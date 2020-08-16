@@ -192,8 +192,11 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, args, **kw):
     def set_eval(trainer: T5SquadTrainer):
         # set squad evaluation method
         # TODO: can do this parallel by getting answers parallel.
-        trainer.statistics.evaluate_squad = types.MethodType(
-           stats_eval_squad, trainer.statistics)
+        # TODO: when doing this on CPU it takes >1 hour, and torch.distributed gets timout after 1 hour
+        # TODO: for small networks: can even do this on GPU.
+        if getattr(args, "eval_generate_during_training", False):
+            trainer.statistics.evaluate_squad = types.MethodType(
+                stats_eval_squad, trainer.statistics)
 
     return train_dataset, dev_dataset, set_eval
 
@@ -226,11 +229,11 @@ def evaluate_squad_checkpoint(args, cp_number):
     add_to_prefix = f"_{cp_number}"
     hugg, config, tokenizer = load_huggingface_model_for_generation(args, add_to_prefix=add_to_prefix)
     valid_dataset = compute_and_cache(get_squad_validation_dataset, 'squad_valid_data.pt', args=args, tokenizer=tokenizer)
-
     # TODO: this can be done smarter, distributed
+
     dataloader = torch.utils.data.DataLoader(valid_dataset, batch_size=32)
     answers = get_answers(args, hugg, tokenizer, dataloader=dataloader)
-
+    valid_dataset.set_format()
     squad_result = evaluate_squad_answers(valid_dataset=valid_dataset, answers=answers)
     print(squad_result)
     return squad_result
