@@ -15,8 +15,8 @@
         }
     },
     "statistics": "squad_loss_per_batch",
-    "bs_train": 32,
-    "bs_test": 32,
+    "bs_train": 64,
+    "bs_test": 64,
     "num_data_workers": 10,
     "optimizer": {
         "type": "adam",
@@ -38,7 +38,7 @@
             "last_epoch": -1
         }
     },
-    "epochs": 3,
+    "epochs": 12,
     "steps": -1,
     "seed_from_cmd": true,
     "bs_train_from_cmd": false,
@@ -49,7 +49,7 @@
     "work_scheduler": "1F1B",
     "cudnn_benchmark": true,
     "max_buffers": 1,
-    "step_every": 8,
+    "step_every": 4,
     "keep_buffers_alive": false,
     "train_batches_limit": -1,
     "log_frequency": 200,
@@ -57,9 +57,6 @@
     "max_seq_length": 384,
     "answer_max_seq_length": 32,
     "do_lower_case": true,
-    "doc_stride": 128,
-    "max_query_length": 64,
-    "threads": 60,
     "overwrite_cache": false,
     "dont_drop_last": true,
     "model_type": "t5",

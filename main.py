@@ -65,7 +65,7 @@ def parse_multiprocessing_cli(parser):
     parser.add_argument("--verbose_comm_from_cmd", action="store_true")
 
 
-def parse_cli(add_fn=None):
+def parse_cli():
     # TODO: note, some arguments are supported only through config and not argparse.
     # TODO: replace all this
     # with a function to tell the available options to the user,
@@ -83,8 +83,6 @@ def parse_cli(add_fn=None):
 
     parser.add_argument('--model', type=str, required=False)
     parser.add_argument('--model_from_cmd', action="store_true")
-    if add_fn is not None:
-        add_fn(parser)
 
     parser.add_argument(
         '--debug',
@@ -470,17 +468,16 @@ def start_preproc():
 
 
 def start_eval_checkpoint():
-    def add_fn(parser):
-        parser.add_argument("--cp_number", type=int, default=0)
-        parser.add_argument("--eval_on_cuda", action="set_true", default=False)
-
-    args = parse_cli(add_fn=add_fn)
+    # TODO: currently its hardcoded...
+    args = parse_cli()
     parse_json_config(args, args.config, first=True)
+    
+    args.cp_number = "c4"
+    args.eval_on_cuda = True
 
     # TODO: alow others...
     from datasets import t5_squad
     squad_result = t5_squad.evaluate_squad_checkpoint(args, cp_number=args.cp_number)
-
 
 
 if __name__ == "__main__":

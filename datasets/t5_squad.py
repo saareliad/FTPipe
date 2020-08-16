@@ -225,9 +225,18 @@ def load_huggingface_model_for_generation(args, add_to_prefix=""):
 
 # TODO: call somewhere (e.g from stats or somewhere else..)
 def evaluate_squad_checkpoint(args, cp_number):
-    # Get current eval:
-    add_to_prefix = f"_{cp_number}"
-    hugg, config, tokenizer = load_huggingface_model_for_generation(args, add_to_prefix=add_to_prefix)
+    if cp_number == "c4":
+        loader = T5HFLoader(hf_transformers_model_class=T5ForConditionalGeneration)
+        model_name_or_path = args.model_name_or_path
+        print(f"-I- Will evaluate {model_name_or_path}, no further finetuining")
+        # TODO: call with other hyperparameters...
+        hugg, tokenizer, config = loader.get_hf_original_model_tokenizer_and_config(
+            model_name_or_path)
+    else:
+        # Get current eval:
+        add_to_prefix = f"_{cp_number}"
+        hugg, config, tokenizer = load_huggingface_model_for_generation(args, add_to_prefix=add_to_prefix)
+
     valid_dataset = compute_and_cache(get_squad_validation_dataset, 'squad_valid_data.pt', args=args, tokenizer=tokenizer)
     # TODO: this can be done smarter, distributed
 
