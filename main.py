@@ -471,13 +471,14 @@ def start_eval_checkpoint():
     # TODO: currently its hardcoded...
     args = parse_cli()
     parse_json_config(args, args.config, first=True)
-    
-    args.cp_number = "c4"
-    args.eval_on_cuda = True
-
-    # TODO: alow others...
     from datasets import t5_squad
-    squad_result = t5_squad.evaluate_squad_checkpoint(args, cp_number=args.cp_number)
+    # args.cp_number = "c4"
+    args.single_worker_eval_batch_size = 128
+    for cp_number in range(12):
+        args.cp_number = cp_number
+        args.eval_on_cuda = True
+        # TODO: alow others...
+        squad_result = t5_squad.evaluate_squad_checkpoint(args, cp_number=args.cp_number)
 
 
 if __name__ == "__main__":

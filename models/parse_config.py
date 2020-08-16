@@ -84,6 +84,8 @@ class PartitioningConfigParser:
                  stateless_tied_same_process=False):
 
         handler = AVAILABLE_MODELS.get(cfg)
+        if handler is None:
+            raise ValueError(f"Model {cfg} not found. AVAILABLE_MODELS={AVAILABLE_MODELS.keys()}")
         pipe_config = handler.get_pipe_config()
         model = handler.realize_stage_for_rank(batch_size=bs_train, my_rank=rank)
 

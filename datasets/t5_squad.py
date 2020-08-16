@@ -239,8 +239,9 @@ def evaluate_squad_checkpoint(args, cp_number):
 
     valid_dataset = compute_and_cache(get_squad_validation_dataset, 'squad_valid_data.pt', args=args, tokenizer=tokenizer)
     # TODO: this can be done smarter, distributed
-
-    dataloader = torch.utils.data.DataLoader(valid_dataset, batch_size=32)
+    
+    batch_size = getattr(args, "single_worker_eval_batch_size", 32)
+    dataloader = torch.utils.data.DataLoader(valid_dataset, batch_size=batch_size)
     answers = get_answers(args, hugg, tokenizer, dataloader=dataloader)
     valid_dataset.set_format()
     squad_result = evaluate_squad_answers(valid_dataset=valid_dataset, answers=answers)

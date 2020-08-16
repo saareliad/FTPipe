@@ -224,6 +224,23 @@ def t5_small_tied_lmhead_4p_bw12_async_squad1():
                 stateless_tied=True)
 
 
+
+def t5_large_tied_lmhead_8p_bw12_async_squad1():
+    return dict(model_type='t5_stateless',
+                model_name_or_path='t5-large',
+                do_lower_case=False,
+                output_past=False,
+                output_attentions=False,
+                output_hidden_states=False,
+                explicitly_set_dict={
+                    "output_only": True,
+                    "output_attentions": False,
+                    "precomputed_masks": True,
+                    "output_hidden_states": False
+                },
+                stateless_tied=True)
+
+
 def t5_small_untied_4p_bw12_squad1():
     return dict(model_type='t5',
                 model_name_or_path='t5-small',
