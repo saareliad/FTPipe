@@ -3,6 +3,9 @@ import os
 import numpy as np
 import torch
 import time
+from pprint import pprint
+import io
+from contextlib import redirect_stdout
 
 from pipeline.util import get_world_size
 from datasets import add_dataset_argument
@@ -473,12 +476,27 @@ def start_eval_checkpoint():
     parse_json_config(args, args.config, first=True)
     from datasets import t5_squad
     # args.cp_number = "c4"
-    args.single_worker_eval_batch_size = 128
-    for cp_number in range(12):
+    # args.single_worker_eval_batch_size = 128
+    args.single_worker_eval_batch_size = 64
+
+    all_results = {}
+    all_cps = list(range(12)) + ["c4"]
+
+    for cp_number in all_cps:
         args.cp_number = cp_number
         args.eval_on_cuda = True
         # TODO: alow others...
         squad_result = t5_squad.evaluate_squad_checkpoint(args, cp_number=args.cp_number)
+        all_results[cp_number] = squad_result
+
+    pprint(all_results)
+    
+    # Also write to file
+    with io.StringIO() as buf, redirect_stdout(buf):
+        pprint(all_results)
+        s = buf.getvalue()
+    with open("results/all_results.txt", "w+") as f:
+        f.write(s)
 
 
 if __name__ == "__main__":

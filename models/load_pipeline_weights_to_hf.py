@@ -59,7 +59,7 @@ class HFLoader(Loader):
         # Get unified state dict
         unified_state = self.get_unified_state_dict(cfg, name_prefix,
                                                     partitions_saved_dir)
-        print("-I- Loaded state dict")
+        print(f"-I- Loaded state dict from {partitions_saved_dir}")
 
         if to_original:
             # Load state dict to original model
@@ -94,6 +94,7 @@ class HFLoader(Loader):
         n_stages = AVAILABLE_MODELS.get(cfg).get_pipe_config().n_stages
         names = [base_checkoint_name(name_prefix, stage=i) for i in range(n_stages)]
         names = [os.path.join(partitions_saved_dir, name) for name in names]
+        print(f"-V- loading from {names}")
         loaded = [torch.load(name) for name in names]
         unified_state = dict()
         for d in loaded:
