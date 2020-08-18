@@ -80,11 +80,13 @@ def pretrained_model_config_and_tokenizer(
         do_lower_case=do_lower_case,
         cache_dir=cache_dir if cache_dir else None)
 
+    use_cdf = model_name_or_path in {"t5-11b"}
     model = model_class.from_pretrained(
         model_name_or_path,
         from_tf=bool('.ckpt' in model_name_or_path),
         config=config,
-        cache_dir=cache_dir if cache_dir else None)
+        cache_dir=cache_dir if cache_dir else None,
+        use_cdf=use_cdf)
 
     resize_token_embeddings(model, tokenizer)
 
