@@ -132,13 +132,13 @@ class HFLoader(Loader):
             cache_dir=cache_dir if cache_dir else None,
             **tokenizer_kw)
 
-        use_cdf = model_name_or_path in {"t5-11b"}
+        use_cdn = model_name_or_path in {"t5-11b"}
         model = self.MODEL_CLASS.from_pretrained(
             model_name_or_path,
             from_tf=bool('.ckpt' in model_name_or_path),
             config=config,
             cache_dir=cache_dir if cache_dir else None,
-            use_cdf=use_cdf)
+            use_cdn=use_cdn)
 
         if resize_embeds:
             resize_token_embeddings(model, tokenizer)
