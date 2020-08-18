@@ -14,7 +14,7 @@ class P2PCommunicationHandler(SimpleCommBase):
     def init_process_group(self, *args, **kw):
         super().init_process_group(*args, **kw)
 
-    def _recv_tensors_p2p(self, x, batch_idx, ranks_dict_items):
+    def _recv_tensors_p2p(self, x, batch_idx, ranks_dict_items, is_grad):
         # FIXME: it is possible that we recived multiple gradients for the same tensor.
 
         ix = iter(x)
@@ -28,6 +28,8 @@ class P2PCommunicationHandler(SimpleCommBase):
                     print(f"rank={self.rank}: recieving {tensor_name} from multiple ranks: {receive_ranks}")
                     # TODO: need to acummulate the result somwhere.
 
+                if is_grad:
+                    receive_ranks = reversed(receive_ranks)
                 for receive_rank in receive_ranks:
                     tensor = next(ix)
 
@@ -45,10 +47,10 @@ class P2PCommunicationHandler(SimpleCommBase):
         return request_objects
 
     def recv_activations(self, x, batch_idx):
-        return self._recv_tensors_p2p(x, batch_idx, self.receive_ranks.items())
+        return self._recv_tensors_p2p(x, batch_idx, self.receive_ranks.items(), False)
 
     def recv_gradients(self, x, batch_idx):
-        return self._recv_tensors_p2p(x, batch_idx, self.grad_rcv_items)
+        return self._recv_tensors_p2p(x, batch_idx, self.grad_rcv_items, False)
 
     def _send_tensors_p2p(self, x, batch_idx, ranks_dict_items, is_grad):
         with torch.no_grad():
@@ -58,6 +60,9 @@ class P2PCommunicationHandler(SimpleCommBase):
                 # tag for minibatch idx too
                 tensor = tensor.detach()
                 tensor_tag = self.tensor_tags[tensor_name] + (self.TOTAL_TAGS * batch_idx)
+                if is_grad:
+                    send_ranks = reversed(send_ranks)
+                
                 for send_rank in send_ranks:
                     if self.verbose:
                         self.logger.info(
