@@ -211,13 +211,6 @@ class SimpleCommBase(CommunicationHandlerBase):
                              tensor_ranks,
                              requires_grad=False,
                              for_grads=False):
-        # FIXME: for gradient recv buffers:
-        # FIXME
-        # FIXME
-        # FIXME
-        # FIXME
-        # FIXME
-        # FIXME
         with torch.no_grad():
             buffers = []
             for tensor_name, ranks in tensor_ranks:
@@ -236,9 +229,8 @@ class SimpleCommBase(CommunicationHandlerBase):
                         shape,
                         dtype=dtype,
                         device=self.device,
-                        requires_grad=requires_grad).share_memory_()
-
-                    # NOTE: double buffring used to be here.
+                        requires_grad=requires_grad)
+                    rcv_buffer.share_memory_()
                     buffers.append(rcv_buffer)
         return buffers
 

@@ -36,7 +36,7 @@ class P2PCommunicationHandler(SimpleCommBase):
                     tensor_tag = self.tensor_tags[tensor_name] + (self.TOTAL_TAGS * batch_idx)
                     if self.verbose:
                         self.logger.info(
-                            f"irecv, src={receive_rank}, tag={tensor_tag}, name={tensor_name}, rank={self.local_rank}"
+                            f"rank={self.local_rank}: irecv, src={receive_rank}, tag={tensor_tag}, name={tensor_name}"
                         )
 
                     request_obj = dist.irecv(tensor,
@@ -66,7 +66,7 @@ class P2PCommunicationHandler(SimpleCommBase):
                 for send_rank in send_ranks:
                     if self.verbose:
                         self.logger.info(
-                            f"isend, dst={send_rank}, tag={tensor_tag}, name={tensor_name}, rank={self.local_rank}"
+                            f"rank={self.local_rank}: isend, dst={send_rank}, tag={tensor_tag}, name={tensor_name}"
                         )
 
                     # FIXME: accuracy used to crashe with num_chunks > 1 when we synchronize here once
