@@ -198,7 +198,8 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             # ix = iter(x)
             request_objects = []
             for (tensor_name, receive_ranks) in ranks_dict_items:
-                for receive_rank in receive_ranks:
+                order = receive_ranks if is_activations else reversed(receive_ranks)
+                for receive_rank in order:
                     # tensor = next(ix)
                     # assert len(receive_ranks) == 1
                     # receive_rank = receive_ranks[0]
@@ -282,6 +283,8 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                 prev_work_event.wait()
             with torch.no_grad():
                 for tensor, (tensor_name, send_ranks) in zip(x, ranks_dict_items):
+                    if is_grad:
+                        send_ranks = reversed(send_ranks)
                     if isinstance(tensor, torch.nn.Parameter):
                         for send_rank in send_ranks:
                             if tensor_name not in self.send_shared_parameters or send_rank not in self.send_shared_parameters[
@@ -295,12 +298,19 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                     
                     my_buff_reuse_queues = self.buffer_reuse_queues[self.rank]
                     if isinstance(tensor, torch.Tensor):
-
                         tensor = tensor.detach()
                         send_buffers = self.send_buffers[tensor_name]
                         for send_rank in send_ranks:
                             buff_q = my_buff_reuse_queues[send_rank]
+                            if self.verbose:
+                                self.logger.info(
+                                f"rank={self.rank}: getting reuse buffer from {send_rank}, for {tensor_name} (start)")
+                                    
                             buff_q.get()  # sync with sender we can use the buffer
+                            if self.verbose:
+                                self.logger.info(
+                                f"rank={self.rank}: getting reuse buffer from {send_rank} for {tensor_name} (done)")                            
+
                             with torch.cuda.stream(stream):
                                 out_q = self.rcv_queues[send_rank][self.rank]
                                 buff = send_buffers[send_rank]
@@ -315,6 +325,14 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                                 stream.record_event(event)
                                 event.synchronize()
                                 out_q.put(buff)
+
+                            if self.verbose:
+                                tensor_tag = self.tensor_tags[tensor_name] + (
+                                    self.TOTAL_TAGS * batch_idx)
+                                self.logger.info(
+                                    f"rank={self.rank}: done send(), dst={send_rank}, tag={tensor_tag}, name={tensor_name}"
+                                )
+
                     else:
                         for send_rank in send_ranks:
                             buff_q = my_buff_reuse_queues[send_rank]
@@ -322,12 +340,12 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                             out_q = self.rcv_queues[send_rank][self.rank]
                             out_q.put(tensor)
 
-                    if self.verbose:
-                        tensor_tag = self.tensor_tags[tensor_name] + (
-                            self.TOTAL_TAGS * batch_idx)
-                        self.logger.info(
-                            f"rank={self.rank}: done copy_(), dst={send_rank}, tag={tensor_tag}, name={tensor_name}"
-                        )
+                            if self.verbose:
+                                tensor_tag = self.tensor_tags[tensor_name] + (
+                                    self.TOTAL_TAGS * batch_idx)
+                                self.logger.info(
+                                    f"rank={self.rank}: done send(), dst={send_rank}, tag={tensor_tag}, name={tensor_name}"
+                                )
         except Exception as e:
             print("ERRRRRORRRRR in send thread")
             print(sys.exc_info())

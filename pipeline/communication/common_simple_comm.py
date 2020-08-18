@@ -10,30 +10,20 @@ import numpy as np
 # TODO tags for tensors we send multiple times
 
 
-def tensor_tags_from_config(
-        config,
-        num_chunks=1,
-        target_tensor_names=None,
-        GRAD_UGLY_SHAMEFUL_NAME="_grad"):
-
-    def config_to_tuples_array(config):
-        def config_to_tuples_generator(stages):
-            """ allows iterating with the tuple: (stage_id, inputs, outputs) """
-            for i, v in stages.items():
-                yield i, v.inputs, v.outputs, v.req_grad, config.get_outputs_req_grad_for_stage(
-                    i)
-
-        return np.array(list(config_to_tuples_generator(config.stages)))
-
+def tensor_tags_from_config(config,
+                            num_chunks=1,
+                            target_tensor_names=None,
+                            GRAD_UGLY_SHAMEFUL_NAME="_grad"):
     # Note: same tags for all process
 
     tensor_tags = {}
     tensor_tag = 1
-    model = config_to_tuples_array(config)
 
-    for (_, input_tensors, output_tensors, req_grad,
-         outputs_req_grad) in model:
-
+    for i, stage in config.stages.items():
+        input_tensors = stage.inputs
+        output_tensors = stage.outputs
+        req_grad = stage.req_grad
+        outputs_req_grad = config.get_outputs_req_grad_for_stage(i)
         # Create different tags for gradients
         for name_post_addition in ["", GRAD_UGLY_SHAMEFUL_NAME]:
             for input_tensor in input_tensors:
@@ -59,9 +49,13 @@ def tensor_tags_from_config(
             tensor_tags[target_tensor_name] = tensor_tag
             tensor_tag += num_chunks
 
-    tensor_tag += num_chunks
+    total_tags = len(tensor_tags)
 
-    return tensor_tags, tensor_tag
+    # from pprint import pprint
+    # pprint(total_tags)
+    # pprint(tensor_tags)
+
+    return tensor_tags, total_tags
 
 
 class SimpleCommBase(CommunicationHandlerBase):
@@ -154,14 +148,16 @@ class SimpleCommBase(CommunicationHandlerBase):
         self.grad_send_items = [(i + GRAD_UGLY_SHAMEFUL_NAME, v)
                                 for i, v in self.receive_ranks.items()
                                 if not (i in self.tensors_names_with_no_grad)]
-        
-        self.grad_rcv_items_without_extention = [(i, v)
-                               for i, v in self.send_ranks.items()
-                               if not (i in self.tensors_names_with_no_grad)]
 
-        self.grad_send_items_without_extention = [(i, v)
-                                for i, v in self.receive_ranks.items()
-                                if not (i in self.tensors_names_with_no_grad)]
+        self.grad_rcv_items_without_extention = [
+            (i, v) for i, v in self.send_ranks.items()
+            if not (i in self.tensors_names_with_no_grad)
+        ]
+
+        self.grad_send_items_without_extention = [
+            (i, v) for i, v in self.receive_ranks.items()
+            if not (i in self.tensors_names_with_no_grad)
+        ]
 
         self.grad_send_dict = dict(self.grad_send_items)
         self.grad_rcv_dict = dict(self.grad_rcv_items)
@@ -211,7 +207,10 @@ class SimpleCommBase(CommunicationHandlerBase):
     def set_tensor_dtypes(self, tensor_dtypes):
         self.tensor_dtypes = tensor_dtypes
 
-    def _create_recv_buffers(self, tensor_ranks, requires_grad=False, for_grads=False):
+    def _create_recv_buffers(self,
+                             tensor_ranks,
+                             requires_grad=False,
+                             for_grads=False):
         # FIXME: for gradient recv buffers:
         # FIXME
         # FIXME
@@ -228,13 +227,16 @@ class SimpleCommBase(CommunicationHandlerBase):
                 if dtype is None:
                     raise NotImplementedError()
                 if len(ranks) > 1:
-                    print(f"-V- creating double buffers for {tensor_name} which is sent/receved to/from multiple ranks: {ranks}")
+                    print(
+                        f"-V- creating double buffers for {tensor_name} which is sent/receved to/from multiple ranks: {ranks}"
+                    )
                     assert for_grads
                 for _ in ranks:
-                    rcv_buffer = torch.zeros(shape,
-                                             dtype=dtype,
-                                             device=self.device,
-                                             requires_grad=requires_grad).share_memory_()
+                    rcv_buffer = torch.zeros(
+                        shape,
+                        dtype=dtype,
+                        device=self.device,
+                        requires_grad=requires_grad).share_memory_()
 
                     # NOTE: double buffring used to be here.
                     buffers.append(rcv_buffer)
@@ -384,7 +386,10 @@ class SimpleCommBase(CommunicationHandlerBase):
             ix = iter(x)
             for name, ranks in self.grad_rcv_items:
                 if len(ranks) > 1:
-                    tensors = [t for t in [next(ix) for _ in range(len(ranks))] if t is not None]
+                    tensors = [
+                        t for t in [next(ix) for _ in range(len(ranks))]
+                        if t is not None
+                    ]
                     out.append(torch.stack(tensors).sum(0))
                 else:
                     out.append(next(ix))
