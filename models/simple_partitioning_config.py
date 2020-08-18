@@ -348,7 +348,16 @@ class PipelineConfig():
         for i, stage in self.stages.items():
             for name, r in stage.req_grad.items():
                 if name in my_outputs:
+                    if name in outputs_req_grad:
+                        assert outputs_req_grad[name] == r
                     outputs_req_grad[name] = r
+
+        n_my_model_outputs = len([i for i in my_outputs if i in self.model_outputs])
+        assert len(my_outputs) == len(outputs_req_grad) + n_my_model_outputs, (my_outputs, outputs_req_grad, n_my_model_outputs)
+        
+        if not outputs_req_grad:
+            assert len(my_outputs) == n_my_model_outputs
+
         return outputs_req_grad
 
     def get_dataset_inputs_for_stage(self, stage_id: int):
@@ -362,103 +371,6 @@ class PipelineConfig():
                 d[name] = i
 
         return d
-
-    @staticmethod
-    def generate_config_without_nested(dict_config):
-        config_without_nested = deepcopy(dict_config)
-
-        # convert in/out for model
-        new_model_inputs = dict()
-        for input_id, input_cfg in config_without_nested['model_inputs'].items(
-        ):
-            # found nested activation
-            if not isinstance(input_cfg['is_batched'], bool):
-                flattened_is_batched = flatten(input_cfg['is_batched'])
-                flattened_shape = flatten(input_cfg['shape'])
-                flattened_dtype = flatten(input_cfg['dtype'])
-                for idx, (is_batched, shape, dtype) in enumerate(
-                        zip(flattened_is_batched, flattened_shape,
-                            flattened_dtype)):
-                    cfg = {
-                        "shape": shape,
-                        "dtype": dtype,
-                        "is_batched": is_batched
-                    }
-                    new_model_inputs[input_id + f"_{idx}"] = cfg
-            else:
-                new_model_inputs[input_id] = input_cfg
-
-        config_without_nested['model_inputs'] = new_model_inputs
-
-        new_model_outputs = dict()
-        for output_id, output_cfg in config_without_nested[
-                'model_outputs'].items():
-            # found nested activation
-            if not isinstance(output_cfg['is_batched'], bool):
-                flattened_is_batched = flatten(output_cfg['is_batched'])
-                flattened_shape = flatten(output_cfg['shape'])
-                flattened_dtype = flatten(output_cfg['dtype'])
-                for idx, (is_batched, shape, dtype) in enumerate(
-                        zip(flattened_is_batched, flattened_shape,
-                            flattened_dtype)):
-                    cfg = {
-                        "shape": shape,
-                        "dtype": dtype,
-                        "is_batched": is_batched
-                    }
-                    new_model_outputs[output_id + f"_{idx}"] = cfg
-            else:
-                new_model_outputs[output_id] = output_cfg
-
-        config_without_nested['model_outputs'] = new_model_outputs
-
-        # convert in/out for stages
-        for stage_id, stage in config_without_nested['stages'].items():
-            new_stage_outputs = dict()
-            for output_id, output_cfg in stage['outputs'].items():
-                # found nested activation
-                if not isinstance(output_cfg['is_batched'], bool):
-                    flattened_is_batched = flatten(output_cfg['is_batched'])
-                    flattened_shape = flatten(output_cfg['shape'])
-                    flattened_dtype = flatten(output_cfg['dtype'])
-                    for idx, (is_batched, shape, dtype) in enumerate(
-                            zip(flattened_is_batched, flattened_shape,
-                                flattened_dtype)):
-                        cfg = {
-                            "shape": shape,
-                            "dtype": dtype,
-                            "is_batched": is_batched
-                        }
-                        new_stage_outputs[output_id + f"_{idx}"] = cfg
-                else:
-                    new_stage_outputs[output_id] = output_cfg
-
-            stage['outputs'] = new_stage_outputs
-
-            new_stage_inputs = dict()
-            for input_id, input_cfg in stage['inputs'].items():
-                # found nested activation
-                if not isinstance(input_cfg['is_batched'], bool):
-                    flattened_is_batched = flatten(input_cfg['is_batched'])
-                    flattened_shape = flatten(input_cfg['shape'])
-                    flattened_dtype = flatten(input_cfg['dtype'])
-                    flatten_req_grad = flatten(input_cfg['req_grad'])
-                    for idx, (is_batched, shape, dtype, req_grad) in enumerate(
-                            zip(flattened_is_batched, flattened_shape,
-                                flattened_dtype, flatten_req_grad)):
-                        cfg = {
-                            "shape": shape,
-                            "dtype": dtype,
-                            "req_grad": req_grad,
-                            "is_batched": is_batched
-                        }
-                        new_stage_inputs[input_id + f"_{idx}"] = cfg
-                else:
-                    new_stage_inputs[input_id] = input_cfg
-
-            stage['inputs'] = new_stage_inputs
-
-        return config_without_nested
 
 
 class StageConfig():
