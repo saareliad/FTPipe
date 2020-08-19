@@ -495,14 +495,14 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         g = self.fix_after_recv(g, True)
         return g
 
-    @staticmethod
-    def futures_handler(is_first_partition, is_last_partition, stateless_tied, num_stages):
+    def futures_handler(self, is_first_partition, is_last_partition, stateless_tied, num_stages):
         return FuturesHandler(is_first_partition, is_last_partition, stateless_tied, num_stages)
 
 
 class FuturesHandler(FuturesHandlerBase):
     """ Handle sent object futures """
     def __init__(self, is_first_partition, is_last_partition, stateless_tied, num_stages):
+        super().__init__()
         self.is_first_partition = is_first_partition
         self.is_last_partition = is_last_partition
 

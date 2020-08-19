@@ -1,3 +1,5 @@
+from abc import ABC
+
 import torch
 import logging
 import torch.distributed as dist
@@ -5,11 +7,12 @@ import torch.distributed as dist
 from .interface import CommunicationHandlerBase, FuturesHandlerBase
 from .buffer import make_buff
 from collections import OrderedDict
-import numpy as np
+from models.simple_partitioning_config import PipelineConfig
 
 # TODO tags for tensors we send multiple times
 
 
+# FIXME: just use dict
 def tensor_tags_from_config(config,
                             num_chunks=1,
                             target_tensor_names=None,
@@ -50,15 +53,10 @@ def tensor_tags_from_config(config,
             tensor_tag += num_chunks
 
     total_tags = len(tensor_tags)
-
-    # from pprint import pprint
-    # pprint(total_tags)
-    # pprint(tensor_tags)
-
     return tensor_tags, total_tags
 
 
-class SimpleCommBase(CommunicationHandlerBase):
+class SimpleCommBase(CommunicationHandlerBase, ABC):
     """ common for all MPI based.
     TODO: some functions in the end should be moved to lower class
     """
@@ -77,7 +75,7 @@ class SimpleCommBase(CommunicationHandlerBase):
             ranks_in_next_stage,  # NOTE: deprecated
             req_grad,
             outputs_req_grad,
-            pipe_config,
+            pipe_config: PipelineConfig,
             cpu,
             num_chunks,
             device,
@@ -132,7 +130,7 @@ class SimpleCommBase(CommunicationHandlerBase):
 
         # Optional
         if target_tensor_names:
-            self.tensor_names_with_no_grad.update(target_tensor_names)
+            self.tensors_names_with_no_grad.update(target_tensor_names)
 
         self.cpu = cpu
         self.device = device
@@ -518,19 +516,24 @@ class SimpleCommBase(CommunicationHandlerBase):
                          is_bwd=True,
                          create=True)
 
-    @staticmethod
-    def futures_handler(is_first_partition, is_last_partition, stateless_tied,
+    # @staticmethod
+    def futures_handler(self, is_first_partition, is_last_partition, stateless_tied,
                         num_stages):
-        return FuturesHandler(is_first_partition, is_last_partition,
+        return FuturesHandler(self.pipe_config, is_first_partition, is_last_partition,
                               stateless_tied, num_stages)
 
 
 class FuturesHandler(FuturesHandlerBase):
     """ This is mostly for MPI, where sent objects are problematic - currently not deleted automatically """
-    def __init__(self, is_first_partition, is_last_partition, stateless_tied,
+    def __init__(self, pipe_config, is_first_partition, is_last_partition, stateless_tied,
                  num_stages):
-
+        super().__init__()
         # FIXME: this is ugly solution for freeing send buffers in tied weights trick. its a waste of memory.
+        # FIXME: this is ugly solution for freeing send buffers in tied weights trick. its a waste of memory.
+        # FIXME: this is ugly solution for freeing send buffers in tied weights trick. its a waste of memory.
+        # FIXME: this is ugly solution for freeing send buffers in tied weights trick. its a waste of memory.
+        # FIXME: this is ugly solution for freeing send buffers in tied weights trick. its a waste of memory.
+
         if stateless_tied and (is_first_partition or is_last_partition):
             self.sent_obejct_patience = num_stages - 2
         else:

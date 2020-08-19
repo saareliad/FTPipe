@@ -24,9 +24,9 @@ class P2PCommunicationHandler(SimpleCommBase):
 
             for (tensor_name, receive_ranks) in ranks_dict_items:
 
-                if len(receive_ranks) > 1:
-                    print(f"rank={self.rank}: recieving {tensor_name} from multiple ranks: {receive_ranks}")
-                    # TODO: need to acummulate the result somwhere.
+                # if len(receive_ranks) > 1:
+                #     print(f"rank={self.rank}: recieving {tensor_name} from multiple ranks: {receive_ranks}")
+                # NOTE: accumulated in fix_after_recv
 
                 if is_grad:
                     receive_ranks = reversed(receive_ranks)
@@ -57,7 +57,6 @@ class P2PCommunicationHandler(SimpleCommBase):
             request_objects = []
 
             for tensor, (tensor_name, send_ranks) in zip(x, ranks_dict_items):
-                # tag for minibatch idx too
                 tensor = tensor.detach()
                 tensor_tag = self.tensor_tags[tensor_name] + (self.TOTAL_TAGS * batch_idx)
                 if is_grad:
@@ -69,7 +68,7 @@ class P2PCommunicationHandler(SimpleCommBase):
                             f"rank={self.local_rank}: isend, dst={send_rank}, tag={tensor_tag}, name={tensor_name}"
                         )
 
-                    # FIXME: accuracy used to crashe with num_chunks > 1 when we synchronize here once
+                    # NOTE valid accuracy used to crash with num_chunks > 1 when we synchronize here once
                     if not self.cpu:
                         # HACK: synchronize.
                         torch.cuda.synchronize(device=self.device)
