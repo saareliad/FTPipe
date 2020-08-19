@@ -7,6 +7,8 @@ from .adamw import AdamW
 
 from .adam_record import Adam as AdamGA
 from .adamw_record import AdamW as AdamWGA
+
+from .adafactor import Adafactor
 # from .utils import linear_lr_scaling
 
 AVAILBALE_OPTIMIZERS = {
@@ -15,5 +17,7 @@ AVAILBALE_OPTIMIZERS = {
     'adam': Adam,
     'adamw': AdamW,
     'adam_record_step': AdamGA,
-    'adamw_record_step': AdamWGA
+    'adamw_record_step': AdamWGA,
+    'adafactor': Adafactor
+
 }

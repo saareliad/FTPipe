@@ -170,6 +170,8 @@ def get_gap_aware(args, optimizer):
         gap_aware_cls = get_adam_gap_aware_cls()
     elif 'adamw' == optimizer_type:
         gap_aware_cls = get_adamw_gap_aware_cls()
+    elif 'adafactor' == optimizer_type:
+        raise NotImplementedError("WIP")
     else:
         raise NotImplementedError
 
