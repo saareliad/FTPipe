@@ -104,10 +104,6 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
 
         self.receive_ranks = receive_ranks
         self.send_ranks = send_ranks
-        # self.req_grad = req_grad  # inputs require grads
-
-        # TODO: HACK:
-        # flatten all dicts and send/recv only flattened stuff.
 
         # Do not calculate and send gradients for tensors which do not req grad.
         self.tensors_names_with_no_grad = set()
@@ -126,7 +122,7 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
         A = set(outputs_req_grad.keys())
         B = set(req_grad.keys())
         intersection = A & B
-        assert not intersection
+        assert not intersection, f"intersection: {intersection}, stage{self.stage}: outputs_req_grad: {outputs_req_grad}"
 
         # Optional
         if target_tensor_names:
@@ -323,6 +319,7 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
         x = fwd_recv_buffers.wait_first()
         # print(f"rank {self.rank} get_data_forward, got {x}")
         x = self.fix_after_recv(x)
+        x = [v.clone() for v in x]
 
         # pre-Start the next fwd Irecv:
         # TODO: decide if this is the best place to do it
@@ -538,6 +535,9 @@ class FuturesHandler(FuturesHandlerBase):
             self.sent_obejct_patience = num_stages - 2
         else:
             self.sent_obejct_patience = 1
+
+        self.sent_obejct_patience = 8
+
         # Holds Async handle objects (for isends)
         self.async_fwd_objects = OrderedDict()
         self.async_bwd_objects = OrderedDict()

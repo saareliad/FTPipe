@@ -49,7 +49,7 @@
     "work_scheduler": "1F1B",
     "cudnn_benchmark": true,
     "max_buffers": 1,
-    "step_every": 8,
+    "step_every": 16,
     "keep_buffers_alive": false,
     "train_batches_limit": -1,
     "log_frequency": 200,

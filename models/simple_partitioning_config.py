@@ -9,9 +9,9 @@ import os
 import importlib
 from itertools import chain
 from copy import deepcopy
-from pipeline.util import nested_map, flatten, unflatten
+from pipeline.util import nested_map
 # NOTE: currently nesting is supported just for tuples and lists
-
+# TODO: change the entire thing to just use the original dict and allow abstactions...
 # Used only to assert correct shape dtype
 _SHAPE_CLS = torch.Size
 
@@ -53,21 +53,6 @@ class PipelineConfig():
         stage = StageConfig(stage_class)
         self.stages[self.n_stages] = stage
         return stage
-
-    def _to_old_format(self, layers, tensors) -> Dict:
-        old_config = dict()
-
-        old_config['model inputs'] = self.model_inputs
-        old_config['model outputs'] = self.model_outputs
-
-        for idx, stage in self.stages.items():
-            stage_config = dict()
-            stage_config['inputs'] = stage.inputs
-            stage_config['outputs'] = stage.outputs
-            model = stage._stage_class(layers, tensors).to(stage.devices[0])
-            stage_config['model'] = model
-            old_config[idx] = stage_config
-        return old_config
 
     @property
     def n_ranks(self) -> int:
