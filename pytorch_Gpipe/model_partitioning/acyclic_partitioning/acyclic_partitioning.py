@@ -740,6 +740,8 @@ def single_level_partitioning(graph: Graph,
     else:
         constraint_per_stage = params_per_stage
 
+    avg_constraint_value = (sum(constraint_per_stage.values()) / k)
+
     if maximum_constraint_value is None:
         L_max = (1 + epsilon) * math.ceil(sum(constraint_per_stage.values()) / k)
     else:
@@ -748,10 +750,10 @@ def single_level_partitioning(graph: Graph,
     msg = "\n".join([
         f"-I- partitioning with {constraint.name} constraint is not possible",
         f"   max allowed stage constraint: {L_max:.2f}",
-        f"   max node constraint: {max(constraint_weights.values()):.2f}"
+        f"   average constraint value: {avg_constraint_value:.2f}"
     ])
 
-    assert all((v <= L_max for v in constraint_weights.values())), msg
+    assert avg_constraint_value < L_max, msg
 
     # NOTE we optimize the more stable edge cut objective
     # optimizing stage times directly is unstable and can create less partitions than requested
