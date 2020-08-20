@@ -954,8 +954,8 @@ def edge_cut(graph):
     for n in graph.nodes:
         stages = set()
         for o in n.out_edges:
-            if (n.stage_id != o.stage_id) and (o.id not in stages):
-                stages.add(o.id)
+            if (n.stage_id != o.stage_id) and (o.stage_id not in stages):
+                stages.add(o.stage_id)
                 edges.append((n, o))
 
     return edges

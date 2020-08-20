@@ -82,7 +82,7 @@ def partition_async_pipe(
                 n.weight = weights[n].recomputation
 
         if not cmd_args.use_METIS:
-            acyclic_partition(graph,
+            acyclic_partition(model,graph,
                               cmd_args.n_partitions,
                               node_weight_function=evaluator,
                               edge_weight_function=evaluator,

@@ -563,7 +563,7 @@ class Graph():
                     stage_output_ids.append(n.id)
                 
                 #discard outgoing edges to external stages
-                n.out_edges = {o for o in n.out_edges if o.stage_id == stage_id}
+                n.out_edges = [o for o in n.out_edges if o.stage_id == stage_id]
 
                 #add stage inputs
                 to_replace = dict()
@@ -578,7 +578,7 @@ class Graph():
                             stage_input.args=[]
                             stage_input.kwargs=dict()
                             stage_input.stage_id = stage_id
-                            stage_input.out_edges = {o for o in u.out_edges if o.stage_id == stage_id}
+                            stage_input.out_edges = [o for o in u.out_edges if o.stage_id == stage_id]
                             stage_inputs[u.id] = stage_input
                             stage_nodes[u.id] = stage_input
                         to_replace[u] = stage_input        

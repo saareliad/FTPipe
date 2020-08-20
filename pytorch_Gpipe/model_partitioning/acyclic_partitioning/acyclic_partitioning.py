@@ -1,17 +1,22 @@
+from torch.nn.parameter import Parameter
+from pytorch_Gpipe.utils import layerDict, tensorDict
+from torch.nn.modules.module import Module
 from pytorch_Gpipe.model_profiling import Graph, NodeWeightFunction, EdgeWeightFunction
 from .data_structures import QuotientGraph, SimpleNode, PriorityQueue, VerticeStageConnections
 from .gpa import coarsening, refine
 import random
 import math
 import numpy as np
-from typing import Tuple, Dict, Optional
-from collections import defaultdict, namedtuple
+from typing import Tuple, Dict, Optional,NamedTuple
+from collections import defaultdict
 import enum
 from multiprocessing import Pool
 import time
 import os
 
 ###################################################################################################
+
+# TODO add maximum suppression hueristic aka minimize objective for the stage which has the largest objective value
 
 
 class META_ALGORITH(enum.Enum):
@@ -28,7 +33,7 @@ class ALGORITHM(enum.Enum):
     GLOBAL_MOVES = 3
     FIDUCCIA_MATTHEYSES_MOVES = 4
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.name
 
 
@@ -36,7 +41,15 @@ class Objective(enum.Enum):
     EDGE_CUT = 1
     STAGE_TIME = 2
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        return self.name
+
+
+class Constraint(enum.Enum):
+    MEMORY = 1
+    TIME = 2
+
+    def __repr__(self) -> str:
         return self.name
 
 
@@ -45,12 +58,12 @@ class Objective(enum.Enum):
 #create initial partitioning by taking consecutive blocks of equal weight
 #the blocks are consecutive blocks of nodes acquired by a Khan's algorithm
 def initial_divide(graph: Graph, k: int,
-                   node_weights: Dict[SimpleNode, float])->Tuple[int,...]:
+                   weights: Dict[SimpleNode, float])->Tuple[int,...]:
     random_topo_sort = random_Khan_algorithm(graph)
-    node_weights = np.asarray([node_weights[n] for n in random_topo_sort])
-    cumulative_node_weights = np.cumsum(node_weights)
+    weights = np.asarray([weights[n] for n in random_topo_sort])
+    cumulative_weights = np.cumsum(weights)
 
-    total_weight = cumulative_node_weights[-1]
+    total_weight = cumulative_weights[-1]
     avg_weight = total_weight / k
 
     Vs = []
@@ -61,9 +74,9 @@ def initial_divide(graph: Graph, k: int,
     while len(Vs) < k - 1:
         stage_weight = options[random.randint(0, 1)]
         acc += stage_weight
-        Vs.append(np.searchsorted(cumulative_node_weights, acc))
+        Vs.append(np.searchsorted(cumulative_weights, acc))
 
-    idxs = [-1] + Vs + [len(cumulative_node_weights) - 1]
+    idxs = [-1] + Vs + [len(cumulative_weights) - 1]
 
     idxs = list(zip(map(lambda i: i + 1, idxs), idxs[1:]))
 
@@ -114,24 +127,35 @@ def random_Khan_algorithm(graph: Graph):
 # move nodes between adjacent partitions as long as edge cut improves and constraints are enforced
 # aka i=>i+1 or i=>i+1
 # a move is aligible as long as it does not overload the target partition and does not create a cycle
-def simple_moves(partition_volumes: Dict[int, float],
+def simple_moves(constraint: Constraint,
+                 objective: Objective,
+                 stage_volumes: Dict[int, float],
+                 params_per_stage: Dict[int,float],
                  edge_weights: Dict[Tuple[SimpleNode, SimpleNode], float],
                  node_weights: Dict[SimpleNode, float],
+                 params_per_node: Dict[SimpleNode,float],
                  L_max: float,
-                 rounds: int = 1):
+                 rounds: int):
     connections = VerticeStageConnections(node_weights)
 
-    def update_function(v, dst):
-        partition_volumes[v.stage_id] -= node_weights[v]
-        partition_volumes[dst] += node_weights[v]
+    def update_function(v:SimpleNode, dst:int):
+        stage_volumes[v.stage_id] -= node_weights[v]
+        stage_volumes[dst] += node_weights[v]
+
+        params_per_stage[v.stage_id] -= params_per_node[v]
+        params_per_stage[dst] += params_per_node[v]
+
         connections.move_node(v, dst)
+        v.stage_id = dst
 
 
-    state = PartitionState(edge_weights, node_weights, partition_volumes,
-                           L_max)
+    satisfies_constraint = CONSTRAINTS[constraint]
+    gain_function = GAINS[objective]
+
+    state = PartitionState(stage_volumes,params_per_stage,node_weights,edge_weights,params_per_node,L_max)
 
     # we use 0 based indexing
-    k = len(partition_volumes) - 1
+    k = len(stage_volumes) - 1
 
     nodes = list(node_weights.keys())
     for _ in range(rounds):
@@ -142,15 +166,13 @@ def simple_moves(partition_volumes: Dict[int, float],
         for n in nodes:
             gain_left = -np.inf
             if (n.stage_id > 0
-                ) and (not connections.has_in_connection(n, n.stage_id)) and (
-                    (partition_volumes[n.stage_id - 1] + node_weights[n]) < L_max):
-                gain_left = calculate_edge_gain(n, n.stage_id - 1, state)
+                ) and (not connections.has_in_connection(n, n.stage_id)) and satisfies_constraint(n,n.stage_id-1,state):
+                gain_left = gain_function(n, n.stage_id - 1, state)
 
             gain_right = -np.inf
             if (n.stage_id < k
-                ) and (not connections.has_out_connection(n, n.stage_id)) and (
-                    (partition_volumes[n.stage_id + 1] + node_weights[n]) < L_max):
-                gain_right = calculate_edge_gain(n, n.stage_id + 1, state)
+                ) and (not connections.has_out_connection(n, n.stage_id)) and satisfies_constraint(n,n.stage_id+1,state):
+                gain_right = gain_function(n, n.stage_id + 1, state)
 
             moves = defaultdict(list)
             moves[gain_left].append(n.stage_id - 1)
@@ -165,7 +187,6 @@ def simple_moves(partition_volumes: Dict[int, float],
             dst = random.sample(best_moves, 1)[0]
 
             update_function(n, dst)
-            n.stage_id = dst
 
         if not changed:
             break
@@ -175,19 +196,30 @@ def simple_moves(partition_volumes: Dict[int, float],
 # uses a sufficient condition for enforcing acyclicicity not a necessary condition
 # as such some options are skipped
 # a move is aligible as long as it does not overload the target partition and does not create a cycle
-def advanced_moves(partition_volumes: Dict[int, float],
-                   edge_weights: Dict[Tuple[SimpleNode, SimpleNode], float],
-                   node_weights: Dict[SimpleNode, float],
-                   L_max: float,
-                   rounds: int = 1):
+def advanced_moves(constraint: Constraint,
+                 objective: Objective,
+                 stage_volumes: Dict[int, float],
+                 params_per_stage: Dict[int,float],
+                 edge_weights: Dict[Tuple[SimpleNode, SimpleNode], float],
+                 node_weights: Dict[SimpleNode, float],
+                 params_per_node: Dict[SimpleNode,float],
+                 L_max: float,
+                 rounds: int):
 
-    def update_function(v, dst):
-        partition_volumes[v.stage_id] -= node_weights[v]
-        partition_volumes[dst] += node_weights[v]
+    def update_function(v:SimpleNode, dst:int):
+        stage_volumes[v.stage_id] -= node_weights[v]
+        stage_volumes[dst] += node_weights[v]
+
+        params_per_stage[v.stage_id] -= params_per_node[v]
+        params_per_stage[dst] += params_per_node[v]
+
+        v.stage_id = dst
+
+    satisfies_constraint = CONSTRAINTS[constraint]
+    gain_function = GAINS[objective]
 
 
-    state = PartitionState(edge_weights, node_weights, partition_volumes,
-                           L_max)
+    state = PartitionState(stage_volumes,params_per_stage,node_weights,edge_weights,params_per_node,L_max)
 
     nodes = list(node_weights.keys())
     for _ in range(rounds):
@@ -209,10 +241,10 @@ def advanced_moves(partition_volumes: Dict[int, float],
             for dst in range(A, B + 1):
                 if dst == n.stage_id:
                     continue
-                edge_gain = calculate_edge_gain(n, dst, state)
-                if (partition_volumes[dst] + node_weights[n]) > L_max:
-                    edge_gain = -np.inf
-                moves[edge_gain].append(dst)
+                gain = -np.inf
+                if satisfies_constraint(n,dst,state):
+                    gain = gain_function(n, dst, state)
+                moves[gain].append(dst)
 
             max_gain = max(moves.keys())
             if max_gain < 0:
@@ -223,7 +255,6 @@ def advanced_moves(partition_volumes: Dict[int, float],
             dst = random.sample(best_moves, 1)[0]
 
             update_function(n, dst)
-            n.stage_id = dst
 
         if not changed:
             break
@@ -232,18 +263,27 @@ def advanced_moves(partition_volumes: Dict[int, float],
 # move nodes between all partitions as long as edge cut improves and constraints are enforced
 # uses Khan's algorithm to ensure we do not create cycles in the quotient graph
 # a move is aligible as long as it does not overload the target partition and does not create a cycle
-def global_moves(partition_volumes: Dict[int, float],
+def global_moves(constraint: Constraint,
+                 objective: Objective,
+                 stage_volumes: Dict[int, float],
+                 params_per_stage: Dict[int,float],
                  edge_weights: Dict[Tuple[SimpleNode, SimpleNode], float],
                  node_weights: Dict[SimpleNode, float],
+                 params_per_node: Dict[SimpleNode,float],
                  L_max: float,
-                 rounds: int = 1):
+                 rounds: int):
 
-    def update_function(v, dst):
-        partition_volumes[v.stage_id] -= node_weights[v]
-        partition_volumes[dst] += node_weights[v]
+    def update_function(v:SimpleNode, dst:int):
+        stage_volumes[v.stage_id] -= node_weights[v]
+        stage_volumes[dst] += node_weights[v]
 
-    state = PartitionState(edge_weights, node_weights, partition_volumes,
-                           L_max)
+        params_per_stage[v.stage_id] -= params_per_node[v]
+        params_per_stage[dst] += params_per_node[v]
+
+    satisfies_constraint = CONSTRAINTS[constraint]
+    gain_function = GAINS[objective]
+
+    state = PartitionState(stage_volumes,params_per_stage,node_weights,edge_weights,params_per_node,L_max)
 
     quotient_graph = QuotientGraph(node_weights.keys())
     nodes = list(node_weights.keys())
@@ -254,14 +294,13 @@ def global_moves(partition_volumes: Dict[int, float],
         # O(E(k+mq))
         for n in nodes:
             moves = defaultdict(list)
-            for dst in partition_volumes.keys():
+            for dst in stage_volumes.keys():
                 if dst == n.stage_id:
                     continue
 
-                gain = calculate_edge_gain(n, dst, state)
-                if ((partition_volumes[dst] + node_weights[n]) >
-                        L_max) or quotient_graph.move_creates_cycle(n, dst):
-                    gain = -np.inf
+                gain = -np.inf
+                if satisfies_constraint(n,dst,state) and (not quotient_graph.move_creates_cycle(n, dst)):
+                    gain = gain_function(n, dst, state)
 
                 moves[gain].append(dst)
 
@@ -283,31 +322,41 @@ def global_moves(partition_volumes: Dict[int, float],
 # move nodes between partitions
 # moves with negative gain are also eligible in order to escape local minima
 # the partitioning with the best objective will be returned
-def Fiduccia_Mattheyses_moves(partition_volumes: Dict[int, float],
-                              edge_weights: Dict[Tuple[SimpleNode, SimpleNode],
-                                                 float],
+def Fiduccia_Mattheyses_moves(constraint: Constraint,
+                              objective: Objective,
+                              stage_volumes: Dict[int, float],
+                              params_per_stage: Dict[int,float],
+                              edge_weights: Dict[Tuple[SimpleNode, SimpleNode], float],
                               node_weights: Dict[SimpleNode, float],
+                              params_per_node: Dict[SimpleNode,float],
                               L_max: float,
-                              rounds: int = 1):
+                              rounds: int):
 
     # track which nodes belong to each partiiton
-    partitions = {i: set() for i in partition_volumes}
+    partitions = {i: set() for i in stage_volumes}
     for n in node_weights:
         partitions[n.stage_id].add(n)
 
-    def update_function(v, dst):
-        partition_volumes[v.stage_id] -= node_weights[v]
-        partition_volumes[dst] += node_weights[v]
+    def update_function(v:SimpleNode, dst:int):
+        stage_volumes[v.stage_id] -= node_weights[v]
+        stage_volumes[dst] += node_weights[v]
+
         partitions[v.stage_id].discard(v)
         partitions[dst].add(v)
 
+        params_per_stage[v.stage_id] -= params_per_node[v]
+        params_per_stage[dst] += params_per_node[v]
 
-    state = PartitionState(edge_weights, node_weights, partition_volumes,
-                           L_max)
+        v.stage_id = dst
+
+    satisfies_constraint = CONSTRAINTS[constraint]
+    gain_function = GAINS[objective]
+
+    state = PartitionState(stage_volumes,params_per_stage,node_weights,edge_weights,params_per_node,L_max)
 
     best_objective = calculate_edge_cut(edge_weights)
 
-    all_blocks = list(partition_volumes.keys())
+    all_blocks = list(stage_volumes.keys())
 
     for _ in range(rounds):
         active_blocks = set(all_blocks)
@@ -326,11 +375,11 @@ def Fiduccia_Mattheyses_moves(partition_volumes: Dict[int, float],
             candidate_moves = PriorityQueue()
             for node in partitions[A]:
                 if all(o.stage_id >= B for o in node.out_edges):
-                    candidate_moves.push_task(calculate_edge_gain(node, B, state),
+                    candidate_moves.push_task(gain_function(node, B, state),
                                               (node, B))
             for node in partitions[B]:
                 if all(i.stage_id <= A for i in node.in_edges):
-                    candidate_moves.push_task(calculate_edge_gain(node, A, state),
+                    candidate_moves.push_task(gain_function(node, A, state),
                                               (node, A))
 
             locked_nodes = set()
@@ -343,7 +392,7 @@ def Fiduccia_Mattheyses_moves(partition_volumes: Dict[int, float],
                 # check if the move is still valid
                 if node in locked_nodes:
                     continue
-                elif (partition_volumes[dst] + node_weights[node]) > L_max:
+                elif not satisfies_constraint(node,dst,state):
                     continue
                 elif (node.stage_id == A) and any(o.stage_id < B
                                               for o in node.out_edges):
@@ -354,12 +403,11 @@ def Fiduccia_Mattheyses_moves(partition_volumes: Dict[int, float],
 
                 locked_nodes.add(node)
 
-                gain = calculate_edge_gain(node, dst, state)
+                gain = gain_function(node, dst, state)
                 current_objective -= gain
                 src = node.stage_id
 
                 update_function(node, dst)
-                node.stage_id = dst
 
                 if current_objective < best_objective:
                     best_objective = current_objective
@@ -376,26 +424,39 @@ def Fiduccia_Mattheyses_moves(partition_volumes: Dict[int, float],
                     for i in node.in_edges:
                         if i.stage_id == A and all(o.stage_id >= B
                                                for o in i.out_edges):
-                            gain = calculate_edge_gain(i, B, state)
+                            gain = gain_function(i, B, state)
                             candidate_moves.push_task(gain, (i, B))
                 else:
                     for o in node.out_edges:
                         if o.stage_id == B and all(i.stage_id <= A
                                                for i in o.in_edges):
-                            gain = calculate_edge_gain(o, A, state)
+                            gain = gain_function(o, A, state)
                             candidate_moves.push_task(gain, (o, A))
 
             # end of inner pass revert partition to best partition
             for n, dst in moves_to_best.items():
                 update_function(n, dst)
-                n.stage_id = dst
+
+
+HEURISTICS = {
+    ALGORITHM.SIMPLE_MOVES: simple_moves,
+    ALGORITHM.ADVANCED_MOVES: advanced_moves,
+    ALGORITHM.GLOBAL_MOVES: global_moves,
+    ALGORITHM.FIDUCCIA_MATTHEYSES_MOVES: Fiduccia_Mattheyses_moves
+}
+
 
 
 ###################################################################################################
 
 
-PartitionState = namedtuple(
-    "PartitionState", "edge_weights node_weights partition_volumes L_max")
+class PartitionState(NamedTuple):
+    stage_volumes: Dict[int,float]
+    params_per_stage: Dict[int,float]
+    node_weights: Dict[SimpleNode,float]
+    edge_weights: Dict[Tuple[SimpleNode,SimpleNode],float]
+    params_per_node: Dict[SimpleNode,float]
+    L_max: float
 
 
 ###################################################################################################
@@ -428,8 +489,6 @@ def calculate_edge_gain(v: SimpleNode, dest: int,
     return gain
 
 
-###################################################################################################
-
 
 def calculate_edge_cut(edge_weights: Dict[Tuple[SimpleNode, SimpleNode], float]) -> float:
     edge_cut = 0
@@ -443,19 +502,16 @@ def calculate_edge_cut(edge_weights: Dict[Tuple[SimpleNode, SimpleNode], float])
     return edge_cut
 
 
-def calculate_partition_volumes(
-        k: int, node_weights: Dict[SimpleNode, float]) -> Dict[int, float]:
-    partition_volumes = {i: 0 for i in range(k)}
+def calculate_stage_volumes(node_weights: Dict[SimpleNode, float]) -> Dict[int, float]:
+    stage_volumes = defaultdict(lambda : 0)
     for n, w in node_weights.items():
-        partition_volumes[n.stage_id] += w
+        stage_volumes[n.stage_id] += w
 
-    return partition_volumes
+    return dict(stage_volumes)
 
 
-def calculate_stage_times(
-    node_weights: Dict[SimpleNode, float],
-    edge_weights: Dict[Tuple[SimpleNode, SimpleNode],
-                       float]) -> Dict[int, float]:
+def calculate_stage_times(node_weights: Dict[SimpleNode, float],
+                          edge_weights: Dict[Tuple[SimpleNode, SimpleNode],float]) -> Dict[int, float]:
     stage_times = defaultdict(lambda: 0)
 
     for n, w in node_weights.items():
@@ -474,28 +530,68 @@ def calculate_stage_times(
     return dict(stage_times)
 
 
+def calculate_params_per_node(model:Module,graph:Graph)->Dict[int,float]:
+    layers = layerDict(model,graph.depth,graph.basic_blocks)
+    tensors = tensorDict(model)
+
+    params_per_node=dict()
+
+    for n in graph.nodes:
+        if n.scope in layers:
+            params_per_node[n.id] = sum(t.numel() for t in layers[n.scope].parameters())
+        elif (n.value_type is Parameter) and (n.scope in tensors):
+            params_per_node[n.id] = tensors[n.scope].numel()
+        else:
+            params_per_node[n.id] = 0
+    
+    return params_per_node
+
+
+def calculate_params_per_stage(params_per_node:Dict[SimpleNode,float])->Dict[int,float]:
+    params_per_stage = defaultdict(lambda:0)
+
+    for n,p in params_per_node.items():
+        params_per_stage[n.stage_id] += p
+    
+    return dict(params_per_stage)
+
+
+GAINS = {Objective.EDGE_CUT:calculate_edge_gain}
+
+
 ###################################################################################################
 
+def move_satisfies_time_constraint(v:SimpleNode,dst:int,state:PartitionState)->bool:
+    node_weights = state.node_weights
+    volumes = state.stage_volumes
 
-HEURISTICS = {
-    ALGORITHM.SIMPLE_MOVES: simple_moves,
-    ALGORITHM.ADVANCED_MOVES: advanced_moves,
-    ALGORITHM.GLOBAL_MOVES: global_moves,
-    ALGORITHM.FIDUCCIA_MATTHEYSES_MOVES: Fiduccia_Mattheyses_moves
-}
+    return (volumes[dst] + node_weights[v]) < state.L_max
 
+
+def move_satisifies_memory_constraint(v:SimpleNode,dst:int,state:PartitionState)->bool:
+    params_per_node = state.params_per_node
+    params_per_stage = state.params_per_stage
+
+    return (params_per_stage[dst] + params_per_node[v]) < state.L_max
+
+
+CONSTRAINTS = { Constraint.TIME:move_satisfies_time_constraint,
+                Constraint.MEMORY:move_satisifies_memory_constraint}
 
 ###################################################################################################
 
 
 def acyclic_partition(
+        model:Module,
         graph: Graph,
         k: int,
         epsilon: float = 0.1,
         node_weight_function: Optional[NodeWeightFunction] = None,
         edge_weight_function: Optional[EdgeWeightFunction] = None,
-        meta_algorithm: META_ALGORITH = META_ALGORITH.SINGLE_LEVEL,
+        constraint: Constraint = Constraint.TIME,
         objective: Objective = Objective.EDGE_CUT,
+        meta_algorithm: META_ALGORITH = META_ALGORITH.SINGLE_LEVEL,
+        maximum_constraint_value: Optional[float] = None,
         rounds: int = 10,
         allocated_seconds: int = 20,
         use_layers_graph: bool = True
@@ -512,8 +608,11 @@ def acyclic_partition(
     else:
         work_graph = graph
 
+    params_per_node = calculate_params_per_node(model,work_graph)
+
     worker_args = [
         dict(graph=work_graph._remove_parallel_edges().state(),
+             params_per_node=params_per_node,
              k=k,
              meta_algorithm=meta_algorithm,
              algorithm=alg,
@@ -522,7 +621,9 @@ def acyclic_partition(
              edge_weight_function=edge_weight_function,
              rounds=rounds,
              allocated_seconds=allocated_seconds,
-             objective=objective) for alg in ALGORITHM
+             objective=objective,
+             constraint=constraint,
+             maximum_constraint_value=maximum_constraint_value) for alg in ALGORITHM
     ]
 
     with Pool(len(worker_args)) as pool:
@@ -563,11 +664,14 @@ def worker(kwargs) -> Tuple[Dict[int,int],float,float]:
     ewf = kwargs.pop("edge_weight_function")
     node_weights = dict()
     edge_weights = dict()
+    params_per_node = dict(kwargs["params_per_node"])
     for u in graph.nodes:
         node_weights[u] = nwf(u)
+        params_per_node[u] = params_per_node.pop(u.id)
         for o in u.out_edges:
             edge_weights[(u,o)] = ewf(u,o)
 
+    kwargs['params_per_node'] = params_per_node
     kwargs['node_weights'] = node_weights
     kwargs['edge_weights'] = edge_weights
 
@@ -609,89 +713,132 @@ def is_better_solution(solution:Tuple[float,float],best_solution:Tuple[float,flo
 ###################################################################################################
 
 
-def single_level_partitioning(
-    graph: Graph,
-    node_weights: Dict[SimpleNode,float],
-    edge_weights: Dict[Tuple[SimpleNode,SimpleNode],float],
-    algorithm: ALGORITHM = ALGORITHM.FIDUCCIA_MATTHEYSES_MOVES,
-    k: int = 4,
-    epsilon: float = 0.1,
-    objective: Objective = Objective.EDGE_CUT,
-    rounds: int = 10
-) -> Tuple[Dict[int,int],float,float]:
+def single_level_partitioning(graph: Graph,
+                                node_weights: Dict[SimpleNode,float],
+                                edge_weights: Dict[Tuple[SimpleNode,SimpleNode],float],
+                                params_per_node: Dict[SimpleNode,float],
+                                algorithm: ALGORITHM,
+                                k: int,
+                                epsilon: float,
+                                constraint: Constraint,
+                                maximum_constraint_value: Optional[float],
+                                objective: Objective,
+                                rounds: int) -> Tuple[Dict[int,int],float,float]:
+                                
+    if constraint is Constraint.TIME:
+        constraint_weights = node_weights
+    else:
+        constraint_weights = params_per_node
     
-    initial_divide(graph, k, node_weights)
+    initial_divide(graph,k,constraint_weights)
 
-    partition_volumes = calculate_partition_volumes(k, node_weights)
-    L_max = (1 + epsilon) * math.ceil(sum(partition_volumes.values()) / k)
+    stage_volumes = calculate_stage_volumes(node_weights)
+    params_per_stage = calculate_params_per_stage(params_per_node)
 
+    if constraint is Constraint.TIME:
+        constraint_per_stage = stage_volumes
+    else:
+        constraint_per_stage = params_per_stage
+
+    if maximum_constraint_value is None:
+        L_max = (1 + epsilon) * math.ceil(sum(constraint_per_stage.values()) / k)
+    else:
+        L_max = maximum_constraint_value
     
     msg = "\n".join([
-        "-I- balanced partitioning is not possible",
-        f"   max allowed weight: {L_max:.2f}",
-        f"   max node weight: {max(node_weights.values()):.2f}"
+        f"-I- partitioning with {constraint.name} constraint is not possible",
+        f"   max allowed stage constraint: {L_max:.2f}",
+        f"   max node constraint: {max(constraint_weights.values()):.2f}"
     ])
 
-    assert all((v <= L_max for v in node_weights.values())), msg
+    assert all((v <= L_max for v in constraint_weights.values())), msg
 
     # NOTE we optimize the more stable edge cut objective
     # optimizing stage times directly is unstable and can create less partitions than requested
     # when selecting the best solution it could be according to the stage time objective 
-    HEURISTICS[algorithm](partition_volumes,
+    HEURISTICS[algorithm](constraint,
+                        objective,
+                        stage_volumes,
+                        params_per_stage,
                         edge_weights,
                         node_weights,
+                        params_per_node,
                         L_max,
-                        rounds=rounds)
+                        rounds)
 
     #refine partition in a greedy fashion
-    global_moves(partition_volumes,
+    global_moves(constraint,
+                objective,
+                stage_volumes,
+                params_per_stage,
                 edge_weights,
                 node_weights,
+                params_per_node,
                 L_max,
                 rounds=1)
 
     if objective is Objective.STAGE_TIME:
-        partition_volumes = calculate_stage_times(node_weights,edge_weights)
+        stage_volumes = calculate_stage_times(node_weights,edge_weights)
 
     edge_cut = calculate_edge_cut(edge_weights)
 
-    return {n.id:n.stage_id for n in graph.nodes},edge_cut,max(partition_volumes.values())
+    return {n.id:n.stage_id for n in graph.nodes},edge_cut,max(stage_volumes.values())
 
 
 def multilevel_partitioning(
                         graph: Graph,
                         node_weights: Dict[SimpleNode,float],
                         edge_weights: Dict[Tuple[SimpleNode,SimpleNode],float],
-                        algorithm: ALGORITHM = ALGORITHM.FIDUCCIA_MATTHEYSES_MOVES,
-                        k: int = 4,
-                        epsilon: float = 0.1,
-                        objective: Objective = Objective.EDGE_CUT,
-                        rounds: int = 10
+                        params_per_node: Dict[SimpleNode,float],
+                        algorithm: ALGORITHM,
+                        k: int,
+                        epsilon: float,
+                        constraint:Constraint,
+                        maximum_constraint_value: Optional[float],
+                        objective: Objective,
+                        rounds: int
                         ) -> Tuple[Dict[int,int],float,float]:
     # NOTE we optimize the more stable edge cut objective
     # optimizing stage times directly is unstable and can create less partitions than requested
     # when selecting the best solution it could be according to the stage time objective 
     single_level_partitioning(graph,
+                                params_per_node=params_per_node,
                                 node_weights=node_weights,
                                 edge_weights=edge_weights,
                                 algorithm=algorithm,
                                 k=k,
                                 epsilon=epsilon,
+                                constraint=constraint,
+                                maximum_constraint_value=maximum_constraint_value,
                                 objective=Objective.EDGE_CUT,
                                 rounds=rounds)
     
-    partition_volumes = calculate_partition_volumes(k, node_weights)
-    L_max = (1 + epsilon) * math.ceil(sum(partition_volumes.values()) / k)
+    stage_volumes = calculate_stage_volumes(node_weights)
+    params_per_stage = calculate_params_per_stage(params_per_node)
 
-    hierarchy = coarsening(graph, node_weights, edge_weights)
+    if constraint is Constraint.TIME:
+        constraint_per_stage = stage_volumes
+    else:
+        constraint_per_stage = params_per_stage
+
+    if maximum_constraint_value is None:
+        L_max = (1 + epsilon) * math.ceil(sum(constraint_per_stage.values()) / k)
+    else:
+        L_max = maximum_constraint_value
+    
+    hierarchy = coarsening(graph, node_weights, edge_weights,params_per_node)
     # iterate in reverse order to coarsening
     # from smallest graph to largest graph
     for fine_graph, matching, coarse_graph in reversed(hierarchy):
-        HEURISTICS[algorithm](partition_volumes,
+        HEURISTICS[algorithm](constraint,
+                              objective,
+                              stage_volumes,
+                              params_per_stage,
                               coarse_graph._edge_weights,
                               coarse_graph._node_weights,
+                              coarse_graph._params_per_node,
                               L_max,
-                              rounds=rounds)
+                              rounds)
         refine(fine_graph, coarse_graph, matching)
 
     #update original graph
@@ -700,11 +847,11 @@ def multilevel_partitioning(
         graph[i].stage_id = root[i].stage_id
     
     if objective is Objective.STAGE_TIME:
-        partition_volumes = calculate_stage_times(node_weights,edge_weights)
+        stage_volumes = calculate_stage_times(node_weights,edge_weights)
 
     edge_cut = calculate_edge_cut(edge_weights)
 
-    return {n.id:n.stage_id for n in graph.nodes},edge_cut,max(partition_volumes.values())
+    return {n.id:n.stage_id for n in graph.nodes},edge_cut,max(stage_volumes.values())
 
 
 ###################################################################################################
