@@ -4,7 +4,7 @@ from typing import List, Tuple, Dict, Iterator, Set
 import re
 from ..model_profiling import used_namespaces, Node, NodeTypes,Graph
 from ..utils import inplace_arithmetic_ops, r_arithmetic_ops,arithmetic_ops,logical_ops,conversion_ops,magics, tensor_creation_ops,unary_ops
-from .utils import sortedPartitionInputs,sortedPartitionOutputs
+from .utils import sortedPartitionInputs,partitionOutputs
 import torch
 
 tab = '    '
@@ -18,11 +18,13 @@ __all__ = ['generate_forward_method']
 # while in the original model x0 was just an intermediary value
 # def forward(self,x0):
     # x0+=1
-def generate_forward_method(graph:Graph,
+def generate_forward_method(stage_id:int,
+        graph:Graph,
         partition_nodes: List[Node],
         model_outputs: List[Node],
         partition_fields: Dict[str, str],
-        generate_explicit_del=False) -> Tuple[List[str], Dict[str, List]]:
+        generate_explicit_del=False,
+        propagate_inputs=True) -> Tuple[List[str], Dict[str, List]]:
     '''the gateway to generate a forward function of a partition
     '''
     # function arguments are x0...xn
@@ -32,11 +34,11 @@ def generate_forward_method(graph:Graph,
     # constants are embedded in use site
     # function and layers are allocated temporary only if they have more than 1 use
 
-    part_inputs = sortedPartitionInputs(partition_nodes)
+    inputs = sortedPartitionInputs(partition_nodes)
     i=0
     input_ids=[]
     input_sources=[]
-    for n in part_inputs:
+    for n in inputs:
         if n.id in graph.input_kw_ids:
             input_ids.append(graph.input_kw_ids[n.id])
         else:
@@ -58,14 +60,22 @@ def generate_forward_method(graph:Graph,
     for k in remove_buffs_params:
         partition_fields.pop(k)
 
-    input_scopes = [graph.input_kw_ids.get(node.id,node.scope) for node in part_inputs]
-    ready_expressions.update(zip(part_inputs, input_ids))
+    input_scopes = [graph.input_kw_ids.get(node.id,node.scope) for node in inputs]
+    ready_expressions.update(zip(inputs, input_ids))
 
     lines = []
     lines.append(
         generateDeclaration(input_ids, partition_fields,
                             ready_expressions))
-    outputs = sortedPartitionOutputs(partition_nodes, model_outputs)
+    outputs = partitionOutputs(partition_nodes, model_outputs)
+
+    if propagate_inputs:
+        #NOTE this just ensures correct code generation for input propagation
+        # we still need to modify the actual config 
+        # this is done in the compile_partitioned_model.generate_config_with_input_propagation
+        outputs = apply_input_propagation(stage_id,outputs,inputs)
+
+    outputs = sorted(outputs, key=lambda n: n.id)
 
     output_destinations = []
     for n in outputs:
@@ -90,11 +100,11 @@ def generate_forward_method(graph:Graph,
 
     lines.append(body)
 
-    input_shapes = [n.tensor_shape for n in part_inputs]
+    input_shapes = [n.tensor_shape for n in inputs]
     output_shapes = [n.tensor_shape for n in outputs]
-    input_dtypes = [n.tensor_dtype for n in part_inputs]
+    input_dtypes = [n.tensor_dtype for n in inputs]
     output_dtypes = [n.tensor_dtype for n in outputs]
-    inputs_req_grad = [n.req_grad for n in part_inputs]
+    inputs_req_grad = [n.req_grad for n in inputs]
     outputs_req_grad = [n.req_grad for n in outputs]
     io = {"inputs": input_scopes,
           "outputs": out_scopes,
@@ -447,3 +457,16 @@ def variableNameGenerator() -> Iterator[str]:
             yield f"t_{temp_idx}"
 
     return iter(f())
+
+
+
+def apply_input_propagation(stage_id:int,outputs:List[Node],inputs:List[Node])->Set[Node]:
+    for i in inputs:
+        dsts = {o.stage_id for o in i.out_edges}
+        
+        # if there is a later stage that uses the same input
+        # we will propagate it from here
+        if stage_id < max(dsts):
+            outputs.append(i)
+    
+    return set(outputs)

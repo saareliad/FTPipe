@@ -63,16 +63,14 @@ def sortedPartitionInputs(partition: List[Node]) -> List[Node]:
     return sorted(inputs, key=lambda n: n.id)
 
 
-def sortedPartitionOutputs(partition: List[Node],
+def partitionOutputs(partition: List[Node],
                            model_outputs: List[Node]) -> List[Node]:
     ''' return all nodes that are outputs of the partition\n
-        sorted by id
     '''
 
     def isOutput(n):
         part_output = (n.type != NodeTypes.IN) and any(o.stage_id != n.stage_id for o in n.out_edges)
         return part_output or (n in model_outputs)
 
-    outputs = {n for n in partition if isOutput(n)}
+    return [n for n in partition if isOutput(n)]
 
-    return sorted(outputs, key=lambda n: n.id)

@@ -312,6 +312,7 @@ def build_graph(model: nn.Module,
 
     graph = trace_module(model, args=args, kwargs=kwargs, depth=max_depth,
                          basic_blocks=basic_blocks)
+
     weights = None
     print("graph built")
     if use_graph_profiler:

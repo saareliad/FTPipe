@@ -22,6 +22,7 @@ def compile_partitioned_model(graph: Graph,
                               batch_dim: int,
                               generate_model_parallel: bool = False,
                               generate_explicit_del=False,
+                              propagate_inputs = True,
                               output_file: Optional[str] = None):
     '''generates the code for the partitioned model.
        The partitions can be consumed using the `create_pipeline_configuration` method in the generated code
@@ -70,11 +71,13 @@ def compile_partitioned_model(graph: Graph,
         class_decl, scope_to_class_field = generate_init_method(stage,class_name, layers,
                                                                 is_param_dict, buffs_params)
         state_methods_functions = generate_partition_state_methods()
-        forward_function, io = generate_forward_method(graph,
+        forward_function, io = generate_forward_method(idx,
+                                                       graph,
                                                        stage,
                                                        graph.outputs,
                                                        scope_to_class_field,
-                                                       generate_explicit_del=generate_explicit_del)
+                                                       generate_explicit_del=generate_explicit_del,
+                                                       propagate_inputs=propagate_inputs)
         partitions_code.append(class_decl)
         partitions_code.extend(forward_function)
         partitions_code.append("")
@@ -86,7 +89,7 @@ def compile_partitioned_model(graph: Graph,
     elif output_file.endswith(".py"):
         output_file = output_file[:-3]
 
-    create_pipeline_configuration_str,config = create_pipeline_configuration(graph, ios, layer_classes, batch_dim)
+    create_pipeline_configuration_str,config = create_pipeline_configuration(graph, ios, layer_classes, batch_dim, propagate_inputs)
     lines.append(create_pipeline_configuration_str)
     if generate_model_parallel:
         lines.append(create_model_parallel_module(config))
@@ -158,7 +161,8 @@ def create_pipeline_configuration(graph: Graph,
                                             Dict[str,
                                                  List[str]]],
                                   model_blocks: Dict[str, Module],
-                                  batch_dim: int) -> Tuple[str,Dict]:
+                                  batch_dim: int,
+                                  propagate_inputs: bool) -> Tuple[str,Dict]:
     '''generates the create_pipeline_configuration method which given a model creates his partitioned counterpart
     '''
     # TODO assumption the first input is batched
@@ -169,7 +173,6 @@ def create_pipeline_configuration(graph: Graph,
             return (s is not None) and(len(s) > (batch_dim + 1)) and (s[batch_dim] == batch_size)
         return nested_map(f,shape)
 
-    module_path = 'os.path.relpath(__file__).replace("/",".")[:-3]'
     basic_blocks = ",".join(
         map(lambda block: block.__name__, set(model_blocks.values())))
 
@@ -190,6 +193,10 @@ def create_pipeline_configuration(graph: Graph,
         "model_outputs":model_outputs,
         "stages":stages
     }
+
+    if propagate_inputs:
+        # modify the config to accomodate input propagation
+        config = generate_config_with_input_propagation(config)
 
     config = generate_config_without_nested(config)
 
@@ -355,7 +362,7 @@ def generate_switch_batch_size():
     return s
 
 
-def generate_config_without_nested(dict_config):
+def generate_config_without_nested(dict_config:Dict)->Dict:
     config_without_nested = deepcopy(dict_config)
 
     #convert in/out for model
@@ -424,3 +431,54 @@ def generate_config_without_nested(dict_config):
     
     return config_without_nested
 
+
+def generate_config_with_input_propagation(dict_config:Dict)->Dict:
+    # consider the case where stage 0 sends an activation for stages[1,2,3]
+    # if stage0 sends directly to all other stages
+    # it will need to keep the buffer alive until stage3 uses it
+    # but if we instead have 0->1->2->3
+    # than each stage needs to keep the buffer alive for 1 cycle
+    # removing the overall memory used per worker
+
+    new_config = deepcopy(dict_config)
+
+    # modify model outputs
+    new_model_outputs = new_config['model_outputs'] 
+    for name,cfg in dict_config['model_outputs'].items():
+        old_src = cfg['created_by']
+        used_by = dict_config['stages'][old_src]['outputs'][name]['used_by']
+        if len(used_by) > 1:
+            new_src = max(used_by)
+            new_model_outputs[name]['created_by'] = new_src
+        else:
+            #preserve order
+            new_model_outputs[name] = new_model_outputs.pop(name)
+
+    # modify stages
+    for stage_id,stage_cfg in dict_config['stages'].items():
+        new_stage_cfg = new_config['stages'][stage_id]
+        for name,cfg in stage_cfg['inputs'].items():
+            old_src = cfg['created_by']
+            #model inputs remain unchanged
+            if old_src == -1:
+                # need to preserve order
+                new_stage_cfg['inputs'][name] = new_stage_cfg['inputs'].pop(name)
+                continue
+            used_by = dict_config['stages'][old_src]['outputs'][name]['used_by']
+            if len(used_by) > 1:
+                new_src = max((dst for dst in used_by if dst < stage_id), default=old_src)
+                new_stage_cfg['inputs'][name]['created_by'] = new_src
+                new_stage_cfg['inputs'][name+f"_{stage_id}"] = new_stage_cfg['inputs'].pop(name)
+            else:
+                #preserve order
+                new_stage_cfg['inputs'][name] = new_stage_cfg['inputs'].pop(name)
+        
+        for name,cfg in stage_cfg['outputs'].items():
+            if len(cfg['used_by']) > 1:
+                new_dst = min((dst for dst in cfg['used_by'] if dst > stage_id))
+                new_stage_cfg['outputs'][name]['used_by'] = [new_dst]
+                new_stage_cfg['outputs'][name+f"_{new_dst}"] = new_stage_cfg['outputs'].pop(name)
+            else:
+                new_stage_cfg['outputs'][name] = new_stage_cfg['outputs'].pop(name)
+
+    return new_config
