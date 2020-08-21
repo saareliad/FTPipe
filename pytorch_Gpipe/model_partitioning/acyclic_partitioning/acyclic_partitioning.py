@@ -521,7 +521,7 @@ def calculate_stage_time_gain(v:SimpleNode, dst:int, state:PartitionState) -> fl
 
     delta = prev_max - new_max
 
-    #TODO maybe factor in the comm change also
+    # TODO decide wether to include communication
     
     return delta
 
@@ -540,8 +540,9 @@ def calculate_stage_times(node_weights: Dict[SimpleNode, float],
                 continue
             e = edge_weights[(n, o)]
             destinations.add(o.stage_id)
-            stage_times[n.stage_id] += e
-            stage_times[o.stage_id] += e
+            # TODO decide wether to include communication
+            # stage_times[n.stage_id] += e
+            # stage_times[o.stage_id] += e
 
     return dict(stage_times)
 
@@ -749,6 +750,7 @@ def single_level_partitioning(graph: Graph,
     
     initial_divide(graph,k,constraint_weights)
 
+    #TODO if we decide to include comm for stage_time objective we'll need to address this here
     stage_volumes = calculate_stage_volumes(node_weights)
     params_per_stage = calculate_params_per_stage(params_per_node)
 
@@ -817,9 +819,7 @@ def multilevel_partitioning(
                         objective: Objective,
                         rounds: int
                         ) -> Tuple[Dict[int,int],float,float]:
-    # NOTE we optimize the more stable edge cut objective
-    # optimizing stage times directly is unstable and can create less partitions than requested
-    # when selecting the best solution it could be according to the stage time objective 
+
     single_level_partitioning(graph,
                                 params_per_node=params_per_node,
                                 node_weights=node_weights,
@@ -829,9 +829,10 @@ def multilevel_partitioning(
                                 epsilon=epsilon,
                                 constraint=constraint,
                                 maximum_constraint_value=maximum_constraint_value,
-                                objective=Objective.EDGE_CUT,
+                                objective=objective,
                                 rounds=rounds)
     
+    #TODO if we decide to include comm for stage_time objective we'll need to address this here
     stage_volumes = calculate_stage_volumes(node_weights)
     params_per_stage = calculate_params_per_stage(params_per_node)
 
