@@ -489,7 +489,6 @@ def calculate_edge_gain(v: SimpleNode, dest: int,
     return gain
 
 
-
 def calculate_edge_cut(edge_weights: Dict[Tuple[SimpleNode, SimpleNode], float]) -> float:
     edge_cut = 0
 
@@ -508,6 +507,23 @@ def calculate_stage_volumes(node_weights: Dict[SimpleNode, float]) -> Dict[int, 
         stage_volumes[n.stage_id] += w
 
     return dict(stage_volumes)
+
+
+def calculate_stage_time_gain(v:SimpleNode, dst:int, state:PartitionState) -> float:
+    node_weights = state.node_weights
+    edge_weights = state.edge_weights
+    volumes = state.stage_volumes
+
+
+    prev_max = max(volumes[v.stage_id],volumes[dst])
+
+    new_max = max(volumes[v.stage_id]-node_weights[v],volumes[dst]+node_weights[v])
+
+    delta = prev_max - new_max
+
+    #TODO maybe factor in the comm change also
+    
+    return delta
 
 
 def calculate_stage_times(node_weights: Dict[SimpleNode, float],
@@ -556,7 +572,8 @@ def calculate_params_per_stage(params_per_node:Dict[SimpleNode,float])->Dict[int
     return dict(params_per_stage)
 
 
-GAINS = {Objective.EDGE_CUT:calculate_edge_gain}
+GAINS = {Objective.EDGE_CUT:calculate_edge_gain,
+        Objective.STAGE_TIME:calculate_stage_time_gain}
 
 
 ###################################################################################################
