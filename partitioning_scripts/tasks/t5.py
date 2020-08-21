@@ -326,8 +326,10 @@ class T5Partitioner(Partitioner):
             model_cls = TiedT5ForConditionalGeneration
         else:
             model_cls = T5ForConditionalGeneration
+        
+        use_cdn = args.model_name_or_path != "t5-11b"
         model = model_cls.from_pretrained(args.model_name_or_path,
-                                        config=config).train()
+                                        config=config,use_cdn=use_cdn).train()
 
         if tied:
             model.make_stateless()
