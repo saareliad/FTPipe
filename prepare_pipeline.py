@@ -335,6 +335,7 @@ def get_optimizer_cls(args, has_gap_aware):
         optimizer_type += '_record_step'
 
     optimizer_cls = AVAILBALE_OPTIMIZERS.get(optimizer_type)
+    assert optimizer_cls is not None, f"{optimizer_type} not in {AVAILBALE_OPTIMIZERS.keys()}"
     return optimizer_cls
 
 
