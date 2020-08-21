@@ -907,8 +907,14 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
 
         self.lm_head = nn.Linear(config.d_model, config.vocab_size, bias=False)
 
-        self.lm_loss = nn.CrossEntropyLoss(ignore_index=-100)
-        
+        self.z_loss = getattr(config, "z_loss", None)
+
+        if is_None(self.z_loss):
+            self.lm_loss = nn.CrossEntropyLoss(ignore_index=-100)
+        else:
+            self.lm_loss = nn.CrossEntropyLoss(ignore_index=-100, reduction='none')
+
+
         self.output_only = config.output_only
         self.precomputed_masks = config.precomputed_masks
 
@@ -1012,9 +1018,16 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         if is_not_None(lm_labels):
             # loss_fct = CrossEntropyLoss(ignore_index=-100)
             loss_fct = self.lm_loss
-            loss = loss_fct(lm_logits.view(-1, lm_logits.size(-1)), lm_labels.view(-1))
-            # TODO(thom): Add z_loss https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/layers.py#L666
-            decoder_outputs = (loss,) + decoder_outputs
+
+            if is_not_None(self.z_loss):
+                # TODO(thom): Add z_loss https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/layers.py#L666
+                a = lm_logits.view(-1, lm_logits.size(-1))[lm_labels.view(-1) != -100]
+                b = lm_labels.view(-1)[lm_labels.view(-1) != -100]
+                loss = loss_fct(a,b).add_(a.logsumexp(1).pow_(2).add_(self.z_loss)).mean()
+            else:
+                loss = loss_fct(lm_logits.view(-1, lm_logits.size(-1)), lm_labels.view(-1))
+
+                decoder_outputs = (loss,) + decoder_outputs
         
         if self.output_only:
             return decoder_outputs[0]
