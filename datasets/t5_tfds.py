@@ -280,7 +280,7 @@ class SEP_T5_TFDS_DatasetHandler(CommonDatasetHandler):
         pass
 
     def modify_dataloader_keywords(self, dataloader_keywords):
-        pass
+        return dataloader_keywords
 
 
 register_dataset("t5_tfds", SEP_T5_TFDS_DatasetHandler)
