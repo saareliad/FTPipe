@@ -388,7 +388,8 @@ def preproc_data(args, cache=None, save_cache=True):
         args.bs_train,
         args.bs_test,  # NOTE: changed name
         model_instance=model_instance,
-        send_target_in_pipe=("_nonsep" in args.task))
+        send_target_in_pipe=("_nonsep" in args.task),
+        prefer_seq_sends=getattr(args, "prefer_seq_sends",True))
 
     pipe_config = parsed_config.pipe_config
     args.num_stages = parsed_config.num_stages
@@ -445,7 +446,8 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         args.bs_train,
         args.bs_test,  # NOTE: changed name
         model_instance=model_instance,
-        send_target_in_pipe=("_nonsep" in args.task))
+        send_target_in_pipe=("_nonsep" in args.task),
+        prefer_seq_sends=getattr(args, "prefer_seq_sends",True))
 
     pipe_config = parsed_config.pipe_config
 

@@ -4,7 +4,7 @@ from itertools import count
 from collections import OrderedDict, defaultdict
 
 
-def get_my_send_recv_ranks(pipe_config, stage, stage_to_rank_map=None):
+def get_my_send_recv_ranks(pipe_config, stage, stage_to_rank_map=None, prefer_seq_sends=True):
     def ranks_in_stage(given_stage):
         if stage_to_rank_map:
             return stage_to_rank_map[given_stage]
@@ -23,10 +23,24 @@ def get_my_send_recv_ranks(pipe_config, stage, stage_to_rank_map=None):
             stage_j = stages[j]
             for tensor_name in stage_i.outputs:
                 if tensor_name in stage_j.inputs:
-                    if stage == j:
-                        assert tensor_name not in receive_ranks
+                    if stage == j: # recv
+                        if tensor_name in receive_ranks:
+                            if prefer_seq_sends:
+                                print(f"-V- stage {stage}: preferring to recv from a later: {i}-->{j}: {tensor_name}")
+                            else:
+                                raise ValueError(f"Input {tensor_name} received from multiple stages")
                         receive_ranks[tensor_name] = ranks_in_stage(i)
-                    else:
+                    else:  # stage == i, send
+                        if prefer_seq_sends:
+                            # check if I'm the closest
+                            all_sending_dist = [x for x,v in enumerate(stages) if tensor_name in v.outputs and x < j]
+                            assert len(all_sending_dist) > 0
+                            assert stage in all_sending_dist
+                            closest_sender = max(all_sending_dist)
+                            if stage != closest_sender:
+                                print(f"-v- stage {stage}: will not send {i}-->{j}: {tensor_name}."
+                                      f" There is a closer sender: {closest_sender}")
+                                continue
                         send_ranks[tensor_name].extend(ranks_in_stage(j))
 
     # Enusure the sort order is like config.
@@ -81,7 +95,8 @@ class PartitioningConfigParser:
                  model_instance=None,
                  send_target_in_pipe=False,
                  stage_to_device_map=None,
-                 stateless_tied_same_process=False):
+                 stateless_tied_same_process=False,
+                 prefer_seq_sends=True):
 
         handler = AVAILABLE_MODELS.get(cfg)
         if handler is None:
@@ -98,7 +113,7 @@ class PartitioningConfigParser:
         stage_to_rank_map = get_stage_to_rank_map(pipe_config, stage_to_device_map=stage_to_device_map, stateless_tied_same_process=stateless_tied_same_process)
 
         self.send_ranks, self.receive_ranks = get_my_send_recv_ranks(
-            pipe_config, self.stage, stage_to_rank_map=stage_to_rank_map)
+            pipe_config, self.stage, stage_to_rank_map=stage_to_rank_map, prefer_seq_sends=prefer_seq_sends)
         
         # Handle sending target in pipe. (deprecated)
         if send_target_in_pipe:
