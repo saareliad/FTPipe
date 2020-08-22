@@ -9,7 +9,7 @@ from .datasets import CommonDatasetHandler, register_dataset
 from .t5_squad_eval import get_answers, get_squad_validation_dataset, evaluate_squad_answers
 
 # Type hint
-from pipeline.training import T5SquadTrainer
+from pipeline.training import T5Trainer
 from pipeline.stats import SquadStats
 
 # For loading
@@ -190,7 +190,7 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, args, **kw):
         return evaluate_squad_checkpoint(args, cp_number=cp_number)
 
     # TODO: currently this will eval squad every epoch (but jsut checkint it works)
-    def set_eval(trainer: T5SquadTrainer):
+    def set_eval(trainer: T5Trainer):
         # set squad evaluation method
         # TODO: can do this parallel by getting answers parallel.
         # TODO: when doing this on CPU it takes >1 hour, and torch.distributed gets timout after 1 hour
