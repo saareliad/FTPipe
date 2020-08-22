@@ -2,21 +2,21 @@ import abc
 from typing import Tuple, Any
 
 
-class DLTask(abc.ABC):
+class PipelineDataPropagator(abc.ABC):
     """
-    Class describing how to handle data loaded or passed throught the pipeline.
+    Class describing how to handle data loaded or passed through the pipeline.
         
     Usage:
 
         # Get data:
         (1)
         from_prev_stage = (...)  # get it from somewhere
-        to_stage, to_somewhere_else = task.preload_from_dataloader(dlitr)
+        to_stage, to_somewhere_else = propagator.preload_from_dataloader(dlitr)
         x = (*to_stage, *from_prev_stage)
 
         # Run the model:
         (2)
-        x, *ctx = task.unpack_data_for_partition(data)
+        x, *ctx = propagator.unpack_data_for_partition(data)
         model_out = model(x, ...)
 
         # Unify outside context
@@ -25,7 +25,7 @@ class DLTask(abc.ABC):
 
         # Send Data:
         (4)
-        t = task.pack_send_context(model_out, *ctx)
+        t = propagator.pack_send_context(model_out, *ctx)
         send(t) ...
     """
     # @staticmethod

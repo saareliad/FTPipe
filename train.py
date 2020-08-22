@@ -3,7 +3,7 @@ import time
 import torch
 import os
 from pipeline import SinglePartitionManager
-from pipeline.stats import Stats
+from pipeline.statistics import Stats
 
 
 def training_loop(args, logger, train_dl, test_dl, is_first_partition,

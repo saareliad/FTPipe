@@ -113,7 +113,6 @@ def parse_cli():
                         default=200,
                         metavar='BT')
 
-    # should be like `trainer` and `task` but I left it like this.
     add_dataset_argument(parser)
 
     parser.add_argument('--seed',
@@ -195,6 +194,8 @@ def parse_cli():
         default=100,
         help="Print extra statistics every given number of batches")
 
+    parser.add_argument("--data_propagator", default="auto", help="Data propagation inside the pipeline")
+    
     parser.add_argument(
         "--no_recomputation",
         action="store_true",
@@ -383,7 +384,7 @@ def main(args, shared_ctx=None):
     # Prepare for pipeline
     ###############################
     # As for advanced features everything is coupled
-    # (datasets length, training task,
+    # (datasets length, data-propgation,
     # optimizer, scheduler, weight predictior, gap aware,...)
     # we have to prepare everything together, this is somewhat
     # "spaghetti code" and can't really escape it.

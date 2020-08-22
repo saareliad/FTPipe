@@ -1,8 +1,8 @@
-from .interface import DLTask
+from .interface import PipelineDataPropagator
 import torch
 
 
-class CVTask(DLTask):
+class CVTargetInPipePropagator(PipelineDataPropagator):
     def __init__(self, device, is_last_partition, is_first_partition):
         super().__init__()
         self.device = device

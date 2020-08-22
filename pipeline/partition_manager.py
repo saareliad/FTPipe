@@ -12,7 +12,7 @@ from .partition import (GPipePartition, GPipeFirstPartition,
 
 from .partition import get_buffers_for_ddp_sync
 from .training.interface import PartitionedTrainer  # , GradNormStepper
-from .tasks import DLTask
+from .data_propagation import PipelineDataPropagator
 from .weight_prediction.interface import WeightPredictor
 from .gap_aware import GapAwareBase
 from .work_schedulers import WorkScheduler, get_fwds_between_first_and_seconds_step_for_stage
@@ -108,7 +108,7 @@ class SinglePartitionManager:
 
         # Hints,May be set later.
         # self.dl_iter = None
-        self.task: DLTask
+        self.data_propagator: PipelineDataPropagator
         self.trainer: PartitionedTrainer
         self.weight_predictor: WeightPredictor
         self.gap_aware: GapAwareBase
@@ -204,8 +204,8 @@ class SinglePartitionManager:
         do_step = (batch_idx % se) == (se - 1)
         return do_step
 
-    def set_task(self, task: DLTask):
-        self.task = task
+    def set_data_propagator(self, data_propagator: PipelineDataPropagator):
+        self.data_propagator = data_propagator
 
     def set_trainer(self, trainer: PartitionedTrainer):
         self.trainer = trainer
@@ -288,13 +288,13 @@ class SinglePartitionManager:
             x = (*preload_input_partition, *x)
         # In case we send labels in pipeline: extract them from the output.
         # For last partition: what is loaded for outside loss and statistics (e.g: batch size, ...)
-        x, *ctx = self.task.unpack_data_for_partition(x)
+        x, *ctx = self.data_propagator.unpack_data_for_partition(x)
         # Run the stage
         x = self.partition(x, batch_idx)
         request_objects = None
         # For non last partition - send forward.
         if not self.is_last_partition:
-            send_ctx = self.task.pack_send_context(x, *ctx)
+            send_ctx = self.data_propagator.pack_send_context(x, *ctx)
             request_objects = self.comm_handler.send_activations(
                 send_ctx, batch_idx)
         return request_objects, x, ctx
@@ -331,7 +331,7 @@ class SinglePartitionManager:
             self.delay_at_batch[batch_idx] = expected_staleness
 
         # TODO: preload stuff from dataloader.
-        preload_input_partition, preload_input_to_outside_loss = self.task.preload_from_dataloader(getattr(self, "dl_iter", None))
+        preload_input_partition, preload_input_to_outside_loss = self.data_propagator.preload_from_dataloader(getattr(self, "dl_iter", None))
 
         # Do the forward pass with optionals
         # optional (1): Weight Prediction
@@ -458,7 +458,7 @@ class SinglePartitionManager:
                 # Note: could be more than one LR, but we ignore this for simplicity.
                 lr = self.trainer.scheduler.get_last_lr()[0]
                 batch_log_str += '| lr {:02.9f}'.format(lr)
-            # TODO: add more stats. e.g can print here time, ' ms/batch {:5.2f} | ' ,...
+            # TODO: add more statistics. e.g can print here time, ' ms/batch {:5.2f} | ' ,...
             self.logger.info(batch_log_str)
 
     def run_batch_backward(self, batch_idx, num_batches):
@@ -598,7 +598,7 @@ class SinglePartitionManager:
             futures_handler.after_forward(ro, done_fwds, False)
         futures_handler.clean_eval()
 
-    def run_until_flush(self, num_batches):
+    def run_until_flush(self, num_batches, flush_rate=-1):
         """
         Requires:
             set_dataloader() was called (if first partition)
@@ -735,7 +735,7 @@ class GPipePartitionManager(SinglePartitionManager):
 
         partition.is_last_micro_batch = is_last_micro_batch
 
-        preload_input_partition, preload_input_to_outside_loss = self.task.preload_from_dataloader(getattr(self, "dl_iter", None))
+        preload_input_partition, preload_input_to_outside_loss = self.data_propagator.preload_from_dataloader(getattr(self, "dl_iter", None))
 
         request_objects, x, ctx = self.forward_pass_and_send(
             batch_idx, num_batches, preload_input_partition)
@@ -755,7 +755,7 @@ class GPipePartitionManager(SinglePartitionManager):
                 # TODO: can ask trainer what exactly is neccesary from the output to save space, but its very minor.
 
                 # NOTE: for the micro batch (no recomputation), we have x as root of the computation graph.
-                # otherwise, it can be saved just for stats, and we need to do recomputation.
+                # otherwise, it can be saved just for statistics, and we need to do recomputation.
 
                 # NOTE: when we do recomputation -  this is not needed.
                 # but we can use this to assert recomputation is correct.
@@ -891,7 +891,7 @@ class GPipePartitionManager(SinglePartitionManager):
 
         return request_objects
 
-    def run_until_flush(self, num_batches):
+    def run_until_flush(self, num_batches, flush_rate=-1):
         """
         Requires:
             set_dataloader() was called (if first partition)

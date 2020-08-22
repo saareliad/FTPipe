@@ -10,7 +10,7 @@ from models import parse_config
 from pipeline.partition_manager import (SinglePartitionManager, GPipePartitionManager)
 from pipeline import CommunicationHandlerBase, get_auto_comm_handler_cls
 from pipeline.communication.multiprocessing import MultiprocessingCommunicationHandler
-from pipeline.stats import get_statistics  # , Stats
+from pipeline.statistics import get_statistics  # , Stats
 from pipeline.weight_prediction import get_sched_predictor
 from pipeline.weight_prediction import get_weight_predictor as get_weight_predictor_partial
 from pipeline.gap_aware import (get_sgd_gap_aware_cls, get_adam_gap_aware_cls,
@@ -24,14 +24,14 @@ import optimizers.lr_scheduler
 # TODO: migrate to `register_xxx()` convention
 from pipeline.work_schedulers import AVAILABLE_WORK_SCHEDULERS
 from pipeline.training import AVAILABLE_TRAINERS
-from pipeline.tasks import AVAILABLE_TASKS
+from pipeline.data_propagation import AVAILABLE_PROPAGATORS
 from optimizers import AVAILBALE_OPTIMIZERS
 # from datasets import AVAILABLE_DATASETS
 
 
-def get_task_cls(args):
-    task_cls = AVAILABLE_TASKS.get(args.task)
-    return task_cls
+def get_propagator_cls(args):
+    propagator_cls = AVAILABLE_PROPAGATORS.get(args.data_propagator)
+    return propagator_cls
 
 
 def get_trainer_cls(args):
@@ -44,7 +44,7 @@ def is_huggingface_transformer(args):
 
 
 def is_explicit_non_seperated_dataset(args):
-    return "_nonsep" in args.task
+    return "_nonsep" in args.data_propagator
 
 
 def create_comm_handler(args, comm_init_args,
@@ -388,7 +388,7 @@ def preproc_data(args, cache=None, save_cache=True):
         args.bs_train,
         args.bs_test,  # NOTE: changed name
         model_instance=model_instance,
-        send_target_in_pipe=("_nonsep" in args.task),
+        send_target_in_pipe=("_nonsep" in args.data_propagator),
         prefer_seq_sends=getattr(args, "prefer_seq_sends",True))
 
     pipe_config = parsed_config.pipe_config
@@ -446,7 +446,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         args.bs_train,
         args.bs_test,  # NOTE: changed name
         model_instance=model_instance,
-        send_target_in_pipe=("_nonsep" in args.task),
+        send_target_in_pipe=("_nonsep" in args.data_propagator),
         prefer_seq_sends=getattr(args, "prefer_seq_sends",True))
 
     pipe_config = parsed_config.pipe_config
@@ -564,7 +564,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         logger.info(f"Stage {args.stage} will use Gap Aware")
 
     trainer_cls = get_trainer_cls(args)
-    task_cls = get_task_cls(args)
+    propagator_cls = get_propagator_cls(args)
     optimizer_cls = get_optimizer_cls(args, partition_using_gap_aware)
     statistics = get_statistics(args.statistics,
                                 is_last_partition=is_last_partition)
@@ -689,9 +689,9 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         if gap_aware_just_loss:
             assert (getattr(args, "weight_stashing", False))
 
-    # Set Task
-    task = task_cls(device, is_last_partition, is_first_partition, args.stage, pipe_config)
-    partition.set_task(task)
+    # Set Data propagator
+    propagator = propagator_cls(device, is_last_partition, is_first_partition, args.stage, pipe_config)
+    partition.set_data_propagator(propagator)
 
     if hasattr(args, "auto_file_name"):
         auto_file_name(args)

@@ -6,7 +6,6 @@
     "auto_file_name": true,
     "out_filename": "s2",
     "distributed_backend": "mpi",
-    "task": "squad",
     "model": "bert_large_uncased_squad_8p",
     "dataset": "squad2",
     "trainer": {

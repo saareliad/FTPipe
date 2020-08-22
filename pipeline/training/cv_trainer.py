@@ -1,6 +1,6 @@
 import torch
 from .interface import BaseLossTrainer
-# TODO: typehint for statistics. maybe it should actually sit under stats
+# TODO: typehint for statistics. maybe it should actually sit under statistics
 
 class CVTrainer(BaseLossTrainer):
     PER_STEP_SCHEDULER = False

@@ -25,9 +25,8 @@ from .datasets import (
 
 
 def _is_hardcoded_xy(args):
-    HARDCODED_JUST_XY = {"lm", "cv"}  # HACK: used to hardcode this.
-    # TODO: it should be by datasets actually and not task, will handle it later
-    is_hardcoded_xy = args.task in HARDCODED_JUST_XY
+    HARDCODED_JUST_XY = {"cifar100", "cifar100", "imagenet", "wt2"}  # HACK: used to hardcode this.
+    is_hardcoded_xy = args.dataset in HARDCODED_JUST_XY
     return is_hardcoded_xy
 
 

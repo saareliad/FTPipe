@@ -6,7 +6,6 @@
     "auto_file_name": true,
     "out_filename": "wd",
     "distributed_backend": "mpi",
-    "task": "lm",
     "model": "new_gpt2_xl_tied_lm_p8_seq_512",
     "model_name_or_path": "gpt2-xl",
     "dataset": "wt2",

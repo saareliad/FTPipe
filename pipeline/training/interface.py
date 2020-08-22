@@ -3,7 +3,7 @@ from itertools import chain
 import torch
 from torch.nn.utils import clip_grad_norm_
 from .utils import calc_norm
-from ..stats.interface import Stats
+from ..statistics.interface import Stats
 from torch.optim.optimizer import Optimizer
 from torch.nn import Module
 

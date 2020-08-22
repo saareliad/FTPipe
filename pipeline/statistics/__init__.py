@@ -8,7 +8,7 @@ from .interface import Stats
 # TODO: remove the "record_loss_per_batch", it is not used mostly.
 # TODO: option to record every X batches, when epoch is giant.
 
-# TODO: change the way of getting stats
+# TODO: change the way of getting statistics
 
 AVAILBALE_STATS = {}
 

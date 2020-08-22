@@ -5,7 +5,6 @@
     "auto_file_name": true,
     "out_filename": "tst1",
     "distributed_backend": "mpi",
-    "task": "t5_squad",
     "model": "t5_large_tied_lmhead_8p_bw12_async_squad1",
     "dataset": "t5_squad",
     "trainer": {

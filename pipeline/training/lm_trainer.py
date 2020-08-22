@@ -1,6 +1,6 @@
 # import torch
 from .interface import BaseOutPutIsLossTrainer
-# TODO: typehint for statistics. maybe it should actually sit under stats
+# TODO: typehint for statistics. maybe it should actually sit under statistics
 
 
 class LMTrainer(BaseOutPutIsLossTrainer):

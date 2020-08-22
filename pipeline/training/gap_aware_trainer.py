@@ -19,7 +19,7 @@ class GapAwareTrainerBase(PartitionedTrainer):
          """
         # TODO: we may want to save some statistics before we modify grad.
         ga = self.gap_aware
-        # NOTE: runing stats shoud record the step size per parameter and step count
+        # NOTE: runing statistics shoud record the step size per parameter and step count
         # if they are not already recored otherwise.
         ga.update_running_stats()  # NOTE: SGD, like paper's implementation
         if delay:

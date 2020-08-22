@@ -3,7 +3,7 @@
     "out_dir":"results/",
     "out_filename": "wrn_16x4_p4_msnag_clone_ga_no_wd",
     "distributed_backend": "mpi",
-    "task": "cv",
+    "data_propagator": "auto",
     "statistics": "cv",
     "model": "wrn_16x4_p4",
     "dataset": "cifar10",

@@ -683,8 +683,7 @@ def extract_needed_keywords(**kw):
             version_2_with_negative, args.version_2_with_negative)
     else:
         print(
-            f"-W- version_2_with_negative inferred automatically as {version_2_with_negative}. args.dataset: {args.dataset}. args.task: {args.task}"
-        )
+            f"-W- version_2_with_negative inferred automatically as {version_2_with_negative}. args.dataset: {args.dataset}.")
 
     dataset_keywords = dict(
         model_name_or_path=args.model_name_or_path,

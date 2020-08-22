@@ -10,7 +10,7 @@ from .t5_squad_eval import get_answers, get_squad_validation_dataset, evaluate_s
 
 # Type hint
 from pipeline.training import T5Trainer
-from pipeline.stats import SquadStats
+from pipeline.statistics import SquadStats
 
 # For loading
 from models.load_pipeline_weights_to_hf import T5HFLoader
@@ -224,7 +224,7 @@ def load_huggingface_model_for_generation(args, add_to_prefix=""):
     # outputs = hugg.generate(input_ids)
 
 
-# TODO: call somewhere (e.g from stats or somewhere else..)
+# TODO: call somewhere (e.g from statistics or somewhere else..)
 def evaluate_squad_checkpoint(args, cp_number):
     if cp_number == "c4":
         loader = T5HFLoader(hf_transformers_model_class=T5ForConditionalGeneration)

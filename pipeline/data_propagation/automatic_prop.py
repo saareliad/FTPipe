@@ -1,12 +1,12 @@
 import torch
 # from typing import Tuple, Any
-from .interface import DLTask
+from .interface import PipelineDataPropagator
 import types
 
 
 # NOTE: outputing the batch for last partition. (trainer should handle)
 # TODO: allow flag to know if we send labels in pipeline.
-class AutomaticPipelineTask(DLTask):
+class AutomaticPipelinePropagator(PipelineDataPropagator):
     SENDING_LABELS_IN_PIPELINE = False
 
     def __init__(self, device, is_last_partition, is_first_partition, stage,

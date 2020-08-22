@@ -6,7 +6,6 @@
     "auto_file_name": true,
     "out_filename": "tst",
     "distributed_backend": "mpi",
-    "task": "glue",
     "model": "roberta_large_8p_bw11_0_async_mnli_glue",
     "dataset": "glue",
     "trainer": {

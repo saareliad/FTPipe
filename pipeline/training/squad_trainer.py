@@ -1,7 +1,7 @@
 from .interface import BaseOutPutIsLossTrainer, BaseLossTrainer
 from collections import defaultdict
 from transformers.data.processors.squad import SquadResult
-# TODO: typehint for statistics. maybe it should actually sit under stats
+# TODO: typehint for statistics. maybe it should actually sit under statistics
 import torch
 import torch.nn.functional as F
 

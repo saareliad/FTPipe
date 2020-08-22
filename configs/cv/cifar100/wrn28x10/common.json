@@ -6,7 +6,6 @@
     "out_filename": "cv",
     "statistics": "cv",
     "distributed_backend": "mpi",
-    "task": "cv",
     "model": "wrn_28x10_c100_dr03_p4",
     "dataset": "cifar100",
     "trainer": {
