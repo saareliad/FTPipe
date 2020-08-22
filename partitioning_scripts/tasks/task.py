@@ -1,6 +1,6 @@
 from argparse import Namespace
 from typing import Dict, List, Tuple
-from pytorch_Gpipe.model_partitioning.acyclic_partitioning import Objective, META_ALGORITH
+from pytorch_Gpipe.model_partitioning.acyclic_partitioning import Objective, META_ALGORITH,Constraint
 
 import argparse
 import torch
@@ -260,6 +260,16 @@ class Parser(argparse.ArgumentParser,ABC):
                           choices=["edge_cut", "stage_time"],
                           default="edge_cut",
                           help="partitioning optimization objective")
+        group.add_argument("--constraint",
+                          choices=["time","memory"],
+                          default="time",
+                          help="partitioning constraint")
+        group.add_argument("--maximum_constraint_value",
+                          required=False,
+                          type=float,
+                          default=None,
+                          help=
+                          "maximum constraint value a single stage can have,for example for memory constraint this is the maximum number of parameters a stage can have")
 
     def _extra(self, group):
         """add any extra cmd args which are task specific"""
@@ -315,13 +325,20 @@ class Parser(argparse.ArgumentParser,ABC):
             meta_algorithm = META_ALGORITH.MULTI_LEVEL
         else:
             meta_algorithm = META_ALGORITH.SINGLE_LEVEL
+        
+        if args.constraint == "time":
+            constraint = Constraint.TIME
+        else:
+            constraint = Constraint.MEMORY
 
         return {
             "epsilon": args.epsilon,
             "rounds": args.rounds,
             "allocated_seconds": args.allocated_seconds,
             "meta_algorithm": meta_algorithm,
-            "objective": objective
+            "objective": objective,
+            "constraint": constraint,
+            "maximum_constraint_value":args.maximum_constraint_value
         }
     
     @staticmethod

@@ -3,7 +3,6 @@ from pytorch_Gpipe.model_profiling import Node, Graph
 from typing import Dict, Iterable, Set, Iterator, List, Tuple, Any, Optional
 import random
 import heapq
-import pickle
 
 
 class PriorityQueue():
@@ -526,17 +525,19 @@ class SimpleNode():
 
 
 class ContractedGraph():
-    def __init__(self,in_edges,partition,node_weights,edge_weights,matching):
+    def __init__(self,in_edges,partition,node_weights,edge_weights,params_per_node,matching):
         self._nodes:Dict[int, SimpleNode]=dict()
         for n in set(matching.values()):
             self._nodes[n] = SimpleNode(n, partition[n])
 
         self._node_weights = defaultdict(lambda: 0)
         self._edge_weights = defaultdict(lambda: 0)
+        self._params_per_node = defaultdict(lambda: 0)
 
         for n in node_weights.keys():
             matched = matching[n]
             self._node_weights[self._nodes[matched]] += node_weights[n]
+            self._params_per_node[self._nodes[matched]] += params_per_node[n]
             for i in in_edges[n]:
                 matched_i = matching[i]
                 if matched_i == matched:
@@ -563,6 +564,9 @@ class ContractedGraph():
 
     def edge_weight(self, u, v) -> float:
         return self._edge_weights[u, v]
+
+    def params_per_node(self,n)->float:
+        return self._params_per_node[n]
 
     @property
     def nodes(self) -> Iterable[SimpleNode]:
@@ -600,9 +604,11 @@ class ContractedGraph():
         partition = dict()
         node_weights = dict()
         edge_weights = dict()
+        params_per_node = dict()
 
         for n in contracted_graph.nodes:
             node_weights[n.id] = contracted_graph.node_weight(n)
+            params_per_node[n.id] = contracted_graph.params_per_node(n)
             partition[n.id] = n.stage_id
             us = set()
             for u in n.in_edges:
@@ -610,20 +616,21 @@ class ContractedGraph():
                 edge_weights[(u.id, n.id)] = contracted_graph.edge_weight(u, n)
             in_edges[n.id] = us
 
-        return cls(in_edges, partition, node_weights, edge_weights, matching)
+        return cls(in_edges, partition, node_weights, edge_weights,params_per_node, matching)
 
     @classmethod
     def from_Graph(cls, graph: Graph, node_weights,
-                   edge_weights) -> "ContractedGraph":
+                   edge_weights,params_per_node) -> "ContractedGraph":
         node_weights = {n.id: w for n, w in node_weights.items()}
         edge_weights = {(u.id, v.id): w for (u, v), w in edge_weights.items()}
+        params_per_node = {n.id: p for n,p in params_per_node.items()}
         in_edges = dict()
         partition = dict()
         for n in graph.nodes:
             in_edges[n.id] = {u.id for u in n.in_edges}
             partition[n.id] = n.stage_id
 
-        return cls(in_edges, partition, node_weights, edge_weights,
+        return cls(in_edges, partition, node_weights, edge_weights,params_per_node,
                    {n: n
                     for n in node_weights})
 
@@ -724,41 +731,3 @@ class ContractedGraph():
             os.remove(f"{directory}/{file_name}.pdf")
         dot.render(file_name, directory=directory, cleanup=True)
         return self
-
-    def serialize(self, path):
-        edge_weights = dict()
-        node_weights = dict()
-        partition = dict()
-        in_edges = dict()
-        for n in self.nodes:
-            in_edges[n.id] = [u.id for u in n.in_edges]
-            idx = n.id
-            partition[idx] = n.stage_id
-            node_weights[idx] = self.node_weight(n)
-            for i in n.in_edges:
-                edge_weights[(i.id, idx)] = self.edge_weight(i, n)
-
-        state = dict(in_edges=in_edges,
-                     partition=partition,
-                     edge_weights=edge_weights,
-                     node_weights=node_weights)
-
-        if not path.endswith(".graph"):
-            path += ".graph"
-
-        pickle.dump(state, open(path, "wb"))
-
-    @classmethod
-    def deserialize(cls, path):
-        if not path.endswith(".graph"):
-            path += ".graph"
-
-        state = pickle.load(open(path, "rb"))
-        in_edges = state['in_edges']
-        partition = state['partition']
-        node_weights = state['node_weights']
-        edge_weights = state['edge_weights']
-        matching = {n: n for n in node_weights.keys()}
-
-        return cls(in_edges, partition, node_weights, edge_weights,
-                   matching).selfcheck()
