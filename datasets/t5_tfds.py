@@ -55,7 +55,7 @@ def our_collate_fn(batch, device, config):
     input_ids = batch['inputs']
     lm_labels = batch['targets']
     attention_mask = batch['inputs_mask']
-    decoder_attention_mask = batch['target_mask']
+    decoder_attention_mask = batch['targets_mask']
 
     lm_labels[lm_labels[:, :] == 0] = -100
 
