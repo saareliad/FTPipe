@@ -111,17 +111,17 @@ def like_mtf(mixture_or_task_name="glue_cola_v002",
             ex[key + "_mask"] = mask
         return ex
 
-    ds = ds.map(
-        _map_fn,
-        num_parallel_calls=t5.data.preprocessors.num_parallel_calls()
-    )
-
     feature_keys = tuple(k for k in mixture_or_task.output_features
                          if k in tf.data.get_output_shapes(ds))
 
     ds = transformer_dataset.pack_or_pad(
         ds, sequence_length, pack=pack,
         feature_keys=feature_keys, ensure_eos=True)
+
+    ds = ds.map(
+        _map_fn,
+        num_parallel_calls=t5.data.preprocessors.num_parallel_calls()
+    )
 
 
     """
@@ -136,6 +136,20 @@ def like_mtf(mixture_or_task_name="glue_cola_v002",
     """
     return ds
 
+
+def tokens_to_batches(dataset, batch_size, drop_remainder=False):
+    dataset = dataset.batch(batch_size, drop_remainder=drop_remainder)
+    return tfds.as_numpy(dataset)
+
+
+# def all_examples(ds):
+#     def _unbatch(batch):
+#       """Converts a dict of lists to a list of dicts of singletons."""
+#       return [dict(zip(batch, t)) for t in zip(*batch.values())]
+#
+#     batches = list(tokens_to_batches(ds, batch_size=128))
+#     examples = [ex for b in batches for ex in _unbatch(b)]
+#     return examples
 
 
 # class SEP_T5_TFDS_DatasetHandler(CommonDatasetHandler):
@@ -167,4 +181,3 @@ if __name__ == '__main__':
                  use_cached=False,
                  pack=False)
 
-    
