@@ -55,8 +55,9 @@ def to_torch_tensor_dataset(config, ds, preproc_batch_size, preproc_device):
     batches = []
     for x in batched_ds:
         res_cuda = our_collate_fn(x, torch.device(preproc_device), config)
-        for i, v in res_cuda:
-            res_cuda[i] = v.cpu()
+        keys = list(res_cuda.keys())
+        for i in keys:
+            res_cuda[i] = res_cuda[i].cpu()
         batches.append(res_cuda)
     del ds
     del batched_ds
@@ -68,10 +69,10 @@ def to_torch_tensor_dataset(config, ds, preproc_batch_size, preproc_device):
     tensor_dataset = torch.utils.data.TensorDataset(*tensors)
     return tensor_dataset
 
-@torch.no_grad
+# @torch.no_grad
 def our_collate_fn(batch, device, config):
     for i in ['inputs', 'targets', 'inputs_mask', 'targets_mask']:
-        batch[i] = torch.as_numpy(batch[i]).to(device)
+        batch[i] = torch.from_numpy(batch[i]).to(device)
 
     input_ids = batch['inputs']
     lm_labels = batch['targets']
