@@ -496,6 +496,10 @@ class GPipePartition(nn.Module):
         used_partition = self.no_recomputation_partition if self.is_last_micro_batch else self.recomputation_partition
         return used_partition.bwd_graph_head_buffer.pop(micro_batch_idx)
 
+    @property
+    def layers(self):
+        return self.recomputation_partition.layers
+
 
 class GPipeFirstPartition(GPipePartition):
     """ Do not do recomputation on the last micro batch """
