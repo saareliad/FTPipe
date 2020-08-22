@@ -159,6 +159,12 @@ class Parser(argparse.ArgumentParser,ABC):
             action="store_true",
             default=False,
             help="wether to generate del statements in partitioned code")
+        group.add_argument(
+            "--no_activation_propagation",
+            action="store_true",
+            default=False,
+            help="wether to not propgate activations in the pipeline, and having direct sends instead"
+        )
 
         group.add_argument("-a",
                             "--async_pipeline",

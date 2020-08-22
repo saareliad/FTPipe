@@ -96,6 +96,7 @@ def main(cmd_args:Namespace,model_args:Dict,partitioner:Partitioner,override_dic
                             output_file=cmd_args.output_file,
                             generate_model_parallel=cmd_args.generate_model_parallel,
                             generate_explicit_del=cmd_args.generate_explicit_del,
+                            generate_activation_propagation=not cmd_args.no_activation_propagation,
                             use_layers_only_graph=True,
                             use_graph_profiler=not cmd_args.use_network_profiler,
                             use_network_profiler=cmd_args.use_network_profiler,

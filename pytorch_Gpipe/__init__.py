@@ -33,6 +33,7 @@ def pipe_model(model: nn.Module,
                output_file:Optional[str] = None,
                generate_model_parallel: bool = False,
                generate_explicit_del:bool=False,
+               generate_activation_propagation:bool=True,
                recomputation:bool=False,
                use_METIS:bool=False,
                METIS_opt:Optional[Dict]=None,
@@ -83,6 +84,12 @@ def pipe_model(model: nn.Module,
     generate_explicit_del:
         whether to generate del statements to explicitly delete variables when they are no longer used
         default False
+    generate_activation_propagation:
+        in cases where a stage sends an activation to multiple stages.
+        for example 0->[1,3,4]
+        decide wether to have each stage send the activation to the next target
+        0->1->3->4
+        or have it sent directly from the source
     use_METIS:
         wether to use METIS partitioning instead of the acyclic partitioner
         default False
@@ -142,7 +149,8 @@ def pipe_model(model: nn.Module,
                               batch_dim,
                               output_file=output_file,
                               generate_explicit_del=generate_explicit_del,
-                              generate_model_parallel=generate_model_parallel)
+                              generate_model_parallel=generate_model_parallel,
+                              generate_activation_propagation=generate_activation_propagation)
     print("generated code")
     return graph
 

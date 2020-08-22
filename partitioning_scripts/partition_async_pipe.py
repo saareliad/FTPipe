@@ -130,6 +130,7 @@ def partition_async_pipe(
         batch_dim,
         generate_explicit_del=cmd_args.generate_explicit_del,
         generate_model_parallel=cmd_args.generate_model_parallel,
+        generate_activation_propagation=not cmd_args.no_activation_propagation,
         output_file=cmd_args.output_file)
 
     return graph

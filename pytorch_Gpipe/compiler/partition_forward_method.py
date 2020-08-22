@@ -24,7 +24,7 @@ def generate_forward_method(stage_id:int,
         model_outputs: List[Node],
         partition_fields: Dict[str, str],
         generate_explicit_del=False,
-        propagate_inputs=True) -> Tuple[List[str], Dict[str, List]]:
+        generate_activation_propagation=True) -> Tuple[List[str], Dict[str, List]]:
     '''the gateway to generate a forward function of a partition
     '''
     # function arguments are x0...xn
@@ -69,7 +69,7 @@ def generate_forward_method(stage_id:int,
                             ready_expressions))
     outputs = partitionOutputs(partition_nodes, model_outputs)
 
-    if propagate_inputs:
+    if generate_activation_propagation:
         #NOTE this just ensures correct code generation for input propagation
         # we still need to modify the actual config 
         # this is done in the compile_partitioned_model.generate_config_with_input_propagation

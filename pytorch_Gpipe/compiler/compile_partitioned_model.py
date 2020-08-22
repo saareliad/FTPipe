@@ -22,7 +22,7 @@ def compile_partitioned_model(graph: Graph,
                               batch_dim: int,
                               generate_model_parallel: bool = False,
                               generate_explicit_del=False,
-                              propagate_inputs = True,
+                              generate_activation_propagation = True,
                               output_file: Optional[str] = None):
     '''generates the code for the partitioned model.
        The partitions can be consumed using the `create_pipeline_configuration` method in the generated code
@@ -77,7 +77,7 @@ def compile_partitioned_model(graph: Graph,
                                                        graph.outputs,
                                                        scope_to_class_field,
                                                        generate_explicit_del=generate_explicit_del,
-                                                       propagate_inputs=propagate_inputs)
+                                                       generate_activation_propagation=generate_activation_propagation)
         partitions_code.append(class_decl)
         partitions_code.extend(forward_function)
         partitions_code.append("")
@@ -89,7 +89,7 @@ def compile_partitioned_model(graph: Graph,
     elif output_file.endswith(".py"):
         output_file = output_file[:-3]
 
-    create_pipeline_configuration_str,config = create_pipeline_configuration(graph, ios, layer_classes, batch_dim, propagate_inputs)
+    create_pipeline_configuration_str,config = create_pipeline_configuration(graph, ios, layer_classes, batch_dim, generate_activation_propagation)
     lines.append(create_pipeline_configuration_str)
     if generate_model_parallel:
         lines.append(create_model_parallel_module(config))
@@ -162,7 +162,7 @@ def create_pipeline_configuration(graph: Graph,
                                                  List[str]]],
                                   model_blocks: Dict[str, Module],
                                   batch_dim: int,
-                                  propagate_inputs: bool) -> Tuple[str,Dict]:
+                                  generate_activation_propagation: bool) -> Tuple[str,Dict]:
     '''generates the create_pipeline_configuration method which given a model creates his partitioned counterpart
     '''
     # TODO assumption the first input is batched
@@ -194,7 +194,7 @@ def create_pipeline_configuration(graph: Graph,
         "stages":stages
     }
 
-    if propagate_inputs:
+    if generate_activation_propagation:
         # modify the config to accomodate input propagation
         config = generate_config_with_input_propagation(config)
 
