@@ -8,6 +8,14 @@ from .t5_squad import get_inverted_encoder_attention_mask, _shift_right, get_att
 from torch.utils.data import TensorDataset
 from .datasets import CommonDatasetHandler, register_dataset
 
+def get_t5_available_tasks(verbose=False):
+    if verbose:
+        for i in t5.data.TaskRegistry.names():
+            print(i)
+
+    return t5.data.TaskRegistry.names()
+
+
 def get_dataset(*args, **kw):
     return t5.models.hf_model.get_dataset(*args, **kw)
 
@@ -85,7 +93,8 @@ def get_t5_sequence_length(args):
 def like_mtf(mixture_or_task_name="glue_cola_v002",
              sequence_length={"inputs": 64, "targets": 4},
              dataset_split=tfds.Split.TRAIN,
-             use_cached=False):
+             use_cached=False,
+             pack=True):
     # https://github.com/google-research/text-to-text-transfer-transformer/blob/5053a463eac3423284c327bf36e61988189239c1/t5/models/mesh_transformer.py
     import tensorflow_datasets as tfds
     import mesh_tensorflow.transformer.dataset as transformer_dataset
@@ -109,8 +118,9 @@ def like_mtf(mixture_or_task_name="glue_cola_v002",
 
     feature_keys = tuple(k for k in mixture_or_task.output_features
                          if k in tf.data.get_output_shapes(ds))
+
     ds = transformer_dataset.pack_or_pad(
-        ds, sequence_length, pack=True,
+        ds, sequence_length, pack=pack,
         feature_keys=feature_keys, ensure_eos=True)
 
 
@@ -149,3 +159,12 @@ def like_mtf(mixture_or_task_name="glue_cola_v002",
 
 
 # register_dataset("t5_squad", SEP_T5_SQUAD_DatasetHandler)
+
+if __name__ == '__main__':
+    ds = like_mtf(mixture_or_task_name="glue_rte_v002",
+                 sequence_length={"inputs": 512, "targets": 84},
+                 dataset_split=tfds.Split.TRAIN,
+                 use_cached=False,
+                 pack=False)
+
+    
