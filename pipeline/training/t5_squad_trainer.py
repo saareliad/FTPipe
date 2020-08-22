@@ -1,13 +1,11 @@
 from .interface import BaseOutPutIsLossTrainer, BaseLossTrainer
 
 
-class SquadTrainer(BaseOutPutIsLossTrainer):
+class T5Trainer(BaseOutPutIsLossTrainer):
     PER_STEP_SCHEDULER = True
 
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
-        # NOTE: set by dataset
-        self.features = None
 
     def advanced_test_stats(self, x, example_indices):
         raise NotImplementedError()

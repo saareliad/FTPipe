@@ -3,7 +3,7 @@ from .gap_aware_trainer import gap_aware_trainer_factory
 from .cv_trainer import CVTrainer
 from .lm_trainer import LMTrainer
 from .squad_trainer import SquadTrainer
-from .t5_squad_trainer import SquadTrainer as T5SquadTrainer
+from .t5_squad_trainer import T5Trainer
 from .glue_trainer import GlueTrainer
 
 AVAILABLE_TRAINERS = {}
@@ -19,4 +19,5 @@ register_trainer("cv", CVTrainer)
 register_trainer("lm", LMTrainer)
 register_trainer("squad", SquadTrainer)
 register_trainer("glue", GlueTrainer)
-register_trainer("t5_squad", T5SquadTrainer)
+register_trainer("t5_squad", T5Trainer)  # backward compatibility with configs.
+register_trainer("t5", T5Trainer)
