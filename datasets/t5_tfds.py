@@ -8,6 +8,7 @@ from .t5_squad import get_inverted_encoder_attention_mask, _shift_right, get_att
 from torch.utils.data import TensorDataset
 from .datasets import CommonDatasetHandler, register_dataset
 
+
 def get_t5_available_tasks(verbose=False):
     if verbose:
         for i in t5.data.TaskRegistry.names():
@@ -16,46 +17,66 @@ def get_t5_available_tasks(verbose=False):
     return t5.data.TaskRegistry.names()
 
 
-def get_dataset(*args, **kw):
-    return t5.models.hf_model.get_dataset(*args, **kw)
+def torch_dataset_from_args(args, config, dataset_split=tfds.Split.TRAIN, preproc_device="cpu"):
+    def get_t5_sequence_length_from_args(args):
+        return {"inputs": args.max_seq_length, "targets": args.answer_max_seq_length}
+
+    mixture_or_task_name = getattr(args, "mixture_or_task_name")
+    sequence_length = get_t5_sequence_length_from_args(args)
+    # preproc_device = getattr(args, "preproc_device")
+    preproc_batch_size = getattr(args, "preproc_batch_size", 128)
 
 
-# encodings = {
-#     'input_ids': input_encodings['input_ids'],
-#     'attention_mask': input_encodings['attention_mask'],
-#     'target_ids': target_encodings['input_ids'],
-#     'target_attention_mask': target_encodings['attention_mask']
-# }
+    ds = like_mtf(mixture_or_task_name=mixture_or_task_name,
+                 sequence_length=sequence_length,
+                 dataset_split=dataset_split,
+                 use_cached=False,
+                 pack=False)
+
+    return to_torch_tensor_dataset(config, ds, config, preproc_device=preproc_device, preproc_batch_size=preproc_batch_size)
 
 
-# d['input_ids'] = input_ids
-# d['attention_mask'] = attention_mask
-# d['decoder_input_ids'] = decoder_input_ids
-# d['decoder_attention_mask'] = decoder_attention_mask
-# d['inverted_encoder_attention_mask'] = inverted_encoder_attention_mask
-# d['lm_labels'] = lm_labels
+def rte_tensor_dataset(config, preproc_device="cuda:0", preproc_batch_size=128):
+    # sequence_length={"inputs": 512, "targets": 84},
+    ds = like_mtf(mixture_or_task_name="glue_rte_v002",
+                  sequence_length={
+                      "inputs": 128,
+                      "targets": 16
+                  },
+                  dataset_split=tfds.Split.TRAIN,
+                  use_cached=False,
+                  pack=False)
 
-# def collate(batch, device):
-#     # TODO: -100?
+    tensor_dataset = to_torch_tensor_dataset(config, ds, preproc_batch_size, preproc_device)
+    return tensor_dataset
 
+def to_torch_tensor_dataset(config, ds, preproc_batch_size, preproc_device):
+    batched_ds = tokens_to_batches(ds, preproc_batch_size, drop_remainder=False)
+    batches = []
+    for x in batched_ds:
+        res_cuda = our_collate_fn(x, torch.device(preproc_device), config)
+        for i, v in res_cuda:
+            res_cuda[i] = v.cpu()
+        batches.append(res_cuda)
+    del ds
+    del batched_ds
+    d = {}
+    for k in batches[0].keys():
+        stacked = torch.cat([b[k] for b in batches])
+        d[k] = stacked
+    tensors = list(d.values())
+    tensor_dataset = torch.utils.data.TensorDataset(*tensors)
+    return tensor_dataset
 
-#     d = dict(
-#         input_ids=torch.as_tensor(batch["inputs"], device=device),
-#         attention_mask=torch.as_tensor(batch["inputs_mask"], device=device),
-#         decoder_attention_mask=torch.as_tensor(batch["targets_mask"], device=device),
-#         lm_labels=torch.as_tensor(batch["targets"], device=device),
-#     )
-
-#     # TODO: preproc and etc
-
-#     return d
-
-
+@torch.no_grad
 def our_collate_fn(batch, device, config):
+    for i in ['inputs', 'targets', 'inputs_mask', 'targets_mask']:
+        batch[i] = torch.as_numpy(batch[i]).to(device)
+
     input_ids = batch['inputs']
     lm_labels = batch['targets']
     attention_mask = batch['inputs_mask']
-    decoder_attention_mask = batch['target_mask']
+    decoder_attention_mask = batch['targets_mask']
 
     lm_labels[lm_labels[:, :] == 0] = -100
 
@@ -64,11 +85,17 @@ def our_collate_fn(batch, device, config):
     precompute_masks = getattr(config, "precomputed_masks", False)
     if precompute_masks:
         # print("-I- precomputing t5 masks on CPU", end ="...")
-        inverted_encoder_attention_mask = get_inverted_encoder_attention_mask(input_ids.size(), attention_mask,
-                                                                              attention_mask.device)
-        attention_mask = get_attention_mask(input_ids.size(), attention_mask, attention_mask.device, is_decoder=False)
-        decoder_attention_mask = get_attention_mask(decoder_input_ids.size(), decoder_attention_mask,
-                                                    decoder_attention_mask.device, is_decoder=True)
+        inverted_encoder_attention_mask = get_inverted_encoder_attention_mask(
+            input_ids.size(), attention_mask, attention_mask.device)
+        attention_mask = get_attention_mask(input_ids.size(),
+                                            attention_mask,
+                                            attention_mask.device,
+                                            is_decoder=False)
+        decoder_attention_mask = get_attention_mask(
+            decoder_input_ids.size(),
+            decoder_attention_mask,
+            decoder_attention_mask.device,
+            is_decoder=True)
         # print("-I- done")
     else:
         # print("-W- preprocessing will happen inside the model...")
@@ -86,12 +113,11 @@ def our_collate_fn(batch, device, config):
     return d
 
 
-def get_t5_sequence_length(args):
-    return {"inputs": args.max_seq_length, "targets": args.answer_max_seq_length}
-
-
 def like_mtf(mixture_or_task_name="glue_cola_v002",
-             sequence_length={"inputs": 64, "targets": 4},
+             sequence_length={
+                 "inputs": 64,
+                 "targets": 4
+             },
              dataset_split=tfds.Split.TRAIN,
              use_cached=False,
              pack=True):
@@ -101,8 +127,10 @@ def like_mtf(mixture_or_task_name="glue_cola_v002",
     import tensorflow.compat.v1 as tf
 
     mixture_or_task = t5.data.get_mixture_or_task(mixture_or_task_name)
-    ds = mixture_or_task.get_dataset(
-          sequence_length, split=dataset_split, use_cached=use_cached, shuffle=True)
+    ds = mixture_or_task.get_dataset(sequence_length,
+                                     split=dataset_split,
+                                     use_cached=use_cached,
+                                     shuffle=True)
 
     def _map_fn(ex):
         for key in ['inputs', 'targets']:
@@ -114,16 +142,14 @@ def like_mtf(mixture_or_task_name="glue_cola_v002",
     feature_keys = tuple(k for k in mixture_or_task.output_features
                          if k in tf.data.get_output_shapes(ds))
 
-    ds = transformer_dataset.pack_or_pad(
-        ds, sequence_length, pack=pack,
-        feature_keys=feature_keys, ensure_eos=True)
+    ds = transformer_dataset.pack_or_pad(ds,
+                                         sequence_length,
+                                         pack=pack,
+                                         feature_keys=feature_keys,
+                                         ensure_eos=True)
 
-    ds = ds.map(
-        _map_fn,
-        num_parallel_calls=t5.data.preprocessors.num_parallel_calls()
-    )
-
-
+    ds = ds.map(_map_fn,
+                num_parallel_calls=t5.data.preprocessors.num_parallel_calls())
     """
     # https://github.com/tensorflow/mesh/blob/6f5e3f10b5fe2bbd613bbe11b18a63d52f2749f4/mesh_tensorflow/transformer/utils.py
             encoder_sequence_id=mtf_features.get("inputs_segmentation", None),
@@ -151,7 +177,6 @@ def tokens_to_batches(dataset, batch_size, drop_remainder=False):
 #     examples = [ex for b in batches for ex in _unbatch(b)]
 #     return examples
 
-
 # class SEP_T5_TFDS_DatasetHandler(CommonDatasetHandler):
 #     def __init__(self, **kw):
 #         super().__init__()
@@ -171,13 +196,4 @@ def tokens_to_batches(dataset, batch_size, drop_remainder=False):
 #     def modify_dataloader_keywords(self, dataloader_keywords):
 #         pass
 
-
 # register_dataset("t5_squad", SEP_T5_SQUAD_DatasetHandler)
-
-if __name__ == '__main__':
-    ds = like_mtf(mixture_or_task_name="glue_rte_v002",
-                 sequence_length={"inputs": 512, "targets": 84},
-                 dataset_split=tfds.Split.TRAIN,
-                 use_cached=False,
-                 pack=False)
-
