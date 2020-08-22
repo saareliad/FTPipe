@@ -23,7 +23,7 @@ def get_my_send_recv_ranks(pipe_config, stage, stage_to_rank_map=None, prefer_se
             stage_j = stages[j]
             for tensor_name in stage_i.outputs:
                 if tensor_name in stage_j.inputs:
-                    if stage == j: # recv
+                    if stage == j:  # recv
                         if tensor_name in receive_ranks:
                             if prefer_seq_sends:
                                 print(f"-V- stage {stage}: preferring to recv from a later: {i}-->{j}: {tensor_name}")
@@ -33,7 +33,7 @@ def get_my_send_recv_ranks(pipe_config, stage, stage_to_rank_map=None, prefer_se
                     else:  # stage == i, send
                         if prefer_seq_sends:
                             # check if I'm the closest
-                            all_sending_dist = [x for x,v in enumerate(stages) if tensor_name in v.outputs and x < j]
+                            all_sending_dist = [x for x, v in stages.items() if tensor_name in v.outputs and x < j]
                             assert len(all_sending_dist) > 0
                             assert stage in all_sending_dist
                             closest_sender = max(all_sending_dist)
