@@ -137,15 +137,16 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, args, **kw):
 
         return d
 
-
+    name = "t5_squad"
     small_cache = "_".join(just) if isinstance(just, list) else just
     big_cache = "FULL"
     ww = ['train', 'val']
-    
-    small_cache_name_train = os.path.join(DATA_DIR, f"cache_{ww[0]}.t5_squad_just_{small_cache}.pt")
-    small_cache_name_eval = os.path.join(DATA_DIR, f"cache_{ww[1]}.t5_squad_just_{small_cache}.pt")
-    big_cache_name_train = os.path.join(DATA_DIR, f"cache_{ww[0]}.t5_squad_just_{big_cache}.pt")
-    big_cache_name_eval = os.path.join(DATA_DIR, f"cache_{ww[1]}.t5_squad_just_{big_cache}.pt")
+
+    small_cache_name_train = os.path.join(DATA_DIR, f"cache_{ww[0]}.{name}_just_{small_cache}.pt")
+    small_cache_name_eval = os.path.join(DATA_DIR, f"cache_{ww[1]}.{name}_just_{small_cache}.pt")
+    big_cache_name_train = os.path.join(DATA_DIR, f"cache_{ww[0]}.{name}_just_{big_cache}.pt")
+    big_cache_name_eval = os.path.join(DATA_DIR, f"cache_{ww[1]}.{name}_just_{big_cache}.pt")
+
 
     def compute_full_train():
         train_dataset = nlp.load_dataset('squad', split=nlp.Split.TRAIN)
