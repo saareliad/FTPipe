@@ -274,8 +274,7 @@ def evaluate_t5_tfds(args, cp_number, device="cpu"):
     model_dir = auto_file_name(args)
     batch_size = getattr(args, "single_worker_eval_batch_size", 32)
     generate_kwargs = getattr(args, "generate_kwargs", {})
-    # TODO: add to arg config
-
+    # generate_kwargs['max_length'] = args.answer_max_length
     evaluator = T5Evaluator(args, model_dir=model_dir, device=device, model=None)
     results = evaluator.eval(mixture_or_task_name=args.mixture_or_task_name,
                    sequence_length=get_t5_sequence_length_from_args(args),

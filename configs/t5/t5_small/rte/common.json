@@ -18,6 +18,9 @@
     "statistics": "squad_loss_per_batch",
     "bs_train": 64,
     "bs_test": 64,
+    "single_worker_eval_batch_size": 64,
+    "generate_kwargs": {
+    },
     "num_data_workers": 10,
     "optimizer": {
         "type": "adafactor",
