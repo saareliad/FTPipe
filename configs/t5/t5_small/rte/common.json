@@ -21,6 +21,7 @@
     "single_worker_eval_batch_size": 64,
     "generate_kwargs": {
     },
+    "eval_device": "cuda:0",
     "num_data_workers": 10,
     "optimizer": {
         "type": "adafactor",
