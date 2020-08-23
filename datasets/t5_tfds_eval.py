@@ -43,6 +43,9 @@ class T5Evaluator:
         self._model = hugg
         self._step = cp_number  # HACK
 
+        if self._device.type == "cuda":
+            self._model.to(self._device)
+
     def get_all_checkpoint_steps(self):
         raise NotImplementedError()
 
