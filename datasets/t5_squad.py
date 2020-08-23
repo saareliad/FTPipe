@@ -210,9 +210,9 @@ def save_huggingface_model_for_generation(args, model, add_to_prefix=""):
     print(f"-I- model checkpoint saved: {fn}")
 
 
-def load_huggingface_model_for_generation(args, add_to_prefix=""):
+def load_huggingface_model_for_generation(args, **kwargs):
     loader = T5HFLoader(hf_transformers_model_class=T5ForConditionalGeneration)
-    hugg, extra = loader.load_from_saved_pipeline(args, to_original=True, add_to_prefix=add_to_prefix)
+    hugg, extra = loader.load_from_saved_pipeline(args, to_original=True, **kwargs)
     config = extra['config']
     tokenizer = extra['tokenizer']
 
@@ -226,17 +226,7 @@ def load_huggingface_model_for_generation(args, add_to_prefix=""):
 
 # TODO: call somewhere (e.g from statistics or somewhere else..)
 def evaluate_squad_checkpoint(args, cp_number):
-    if cp_number == "c4":
-        loader = T5HFLoader(hf_transformers_model_class=T5ForConditionalGeneration)
-        model_name_or_path = args.model_name_or_path
-        print(f"-I- Will evaluate {model_name_or_path}, no further finetuining")
-        # TODO: call with other hyperparameters...
-        hugg, tokenizer, config = loader.get_hf_original_model_tokenizer_and_config(
-            model_name_or_path)
-    else:
-        # Get current eval:
-        add_to_prefix = f"_{cp_number}"
-        hugg, config, tokenizer = load_huggingface_model_for_generation(args, add_to_prefix=add_to_prefix)
+    hugg, tokenizer = load_huggingface_checkpoint(args, cp_number)
 
     valid_dataset = compute_and_cache(get_squad_validation_dataset, 'squad_valid_data.pt', args=args, tokenizer=tokenizer)
     # TODO: this can be done smarter, distributed
@@ -248,6 +238,21 @@ def evaluate_squad_checkpoint(args, cp_number):
     squad_result = evaluate_squad_answers(valid_dataset=valid_dataset, answers=answers)
     print(squad_result)
     return squad_result
+
+
+def load_huggingface_checkpoint(args, cp_number, **kwargs):
+    if cp_number == "c4":
+        loader = T5HFLoader(hf_transformers_model_class=T5ForConditionalGeneration)
+        model_name_or_path = args.model_name_or_path
+        print(f"-I- Will evaluate {model_name_or_path}, no further finetuining")
+        # TODO: call with other hyperparameters...
+        hugg, tokenizer, config = loader.get_hf_original_model_tokenizer_and_config(
+            model_name_or_path)
+    else:
+        # Get current eval:
+        add_to_prefix = f"_{cp_number}"
+        hugg, config, tokenizer = load_huggingface_model_for_generation(args, add_to_prefix=add_to_prefix, **kwargs)
+    return hugg, tokenizer
 
 
 class DistributedGenerator:

@@ -39,8 +39,10 @@ class Loader(abc.ABC):
 
         return False
 
+
 def base_checkoint_name(name_prefix, stage):
     return f"{name_prefix}_Partition{stage}.pt"
+
 
 class HFLoader(Loader):
     IS_HUGGINFACE_TRANSFORMER = True
@@ -67,25 +69,31 @@ class HFLoader(Loader):
                 unified_state)
             model_name_or_path = args.model_name_or_path
             # TODO: call with other hyperparameters...
-            model, tokenizer, config = self.get_hf_original_model_tokenizer_and_config(
-                model_name_or_path)
-            strict = self._check_load_matching(
-                original_state=model.state_dict(), unified_state=unified_state)
-            model.load_state_dict(unified_state, strict=strict)
-            print("-I- Loaded state into the model")
+
+            if all([k in kw for k in ["model", "tokenizer", "config"]]):
+                model = kw.get("model")
+                tokenizer = kw.get("tokenizer")
+                config = kw.get("config")
+            else:
+                model, tokenizer, config = self.get_hf_original_model_tokenizer_and_config(
+                    model_name_or_path)
         else:
             # load the model used for training/finetuning.
             # generated = get_generated_module(cfg)
-            handler = AVAILABLE_MODELS.get(cfg)
+            if all([k in kw for k in ["model", "tokenizer", "config"]]):
+                model = kw.get("model")
+                tokenizer = kw.get("tokenizer")
+                config = kw.get("config")
+            else:
+                handler = AVAILABLE_MODELS.get(cfg)
+                model = handler.get_normal_model_instance()
+                tokenizer = handler.tokenizer
+                config = handler.config
 
-            model = handler.get_normal_model_instance()
-            tokenizer = handler.tokenizer
-            config = handler.config
-
-            # TODO: tested without make stateless
-            strict = self._check_load_matching(
-                original_state=model.state_dict(), unified_state=unified_state)
-            model.load_state_dict(unified_state, strict=strict)
+        strict = self._check_load_matching(
+            original_state=model.state_dict(), unified_state=unified_state)
+        model.load_state_dict(unified_state, strict=strict)
+        print("-I- Loaded state into the model")
 
         extra = dict(tokenizer=tokenizer, config=config)
         return model, extra

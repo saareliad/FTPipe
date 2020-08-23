@@ -2,7 +2,7 @@ import torch
 from typing import Dict
 import os
 
-from .t5_squad import get_inverted_encoder_attention_mask, _shift_right, get_attention_mask
+from .t5_squad import get_inverted_encoder_attention_mask, _shift_right, get_attention_mask, load_huggingface_checkpoint
 from .utils import compute_and_cache
 
 try:
@@ -16,7 +16,8 @@ except Exception as e:
 
 from torch.utils.data import TensorDataset
 from .datasets import CommonDatasetHandler, register_dataset
-
+from .t5_tfds_eval import T5Evaluator
+from experiments.experiments import  auto_file_name
 
 def get_t5_available_tasks(verbose=False):
     if verbose:
@@ -26,15 +27,17 @@ def get_t5_available_tasks(verbose=False):
     return t5.data.TaskRegistry.names()
 
 
+def get_t5_sequence_length_from_args(args):
+    return {
+        "inputs": args.max_seq_length,
+        "targets": args.answer_max_seq_length
+    }
+
 def torch_tensor_dict_from_args(args,
                                 config,
                                 dataset_split=tfds.Split.TRAIN,
                                 preproc_device="cpu"):
-    def get_t5_sequence_length_from_args(args):
-        return {
-            "inputs": args.max_seq_length,
-            "targets": args.answer_max_seq_length
-        }
+
 
     mixture_or_task_name = args.mixture_or_task_name
     sequence_length = get_t5_sequence_length_from_args(args)
@@ -186,16 +189,6 @@ def tokens_to_batches(dataset, batch_size, drop_remainder=False):
     return tfds.as_numpy(dataset)
 
 
-# def all_examples(ds):
-#     def _unbatch(batch):
-#       """Converts a dict of lists to a list of dicts of singletons."""
-#       return [dict(zip(batch, t)) for t in zip(*batch.values())]
-#
-#     batches = list(tokens_to_batches(ds, batch_size=128))
-#     examples = [ex for b in batches for ex in _unbatch(b)]
-#     return examples
-
-
 def get_separated_dataset(just, DATA_DIR, args, **dataset_keywords):
 
     config = dataset_keywords['config']
@@ -258,6 +251,39 @@ def get_separated_dataset(just, DATA_DIR, args, **dataset_keywords):
     dev_dataset = compute_and_cache(compute_subset_eval, small_cache_name_eval)
 
     return train_dataset, dev_dataset
+
+
+
+#
+# def evaluate_tfds_checkpoint(args, cp_number):
+#     hugg, tokenizer = load_huggingface_checkpoint(args, cp_number)
+#
+#     # valid_dataset = compute_and_cache(get_squad_validation_dataset, 'squad_valid_data.pt', args=args,
+#     #                                   tokenizer=tokenizer)
+#     # # TODO: this can be done smarter, distributed
+#     #
+#     # batch_size = getattr(args, "single_worker_eval_batch_size", 32)
+#     # dataloader = torch.utils.data.DataLoader(valid_dataset, batch_size=batch_size)
+#     # answers = get_answers(args, hugg, tokenizer, dataloader=dataloader)
+#     # valid_dataset.set_format()
+#     # squad_result = evaluate_squad_answers(valid_dataset=valid_dataset, answers=answers)
+#     # print(squad_result)
+#     # return squad_result
+#
+def evaluate_t5_tfds(args, cp_number, device="cpu"):
+    model_dir = auto_file_name(args)
+    batch_size = getattr(args, "single_worker_eval_batch_size", 32)
+    generate_kwargs = getattr(args, "generate_kwargs", {})
+    # TODO: add to arg config
+
+    evaluator = T5Evaluator(args, model_dir=model_dir, device=device, model=None)
+    results = evaluator.eval(mixture_or_task_name=args.mixture_or_task_name,
+                   sequence_length=get_t5_sequence_length_from_args(args),
+                   batch_size=batch_size, checkpoint_steps=cp_number, split="validation",
+                   summary_dir=None,
+                   **generate_kwargs
+                   )
+    return results
 
 
 class SEP_T5_TFDS_DatasetHandler(CommonDatasetHandler):
