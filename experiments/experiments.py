@@ -99,7 +99,7 @@ class ArgsStasher:
         delattr(args, STASH_NAME)
 
 
-def auto_file_name(args):
+def auto_file_name(args, verbose=True):
     ArgsStasher.reload_stashed_args(args)
     """This is used to distinguish different configurations by file name """
     assert hasattr(args, "auto_file_name")
@@ -117,4 +117,6 @@ def auto_file_name(args):
     else:
         s = f'{args.model}_{args.dataset}_{wp}_{ws}{ga}{bs}_{se}_{ga_just_for_loss}seed_{args.seed}'
     args.out_filename = f"{args.out_filename}_{s}"
-    print(f"Out File Name will be: {args.out_filename}")
+    if verbose:
+        print(f"Out File Name will be: {args.out_filename}")
+    return args.out_filename
