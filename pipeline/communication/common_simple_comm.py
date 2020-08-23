@@ -219,11 +219,16 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
                     )
                     assert for_grads
                 for _ in ranks:
-                    rcv_buffer = torch.zeros(
-                        shape,
-                        dtype=dtype,
-                        device=self.device,
-                        requires_grad=requires_grad)
+                    try:
+                        rcv_buffer = torch.zeros(
+                            shape,
+                            dtype=dtype,
+                            device=self.device,
+                            requires_grad=requires_grad)
+                    except TypeError as e:
+                        print(f"problem with {tensor_name}, shape:{shape}, dtype={dtype}")
+                        raise e
+
                     rcv_buffer.share_memory_()
                     buffers.append(rcv_buffer)
         return buffers
