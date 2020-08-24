@@ -543,7 +543,7 @@ def filter_for_backward(x, g):
     tensors = []
     grad_tensors = []
     for t, gt in zip(x, g):
-        if t.grad_fn is not None:
+        if t.requires_grad:
             if gt is not None:
                 tensors.append(t)
                 grad_tensors.append(gt)
@@ -551,7 +551,7 @@ def filter_for_backward(x, g):
                 print("-W- filtering NONE grad")
         else:
             if gt is not None:
-                print("-W- calculated and sent a grad tensor for a tensor with no grad_fn")
+                print(f"-W- calculated and sent a grad tensor for a tensor with no grad_fn, {gt.shape}")
     return tensors, grad_tensors
 
 
