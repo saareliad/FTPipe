@@ -208,7 +208,6 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
 
     def _create_recv_buffers(self,
                              tensor_ranks,
-                             requires_grad=False,
                              for_grads=False):
         with torch.no_grad():
             buffers = []
@@ -236,7 +235,7 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
                             shape,
                             dtype=dtype,
                             device=self.device,
-                            requires_grad=requires_grad)
+                            requires_grad=False)
                     except TypeError as e:
                         print(f"problem with {tensor_name}, shape:{shape}, dtype={dtype}")
                         raise e
@@ -245,13 +244,13 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
                     buffers.append(rcv_buffer)
         return buffers
 
-    def create_activations_recv_buffers(self, requires_grad=False):
-        return self._create_recv_buffers(list(self.receive_ranks.items()))
+    def create_activations_recv_buffers(self):
+        # TODO list to class
+        return self._create_recv_buffers(list(self.receive_ranks.items()), for_grads=False)
 
-    def create_gradients_rcv_buffers(self, requires_grad=False):
+    def create_gradients_rcv_buffers(self):
         tensor_ranks = self.grad_rcv_items_without_extention
-        return self._create_recv_buffers(tensor_ranks,
-                                         for_grads=True)
+        return self._create_recv_buffers(tensor_ranks, for_grads=True)
 
     def init_buffers_ctx(self, buffers_ctx):
         (

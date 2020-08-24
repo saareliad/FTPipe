@@ -120,11 +120,13 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
 
     def _create_recv_buffers(self,
                              tensor_names,
-                             is_activations,
-                             requires_grad=False):
+                             for_grads=False,
+                             # is_activations,
+                             ):
         """ The receiver sends an initial "ack" to the sender.
             No buffer is actually created.
         """
+        is_activations = not for_grads
         if is_activations:
             sending = self.receive_ranks
         else:
@@ -154,8 +156,9 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
 
     def _create_send_buffers(self,
                              tensor_send_ranks,
-                             is_activations,
-                             requires_grad=False):
+                             for_grads,
+                             ):
+        is_activations = not for_grads
         """ the sender creates the buffers """
         tensor_names = tensor_send_ranks.keys()
         for tensor_name in tensor_names:
@@ -169,25 +172,25 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
 
             self.send_buffers[tensor_name] = d
 
-    def create_activations_send_buffers(self, requires_grad=False):
+    def create_activations_send_buffers(self):
         return self._create_send_buffers(self.send_ranks,
-                                         is_activations=True,
-                                         requires_grad=requires_grad)
+                                         for_grads=False,
+                                         )
 
-    def create_gradients_send_buffers(self, requires_grad=False):
+    def create_gradients_send_buffers(self):
         return self._create_send_buffers(self.grad_send_dict,
-                                         is_activations=False,
-                                         requires_grad=requires_grad)
+                                         for_grads=True,
+                                         )
 
-    def create_activations_recv_buffers(self, *args, requires_grad=False):
+    def create_activations_recv_buffers(self, *args):
         return self._create_recv_buffers(self.receive_ranks.keys(),
-                                         is_activations=True,
-                                         requires_grad=requires_grad)
+                                         for_grads=False,
+                                         )
 
-    def create_gradients_rcv_buffers(self, *args, requires_grad=False):
+    def create_gradients_rcv_buffers(self, *args):
         return self._create_recv_buffers(self.grad_rcv_dict.keys(),
-                                         is_activations=False,
-                                         requires_grad=requires_grad)
+                                         for_grads=True,
+                                         )
 
     def init_process_group(self, *args, **kw):
         pass
