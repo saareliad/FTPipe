@@ -84,7 +84,7 @@ class Buffers:
         request_objects = self.handlers.popleft()
         for obj in request_objects:
             # obj.wait()
-            while (not obj.is_completed()):
+            while not obj.is_completed():
                 pass
 
         res = self.buffers[self.pointer]

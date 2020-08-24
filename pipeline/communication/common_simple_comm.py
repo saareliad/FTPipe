@@ -85,6 +85,8 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
         # NOTE: Order is important, must call for send,recv ranks before in/out req grads.
         # TODO: original_req_grad somewhere.
 
+        self.tensor_dtypes = None
+
         # inputs/outputs are not part of send/recv ranks
         for to_del in [receive_ranks, send_ranks]:
             for inout in [pipe_config.model_inputs, pipe_config.model_outputs]:
@@ -153,6 +155,9 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
             if not (i in self.tensors_names_with_no_grad)
         ]
 
+        self.grad_rcv_dict_without_extention = dict(self.grad_rcv_items_without_extention)
+        self.grad_send_dict_without_extention = dict(self.grad_send_items_without_extention)
+
         self.grad_send_dict = dict(self.grad_send_items)
         self.grad_rcv_dict = dict(self.grad_rcv_items)
 
@@ -210,9 +215,16 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
             for tensor_name, ranks in tensor_ranks:
                 dtype = self.tensor_dtypes[tensor_name]
                 shape = self.tensor_shapes[tensor_name]
-                # TODO: handle None dtype
-                if dtype is None:
-                    raise NotImplementedError()
+                if not isinstance(dtype, torch.dtype):
+                    if isinstance(dtype, torch.Size):
+                        # TODO: handle torch.Size dtype
+                        # TODO: https://github.com/saareliad/pytorch_gpipe_private_fork/issues/45
+                        raise NotImplementedError()
+                    else:
+                        _tmp = torch.tensor(dtype())
+                        dtype = _tmp.dtype
+                        shape = _tmp.shape
+                        # shape = torch.Size()
                 if len(ranks) > 1:
                     print(
                         f"-V- creating double buffers for {tensor_name} which is sent/receved to/from multiple ranks: {ranks}"
@@ -234,13 +246,11 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
         return buffers
 
     def create_activations_recv_buffers(self, requires_grad=False):
-        return self._create_recv_buffers(list(self.receive_ranks.items()),
-                                         requires_grad=requires_grad)
+        return self._create_recv_buffers(list(self.receive_ranks.items()))
 
     def create_gradients_rcv_buffers(self, requires_grad=False):
         tensor_ranks = self.grad_rcv_items_without_extention
         return self._create_recv_buffers(tensor_ranks,
-                                         requires_grad=requires_grad,
                                          for_grads=True)
 
     def init_buffers_ctx(self, buffers_ctx):
@@ -560,7 +570,7 @@ class FuturesHandler(FuturesHandlerBase):
     def after_backward(self, sent_request_objects, done_bwds):
         # NOTE: its actually after the step too
         # HACK: in GPIPE we laizly insert at wrong index to to avoid ordering issues
-        if not (self.is_first_partition):
+        if not self.is_first_partition:
             # wait on prev send
             if self.async_bwd_objects:
                 self.wait_on_sent_object(is_fwd=False)

@@ -1,5 +1,23 @@
 import torch
 from torch import Tensor
+import numpy as np
+# from copy import deepcopy
+
+# Conversion Table
+TABLE = {
+    torch.Size: torch.int64,
+}
+
+
+
+
+def None_tensor():
+    return torch.tensor(np.nan)
+
+
+def is_None_tensor(recved_tensor):
+    return recved_tensor.size() == torch.Size() and np.isnan(
+        recved_tensor.item())
 
 
 class TensorWrapper:
@@ -10,28 +28,47 @@ class TensorWrapper:
         TODO: mapping conventions
     """
     def __init__(self, dtypes):
-
         self.send_dtype_map = TensorWrapper.make_send_dtype_map(dtypes)
         self.recv_dtype_map = TensorWrapper.make_recv_dtype_map(dtypes)
 
     def convert_activations_send(self, name: str, value):
         if isinstance(value, Tensor):
-            return value
+            return value  # NOTE: if we quantize sends change this
+        elif value is None:
+            return None_tensor()
 
-        dtype = self.send_dtype_map[name]
+        # NOTE: this si quite redundant actually.
+        dtype = self.send_dtype_map.get(name, None)
         return torch.tensor(value, dtype=dtype)
 
-
     def convert_activations_recv(self, name: str, recved_tensor: Tensor):
-
-        dtype = self.dtypes[name]
-        v = recved_tensor.item()
-        return dtype(v)
+        if is_None_tensor(recved_tensor):
+            # FIXME: better do it from dtypes.
+            return None
+        elif not isinstance(self.recv_dtype_map[name], torch.dtype):
+            dtype = self.recv_dtype_map[name]
+            # NOTE: commented is redundent
+            # if recved_tensor.size() == torch.Size():
+            #     v = recved_tensor.item()
+            return dtype(recved_tensor)
+        else:
+            return recved_tensor
 
     @staticmethod
     def make_send_dtype_map(dtypes):
-        raise NotImplementedError()
+
+        d = {}
+        for name, dtype in dtypes.items():
+            if dtype in TABLE:
+                d[name] = TABLE[dtype]
+            # elif isinstance(dtype, torch.dtype):
+            #     # For send it does not matter, we will just send the tensor
+            #     # It can be later used to do stuff like quantized communication
+            #     # d[name] = dtype
+            #     pass
+        return d
 
     @staticmethod
     def make_recv_dtype_map(dtypes):
-        raise NotImplementedError()
+        # return deepcopy(dtypes)
+        return dtypes

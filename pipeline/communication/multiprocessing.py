@@ -14,7 +14,7 @@ import traceback
 # TODO: send to the closest stage first (priority)
 # TODO: recv queue per tensor can potentially make life easier
 
-filter_none = partial(filter, lambda t: t is not None)
+# filter_none = partial(filter, lambda t: t is not None)
 
 
 def is_shared_parameter(tensor_scope):
@@ -363,15 +363,15 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
     def send_gradients(self, x, batch_idx):
         b4 = len(x)
         x_b4 = x
-        x = list(filter_none(x))
+        # x = list(filter_none(x))
+        x = list(filter(lambda t: t is not None, x))
         after = len(x)
 
         if b4 != after:
             for i, (name,r) in zip(x_b4,self.grad_send_items):
                 if i is None:
-                    print(name, "GOT NONE GRADIENT")
-            # raise NotImplementedError()
-        
+                    print(name, f"Computed a NONE GRADIENT in stage {self.stage}")
+
         future = self.pool_send_grad.submit(self._send_tensors_p2p, x_b4,
                                             batch_idx, self.grad_send_items,
                                             True)
