@@ -1,15 +1,16 @@
+import types
+from functools import partial
+from typing import Tuple, Union
+
 import torch
 import torch.nn as nn
 from torch import Tensor
-from typing import Tuple, Union
+
+from . import dp_sim
 from .monkey_patch import DummyForwardMonkeyPatcher
 from .monkey_patch.find_modules import find_modules
 from .replace_inplace import replace_inplace_for_first_innermost_layer_
 from .rng_stasher import PartitionRngStasher
-from . import dp_sim
-import types
-from functools import partial
-from .util import flatten, unflatten, nested_map
 
 # import logging
 Tensors = Tuple[Tensor, ...]
@@ -28,14 +29,15 @@ __all__ = [
     'GPipeLastPartition',
 ]
 
-# TODO: LayerNorm? GroupNorm?
+# Deprecated. This should be handled by partitioning.
+_REPLACE_INPLACE = False
+
+# LayerNorm? GroupNorm?
 DEFAULT_CLASSES_LIST_TO_PATCH = [
     nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d, nn.SyncBatchNorm,
     nn.InstanceNorm1d, nn.InstanceNorm2d, nn.InstanceNorm3d,
     dp_sim.BatchNorm1d, dp_sim.BatchNorm2d, dp_sim.BatchNorm3d
 ]
-
-
 
 
 def get_buffers_for_ddp_sync(model,
@@ -86,9 +88,11 @@ class Partition(nn.Module):
         elif isinstance(layers, nn.Module):
             self.layers = layers
 
-        if self._HAS_DUMMY_FORWARD or self._REQ_GRAD:
-            # TODO: can print if is_replaced
-            replace_inplace_for_first_innermost_layer_(self.layers)
+        if _REPLACE_INPLACE:
+            if self._HAS_DUMMY_FORWARD or self._REQ_GRAD:
+                is_replaced = replace_inplace_for_first_innermost_layer_(self.layers)
+                if is_replaced:
+                    print("-W- replace_inplace_for_first_innermost_layer_=True")
 
         self.dummy_forward_monkey_patcher = DummyForwardMonkeyPatcher(self.layers, classes_list_to_patch) \
             if self._HAS_DUMMY_FORWARD else None
@@ -138,7 +142,6 @@ class Partition(nn.Module):
                         x = list(get_dr(x, self.req_grad))
                     self.input_buffer[micro_batch_idx] = x
                     self.rng_stasher.stash_rng_state(micro_batch_idx)
-                    # UNFLATTEN
                     x = self.layers(*x)
 
                 if self.dummy_forward_monkey_patcher:
@@ -153,7 +156,6 @@ class Partition(nn.Module):
                 if isinstance(x, Tensor):
                     x = self.layers(x)
                 else:
-                    # UNFLATTEN
                     x = self.layers(*x)
                 return x
 
@@ -161,10 +163,8 @@ class Partition(nn.Module):
         x = self.input_buffer[micro_batch_idx]  # Note: still not poping!
         if self.dummy_forward_monkey_patcher:
             self.dummy_forward_monkey_patcher.replace_for_forward()
-        # TODO: maybe changing the rng state messes up with MPI?
         with torch.random.fork_rng(devices=self.rng_stasher.devices):
             self.rng_stasher.restore_rng_state(micro_batch_idx)
-            #  UNFLATTEN
             x = self.layers(*x)
         # Save for later
         self.bwd_graph_head_buffer[micro_batch_idx] = x
@@ -176,9 +176,9 @@ class Partition(nn.Module):
 
     def get_grad(self, micro_batch_idx):
         """ returns an iteretable of grads """
-        x = self.input_buffer.pop(micro_batch_idx)  # Flattened
+        x = self.input_buffer.pop(micro_batch_idx)
         if isinstance(x, Tensor):
-            return (x.grad, )
+            return (x.grad,)
         else:
             return [y.grad for y in filter_req_grad_tensors(x)]
 
@@ -341,9 +341,11 @@ class PartitionWithoutRecomputation(nn.Module):
         elif isinstance(layers, nn.Module):
             self.layers = layers
 
-        if self._REQ_GRAD or self._HAS_DUMMY_FORWARD:
-            # TODO: can print if is_replaced
-            replace_inplace_for_first_innermost_layer_(self.layers)
+        if _REPLACE_INPLACE:
+            if self._HAS_DUMMY_FORWARD or self._REQ_GRAD:
+                is_replaced = replace_inplace_for_first_innermost_layer_(self.layers)
+                if is_replaced:
+                    print("-W- replace_inplace_for_first_innermost_layer_=True")
 
         if _REQ_GRAD:
             self.input_buffer = {}  # For saving activations
@@ -415,7 +417,7 @@ class PartitionWithoutRecomputation(nn.Module):
         # NOTE: This method can be patched.
         x = self.input_buffer.pop(micro_batch_idx)
         if isinstance(x, Tensor):
-            return (x.grad, )
+            return (x.grad,)
         else:
             return [y.grad for y in filter_req_grad_tensors(x)]
 
@@ -430,7 +432,7 @@ class FirstPartitionWithoutRecomputation(PartitionWithoutRecomputation):
 
 ##################
 # GPipe
-# TODO: we can easly avoid clones() and just use the same buffer.
+# TODO: we can easily avoid clones() and just use the same buffer.
 # NOTE: this already  happens in multiprocessing
 # it will save buffer memory, but its minor.
 ##################
@@ -476,7 +478,7 @@ class GPipePartition(nn.Module):
                 g, micro_batch_idx)
 
     def get_grad(self, micro_batch_idx):
-        """ returns an iteretable of grads """
+        """ returns a list of grads """
         if self.is_last_micro_batch:
             return self.no_recomputation_partition.get_grad(micro_batch_idx)
         else:
@@ -520,7 +522,8 @@ class GPipeLastPartition(GPipePartition):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
 
-    # TODO: when loss is included in the model (e.g some of huggingface transformers) it is very stupied that we calculate loss for all micro batches in the dummy forward,
+    # TODO: when loss is included in the model (e.g some of huggingface transformers)
+    #  it is very stupied that we calculate loss for all micro batches in the dummy forward,
 
     def forward(self, x: TensorOrTensors, micro_batch_idx):
         x = super().forward(x, micro_batch_idx)
@@ -529,16 +532,13 @@ class GPipeLastPartition(GPipePartition):
             return x[0]
         return x
 
-filter_req_grad_tensors = partial(
-    filter, lambda a: isinstance(a, Tensor) and a.requires_grad)
+
+filter_req_grad_tensors = partial(filter, lambda a: isinstance(a, Tensor) and a.requires_grad)
 
 
 def filter_for_backward(x, g):
-    # TODO: remove this compeltly, by saving for backward only whats needed.
     # NOTE: we currently build on this behavior  so be careful when removing.
     x = list(filter_req_grad_tensors(x))
-    # x = list(x)  # FIXME: just for the assert
-    # g = list(flatten(g))  # FIXME: just for the assert
     assert len(x) == len(g)
     tensors = []
     grad_tensors = []
@@ -548,12 +548,11 @@ def filter_for_backward(x, g):
                 tensors.append(t)
                 grad_tensors.append(gt)
             else:
-                print("-W- filtering NONE gradeint")
+                print("-W- filtering NONE grad")
         else:
-            if g is not None:
-                print("-W- calculated and sent un-needed grad")
+            if gt is not None:
+                print("-W- calculated and sent a grad tensor for a tensor with no grad_fn")
     return tensors, grad_tensors
-    # torch.autograd.backward(tensors, grad_tensors)
 
 
 def req_grad_dict_to_tuple(req_grad: dict):
@@ -562,17 +561,14 @@ def req_grad_dict_to_tuple(req_grad: dict):
     return ret
 
 
-# NOTE: we count that the user would not change mutable object because we don't deepcopy them...
-
-
 def assert_same_size(x, g):
-    assert len(list(flatten(x))) == len(list(flatten(g))), str((len(list(flatten(x))), len(list(flatten(g)))))
+    assert len(list(x)) == len(list(g)), str((len(list(x)), len(list(g))))
 
 
 def get_dcr(x, req_grad):
     assert_same_size(x, req_grad)
     res = []
-    for t, r in zip(flatten(x), flatten(req_grad)):
+    for t, r in zip(x, req_grad):
         if isinstance(t, Tensor):
             assert isinstance(r, bool)
             res.append(t.detach().clone().requires_grad_(r))
@@ -590,7 +586,7 @@ def get_dr(x, req_grad):
         print(req_grad)
         raise e
     res = []
-    for t, r in zip(flatten(x), flatten(req_grad)):
+    for t, r in zip(x, req_grad):
         if isinstance(t, Tensor):
             assert isinstance(r, bool)
             res.append(t.detach().requires_grad_(r))
@@ -603,7 +599,7 @@ def get_dr(x, req_grad):
 def get_r(x, req_grad):
     assert_same_size(x, req_grad)
     res = []
-    for t, r in zip(flatten(x), flatten(req_grad)):
+    for t, r in zip(x, req_grad):
         if isinstance(t, Tensor):
             assert isinstance(r, bool)
             res.append(t.requires_grad_(r))
