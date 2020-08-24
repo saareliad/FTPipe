@@ -416,7 +416,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         COMM_VERSION = 2
 
     # get work scheduler
-    work_scheduler = AVAILABLE_WORK_SCHEDULERS.get(args.work_scheduler)
+    work_scheduler = AVAILABLE_WORK_SCHEDULERS.get(args.work_scheduler)(args.step_every)
 
     # set device
     local_rank_to_device_map = get_rank_to_device_map(args)

@@ -65,7 +65,7 @@ class SinglePartitionManager:
         self.stage = stage
         self.num_stages = num_stages
         self.step_every = step_every
-        self.work_scheduler = work_scheduler(step_every)
+        self.work_scheduler = work_scheduler
         self._init_partition(partition, use_recomputation, is_mp, req_grad,
                              )
         if hasattr(comm_handler, "init_ddp_context"):

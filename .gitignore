@@ -280,7 +280,6 @@ $RECYCLE.BIN/
 *.out
 
 .vscode/settings.json
-data/
 checkpoints/
 results/
 multithreaded_pipe/
