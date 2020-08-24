@@ -1,13 +1,14 @@
+import logging
 from abc import ABC
+from collections import OrderedDict
 
 import torch
-import logging
 import torch.distributed as dist
 
-from .interface import CommunicationHandlerBase, FuturesHandlerBase
-from .buffer import make_buff
-from collections import OrderedDict
 from models.simple_partitioning_config import PipelineConfig
+from .buffer import make_buff
+from .interface import CommunicationHandlerBase, FuturesHandlerBase
+
 
 # TODO tags for tensors we send multiple times
 
@@ -60,6 +61,7 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
     """ common for all MPI based.
     TODO: some functions in the end should be moved to lower class
     """
+
     def __init__(
             self,
             rank,
@@ -135,6 +137,8 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
         self.world_size = world_size
 
         self.num_chunks = num_chunks  # optionally split the batches to chunks
+
+        self.activations_rcv_items = list(self.receive_ranks.items())
 
         # can spare the if, intentionally ugly.
         self.grad_rcv_items = [(i + GRAD_UGLY_SHAMEFUL_NAME, v)
@@ -245,12 +249,10 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
         return buffers
 
     def create_activations_recv_buffers(self):
-        # TODO list to class
-        return self._create_recv_buffers(list(self.receive_ranks.items()), for_grads=False)
+        return self._create_recv_buffers(tensor_ranks=self.activations_rcv_items, for_grads=False)
 
     def create_gradients_rcv_buffers(self):
-        tensor_ranks = self.grad_rcv_items_without_extention
-        return self._create_recv_buffers(tensor_ranks, for_grads=True)
+        return self._create_recv_buffers(tensor_ranks=self.grad_rcv_items_without_extention, for_grads=True)
 
     def init_buffers_ctx(self, buffers_ctx):
         (
@@ -442,8 +444,8 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
 
     def _ensure_fwd_recv_buffers_size_set(self, last_due_end):
         if last_due_end and (
-            (self.training and self.last_batch_train_shapes) or
-            (not self.training and self.last_batch_test_shapes)):
+                (self.training and self.last_batch_train_shapes) or
+                (not self.training and self.last_batch_test_shapes)):
             # Delete previous buffers
             print(
                 f"rank: {self.rank} replacing buffers for last batch, forward")
@@ -536,6 +538,7 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
 
 class FuturesHandler(FuturesHandlerBase):
     """ This is mostly for MPI, where sent objects are problematic - currently not deleted automatically """
+
     def __init__(self, pipe_config, is_first_partition, is_last_partition, stateless_tied,
                  num_stages):
         super().__init__()
