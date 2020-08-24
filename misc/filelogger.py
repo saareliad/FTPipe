@@ -1,6 +1,8 @@
 import os
 import logging
 
+# TODO: completely replace this, didn't pay attention to logging so far.
+
 
 class FileLogger:
     def __init__(self, output_dir: str, global_rank: int, local_rank: int, name: str, world_size: int, name_prefix=''):
@@ -55,8 +57,8 @@ class FileLogger:
     def debug(self, *args_):
         self.logger.debug(*args_)
 
-    def warn(self, *args_):
-        self.logger.warn(*args_)
+    def warning(self, *args_):
+        self.logger.warning(*args_)
 
     def info(self, *args_):
         self.logger.info(*args_)

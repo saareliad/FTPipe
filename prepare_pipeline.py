@@ -2,7 +2,7 @@ import torch
 
 from experiments.experiments import ArgsStasher, auto_file_name
 from misc.filelogger import FileLogger
-from datasets import get_separate_dls_from_args
+from data import get_separate_dls_from_args
 
 import models
 from models import parse_config
@@ -26,7 +26,7 @@ from pipeline.work_schedulers import AVAILABLE_WORK_SCHEDULERS
 from pipeline.training import AVAILABLE_TRAINERS
 from pipeline.data_propagation import AVAILABLE_PROPAGATORS
 from optimizers import AVAILBALE_OPTIMIZERS
-# from datasets import AVAILABLE_DATASETS
+# from data import AVAILABLE_DATASETS
 
 
 def get_propagator_cls(args):

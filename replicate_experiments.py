@@ -3,8 +3,10 @@ import argparse
 
 ALL_SEEDS = [42, 20202020, 77777777, 314159, 1322019]
 
+
 # TODO: run replication scripts according to paper, clean.
 # TODO: can re run with better partitioning when we compare to GPipe.
+
 
 def gpt2_tied():
     # TODO:
@@ -26,7 +28,9 @@ def gpt2_tied():
                                   gpu_list=list(range(8)),
                                   gpus_per_config=4)
 
+
 ################################################################
+
 
 def gpt2xl():
     # Goal: achieving comparable generalization vs fully-synchronous models
@@ -113,7 +117,62 @@ def grad_accumulation_WRN():
     helper.run()
 
 
+def t5_glue():
+
+    ALL_TASKS = {
+
+    }
+
+
+
+    def mp_helper(helper,
+                  alg="stale_nr",
+                  model="wrn_28x10_c100_dr03_p4_group_norm",
+                  port=29500,
+                  seed=42):
+        COMMAND = "python main.py --mode mp"
+        cv_cfgs_dir = "configs/cv/cifar100/wrn28x10/no_recomputation/"
+        gpus_per_config = 4
+        cfgs_dir = cv_cfgs_dir
+
+        all_algs = [alg]  # TODO
+        common = {
+            'config': [f"{cfgs_dir}{cfg}.json" for cfg in all_algs],
+            'seed': [seed],
+            "nprocs": [gpus_per_config],
+            "step_every_from_cmd": [""],
+            "bs_train_from_cmd": [""],
+            "out_dir_from_cmd": [""],
+            "out_dir": ["results/debug_se/gn/linscale/"],
+            "model": [model],
+            "model_from_cmd": [""]
+        }
+        param_grid_1 = {
+            "step_every": [1],
+            "bs_train": [256],
+        }
+
+        param_grid_2 = {
+            "step_every": [2],
+            "bs_train": [128],
+        }
+
+        param_grid_3 = {
+            "step_every": [4],
+            "bs_train": [64],
+        }
+
+        param_grid = [param_grid_1, param_grid_2, param_grid_3]
+
+        for i, p in enumerate(param_grid):
+            p.update(**common)
+            p["master_port"] = [port + i]
+
+        helper.add_runs(COMMAND, param_grid, num_gpus=gpus_per_config)
+
+
 #######################################################
+
 AVAIALBE_EXPS = {'grad_accumulation_WRN': grad_accumulation_WRN,
                  'gpt2xl': gpt2xl}
 
@@ -125,6 +184,7 @@ def parse_cli():
     args = parser.parse_args()
     return args
 
+
 if __name__ == "__main__":
     args = parse_cli()
     fn = AVAIALBE_EXPS[args.exp]
@@ -132,12 +192,8 @@ if __name__ == "__main__":
     # grad_accumulation_WRN()
     # gpt2xl()
 
-
-
     # gpt2_tied()
     # gpt2xl_untied_gpipe()
     # mp_gpt2_tied()
     # mp_gpt2xl_untied()  # TODO: bug?
     # gpt2xl_tied()
-
-

@@ -8,7 +8,7 @@ import io
 from contextlib import redirect_stdout
 
 from pipeline.util import get_world_size
-from datasets import add_dataset_argument
+from data import add_dataset_argument
 
 from configs.parse_json_config import parse_json_config
 from train import training_loop
@@ -483,12 +483,12 @@ def start_eval_checkpoint():
     all_cps = list(range(12)) + ["c4"]
 
     if args.dataset == "t5_tfds":
-        from datasets import t5_tfds
+        from data.t5 import t5_tfds
         device = getattr(args, "eval_device", "cpu")
         all_results = t5_tfds.evaluate_t5_tfds(args, cp_number=all_cps, device=device)
 
     elif args.dataset == "t5_squad":
-        from datasets import t5_squad
+        from data.t5 import t5_squad
         for cp_number in all_cps:
             args.cp_number = cp_number
             args.eval_on_cuda = True
@@ -518,7 +518,7 @@ if __name__ == "__main__":
         print("Running in mpi overlay mode")
         start_mpi_overlay()
     elif args.mode == 'preproc':
-        print("Running in preproc mode: Preprocessing datasets...")
+        print("Running in preproc mode: Preprocessing data...")
         start_preproc()
     elif args.mode == 'eval':
         print("Running in eval mode: Evaluating checkpoints...")
