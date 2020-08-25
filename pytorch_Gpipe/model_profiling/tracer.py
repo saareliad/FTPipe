@@ -1300,6 +1300,9 @@ def check_is_valid_graph(nodes):
             valid = False
 
         if isinstance(node.tensor_shape, torch.Size) or isinstance(node.tensor_dtype, torch.dtype) or issubclass(node.value_type, Tensor):
+            #HACK send torch.Size in MPI as tuple
+            if node.value_type is torch.Size:
+                continue
             if not ((isinstance(node.tensor_shape, torch.Size)) and (isinstance(node.tensor_dtype, torch.dtype)) and (issubclass(node.value_type, Tensor))):
                 errors.extend(["tensor value value not recorded in all of TENSOR_SHAPES TENSOR_DTYPES VALUE_TYPES",
                                f"node id: {i}",

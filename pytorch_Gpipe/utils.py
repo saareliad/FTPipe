@@ -195,6 +195,9 @@ def get_tensor_shapes(ts):
     def get_shape(t):
         if isinstance(t, Tensor):
             return t.shape if t.shape else torch.Size([1])
+        elif isinstance(t,torch.Size):
+            #HACK send torch.Size in MPI as tuple
+            return torch.Size([len(t)])
         return None
 
     return nested_map(get_shape, ts)
