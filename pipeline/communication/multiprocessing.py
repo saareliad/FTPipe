@@ -1,5 +1,6 @@
 # from .interface import CommunicationHandlerBase
 import concurrent
+import concurrent.futures
 import sys
 import traceback
 from collections import defaultdict
@@ -60,6 +61,10 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         # NOTE: checking lower priority for grad stream
         self.grad_send_stream = torch.cuda.Stream(self.device, priority=-2)
         self.acti_send_stream = torch.cuda.Stream(self.device, priority=-1)
+
+        self.grad_recv_stream = torch.cuda.Stream(self.device, priority=-2)
+        self.acti_recv_stream = torch.cuda.Stream(self.device, priority=-2)
+
         self.main_stream = torch.cuda.current_stream()
 
     def init_buffers(self):
@@ -93,11 +98,12 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         self.dtypes_and_shapes_are_equal = dtypes_and_shapes_are_equal
         # Its just "Ack on start", nothing more.
         # can spare some according to partition.
-        self.create_activations_recv_buffers()
-        self.create_gradients_rcv_buffers()
 
-        self.create_activations_send_buffers()
-        self.create_gradients_send_buffers()
+        self._send_ack_on_start(for_grads=False)  # activations recv
+        self._send_ack_on_start(for_grads=True)  # Gradients recv
+
+        self._create_send_buffers(self.send_ranks, for_grads=False)
+        self._create_send_buffers(self.grad_send_dict, for_grads=True)
 
     def _send_ack_on_start(self, for_grads=False):
         """ The receiver sends an initial "ack" to the sender.
@@ -147,43 +153,24 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
 
             self.send_buffers[tensor_name] = d
 
-    def create_activations_send_buffers(self):
-        return self._create_send_buffers(self.send_ranks,
-                                         for_grads=False,
-                                         )
-
-    def create_gradients_send_buffers(self):
-        return self._create_send_buffers(self.grad_send_dict,
-                                         for_grads=True,
-                                         )
-
-    def create_activations_recv_buffers(self, *args):
-        return self._send_ack_on_start(for_grads=False,
-                                       )
-
-    def create_gradients_rcv_buffers(self, *args):
-        return self._send_ack_on_start(for_grads=True,
-                                       )
-
     def init_process_group(self, *args, **kw):
         pass
 
-    def _recv_tensors_p2p(self, x, batch_idx, ranks_dict_items,
+    def _recv_tensors_p2p(self, batch_idx, ranks_dict_items,
                           is_activations):
         try:
-            # ix = iter(x)
-            request_objects = []
-            for (tensor_name, receive_ranks) in ranks_dict_items:
-                order = receive_ranks if is_activations else reversed(receive_ranks)
-                for receive_rank in order:
-                    # tensor = next(ix)
-                    # assert len(receive_ranks) == 1
-                    # receive_rank = receive_ranks[0]
-                    q = self.rcv_queues[self.rank][receive_rank]
-
-                    if is_activations:
-                        is_parameter = is_shared_parameter(tensor_name)
-                        if is_parameter:
+            stream = self.grad_recv_stream if not is_activations else self.acti_recv_stream
+            with torch.cuda.stream(stream):
+                request_objects = []
+                if not is_activations:
+                    ranks_dict_items = reversed(ranks_dict_items)
+                for (tensor_name, receive_ranks) in ranks_dict_items:
+                    if not is_activations:
+                        receive_ranks = reversed(receive_ranks)
+                    for receive_rank in receive_ranks:
+                        q = self.rcv_queues[self.rank][receive_rank]
+                        # Only do for shared shared parameters FIXME
+                        if is_activations and is_shared_parameter(tensor_name):
                             # we don't use a reuse queue.
                             if tensor_name in self.rcv_shared_parameters:
                                 # from dict
@@ -194,55 +181,53 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                                 self.rcv_shared_parameters[tensor_name] = p
                             request_objects.append(p)
                             continue
-                    if self.verbose:
-                        tensor_tag = self.tensor_tags[tensor_name] + \
-                                     (self.TOTAL_TAGS * batch_idx)
-                        self.logger.info(
-                            f"rank={self.local_rank}: q.get(), src={receive_rank}, tag={tensor_tag}, name={tensor_name}"
-                        )
 
-                    x = q.get()
+                        # Get the item
+                        if self.verbose:
+                            tensor_tag = self.tensor_tags[tensor_name] + \
+                                         (self.TOTAL_TAGS * batch_idx)
+                            self.logger.info(
+                                f"rank={self.local_rank}: q.get(), src={receive_rank}, tag={tensor_tag}, name={tensor_name}"
+                            )
+                        x = q.get()
+                        if self.verbose:
+                            tensor_tag = self.tensor_tags[tensor_name] + \
+                                         (self.TOTAL_TAGS * batch_idx)
+                            self.logger.info(
+                                f"rank={self.local_rank}: done q.get(), src={receive_rank}, tag={tensor_tag}, name={tensor_name}"
+                            )
 
-                    if self.verbose:
-                        tensor_tag = self.tensor_tags[tensor_name] + \
-                                     (self.TOTAL_TAGS * batch_idx)
-                        self.logger.info(
-                            f"rank={self.local_rank}: done q.get(), src={receive_rank}, tag={tensor_tag}, name={tensor_name}"
-                        )
+                        # Release the token so the sender could send another one
+                        if isinstance(x, torch.Tensor):
+                            # Clone first
+                            event = torch.cuda.Event(blocking=True)
+                            t = x.detach().clone()  # Happens or recv stream
+                            event.record(stream)
 
-                    if isinstance(x, torch.Tensor):
-                        # give the next buffer
-                        # FIXME: un-optimized clones
-                        # NOTE: this happends on the main stream FIXME?
-                        event = torch.cuda.Event(blocking=True)
-                        with torch.no_grad():
-                            t = x.clone()
-                            event.record()
-
-                        reuse_q = self.buffer_reuse_queues[receive_rank][self.rank]
-                        # sync clone event
-                        event.synchronize()
-                        reuse_q.put(None)  # TODO: better happen in callback
-                        request_objects.append(t)
-                    else:
-                        reuse_q = self.buffer_reuse_queues[receive_rank][self.rank]
-                        reuse_q.put(None)
-                        request_objects.append(x)
+                            reuse_q = self.buffer_reuse_queues[receive_rank][self.rank]
+                            # CPU sync clone event
+                            event.synchronize()
+                            reuse_q.put(None)  # TODO: better happen in callback
+                            request_objects.append(t)
+                        else:
+                            reuse_q = self.buffer_reuse_queues[receive_rank][self.rank]
+                            reuse_q.put(None)
+                            request_objects.append(x)
 
         except Exception as e:
             print("ERROR in recv thread")
             print(sys.exc_info())
-            traceback.print_exc()
+            # traceback.print_exc()
             raise e
 
         return request_objects
 
     def recv_activations(self, x, batch_idx, is_last_batch):
-        return self._recv_tensors_p2p(x, batch_idx, self.receive_ranks.items(),
+        return self._recv_tensors_p2p(batch_idx, self.receive_ranks.items(),
                                       True)
 
     def recv_gradients(self, x, batch_idx, is_last_batch):
-        return self._recv_tensors_p2p(x, batch_idx, self.grad_rcv_items, False)
+        return self._recv_tensors_p2p(batch_idx, self.grad_rcv_items, False)
 
     def _send_tensors_p2p(self, x, batch_idx, ranks_dict_items, is_grad):
         try:
@@ -251,46 +236,49 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             assert (len(x) == len(ranks_dict_items)), str((len(x), len(
                 ranks_dict_items))) + f"is_grad:{is_grad}" + f"batch:{batch_idx}" + f"rank:{self.rank}" + str(
                 ranks_dict_items)
-            torch.cuda.set_device(self.device)  # needed for thread.
+            # torch.cuda.set_device(self.device)  # needed for thread.
             request_objects = []
 
             prev_work_event = torch.cuda.Event(blocking=True)
-            prev_work_event.record()
+            prev_work_event.record(self.main_stream)
             stream = self.grad_send_stream if is_grad else self.acti_send_stream
             with torch.cuda.stream(stream):
-                prev_work_event.wait()
-            with torch.no_grad():
-                for tensor, (tensor_name, send_ranks) in zip(x, ranks_dict_items):
+                prev_work_event.wait(stream)
+
+                with torch.no_grad():
                     if is_grad:
-                        send_ranks = reversed(send_ranks)
-                    if isinstance(tensor, torch.nn.Parameter):
-                        for send_rank in send_ranks:
-                            if tensor_name not in self.send_shared_parameters or send_rank not in \
-                                    self.send_shared_parameters[
-                                        tensor_name]:
-                                tensor.share_memory_()
-                                out_q = self.rcv_queues[send_rank][self.rank]
-                                out_q.put(tensor)
-                                self.send_shared_parameters[tensor_name].add(
-                                    send_rank)
-                        continue
+                        x = reversed(x)
+                        ranks_dict_items = reversed(ranks_dict_items)
+                    for tensor, (tensor_name, send_ranks) in zip(x, ranks_dict_items):
+                        if is_grad:
+                            send_ranks = reversed(send_ranks)
+                        if isinstance(tensor, torch.nn.Parameter):
+                            for send_rank in send_ranks:
+                                if tensor_name not in self.send_shared_parameters or send_rank not in \
+                                        self.send_shared_parameters[
+                                            tensor_name]:
+                                    tensor.share_memory_()
+                                    out_q = self.rcv_queues[send_rank][self.rank]
+                                    out_q.put(tensor)
+                                    self.send_shared_parameters[tensor_name].add(
+                                        send_rank)
+                            continue
 
-                    my_buff_reuse_queues = self.buffer_reuse_queues[self.rank]
-                    if isinstance(tensor, torch.Tensor):
-                        tensor = tensor.detach()
-                        send_buffers = self.send_buffers[tensor_name]
-                        for send_rank in send_ranks:
-                            buff_q = my_buff_reuse_queues[send_rank]
-                            if self.verbose:
-                                self.logger.info(
-                                    f"rank={self.rank}: getting reuse buffer from {send_rank}, for {tensor_name} (start)")
+                        my_buff_reuse_queues = self.buffer_reuse_queues[self.rank]
+                        if isinstance(tensor, torch.Tensor):
+                            tensor = tensor.detach()
+                            send_buffers = self.send_buffers[tensor_name]
+                            for send_rank in send_ranks:
+                                buff_q = my_buff_reuse_queues[send_rank]
+                                if self.verbose:
+                                    self.logger.info(
+                                        f"rank={self.rank}: getting reuse buffer from {send_rank}, for {tensor_name} (start)")
 
-                            buff_q.get()  # sync with sender we can use the buffer
-                            if self.verbose:
-                                self.logger.info(
-                                    f"rank={self.rank}: getting reuse buffer from {send_rank} for {tensor_name} (done)")
+                                buff_q.get()  # sync with sender we can use the buffer
+                                if self.verbose:
+                                    self.logger.info(
+                                        f"rank={self.rank}: getting reuse buffer from {send_rank} for {tensor_name} (done)")
 
-                            with torch.cuda.stream(stream):
                                 out_q = self.rcv_queues[send_rank][self.rank]
                                 buff = send_buffers[send_rank]
                                 if _COPY_INSTEAD_CLONE_WORKING and buff is not None and tensor.size() == buff.size():
@@ -301,34 +289,35 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
 
                                 # pass to next process only when the copy is done
                                 event = torch.cuda.Event(blocking=True)
-                                stream.record_event(event)
+                                event.record(stream)
+                                # stream.record_event(event)
                                 event.synchronize()
                                 out_q.put(buff)
 
-                            if self.verbose:
-                                tensor_tag = self.tensor_tags[tensor_name] + (
-                                        self.TOTAL_TAGS * batch_idx)
-                                self.logger.info(
-                                    f"rank={self.rank}: done send(), dst={send_rank}, tag={tensor_tag}, name={tensor_name}"
-                                )
+                                if self.verbose:
+                                    tensor_tag = self.tensor_tags[tensor_name] + (
+                                            self.TOTAL_TAGS * batch_idx)
+                                    self.logger.info(
+                                        f"rank={self.rank}: done send(), dst={send_rank}, tag={tensor_tag}, name={tensor_name}"
+                                    )
 
-                    else:
-                        for send_rank in send_ranks:
-                            buff_q = my_buff_reuse_queues[send_rank]
-                            buff_q.get()  # sync with sender we can use the buffer
-                            out_q = self.rcv_queues[send_rank][self.rank]
-                            out_q.put(tensor)
+                        else:
+                            for send_rank in send_ranks:
+                                buff_q = my_buff_reuse_queues[send_rank]
+                                buff_q.get()  # sync with sender we can use the buffer
+                                out_q = self.rcv_queues[send_rank][self.rank]
+                                out_q.put(tensor)
 
-                            if self.verbose:
-                                tensor_tag = self.tensor_tags[tensor_name] + (
-                                        self.TOTAL_TAGS * batch_idx)
-                                self.logger.info(
-                                    f"rank={self.rank}: done send(), dst={send_rank}, tag={tensor_tag}, name={tensor_name}"
-                                )
+                                if self.verbose:
+                                    tensor_tag = self.tensor_tags[tensor_name] + (
+                                            self.TOTAL_TAGS * batch_idx)
+                                    self.logger.info(
+                                        f"rank={self.rank}: done send(), dst={send_rank}, tag={tensor_tag}, name={tensor_name}"
+                                    )
         except Exception as e:
             print("ERRRRRORRRRR in send thread")
             print(sys.exc_info())
-            traceback.print_exec()
+            # traceback.print_exec()
             raise e
 
         return request_objects
@@ -340,18 +329,6 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         return future
 
     def send_gradients(self, x, batch_idx):
-        # b4 = len(x)
-        # x_b4 = x
-        # # x = list(filter_none(x))
-        # x = list(filter(lambda t: t is not None, x))
-        # after = len(x)
-        #
-        # if b4 != after:
-        #     for i, (name, r) in zip(x_b4, self.grad_send_items):
-        #         if i is None:
-        #             print(name, f"Computed a NONE GRADIENT in stage {self.stage}")
-        # NOTE: send x_b4
-
         future = self.pool_send_grad.submit(self._send_tensors_p2p, x,
                                             batch_idx, self.grad_send_items,
                                             True)

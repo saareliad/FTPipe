@@ -29,6 +29,8 @@ class CommunicationHandlerBase(abc.ABC):
     def __init__(self):
         pass
 
+    # TODO: notion of buffers can be misleading
+
     def init_buffers_ctx(self, buffers_ctx):
         # Called with:
         #     buffers_ctx = (

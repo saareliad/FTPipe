@@ -140,24 +140,23 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
 
         self.activations_rcv_items = list(self.receive_ranks.items())
 
-        # can spare the if, intentionally ugly.
-        self.grad_rcv_items = [(i + GRAD_UGLY_SHAMEFUL_NAME, v)
-                               for i, v in self.send_ranks.items()
-                               if not (i in self.tensors_names_with_no_grad)]
-
-        self.grad_send_items = [(i + GRAD_UGLY_SHAMEFUL_NAME, v)
-                                for i, v in self.receive_ranks.items()
-                                if not (i in self.tensors_names_with_no_grad)]
-
         self.grad_rcv_items_without_extention = [
             (i, v) for i, v in self.send_ranks.items()
-            if not (i in self.tensors_names_with_no_grad)
+            if i not in self.tensors_names_with_no_grad
         ]
 
         self.grad_send_items_without_extention = [
             (i, v) for i, v in self.receive_ranks.items()
-            if not (i in self.tensors_names_with_no_grad)
+            if i not in self.tensors_names_with_no_grad
         ]
+
+        self.grad_rcv_items = [(i + GRAD_UGLY_SHAMEFUL_NAME, v)
+                               for i, v in self.send_ranks.items()
+                               if i not in self.tensors_names_with_no_grad]
+
+        self.grad_send_items = [(i + GRAD_UGLY_SHAMEFUL_NAME, v)
+                                for i, v in self.receive_ranks.items()
+                                if i not in self.tensors_names_with_no_grad]
 
         self.grad_rcv_dict_without_extention = dict(self.grad_rcv_items_without_extention)
         self.grad_send_dict_without_extention = dict(self.grad_send_items_without_extention)
@@ -165,8 +164,7 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
         self.grad_send_dict = dict(self.grad_send_items)
         self.grad_rcv_dict = dict(self.grad_rcv_items)
 
-        tag_info = tensor_tags_from_config(
-            pipe_config)  # FIXME: for tuples. (can avoid None but its minor)
+        tag_info = tensor_tags_from_config(pipe_config)
         self.tensor_tags, self.TOTAL_TAGS = tag_info
 
         if target_tensor_names:
