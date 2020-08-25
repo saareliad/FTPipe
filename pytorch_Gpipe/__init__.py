@@ -249,7 +249,7 @@ def partition_model(model: nn.Module,
                                 **METIS_opt)
     else:
         print("-I- using Acyclic Partitioning algorithm")
-        acyclic_partition(graph,nparts,
+        acyclic_partition(model,graph,nparts,
         node_weight_function=node_weight_function,
         edge_weight_function=edge_weight_function,
         use_layers_graph=use_layers_only_graph,
