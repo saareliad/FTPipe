@@ -47,7 +47,7 @@ cuda_awre_openmpi() {
     # Can also do it from conda, but I didn't try.
     wget https://download.open-mpi.org/release/open-mpi/v4.0/openmpi-4.0.3.tar.gz
     tar -xvzf openmpi-4.0.3.tar.gz
-    cd openmpi-4.0.3
+    cd openmpi-4.0.3 || exit 1
     ./configure --with-cuda
     make
     sudo make install
@@ -57,7 +57,7 @@ cuda_awre_openmpi() {
 pytorch_sources() {
     # NOTE: The recursive is important
     git clone --recursive https://github.com/pytorch/pytorch
-    cd pytorch
+    cd pytorch || exit 1
     # Added required version (not checked the line below)
     git checkout --recurse-submodules v1.5.0
 
