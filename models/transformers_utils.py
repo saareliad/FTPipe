@@ -4,6 +4,7 @@ from transformers import AutoModel, AutoConfig, AutoTokenizer
 from enum import Enum, auto
 import os
 
+
 class GetConfigFrom(Enum):
     HardCoded = auto()
     ParsedArgs = auto()
@@ -47,6 +48,7 @@ class HFModelHandler(CommonModelHandler):
     def get_loader(self, *args, **kw):
         raise NotImplementedError()
 
+
 def resize_token_embeddings(model, tokenizer):
     # NOTE: must use the same tokenizer used at partitioning.
     model_to_resize = model.module if hasattr(model, 'module') else model
@@ -64,13 +66,12 @@ def pretrained_model_config_and_tokenizer(
         explicitly_set_dict={},
         **config_kw
 ):
-
     config_class, model_class, tokenizer_class = MODEL_TYPES[model_type]
     config = config_class.from_pretrained(
         config_name if config_name else model_name_or_path,
         cache_dir=cache_dir if cache_dir else None,
         **config_kw
-        )
+    )
 
     for k, v in explicitly_set_dict.items():
         setattr(config, k, v)
@@ -92,7 +93,7 @@ def pretrained_model_config_and_tokenizer(
 
     if stateless_tied:
         model_to_resize = model.module if hasattr(model, 'module') else model
-        
+
         if hasattr(model_to_resize, "make_stateless_after_loaded_tied_and_resized"):
             model_to_resize.make_stateless_after_loaded_tied_and_resized()
         elif hasattr(model_to_resize, "make_stateless"):

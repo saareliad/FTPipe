@@ -45,7 +45,7 @@ class CommonModelHandler(abc.ABC):
 
         return self.generated
 
-    def get_pipe_config(self):
+    def get_pipe_config(self) -> PipelineConfig:
         if self.pipe_config is None:
             generated = self.get_generated_module()
             GET_PARTITIONS_ON_CPU = True
@@ -78,6 +78,8 @@ class CommonModelHandler(abc.ABC):
         NotImplementedError()
 
     def get_extra(self):
+        """extra keywords for dataset,
+        return a dict if there is something to return"""
         pass
 
 AVAILABLE_MODELS: Dict[str, CommonModelHandler] = {}

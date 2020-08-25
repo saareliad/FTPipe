@@ -31,6 +31,7 @@ __all__ = [
 
 # Deprecated. This should be handled by partitioning.
 _REPLACE_INPLACE = False
+_VERBOSE_ON_NONE_GRADIENTS = False
 
 # LayerNorm? GroupNorm?
 DEFAULT_CLASSES_LIST_TO_PATCH = [
@@ -547,11 +548,10 @@ def filter_for_backward(x, g):
             if gt is not None:
                 tensors.append(t)
                 grad_tensors.append(gt)
-            else:
+            elif _VERBOSE_ON_NONE_GRADIENTS:
                 print("-W- filtering NONE grad")
-        else:
-            if gt is not None:
-                print(f"-W- calculated and sent a grad tensor for a tensor with no grad_fn, {gt.shape}")
+        elif gt is not None:
+            print(f"-W- calculated and sent a grad tensor for a tensor which does not requires grad, {gt.shape}")
     return tensors, grad_tensors
 
 

@@ -40,6 +40,8 @@ def get_trainer_cls(args):
 
 
 def is_huggingface_transformer(args):
+    if getattr(args, "is_huggingface_transformer", False):
+        return True
     return args.model in models.transformers_cfg.MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS.keys()
 
 
@@ -365,31 +367,30 @@ def preproc_data(args, cache=None, save_cache=True):
 
     # Parse partitioning config and requires args
     print(f"Loading partitioned model and dataset...")
-    model_instance = None
-    dataset_keywords = {}
-    if is_huggingface_transformer(args):
-        if cache is None:
-            handler = models.AVAILABLE_MODELS.get(args.model)
-            model_instance = handler.get_normal_model_instance()
-            tokenizer = handler.tokenizer
-            config = handler.config
 
-            if save_cache:
-                cache = (model_instance, tokenizer, config)
-        else:
-            model_instance, tokenizer, config = cache
-
-        dataset_keywords['tokenizer'] = tokenizer
-        dataset_keywords['config'] = config
+    if cache is None:
+        handler = models.AVAILABLE_MODELS.get(args.model)
+        if save_cache:
+            cache = handler
+    else:
+        handler = cache
 
     parsed_config = parse_config.PartitioningConfigParser(
         args.model,
         args.rank,
         args.bs_train,
         args.bs_test,  # NOTE: changed name
-        model_instance=model_instance,
+        handler=handler,
         send_target_in_pipe=("_nonsep" in args.data_propagator),
         prefer_seq_sends=getattr(args, "prefer_seq_sends",True))
+
+    dataset_keywords = {}
+    extra_kw = handler.get_extra()
+    if isinstance(extra_kw, dict):
+        dataset_keywords.update(extra_kw)
+    # NOTE: it can be saved in cache
+    # delete to save mem, in contains original model
+    del handler
 
     pipe_config = parsed_config.pipe_config
     args.num_stages = parsed_config.num_stages
@@ -427,27 +428,23 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     # Parse partitioning config and requires args
     # TODO: some easier way to get original model and the config used during partitioning (WIP)
     print(f"Loading partitioned model and dataset...")
-    model_instance = None
-    dataset_keywords = {}
-    if is_huggingface_transformer(args):
-        handler = models.AVAILABLE_MODELS.get(args.model)
-        model_instance = handler.get_normal_model_instance()
-        tokenizer = handler.tokenizer
-        config = handler.config
-        del handler.config
-        del handler.tokenizer
-
-        dataset_keywords['tokenizer'] = tokenizer
-        dataset_keywords['config'] = config
+    handler = models.AVAILABLE_MODELS.get(args.model)
 
     parsed_config = parse_config.PartitioningConfigParser(
         args.model,
         args.rank,
         args.bs_train,
         args.bs_test,  # NOTE: changed name
-        model_instance=model_instance,
+        handler=handler,
         send_target_in_pipe=("_nonsep" in args.data_propagator),
         prefer_seq_sends=getattr(args, "prefer_seq_sends",True))
+
+    dataset_keywords = {}
+    extra_kw = handler.get_extra()
+    if isinstance(extra_kw, dict):
+        dataset_keywords.update(extra_kw)
+    # delete to save mem, in contains original model
+    del handler
 
     pipe_config = parsed_config.pipe_config
 
@@ -462,9 +459,6 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
 
     # NOTE: here its the sliced model.
     model = parsed_config.model
-    # del parsed_config.model  # NOTE: can delete the extra reference to possibly save mem.
-    del model_instance
-    del handler.normal_model_instance
 
     model.device = device
 
@@ -770,14 +764,11 @@ def get_optimizer_parameter_groups(args, partition):
     print(f"-I- optimized parameters count: {parameters_count}")
     return optimizer_grouped_parameters
 
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentsParser()
-
-    args = parser.parse_args()
-
-    (logger, train_dl, test_dl, is_first_partition, is_last_partition,
-     partition, statistics, train_dl_len, test_dl_len,
-     samplers) = prepare_pipeline(args)
+# Example
+# if __name__ == "__main__":
+#     import argparse
+#     parser = argparse.ArgumentsParser()
+#     args = parser.parse_args()
+#     (logger, train_dl, test_dl, is_first_partition, is_last_partition,
+#      partition, statistics, train_dl_len, test_dl_len,
+#      samplers) = prepare_pipeline(args)

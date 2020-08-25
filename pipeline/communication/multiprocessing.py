@@ -6,6 +6,7 @@ from collections import defaultdict
 
 import torch
 
+from models.parse_config import is_shared_parameter
 from .common_simple_comm import SimpleCommBase
 from .interface import FuturesHandlerBase
 
@@ -18,11 +19,6 @@ from .interface import FuturesHandlerBase
 # TODO: can do the tied weights via cloning the parameter and sending it to a different process on same GPU like mpi does.
 
 _COPY_INSTEAD_CLONE_WORKING = False
-
-
-def is_shared_parameter(tensor_scope):
-    # HACK. (can do it also at config)
-    return "Parameter" in tensor_scope
 
 
 class MultiprocessingCommunicationHandler(SimpleCommBase):
@@ -344,18 +340,19 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         return future
 
     def send_gradients(self, x, batch_idx):
-        b4 = len(x)
-        x_b4 = x
-        # x = list(filter_none(x))
-        x = list(filter(lambda t: t is not None, x))
-        after = len(x)
+        # b4 = len(x)
+        # x_b4 = x
+        # # x = list(filter_none(x))
+        # x = list(filter(lambda t: t is not None, x))
+        # after = len(x)
+        #
+        # if b4 != after:
+        #     for i, (name, r) in zip(x_b4, self.grad_send_items):
+        #         if i is None:
+        #             print(name, f"Computed a NONE GRADIENT in stage {self.stage}")
+        # NOTE: send x_b4
 
-        if b4 != after:
-            for i, (name, r) in zip(x_b4, self.grad_send_items):
-                if i is None:
-                    print(name, f"Computed a NONE GRADIENT in stage {self.stage}")
-
-        future = self.pool_send_grad.submit(self._send_tensors_p2p, x_b4,
+        future = self.pool_send_grad.submit(self._send_tensors_p2p, x,
                                             batch_idx, self.grad_send_items,
                                             True)
         return future

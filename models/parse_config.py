@@ -1,15 +1,18 @@
 from .models import AVAILABLE_MODELS
 
-from itertools import count
+from itertools import count, chain
 from collections import OrderedDict, defaultdict
+from .simple_partitioning_config import PipelineConfig
+from pprint import pprint
 
 
-def get_my_send_recv_ranks(pipe_config, stage, stage_to_rank_map=None, prefer_seq_sends=True):
+def get_my_send_recv_ranks(pipe_config: PipelineConfig, stage, stage_to_rank_map=None, prefer_seq_sends=True):
     def ranks_in_stage(given_stage):
         if stage_to_rank_map:
             return stage_to_rank_map[given_stage]
         else:
             return [given_stage]
+
     stages = pipe_config.stages
     receive_ranks = OrderedDict()
     send_ranks = defaultdict(list)
@@ -43,7 +46,7 @@ def get_my_send_recv_ranks(pipe_config, stage, stage_to_rank_map=None, prefer_se
                                 continue
                         send_ranks[tensor_name].extend(ranks_in_stage(j))
 
-    # Enusure the sort order is like config.
+    # Ensure the sort order is like config.
     send_ranks = OrderedDict(
         (k, send_ranks[k]) for k in stages[stage].outputs if k in send_ranks)
     receive_ranks = OrderedDict((k, receive_ranks[k])
@@ -53,7 +56,7 @@ def get_my_send_recv_ranks(pipe_config, stage, stage_to_rank_map=None, prefer_se
     return send_ranks, receive_ranks
 
 
-def get_stage_to_rank_map(pipe_config, stage_to_device_map=None, stateless_tied_same_process=False):
+def get_stage_to_rank_map(pipe_config: PipelineConfig, stage_to_device_map=None, stateless_tied_same_process=False):
     counter = count()
     # Create stage_to_rank_map
     # (1) normal
@@ -92,15 +95,16 @@ class PartitioningConfigParser:
                  rank,
                  bs_train,
                  bs_eval,
-                 model_instance=None,
+                 handler=None,
                  send_target_in_pipe=False,
                  stage_to_device_map=None,
                  stateless_tied_same_process=False,
                  prefer_seq_sends=True):
 
-        handler = AVAILABLE_MODELS.get(cfg)
         if handler is None:
-            raise ValueError(f"Model {cfg} not found. AVAILABLE_MODELS={AVAILABLE_MODELS.keys()}")
+            handler = AVAILABLE_MODELS.get(cfg)
+            if handler is None:
+                raise ValueError(f"Model {cfg} not found. AVAILABLE_MODELS={AVAILABLE_MODELS.keys()}")
         pipe_config = handler.get_pipe_config()
         model = handler.realize_stage_for_rank(batch_size=bs_train, my_rank=rank)
 
@@ -110,11 +114,16 @@ class PartitioningConfigParser:
         self.model = model
         self.num_stages = len(pipe_config.stages)
 
-        stage_to_rank_map = get_stage_to_rank_map(pipe_config, stage_to_device_map=stage_to_device_map, stateless_tied_same_process=stateless_tied_same_process)
+        stage_to_rank_map = get_stage_to_rank_map(pipe_config, stage_to_device_map=stage_to_device_map,
+                                                  stateless_tied_same_process=stateless_tied_same_process)
 
         self.send_ranks, self.receive_ranks = get_my_send_recv_ranks(
             pipe_config, self.stage, stage_to_rank_map=stage_to_rank_map, prefer_seq_sends=prefer_seq_sends)
-        
+
+        from pprint import pprint
+        pprint(f"Stage: {self.stage} send_ranks:", self.send_ranks)
+        pprint(f"Stage: {self.stage} receive_ranks:", self.receive_ranks)
+
         # Handle sending target in pipe. (deprecated)
         if send_target_in_pipe:
             self.target_tensor_names = pipe_config.model_outputs  # else None
@@ -145,6 +154,8 @@ class PartitioningConfigParser:
         # Grad requirements for output tensors (infer)
         self.outputs_req_grad = pipe_config.get_outputs_req_grad_for_stage(self.stage)
 
+        _check_shared_parameters(pipe_config)
+
     def comm_init_args(self):
         return (self.receive_ranks, self.send_ranks,
                 self.target_tensor_names, self.ranks_in_previous_stage,
@@ -174,3 +185,19 @@ class PartitioningConfigParser:
 # training_tensor_dtypes,
 # training_tensor_shapes,
 # eval_tensor_shapes
+def is_shared_parameter(tensor_scope):
+    # HACK. (can do it also at config)
+    return "Parameter" in tensor_scope
+
+
+def _check_shared_parameters(pipe_config: PipelineConfig):
+    shared = defaultdict(set)
+    for i, s in pipe_config.stages.items():
+        for n in chain(s.inputs, s.outputs):
+            if is_shared_parameter(n):
+                shared[i].add(n)
+
+    if shared:
+        pprint(f"Shared Parameters:", shared)
+
+    return shared
