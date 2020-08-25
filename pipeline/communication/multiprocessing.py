@@ -163,10 +163,12 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             with torch.cuda.stream(stream):
                 request_objects = []
                 if not is_activations:
-                    ranks_dict_items = reversed(ranks_dict_items)
+                    pass
+                    # ranks_dict_items = reversed(ranks_dict_items)
                 for (tensor_name, receive_ranks) in ranks_dict_items:
                     if not is_activations:
-                        receive_ranks = reversed(receive_ranks)
+                        pass
+                        # receive_ranks = reversed(receive_ranks)
                     for receive_rank in receive_ranks:
                         q = self.rcv_queues[self.rank][receive_rank]
                         # Only do for shared shared parameters FIXME
@@ -247,11 +249,13 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
 
                 with torch.no_grad():
                     if is_grad:
-                        x = reversed(x)
-                        ranks_dict_items = reversed(ranks_dict_items)
+                        pass
+                        # x = reversed(x)
+                        # ranks_dict_items = reversed(ranks_dict_items)
                     for tensor, (tensor_name, send_ranks) in zip(x, ranks_dict_items):
                         if is_grad:
-                            send_ranks = reversed(send_ranks)
+                            pass
+                            # send_ranks = reversed(send_ranks)
                         if isinstance(tensor, torch.nn.Parameter):
                             for send_rank in send_ranks:
                                 if tensor_name not in self.send_shared_parameters or send_rank not in \
@@ -289,8 +293,8 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
 
                                 # pass to next process only when the copy is done
                                 event = torch.cuda.Event(blocking=True)
-                                event.record(stream)
-                                # stream.record_event(event)
+                                # event.record(stream)
+                                stream.record_event(event)
                                 event.synchronize()
                                 out_q.put(buff)
 
