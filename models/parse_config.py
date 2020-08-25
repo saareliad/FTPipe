@@ -121,8 +121,8 @@ class PartitioningConfigParser:
             pipe_config, self.stage, stage_to_rank_map=stage_to_rank_map, prefer_seq_sends=prefer_seq_sends)
 
         from pprint import pprint
-        pprint(f"Stage: {self.stage} send_ranks:", self.send_ranks)
-        pprint(f"Stage: {self.stage} receive_ranks:", self.receive_ranks)
+        pprint(f"Stage: {self.stage} send_ranks: {self.send_ranks}")
+        pprint(f"Stage: {self.stage} receive_ranks: {self.receive_ranks}")
 
         # Handle sending target in pipe. (deprecated)
         if send_target_in_pipe:
@@ -198,6 +198,6 @@ def _check_shared_parameters(pipe_config: PipelineConfig):
                 shared[i].add(n)
 
     if shared:
-        pprint(f"Shared Parameters:", shared)
+        pprint(f"Shared Parameters: {shared}")
 
     return shared
