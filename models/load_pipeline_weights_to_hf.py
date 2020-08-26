@@ -103,7 +103,7 @@ class HFLoader(Loader):
         names = [base_checkoint_name(name_prefix, stage=i) for i in range(n_stages)]
         names = [os.path.join(partitions_saved_dir, name) for name in names]
         print(f"-V- loading from {names}")
-        loaded = [torch.load(name) for name in names]
+        loaded = [torch.load(name, map_location="cpu") for name in names]
         unified_state = dict()
         for d in loaded:
             unified_state.update(d)
