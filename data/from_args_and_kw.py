@@ -2,7 +2,7 @@ import os
 import torch
 from torch.utils.data import Dataset, DistributedSampler, DataLoader, Sampler
 from typing import List, Tuple
-
+from models.simple_partitioning_config import PipelineConfig
 from .hardcoded_dirs import DEFAULT_DATA_DIR
 
 
@@ -41,12 +41,10 @@ def get_just(args, pipe_config=None):
         else:
             just = None
     else:
-        pcs = pipe_config.stages[args.stage]
-        inputs_from_dl = [
-            i for i in pcs.inputs if i in pipe_config.model_inputs
-        ]
+        pipe_config: PipelineConfig
+        inputs_from_dl = pipe_config.get_dataset_inputs_for_stage(args.stage)
         just = inputs_from_dl
-        print(f"stage{args.stage}: infered inputs from config: {just}")
+        print(f"stage{args.stage}: inferred inputs from config: {just}")
 
     return just
 

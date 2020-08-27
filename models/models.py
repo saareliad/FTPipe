@@ -1,11 +1,9 @@
+import abc
 import importlib
 import os
-import abc
 from typing import Dict
-from .simple_partitioning_config import PipelineConfig
 
-from torch.nn import Module
-from typing import Tuple
+from .simple_partitioning_config import PipelineConfig
 
 _PARTITIONED_MODELS_PACKAGE = "models.partitioned"
 
@@ -51,7 +49,7 @@ class CommonModelHandler(abc.ABC):
             GET_PARTITIONS_ON_CPU = True
             create_pipeline_configuration = generated.create_pipeline_configuration
             config = create_pipeline_configuration(DEBUG=GET_PARTITIONS_ON_CPU)
-            pipe_config = PipelineConfig.fromDict(config)
+            pipe_config = PipelineConfig(config)
             self.pipe_config = pipe_config
         return self.pipe_config
 
@@ -68,8 +66,8 @@ class CommonModelHandler(abc.ABC):
         generated = self.get_generated_module()
         layerDict = generated.layerDict
         tensorDict = generated.tensorDict
-        depth = pipe_config.depth
-        blocks = pipe_config.basic_blocks
+        depth = pipe_config.d['depth']
+        blocks = pipe_config.d['basic_blocks']
         layers = layerDict(model_instance, depth=depth, basic_blocks=blocks)
         tensors = tensorDict(model_instance)
         return layers, tensors
@@ -82,7 +80,9 @@ class CommonModelHandler(abc.ABC):
         return a dict if there is something to return"""
         pass
 
+
 AVAILABLE_MODELS: Dict[str, CommonModelHandler] = {}
+
 
 def register_model(name, handler):
     global AVAILABLE_MODELS

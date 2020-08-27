@@ -8,53 +8,7 @@ import torch.distributed as dist
 from models.simple_partitioning_config import PipelineConfig
 from .buffer import make_buff
 from .interface import CommunicationHandlerBase, FuturesHandlerBase
-
-
-# TODO tags for tensors we send multiple times
-
-
-# FIXME: just use dict
-def tensor_tags_from_config(config,
-                            num_chunks=1,
-                            target_tensor_names=None,
-                            GRAD_UGLY_SHAMEFUL_NAME="_grad"):
-    # Note: same tags for all process
-
-    tensor_tags = {}
-    tensor_tag = 1
-
-    for i, stage in config.stages.items():
-        input_tensors = stage.inputs
-        output_tensors = stage.outputs
-        req_grad = stage.req_grad
-        outputs_req_grad = config.get_outputs_req_grad_for_stage(i)
-        # Create different tags for gradients
-        for name_post_addition in ["", GRAD_UGLY_SHAMEFUL_NAME]:
-            for input_tensor in input_tensors:
-                if input_tensor not in req_grad:
-                    assert input_tensor in config.model_inputs
-                    continue
-                input_tensor += name_post_addition
-                if input_tensor not in tensor_tags:
-                    tensor_tags[input_tensor] = tensor_tag
-                    tensor_tag += num_chunks
-
-            for output_tensor in output_tensors:
-                if output_tensor not in outputs_req_grad:
-                    assert output_tensor in config.model_outputs
-                    continue
-                output_tensor += name_post_addition
-                if output_tensor not in tensor_tags:
-                    tensor_tags[output_tensor] = tensor_tag
-                    tensor_tag += num_chunks
-
-    if target_tensor_names:
-        for target_tensor_name in sorted(target_tensor_names):
-            tensor_tags[target_tensor_name] = tensor_tag
-            tensor_tag += num_chunks
-
-    total_tags = len(tensor_tags)
-    return tensor_tags, total_tags
+from .tags import tensor_tags_from_config
 
 
 class SimpleCommBase(CommunicationHandlerBase, ABC):
@@ -83,6 +37,7 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
             device,
             GRAD_UGLY_SHAMEFUL_NAME="_grad",
             verbose=False):
+        super().__init__()
 
         # NOTE: Order is important, must call for send,recv ranks before in/out req grads.
         # TODO: original_req_grad somewhere.
@@ -91,7 +46,7 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
 
         # inputs/outputs are not part of send/recv ranks
         for to_del in [receive_ranks, send_ranks]:
-            for inout in [pipe_config.model_inputs, pipe_config.model_outputs]:
+            for inout in [pipe_config.d['model_inputs'], pipe_config.d['model_outputs']]:
                 for i in inout:
                     if i in to_del:
                         del to_del[i]
@@ -122,6 +77,7 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
             if not v:
                 self.tensors_names_with_no_grad.add(i)
 
+        # TODO: remove:
         # Assert intersection is empty
         A = set(outputs_req_grad.keys())
         B = set(req_grad.keys())
@@ -168,6 +124,7 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
         self.tensor_tags, self.TOTAL_TAGS = tag_info
 
         if target_tensor_names:
+            self.ranks_in_next_stage = ranks_in_next_stage
             self._register_target_tensor(target_tensor_names,
                                          ranks_in_previous_stage,
                                          ranks_in_next_stage)  # If needed.
@@ -537,7 +494,7 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
 class FuturesHandler(FuturesHandlerBase):
     """ This is mostly for MPI, where sent objects are problematic - currently not deleted automatically """
 
-    def __init__(self, pipe_config, is_first_partition, is_last_partition, stateless_tied,
+    def __init__(self, pipe_config: PipelineConfig, is_first_partition, is_last_partition, stateless_tied,
                  num_stages):
         super().__init__()
         # FIXME: this is ugly solution for freeing send buffers in tied weights trick. its a waste of memory.

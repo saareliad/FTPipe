@@ -2,36 +2,34 @@ import torch
 # from typing import Tuple, Any
 from .interface import PipelineDataPropagator
 import types
-
+from models.simple_partitioning_config import PipelineConfig
 
 # NOTE: outputing the batch for last partition. (trainer should handle)
 # TODO: allow flag to know if we send labels in pipeline.
 class AutomaticPipelinePropagator(PipelineDataPropagator):
     SENDING_LABELS_IN_PIPELINE = False
 
-    def __init__(self, device, is_last_partition, is_first_partition, stage,
-                 pipe_config):
+    def __init__(self, device, is_last_partition, is_first_partition, stage_id, pipe_config: PipelineConfig):
         super().__init__()
         self.device = device
 
-        pcs = pipe_config.stages[stage]
-        inputs_from_dl = [
-            i for i in pcs.inputs if i in pipe_config.model_inputs
-        ]
+        pcs = pipe_config.d['stages'][stage_id]
+        inputs_from_dl = pipe_config.get_dataset_inputs_for_stage(stage_id)
         self.inputs_from_dl = inputs_from_dl
         self.len_inputs_from_dl = len(inputs_from_dl)
 
-        num_total_inputs = len(pcs.inputs)
+        num_total_inputs = len(pcs['inputs'])
         if self.len_inputs_from_dl == num_total_inputs and not is_first_partition:
             raise NotImplementedError(
-                f"a non-first stage ({stage}) got all {num_total_inputs} inputs from dataloded, we currently assume it does not happen"
+                f"a non-first stage ({stage_id}) got all {num_total_inputs} inputs from dataloded, we currently assume it does not happen"
             )
 
         # Determine unpack_cls
         if is_last_partition:
             # Last partition
-            batch_dim = pipe_config.batch_dim
-            for i, is_batched in enumerate(pcs.is_batched):
+            batch_dim = pipe_config.d['batch_dim']
+            for i, is_batched in enumerate(pcs['inputs'].values()):
+                is_batched = is_batched['is_batched']
                 if is_batched:
                     break
             else:

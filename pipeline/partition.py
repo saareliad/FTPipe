@@ -88,6 +88,7 @@ class Partition(nn.Module):
             self.layers = nn.Sequential(*layers)
         elif isinstance(layers, nn.Module):
             self.layers = layers
+            self.layers.device = device
 
         if _REPLACE_INPLACE:
             if self._HAS_DUMMY_FORWARD or self._REQ_GRAD:
