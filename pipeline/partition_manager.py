@@ -103,7 +103,7 @@ class SinglePartitionManager:
 
         self.delay_at_batch = {}
 
-        self.futures_handler = self.comm_handler.futures_handler(
+        self.futures_handler = self.comm_handler.create_futures_handler(
             is_first_partition, is_last_partition, stateless_tied, num_stages)
 
         # Hints,May be set later.

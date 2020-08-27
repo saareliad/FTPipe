@@ -1,18 +1,18 @@
 import torch
 import torch.distributed as dist
+
 from .common_simple_comm import SimpleCommBase
-from functools import partial
 from .wrapper import TensorWrapper
 
-# filter_none = partial(filter, lambda t: t is not None)
 
+# filter_none = partial(filter, lambda t: t is not None)
+# TODO: maybe avoid reversed if problems
+# TODO: can avoid synchronized?
 
 class P2PCommunicationHandler(SimpleCommBase):
     def __init__(self, *args, **kw):
         kw["GRAD_UGLY_SHAMEFUL_NAME"] = "_grad"
         super().__init__(*args, **kw)
-        # self.tensor_comm_warper = TensorWrapper(dtypes=self.tensor_dtypes)
-        # self.tensor_comm_warper: TensorWrapper = None
         # self.tensor_comm_warper
 
     def set_tensor_dtypes(self, tensor_dtypes):
@@ -28,36 +28,26 @@ class P2PCommunicationHandler(SimpleCommBase):
     def init_process_group(self, *args, **kw):
         super().init_process_group(*args, **kw)
 
-    def _recv_tensors_p2p(self, x, batch_idx, ranks_dict_items, is_grad):
-        # FIXME: it is possible that we recived multiple gradients for the same tensor.
-
-        ix = iter(x)
-
+    def _recv_tensors_p2p(self, buffers, batch_idx, ranks_dict_items, is_grad):
+        ix = iter(buffers)
         with torch.no_grad():
             request_objects = []
-
             for (tensor_name, receive_ranks) in ranks_dict_items:
-
-                # if len(receive_ranks) > 1:
-                #     print(f"rank={self.rank}: recieving {tensor_name} from multiple ranks: {receive_ranks}")
-                # NOTE: accumulated in fix_after_recv
-
+                # it is possible that we received multiple gradients for the same tensor.
+                # accumulated in fix_after_recv
                 if is_grad:
                     receive_ranks = reversed(receive_ranks)
                 for receive_rank in receive_ranks:
                     tensor = next(ix)
-
                     tensor_tag = self.tensor_tags[tensor_name] + (self.TOTAL_TAGS * batch_idx)
                     if self.verbose:
                         self.logger.info(
                             f"rank={self.local_rank}: irecv, src={receive_rank}, tag={tensor_tag}, name={tensor_name}"
                         )
-
                     request_obj = dist.irecv(tensor,
                                              receive_rank,
                                              tag=tensor_tag)
                     request_objects.append(request_obj)
-
         return request_objects
 
     def recv_activations(self, x, batch_idx):
@@ -75,7 +65,7 @@ class P2PCommunicationHandler(SimpleCommBase):
                 tensor_tag = self.tensor_tags[tensor_name] + (self.TOTAL_TAGS * batch_idx)
                 if is_grad:
                     send_ranks = reversed(send_ranks)
-                
+
                 for send_rank in send_ranks:
                     if self.verbose:
                         self.logger.info(
@@ -101,22 +91,19 @@ class P2PCommunicationHandler(SimpleCommBase):
         return request_objects
 
     def send_activations(self, x, batch_idx):
-        return self._send_tensors_p2p(x, batch_idx, self.send_ranks.items(),
-                                      False)
+        return self._send_tensors_p2p(x, batch_idx, self.send_ranks.items(), False)
 
     def send_gradients(self, x, batch_idx):
-        b4 = len(x)
-        x_b4 = x
-        # x = list(filter_none(x))
-        x = list(filter(lambda t: t is not None, x))
-
-        after = len(x)
-
-        if b4 != after:
-            for i, (name,r) in zip(x_b4,self.grad_send_items):
-                if i is None:
-                    print(name, f"Computed a NONE GRADIENT in stage {self.stage}")
-
-        # FIXME: can't avoid sending None
+        # b4 = len(x)
+        # x_b4 = x
+        # # x = list(filter_none(x))
+        # x = list(filter(lambda t: t is not None, x))
+        # after = len(x)
+        #
+        # if b4 != after:
+        #     for i, (name,r) in zip(x_b4,self.grad_send_items):
+        #         if i is None:
+        #             self.logger.debug(name, f"Computed a NONE GRADIENT in stage {self.stage}")
+        #
+        # can't avoid sending None
         return self._send_tensors_p2p(x, batch_idx, self.grad_send_items, True)
-

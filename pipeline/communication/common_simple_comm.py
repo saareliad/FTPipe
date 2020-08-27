@@ -1,4 +1,5 @@
 import logging
+import warnings
 from abc import ABC
 from collections import OrderedDict
 
@@ -40,8 +41,6 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
         super().__init__()
 
         # NOTE: Order is important, must call for send,recv ranks before in/out req grads.
-        # TODO: original_req_grad somewhere.
-
         self.tensor_dtypes = None
 
         # inputs/outputs are not part of send/recv ranks
@@ -76,13 +75,6 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
             assert isinstance(v, bool), str((i, v))
             if not v:
                 self.tensors_names_with_no_grad.add(i)
-
-        # TODO: remove:
-        # Assert intersection is empty
-        A = set(outputs_req_grad.keys())
-        B = set(req_grad.keys())
-        intersection = A & B
-        assert not intersection, f"intersection: {intersection}, stage{self.stage}: outputs_req_grad: {outputs_req_grad}"
 
         # Optional
         if target_tensor_names:
@@ -148,8 +140,9 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
 
     def _register_target_tensor(self, target_tensor_names,
                                 ranks_in_previous_stage, ranks_in_next_stage):
-        # FIXME: Its inefficient to pass the targets all the way to the end.
-        # It can be replaced by propper data loaders and timing.
+        warnings.warn("Sending targets in pipeline is deprecated.")
+        #  Its inefficient to pass the targets all the way to the end, it is deprecated
+        # It can be replaced by popper data loaders and timing.
         # However, when using dataloaders are in different machines,
         # we need to test and assert that the loading and shuffling is done in the same order.
         for target_tensor_name in target_tensor_names:
@@ -174,9 +167,9 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
                 dtype = self.tensor_dtypes[tensor_name]
                 shape = self.tensor_shapes[tensor_name]
                 if not isinstance(dtype, torch.dtype):
-                    if isinstance(dtype, torch.Size):
-                        # TODO: handle torch.Size dtype
-                        # TODO: https://github.com/saareliad/pytorch_gpipe_private_fork/issues/45
+                    if isinstance(dtype, torch.Size) and shape is None:
+                        # HACK: https://github.com/saareliad/pytorch_gpipe_private_fork/issues/45
+                        # we expect shape to be torch.Size() because it will be converted to tensor.
                         raise NotImplementedError()
                     else:
                         _tmp = torch.tensor(dtype())
@@ -290,11 +283,13 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
         x = fwd_recv_buffers.wait_first()
         # print(f"rank {self.rank} get_data_forward, got {x}")
         x = self.fix_after_recv(x)
+        # FIXME used to avoid this clone
+        # FIXME used to avoid this clone
+        # FIXME used to avoid this clone
         x = [v.clone() for v in x]
 
         # pre-Start the next fwd Irecv:
         # TODO: decide if this is the best place to do it
-
         # This makes sure we don't overrun the buffer.
         # actually, many times we clone the input anyway inside the partition (for re-computation)
         # and if so, we can use less recv buffers for forward to save memory,
@@ -306,25 +301,21 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
         return x
 
     def pre_recv_gradients(self, batch_idx, num_batches, last_due_end):
-        """ can be used to start the recv before recomputation.
-        Call at the beggining of "backward"
-
-        TODO: what do we want for non recomputing partitions?
-        just call it.
+        """ Used to start the recv before recomputation.
+        Called at the beginning of "backward"
+        # TODO: can start it earlier, after the forward send
         """
         # Special case: Last batch with differnt size
         self._ensure_bwd_recv_buffers_size_set(last_due_end)
-
         bwd_recv_buffers = self.bwd_recv_buffers
         recved_all = False
         if bwd_recv_buffers.first_rcv_after_created or bwd_recv_buffers.max_buffers == 1:
             bwd_recv_buffers.recv_all(batch_idx, num_batches)
             recved_all = True
-
         self.recved_all = recved_all
 
     def wait_recv_gradients(self, *args):
-        # TODO: the *args are design mistake.
+        # the *args are due to inheritance and redunent here.
         # its due to multiprocessing comm handler
         g = self.bwd_recv_buffers.wait_first()
         g = self.fix_after_recv(g, True)
@@ -485,10 +476,11 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
                          create=True)
 
     # @staticmethod
-    def futures_handler(self, is_first_partition, is_last_partition, stateless_tied,
-                        num_stages):
-        return FuturesHandler(self.pipe_config, is_first_partition, is_last_partition,
-                              stateless_tied, num_stages)
+    def create_futures_handler(self, is_first_partition, is_last_partition, stateless_tied,
+                               num_stages):
+        self.futures_handler = FuturesHandler(self.pipe_config, is_first_partition, is_last_partition,
+                                              stateless_tied, num_stages)
+        return self.futures_handler
 
 
 class FuturesHandler(FuturesHandlerBase):

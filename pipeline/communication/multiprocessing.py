@@ -401,8 +401,9 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         g = self.fix_after_recv(g, True)
         return g
 
-    def futures_handler(self, is_first_partition, is_last_partition, stateless_tied, num_stages):
-        return FuturesHandler(is_first_partition, is_last_partition, stateless_tied, num_stages)
+    def create_futures_handler(self, is_first_partition, is_last_partition, stateless_tied, num_stages):
+        self.futures_handler = FuturesHandler(is_first_partition, is_last_partition, stateless_tied, num_stages)
+        return self.futures_handler
 
 
 class FuturesHandler(FuturesHandlerBase):

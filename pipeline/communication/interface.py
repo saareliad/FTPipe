@@ -108,6 +108,6 @@ class CommunicationHandlerBase(abc.ABC):
 
     @staticmethod
     @abc.abstractmethod
-    def futures_handler(*args, **kw) -> FuturesHandlerBase:
+    def create_futures_handler(*args, **kw) -> FuturesHandlerBase:
         pass
 
