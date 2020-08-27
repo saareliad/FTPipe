@@ -45,7 +45,7 @@ class PipelineConfig:
     def get_dtypes_for_stage(self, stage_id) -> Dict[str, torch.Size]:
         res = {name: inorout['dtype']
                for name, inorout in
-               chain(self.d['stages'][stage_id]['inputs'].items(), self.d['stages'][stage_id]['inputs'].items())}
+               chain(self.d['stages'][stage_id]['inputs'].items(), self.d['stages'][stage_id]['outputs'].items())}
         return res
 
     def change_batch(self, batch_size, for_replicated=True):
