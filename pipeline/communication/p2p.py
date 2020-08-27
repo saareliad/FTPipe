@@ -21,9 +21,13 @@ class P2PCommunicationHandler(SimpleCommBase):
             self.tensor_comm_warper = TensorWrapper(dtypes=self.tensor_dtypes)
 
     def fix_after_recv(self, x, is_grad=False):
-        names = self.grad_rcv_dict_without_extention.keys() if is_grad else self.receive_ranks.keys()
-        x = [self.tensor_comm_warper.convert_activations_recv(name, a) for name, a in zip(names, x)]
-        return super().fix_after_recv(x, is_grad=is_grad)
+        res = []
+        ix = iter(x)
+        recv_ranks = self.grad_rcv_dict_without_extention if is_grad else self.receive_ranks
+        for name, ranks in recv_ranks.items():
+            for _ in ranks:
+                res.append(self.tensor_comm_warper.convert_activations_recv(name, next(ix)))
+        return super().fix_after_recv(res, is_grad=is_grad)
 
     def init_process_group(self, *args, **kw):
         super().init_process_group(*args, **kw)
@@ -36,13 +40,14 @@ class P2PCommunicationHandler(SimpleCommBase):
                 # it is possible that we received multiple gradients for the same tensor.
                 # accumulated in fix_after_recv
                 if is_grad:
-                    receive_ranks = reversed(receive_ranks)
+                    pass
+                    # receive_ranks = reversed(receive_ranks)
                 for receive_rank in receive_ranks:
                     tensor = next(ix)
                     tensor_tag = self.tensor_tags[tensor_name] + (self.TOTAL_TAGS * batch_idx)
                     if self.verbose:
                         self.logger.info(
-                            f"rank={self.local_rank}: irecv, src={receive_rank}, tag={tensor_tag}, name={tensor_name}"
+                            f"rank={self.local_rank}: irecv, src={receive_rank}, tag={tensor_tag}, name={tensor_name}, buffshape={tensor.shape}"
                         )
                     request_obj = dist.irecv(tensor,
                                              receive_rank,
@@ -64,13 +69,10 @@ class P2PCommunicationHandler(SimpleCommBase):
                 tensor = tensor.detach()
                 tensor_tag = self.tensor_tags[tensor_name] + (self.TOTAL_TAGS * batch_idx)
                 if is_grad:
-                    send_ranks = reversed(send_ranks)
+                    pass
+                    # send_ranks = reversed(send_ranks)
 
                 for send_rank in send_ranks:
-                    if self.verbose:
-                        self.logger.info(
-                            f"rank={self.local_rank}: isend, dst={send_rank}, tag={tensor_tag}, name={tensor_name}"
-                        )
 
                     # NOTE valid accuracy used to crash with num_chunks > 1 when we synchronize here once
 
@@ -79,10 +81,15 @@ class P2PCommunicationHandler(SimpleCommBase):
                     else:
                         cname = tensor_name
                     tensor = self.tensor_comm_warper.convert_activations_send(cname, tensor)
+                    
+                    if self.verbose:
+                        self.logger.info(
+                            f"rank={self.local_rank}: isend, dst={send_rank}, tag={tensor_tag}, name={tensor_name}, shape={tensor.shape}"
+                        )
 
                     if not self.cpu:
-                        # HACK: synchronize.
-                        torch.cuda.synchronize(device=self.device)
+                        # FIXME: in MPI we must synchronize.
+                        torch.cuda.current_stream(self.device).synchronize()
 
                     request_obj = dist.isend(tensor.contiguous(),
                                              send_rank,
