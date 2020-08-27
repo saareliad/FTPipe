@@ -195,7 +195,7 @@ def get_separated_dataset(just, DATA_DIR, args, **dataset_keywords):
     preproc_device = dataset_keywords.get("preproc_device", "cpu")
 
     # Get cache names
-    name = f"t5_tfds_{args.mixture_or_task_name}"
+    name = f"t5_tfds_{args.mixture_or_task_name}_{args.max_seq_length}_{args.answer_max_seq_length}"
     small_cache = "_".join(just) if isinstance(just, list) else just
     big_cache = "FULL"
     ww = ['train', 'val']
