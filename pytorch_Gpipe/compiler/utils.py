@@ -1,6 +1,6 @@
 import torch
 from typing import List
-from pytorch_Gpipe.model_profiling import Node,NodeTypes
+from pytorch_Gpipe.model_profiling import Node,NodeTypes,Graph
 
 
 tab = "    "
@@ -74,3 +74,11 @@ def partitionOutputs(partition: List[Node],
 
     return [n for n in partition if isOutput(n)]
 
+def ensure_inputs_are_used(graph:Graph):
+    #ensure all model inputs belong to stages that actually use them
+    for n in graph.nodes:
+        if n.type != NodeTypes.IN:
+            continue
+        assert len(n.out_edges) > 0,"inputs must be used"
+
+        n.stage_id = min(n.out_edges,key=lambda u:u.stage_id).stage_id

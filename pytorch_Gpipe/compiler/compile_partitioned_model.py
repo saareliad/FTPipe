@@ -6,7 +6,7 @@ from .partition_forward_method import generate_forward_method
 from .partition_init_method import generate_init_method
 from .state_methods import get_state_methods, generate_partition_state_methods
 from .compile_modelParallel_module import create_model_parallel_module
-from .utils import pretty_format_obj
+from .utils import pretty_format_obj,ensure_inputs_are_used
 from typing import List, Tuple, Dict, Optional, Callable
 from collections import OrderedDict
 import inspect
@@ -42,6 +42,10 @@ def compile_partitioned_model(graph: Graph,
     output_file:
         optional path to the generated code. if None uses generated_{model_name}{numberOfPatitions}.py
     '''
+    
+    ensure_inputs_are_used(graph)
+
+
     layer_classes = {
         scope: type(layer)
         for layer, scope, _ in traverse_model(
