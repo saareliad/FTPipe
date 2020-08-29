@@ -462,11 +462,12 @@ def variableNameGenerator() -> Iterator[str]:
 
 def apply_input_propagation(stage_id:int,outputs:List[Node],inputs:List[Node])->Set[Node]:
     for i in inputs:
-        dsts = {o.stage_id for o in i.out_edges}
+        if i.type != NodeTypes.IN:
+            dsts = {o.stage_id for o in i.out_edges}
         
-        # if there is a later stage that uses the same input
-        # we will propagate it from here
-        if stage_id < max(dsts):
-            outputs.append(i)
+            # if there is a later stage that uses the same input
+            # we will propagate it from here
+            if stage_id < max(dsts):
+                outputs.append(i)
     
     return set(outputs)
