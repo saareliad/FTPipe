@@ -30,11 +30,16 @@ class TensorWrapper:
     def __init__(self, dtypes):
         self.send_dtype_map = TensorWrapper.make_send_dtype_map(dtypes)
         self.recv_dtype_map = TensorWrapper.make_recv_dtype_map(dtypes)
+        self.dtypes = dtypes
 
     def convert_activations_send(self, name: str, value):
         if isinstance(value, Tensor):
             return value  # NOTE: if we quantize sends change this
         elif value is None:
+            if self.dtypes[name] is not None:
+                raise NotImplementedError(f"expected to send dtype {self.dtypes[name]} for tensor {name} for got None instead")
+                # TODO: can also send fake tensor of zeros, its is probably the gradients.
+                # TODO: can do it by informing recver he has to accept None instead of tensor
             return None_tensor()
 
         # NOTE: this si quite redundant actually.

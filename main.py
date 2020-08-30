@@ -285,7 +285,7 @@ def mp_queue_matrix(world_size):
     for i in range(world_size):
         qs = []
         for j in range(world_size):
-            qs.append(mp.Queue() if i != j else None)
+            qs.append(mp.SimpleQueue() if i != j else None)
         queues.append(qs)
     return queues
 

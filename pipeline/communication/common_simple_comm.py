@@ -106,11 +106,11 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
                                 for i, v in self.receive_ranks.items()
                                 if i not in self.tensors_names_with_no_grad]
 
-        self.grad_rcv_dict_without_extention = dict(self.grad_rcv_items_without_extention)
-        self.grad_send_dict_without_extention = dict(self.grad_send_items_without_extention)
+        self.grad_rcv_dict_without_extention = OrderedDict(self.grad_rcv_items_without_extention)
+        self.grad_send_dict_without_extention = OrderedDict(self.grad_send_items_without_extention)
 
-        self.grad_send_dict = dict(self.grad_send_items)
-        self.grad_rcv_dict = dict(self.grad_rcv_items)
+        self.grad_send_dict = OrderedDict(self.grad_send_items)
+        self.grad_rcv_dict = OrderedDict(self.grad_rcv_items)
 
         tag_info = tensor_tags_from_config(pipe_config)
         self.tensor_tags, self.TOTAL_TAGS = tag_info

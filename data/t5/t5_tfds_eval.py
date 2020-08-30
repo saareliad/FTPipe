@@ -8,7 +8,7 @@ from transformers import T5ForConditionalGeneration
 import functools
 from .t5_squad import load_huggingface_checkpoint
 get_dataset = t5.models.hf_model.get_dataset
-
+from tqdm import tqdm
 
 class T5Evaluator:
     def __init__(self, args, model_dir, device, model: T5ForConditionalGeneration = None):
@@ -149,7 +149,7 @@ class T5Evaluator:
                 targets = cached_targets[task.name]
                 predictions = []
                 # TODO: attention_mask ?
-                for batch in ds:
+                for batch in tqdm(ds, desc="Evaluating"):
                     predicted_tokens = self._model.generate(
                         input_ids=self.to_tensor(batch["inputs"]), **generate_kwargs
                     )

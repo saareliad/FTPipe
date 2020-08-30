@@ -225,11 +225,10 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         return request_objects
 
     def recv_activations(self, x, batch_idx, is_last_batch):
-        return self._recv_tensors_p2p(batch_idx, self.receive_ranks.items(),
-                                      True)
+        return self._recv_tensors_p2p(batch_idx, self.activations_rcv_items, is_activations=True)
 
     def recv_gradients(self, x, batch_idx, is_last_batch):
-        return self._recv_tensors_p2p(batch_idx, self.grad_rcv_items, False)
+        return self._recv_tensors_p2p(batch_idx, self.grad_rcv_items, is_activations=False)
 
     def _send_tensors_p2p(self, x, batch_idx, ranks_dict_items, is_grad):
         try:

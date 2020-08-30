@@ -56,10 +56,10 @@ class P2PCommunicationHandler(SimpleCommBase):
         return request_objects
 
     def recv_activations(self, x, batch_idx):
-        return self._recv_tensors_p2p(x, batch_idx, self.receive_ranks.items(), False)
+        return self._recv_tensors_p2p(x, batch_idx, self.activations_rcv_items, is_grad=False)
 
     def recv_gradients(self, x, batch_idx):
-        return self._recv_tensors_p2p(x, batch_idx, self.grad_rcv_items, False)
+        return self._recv_tensors_p2p(x, batch_idx, self.grad_rcv_items, is_grad=True)
 
     def _send_tensors_p2p(self, x, batch_idx, ranks_dict_items, is_grad):
         with torch.no_grad():
