@@ -16,26 +16,24 @@
         }
     },
     "statistics": "squad_loss_per_batch",
-    "bs_train": 4,
-    "bs_test": 4,
+    "bs_train": 8,
+    "bs_test": 8,
     "num_data_workers": 10,
     "optimizer": {
         "type": "adafactor",
         "args": {
             "lr": 0.001,
             "weight_decay": 0,
-	    "beta1": 0.9,
-	    "scale_parameter": false,
+	    "scale_parameter": true,
 	    "relative_step": false
         }
     },
     "lr_scheduler": {
         "type": "get_constant_schedule_with_warmup",
         "preproc_args": {
-            "num_warmup_steps": "epochs_to_steps"
         },
         "args": {
-            "num_warmup_steps": 0,
+            "num_warmup_steps": 200,
             "last_epoch": -1
         }
     },
@@ -50,7 +48,7 @@
     "work_scheduler": "1F1B",
     "cudnn_benchmark": true,
     "max_buffers": 1,
-    "step_every": 2,
+    "step_every": 1,
     "keep_buffers_alive": false,
     "train_batches_limit": -1,
     "log_frequency": 200,
