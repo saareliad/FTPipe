@@ -8,7 +8,6 @@ from .compiler import compile_partitioned_model
 from .model_profiling import Graph, profile_network, GraphProfiler, trace_module, ExecTimes, NodeWeightFunction, EdgeWeightFunction
 from .model_profiling.infer_req_grad import infer_req_grad
 from .model_profiling.graph_executor import execute_graph
-from .pipeline import Pipeline, PipelineConfig, StageConfig, SyncBuffersMode
 from .utils import move_tensors
 
 __all__ = [
