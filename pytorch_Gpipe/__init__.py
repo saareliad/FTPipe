@@ -12,7 +12,7 @@ from .utils import move_tensors
 
 __all__ = [
     'pipe_model', 'profile_network', 'trace_module', 'partition_model',
-    'METIS_partition', 'Pipeline'
+    'METIS_partition'
 ]
 
 # TODO document everything. too many things have changed since last documantation pass
@@ -150,7 +150,7 @@ def pipe_model(model: nn.Module,
                               generate_explicit_del=generate_explicit_del,
                               generate_model_parallel=generate_model_parallel,
                               generate_activation_propagation=generate_activation_propagation)
-    print("generated code")
+    print("-I- generated code")
     return graph
 
 
@@ -164,7 +164,7 @@ def partition_model(model: nn.Module,
                     node_weight_function: Optional[NodeWeightFunction] = None,
                     edge_weight_function: Optional[EdgeWeightFunction] = None,
                     use_layers_only_graph: bool = True,
-                    recomputation: bool = False,
+                    recomputation: bool = True,
                     use_METIS:bool=False,
                     METIS_opt:Optional[Dict]=None,
                     acyclic_opt:Optional[Dict]=None,
@@ -254,7 +254,7 @@ def partition_model(model: nn.Module,
         use_layers_graph=use_layers_only_graph,
         **acyclic_opt)
 
-    print("partitioned model")
+    print("-I- partitioned model")
 
     return graph
 
@@ -321,10 +321,10 @@ def build_graph(model: nn.Module,
                          basic_blocks=basic_blocks)
 
     weights = None
-    print("graph built")
+    print("-I- graph built")
     if use_graph_profiler:
         print(
-            f"using graph profiler with op profiling = {profile_ops} save_memory_mode = {save_memory_mode}")
+            f"-I- using graph profiler with op profiling = {profile_ops} save_memory_mode = {save_memory_mode}")
 
         if save_memory_mode:
             model, args, kwargs = move_tensors((model, args, kwargs), 'cpu')
@@ -334,11 +334,11 @@ def build_graph(model: nn.Module,
                                  force_no_recomp_scopes=force_no_recomp_scopes,save_memory_mode=save_memory_mode)
         execute_graph(model, graph, model_args=args, model_kwargs=kwargs,
                       pre_hook=profiler.time_forward, post_hook=profiler.time_backward,enforce_out_of_place=True)
-        print(f"profiling mem {torch.cuda.max_memory_allocated()/1e9} GB")
+        print(f"-I- profiling mem {torch.cuda.max_memory_allocated()/1e9} GB")
         weights = profiler.get_weights()
     elif use_network_profiler:
         print(
-            f"using network profiler with save_memory_mode = {save_memory_mode}")
+            f"-I- using network profiler with save_memory_mode = {save_memory_mode}")
         assert not profile_ops, "op profiling is not supported in the network profiler"
         weights = profile_network(model, args, kwargs=kwargs,
                                   basic_blocks=basic_blocks,
@@ -348,10 +348,9 @@ def build_graph(model: nn.Module,
                                   save_memory_mode=save_memory_mode,
                                   force_no_recomp_scopes=force_no_recomp_scopes)
     if not (weights is None):
-        print("model profiled")
+        print("-I- model profiled")
         for n in graph.nodes:
             n.weight = weights.get(n.scope, ExecTimes(0, 0))
 
     infer_req_grad(graph,model,args=args,kwargs=kwargs)
-
     return graph

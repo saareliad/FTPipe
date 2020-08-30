@@ -6,6 +6,7 @@ from ..model_profiling import used_namespaces, Node, NodeTypes,Graph
 from ..utils import inplace_arithmetic_ops, r_arithmetic_ops,arithmetic_ops,logical_ops,conversion_ops,magics, tensor_creation_ops,unary_ops
 from .utils import sortedPartitionInputs,partitionOutputs
 import torch
+from importlib import import_module
 
 tab = '    '
 dtab = tab + tab
@@ -13,11 +14,6 @@ dtab = tab + tab
 __all__ = ['generate_forward_method']
 
 
-# TODO force out of place for nodes on partiton borders
-# the folowing will cause an error because when we detach we make x0 a leaf
-# while in the original model x0 was just an intermediary value
-# def forward(self,x0):
-    # x0+=1
 def generate_forward_method(stage_id:int,
         graph:Graph,
         partition_nodes: List[Node],
@@ -35,6 +31,7 @@ def generate_forward_method(stage_id:int,
     # function and layers are allocated temporary only if they have more than 1 use
 
     inputs = sortedPartitionInputs(partition_nodes)
+    enforce_out_of_place_for_partition_inputs(partition_nodes,inputs)
     i=0
     input_ids=[]
     input_sources=[]
@@ -459,6 +456,36 @@ def variableNameGenerator() -> Iterator[str]:
     return iter(f())
 
 
+def enforce_out_of_place_for_partition_inputs(partition: List[Node],partition_inputs:List[Node]):
+    # the folowing will cause an error because
+    # def forward(self,x0):
+        # x0+=1
+    # when we detach we make x0 a leaf
+    # while in the original model x0 was just an intermediary value
+    # the solution is to transform the operation into an out of place one x0 + 1
+    for n in partition:
+        if (n.type != NodeTypes.OP) or (n.value_type != torch.Tensor):
+            continue
+
+        op_path,idx = n.scope.rsplit("/", maxsplit=1)[1].rsplit("_",maxsplit=1)
+        namespace, func_name = op_path.split("::")
+
+        inplace_torch_function = ("torch" in namespace) and (func_name[-1] == '_')
+        inplace_tensor_function = (namespace == "Tensor") and (func_name[-1] == "_") and (not func_name.startswith("__"))
+        inplace_tensor_magic = (namespace == "Tensor") and (func_name in inplace_arithmetic_ops)
+
+        if inplace_tensor_magic or inplace_tensor_function or inplace_torch_function:
+            u = n.in_edges[0]
+            if not ((u.value_type is torch.Tensor) and(u.req_grad) and (u in partition_inputs)):
+                continue
+            if inplace_tensor_magic:
+                # function is an __imagic__
+                n.scope = n.scope.rsplit("/",maxsplit=1)[0]+f"/{namespace}::__{func_name[3:]}_{idx}"
+            #if we have the out of place version we use it instead
+            elif (namespace == "Tensor" and  hasattr(torch.Tensor,func_name[:-1])) or (namespace != "Tensor" and hasattr(import_module(namespace),func_name[:-1])):
+                # function torch.func_ or Tensor.func_
+                n.scope = n.scope.rsplit("/",maxsplit=1)[0]+f"/{namespace}::{func_name[:-1]}_{idx}"
+            
 
 def apply_input_propagation(stage_id:int,outputs:List[Node],inputs:List[Node])->Set[Node]:
     for i in inputs:

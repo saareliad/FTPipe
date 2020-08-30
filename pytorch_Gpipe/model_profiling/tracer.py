@@ -8,11 +8,12 @@ import warnings
 import torch
 import torch.nn as nn
 from torch import Tensor
+import torch.nn.functional as F
 from torch._overrides import get_overridable_functions
 
 from pytorch_Gpipe.utils import traverse_model
 from .control_flow_graph import Node, NodeTypes, Graph
-from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops,logical_ops, nested_map,print_call_site, tensor_creation_ops
+from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops,logical_ops, nested_map,get_call_site, tensor_creation_ops
 ##############################
 # Tracing Metadata
 ##############################
@@ -237,6 +238,8 @@ class TracedValue(object):
         self.node = Node(node_type, self.id, self.scope)
         NODES[self.id] = self.node
 
+        self.creation_site = get_call_site(__file__)
+        
     def set_data(self, data):
         assert isTracedValue(
             data), f"TracedValue expects a basic type got {type(data)} scope {self.scope}"
@@ -262,9 +265,21 @@ class TracedValue(object):
 
         # operation name
         func_name = func.__name__
-        namespace = FUNCTION_NAMESPACE[func].__name__
-        op = f"/{namespace}::{func_name}"
+        try:
+            namespace = FUNCTION_NAMESPACE[func].__name__
+        except KeyError as e:
+            # NOTE inplace operations are not registered as overridable but they still support __torch_function__
+            # so here we try and find the namespace explicitly
+            # first encounter was when tracing a torch.relu_
+            namespace = None
+            for m in [torch,F,torch.functional]:
+                if hasattr(m,func_name):
+                    namespace = m.__name__
+                    break
+            if namespace is None:
+                raise e
 
+        op = f"/{namespace}::{func_name}"
         # record the operation
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
         out = TracedValue(NodeTypes.OP, op)
@@ -326,7 +341,6 @@ class TracedValue(object):
         #TODO add general warning
         # show file name, actual line, operator
         # print(f"{self.scope}::__len__ is treated as constant")
-        # print_call_site(__file__)
         return len(self._data)
 
     @tracing_not_supported
@@ -614,13 +628,13 @@ class TracedLayer(nn.Module):
         self._terminal = terminal
 
     def forward(self, *args, **kwargs):
+        args, kwargs = record_args_and_kwargs(*args, **kwargs)
+
         global CURRENT_SCOPE
         if CURRENT_SCOPE == "":
             CURRENT_SCOPE = self._name
         else:
             CURRENT_SCOPE += f"/{self._name}"
-
-        args, kwargs = record_args_and_kwargs(*args, **kwargs)
 
         if self._terminal:
             # NOTE no need to set the creating operation

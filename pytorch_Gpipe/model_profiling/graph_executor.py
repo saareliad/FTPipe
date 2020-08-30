@@ -4,7 +4,7 @@ from functools import wraps
 from importlib import import_module
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from contextlib import nullcontext
-from torch import nn
+from torch import nn,Tensor
 from pytorch_Gpipe.model_profiling import (Graph, Node, NodeTypes,
                                            used_namespaces)
 from pytorch_Gpipe.utils import layerDict, tensorDict,force_out_of_place,inplace_arithmetic_ops
@@ -141,12 +141,33 @@ def create_container_construct(node, args, kwargs):
 
 
 def call_function(namespaces, node, args, kwargs, pre_hook, post_hook,enforce_out_of_place=True):
-    op_path = node.scope.rsplit("/", maxsplit=1)[1].rsplit("_",maxsplit=1)[0]
+    op_path,idx = node.scope.rsplit("/", maxsplit=1)[1].rsplit("_",maxsplit=1)
     namespace, func_name = op_path.split("::")
+
+    # if we enforce out of place convert inplace functions
+    # to their out of place counterparts
+    forced_out_of_place = enforce_out_of_place and node.type is NodeTypes.OP
+    if forced_out_of_place:
+        inplace_torch_function = ("torch" in namespace) and (func_name[-1] == '_')
+        inplace_tensor_function = (namespace == "Tensor") and (func_name[-1] == "_") and (not func_name.startswith("__"))
+        inplace_tensor_magic = (namespace == "Tensor") and (func_name in inplace_arithmetic_ops)
+        if inplace_tensor_magic or inplace_tensor_function or inplace_torch_function:
+            debug_str = f"converted {namespace}.{func_name} "
+            if inplace_tensor_magic:
+                # function is an __imagic__
+                out_of_place = "__"+func_name[3:]
+            else:
+                # function torch.func_ or Tensor.func_
+                out_of_place = func_name[:-1]
+
+            if (namespace == "Tensor" and hasattr(Tensor,out_of_place)) or (namespace != "Tensor" and hasattr(import_module(namespace),out_of_place)):
+                func_name = out_of_place
+   
+            debug_str += f"to {namespace}.{func_name}"
+
     # function call
     if namespace in namespaces:
-        namespace = import_module(namespace)
-        function = getattr(namespace, func_name)
+        function = getattr(import_module(namespace), func_name)
     else:
         if "__" not in func_name:
             function = getattr(type(args[0]), func_name)
@@ -156,16 +177,22 @@ def call_function(namespaces, node, args, kwargs, pre_hook, post_hook,enforce_ou
         else:
             assert len(kwargs) == 0, "no kwarg in magic method"
 
-            if enforce_out_of_place and (func_name in inplace_arithmetic_ops):
-                func_name ="__"+func_name[3:]
             if hasattr(operator, func_name):
                 function = getattr(operator, func_name)
             else:
                 function = getattr(type(args[0]), func_name)
 
+    if forced_out_of_place:
+        original_scope = node.scope
+        node.scope = node.scope.rsplit("/",maxsplit=1)[0]+f"/{namespace}::{func_name}_{idx}"
+
+
     args, kwargs = pre_hook(node, function, args, kwargs)
     output = function(*args, **kwargs)
     output = post_hook(node, function, args, kwargs, output)
+
+    if forced_out_of_place:
+        node.scope = original_scope
 
     return output
 

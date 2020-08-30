@@ -9,6 +9,7 @@ from contextlib import contextmanager
 import inspect
 import re
 import operator
+import os
 
 __all__ = ["traverse_model", "traverse_params_buffs",
            "layerDict", "tensorDict"]
@@ -304,13 +305,16 @@ tensor_creation_ops = {
     }
 
 
-def print_call_site(*ignored_files):
+def get_call_site(*ignored_files)->Optional[str]:
     ignored_files = (__file__,) + ignored_files
+    curdir = os.path.dirname(os.path.realpath(__file__)) 
     for f in inspect.stack():
         frameinfo=inspect.getframeinfo(f[0]) 
-        if (frameinfo.filename not in ignored_files):
-            print(frameinfo.filename+", line "+str(frameinfo.lineno)+"\n")
-            break
+        file_name = frameinfo.filename
+        if (file_name not in ignored_files) and (not file_name.startswith(curdir)) and (not "torch\\" in file_name):
+            return file_name+", line "+str(frameinfo.lineno)+"\n"
+    
+    return None
 
 
 

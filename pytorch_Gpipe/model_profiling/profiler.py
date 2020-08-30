@@ -1,7 +1,7 @@
 from collections import defaultdict
+from itertools import chain
 import torch
 from torch import Tensor
-import re
 from .tracer import NodeTypes
 from ..utils import detach_tensors, flatten, move_tensors, set_grad_mode, inplace_arithmetic_ops, ExecTimes,force_out_of_place
 
@@ -15,12 +15,12 @@ class GraphProfiler():
         assert n_iter > 0
         self.n_iter = n_iter + NUM_OUTLIERS
 
+        self.not_profiled = dict(fwd=list(),bwd=list())
+
         if force_no_recomp_scopes is None:
             self.force_no_recomp_scopes = lambda s: False
         else:
             self.force_no_recomp_scopes = force_no_recomp_scopes
-
-        self.torch_function_matcher = re.compile(r"torch|Tensor")
 
         self.profile_ops = profile_ops
         self.save_memory_mode = save_memory_mode
@@ -32,9 +32,7 @@ class GraphProfiler():
 
         with force_out_of_place(function):
             if self.should_profile(node, function, args, kwargs):
-                recomputation = self.recomputation and (
-                    not self.force_no_recomp_scopes(node.scope))
-
+                recomputation = self.recomputation and (not self.force_no_recomp_scopes(node.scope))
                 for _ in range(self.n_iter):
                     args, kwargs = detach_tensors((args, kwargs))
                     with torch.set_grad_enabled(not recomputation):
@@ -50,17 +48,15 @@ class GraphProfiler():
                 # NOTE we do not move the the inputs to the cpu
                 # because the graph executor stores them on the cpu anyway
                 # using save_memory_mode = True should be used with the model and initial inputs on the cpu
+            elif node.value_type is torch.Tensor:
+                self.not_profiled['fwd'].append(node)
 
-
-            # so we explicilty set grad to False to avoid inplace operations to leaf tensors
-            return set_grad_mode((args, kwargs), False)
+            return detach_tensors((args,kwargs))
 
     def time_backward(self, node, function, args, kwargs, output):
         with force_out_of_place(function):
             if self.should_profile(node, function, args, kwargs, output=output):
-                recomputation = not self.force_no_recomp_scopes(node.scope)
-                recomputation = recomputation and self.recomputation
-
+                recomputation = self.recomputation and (not self.force_no_recomp_scopes(node.scope))
                 if not recomputation:
                     self.backward_no_recomputation(node, function,
                                                 args, kwargs,
@@ -69,7 +65,8 @@ class GraphProfiler():
                     self.backward_recomputation(node, function,
                                                 args, kwargs,
                                                 output)
-
+            elif node.value_type is torch.Tensor:
+                self.not_profiled['bwd'].append(node)
             if self.save_memory_mode:
                 # NOTE we move the function and output to cpu
                 # in order to clear the gpu
@@ -77,8 +74,7 @@ class GraphProfiler():
                 # the graph executor saves the originals on the cpu
                 function, output = move_tensors((function, output), 'cpu')
 
-            # detach output from history and start recording again for future operations
-            return set_grad_mode(output, True)
+            return detach_tensors(output)
 
     def backward_no_recomputation(self, node, function, args, kwargs, output):
         for _ in range(self.n_iter):
@@ -196,14 +192,14 @@ class GraphProfiler():
             return False
 
         if node.type is NodeTypes.OP:
-            # we cannot profile inplace ops
-            op_path = node.scope.rsplit("/", maxsplit=1)[1].rsplit("_",maxsplit=1)[0]
+            op_path,idx = node.scope.rsplit("/", maxsplit=1)[1].rsplit("_",maxsplit=1)
             namespace, func_name = op_path.split("::")
 
-            inplace_torch_operation = (func_name[-1] == '_')
-            inplace_torch_operation &= (self.torch_function_matcher.match(namespace) is not None)
+            inplace_torch_function = ("torch" in namespace) and (func_name[-1] == '_')
+            inplace_tensor_function = (namespace == "Tensor") and (func_name[-1] == "_") and (not func_name.startswith("__"))
+            inplace_tensor_magic = (namespace == "Tensor") and (func_name in inplace_arithmetic_ops)
 
-            if func_name in inplace_arithmetic_ops or inplace_torch_operation:
+            if inplace_tensor_magic or inplace_tensor_function or inplace_torch_function:
                 return False
 
         if output is None:
@@ -218,3 +214,32 @@ class GraphProfiler():
         should_profile = len(output_w_grads) > 0 or len(output_w_grad_fn) > 0
 
         return should_profile
+
+
+    def _debug_stats(self):
+        not_fwd = set(self.not_profiled['fwd'])
+        not_bwd = set(self.not_profiled['bwd'])
+        not_fwd_not_bwd = not_bwd.intersection(not_fwd)
+        print(f"not fwd {len(not_fwd)}")
+        print(f"not bwd {len(not_bwd)}")
+        print(f"not fwd and bwd {len(not_fwd_not_bwd)}")
+
+        not_fwd_req_grad = sum(n.req_grad for n in not_fwd)
+        not_bwd_req_grad = sum(n.req_grad for n in not_bwd)
+
+        print(f"not fwd req_grad {not_fwd_req_grad}")
+        print(f"not bwd req_grad {not_bwd_req_grad}")
+
+
+        for n in chain(not_fwd,not_bwd):
+            assert not n.req_grad
+        
+        assert not_fwd == not_bwd
+        print()
+        for n in not_fwd:
+            print(n.scope)
+
+#NOTE we do not profile operations which do not require grad
+# we do not profile inplace operations (unless if we enforce out of place)
+# the result is that for things like computing masks we do not profile neither fwd not bwd
+# this is ok as those computations are not substantial 
