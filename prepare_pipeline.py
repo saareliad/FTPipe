@@ -22,7 +22,7 @@ from pipeline import dp_sim
 import optimizers.lr_scheduler
 
 # TODO: migrate to `register_xxx()` convention
-from pipeline.work_schedulers import AVAILABLE_WORK_SCHEDULERS
+from pipeline.work_schedulers import AVAILABLE_WORK_SCHEDULERS, get_work_scheduler
 from pipeline.training import AVAILABLE_TRAINERS
 from pipeline.data_propagation import AVAILABLE_PROPAGATORS
 from optimizers import AVAILBALE_OPTIMIZERS
@@ -417,7 +417,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         COMM_VERSION = 2
 
     # get work scheduler
-    work_scheduler = AVAILABLE_WORK_SCHEDULERS.get(args.work_scheduler)(args.step_every)
+    work_scheduler = get_work_scheduler(args)
 
     # set device
     local_rank_to_device_map = get_rank_to_device_map(args)
