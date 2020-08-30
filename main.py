@@ -503,7 +503,8 @@ def start_eval_checkpoint():
     with io.StringIO() as buf, redirect_stdout(buf):
         pprint(all_results)
         s = buf.getvalue()
-    with open("results/all_results.txt", "w+") as f:
+    
+    with open("results/all_results_{ars.out_filename}.txt", "w+") as f:
         f.write(s)
 
 

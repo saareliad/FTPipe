@@ -636,7 +636,7 @@ class SinglePartitionManager:
                                        num_batches,
                                        done_bwds=done_bwds)
                 if is_last_partition:
-                    futures_handler.after_backward(ro, done_fwds)
+                    futures_handler.after_backward(ro, done_bwds)
                 else:
                     futures_handler.after_forward(ro, done_fwds, True)
 
@@ -943,7 +943,7 @@ class GPipePartitionManager(SinglePartitionManager):
                 batch_idx_to_run = mark_bwd_start + micro_batch_to_run
 
                 ro = run_batch_backward(batch_idx_to_run, num_batches)
-                futures_handler.after_backward(ro, done_fwds)
+                futures_handler.after_backward(ro, done_bwds)
 
                 done_bwds += 1
 
