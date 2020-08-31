@@ -1,4 +1,3 @@
-from .analysis import get_fwds_between_first_and_seconds_step_for_stage
 from .schedulers import WorkScheduler, SeqScheduler, GpipeScheduler, FBScheduler, PipeDream1F1BScheduler, \
     VirtualStagesFBScheduler
 
