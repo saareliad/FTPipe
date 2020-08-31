@@ -272,7 +272,7 @@ class ParsePartitioningT5Opts(Parser):
             "n_partitions": 4,
             "bw": 12,
             "analysis_batch_size": 16,
-            "basic_blocks": ["T5Attention"]
+            # "basic_blocks": ["T5Attention"]
         }
 
     def _auto_file_name(self, args) -> str:
@@ -282,7 +282,10 @@ class ParsePartitioningT5Opts(Parser):
         model_str += f"_{tied}"
         if args.lmhead:
             model_str += "_lmhead"
+        
+        seq_len_str = f"s_{args.max_seq_length}_{args.answer_max_seq_length}"
 
+        model_str += seq_len_str
         output_file = f"{model_str}_{args.n_partitions}p_bw{bw_str}"
 
         if args.async_pipeline:
