@@ -1,9 +1,10 @@
-import torch
-from typing import Dict
 import os
+from typing import Dict
 
-from .t5_squad import get_inverted_encoder_attention_mask, _shift_right, get_attention_mask, load_huggingface_checkpoint
+import torch
+
 from data.utils import compute_and_cache
+from .t5_squad import get_inverted_encoder_attention_mask, _shift_right, get_attention_mask
 
 try:
     import t5
@@ -17,7 +18,8 @@ except Exception as e:
 from torch.utils.data import TensorDataset
 from data.datasets import CommonDatasetHandler, register_dataset
 from .t5_tfds_eval import T5Evaluator
-from experiments.experiments import  auto_file_name
+from experiments.experiments import auto_file_name
+
 
 def get_t5_available_tasks(verbose=False):
     if verbose:
@@ -33,12 +35,11 @@ def get_t5_sequence_length_from_args(args):
         "targets": args.answer_max_seq_length
     }
 
+
 def torch_tensor_dict_from_args(args,
                                 config,
                                 dataset_split=tfds.Split.TRAIN,
                                 preproc_device="cpu"):
-
-
     mixture_or_task_name = args.mixture_or_task_name
     sequence_length = get_t5_sequence_length_from_args(args)
     # preproc_device = getattr(args, "preproc_device")
@@ -190,7 +191,6 @@ def tokens_to_batches(dataset, batch_size, drop_remainder=False):
 
 
 def get_separated_dataset(just, DATA_DIR, args, **dataset_keywords):
-
     config = dataset_keywords['config']
     preproc_device = dataset_keywords.get("preproc_device", "cpu")
 
@@ -253,7 +253,6 @@ def get_separated_dataset(just, DATA_DIR, args, **dataset_keywords):
     return train_dataset, dev_dataset
 
 
-
 #
 # def evaluate_tfds_checkpoint(args, cp_number):
 #     hugg, tokenizer = load_huggingface_checkpoint(args, cp_number)
@@ -277,11 +276,11 @@ def evaluate_t5_tfds(args, cp_number, device="cpu"):
     # generate_kwargs['max_length'] = args.answer_max_length
     evaluator = T5Evaluator(args, model_dir=model_dir, device=device, model=None)
     results = evaluator.eval(mixture_or_task_name=args.mixture_or_task_name,
-                   sequence_length=get_t5_sequence_length_from_args(args),
-                   batch_size=batch_size, checkpoint_steps=cp_number, split="validation",
-                   summary_dir=None,
-                   **generate_kwargs
-                   )
+                             sequence_length=get_t5_sequence_length_from_args(args),
+                             batch_size=batch_size, checkpoint_steps=cp_number, split="validation",
+                             summary_dir=None,
+                             **generate_kwargs
+                             )
     return results
 
 
