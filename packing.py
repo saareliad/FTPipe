@@ -17,6 +17,13 @@ from torch.utils.data import Sampler
 # https://github.com/tensorflow/mesh/blob/897511d0e91f99dde83c8e5350bbe9bfdc973d1d/mesh_tensorflow/transformer/transformer_layers.py#L371
 # https://github.com/tensorflow/mesh/blob/897511d0e91f99dde83c8e5350bbe9bfdc973d1d/mesh_tensorflow/transformer/transformer_layers.py#L454
 # I'm not sure how leacking is prevented.
+#
+###### continue #########
+# attention_mask_same_segment
+# https://github.com/tensorflow/mesh/blob/4db643b62a781cd22a87b4e52148664941f9ea29/mesh_tensorflow/layers.py#L1813
+# (BUT IT IS UNUSED IN THE PROJECT)
+
+
 
 
 # Option 2: variable length

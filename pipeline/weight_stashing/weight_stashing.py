@@ -1,10 +1,19 @@
-import types
-import torch
-from collections import OrderedDict
-
 import os
+import types
+from collections import OrderedDict
+from enum import Enum, auto
+
+import torch
+
 rank = int(os.environ.get('OMPI_COMM_WORLD_RANK', 0))
 
+
+class CachePolicy(Enum):
+    EVERY_BATCH = auto()
+    STEP_EVERY = auto()
+
+
+# TODO: can analyze when doing gap aware is possible
 
 class WeightStasher:
     """ Helper calss to handle weight stashing
@@ -18,10 +27,11 @@ class WeightStasher:
         Post backward pass:
             # back to true weights
 
-    # TODO: look to pipedream implementation and udnerstand if they did something special with the weight decay.
-    # TODO: think about batch norm, and simillar "dangerous" layers.
+    # TODO: look to pipedream implementation and understand if they did something special with the weight decay.
+    # TODO: think about batch norm, and similar "dangerous" layers.
 
     """
+
     def __init__(self,
                  optimizer,
                  step_every=1,
@@ -38,27 +48,43 @@ class WeightStasher:
         self.is_problematic = False
         self.has_weight_predictor = has_weight_predictor
         self.using_clone_weight_predictor = using_clone_weight_predictor
-        # TODO: reduce redundent stashing for micro batches.
 
         self.true_weights_storage = true_weights_storage
+        # TODO: reduce redundant stashing for micro batches. (check do simply at init...)
 
-    def set_problematic(self, forward=True, policy='EVERY_BATCH'):
+    def set_problematic(self, stage, num_stages, forward=True, policy: CachePolicy = CachePolicy.EVERY_BATCH):
+
         self.is_problematic = True
-        # POLICIES = {'CHANGE', 'EVERY_BATCH'}
         se = self.step_every
-        if policy == 'CHANGE':
+        depth = num_stages - stage - 1
+        if policy == CachePolicy.STEP_EVERY:
+            if se >= num_stages or se >= depth:
+                def get_micro_batch(self, batch_index):
+                    true_mb = batch_index % se
+                    if true_mb <= stage + (se - num_stages):
+                        return true_mb  # staleness 0
+                    else:
+                        return true_mb - (stage + (se - num_stages) + 1)  # staleness 1
 
-            def get_micro_batch(self, batch_index):
-                # TODO: can do a more "fine grained condition"
-                # saves computation for earlier partitions:
-                # L - num partitions
-                # roundtrip = 2*L - 1
-                # min(initial_forwards, roundtrip) + (step.every - 1)
-                if batch_index <= se:
-                    return batch_index
-                return (batch_index + 1) % se
-        elif policy == 'EVERY_BATCH':
+                    # TODO: can do a more "fine grained condition"
+                    # saves computation for earlier partitions:
+                    # L - num partitions
+                    # roundtrip = 2*L - 1
+                    # min(initial_forwards, roundtrip) + (step.every - 1)
+                    # if batch_index <= se:
+                    #     return batch_index
+                    # return (batch_index + 1) % se
+            else:
+                # TODO: not so sure
+                return  # no change
+                # def get_micro_batch(self, batch_index):
+                #     return batch_index % se
+            # else:
+            #     warnings.warn(f"Did not implement better caching so setting EVERY_BATCH caching weight stashing policy instead of STEP_EVERY for stage {stage}")
+            #     return self.set_problematic(stage,num_stages,forward=forward,policy=CachePolicy.EVERY_BATCH)
+            #     # raise NotImplementedError()
 
+        elif policy == CachePolicy.EVERY_BATCH:
             def get_micro_batch(self, batch_index):
                 # return 0  # TODO: this can be improved, but I have problems with the dirty...
                 return batch_index if batch_index < se else 0
@@ -69,13 +95,9 @@ class WeightStasher:
             self.get_micro_batch_forward = types.MethodType(
                 get_micro_batch, self)
         else:
-            self.get_micro_batch_backward = types.MethodType(
-                get_micro_batch, self)
+            raise NotImplementedError()
 
     def get_micro_batch_forward(self, batch_index):
-        return batch_index % self.step_every
-
-    def get_micro_batch_backward(self, batch_index):
         return batch_index % self.step_every
 
     def mark_stashed_as_dirty(self):
@@ -84,9 +106,9 @@ class WeightStasher:
 
     # TODO: this may cause the problem with aggregation.
     def _create_current_cloned_buff(self):
-        # TODO: we can completly avoid the clone for clone weight prediction.
+        # TODO: we can completely avoid the clone for clone weight prediction.
         # becasue, we
-        # (1) first clone() for weight preiction,
+        # (1) first clone() for weight prediction,
         # (2) then stash the cloned weight.
         if self.using_clone_weight_predictor:
             with torch.no_grad():
@@ -109,8 +131,8 @@ class WeightStasher:
         """
         if expected_updates > 0:
 
-            # HACK: we use the same buffer for differnt micro batches!
-            # we can do it because we don't step on stashed wieghts.
+            # HACK: we use the same buffer for different micro batches!
+            # we can do it because we don't step on stashed weights.
             micro_batch = self.get_micro_batch_forward(batch_index)
             buff = self.theta_buffer.get(batch_index -
                                          1, None) if micro_batch > 0 else None
@@ -122,7 +144,7 @@ class WeightStasher:
                 if (self.dirty_mark[batch_index -
                                     1]) and not self.has_weight_predictor:
                     s = f"Attemted to use dirty buff as stash: rank:\
-                        {rank} b:{batch_index}, mb:{micro_batch}, prev b:{batch_index-1} \
+                        {rank} b:{batch_index}, mb:{micro_batch}, prev b:{batch_index - 1} \
                           expected_updates:{expected_updates}"
 
                     raise RuntimeError(s)
@@ -148,7 +170,7 @@ class WeightStasher:
 
     def pop_and_load_stashed_params(self, batch_index):
         """
-        Changed weight back to stashed wieghts.
+        Changed weight back to stashed weights.
         pops the stashed weights from memory.
 
         (used before backward)

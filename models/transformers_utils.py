@@ -22,6 +22,7 @@ def pretrained_model_config_and_tokenizer(
         do_lower_case: bool = False,
         cache_dir: str = "",
         stateless_tied=False,
+        do_resize_token_embedding=True,
         explicitly_set_dict={},
         **config_kw
 ):
@@ -49,7 +50,8 @@ def pretrained_model_config_and_tokenizer(
         cache_dir=cache_dir if cache_dir else None,
         use_cdn=use_cdn)
 
-    resize_token_embeddings(model, tokenizer)
+    if do_resize_token_embedding:
+        resize_token_embeddings(model, tokenizer)
 
     if stateless_tied:
         model_to_resize = model.module if hasattr(model, 'module') else model

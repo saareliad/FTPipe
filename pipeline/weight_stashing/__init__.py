@@ -1,1 +1,1 @@
-from .weight_stashing import WeightStasher
+from .weight_stashing import WeightStasher, CachePolicy

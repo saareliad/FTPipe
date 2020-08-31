@@ -1,35 +1,32 @@
-import torch
-from tqdm import tqdm
-from torch import Tensor
 import logging
+import types
+
+import torch
+from torch import Tensor
+from tqdm import tqdm
+
 from . import CommunicationHandlerBase
+from .data_propagation import PipelineDataPropagator
+from .gap_aware import GapAwareBase
+from .partition import (GPipePartition, GPipeFirstPartition,
+                        GPipeLastPartition)
 from .partition import (Partition, LastPartition, FirstPartition,
                         PartitionWithoutRecomputation,
                         )
-
-from .partition import (GPipePartition, GPipeFirstPartition,
-                        GPipeLastPartition)
-
 from .partition import get_buffers_for_ddp_sync
 from .training.interface import PartitionedTrainer  # , GradNormStepper
-from .data_propagation import PipelineDataPropagator
-from .weight_prediction.interface import WeightPredictor
-from .gap_aware import GapAwareBase
-from .work_schedulers import WorkScheduler, get_fwds_between_first_and_seconds_step_for_stage
-from .weight_stashing import WeightStasher
-import types
 from .true_weights_storage import TrueWeightsStorage
+from .weight_prediction.interface import WeightPredictor
+from .weight_stashing import WeightStasher, CachePolicy
+from .work_schedulers import WorkScheduler
 
 DEBUG_FAKE_DRAW = False
 
-# For mp:
-# TODO: problem when sharing weights (sending nn.Parameters)
-# TODO: with weight prediction, with weight stashing.
-
+# TODO: multiprocessing: problem when sharing weights (sending nn.Parameters),
+# TODO: weight prediction + weight stashing + step_every + cache (aggmsnag, no aggmsnag)
+# TODO: gap aware + step_every >1
 
 class SinglePartitionManager:
-    PROBLEMATIC_POLICY = 'SAME'
-
     def __init__(self,
                  stage,
                  num_stages,
@@ -79,14 +76,6 @@ class SinglePartitionManager:
                 self.buffers_to_sync = get_buffers_for_ddp_sync(
                     partition.layers)
 
-        fwds, is_problematic = get_fwds_between_first_and_seconds_step_for_stage(
-            self.work_scheduler, self.stage, self.num_stages, num_batches=390)
-        self.is_problematic = is_problematic
-        if is_problematic:
-            print(
-                f"-V- Patching problematic batches {fwds} for stage {self.stage}"
-            )
-
         # Initialize buffers
         self.comm_handler.init_buffers()
 
@@ -133,7 +122,7 @@ class SinglePartitionManager:
             self.partition = partition_cls(partition,
                                            device,
                                            to_device=TO_DEVICE,
-                                           req_grad=req_grad,)
+                                           req_grad=req_grad, )
         else:
             # Partition without recomputation
             if is_last_partition:
@@ -143,7 +132,7 @@ class SinglePartitionManager:
                     device,
                     to_device=TO_DEVICE,
                     req_grad=req_grad,
-                    )
+                )
             elif is_first_partition:
                 partition_cls = PartitionWithoutRecomputation
                 self.partition = partition_cls(
@@ -152,7 +141,7 @@ class SinglePartitionManager:
                     to_device=TO_DEVICE,
                     _REQ_GRAD=False,
                     req_grad=req_grad,
-                    )
+                )
             else:
                 partition_cls = PartitionWithoutRecomputation
                 self.partition = partition_cls(
@@ -161,7 +150,7 @@ class SinglePartitionManager:
                     to_device=TO_DEVICE,
                     _REQ_GRAD=True,
                     req_grad=req_grad,
-                    )
+                )
         if is_mp:
             # We do the clone ourself.
             # if hasattr(partition_cls, "_CLONE_INPUTS"):
@@ -219,7 +208,7 @@ class SinglePartitionManager:
             self.dl_iter = dl_iter
         else:
             self.dl_iter = iter(dataloader)
-        
+
             # FOR DEBUG
             if fake_draw and debug_run_limit > 0 and (debug_run_limit < len(dataloader)):
                 fake_draw = len(dataloader) - debug_run_limit
@@ -238,20 +227,23 @@ class SinglePartitionManager:
 
     def set_gap_aware(self, gap_aware):
         self.gap_aware = gap_aware
+        if self.step_every > 1:
+            raise NotImplementedError("deprecated, work in progress")
 
     def set_weight_stasher(self, weight_stasher: WeightStasher):
         assert (weight_stasher is not None)
         if self.is_last_partition:
             raise NotImplementedError()
 
-        if self.is_problematic:  # FIXME FIXME FIXME
-            if self.PROBLEMATIC_POLICY == 'SAME':
-                if self.weight_predictor is None:
-                    weight_stasher.set_problematic(forward=True,
-                                                   policy='CHANGE')
-                else:
-                    weight_stasher.set_problematic(forward=True,
-                                                   policy='EVERY_BATCH')
+        if self.step_every > 1 and not self.is_last_partition:
+            if self.weight_stasher.has_weight_predictor or self.weight_predictor is not None:
+                # TODO: this can work for msnag which does not do aggregation...
+                policy = CachePolicy.EVERY_BATCH
+            else:
+                policy = CachePolicy.STEP_EVERY
+
+            self.weight_stasher.set_problematic(stage=self.stage, num_stages=self.num_stages, forward=True,
+                                                policy=policy)
 
         self.weight_stasher = weight_stasher
 
@@ -324,19 +316,18 @@ class SinglePartitionManager:
             Feature:
                 - Pre load Y to last partition if possible
         """
+        # preload stuff from dataloader.
+        preload_input_partition, preload_input_to_outside_loss = self.data_propagator.preload_from_dataloader(
+            getattr(self, "dl_iter", None))
+
         partition = self.partition
         is_training = partition.training
-        if is_training:
-            expected_staleness = self.expected_staleness(batch_idx, done_bwds)
-            self.delay_at_batch[batch_idx] = expected_staleness
-
-        # TODO: preload stuff from dataloader.
-        preload_input_partition, preload_input_to_outside_loss = self.data_propagator.preload_from_dataloader(getattr(self, "dl_iter", None))
-
         # Do the forward pass with optionals
         # optional (1): Weight Prediction
         # optional (2): Weight Stashing
         if is_training:
+            expected_staleness = self.expected_staleness(batch_idx, done_bwds)
+            self.delay_at_batch[batch_idx] = expected_staleness
             weight_predictor = self.weight_predictor
             weight_stasher = self.weight_stasher
             if weight_predictor is not None:
@@ -532,15 +523,17 @@ class SinglePartitionManager:
 
             if self.gap_aware:
                 # Get delay and modify gradients.
-                if self.is_problematic:  # FIXME FIXME FIXME
-                    # Take the maximal delay
-                    mb = self.get_micro_batch(batch_idx)
-                    delay = max([
-                        self.delay_at_batch.pop(batch_idx - i)
-                        for i in range(0, mb + 1)
-                    ])
-                else:
-                    delay = self.delay_at_batch.pop(batch_idx)
+                if self.step_every > 1:
+                    raise NotImplementedError()
+                    # TODO:
+                    # NOTE: used to try the following, it did not work.
+                    #     # Take the maximal delay
+                    #     mb = self.get_micro_batch(batch_idx)
+                    #     delay = max([
+                    #         self.delay_at_batch.pop(batch_idx - i)
+                    #         for i in range(0, mb + 1)
+                    #     ])
+                delay = self.delay_at_batch.pop(batch_idx)
 
                 # Modify gradients
                 # TODO: return the gap.
@@ -548,7 +541,6 @@ class SinglePartitionManager:
                 trainer.apply_gap_aware(real_theta=real_theta,
                                         delay=delay,
                                         stashed_theta=stashed_theta)
-
             if weight_stasher:
                 # Mark previously stashed weights as dirty
                 weight_stasher.mark_stashed_as_dirty()
@@ -592,7 +584,7 @@ class SinglePartitionManager:
             b_tqdm = tqdm(range(num_batches), desc="Eval")
         else:
             b_tqdm = range(num_batches)
- 
+
         for done_fwds in b_tqdm:
             ro = run_batch_forward(done_fwds, num_batches)
             futures_handler.after_forward(ro, done_fwds, False)
@@ -666,8 +658,6 @@ class SinglePartitionManager:
 # GPIPE
 #################
 class GPipePartitionManager(SinglePartitionManager):
-    PROBLEMATIC_POLICY = "None"
-
     def __init__(self, *args, **kw):
         # NOTE: we changed partition type choice
         super().__init__(*args, **kw)
@@ -735,7 +725,8 @@ class GPipePartitionManager(SinglePartitionManager):
 
         partition.is_last_micro_batch = is_last_micro_batch
 
-        preload_input_partition, preload_input_to_outside_loss = self.data_propagator.preload_from_dataloader(getattr(self, "dl_iter", None))
+        preload_input_partition, preload_input_to_outside_loss = self.data_propagator.preload_from_dataloader(
+            getattr(self, "dl_iter", None))
 
         request_objects, x, ctx = self.forward_pass_and_send(
             batch_idx, num_batches, preload_input_partition)
@@ -920,7 +911,7 @@ class GPipePartitionManager(SinglePartitionManager):
         if is_last_partition:
             b_tqdm = tqdm(range(num_batches), desc="Train")
             b_tqdm_it = iter(b_tqdm)
-        
+
         while done_bwds < num_batches:
             # Act according to some policy
             action_is_fwd = work_scheduler(stage, num_stages, num_batches,
@@ -955,6 +946,3 @@ class GPipePartitionManager(SinglePartitionManager):
         if not self.trainer.PER_STEP_SCHEDULER:
             self.lr_scheduler.step()
         futures_handler.clean_train()
-
-
-
