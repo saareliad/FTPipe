@@ -128,15 +128,19 @@ def run_analysis(sample,
         return d
 
     def get_seq_no_recomp_no_comm_times():
-        seq_times = profile_execution(
-            sample,
-            config,
-            n_iter + 1,
-            recomputation=False,
-            bw_GBps=bw_GBps,  # don't care
-            async_pipeline=False,  # don't care
-            add_comm_times_to_balance=add_comm_times_to_balance,  # don't care
-            stages_on_same_gpu=stages_on_same_gpu)  # don't care
+        try:
+            seq_times = profile_execution(
+                sample,
+                config,
+                n_iter + 1,
+                recomputation=False,
+                bw_GBps=bw_GBps,  # don't care
+                async_pipeline=False,  # don't care
+                add_comm_times_to_balance=add_comm_times_to_balance,  # don't care
+                stages_on_same_gpu=stages_on_same_gpu)  # don't care
+        except Exception as e:
+            print("-E- failed at get_seq_no_recomp_no_comm_times, known issue")
+            raise e
         return seq_times
 
     def get_comm_vol_str(comm_volume_stats):
@@ -594,7 +598,7 @@ def profile_execution(model_inputs,
                     outputs = (outputs, )
 
                 # outputs
-                stage_outputs = outputs
+                # stage_outputs = outputs
                 stage_outputs_sent_to = []
 
                 for o, t in zip(partition_config[idx]['outputs'], outputs):
