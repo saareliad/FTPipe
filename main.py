@@ -1,22 +1,22 @@
 import argparse
+import io
 import os
+import time
+from contextlib import redirect_stdout
+from pprint import pprint
+
 import numpy as np
 import torch
-import time
-from pprint import pprint
-import io
-from contextlib import redirect_stdout
-
-from pipeline.util import get_world_size
-from data import add_dataset_argument
-
-from configs.parse_json_config import parse_json_config
-from train import training_loop
-from experiments import save_experiment, load_experiment_for_update
-from prepare_pipeline import prepare_pipeline, preproc_data
 import torch.multiprocessing as mp
 
+from configs.parse_json_config import parse_json_config
+from data import add_dataset_argument
+from experiments import save_experiment, load_experiment_for_update
 from models import AVAILABLE_MODELS
+from pipeline.util import get_world_size
+from prepare_pipeline import prepare_pipeline, preproc_data
+from train import training_loop
+
 
 # TODO: support multiple servers,
 # TODO heterogenous servers
@@ -45,14 +45,14 @@ def parse_distributed_cli(parser):
         type=int,
         default=1,
         help="Maximal Number of async recv buffers. "
-        "With 1: it actually means the recv is sync.(default=2 for best performance)."
+             "With 1: it actually means the recv is sync.(default=2 for best performance)."
     )
 
     parser.add_argument("--keep_buffers_alive",
                         action="store_true",
                         default=False,
                         help="Keep forward buffers for both train and eval "
-                        "instead of dynamically creating them every iteration")
+                             "instead of dynamically creating them every iteration")
 
 
 def parse_multiprocessing_cli(parser):
@@ -195,7 +195,7 @@ def parse_cli():
         help="Print extra statistics every given number of batches")
 
     parser.add_argument("--data_propagator", default="auto", help="Data propagation inside the pipeline")
-    
+
     parser.add_argument(
         "--no_recomputation",
         action="store_true",
@@ -295,7 +295,6 @@ def mp_recv_queue_per_tensor(args_model, world_size, ushn="_grad"):
     # FIXME FIXME: this whole thing did not assume nested tuples...
     handler = AVAILABLE_MODELS.get(args_model)
     pc = handler.get_pipe_config()
-
 
     d = {}
     for i, s in pc.stages.items():
@@ -463,7 +462,7 @@ def start_preproc():
     args.world_size = args.nprocs  # HACK
     cache = None
     for rank in range(args.world_size):
-        print(f"-I- preprocessing data for rank {rank}/{args.world_size-1} (word size is {args.world_size})...")
+        print(f"-I- preprocessing data for rank {rank}/{args.world_size - 1} (word size is {args.world_size})...")
         local_rank = rank
         args.rank = rank
         args.local_rank = local_rank
@@ -498,13 +497,13 @@ def start_eval_checkpoint():
             all_results[cp_number] = squad_result
 
     pprint(all_results)
-    
+
     # Also write to file
     with io.StringIO() as buf, redirect_stdout(buf):
         pprint(all_results)
         s = buf.getvalue()
-    
-    with open("results/all_results_{ars.out_filename}.txt", "w+") as f:
+
+    with open(f"results/all_results_{args.out_filename}.txt", "w+") as f:
         f.write(s)
 
 
