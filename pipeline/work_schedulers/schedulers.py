@@ -147,3 +147,34 @@ class GpipeScheduler(WorkScheduler):
         bwd_batch_idx = done_bwds // num_micro_batches
 
         return fwd_batch_idx == bwd_batch_idx
+
+
+class Synchronous1F1BScheduler(WorkScheduler):
+    """ "1f1b-gpipe.
+        First scheduler I implemented in simulation 1.5 years ago...
+    """
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        assert hasattr(self, "step_every")
+
+    def __call__(self, stage, num_stages, num_batches, done_fwds, done_bwds):
+        # NOTE: num_batches is number of batches
+        num_micro_batches = self.step_every
+
+        # Supports shorter "last batch"
+        # User responsibility to check that
+        # (1) last_batch_size % (normal_batch_size // step_every) == 0
+        # (2) normal_batch_size % step_every == 0
+        if done_fwds == num_batches:
+            return False
+        fwd_batch_idx = done_fwds // num_micro_batches
+        bwd_batch_idx = done_bwds // num_micro_batches
+
+        if fwd_batch_idx == bwd_batch_idx:
+            # do 1F1B with micro batches, no staleness
+            # Last stage
+            if stage == num_stages - 1:
+                return True
+            return stage == num_stages - 1 or (done_fwds - done_bwds < num_stages - stage)
+        else:
+            return False  # wait for backward (synchronous)

@@ -1,11 +1,12 @@
 from .schedulers import WorkScheduler, SeqScheduler, GpipeScheduler, FBScheduler, PipeDream1F1BScheduler, \
-    VirtualStagesFBScheduler
+    VirtualStagesFBScheduler, Synchronous1F1BScheduler
 
 AVAILABLE_WORK_SCHEDULERS = {"1f1b": FBScheduler,
                              "virtual_stages_1f1b": VirtualStagesFBScheduler,
                              "seq": SeqScheduler,
                              "gpipe": GpipeScheduler,
-                             "pipedream": PipeDream1F1BScheduler}
+                             "pipedream": PipeDream1F1BScheduler,
+                             "sync_1f1b": Synchronous1F1BScheduler}
 
 
 def get_work_scheduler(args) -> WorkScheduler:
