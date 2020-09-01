@@ -277,7 +277,6 @@ def bert_p8():
     os.makedirs(OUT_DIR, exist_ok=True)
     
     # use_network_profiler
-    # use_METIS
     # disable_op_profiling
     new = dict(objective=["stage_time"], basic_blocks=["BertSelfAttention"])
     squad_stuff = dict(max_seq_length=[384],
@@ -318,9 +317,8 @@ def bert_p8_METIS():
     os.makedirs(OUT_DIR, exist_ok=True)
     
     # use_network_profiler
-    # use_METIS
     # disable_op_profiling
-    new = dict(use_METIS=[""], basic_blocks=["BertSelfAttention"])
+    new = dict(partitioning_method=["METIS"], basic_blocks=["BertSelfAttention"])
     squad_stuff = dict(max_seq_length=[384],
                        doc_strid=[128],
                        threads=[60],
@@ -359,7 +357,6 @@ def bert_p4():
     os.makedirs(OUT_DIR, exist_ok=True)
     
     # use_network_profiler
-    # use_METIS
     # disable_op_profiling
     new = dict(objective=["stage_time"], basic_blocks=["BertSelfAttention"])
     squad_stuff = dict(max_seq_length=[384],
@@ -402,7 +399,6 @@ def bert_p4_edge_cut():
     os.makedirs(OUT_DIR, exist_ok=True)
     
     # use_network_profiler
-    # use_METIS
     # disable_op_profiling
     new = dict(objective=["edge_cut"], basic_blocks=["BertSelfAttention"])
     squad_stuff = dict(max_seq_length=[384],

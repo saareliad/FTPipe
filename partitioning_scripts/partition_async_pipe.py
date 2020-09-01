@@ -1,4 +1,5 @@
 import sys
+
 sys.path.append("../")
 import torch
 from collections import namedtuple
@@ -7,7 +8,8 @@ import functools
 import pickle
 import os
 
-from pytorch_Gpipe import trace_module, Graph, GraphProfiler, execute_graph, ExecTimes, acyclic_partition, infer_req_grad, compile_partitioned_model, METIS_partition, profile_network
+from pytorch_Gpipe import trace_module, Graph, GraphProfiler, execute_graph, ExecTimes, acyclic_partition, \
+    infer_req_grad, compile_partitioned_model, METIS_partition, profile_network
 from pytorch_Gpipe.model_profiling import Node
 from pytorch_Gpipe.utils import move_tensors
 
@@ -15,21 +17,20 @@ FullExecTimes = namedtuple('FullExecTimes', 'recomputation no_recomputation')
 
 
 def partition_async_pipe(
-    cmd_args,
-    model,
-    batch_dim: int = 0,
-    args: tuple = None,
-    kwargs: Dict = None,
-    node_weight_function=None,
-    edge_weight_function=None,
-    # CACHE
-    profiles_cache_name="",
-    overwrite_profiles_cache=False,
-)->Graph:
-
+        cmd_args,
+        model,
+        batch_dim: int = 0,
+        args: tuple = None,
+        kwargs: Dict = None,
+        node_weight_function=None,
+        edge_weight_function=None,
+        # CACHE
+        profiles_cache_name="",
+        overwrite_profiles_cache=False,
+) -> Graph:
     allowed_mistakes = 0
     # HACK: allow mistakes for multilevel and acyclic...
-    if not cmd_args.use_METIS:
+    if not cmd_args.partitioning_method == "METIS":
         allowed_mistakes += 2
 
     if args is None:
@@ -81,20 +82,25 @@ def partition_async_pipe(
             else:
                 n.weight = weights[n].recomputation
 
-        if not cmd_args.use_METIS:
-            acyclic_partition(model,graph,
+        if cmd_args.partitioning_method == "ACYCLIC":
+            acyclic_partition(model, graph,
                               cmd_args.n_partitions,
                               node_weight_function=evaluator,
                               edge_weight_function=evaluator,
                               use_layers_graph=True,
                               **cmd_args.acyclic_opt)
-        else:
+        elif cmd_args.partitioning_method == "METIS":
             METIS_partition(graph,
                             cmd_args.n_partitions,
                             node_weight_function=evaluator,
                             edge_weight_function=evaluator,
                             use_layers_graph=True,
                             **cmd_args.METIS_opt)
+        elif cmd_args.partitioning_method == "2DBIN":
+            raise NotImplementedError()
+        else:
+            raise NotImplementedError()
+
         n_runs += 1
 
         # Load last partition last stage scopes
@@ -161,8 +167,8 @@ def full_profile(graph: Graph, model: torch.nn.Module, args: tuple,
                 n_iter=cmd_args.n_iter,
                 profile_ops=not cmd_args.disable_op_profiling,
                 force_no_recomp_scopes=None,
-                save_memory_mode = cmd_args.save_memory_mode,
-                )
+                save_memory_mode=cmd_args.save_memory_mode,
+            )
             execute_graph(model,
                           graph,
                           model_args=args,

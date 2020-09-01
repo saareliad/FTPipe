@@ -106,7 +106,7 @@ def main(cmd_args:Namespace,model_args:Dict,partitioner:Partitioner,override_dic
                             n_iter=cmd_args.n_iter,
                             recomputation=not cmd_args.no_recomputation,
                             save_memory_mode=cmd_args.save_memory_mode,
-                            use_METIS=cmd_args.use_METIS,
+                            partitioning_method=cmd_args.partitioning_method,
                             acyclic_opt=cmd_args.acyclic_opt,
                             METIS_opt=cmd_args.METIS_opt,
                             force_no_recomp_scopes=cmd_args.force_no_recomputation_scopes_fn,

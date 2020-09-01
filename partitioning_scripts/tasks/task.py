@@ -1,15 +1,19 @@
-from argparse import Namespace
-from typing import Dict, List, Tuple
-from pytorch_Gpipe.model_partitioning.acyclic_partitioning import Objective, META_ALGORITH,Constraint
-
 import argparse
-import torch
-from abc import ABC,abstractmethod
+from abc import ABC, abstractmethod
+from argparse import Namespace
 from gettext import gettext
-class Parser(argparse.ArgumentParser,ABC):
+from typing import Dict
+
+import torch
+
+from pytorch_Gpipe.model_partitioning.acyclic_partitioning import Objective, META_ALGORITH, Constraint
+
+
+class Parser(argparse.ArgumentParser, ABC):
     """ArgumentParser for partitoning tasks"""
-    def __init__(self,*args,**kwargs):
-        super().__init__(*args,**kwargs)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         model_args = self.add_argument_group("model_args")
         self._add_model_args(model_args)
 
@@ -38,23 +42,23 @@ class Parser(argparse.ArgumentParser,ABC):
         self.set_defaults(**self._default_values())
 
     @abstractmethod
-    def _add_model_args(self,group):
+    def _add_model_args(self, group):
         """add cmd args required for building the model that will be partitioned"""
 
     @abstractmethod
-    def _add_data_args(self,group):
+    def _add_data_args(self, group):
         """add cmd args required for providing input samples for partitinoing"""
 
     def _add_analysis_args(self, group):
         analysis_mode = group.add_mutually_exclusive_group()
         analysis_mode.add_argument('--no_analysis',
-                            action='store_true',
-                            default=False,
-                            help="disable partition analysis")
+                                   action='store_true',
+                                   default=False,
+                                   help="disable partition analysis")
         analysis_mode.add_argument('--analysis_only',
-                    action='store_true',
-                    default=False,
-                    help="run only analysis for partitioned model")
+                                   action='store_true',
+                                   default=False,
+                                   help="run only analysis for partitioned model")
         group.add_argument(
             "--analysis_batch_size",
             default=32,
@@ -68,13 +72,13 @@ class Parser(argparse.ArgumentParser,ABC):
             default=12,
             help=
             "data transfer rate between gpus in GBps (Gigabytes per second)")
-        
+
         group.add_argument("--bwd_to_fwd_ratio",
-                            type=float,
-                            default=-1,
-                            help="bwd to fwd ratio for heuristics")
+                           type=float,
+                           default=-1,
+                           help="bwd to fwd ratio for heuristics")
         group.add_argument(
-            "--auto_infer_node_bwd_to_fwd_ratio", 
+            "--auto_infer_node_bwd_to_fwd_ratio",
             action='store_true',
             default=False,
             help=
@@ -82,14 +86,14 @@ class Parser(argparse.ArgumentParser,ABC):
         )
 
         group.add_argument(
-            "--penalize_non_tensors", 
+            "--penalize_non_tensors",
             action='store_true',
             default=False,
             help=
             "penalize edges with non tensor outputs by default no penalties are applied"
-        )        
+        )
         group.add_argument(
-            "--weight_mult_factor", 
+            "--weight_mult_factor",
             type=float,
             default=1e4,
             help=
@@ -97,18 +101,18 @@ class Parser(argparse.ArgumentParser,ABC):
         )
 
         group.add_argument(
-            "--edge_penalty", 
+            "--edge_penalty",
             type=float,
             default=1e4,
             help=
             "multipicative penalty for edges if `penalize_non_tensors` is set"
-        )        
+        )
 
     def _add_partitioning_args(self, group):
         group.add_argument('-b',
-                            '--partitioning_batch_size',
-                            type=int,
-                            default=128)
+                           '--partitioning_batch_size',
+                           type=int,
+                           default=128)
         group.add_argument('-p', '--n_partitions', type=int, default=4)
         group.add_argument('-o', '--output_file', default='')
         group.add_argument(
@@ -128,7 +132,7 @@ class Parser(argparse.ArgumentParser,ABC):
             default=10000,
             type=int,
             help="the depth in which we will partition the model")
-        group.add_argument('--basic_blocks', nargs='*',default=[])
+        group.add_argument('--basic_blocks', nargs='*', default=[])
         group.add_argument(
             "--use_network_profiler",
             default=False,
@@ -141,13 +145,7 @@ class Parser(argparse.ArgumentParser,ABC):
             default=False,
             action="store_true",
             help="weheter to not profile ops when using the GraphProfiler")
-        group.add_argument(
-            "--use_METIS",
-            default=False,
-            action="store_true",
-            help=
-            "wether to use METIS partitioning instead of the acyclic partitioner"
-        )
+        group.add_argument("--partitioning_method", choices=["ACYCLIC", "METIS", "2DBIN"], default="ACYCLIC")
         group.add_argument(
             "--generate_model_parallel",
             action="store_true",
@@ -167,37 +165,40 @@ class Parser(argparse.ArgumentParser,ABC):
         )
 
         group.add_argument("-a",
-                            "--async_pipeline",
-                            default=False,
-                            action="store_true",
-                            help="Do analysis for async pipeline")
+                           "--async_pipeline",
+                           default=False,
+                           action="store_true",
+                           help="Do analysis for async pipeline")
         group.add_argument("--dot",
-                            default=False,
-                            action="store_true",
-                            help="Save and plot it using graphviz")
+                           default=False,
+                           action="store_true",
+                           help="Save and plot it using graphviz")
 
         group.add_argument(
             "--save_memory_mode",
             default=False,
             action="store_true",
             help="Save memory during profiling by storing everything on cpu," +
-            " but sending each layer to GPU before the profiling.")
+                 " but sending each layer to GPU before the profiling.")
 
-        group.add_argument("--force_no_recomputation_scopes",nargs="*",default=[])
+        group.add_argument("--force_no_recomputation_scopes", nargs="*", default=[])
 
-        group.add_argument("-c", "--profiles_cache_name", default="", type=str, help="Profile cache to use in case of multiple runs")
+        group.add_argument("-c", "--profiles_cache_name", default="", type=str,
+                           help="Profile cache to use in case of multiple runs")
 
-        group.add_argument("--overwrite_profiles_cache", action="store_true", default=False, help="overwrite profile cache")
+        group.add_argument("--overwrite_profiles_cache", action="store_true", default=False,
+                           help="overwrite profile cache")
 
-    #TODO should use sub parsers as those 2 groups are mutaully exclusive
-    #also reveales intent better --use_METIS metis_args... or  --use_ACYCLIC acyclic_args...
-    def _add_METIS_args(self,group):
-        group.add_argument("--metis_attempts",type=int,default=1000,help="number of attempts for running the METIS partitioning algorithm")
-        group.add_argument("--metis_verbose_on_error",action="store_true",default=False,help="wether to print the cause of the error")
+    # TODO should use sub parsers as those 2 groups are mutaully exclusive
+    def _add_METIS_args(self, group):
+        group.add_argument("--metis_attempts", type=int, default=1000,
+                           help="number of attempts for running the METIS partitioning algorithm")
+        group.add_argument("--metis_verbose_on_error", action="store_true", default=False,
+                           help="wether to print the cause of the error")
         group.add_argument("--metis_seed",
-                                required=False,
-                                type=int,
-                                help="Random seed for Metis algorithm")
+                           required=False,
+                           type=int,
+                           help="Random seed for Metis algorithm")
         group.add_argument(
             '--metis_compress',
             default=False,
@@ -241,15 +242,15 @@ class Parser(argparse.ArgumentParser,ABC):
             # see http://glaros.dtc.umn.edu/gkhome/metis/metis/faq"
         )
 
-    def _add_acyclic_args(self,group):
+    def _add_acyclic_args(self, group):
         group.add_argument("--epsilon",
-                          default=0.1,
-                          type=float,
-                          help="imbalance factor")
+                           default=0.1,
+                           type=float,
+                           help="imbalance factor")
         group.add_argument("--rounds",
-                          default=10,
-                          type=int,
-                          help="number of optimization rounds default is 10")
+                           default=10,
+                           type=int,
+                           help="number of optimization rounds default is 10")
         group.add_argument(
             "--allocated_seconds",
             default=20,
@@ -263,19 +264,19 @@ class Parser(argparse.ArgumentParser,ABC):
             default=False,
             help="wether to use multilevel partitioning algorithm")
         group.add_argument("--objective",
-                          choices=["edge_cut", "stage_time"],
-                          default="edge_cut",
-                          help="partitioning optimization objective")
+                           choices=["edge_cut", "stage_time"],
+                           default="edge_cut",
+                           help="partitioning optimization objective")
         group.add_argument("--constraint",
-                          choices=["time","memory"],
-                          default="time",
-                          help="partitioning constraint")
+                           choices=["time", "memory"],
+                           default="time",
+                           help="partitioning constraint")
         group.add_argument("--maximum_constraint_value",
-                          required=False,
-                          type=float,
-                          default=None,
-                          help=
-                          "maximum constraint value a single stage can have,for example for memory constraint this is the maximum number of parameters a stage can have")
+                           required=False,
+                           type=float,
+                           default=None,
+                           help=
+                           "maximum constraint value a single stage can have,for example for memory constraint this is the maximum number of parameters a stage can have")
 
     def _extra(self, group):
         """add any extra cmd args which are task specific"""
@@ -284,10 +285,10 @@ class Parser(argparse.ArgumentParser,ABC):
         """ provide default cmd args values"""
         return dict()
 
-    def _post_parse(self,args,argv):
+    def _post_parse(self, args, argv):
         """handler for parsing unkonwn cmd args
         """
-        #NOTE currently the use case is mainly for megatron in order to pass arguments to their parser
+        # NOTE currently the use case is mainly for megatron in order to pass arguments to their parser
 
         # taken from argparse.ArgumentParser.parse_args
         if argv:
@@ -295,12 +296,12 @@ class Parser(argparse.ArgumentParser,ABC):
             self.error(msg % ' '.join(argv))
         return args
 
-    def _auto_file_name(self,args)->str:
+    def _auto_file_name(self, args) -> str:
         """ provide a file name if args.output_file was not specified"""
         return ""
 
-    def parse_args(self,args=None, namespace=None)->Namespace:
-        args,extra = super().parse_known_args(args, namespace)
+    def parse_args(self, args=None, namespace=None) -> Namespace:
+        args, extra = super().parse_known_args(args, namespace)
         args.acyclic_opt = self._acyclic_opts_dict_from_parsed_args(args)
         args.METIS_opt = self._metis_opts_dict_from_parsed_args(args)
 
@@ -312,11 +313,10 @@ class Parser(argparse.ArgumentParser,ABC):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         args.device = device
 
-        args.force_no_recomputation_scopes_fn = lambda scope: any(s in scope for s in args.force_no_recomputation_scopes)
+        args.force_no_recomputation_scopes_fn = lambda scope: any(
+            s in scope for s in args.force_no_recomputation_scopes)
 
-        return self._post_parse(args,extra)
-
-    
+        return self._post_parse(args, extra)
 
     @staticmethod
     def _acyclic_opts_dict_from_parsed_args(args):
@@ -331,7 +331,7 @@ class Parser(argparse.ArgumentParser,ABC):
             meta_algorithm = META_ALGORITH.MULTI_LEVEL
         else:
             meta_algorithm = META_ALGORITH.SINGLE_LEVEL
-        
+
         if args.constraint == "time":
             constraint = Constraint.TIME
         else:
@@ -344,9 +344,9 @@ class Parser(argparse.ArgumentParser,ABC):
             "meta_algorithm": meta_algorithm,
             "objective": objective,
             "constraint": constraint,
-            "maximum_constraint_value":args.maximum_constraint_value
+            "maximum_constraint_value": args.maximum_constraint_value
         }
-    
+
     @staticmethod
     def _metis_opts_dict_from_parsed_args(args):
         """ build metis options """
@@ -374,8 +374,8 @@ class Parser(argparse.ArgumentParser,ABC):
         # We can set to None to get the default
         # See : https://github.com/networkx/networkx-metis/blob/master/nxmetis/enums.py
         METIS_opt = {
-            'verbose_on_error':getattr(args,'metis_verbose_on_error',False),
-            'attempts':getattr(args,"metis_attempts",1000),
+            'verbose_on_error': getattr(args, 'metis_verbose_on_error', False),
+            'attempts': getattr(args, "metis_attempts", 1000),
             'seed': getattr(args, "metis_seed", None),
             'nseps': getattr(args, "nseps", None),
             'niter': getattr(args, "metis_niter", None),
@@ -391,29 +391,26 @@ class Parser(argparse.ArgumentParser,ABC):
 
         return METIS_opt
 
-    
-
 
 class Partitioner(ABC):
 
-    def __init__(self,args) -> None:
+    def __init__(self, args) -> None:
         return None
 
     @property
     @abstractmethod
-    def batch_dim(self)->int:
-        pass
-    
-    @abstractmethod
-    def get_model(self,args)->torch.nn.Module:
-        pass
-    
-    @abstractmethod
-    def get_input(self,args,analysis=False):
+    def batch_dim(self) -> int:
         pass
 
-    
-    #TODO maybe we want to always register operator.is and operator.is_not as untraced
+    @abstractmethod
+    def get_model(self, args) -> torch.nn.Module:
+        pass
+
+    @abstractmethod
+    def get_input(self, args, analysis=False):
+        pass
+
+    # TODO maybe we want to always register operator.is and operator.is_not as untraced
     def register_functions(self):
         """ register explicit_traced/untraced_functions
         
@@ -421,13 +418,12 @@ class Partitioner(ABC):
 
         then it should be done here
         """
-        
-    
-    def update_analysis_kwargs(self,args,config,analysis_kwargs:Dict)->Dict:
+
+    def update_analysis_kwargs(self, args, config, analysis_kwargs: Dict) -> Dict:
         """enable modifications of the analysis_kwargs which are passed to run_analysis
         for example set stages_on_same_gpu for gpt2 stateless
         """
         return analysis_kwargs
 
-    def post_partitioning(self,args,graph,analysis_result,summary):
+    def post_partitioning(self, args, graph, analysis_result, summary):
         """ hook which is called after the partitoning process is done"""
