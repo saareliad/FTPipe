@@ -39,7 +39,7 @@ def analyze_padding(mixture_or_task_name, sequence_length, dataset_split="train"
         x = padded_example
         return {
             "input_seq_length": np.count_nonzero(x['inputs']),
-            "target_seq_length": np.count_nonzero(x['inputs']),
+            "target_seq_length": np.count_nonzero(x['targets']),
             "npacked": 1,
             "target_density": density(x['targets']),
             "input_density": density(x['inputs']),
