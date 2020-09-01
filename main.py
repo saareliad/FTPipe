@@ -19,7 +19,7 @@ from train import training_loop
 
 
 # TODO: support multiple servers,
-# TODO heterogenous servers
+# TODO heterogeneous servers
 # TODO: support mix precision, in the future
 
 
@@ -471,31 +471,38 @@ def start_preproc():
 
 
 def start_eval_checkpoint():
-    # TODO: currently its hardcoded...
     args = parse_cli()
     parse_json_config(args, args.config, first=True)
-    # args.cp_number = "c4"
-    # args.single_worker_eval_batch_size = 128
-    args.single_worker_eval_batch_size = 64
+    # args.single_worker_eval_batch_size = 64
 
     all_results = {}
-    all_cps = list(range(12)) + ["c4"]
+    # TODO: currently its hardcoded...
+    # def infer_all_cps(args):
+    #     if args.epochs > 0:
+    #         return list(range(args.epochs))
+    #     else:
+    #         raise NotImplementedError()
+
+    all_cps = list(range(args.epochs)) + ["c4"]
 
     if args.dataset == "t5_tfds":
         from data.t5 import t5_tfds
         device = getattr(args, "eval_device", "cpu")
-        all_results = t5_tfds.evaluate_t5_tfds(args, cp_number=all_cps, device=device)
-
-    elif args.dataset == "t5_squad":
+        if not isinstance(device, list):
+            all_results = t5_tfds.evaluate_t5_tfds(args, cp_number=all_cps, device=device)
+        else:
+            raise NotImplementedError()
+            # TODO: map with GPU queue.
+    elif args.dataset == "t5_squad":  # deprecated
         from data.t5 import t5_squad
         for cp_number in all_cps:
             args.cp_number = cp_number
             args.eval_on_cuda = True
-            # TODO: alow others...
-
             squad_result = t5_squad.evaluate_squad_checkpoint(args, cp_number=args.cp_number)
             all_results[cp_number] = squad_result
-
+    else:
+        # TODO: allow others.
+        raise NotImplementedError()
     pprint(all_results)
 
     # Also write to file

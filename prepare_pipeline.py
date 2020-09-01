@@ -519,14 +519,18 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     else:
         last_batch_test_shapes = None
 
+
+    steps_per_epoch = train_dl_len // args.step_every
+    if train_dl_len % args.step_every > 0:
+        steps_per_epoch += 1
+
     # Get expected training steps:
     if args.epochs > 0 and args.steps < 0:
-        steps_per_epoch = train_dl_len // args.step_every
-        if train_dl_len % args.step_every > 0:
-            steps_per_epoch += 1
         expected_training_steps = steps_per_epoch * args.epochs
+    elif args.epochs < 0 and args.steps > 0:
+        expected_training_steps = args.steps
     else:
-        raise NotImplementedError()
+        raise NotImplementedError("Missing steps or epochs limit")
 
     args.steps_per_epoch = steps_per_epoch
     args.expected_training_steps = expected_training_steps

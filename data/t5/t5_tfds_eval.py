@@ -1,14 +1,17 @@
+import functools
 import logging
 import os
+
 import t5
 import tensorflow.compat.v1 as tf
-import tensorflow_datasets as tfds
 import torch
 from transformers import T5ForConditionalGeneration
-import functools
+
 from .t5_squad import load_huggingface_checkpoint
+
 get_dataset = t5.models.hf_model.get_dataset
 from tqdm import tqdm
+
 
 class T5Evaluator:
     def __init__(self, args, model_dir, device, model: T5ForConditionalGeneration = None):
@@ -50,14 +53,14 @@ class T5Evaluator:
         raise NotImplementedError()
 
     def eval(
-        self,
-        mixture_or_task_name,
-        sequence_length,
-        batch_size,
-        checkpoint_steps=None,
-        summary_dir=None,
-        split="validation",
-        **generate_kwargs,
+            self,
+            mixture_or_task_name,
+            sequence_length,
+            batch_size,
+            checkpoint_steps=None,
+            summary_dir=None,
+            split="validation",
+            **generate_kwargs,
     ):
         """Evaluate the model on the given Mixture or Task.
 
@@ -170,7 +173,6 @@ class T5Evaluator:
                     summary_dir, f"{task.name}_{self._step}_predictions"
                 )
                 write_lines_to_file(predictions, predictions_file)
-
 
                 for metric_fn in task.metric_fns:
                     scores = metric_fn(targets, predictions)

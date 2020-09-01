@@ -253,22 +253,6 @@ def get_separated_dataset(just, DATA_DIR, args, **dataset_keywords):
     return train_dataset, dev_dataset
 
 
-#
-# def evaluate_tfds_checkpoint(args, cp_number):
-#     hugg, tokenizer = load_huggingface_checkpoint(args, cp_number)
-#
-#     # valid_dataset = compute_and_cache(get_squad_validation_dataset, 'squad_valid_data.pt', args=args,
-#     #                                   tokenizer=tokenizer)
-#     # # TODO: this can be done smarter, distributed
-#     #
-#     # batch_size = getattr(args, "single_worker_eval_batch_size", 32)
-#     # dataloader = torch.utils.data.DataLoader(valid_dataset, batch_size=batch_size)
-#     # answers = get_answers(args, hugg, tokenizer, dataloader=dataloader)
-#     # valid_dataset.set_format()
-#     # squad_result = evaluate_squad_answers(valid_dataset=valid_dataset, answers=answers)
-#     # print(squad_result)
-#     # return squad_result
-#
 def evaluate_t5_tfds(args, cp_number, device="cpu"):
     model_dir = auto_file_name(args)
     batch_size = getattr(args, "single_worker_eval_batch_size", 32)
