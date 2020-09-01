@@ -38,15 +38,15 @@ def analyze_padding(mixture_or_task_name, sequence_length, dataset_split="train"
     def create_record(padded_example):
         x = padded_example
         return {
-            "input_seq_length": np.count_nonzero(['inputs']),
-            "target_seq_length": np.count_nonzero(['inputs']),
+            "input_seq_length": np.count_nonzero(x['inputs']),
+            "target_seq_length": np.count_nonzero(x['inputs']),
             "npacked": 1,
             "target_density": density(x['targets']),
             "input_density": density(x['inputs']),
         }
 
     df = pd.DataFrame.from_records([create_record(x) for x in ds.as_numpy_iterator()])
-    return ds
+    return df
 
 
 if __name__ == '__main__':
@@ -57,5 +57,8 @@ if __name__ == '__main__':
     }
     dataset_split = "train"
 
-    df = analyze_packing(mixture_or_task_name=mixture_or_task_name, sequence_length=sequence_length,
-                         dataset_split=dataset_split)
+    df_packing = analyze_packing(mixture_or_task_name=mixture_or_task_name, sequence_length=sequence_length,
+                                 dataset_split=dataset_split)
+
+    df_padding = analyze_padding(mixture_or_task_name=mixture_or_task_name, sequence_length=sequence_length,
+                                 dataset_split=dataset_split)
