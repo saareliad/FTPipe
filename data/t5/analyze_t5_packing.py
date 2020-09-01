@@ -66,7 +66,8 @@ def infer_no_truncation_padding_seq_length_all_splits(mixture_or_task_name, sequ
 
 
 def infer_no_truncation_padding_seq_length_for_all_t5_available_tasks():
-    names = get_t5_available_tasks(verbose=False)
+    # names = get_t5_available_tasks(verbose=False)
+    names = t5_tasks_we_want()
     # default seq_len
     sequence_length = {
         "inputs": 512,
@@ -79,6 +80,51 @@ def infer_no_truncation_padding_seq_length_for_all_t5_available_tasks():
         res[mixture_or_task_name] = req
 
     return res
+
+
+def t5_tasks_we_want():
+    return [
+            # c4_v020_unsupervised
+            # c4_noclean_v020_unsupervised
+            # c4_realnewslike_v020_unsupervised
+            # c4_webtextlike_v020_unsupervised
+            # c4_v220_span_corruption
+            # c4_v220_iid_denoising
+            # wikipedia_20190301.en_v003_unsupervised
+            "glue_cola_v002",
+            "glue_sst2_v002",
+            "glue_qqp_v002",
+            "glue_mrpc_v002",
+            "glue_stsb_v002",
+            "glue_mnli_v002",
+            # "glue_mnli_mismatched_v002",
+            # "glue_mnli_matched_v002",
+            "glue_qnli_v002",
+            "glue_rte_v002",
+            "glue_wnli_v002",
+            "glue_ax_v002",
+            "cnn_dailymail_v002",
+            # wmt14_ende_v003
+            # wmt14_enfr_v003
+            # wmt16_enro_v003
+            # wmt15_enfr_v003
+            # wmt19_ende_v003
+            # wmt_t2t_ende_v003
+            "super_glue_boolq_v102",
+            "super_glue_cb_v102",
+            "super_glue_copa_v102",
+            "super_glue_multirc_v102",
+            "super_glue_record_v102",
+            "super_glue_rte_v102",
+            "super_glue_wic_v102",
+            "super_glue_axb_v102",
+            "super_glue_axg_v102",
+            "dpr_v001_simple",
+            # super_glue_wsc_v102_simple_train
+            # super_glue_wsc_v102_simple_eval
+            # glue_wnli_v002_simple_eval
+            "squad_v010_allanswers",
+            "trivia_qa_v010"]
 
 
 if __name__ == '__main__':
