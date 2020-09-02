@@ -175,13 +175,15 @@ class GraphProfiler():
     @staticmethod
     def avg_time(times):
         vs = times
-        
-        max_v = max(vs)
-        vs = [t for t in vs if t < max_v]
-        max_v = max(vs)
-        vs = [t for t in vs if t < max_v]
+
+        for i in range(2):
+            max_v = max(vs)
+            vs_cand = [t for t in vs if t < max_v]
+            if len(vs_cand) == 0:
+                break
+            vs = vs_cand
+        assert len(vs) > 0, (max_v, times)
         total = sum(vs)
-        assert len(vs) > 0,times
         return total / (len(vs))
 
     def should_profile(self, node, function, args, kwargs, output=None):
