@@ -483,7 +483,8 @@ def start_eval_checkpoint():
     #     else:
     #         raise NotImplementedError()
 
-    all_cps = list(range(args.epochs)) + ["c4"]
+    # all_cps = list(range(args.epochs)) + ["c4"]
+    all_cps = list(range(0, 102 + 1))  # + ["c4"]
 
     if args.dataset == "t5_tfds":
         from data.t5 import t5_tfds

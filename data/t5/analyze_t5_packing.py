@@ -96,14 +96,15 @@ def t5_tasks_we_want():
             "glue_qqp_v002",
             "glue_mrpc_v002",
             "glue_stsb_v002",
-            "glue_mnli_v002",
+            # "glue_mnli_v002",  # TODO: commented out becasue weird validation names.
             # "glue_mnli_mismatched_v002",
             # "glue_mnli_matched_v002",
             "glue_qnli_v002",
             "glue_rte_v002",
             "glue_wnli_v002",
-            "glue_ax_v002",
-            "cnn_dailymail_v002",
+            # "glue_ax_v002",  # has just "test" split
+            # "cnn_dailymail_v002",  # TODO: The version of the dataset you are trying to use (cnn_dailymail/plain_text/1.0.0) is too old for this version of TFDS so cannot be generated.Either sync to a previous version of TFDS to first prepare the data or use another version of the dataset. Available for `download_and_prepare`: ['3.0.0']
+            # TODO: don't know which wmt to take.
             # wmt14_ende_v003
             # wmt14_enfr_v003
             # wmt16_enro_v003
@@ -117,8 +118,8 @@ def t5_tasks_we_want():
             "super_glue_record_v102",
             "super_glue_rte_v102",
             "super_glue_wic_v102",
-            "super_glue_axb_v102",
-            "super_glue_axg_v102",
+            # "super_glue_axb_v102", only test
+            # "super_glue_axg_v102", only test
             "dpr_v001_simple",
             # super_glue_wsc_v102_simple_train
             # super_glue_wsc_v102_simple_eval
