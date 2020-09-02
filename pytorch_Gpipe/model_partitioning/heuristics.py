@@ -1,6 +1,8 @@
-import torch
-from functools import reduce
 import operator
+from functools import reduce
+
+import torch
+
 from ..model_profiling import Node, NodeTypes, ExecTimes
 from ..utils import flatten
 
@@ -16,19 +18,18 @@ def get_weight_functions(args, verbose=True):
     if args.auto_infer_node_bwd_to_fwd_ratio:
         node = NodeWeightFunctionWithRatioAutoInfer(MULT_FACTOR=MULT_FACTOR)
     else:
-        node = NodeWeightFunction(bwd_to_fwd_ratio=args.bwd_to_fwd_ratio,MULT_FACTOR=MULT_FACTOR)
+        node = NodeWeightFunction(bwd_to_fwd_ratio=args.bwd_to_fwd_ratio, MULT_FACTOR=MULT_FACTOR)
 
     edge = EdgeWeightFunction(args.bw,
-                            bwd_to_fwd_ratio=args.bwd_to_fwd_ratio,
-                            penalize_non_tensors=args.penalize_non_tensors,
-                            penalty=args.edge_penalty,
-                            MULT_FACTOR=MULT_FACTOR)
+                              bwd_to_fwd_ratio=args.bwd_to_fwd_ratio,
+                              penalize_non_tensors=args.penalize_non_tensors,
+                              penalty=args.edge_penalty,
+                              MULT_FACTOR=MULT_FACTOR)
 
     if verbose:
         print(f"-I- using heuristics {type(node).__name__} , {type(edge).__name__}")
 
     return node, edge
-
 
 
 class NodeWeightFunction():
@@ -43,11 +44,7 @@ class NodeWeightFunction():
         else:
             # TODO: it has to be consistent with communication times to work
             # NOTE: / (ratio + 1) is removed, as we do in edge.
-            return self.MULT_FACTOR *(self.ratio * node.weight.backward_time +node.weight.forward_time)
-
-
-
-
+            return self.MULT_FACTOR * (self.ratio * node.weight.backward_time + node.weight.forward_time)
 
 
 class EdgeWeightFunction():
@@ -64,7 +61,8 @@ class EdgeWeightFunction():
         self.penalize_non_tensors = penalize_non_tensors
 
     def __call__(self, u: Node, v: Node):
-        if u.type is NodeTypes.CONSTANT or u.value_type in [torch.Size,torch.device,torch.dtype,int,bool,float,str]:
+        if u.type is NodeTypes.CONSTANT or u.value_type in [torch.Size, torch.device, torch.dtype, int, bool, float,
+                                                            str]:
             # no constant or scalars on boundries
             # no double penalties so we do not multiply by MULT_FACTOR
             w = self.penalty
@@ -77,12 +75,13 @@ class EdgeWeightFunction():
                     v = reduce(operator.mul, shape, 1)
                     # include dtype size
                     v *= torch.empty(1, dtype=dtype).element_size()
-                elif self.penalize_non_tensors and (dtype in [torch.Size,torch.device,torch.dtype,int,bool,float,str,type(None)]):
-                    #ensure the penalty will apply (no double penalty divide be MULT_FACTOR)
-                    v = MB * self.bw * self.penalty/self.MULT_FACTOR
+                elif self.penalize_non_tensors and (
+                        dtype in [torch.Size, torch.device, torch.dtype, int, bool, float, str, type(None)]):
+                    # ensure the penalty will apply (no double penalty divide be MULT_FACTOR)
+                    v = MB * self.bw * self.penalty / self.MULT_FACTOR
                 else:
-                    #ensure v will be 1
-                    v = (MB*self.bw)/self.MULT_FACTOR
+                    # ensure v will be 1
+                    v = (MB * self.bw) / self.MULT_FACTOR
                 volume += v
 
             volume /= MB
@@ -100,7 +99,7 @@ class EdgeWeightFunction():
             w *= mult_factor
 
         # ensure positive weight
-        return max(1e-3,w)
+        return max(1e-3, w)
 
 
 ##############
@@ -123,7 +122,6 @@ class NodeWeightFunctionWithRatioAutoInfer():
         if bwd_plus_fwd == 0:
             return 0
         return self.MULT_FACTOR * (bwd * bwd + fwd * fwd) / bwd_plus_fwd
-
 
 
 #################

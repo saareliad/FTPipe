@@ -6,7 +6,11 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from sklearn.cluster import KMeans
 
-from ...model_profiling import Graph, Node, NodeWeightFunction
+from pytorch_Gpipe.model_partitioning.heuristics import NodeWeightFunction
+from pytorch_Gpipe.model_profiling import Graph, Node
+
+
+# from ...model_profiling import Graph, Node, NodeWeightFunction
 
 
 # from .partition_2dbinpack_poc import determine_n_clusters, first_fit_cluster, make_clusters
@@ -33,10 +37,28 @@ def first_fit_cluster(K, clusters):
     if len(clusters) > 2:
         raise NotImplementedError()
 
+    # def add_id_to_split_k(list_of_items):
+    #     for
+
     # result
     bins = defaultdict(list)
 
     # get splits
+    all_splits = get_all_splits(K, clusters)
+
+    # Unify splits to bins
+    for k in range(K):
+        for split in all_splits:
+            assert len(split) == K, (len(split), len(split[k]), split)
+            print(split[k])
+            bins[k].extend(split[k])
+
+    assert len(bins) == K
+
+    return bins
+
+
+def get_all_splits(K, clusters):
     all_splits = []
     for c_i, cluster in enumerate(clusters):
         n_i = len(cluster)
@@ -50,21 +72,12 @@ def first_fit_cluster(K, clusters):
         if is_reversed:
             split = list(reversed(split))
         all_splits.append(split)
-
-    # Unify splits to bins
-    for k in range(K):
-        for split in all_splits:
-            assert len(split) == K, (len(split), len(split[k]), split)
-            bins[k].extend(split[k])
-
-    assert len(bins) == K
-
-    return bins
+    return all_splits
 
 
 def make_clusters(nodes: List[Node], node_weight_function, C: int):
     def node_to_record(node):
-        return {"id": node.id, "weight": node_weight_function(node.weight)}
+        return {"id": node.id, "weight": node_weight_function(node)}
 
     records = [node_to_record(node) for node in nodes]
     X = pd.DataFrame.from_records(data=records, index="id")
@@ -76,7 +89,7 @@ def make_clusters(nodes: List[Node], node_weight_function, C: int):
 
 def determine_n_clusters(nodes: List[Node], node_weight_function, max_k=10):
     def node_to_record(node):
-        return {"id": node.id, "weight": node_weight_function(node.weight)}
+        return {"id": node.id, "weight": node_weight_function(node)}
 
     records = [node_to_record(node) for node in nodes]
     X = pd.DataFrame.from_records(data=records, index="id")
@@ -137,3 +150,18 @@ def partition_2dbin_pack(graph: Graph,
             n.stage_id = stage_id
 
     return graph
+
+
+if __name__ == '__main__':
+    from pytorch_Gpipe import build_graph
+
+    from torch.nn import Sequential, Linear
+    import torch
+
+    model = Sequential(
+        *[Linear(10, 10), Linear(10, 10), Linear(10, 10), Linear(10, 10),
+          Linear(10, 5),
+          Linear(5, 5), Linear(5, 5), Linear(5, 5)])
+    graph = build_graph(model, args=torch.randn(10, 10))
+    node_weight_function = NodeWeightFunction(bwd_to_fwd_ratio=1)
+    partition_2dbin_pack(graph=graph, num_gpus=2, n_clusters=2, node_weight_function=node_weight_function)
