@@ -2,10 +2,9 @@
     "base_config_path": "common.json",
     "base_config_path_is_relative": true,
     "work_scheduler": "GPIPE",
-    "step_every": 32,
-    "train_batches_limit": -1,
-    "bs_train": 1,
-    "bs_test": 8,
+    "step_every": 10,
+    "bs_train": 4,
+    "bs_test": 4,
     "checkpoints_save_name_prefix": "gpipe_adafactor",
     "checkpoints_save_dir": "/nfs_Disk2/saare/checkpoints/t5/3b/rte/"
 }
