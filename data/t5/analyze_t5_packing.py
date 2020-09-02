@@ -120,7 +120,7 @@ def t5_tasks_we_want():
             "super_glue_wic_v102",
             # "super_glue_axb_v102", only test
             # "super_glue_axg_v102", only test
-            "dpr_v001_simple",
+            # "dpr_v001_simple",  # TODO: Unknown split "validation". Should be one of ['test', 'train'].
             # super_glue_wsc_v102_simple_train
             # super_glue_wsc_v102_simple_eval
             # glue_wnli_v002_simple_eval
