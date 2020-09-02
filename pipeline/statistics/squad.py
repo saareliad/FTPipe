@@ -46,7 +46,7 @@ class SquadStats(Stats):
             loss = self.fit_res.test_loss[-1]
             # TODO: squad eval
 
-        return ' | {} loss {:5.2f}'.format(
+        return ' | {} loss {:7.5f}'.format(
             name, loss, name)
 
 
