@@ -14,7 +14,7 @@ from pytorch_Gpipe.model_profiling import Graph, Node
 # from ...model_profiling import Graph, Node, NodeWeightFunction
 
 
-# from .partition_2dbinpack_poc import determine_n_clusters, first_fit_cluster, make_clusters
+# from .partition_2dbinpack_poc import analyze_n_clusters, first_fit_cluster, make_clusters
 # Poc abstraction for 2d-packing for pipeline with virtual stages
 # ######## ######### ############ ############# ########## ########### ####### ############
 # sorts nodes by value
@@ -97,8 +97,8 @@ def make_clusters(nodes: List[Node], node_weight_function, C: int):
     return X
 
 
-def determine_n_clusters(nodes: List[Node], node_weight_function, max_k=10):
-    """ utility to help determind number of clusters for partition_2dbin_pack"""
+def analyze_n_clusters(nodes: List[Node], node_weight_function, max_k=10):
+    """ utility to help determine number of clusters for partition_2dbin_pack"""
 
     def node_to_record(node):
         return {"id": node.id, "weight": node_weight_function(node)}
@@ -116,23 +116,28 @@ def determine_n_clusters(nodes: List[Node], node_weight_function, max_k=10):
     plt.xlabel("Number of clusters")
     plt.ylabel("SSE")
     plt.show()
-
+    n_clusters = input("choose desired number of clusters to continue...")
+    n_clusters = int(n_clusters)
+    return n_clusters
 
 def partition_2dbin_pack(graph: Graph,
                          num_gpus: int,
                          n_clusters: int,
                          node_weight_function: Optional[NodeWeightFunction] = None,
                          # edge_weight_function: Optional[EdgeWeightFunction] = None,
-                         use_layers_graph: bool = True
+                         use_layers_graph: bool = True,
+                         **kwargs
                          ):
     if use_layers_graph:
         work_graph, lookup = graph.layers_graph()
     else:
         work_graph, lookup = graph, None
 
-    K = num_gpus
     nodes = [n for n in graph.nodes if n not in graph.inputs]
-    # determine_n_clusters(nodes, node_weight_function, max_k=10)
+
+    K = num_gpus
+    if "analyze_n_clusters" in kwargs:
+        n_clusters = analyze_n_clusters(nodes, node_weight_function, max_k=10)
     # import sys
     # sys.exit(0)
     id_to_node = {node.id: node for node in nodes}
@@ -213,6 +218,6 @@ if __name__ == '__main__':
     # plt.show()
 
     nodes = [n for n in graph.nodes if n not in graph.inputs]
-    # determine_n_clusters(nodes=nodes, node_weight_function=node_weight_function, max_k=4)
+    # analyze_n_clusters(nodes=nodes, node_weight_function=node_weight_function, max_k=4)
     graph, stage_to_gpu_map = partition_2dbin_pack(graph=graph, num_gpus=2, n_clusters=2,
                                                    node_weight_function=node_weight_function)

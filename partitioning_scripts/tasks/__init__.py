@@ -25,7 +25,7 @@ def get_parser_and_partitioner(task_name) -> Tuple[Parser, Partitioner]:
     if task_name in REGISTRY:
         return REGISTRY[task_name]
     else:
-        raise ValueError(f"unknow task {task_name} available tasks {list(REGISTRY.keys())}")
+        raise ValueError(f"unknown task {task_name} available tasks {list(REGISTRY.keys())}")
 
 
 # automatically import any Python files in the tasks directory

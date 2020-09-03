@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 from .compiler import compile_partitioned_model
-from .model_partitioning import METIS_partition, acyclic_partition, partition_2dbin_pack, determine_n_clusters, \
+from .model_partitioning import METIS_partition, acyclic_partition, partition_2dbin_pack, analyze_n_clusters, \
     get_weight_functions
 from .model_profiling import Graph, profile_network, GraphProfiler, trace_module, ExecTimes, NodeWeightFunction, \
     EdgeWeightFunction
@@ -267,6 +267,7 @@ def partition_model(model: nn.Module,
     elif partitioning_method == "2DBIN":
         if "n_clusters" not in binpack_opt:
             binpack_opt["n_clusters"] = 2
+
         # TODO: determine nclusters
         graph, stage_to_gpu_map = partition_2dbin_pack(graph, num_gpus=nparts,
                                                        node_weight_function=node_weight_function, **binpack_opt)

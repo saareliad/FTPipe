@@ -10,7 +10,7 @@ from pytorch_Gpipe.model_partitioning.acyclic_partitioning import Objective, MET
 
 
 class Parser(argparse.ArgumentParser, ABC):
-    """ArgumentParser for partitoning tasks"""
+    """ArgumentParser for partitioning tasks"""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -250,7 +250,7 @@ class Parser(argparse.ArgumentParser, ABC):
                            default=2,
                            type=int,
                            help="number of clusters in the model")
-        group.add_argument("--determine_n_clusters", action="set_true", default=False,
+        group.add_argument("--analyze_n_clusters", action="set_true", default=False,
                            help="analyze number of clusters")
 
     def _add_acyclic_args(self, group):
@@ -406,6 +406,7 @@ class Parser(argparse.ArgumentParser, ABC):
     def _binpack_opts_dict_from_parsed_args(self, args):
         d = dict()
         d['n_clusters'] = args.n_clusters
+        d['analyze_n_clusters'] = args.analyze_n_clusters
         return d
 
 

@@ -110,6 +110,7 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: Partitioner, overri
                                partitioning_method=cmd_args.partitioning_method,
                                acyclic_opt=cmd_args.acyclic_opt,
                                METIS_opt=cmd_args.METIS_opt,
+                               binpack_opt=cmd_args.binpack_opt,
                                force_no_recomp_scopes=cmd_args.force_no_recomputation_scopes_fn,
                                graph=graph)
 
@@ -124,7 +125,11 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: Partitioner, overri
         del args, kwargs
 
         if cmd_args.dot:
-            graph.save_as_pdf(cmd_args.output_file, ".")
+            try:
+                graph.save_as_pdf(cmd_args.output_file, ".")
+            except Exception as e:
+                print("Error saving graph as pdf")
+                raise e
 
         # Add cmdline to generate output file.
         record_cmdline(cmd_args.output_file)
