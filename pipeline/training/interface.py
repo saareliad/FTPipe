@@ -1,11 +1,13 @@
 import abc
 from itertools import chain
+
 import torch
+from torch.nn import Module
 from torch.nn.utils import clip_grad_norm_
+from torch.optim.optimizer import Optimizer
+
 from .utils import calc_norm
 from ..statistics.interface import Stats
-from torch.optim.optimizer import Optimizer
-from torch.nn import Module
 
 
 class AnyTrainer(abc.ABC):
@@ -119,7 +121,11 @@ class GradNormStepper:
 
     def step_on_computed_grads(self, old_lrs=None):
         self.optimizer.step()
-        self.optimizer.zero_grad()
+
+        # self.optimizer.zero_grad()
+        for pg in self.optimizer.param_groups:
+            for p in pg['params']:
+                p.grad = None
 
         # Restore old LRs, to avoid messing up scheduler.
         if old_lrs:
@@ -148,6 +154,7 @@ class GradNormStepper:
 
 class BaseLossTrainer(GradNormStepper, PartitionedSupervisedTrainer):
     """Trainer assuming loss is calculated *outside* the model """
+
     def __init__(self,
                  model: Module,
                  optimizer: Optimizer,
@@ -184,6 +191,7 @@ class BaseLossTrainer(GradNormStepper, PartitionedSupervisedTrainer):
 class BaseOutPutIsLossTrainer(GradNormStepper,
                               PartitionedSupervisedLossIncludedTrainer):
     """Trainer assuming loss is calculated *inside* the model """
+
     def __init__(self,
                  model: Module,
                  optimizer: Optimizer,
@@ -192,7 +200,6 @@ class BaseOutPutIsLossTrainer(GradNormStepper,
                  max_grad_norm=None,
                  always_calc_grad_norm=False,
                  step_every=1):
-
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.model = model
