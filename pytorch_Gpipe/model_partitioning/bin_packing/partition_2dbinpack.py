@@ -1,7 +1,7 @@
 from collections import deque, defaultdict
 from pprint import pprint
 from typing import Optional, List
-
+from itertools import count
 import matplotlib.pyplot as plt
 import pandas as pd
 from sklearn.cluster import KMeans
@@ -34,7 +34,7 @@ def maketree(iterable, N):
     return res
 
 
-def first_fit_cluster(K, clusters):
+def first_fit_cluster(K, clusters, id_to_node):
     if len(clusters) > 2:
         raise NotImplementedError()
 
@@ -45,7 +45,7 @@ def first_fit_cluster(K, clusters):
     bins = defaultdict(list)
 
     # get splits
-    all_splits = get_all_splits(K, clusters)
+    all_splits = get_all_splits(K, clusters, id_to_node=id_to_node)
 
     # Unify splits to bins
     for k in range(K):
@@ -59,8 +59,10 @@ def first_fit_cluster(K, clusters):
     return bins
 
 
-def get_all_splits(K, clusters):
+def get_all_splits(K, clusters, id_to_node):
     all_splits = []
+    stage_id_generator = count()
+
     for c_i, cluster in enumerate(clusters):
         n_i = len(cluster)
         if n_i < K:
@@ -72,6 +74,13 @@ def get_all_splits(K, clusters):
         is_reversed = c_i % 2 == 0
         if is_reversed:
             split = list(reversed(split))
+
+        for sub_split in split:
+            stage_id = next(stage_id_generator)
+            for record in sub_split:
+                node = id_to_node[record.Index]
+                node.stage_id = stage_id
+
         all_splits.append(split)
     return all_splits
 
@@ -128,7 +137,7 @@ def partition_2dbin_pack(graph: Graph,
     clusters = [list(X.groupby("cluster").get_group(c).sort_values("id").itertuples()) for c in range(C)]
     clusters_lengths = {i: len(clusters[i]) for i in range(len(clusters))}
     print("cluster_lengths", clusters_lengths)
-    bins = first_fit_cluster(K, clusters)
+    bins = first_fit_cluster(K, clusters, id_to_node=id_to_node)
     # sort
     for v in bins.values():
         v.sort(key=lambda x: x.Index)
@@ -144,31 +153,48 @@ def partition_2dbin_pack(graph: Graph,
     print("times:")
     pprint(times)
 
+    node_to_stage_map = {}
     # Convert
-    for stage_id, ns in bins.items():
+    stage_to_gpu_map = defaultdict(set)
+    for gpu_id, ns in bins.items():
         for n in ns:
             n: Node
-            n.stage_id = stage_id
+            stage_to_gpu_map[n.stage_id].add(gpu_id)
+            node_to_stage_map[n.id] = n.stage_id
+
+    stage_to_gpu_map = {i: sorted(v) for i,v in stage_to_gpu_map.items()}
+    print("stage_to_gpu_map:")
+    pprint(stage_to_gpu_map)
+
+
+    print("node_to_stage_map:")
+    pprint(node_to_stage_map)
+
 
     return graph
 
 
 if __name__ == '__main__':
     from pytorch_Gpipe import build_graph
-
-    from torch.nn import Sequential, Linear
     import torch
+    from torch.nn import Sequential, Linear
 
-    IN_FEATURES = 1000
-    OUT_FEATURES = 500
+    IN_FEATURES = 320
+    OUT_FEATURES = 8
 
     model = Sequential(
         *[Linear(IN_FEATURES, IN_FEATURES), Linear(IN_FEATURES, IN_FEATURES), Linear(IN_FEATURES, IN_FEATURES), Linear(
             IN_FEATURES, IN_FEATURES),
           Linear(IN_FEATURES, OUT_FEATURES),
           Linear(OUT_FEATURES, OUT_FEATURES), Linear(OUT_FEATURES, OUT_FEATURES), Linear(OUT_FEATURES, OUT_FEATURES)])
-    graph = build_graph(model, args=(torch.randn(IN_FEATURES, IN_FEATURES),))
-    node_weight_function = NodeWeightFunction(bwd_to_fwd_ratio=1)
+
+    inputs = torch.randn(IN_FEATURES, IN_FEATURES)
+
+    model = model.cuda()
+    inputs = inputs.cuda()
+    graph = build_graph(model, args=(inputs,), n_iter=50)
+
+    node_weight_function = NodeWeightFunction(bwd_to_fwd_ratio=1, MULT_FACTOR=100000)
     # graph.display(node_weight_function=node_weight_function)
     import graphviz
     # dot = graph.build_dot(node_weight_function=node_weight_function)

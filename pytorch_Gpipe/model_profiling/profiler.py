@@ -173,10 +173,10 @@ class GraphProfiler():
             return GraphProfiler.get_grads(output)
 
     @staticmethod
-    def avg_time(times):
+    def avg_time(times, drop=2):
         vs = times
         # FIXME: this should only drop one
-        for i in range(2):
+        for i in range(drop):
             max_v = max(vs)
             vs_cand = [t for t in vs if t < max_v]
             if len(vs_cand) == 0:
