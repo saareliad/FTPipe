@@ -1,9 +1,11 @@
-from enum import IntEnum
 import pickle
-from typing import Tuple, Optional, Callable, Dict, Iterable, List,Set
-from itertools import chain
-from torch import Tensor, nn as nn
 from collections import defaultdict
+from enum import IntEnum
+from itertools import chain
+from typing import Tuple, Optional, Callable, Dict, Iterable, List
+
+from torch import Tensor, nn as nn
+
 try:
     import networkx as nx
 except ImportError:
@@ -24,6 +26,7 @@ class NodeTypes(IntEnum):
     def __repr__(self):
         return self.name
 
+
 class Node():
     def __init__(self, node_type, idx, scope):
         self.type = node_type
@@ -32,7 +35,7 @@ class Node():
 
         self.stage_id = 0
         self.weight = None
-        self.out_edges:List[Node] = []
+        self.out_edges: List[Node] = []
         self.args = []
         self.kwargs = defaultdict(list)
         self.value_type = None
@@ -42,7 +45,6 @@ class Node():
         self.req_grad = False
 
         self.constant_value = None
-
 
     def add_kwarg(self, kwarg, kwarg_node):
         self.kwargs[kwarg_node].append(kwarg)
@@ -57,20 +59,20 @@ class Node():
         self.out_edges.remove(out_node)
 
     @property
-    def in_edges(self)->List["Node"]:
+    def in_edges(self) -> List["Node"]:
         return list(chain(self.args, self.kwargs.keys()))
 
-    def replace_input(self,original,new):
+    def replace_input(self, original, new):
         try:
-            self.args[self.args.index(original)]=new
+            self.args[self.args.index(original)] = new
         except:
             pass
         if original in self.kwargs:
-            self.kwargs[new]=self.kwargs.pop(original)
-    
+            self.kwargs[new] = self.kwargs.pop(original)
+
     @classmethod
-    def from_other(cls,other):
-        node = cls(other.type,other.id,other.scope)
+    def from_other(cls, other):
+        node = cls(other.type, other.id, other.scope)
         node.stage_id = other.stage_id
         node.weight = other.weight
 
@@ -87,26 +89,28 @@ class Node():
 
         return node
 
+
 GraphNodes = Dict[int, Node]
 NodeWeightFunction = Callable[[Node], int]
 EdgeWeightFunction = Callable[[Tuple[Node, Node]], int]
 
 
 class Graph():
-    def __init__(self, nodes: GraphNodes, input_kw_ids, output_ids: List[int], depth: int, basic_blocks: Tuple[nn.Module, ...]):
+    def __init__(self, nodes: GraphNodes, input_kw_ids, output_ids: List[int], depth: int,
+                 basic_blocks: Tuple[nn.Module, ...]):
         self._nodes: GraphNodes = nodes
         self.input_kw_ids = input_kw_ids
         self.output_ids = output_ids
         self.depth = depth
         self.basic_blocks = basic_blocks
 
-    def __len__(self)->int:
+    def __len__(self) -> int:
         return len(self._nodes)
-    
+
     @property
-    def n_stages(self)->int:
+    def n_stages(self) -> int:
         return len({n.stage_id for n in self.nodes})
-    
+
     @property
     def nodes(self) -> Iterable[Node]:
         return self._nodes.values()
@@ -180,7 +184,7 @@ class Graph():
                 if edge_weight_function is None:
                     w = 1
                 else:
-                    w = int(max(1,edge_weight_function(u, v)))
+                    w = int(max(1, edge_weight_function(u, v)))
                 G.add_edge(u.id, v.id, weight=w)
 
         for n in self.nodes:
@@ -193,8 +197,8 @@ class Graph():
         return G
 
     def build_dot(self,
-                node_weight_function:Optional[NodeWeightFunction]=None,
-                edge_weight_function:Optional[EdgeWeightFunction]=None):
+                  node_weight_function: Optional[NodeWeightFunction] = None,
+                  edge_weight_function: Optional[EdgeWeightFunction] = None):
         '''
         return a graphviz representation of the graph
         Parameters
@@ -268,7 +272,7 @@ class Graph():
         # add nodes
         for node in self.nodes:
             node_id = node.id
-            
+
             scope = node.scope
             value_type = node.value_type
             node_label = f"{scope}\nidx: {node_id}\nvalue type: {value_type}"
@@ -296,28 +300,28 @@ class Graph():
                     node_label += f"\nweight: {node_weight_function(node)}"
 
             dot.node(str(node_id), label=node_label,
-                        fillcolor=colors[node.stage_id])
+                     fillcolor=colors[node.stage_id])
 
             # add edges
             args, kwargs = node.args, node.kwargs
             for idx, i in enumerate(args):
                 edge_label = f"arg: {idx}"
                 if edge_weight_function:
-                    edge_label += f"\nweight: {edge_weight_function(i,node)}"
+                    edge_label += f"\nweight: {edge_weight_function(i, node)}"
                 dot.edge(str(i.id), str(node_id), label=edge_label)
 
             for i, kws in kwargs.items():
                 for kw in kws:
                     edge_label = f"kwarg: {kw}"
                     if edge_weight_function:
-                        edge_label += f"\nweight: {edge_weight_function(i,node)}"
+                        edge_label += f"\nweight: {edge_weight_function(i, node)}"
                     dot.edge(str(i.id), str(node_id), label=edge_label)
 
         return dot
 
     def display(self,
-                node_weight_function:Optional[NodeWeightFunction]=None,
-                edge_weight_function:Optional[EdgeWeightFunction]=None):
+                node_weight_function: Optional[NodeWeightFunction] = None,
+                edge_weight_function: Optional[EdgeWeightFunction] = None):
         '''
         display the graph in Jupyter
 
@@ -339,8 +343,8 @@ class Graph():
     def save_as_pdf(self,
                     file_name: str,
                     directory: str,
-                    node_weight_function:Optional[NodeWeightFunction]=None,
-                    edge_weight_function:Optional[EdgeWeightFunction]=None):
+                    node_weight_function: Optional[NodeWeightFunction] = None,
+                    edge_weight_function: Optional[EdgeWeightFunction] = None):
         '''
         save the rendered graph to a pdf file
 
@@ -380,27 +384,27 @@ class Graph():
         node_states = dict()
         for node in self.nodes:
             state = dict(id=node.id,
-                        scope=node.scope,
-                        type=node.type,
-                        stage_id=node.stage_id,
-                        weight=node.weight,
-                        out_edges=[n.id for n in node.out_edges],
-                        args=[n.id for n in node.args],
-                        kwargs={n.id: kw for n,
-                                kw in node.kwargs.items()},
-                        value_type=node.value_type,
-                        constant_value=node.constant_value,
-                        tensor_dtype=node.tensor_dtype,
-                        tensor_shape=node.tensor_shape,
-                        req_grad=node.req_grad)
+                         scope=node.scope,
+                         type=node.type,
+                         stage_id=node.stage_id,
+                         weight=node.weight,
+                         out_edges=[n.id for n in node.out_edges],
+                         args=[n.id for n in node.args],
+                         kwargs={n.id: kw for n,
+                                              kw in node.kwargs.items()},
+                         value_type=node.value_type,
+                         constant_value=node.constant_value,
+                         tensor_dtype=node.tensor_dtype,
+                         tensor_shape=node.tensor_shape,
+                         req_grad=node.req_grad)
             node_states[node.id] = state
 
-        return{"node_data": node_states,
-               "input_kw_ids": self.input_kw_ids,
-               "output_ids": self.output_ids,
-               "depth": self.depth,
-               "basic_blocks": self.basic_blocks
-               }
+        return {"node_data": node_states,
+                "input_kw_ids": self.input_kw_ids,
+                "output_ids": self.output_ids,
+                "depth": self.depth,
+                "basic_blocks": self.basic_blocks
+                }
 
     def load_state(self, graph_state):
         output_ids = graph_state['output_ids']
@@ -410,7 +414,7 @@ class Graph():
 
         nodes = dict()
         node_states = graph_state['node_data']
-        for state in sorted(node_states.values(),key=lambda s:s['id']):
+        for state in sorted(node_states.values(), key=lambda s: s['id']):
             node = Node(state['type'], state['id'], state['scope'])
             nodes[node.id] = node
 
@@ -446,11 +450,10 @@ class Graph():
         the path to where the graph is stored
         '''
 
-        with open(path,"rb") as f:
+        with open(path, "rb") as f:
             graph_data = pickle.load(f)
 
         return cls(None, None, None, None, None).load_state(graph_data)
-
 
     def layers_graph(self) -> Tuple["Graph", Dict[int, int]]:
         '''
@@ -469,13 +472,14 @@ class Graph():
         lookup = dict()
         for node in new_graph._nodes.values():
             is_constant = node.type is NodeTypes.CONSTANT
-            op_without_inputs = (node.type in [NodeTypes.PRIMITIVE,NodeTypes.OP]) and (len(node.in_edges) == 0)
+            op_without_inputs = (node.type in [NodeTypes.PRIMITIVE, NodeTypes.OP]) and (len(node.in_edges) == 0)
 
-            #NOTE i hate this but it handles passing labels which are used only at last partiton
-            input_or_buff_param_with_one_use_at_end = (node.type in [NodeTypes.IN,NodeTypes.BUFF_PARAM]) and (len(node.out_edges) == 1)
+            # NOTE i hate this but it handles passing labels which are used only at last partiton
+            input_or_buff_param_with_one_use_at_end = (node.type in [NodeTypes.IN, NodeTypes.BUFF_PARAM]) and (
+                        len(node.out_edges) == 1)
             if input_or_buff_param_with_one_use_at_end:
                 input_or_buff_param_with_one_use_at_end &= (list(node.out_edges)[0].id - node.id) >= (len(self) / 2)
-            
+
             if is_constant or op_without_inputs or input_or_buff_param_with_one_use_at_end:
                 for o in node.out_edges:
                     o.kwargs.pop(node, None)
@@ -495,27 +499,24 @@ class Graph():
 
         return new_graph, lookup
 
-
-    def induce_layer_partition(self,layers_graph,
-                           layers_to_original: Dict[int, int]) -> "Graph":
+    def induce_layer_partition(self, layers_graph,
+                               layers_to_original: Dict[int, int]) -> "Graph":
         assert len(self) >= len(layers_graph)
         old_to_new = {v: k for k, v in layers_to_original.items()}
-        #iterate in reverse order
-        for node in sorted(self.nodes,key=lambda n:n.id,reverse=True):
+        # iterate in reverse order
+        for node in sorted(self.nodes, key=lambda n: n.id, reverse=True):
             if node.id in old_to_new:
                 node.stage_id = layers_graph[old_to_new[node.id]].stage_id
             else:
                 # as we iterate in reverse topological order we've already handled this node's outupts
-                #select the lowest partition index to ensure no cycles are created
-                node.stage_id = sorted(node.out_edges,key=lambda n: n.stage_id)[0].stage_id
+                # select the lowest partition index to ensure no cycles are created
+                node.stage_id = sorted(node.out_edges, key=lambda n: n.stage_id)[0].stage_id
             assert node.stage_id >= 0
 
         return self
 
-
-    def __getitem__(self,idx):
+    def __getitem__(self, idx):
         return self._nodes[idx]
-    
 
     def selfcheck(self):
         visited = set()
@@ -523,23 +524,22 @@ class Graph():
             for n in self.nodes:
                 for u in n.in_edges:
                     assert u.id < n.id
-                    assert n in u.out_edges,(n.scope,u.scope)
+                    assert n in u.out_edges, (n.scope, u.scope)
                     visited.add(u)
-                assert n not in n.in_edges        
+                assert n not in n.in_edges
                 for o in n.out_edges:
                     assert o.id > n.id
-                    assert n in o.in_edges,(n.scope,o.scope)
+                    assert n in o.in_edges, (n.scope, o.scope)
                     visited.add(o)
                 visited.add(n)
                 assert n not in n.out_edges
             assert len(visited) == len(self.nodes)
         except AssertionError as e:
-            self.save_as_pdf("selfcheck_error",".")
+            self.save_as_pdf("selfcheck_error", ".")
             raise e
         return self
 
-
-    def split_to_stages(self)->Dict[int,"Graph"]:
+    def split_to_stages(self) -> Dict[int, "Graph"]:
         """return a sub graph for each stage in the graph
 
         Returns:
@@ -553,66 +553,63 @@ class Graph():
         for n in tmp.nodes:
             if n.type != NodeTypes.IN:
                 groups[n.stage_id].append(n)
-        
 
-        for stage_id,group in groups.items():
-            stage_nodes=dict()
+        for stage_id, group in groups.items():
+            stage_nodes = dict()
             stage_inputs = dict()
             stage_output_ids = []
             stage_input_kws = dict()
 
-            for n in sorted(group,key=lambda w:w.id):
+            for n in sorted(group, key=lambda w: w.id):
                 stage_nodes[n.id] = n
-                #check if stage output
+                # check if stage output
                 if (n.id in self.output_ids) or any(o.stage_id != stage_id for o in n.out_edges):
                     stage_output_ids.append(n.id)
-                
-                #discard outgoing edges to external stages
+
+                # discard outgoing edges to external stages
                 n.out_edges = [o for o in n.out_edges if o.stage_id == stage_id]
 
-                #add stage inputs
+                # add stage inputs
                 to_replace = dict()
                 for u in n.in_edges:
                     if (u.stage_id != stage_id) or (u.type is NodeTypes.IN):
                         if u.id in stage_inputs:
                             stage_input = stage_inputs[u.id]
                         else:
-                            #create a new input node for this stage
+                            # create a new input node for this stage
                             stage_input = Node.from_other(u)
                             stage_input.type = NodeTypes.IN
-                            stage_input.args=[]
-                            stage_input.kwargs=dict()
+                            stage_input.args = []
+                            stage_input.kwargs = dict()
                             stage_input.stage_id = stage_id
                             stage_input.out_edges = [o for o in u.out_edges if o.stage_id == stage_id]
                             stage_inputs[u.id] = stage_input
                             stage_nodes[u.id] = stage_input
-                        to_replace[u] = stage_input        
-                    
+                        to_replace[u] = stage_input
+
                     if u.id in self.input_kw_ids:
                         stage_input_kws[u.id] = self.input_kw_ids[u.id]
-                
-                #replace inputs
-                for old,new in to_replace.items():
-                    n.replace_input(old,new)
+
+                # replace inputs
+                for old, new in to_replace.items():
+                    n.replace_input(old, new)
                     new.add_out_edge(n)
-            stages[stage_id] = Graph(stage_nodes, stage_input_kws, stage_output_ids, self.depth,self.basic_blocks)
+            stages[stage_id] = Graph(stage_nodes, stage_input_kws, stage_output_ids, self.depth, self.basic_blocks)
 
         return stages
-    
 
-    def _remove_parallel_edges(self)->"Graph":
+    def _remove_parallel_edges(self) -> "Graph":
         """the control flow graph can contain parallel in/out edges
         those edges are important for control flow but are detrimental for partitioning
         this function creates a new Graph without parallel edges"""
 
         copy = Graph(None, None, None, None,
-                          None).load_state(self.state())
-        
+                     None).load_state(self.state())
 
         for n in copy.nodes:
             n.out_edges = set(n.out_edges)
             in_edges = n.in_edges
             n.args = set(in_edges)
             n.kwargs.clear()
-        
+
         return copy

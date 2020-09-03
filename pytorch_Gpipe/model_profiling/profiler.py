@@ -1,13 +1,17 @@
 from collections import defaultdict
 from itertools import chain
+
 import torch
 from torch import Tensor
+
 from .tracer import NodeTypes
-from ..utils import detach_tensors, flatten, move_tensors, set_grad_mode, inplace_arithmetic_ops, ExecTimes,force_out_of_place
+from ..utils import detach_tensors, flatten, move_tensors, set_grad_mode, inplace_arithmetic_ops, ExecTimes, \
+    force_out_of_place
 
 
 class GraphProfiler():
-    def __init__(self, recomputation=False, n_iter=10, force_no_recomp_scopes=None, profile_ops=True, save_memory_mode=False):
+    def __init__(self, recomputation=False, n_iter=10, force_no_recomp_scopes=None, profile_ops=True,
+                 save_memory_mode=False):
         self.forward_times = defaultdict(list)
         self.backward_times = defaultdict(list)
         self.recomputation = recomputation
@@ -15,7 +19,7 @@ class GraphProfiler():
         assert n_iter > 0
         self.n_iter = n_iter + NUM_OUTLIERS
 
-        self.not_profiled = dict(fwd=list(),bwd=list())
+        self.not_profiled = dict(fwd=list(), bwd=list())
 
         if force_no_recomp_scopes is None:
             self.force_no_recomp_scopes = lambda s: False
@@ -51,7 +55,7 @@ class GraphProfiler():
             elif node.value_type is torch.Tensor:
                 self.not_profiled['fwd'].append(node)
 
-            return detach_tensors((args,kwargs))
+            return detach_tensors((args, kwargs))
 
     def time_backward(self, node, function, args, kwargs, output):
         with force_out_of_place(function):
@@ -59,8 +63,8 @@ class GraphProfiler():
                 recomputation = self.recomputation and (not self.force_no_recomp_scopes(node.scope))
                 if not recomputation:
                     self.backward_no_recomputation(node, function,
-                                                args, kwargs,
-                                                output)
+                                                   args, kwargs,
+                                                   output)
                 else:
                     self.backward_recomputation(node, function,
                                                 args, kwargs,
@@ -146,7 +150,7 @@ class GraphProfiler():
 
     @staticmethod
     def only_tensors_with_grad_fn(ts):
-        return [t for t in flatten(ts) if isinstance(t, Tensor)and(t.grad_fn is not None)]
+        return [t for t in flatten(ts) if isinstance(t, Tensor) and (t.grad_fn is not None)]
 
     @staticmethod
     def delete_grads(node, function, ts):
@@ -194,11 +198,12 @@ class GraphProfiler():
             return False
 
         if node.type is NodeTypes.OP:
-            op_path,idx = node.scope.rsplit("/", maxsplit=1)[1].rsplit("_",maxsplit=1)
+            op_path, idx = node.scope.rsplit("/", maxsplit=1)[1].rsplit("_", maxsplit=1)
             namespace, func_name = op_path.split("::")
 
             inplace_torch_function = ("torch" in namespace) and (func_name[-1] == '_')
-            inplace_tensor_function = (namespace == "Tensor") and (func_name[-1] == "_") and (not func_name.startswith("__"))
+            inplace_tensor_function = (namespace == "Tensor") and (func_name[-1] == "_") and (
+                not func_name.startswith("__"))
             inplace_tensor_magic = (namespace == "Tensor") and (func_name in inplace_arithmetic_ops)
 
             if inplace_tensor_magic or inplace_tensor_function or inplace_torch_function:
@@ -217,7 +222,6 @@ class GraphProfiler():
 
         return should_profile
 
-
     def _debug_stats(self):
         not_fwd = set(self.not_profiled['fwd'])
         not_bwd = set(self.not_profiled['bwd'])
@@ -232,16 +236,15 @@ class GraphProfiler():
         print(f"not fwd req_grad {not_fwd_req_grad}")
         print(f"not bwd req_grad {not_bwd_req_grad}")
 
-
-        for n in chain(not_fwd,not_bwd):
+        for n in chain(not_fwd, not_bwd):
             assert not n.req_grad
-        
+
         assert not_fwd == not_bwd
         print()
         for n in not_fwd:
             print(n.scope)
 
-#NOTE we do not profile operations which do not require grad
+# NOTE we do not profile operations which do not require grad
 # we do not profile inplace operations (unless if we enforce out of place)
 # the result is that for things like computing masks we do not profile neither fwd not bwd
-# this is ok as those computations are not substantial 
+# this is ok as those computations are not substantial

@@ -1,13 +1,17 @@
-from collections import defaultdict
-from typing import List, Dict, Set
-from copy import copy
 import os
-from ...model_profiling import Graph, NodeTypes, Node
+from collections import defaultdict
+from copy import copy
+from typing import List, Dict, Set
+
 import torch
+
+from ...model_profiling import Graph, NodeTypes, Node
+
 __all__ = ["post_process_partition"]
 
 
-def post_process_partition(graph: Graph,edge_weight_function, verbose_on_error=True, assert_output_types=False) -> Graph:
+def post_process_partition(graph: Graph, edge_weight_function, verbose_on_error=True,
+                           assert_output_types=False) -> Graph:
     '''
     process the partition and optimize it
     called as part of partition_graph method
@@ -53,15 +57,14 @@ def post_process_partition(graph: Graph,edge_weight_function, verbose_on_error=T
 
         error = "error cycle detected mutual dependecy between partitions"
         raise AssertionError(error)
-    
 
-    is_valid, error = is_valid_partitioning(graph,edge_weight_function)
+    is_valid, error = is_valid_partitioning(graph, edge_weight_function)
     if assert_output_types:
         assert is_valid, error
     else:
         if not is_valid:
             print("Output between partitons is tricky, but allowing this")
-            print_all_problematic_outputs_between_partitions(graph,edge_weight_function)
+            print_all_problematic_outputs_between_partitions(graph, edge_weight_function)
 
     return graph
 
@@ -169,7 +172,7 @@ def find_subtree(roots: Set[Node], graph_size: int):
     return nodes
 
 
-def is_valid_partitioning(graph: Graph,edge_weight_function):
+def is_valid_partitioning(graph: Graph, edge_weight_function):
     """
     check if we only send tensors between partitions
     """
@@ -178,15 +181,13 @@ def is_valid_partitioning(graph: Graph,edge_weight_function):
             for o in n.out_edges:
                 if n.stage_id != o.stage_id:
                     msg = f"invalid output type at partition boundary {n.stage_id}=>{o.stage_id}"
-                    msg += f"\noutput is {n.scope} of type {n.value_type}, weight {edge_weight_function(n,o)}"
+                    msg += f"\noutput is {n.scope} of type {n.value_type}, weight {edge_weight_function(n, o)}"
                     return False, msg
 
     return True, ""
 
 
-
-
-def print_all_problematic_outputs_between_partitions(graph: Graph,edge_weight_function):
+def print_all_problematic_outputs_between_partitions(graph: Graph, edge_weight_function):
     """
     check if we only send tensors between partitions
     """
@@ -197,10 +198,9 @@ def print_all_problematic_outputs_between_partitions(graph: Graph,edge_weight_fu
             for o in n.out_edges:
                 if n.stage_id != o.stage_id:
                     msg = f"invalid output type at partition boundary {n.stage_id}=>{o.stage_id}"
-                    msg += f"\noutput is {n.scope} of type {n.value_type}, weight {edge_weight_function(n,o)}"
+                    msg += f"\noutput is {n.scope} of type {n.value_type}, weight {edge_weight_function(n, o)}"
                     valid_state = False
                     problems.append(msg)
-
 
     s = f"Valid outputs states = {valid_state}\n" + "problems:\n" + "\n".join(problems)
     print(s)

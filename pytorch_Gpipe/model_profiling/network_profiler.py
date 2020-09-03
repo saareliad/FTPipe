@@ -1,5 +1,6 @@
 import time
 from typing import Dict, List, Optional
+
 import torch
 import torch.nn as nn
 
@@ -9,15 +10,15 @@ __all__ = ['profile_network']
 
 
 def profile_network(
-    net: nn.Module,
-    sample_batch: tuple = (),
-    kwargs: Optional[Dict] = None,
-    basic_blocks: Optional[List[nn.Module]] = None,
-    max_depth=100,
-    n_iter=10,
-    save_memory_mode=False,
-    recomputation=False,
-    force_no_recomp_scopes=None,
+        net: nn.Module,
+        sample_batch: tuple = (),
+        kwargs: Optional[Dict] = None,
+        basic_blocks: Optional[List[nn.Module]] = None,
+        max_depth=100,
+        n_iter=10,
+        save_memory_mode=False,
+        recomputation=False,
+        force_no_recomp_scopes=None,
 ) -> Dict[str, ExecTimes]:
     '''
     profiles a network's computation time(forward/backward)
@@ -52,7 +53,7 @@ def profile_network(
     if basic_blocks is None:
         basic_blocks = ()
     if not isinstance(sample_batch, tuple):
-        sample_batch = (sample_batch, )
+        sample_batch = (sample_batch,)
 
     if force_no_recomp_scopes is None:
 
@@ -101,7 +102,6 @@ def _perform_forward_backward_pass(net,
                                    *sample_batch: tuple,
                                    save_memory_mode=False,
                                    **kwargs: Dict):
-
     if save_memory_mode:
         device = torch.device("cuda")
     else:
@@ -168,6 +168,7 @@ class Wrapper(nn.Module):
         a nn.module to be profiled
 
     '''
+
     def __init__(self,
                  sub_module: nn.Module,
                  scope: str,

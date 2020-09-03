@@ -1,6 +1,8 @@
 from typing import Tuple
+
 import torch
 import torch.nn as nn
+
 tab = '    '
 dtab = tab + tab
 
@@ -82,9 +84,9 @@ def get_state_methods():
     return [state_dict, load_state_dict, named_buffers, named_parameters, cpu, cuda, to]
 
 
-def state_dict(partition, *args,**kwargs):
+def state_dict(partition, *args, **kwargs):
     # we return the state dict of this part as it should be in the original model
-    state = nn.Module.state_dict(partition,*args,**kwargs)
+    state = nn.Module.state_dict(partition, *args, **kwargs)
     lookup = partition.lookup
     result = dict()
     for k, v in state.items():

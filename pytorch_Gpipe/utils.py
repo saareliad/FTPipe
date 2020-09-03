@@ -1,18 +1,20 @@
-from typing import Iterable, Iterator, List, Optional,\
-    Tuple, Union, TypeVar, Generic, OrderedDict, Dict
 import collections
+import inspect
+import operator
+import os
+import re
+from contextlib import contextmanager
+from itertools import chain
+from typing import Iterator, Optional, \
+    Tuple, OrderedDict, Dict
+
 import torch
 import torch.nn as nn
 from torch import Tensor
-from itertools import chain
-from contextlib import contextmanager
-import inspect
-import re
-import operator
-import os
 
 __all__ = ["traverse_model", "traverse_params_buffs",
            "layerDict", "tensorDict"]
+
 
 def is_None(a):
     return operator.is_(a, None)
@@ -22,7 +24,6 @@ def is_not_None(a):
     return operator.is_not(a, None)
 
 
-
 ExecTimes = collections.namedtuple(
     'ExecTimes',
     'forward_time backward_time'
@@ -30,7 +31,8 @@ ExecTimes = collections.namedtuple(
 
 
 def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
-                   basic_blocks: Tuple[nn.Module] = (), full: bool = False) -> Iterator[Tuple[nn.Module, str, nn.Module]]:
+                   basic_blocks: Tuple[nn.Module] = (), full: bool = False) -> Iterator[
+    Tuple[nn.Module, str, nn.Module]]:
     '''
     iterate over model layers yielding the layer,layer_scope,encasing_module
     Parameters:
@@ -92,66 +94,68 @@ def layerDict(model: nn.Module, depth=1000, basic_blocks=()) -> Dict[str, nn.Mod
 
 
 def tensorDict(model: nn.Module) -> OrderedDict[str, Tensor]:
-    return collections.OrderedDict((s, t)for t, s in traverse_params_buffs(model))
+    return collections.OrderedDict((s, t) for t, s in traverse_params_buffs(model))
 
 
-def nested_map(func, ts,full=False):
+def nested_map(func, ts, full=False):
     if isinstance(ts, torch.Size):
         # size is inheriting from tuple which is stupid
         return func(ts)
     elif isinstance(ts, (list, tuple, set)):
-        return type(ts)(nested_map(func, t,full=full) for t in ts)
+        return type(ts)(nested_map(func, t, full=full) for t in ts)
     elif isinstance(ts, dict):
-        return {k: nested_map(func, v,full=full) for k, v in ts.items()}
+        return {k: nested_map(func, v, full=full) for k, v in ts.items()}
     elif isinstance(ts, slice) and full:
-        start = nested_map(func, ts.start,full=full)
-        stop = nested_map(func, ts.stop,full=full)
-        step = nested_map(func, ts.step,full=full)
+        start = nested_map(func, ts.start, full=full)
+        stop = nested_map(func, ts.stop, full=full)
+        step = nested_map(func, ts.step, full=full)
         return slice(start, stop, step)
     return func(ts)
 
 
 def flatten(ts):
-    if isinstance(ts,torch.Size):
+    if isinstance(ts, torch.Size):
         # size is inheriting from tuple which is stupid
         yield ts
     elif isinstance(ts, (list, tuple, set)):
         yield from chain(*[flatten(t) for t in ts])
     elif isinstance(ts, dict):
-        yield from chain(*[flatten(t) for k,t in sorted(ts.items(),key=lambda t:t[0])])
+        yield from chain(*[flatten(t) for k, t in sorted(ts.items(), key=lambda t: t[0])])
     else:
         yield ts
 
-def unflatten(xs,structure):
-    return _unflatten(xs,structure)[0]
 
-def _unflatten(xs,structure):
-    if isinstance(structure,torch.Size):
-        #torch.Size is subclass of tuple which is stupid
-        return xs[0],1
+def unflatten(xs, structure):
+    return _unflatten(xs, structure)[0]
 
-    if not isinstance(structure,(list,tuple,set,dict)):
-        return xs[0],1
-    
-    if isinstance(structure,(list,tuple,set)):
-        offset=0
+
+def _unflatten(xs, structure):
+    if isinstance(structure, torch.Size):
+        # torch.Size is subclass of tuple which is stupid
+        return xs[0], 1
+
+    if not isinstance(structure, (list, tuple, set, dict)):
+        return xs[0], 1
+
+    if isinstance(structure, (list, tuple, set)):
+        offset = 0
         elements = []
         for s in structure:
-            e,n = _unflatten(xs[offset:],s)
+            e, n = _unflatten(xs[offset:], s)
             elements.append(e)
             offset += n
-        
-        return type(structure)(elements),offset
-    
-    assert isinstance(structure,dict)
+
+        return type(structure)(elements), offset
+
+    assert isinstance(structure, dict)
     offset = 0
     elements = dict()
-    for k,v in sorted(structure.items(),key=lambda t: t[0]):
-        e,n = _unflatten(xs[offset:],v)
+    for k, v in sorted(structure.items(), key=lambda t: t[0]):
+        e, n = _unflatten(xs[offset:], v)
         elements[k] = e
         offset += n
-    
-    return elements,offset
+
+    return elements, offset
 
 
 def detach_tensors(ts):
@@ -178,8 +182,9 @@ def move_tensors(ts, device):
 def set_grad_mode(ts, require_grad):
     def grad_mode(t):
         if isinstance(t, Tensor):
-            return t.detach().requires_grad_(isinstance(t,nn.Parameter) or (require_grad and t.is_floating_point()))
+            return t.detach().requires_grad_(isinstance(t, nn.Parameter) or (require_grad and t.is_floating_point()))
         return t
+
     return nested_map(grad_mode, ts)
 
 
@@ -196,8 +201,8 @@ def get_tensor_shapes(ts):
     def get_shape(t):
         if isinstance(t, Tensor):
             return t.shape if t.shape else torch.Size([1])
-        elif isinstance(t,torch.Size):
-            #HACK send torch.Size in MPI as tuple
+        elif isinstance(t, torch.Size):
+            # HACK send torch.Size in MPI as tuple
             return torch.Size([len(t)])
         return None
 
@@ -212,26 +217,25 @@ def get_device(ts) -> torch.device:
     # default device
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+
 @contextmanager
 def force_out_of_place(func):
-    prev_state=None
-    modified=False
-    if hasattr(func,"inplace") and isinstance(func.inplace,bool):
+    prev_state = None
+    modified = False
+    if hasattr(func, "inplace") and isinstance(func.inplace, bool):
         prev_state = func.inplace
-        modified=True
-        setattr(func,"inplace",False)
+        modified = True
+        setattr(func, "inplace", False)
     yield
 
     if modified:
-        setattr(func,"inplace",prev_state)
-
-
+        setattr(func, "inplace", prev_state)
 
     ##############################
     # Magic Method delegation
-    #intentionaly explicit
-    #NOTE if the method requires specific syntax
-    #then it should be also added in model_profiling/tracer.py
+    # intentionaly explicit
+    # NOTE if the method requires specific syntax
+    # then it should be also added in model_profiling/tracer.py
     # and ensure correct code generation in compiler/partition_forward_method.generate_magic
     ##############################
 
@@ -245,80 +249,78 @@ arithmetic_ops = {"__add__": "+",
                   "__mod__": "%",
                   "__matmul__": "@",
                   "__pow__": "**",
-                  "__lshift__":"<<",
-                  "__rshift__":">>",
-                  "__and__":"&",
-                  "__or__":"|",
-                  "__xor__":"^"
+                  "__lshift__": "<<",
+                  "__rshift__": ">>",
+                  "__and__": "&",
+                  "__or__": "|",
+                  "__xor__": "^"
                   }
 
-inplace_arithmetic_ops = {f"__i{op_name[2:]}" : f"{symbol}=" for op_name,symbol in arithmetic_ops.items()}
+inplace_arithmetic_ops = {f"__i{op_name[2:]}": f"{symbol}=" for op_name, symbol in arithmetic_ops.items()}
 
-r_arithmetic_ops = {f"__r{op_name[2:]}" : f"{symbol}" for op_name,symbol in arithmetic_ops.items()}
+r_arithmetic_ops = {f"__r{op_name[2:]}": f"{symbol}" for op_name, symbol in arithmetic_ops.items()}
 
-logical_ops = { "__eq__":"==",
-                "__ne__":"!=",
-                "__gt__":">",
-                "__ge__":">=",
-                "__lt__":"<",
-                "__le__":"<="}
+logical_ops = {"__eq__": "==",
+               "__ne__": "!=",
+               "__gt__": ">",
+               "__ge__": ">=",
+               "__lt__": "<",
+               "__le__": "<="}
 
-conversion_ops={"__bool__":"bool"}
+conversion_ops = {"__bool__": "bool"}
 
-unary_ops={"__neg__":"-",
-           "__pos__":"+",
-           "__invert__":"~"}
+unary_ops = {"__neg__": "-",
+             "__pos__": "+",
+             "__invert__": "~"}
 
-magics={"__len__":"len",
-        "__abs__":"abs",
-        "__iter__":"iter"}
-
+magics = {"__len__": "len",
+          "__abs__": "abs",
+          "__iter__": "iter"}
 
 tensor_creation_ops = {
-        torch.as_tensor: torch,
-        torch.from_numpy: torch,
-        torch.tensor: torch,
-        torch.align_tensors: torch,
-        torch.arange: torch,
-        torch.as_strided: torch,
-        torch.bartlett_window: torch,
-        torch.blackman_window: torch,
-        torch.empty: torch,
-        torch.empty_strided: torch,
-        torch.eye: torch,
-        torch.from_file: torch,
-        torch.full: torch,
-        torch.hamming_window: torch,
-        torch.hann_window: torch,
-        torch.linspace: torch,
-        torch.logspace: torch,
-        torch.ones: torch,
-        torch.rand: torch,
-        torch.randn: torch,
-        torch.randint: torch,
-        torch.randperm: torch,
-        torch.range: torch,
-        torch.sparse_coo_tensor: torch,
-        torch.zeros: torch,
-        torch.cat: torch,
-        torch.stack: torch
-    }
+    torch.as_tensor: torch,
+    torch.from_numpy: torch,
+    torch.tensor: torch,
+    torch.align_tensors: torch,
+    torch.arange: torch,
+    torch.as_strided: torch,
+    torch.bartlett_window: torch,
+    torch.blackman_window: torch,
+    torch.empty: torch,
+    torch.empty_strided: torch,
+    torch.eye: torch,
+    torch.from_file: torch,
+    torch.full: torch,
+    torch.hamming_window: torch,
+    torch.hann_window: torch,
+    torch.linspace: torch,
+    torch.logspace: torch,
+    torch.ones: torch,
+    torch.rand: torch,
+    torch.randn: torch,
+    torch.randint: torch,
+    torch.randperm: torch,
+    torch.range: torch,
+    torch.sparse_coo_tensor: torch,
+    torch.zeros: torch,
+    torch.cat: torch,
+    torch.stack: torch
+}
 
 
-def get_call_site(*ignored_files)->Optional[str]:
+def get_call_site(*ignored_files) -> Optional[str]:
     ignored_files = (__file__,) + ignored_files
-    curdir = os.path.dirname(os.path.realpath(__file__)) 
+    curdir = os.path.dirname(os.path.realpath(__file__))
     for f in inspect.stack():
-        frameinfo=inspect.getframeinfo(f[0]) 
+        frameinfo = inspect.getframeinfo(f[0])
         file_name = frameinfo.filename
         if (file_name not in ignored_files) and (not file_name.startswith(curdir)) and (not "torch\\" in file_name):
-            return file_name+", line "+str(frameinfo.lineno)+"\n"
-    
+            return file_name + ", line " + str(frameinfo.lineno) + "\n"
+
     return None
 
 
-
-def convert_none_checks(input_file:str,output_file:str):
+def convert_none_checks(input_file: str, output_file: str):
     """utility to convert None checks which are unsupported by the traced to
        a convention we support
 
@@ -334,14 +336,14 @@ def convert_none_checks(input_file:str,output_file:str):
         output_file:str:
         path to the python output file to which write the result
     """
-    res=[]
+    res = []
     modifed = False
-    with open(input_file,'r') as f:
-        for idx,original in enumerate(f.readlines()):
+    with open(input_file, 'r') as f:
+        for idx, original in enumerate(f.readlines()):
             is_None_pattern = r'([a-zA-Z0-9\.\(\)\[\]\-\+\*\/]+) is None'
             is_not_None_pattern = r'([a-zA-Z0-9\.\(\)\[\]\-\+\*\/]+) is not None'
-            line = re.sub(is_None_pattern,r'is_None(\1)',original)
-            line = re.sub(is_not_None_pattern,r'is_not_None(\1)',line)
+            line = re.sub(is_None_pattern, r'is_None(\1)', original)
+            line = re.sub(is_not_None_pattern, r'is_not_None(\1)', line)
             if line != original:
                 modifed = True
                 print(f"-I- changed line {idx}")
@@ -350,7 +352,7 @@ def convert_none_checks(input_file:str,output_file:str):
                 print()
 
             res.append(line)
-    
+
     if modifed:
         lines = ['import operator\n']
         lines.append(inspect.getsource(is_None))
@@ -358,7 +360,5 @@ def convert_none_checks(input_file:str,output_file:str):
         lines.append("\n")
         res = lines + res
 
-    
-    with open(output_file,"w") as f:
+    with open(output_file, "w") as f:
         f.writelines(res)
-

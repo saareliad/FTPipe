@@ -1,12 +1,15 @@
+import re
 from collections import defaultdict, deque
+from importlib import import_module
 from itertools import chain
 from typing import List, Tuple, Dict, Iterator, Set
-import re
-from ..model_profiling import used_namespaces, Node, NodeTypes,Graph
-from ..utils import inplace_arithmetic_ops, r_arithmetic_ops,arithmetic_ops,logical_ops,conversion_ops,magics, tensor_creation_ops,unary_ops
-from .utils import sortedPartitionInputs,partitionOutputs
+
 import torch
-from importlib import import_module
+
+from .utils import sortedPartitionInputs, partitionOutputs
+from ..model_profiling import used_namespaces, Node, NodeTypes, Graph
+from ..utils import inplace_arithmetic_ops, r_arithmetic_ops, arithmetic_ops, logical_ops, conversion_ops, magics, \
+    tensor_creation_ops, unary_ops
 
 tab = '    '
 dtab = tab + tab
@@ -14,13 +17,13 @@ dtab = tab + tab
 __all__ = ['generate_forward_method']
 
 
-def generate_forward_method(stage_id:int,
-        graph:Graph,
-        partition_nodes: List[Node],
-        model_outputs: List[Node],
-        partition_fields: Dict[str, str],
-        generate_explicit_del=False,
-        generate_activation_propagation=True) -> Tuple[List[str], Dict[str, List]]:
+def generate_forward_method(stage_id: int,
+                            graph: Graph,
+                            partition_nodes: List[Node],
+                            model_outputs: List[Node],
+                            partition_fields: Dict[str, str],
+                            generate_explicit_del=False,
+                            generate_activation_propagation=True) -> Tuple[List[str], Dict[str, List]]:
     '''the gateway to generate a forward function of a partition
     '''
     # function arguments are x0...xn
@@ -31,16 +34,16 @@ def generate_forward_method(stage_id:int,
     # function and layers are allocated temporary only if they have more than 1 use
 
     inputs = sortedPartitionInputs(partition_nodes)
-    enforce_out_of_place_for_partition_inputs(partition_nodes,inputs)
-    i=0
-    input_ids=[]
-    input_sources=[]
+    enforce_out_of_place_for_partition_inputs(partition_nodes, inputs)
+    i = 0
+    input_ids = []
+    input_sources = []
     for n in inputs:
         if n.id in graph.input_kw_ids:
             input_ids.append(graph.input_kw_ids[n.id])
         else:
             input_ids.append(f"x{i}")
-            i+=1
+            i += 1
 
         if n.type is NodeTypes.IN:
             input_sources.append(-1)
@@ -57,7 +60,7 @@ def generate_forward_method(stage_id:int,
     for k in remove_buffs_params:
         partition_fields.pop(k)
 
-    input_scopes = [graph.input_kw_ids.get(node.id,node.scope) for node in inputs]
+    input_scopes = [graph.input_kw_ids.get(node.id, node.scope) for node in inputs]
     ready_expressions.update(zip(inputs, input_ids))
 
     lines = []
@@ -67,16 +70,16 @@ def generate_forward_method(stage_id:int,
     outputs = partitionOutputs(partition_nodes, model_outputs)
 
     if generate_activation_propagation:
-        #NOTE this just ensures correct code generation for input propagation
+        # NOTE this just ensures correct code generation for input propagation
         # we still need to modify the actual config 
         # this is done in the compile_partitioned_model.generate_config_with_input_propagation
-        outputs = apply_input_propagation(stage_id,outputs,inputs)
+        outputs = apply_input_propagation(stage_id, outputs, inputs)
 
     outputs = sorted(outputs, key=lambda n: n.id)
 
     output_destinations = []
     for n in outputs:
-        dsts=[]
+        dsts = []
         if n.id in graph.output_ids:
             dsts.append(-1)
         dsts.extend(o.stage_id for o in n.out_edges)
@@ -84,7 +87,7 @@ def generate_forward_method(stage_id:int,
         dsts.discard(n.stage_id)
         output_destinations.append(list(dsts))
 
-    out_scopes = [graph.input_kw_ids.get(n.id,n.scope) for n in outputs]
+    out_scopes = [graph.input_kw_ids.get(n.id, n.scope) for n in outputs]
     body = generateBody(outputs,
                         partition_nodes,
                         partition_fields,
@@ -109,10 +112,10 @@ def generate_forward_method(stage_id:int,
           "output_shapes": output_shapes,
           "input_dtypes": input_dtypes,
           "output_dtypes": output_dtypes,
-          "inputs_req_grad":inputs_req_grad,
-          "outputs_req_grad":outputs_req_grad,
-          "created_by":input_sources,
-          "used_by":output_destinations}
+          "inputs_req_grad": inputs_req_grad,
+          "outputs_req_grad": outputs_req_grad,
+          "created_by": input_sources,
+          "used_by": output_destinations}
 
     return lines, io
 
@@ -130,9 +133,9 @@ def generateDeclaration(input_ids: List[str], partition_fields: Dict[Node,
         lines.append(f"{dtab}# {node.scope} <=> {field}\n")
 
     lines.extend([f"\n{dtab}# moving inputs to current device no op if already on the correct device\n",
-                f"{dtab}{', '.join(input_ids)} = move_tensors(unflatten(args,self.input_structure), self.device)"])
+                  f"{dtab}{', '.join(input_ids)} = move_tensors(unflatten(args,self.input_structure), self.device)"])
     if len(input_ids) == 1:
-        lines[-1]+="[0]"
+        lines[-1] += "[0]"
     return ''.join(lines)
 
 
@@ -171,7 +174,7 @@ def generate_statements(partition_nodes: List[Node],
     variable_name_generator = variableNameGenerator()
     namespaces = used_namespaces()
 
-    #if we have a call for a function like torch.zeros() we need to explicitly add a device
+    # if we have a call for a function like torch.zeros() we need to explicitly add a device
     # arg to ensure it's being created at the right place
     tensor_creation_ops_names = {f.__name__ for f in tensor_creation_ops.keys()}
 
@@ -186,7 +189,7 @@ def generate_statements(partition_nodes: List[Node],
             ready_expressions[node] = generate_constant(node)
             continue
 
-        variable_name = allocate_variable(node,ready_expressions,uses,available_names,variable_name_generator)
+        variable_name = allocate_variable(node, ready_expressions, uses, available_names, variable_name_generator)
 
         if node_type is NodeTypes.LAYER:
 
@@ -203,7 +206,7 @@ def generate_statements(partition_nodes: List[Node],
             statements.append(statement)
 
         else:
-            op_path = scope.rsplit("/", maxsplit=1)[1].rsplit("_",maxsplit=1)[0]
+            op_path = scope.rsplit("/", maxsplit=1)[1].rsplit("_", maxsplit=1)[0]
             namespace, func_name = op_path.split("::")
             # function call
             if namespace in namespaces:
@@ -214,10 +217,10 @@ def generate_statements(partition_nodes: List[Node],
                 #  y = x - torch.arange(12)
                 # it those 2 statements are on different stages we will have an error for device mismatch (y was created on cpu, and x was moved to GPU)
 
-                inject_device =  (namespace == "torch") and (func_name in tensor_creation_ops_names)
+                inject_device = (namespace == "torch") and (func_name in tensor_creation_ops_names)
 
                 parameter_list = generate_parameter_list(node.args, node.kwargs,
-                                                         ready_expressions,inject_device=inject_device)
+                                                         ready_expressions, inject_device=inject_device)
                 statements.append(
                     f"{variable_name} = {namespace}.{func_name}({parameter_list})")
 
@@ -239,7 +242,8 @@ def generate_statements(partition_nodes: List[Node],
 
     return statements
 
-def allocate_variable(node,ready_expressions,uses,available_names,variable_name_generator):
+
+def allocate_variable(node, ready_expressions, uses, available_names, variable_name_generator):
     for i in node.in_edges:
         uses[i] -= 1
         if uses[i] == 0:
@@ -255,7 +259,7 @@ def generate_container_construct(ready_expressions, node, variable_name):
     '''
     if "prim::DictConstruct" in node.scope:
         kwargs = []
-        for a,kws in node.kwargs.items():
+        for a, kws in node.kwargs.items():
             for k in kws:
                 kwargs.append(f"'{k}':{ready_expressions[a]}")
         statement = f"{variable_name} = {{{kwargs}}}"
@@ -291,23 +295,24 @@ def generate_container_construct(ready_expressions, node, variable_name):
 
 def generate_constant(node):
     assert node.type is NodeTypes.CONSTANT
-    v= node.constant_value
-    if isinstance(v,torch.device) or v == "cpu" or (isinstance(v,str) and "cuda" in v):
+    v = node.constant_value
+    if isinstance(v, torch.device) or v == "cpu" or (isinstance(v, str) and "cuda" in v):
         return "self.device"
-    elif isinstance(v,str) and ("__getattribute__" not in list(node.out_edges)[0].scope):
-        #this is a string argument and not a attribute access
+    elif isinstance(v, str) and ("__getattribute__" not in list(node.out_edges)[0].scope):
+        # this is a string argument and not a attribute access
         return f"'{v}'"
-    elif isinstance(v,float) and v in [float("inf"),float("-inf")]:
+    elif isinstance(v, float) and v in [float("inf"), float("-inf")]:
         return f"float('{v}')"
     else:
         return str(v)
 
+
 def generate_magic(variable_name, self_arg, func_name, param_list):
     ##############################
     # Magic Method delegation
-    #intentionaly explicit
-    #NOTE if the method requires specific syntax
-    #then it should be also added in model_profiling/tracer.py
+    # intentionaly explicit
+    # NOTE if the method requires specific syntax
+    # then it should be also added in model_profiling/tracer.py
     # and ensure correct code generation in utils
     ##############################
     if func_name == "__getattribute__":
@@ -341,7 +346,7 @@ def generate_magic(variable_name, self_arg, func_name, param_list):
             f"{variable_name} = {magics[func_name]}({self_arg})"]
     elif func_name in unary_ops:
         statement = [
-            f"{variable_name} = {unary_ops[func_name]}{self_arg}"]   
+            f"{variable_name} = {unary_ops[func_name]}{self_arg}"]
     else:
         statement = [
             f"{variable_name} = {self_arg}.{func_name}({', '.join(param_list[1:])})"]
@@ -349,15 +354,15 @@ def generate_magic(variable_name, self_arg, func_name, param_list):
     return statement
 
 
-def generate_parameter_list(node_args, node_kwargs, ready_expressions,inject_device=False, string=True):
+def generate_parameter_list(node_args, node_kwargs, ready_expressions, inject_device=False, string=True):
     has_device_arg = any(a.value_type is torch.device for a in node_args)
     has_device_arg |= any(a.value_type is torch.device for a in node_kwargs.keys())
     args = [ready_expressions[a] for a in node_args]
     kwargs = []
-    for a,kws in node_kwargs.items():
+    for a, kws in node_kwargs.items():
         for k in kws:
             kwargs.append(f"{k}={ready_expressions[a]}")
-    
+
     if inject_device and (not has_device_arg):
         kwargs.append("device = self.device")
 
@@ -447,6 +452,7 @@ def variableNameGenerator() -> Iterator[str]:
     '''return an infinite generator yielding
        names t_0 , t_1,...
     '''
+
     def f():
         temp_idx = -1
         while True:
@@ -456,10 +462,10 @@ def variableNameGenerator() -> Iterator[str]:
     return iter(f())
 
 
-def enforce_out_of_place_for_partition_inputs(partition: List[Node],partition_inputs:List[Node]):
+def enforce_out_of_place_for_partition_inputs(partition: List[Node], partition_inputs: List[Node]):
     # the folowing will cause an error because
     # def forward(self,x0):
-        # x0+=1
+    # x0+=1
     # when we detach we make x0 a leaf
     # while in the original model x0 was just an intermediary value
     # the solution is to transform the operation into an out of place one x0 + 1
@@ -467,34 +473,36 @@ def enforce_out_of_place_for_partition_inputs(partition: List[Node],partition_in
         if (n.type != NodeTypes.OP) or (n.value_type != torch.Tensor):
             continue
 
-        op_path,idx = n.scope.rsplit("/", maxsplit=1)[1].rsplit("_",maxsplit=1)
+        op_path, idx = n.scope.rsplit("/", maxsplit=1)[1].rsplit("_", maxsplit=1)
         namespace, func_name = op_path.split("::")
 
         inplace_torch_function = ("torch" in namespace) and (func_name[-1] == '_')
-        inplace_tensor_function = (namespace == "Tensor") and (func_name[-1] == "_") and (not func_name.startswith("__"))
+        inplace_tensor_function = (namespace == "Tensor") and (func_name[-1] == "_") and (
+            not func_name.startswith("__"))
         inplace_tensor_magic = (namespace == "Tensor") and (func_name in inplace_arithmetic_ops)
 
         if inplace_tensor_magic or inplace_tensor_function or inplace_torch_function:
             u = n.in_edges[0]
-            if not ((u.value_type is torch.Tensor) and(u.req_grad) and (u in partition_inputs)):
+            if not ((u.value_type is torch.Tensor) and (u.req_grad) and (u in partition_inputs)):
                 continue
             if inplace_tensor_magic:
                 # function is an __imagic__
-                n.scope = n.scope.rsplit("/",maxsplit=1)[0]+f"/{namespace}::__{func_name[3:]}_{idx}"
-            #if we have the out of place version we use it instead
-            elif (namespace == "Tensor" and  hasattr(torch.Tensor,func_name[:-1])) or (namespace != "Tensor" and hasattr(import_module(namespace),func_name[:-1])):
+                n.scope = n.scope.rsplit("/", maxsplit=1)[0] + f"/{namespace}::__{func_name[3:]}_{idx}"
+            # if we have the out of place version we use it instead
+            elif (namespace == "Tensor" and hasattr(torch.Tensor, func_name[:-1])) or (
+                    namespace != "Tensor" and hasattr(import_module(namespace), func_name[:-1])):
                 # function torch.func_ or Tensor.func_
-                n.scope = n.scope.rsplit("/",maxsplit=1)[0]+f"/{namespace}::{func_name[:-1]}_{idx}"
-            
+                n.scope = n.scope.rsplit("/", maxsplit=1)[0] + f"/{namespace}::{func_name[:-1]}_{idx}"
 
-def apply_input_propagation(stage_id:int,outputs:List[Node],inputs:List[Node])->Set[Node]:
+
+def apply_input_propagation(stage_id: int, outputs: List[Node], inputs: List[Node]) -> Set[Node]:
     for i in inputs:
         if i.type != NodeTypes.IN:
             dsts = {o.stage_id for o in i.out_edges}
-        
+
             # if there is a later stage that uses the same input
             # we will propagate it from here
             if stage_id < max(dsts):
                 outputs.append(i)
-    
+
     return set(outputs)

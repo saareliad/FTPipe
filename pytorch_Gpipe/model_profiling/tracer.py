@@ -1,19 +1,19 @@
+import operator
 from contextlib import contextmanager
 from functools import wraps
 from itertools import chain
-import operator
-import warnings
-
 
 import torch
 import torch.nn as nn
-from torch import Tensor
 import torch.nn.functional as F
+from torch import Tensor
 from torch._overrides import get_overridable_functions
 
 from pytorch_Gpipe.utils import traverse_model
 from .control_flow_graph import Node, NodeTypes, Graph
-from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops,logical_ops, nested_map,get_call_site, tensor_creation_ops
+from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops, logical_ops, nested_map, get_call_site, \
+    tensor_creation_ops
+
 ##############################
 # Tracing Metadata
 ##############################
@@ -109,7 +109,7 @@ class ExplicitUntracedFunction():
                 return v._data
             return v
 
-        return nested_map(untraced, vs,full=True)
+        return nested_map(untraced, vs, full=True)
 
 
 class TracedFunction():
@@ -128,7 +128,6 @@ class TracedFunction():
         setattr(self.namespace, self.function_name, self)
 
     def __call__(self, *args, **kwargs):
-
         # record the operation
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
         out = TracedValue(NodeTypes.OP,
@@ -198,8 +197,8 @@ def tracing_not_supported(func):
     """a decortaor to have pretty error messages when accessing an unsupported
     __magic__ method
     """
-    
-    #TODO add general warning
+
+    # TODO add general warning
     # show file name, actual line, operator
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -239,14 +238,14 @@ class TracedValue(object):
         NODES[self.id] = self.node
 
         self.creation_site = get_call_site(__file__)
-        
+
     def set_data(self, data):
         assert isTracedValue(
             data), f"TracedValue expects a basic type got {type(data)} scope {self.scope}"
 
-        #target device is managed by the stage and is not dynamic
-        #so we will convert this node to a CONSTANT
-        if isinstance(data,torch.device) or (data == "cpu") or (isinstance(data,str) and "cuda" in data):
+        # target device is managed by the stage and is not dynamic
+        # so we will convert this node to a CONSTANT
+        if isinstance(data, torch.device) or (data == "cpu") or (isinstance(data, str) and "cuda" in data):
             data = torch.device(data)
             self.node.constant_value = data
 
@@ -272,8 +271,8 @@ class TracedValue(object):
             # so here we try and find the namespace explicitly
             # first encounter was when tracing a torch.relu_
             namespace = None
-            for m in [torch,F,torch.functional]:
-                if hasattr(m,func_name):
+            for m in [torch, F, torch.functional]:
+                if hasattr(m, func_name):
                     namespace = m.__name__
                     break
             if namespace is None:
@@ -316,9 +315,9 @@ class TracedValue(object):
 
     ##############################
     # Magic Method delegation
-    #intentionaly explicit
-    #NOTE if the method requires specific syntax
-    #then it should be also added in utils.py
+    # intentionaly explicit
+    # NOTE if the method requires specific syntax
+    # then it should be also added in utils.py
     # and ensure correct code generation in compiler/partition_forward_method.generate_magic
     ##############################
 
@@ -336,33 +335,31 @@ class TracedValue(object):
     def __setitem__(self, idx, value):
         pass
 
-    #NOTE this must return an integer
+    # NOTE this must return an integer
     def __len__(self):
-        #TODO add general warning
+        # TODO add general warning
         # show file name, actual line, operator
         # print(f"{self.scope}::__len__ is treated as constant")
         return len(self._data)
 
     @tracing_not_supported
-    def __contains__(self,key):
+    def __contains__(self, key):
         pass
 
-        
     ##############################
     # Conversions
     ##############################
-    
-    #support for conditionals if statements while loops etc.
-    #NOTE this must return unwraped value
+
+    # support for conditionals if statements while loops etc.
+    # NOTE this must return unwraped value
     # it is prohibited to not return a converted value
     def __bool__(self):
         return bool(self._data)
-    
 
     ##############################
     # Unary operations
     ##############################
-    
+
     @delegate_to_traced_value
     def __neg__(self):
         pass
@@ -435,7 +432,6 @@ class TracedValue(object):
     def __or__(self, other):
         pass
 
-
     ##############################
     # Reflected Arithmetic operators
     ##############################
@@ -492,7 +488,6 @@ class TracedValue(object):
     def __ror__(self, other):
         pass
 
-    
     ##############################
     # Augmented  Assingment operators
     ##############################
@@ -549,7 +544,6 @@ class TracedValue(object):
     def __ior__(self, other):
         pass
 
-
     ##############################
     # Logical operations
     ##############################
@@ -591,7 +585,6 @@ class TracedInstanceFunction(object):
         self.namespace = namespace
 
     def __call__(self, *args, **kwargs):
-
         # record the operation
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
         out = TracedValue(NodeTypes.OP,
@@ -663,7 +656,7 @@ class TracedLayer(nn.Module):
         return out
 
     def __getattr__(self, name):
-        #NOTE this is different than what we did in TracedValue as layers store buffers/parameters/modules in separate dicts
+        # NOTE this is different than what we did in TracedValue as layers store buffers/parameters/modules in separate dicts
         try:
             return super().__getattr__(name)
         except Exception:
@@ -687,6 +680,7 @@ class TracedLayer(nn.Module):
     def __contains__(self, key):
         return key in self._module
 
+
 def isTracedValue(data):
     """
     predicate to check if a value can be traced
@@ -701,12 +695,12 @@ def isTracedValue(data):
 ##############################
 def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_blocks=()):
     reset_tracing_state()
-    #just to be sure
+    # just to be sure
     _unwrap_layers(module)
     args, kwargs = prepare_args_and_kwargs(args=args, kwargs=kwargs)
 
     _wrap_traced_layers(module, depth=depth,
-                                      basic_blocks=basic_blocks)
+                        basic_blocks=basic_blocks)
 
     trace_registered_functions()
     ExplicitUntracedFunctions.enable()
@@ -732,9 +726,9 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
     CURRENT_SCOPE = ""
 
     nodes = make_constant(NODES)
-    nodes,output_id = duplicate_constants(nodes,output_id)
+    nodes, output_id = duplicate_constants(nodes, output_id)
 
-    nodes = discard_unused_nodes(nodes,output_id)
+    nodes = discard_unused_nodes(nodes, output_id)
 
     # record input kwargs explicitly as they are not passed by position
     # we only retain kwargs that are actually used
@@ -744,21 +738,21 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
     nodes, output_id = set_node_indices(nodes, output_id)
     NODES.clear()
 
-
     is_valid, errors = check_is_valid_graph(nodes)
     if not is_valid:
         raise RuntimeError(errors)
 
     return Graph(nodes, input_kw_ids, [output_id], depth, basic_blocks)
 
-def find_reachable_nodes(nodes,output_id):
+
+def find_reachable_nodes(nodes, output_id):
     '''do a bfs from the output on the undirected graph to find all nodes that are 
     reachable from the output node this is really conservative some unused nodes will still remain
     '''
 
-    #TODO make this more strict, we still allow nodes that should be removed
+    # TODO make this more strict, we still allow nodes that should be removed
     open = {nodes[output_id]}
-    reachable=set()
+    reachable = set()
 
     while open:
         node = open.pop()
@@ -770,13 +764,9 @@ def find_reachable_nodes(nodes,output_id):
             if ("__i" in n.scope) or (n.value_type is torch.Tensor):
                 open.add(n)
 
-
         reachable.add(node)
 
-
     return reachable
-        
-        
 
 
 def prepare_args_and_kwargs(args=(), kwargs=None):
@@ -799,10 +789,10 @@ def prepare_args_and_kwargs(args=(), kwargs=None):
         v.set_data(a)
         wrapped_args.append(v)
 
-    n_args=len(args)
+    n_args = len(args)
     wrapped_kwargs = dict()
-    for i, (k, a) in enumerate(sorted(kwargs.items(),key=lambda t:t[0])):
-        v = TracedValue(NodeTypes.IN, f"input{n_args+i}")
+    for i, (k, a) in enumerate(sorted(kwargs.items(), key=lambda t: t[0])):
+        v = TracedValue(NodeTypes.IN, f"input{n_args + i}")
         v.set_data(a)
         wrapped_kwargs[k] = v
 
@@ -849,10 +839,11 @@ def _wrap_traced_layers(module: nn.Module, depth=1000, basic_blocks=()):
                                                              full=True):
         name = scope[scope.rfind('[') + 1:-1]
 
-        if isinstance(sub_layer,(nn.ModuleList,nn.ModuleDict)):
-            raise TypeError(f"tracing nn.ModuleList/nn.ModuleDict is not supported got {scope} of type {type(sub_layer)}")
-        
-        if isinstance(sub_layer,(nn.ParameterList,nn.ParameterDict)):
+        if isinstance(sub_layer, (nn.ModuleList, nn.ModuleDict)):
+            raise TypeError(
+                f"tracing nn.ModuleList/nn.ModuleDict is not supported got {scope} of type {type(sub_layer)}")
+
+        if isinstance(sub_layer, (nn.ParameterList, nn.ParameterDict)):
             # it does not have a forward method so there is nothing to trace
             # we register the parameters for tracing in record_free_floating_parameters_and_buffers
             continue
@@ -885,44 +876,45 @@ def reset_tracing_state():
     TracedValue.ID = 0
 
 
-def duplicate_constants(nodes,output_id):
-    new_nodes=dict()
-    offset=0
-    new_output_id=0
+def duplicate_constants(nodes, output_id):
+    new_nodes = dict()
+    offset = 0
+    new_output_id = 0
     for idx in range(len(nodes)):
         node = nodes[idx]
         if node.id == output_id:
-            new_output_id = node.id+offset
-        node.id+=offset
-        
+            new_output_id = node.id + offset
+        node.id += offset
+
         if node.type is NodeTypes.CONSTANT and len(node.out_edges) > 1:
-            for n_copy,o in enumerate(node.out_edges):
+            for n_copy, o in enumerate(node.out_edges):
                 copy_node = Node.from_other(node)
-                copy_node.id+=(n_copy)
-                o.replace_input(node,copy_node)
-                copy_node.out_edges={o}
+                copy_node.id += (n_copy)
+                o.replace_input(node, copy_node)
+                copy_node.out_edges = {o}
                 new_nodes[copy_node.id] = copy_node
-                offset+=1
+                offset += 1
         else:
             assert node.id not in new_nodes
-            new_nodes[node.id]=node
-    
-    return new_nodes,new_output_id
+            new_nodes[node.id] = node
 
-def discard_unused_nodes(nodes,output_id):
+    return new_nodes, new_output_id
+
+
+def discard_unused_nodes(nodes, output_id):
     new_nodes = []
     while True:
-        changed=False
-        reachable_nodes = find_reachable_nodes(nodes,output_id)
+        changed = False
+        reachable_nodes = find_reachable_nodes(nodes, output_id)
 
         for node in reversed(list(nodes.values())):
             if node.id == output_id:
                 new_nodes.append((node.id, node))
-            
+
             # if a >1:      a>1 will be traced but it has no meaning to us
             # as we only record the branch that was taken
             unused_branch = False
-            if node.type is NodeTypes.OP and (len(node.out_edges)== 0):
+            if node.type is NodeTypes.OP and (len(node.out_edges) == 0):
                 op_path = node.scope.rsplit("/", maxsplit=1)[1]
                 _, func_name = op_path.split("::")
                 unused_branch = func_name in logical_ops
@@ -930,40 +922,41 @@ def discard_unused_nodes(nodes,output_id):
             # a,b=f() will actually invoke __getitem__ 3 times so we discard the last node
             iter_sentinel = node.value_type is None
 
-            unused_constant_or_input = (node.type in [NodeTypes.IN,NodeTypes.CONSTANT]) and (len(node.out_edges) == 0)
+            unused_constant_or_input = (node.type in [NodeTypes.IN, NodeTypes.CONSTANT]) and (len(node.out_edges) == 0)
 
             unreachable = node not in reachable_nodes
 
-            if unused_branch or iter_sentinel or unused_constant_or_input or unreachable: 
+            if unused_branch or iter_sentinel or unused_constant_or_input or unreachable:
                 assert len(
                     node.out_edges) == 0, "unused traced value should not have outgoing edges"
 
                 for u in node.in_edges:
                     u.remove_output(node)
-                
-                changed=True
+
+                changed = True
             else:
                 new_nodes.append((node.id, node))
 
         if not changed:
             break
 
-        nodes=dict(reversed(new_nodes))
-        new_nodes=[]
-    
+        nodes = dict(reversed(new_nodes))
+        new_nodes = []
+
     # reverse dict_order
     return dict(reversed(new_nodes))
 
 
 def make_constant(nodes):
-    #devices are managed by the stage and are static
+    # devices are managed by the stage and are static
     def device_predicate(n):
         return n.value_type is torch.device
-    _make_constant(nodes,device_predicate)
+
+    _make_constant(nodes, device_predicate)
     return nodes
 
 
-def _make_constant(nodes,predicate):
+def _make_constant(nodes, predicate):
     for n in nodes.values():
         if predicate(n):
             for i in n.in_edges:
@@ -980,15 +973,13 @@ def set_node_indices(nodes, output_id):
         assert idx <= node.id
 
         node.id = idx
-        
-        if node.type in [NodeTypes.OP,NodeTypes.PRIMITIVE]:
-            node.scope+=f"_{node.id}"
-        
+
+        if node.type in [NodeTypes.OP, NodeTypes.PRIMITIVE]:
+            node.scope += f"_{node.id}"
+
         new_nodes[idx] = node
 
     return new_nodes, nodes[output_id].id
-
-
 
 
 ##############################
@@ -1145,15 +1136,15 @@ def record_free_floating_parameters_and_buffers(module: nn.Module):
             module._parameters[name] = traced_t
         else:
             module._buffers[name] = traced_t
-    
-    #parameterList/Dict need a special case to ensure correct scope registration
+
+    # parameterList/Dict need a special case to ensure correct scope registration
     # as they are modules but do not have a forward method
-    for name,c in module.named_children():
-        if isinstance(c,(nn.ParameterList,nn.ParameterDict)):
-            for p_name,p in c.named_parameters():
+    for name, c in module.named_children():
+        if isinstance(c, (nn.ParameterList, nn.ParameterDict)):
+            for p_name, p in c.named_parameters():
                 traced_p = TracedValue(NodeTypes.BUFF_PARAM,
-                               f"/{type(c).__name__}[{name}]/{type(p).__name__}[{p_name}]")
-                
+                                       f"/{type(c).__name__}[{name}]/{type(p).__name__}[{p_name}]")
+
                 traced_p.set_data(p)
                 c._parameters[p_name] = traced_p
     yield
@@ -1167,18 +1158,18 @@ def record_free_floating_parameters_and_buffers(module: nn.Module):
         else:
             module._buffers[name] = t
 
-    #revert parameterList/Dict tracing
-    for name,c in module.named_children():
-        if isinstance(c,(nn.ParameterList,nn.ParameterDict)):
-            for p_name,p in c._parameters.items():
+    # revert parameterList/Dict tracing
+    for name, c in module.named_children():
+        if isinstance(c, (nn.ParameterList, nn.ParameterDict)):
+            for p_name, p in c._parameters.items():
                 c._parameters[p_name] = p._data
 
 
 def record_non_terminal_output(out):
-    #NOTE it is possible that a module returns unrecorded outputs
+    # NOTE it is possible that a module returns unrecorded outputs
     # like containers None etc. so we ensure that they are all recorded
 
-    recorded_outs,_ = record_args((out,),top_level=True)
+    recorded_outs, _ = record_args((out,), top_level=True)
     return recorded_outs[0]
 
 
@@ -1224,7 +1215,7 @@ def check_is_valid_graph(nodes):
                            f"scope: {node.scope}",
                            f"incoming edges: {[n.id for n in node.in_edges]}",
                            f"positional args: {[n.id for n in node.args]}",
-                           f"keyword args: {[(n.id,k) for n,k in node.kwargs.items()]}",
+                           f"keyword args: {[(n.id, k) for n, k in node.kwargs.items()]}",
                            f"outgoing edges: {[n.id for n in node.out_edges]}",
                            ""])
             valid = False
@@ -1237,7 +1228,7 @@ def check_is_valid_graph(nodes):
                                f"scope: {node.scope}",
                                f"incoming edges: {[n.id for n in node.in_edges]}",
                                f"positional args: {[n.id for n in node.args]}",
-                               f"keyword args: {[(n.id,k) for n,k in node.kwargs.items()]}",
+                               f"keyword args: {[(n.id, k) for n, k in node.kwargs.items()]}",
                                f"outgoing edges: {[n.id for n in node.out_edges]}",
                                ""])
                 valid = False
@@ -1248,7 +1239,7 @@ def check_is_valid_graph(nodes):
                                f"scope: {node.scope}",
                                f"incoming edges: {[n.id for n in node.in_edges]}",
                                f"positional args: {[n.id for n in node.args]}",
-                               f"keyword args: {[(n.id,k) for n,k in node.kwargs.items()]}",
+                               f"keyword args: {[(n.id, k) for n, k in node.kwargs.items()]}",
                                f"outgoing edges: {[n.id for n in node.out_edges]}",
                                ""])
                 valid = False
@@ -1273,7 +1264,7 @@ def check_is_valid_graph(nodes):
                                f"scope: {node.scope}",
                                f"incoming edges: {[n.id for n in node.in_edges]}",
                                f"positional args: {[n.id for n in node.args]}",
-                               f"keyword args: {[(n.id,k) for n,k in node.kwargs.items()]}",
+                               f"keyword args: {[(n.id, k) for n, k in node.kwargs.items()]}",
                                f"outgoing edges: {[n.id for n in node.out_edges]}",
                                ""])
                 valid = False
@@ -1284,7 +1275,7 @@ def check_is_valid_graph(nodes):
                                f"scope: {node.scope}",
                                f"incoming edges: {[n.id for n in node.in_edges]}",
                                f"positional args: {[n.id for n in node.args]}",
-                               f"keyword args: {[(n.id,k) for n,k in node.kwargs.items()]}",
+                               f"keyword args: {[(n.id, k) for n, k in node.kwargs.items()]}",
                                f"outgoing edges: {[n.id for n in node.out_edges]}",
                                ""])
                 valid = False
@@ -1308,23 +1299,25 @@ def check_is_valid_graph(nodes):
                            f"value: {node.constant_value}",
                            f"incoming edges: {[n.id for n in node.in_edges]}",
                            f"positional args: {[n.id for n in node.args]}",
-                           f"keyword args: {[(n.id,k) for n,k in node.kwargs.items()]}",
+                           f"keyword args: {[(n.id, k) for n, k in node.kwargs.items()]}",
                            f"outgoing edges: {[n.id for n in node.out_edges]}",
                            ""])
             valid = False
 
-        if isinstance(node.tensor_shape, torch.Size) or isinstance(node.tensor_dtype, torch.dtype) or issubclass(node.value_type, Tensor):
-            #HACK send torch.Size in MPI as tuple
+        if isinstance(node.tensor_shape, torch.Size) or isinstance(node.tensor_dtype, torch.dtype) or issubclass(
+                node.value_type, Tensor):
+            # HACK send torch.Size in MPI as tuple
             if node.value_type is torch.Size:
                 continue
-            if not ((isinstance(node.tensor_shape, torch.Size)) and (isinstance(node.tensor_dtype, torch.dtype)) and (issubclass(node.value_type, Tensor))):
+            if not ((isinstance(node.tensor_shape, torch.Size)) and (isinstance(node.tensor_dtype, torch.dtype)) and (
+            issubclass(node.value_type, Tensor))):
                 errors.extend(["tensor value value not recorded in all of TENSOR_SHAPES TENSOR_DTYPES VALUE_TYPES",
                                f"node id: {i}",
                                f"node id: {i}",
                                f"scope: {node.scope}",
                                f"incoming edges: {[n.id for n in node.in_edges]}",
                                f"positional args: {[n.id for n in node.args]}",
-                               f"keyword args: {[(n.id,k) for n,k in node.kwargs.items()]}",
+                               f"keyword args: {[(n.id, k) for n, k in node.kwargs.items()]}",
                                f"outgoing edges: {[n.id for n in node.out_edges]}",
                                ""])
                 valid = False

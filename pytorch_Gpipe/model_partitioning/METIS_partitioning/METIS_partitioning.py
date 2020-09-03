@@ -1,7 +1,7 @@
-from typing import Optional, Dict, List
+from typing import Optional, Dict
 
-from ...model_profiling import Graph, NodeWeightFunction, EdgeWeightFunction
 from .process_partition import post_process_partition
+from ...model_profiling import Graph, NodeWeightFunction, EdgeWeightFunction
 
 __all__ = ["METIS_partition"]
 
@@ -44,8 +44,8 @@ def METIS_partition(graph: Graph,
                      node_weight_function=node_weight_function,
                      edge_weight_function=edge_weight_function)
 
-    attempts = METIS_opts.pop("attempts",1)
-    verbose_on_error = METIS_opts.pop("verbose_on_error",False)
+    attempts = METIS_opts.pop("attempts", 1)
+    verbose_on_error = METIS_opts.pop("verbose_on_error", False)
     options = nxmetis.MetisOptions(**METIS_opts)
     fail = True
     last_exception = None
@@ -56,12 +56,12 @@ def METIS_partition(graph: Graph,
     # not that the Acyclic_partitoning does not suffer from this issue (but it can also give an inferior solution)
     for _ in range(attempts):
         objval, parts = nxmetis.partition(G,
-                                        num_partitions,
-                                        options=options,
-                                        node_weight='weight',
-                                        node_size='size',
-                                        edge_weight='weight',
-                                        recursive=False)
+                                          num_partitions,
+                                          options=options,
+                                          node_weight='weight',
+                                          node_size='size',
+                                          edge_weight='weight',
+                                          recursive=False)
         parts = sorted((idx, n) for n, p in enumerate(parts) for idx in p)
         parts = [n for _, n in parts]
 
@@ -74,16 +74,17 @@ def METIS_partition(graph: Graph,
                 node.stage_id = stage_id
 
         try:
-            post_process_partition(graph,edge_weight_function, assert_output_types=False,verbose_on_error=verbose_on_error)
+            post_process_partition(graph, edge_weight_function, assert_output_types=False,
+                                   verbose_on_error=verbose_on_error)
             fail = False
             break
-        except (Exception,RuntimeError,AssertionError) as e:
+        except (Exception, RuntimeError, AssertionError) as e:
             last_exception = e
 
     if fail:
         print(f"-I- METIS could not find a valid partitioning")
         raise last_exception
-    
+
     n_parts = set(parts)
     actual_nparts = len({n.stage_id for n in graph.nodes})
 
@@ -96,5 +97,3 @@ def METIS_partition(graph: Graph,
         )
         print(f"before post processing there were {n_parts} partitions")
     return graph
-
-

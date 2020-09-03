@@ -1,17 +1,20 @@
 import random
-from typing import Dict, Tuple, List, Optional
-from pytorch_Gpipe.model_profiling import Node, Graph
-from pytorch_Gpipe.model_partitioning.acyclic_partitioning.data_structures import Path, PathSet, ContractedGraph, SimpleNode
+from typing import Dict, Tuple, List
 
-#adapted from https://github.com/KaHIP/KaHIP/blob/master/lib/partition/coarsening/matching/gpa/gpa_matching.cpp
+from pytorch_Gpipe.model_partitioning.acyclic_partitioning.data_structures import Path, PathSet, ContractedGraph, \
+    SimpleNode
+from pytorch_Gpipe.model_profiling import Node, Graph
+
+
+# adapted from https://github.com/KaHIP/KaHIP/blob/master/lib/partition/coarsening/matching/gpa/gpa_matching.cpp
 
 
 def coarsening(
-    graph: Graph, node_weights: Dict[SimpleNode, float],
-    edge_weights: Dict[Tuple[SimpleNode, SimpleNode], float],
-    params_per_node: Dict[SimpleNode,float]
+        graph: Graph, node_weights: Dict[SimpleNode, float],
+        edge_weights: Dict[Tuple[SimpleNode, SimpleNode], float],
+        params_per_node: Dict[SimpleNode, float]
 ) -> List[Tuple[ContractedGraph, Dict[int, int], ContractedGraph]]:
-    g = ContractedGraph.from_Graph(graph, node_weights, edge_weights,params_per_node)
+    g = ContractedGraph.from_Graph(graph, node_weights, edge_weights, params_per_node)
     n = len(g)
 
     hierarchy = []
@@ -35,9 +38,9 @@ def refine(fine_graph: ContractedGraph, coarse_graph: ContractedGraph,
 
 
 def find_max_matching(
-    node_weights: Dict[SimpleNode,
-                       float], edge_weights: Dict[Tuple[SimpleNode,
-                                                        SimpleNode], float]
+        node_weights: Dict[SimpleNode,
+                           float], edge_weights: Dict[Tuple[SimpleNode,
+                                                            SimpleNode], float]
 ) -> Tuple[Dict[int, int], float]:
     edges = list(edge_weights.keys())
     edge_ratings = {
@@ -48,13 +51,13 @@ def find_max_matching(
     edges = sorted(edges, key=lambda e: edge_ratings[e], reverse=True)
 
     pathset = PathSet(node_weights.keys())
-    #find all paths and cycles
+    # find all paths and cycles
     for edge in edges:
         pathset.add_if_eligible(edge)
 
     max_match = []
     max_match_weight = 0
-    #find maximum matching for each path and cycle
+    # find maximum matching for each path and cycle
     for node in node_weights.keys():
         path = pathset.paths[node]
         if not path.active:
@@ -107,13 +110,13 @@ def find_max_matching(
 
 
 def max_path_matching(
-    unpacked_path: List[Tuple[Node, Node]], edge_ratings: Dict[Tuple[Node,
-                                                                     Node],
-                                                               float]
+        unpacked_path: List[Tuple[Node, Node]], edge_ratings: Dict[Tuple[Node,
+                                                                         Node],
+                                                                   float]
 ) -> Tuple[List[Tuple[Node, Node]], float]:
     k = len(unpacked_path)
     if k == 1:
-        #make sure to make a copy
+        # make sure to make a copy
         return list(unpacked_path), edge_ratings[unpacked_path[0]]
 
     ratings = [0] * k
@@ -126,7 +129,7 @@ def max_path_matching(
     if ratings[0] < ratings[1]:
         decision[1] = True
 
-    #find optimal solution via dynamic programing
+    # find optimal solution via dynamic programing
     for i in range(2, k):
         cur_w = edge_ratings[unpacked_path[i]]
         if (cur_w + ratings[i - 2]) > ratings[i - 1]:
@@ -164,7 +167,7 @@ def unpack_path(pathset: PathSet, path: Path) -> List[Tuple[Node, Node]]:
     unpacked_path = []
 
     if prev is head:
-        #cycle
+        # cycle
         current = pathset.next_vertex(prev)
         unpacked_path.append(pathset.edge_to_next(prev))
 
@@ -183,7 +186,7 @@ def unpack_path(pathset: PathSet, path: Path) -> List[Tuple[Node, Node]]:
 
 def edge_rating(u: Node, v: Node, edge_weights: Dict[Tuple[Node, Node], float],
                 node_weights: Dict[Node, float]) -> float:
-    return (edge_weights[(u, v)]**2) / (1 + node_weights[u] * node_weights[v])
+    return (edge_weights[(u, v)] ** 2) / (1 + node_weights[u] * node_weights[v])
 
 
 def visualize_matching(nodes, matching, file_name: str, directory: str):

@@ -1,19 +1,20 @@
-from collections import defaultdict
-from pytorch_Gpipe.model_profiling import Node, Graph
-from typing import Dict, Iterable, Set, Iterator, List, Tuple, Any, Optional
-import random
 import heapq
+import random
+from collections import defaultdict
+from typing import Dict, Iterable, Set, Iterator, List, Tuple, Any, Optional
+
+from pytorch_Gpipe.model_profiling import Node, Graph
 
 
 class PriorityQueue():
-    #heapq is a min heap and we need a max heap
-    #so we push the negative gain
-    #we use a random tie braker in case several tasks have the same gain
+    # heapq is a min heap and we need a max heap
+    # so we push the negative gain
+    # we use a random tie braker in case several tasks have the same gain
     def __init__(self):
         self.heap = []
 
     def push_task(self, gain: float, task: Any):
-        tie_braker = random.randint(0, 2**32)
+        tie_braker = random.randint(0, 2 ** 32)
         priority = (-gain, -tie_braker)
 
         heapq.heappush(self.heap, (priority, task))
@@ -33,6 +34,7 @@ class PartitionNode():
     """ PartitionNode is a collection of graph nodes allocated to the same partition
         an edge exists between PartitionNodes iff they there are edges between the underlying graph nodes
     """
+
     def __init__(self, nodes: Iterable[Node], idx: int):
         self.nodes: Set[Node] = set(nodes)
         self._out_edges = defaultdict(lambda: 0)
@@ -96,7 +98,7 @@ class QuotientGraph():
         }
 
     @property
-    def n_stages(self)->int:
+    def n_stages(self) -> int:
         return len({n.stage_id for n in self.nodes})
 
     def __getitem__(self, idx: int) -> PartitionNode:
@@ -114,26 +116,26 @@ class QuotientGraph():
 
         for i in node.in_edges:
             i_part = self[i.stage_id]
-            #remove edge from i to src
+            # remove edge from i to src
             src_part.remove_in_edge(i.stage_id)
             i_part.remove_out_edge(src)
 
-            #add edge from i to dest
+            # add edge from i to dest
             i_part.add_out_edge(dst)
             dst_part.add_in_edge(i.stage_id)
 
         for o in node.out_edges:
             o_part = self[o.stage_id]
-            #remove edge from src to o
+            # remove edge from src to o
             src_part.remove_out_edge(o.stage_id)
             o_part.remove_in_edge(src)
 
-            #add edge from dst to o
+            # add edge from dst to o
             o_part.add_in_edge(dst)
             self[dst].add_out_edge(o.stage_id)
 
-        #remove self edges
-        #faster than using if statements in the for loops
+        # remove self edges
+        # faster than using if statements in the for loops
         for p in self.nodes:
             p._in_edges.pop(p.id, None)
             p._out_edges.pop(p.id, None)
@@ -173,7 +175,7 @@ class QuotientGraph():
                 if degs[out] == 0:
                     S.append(o)
 
-        #if we have a cycle S will be empty and T will not contain all of the nodes
+        # if we have a cycle S will be empty and T will not contain all of the nodes
         return len(T) < len(self.nodes)
 
     def build_dot(self):
@@ -286,7 +288,7 @@ class QuotientGraph():
                             print(f"{n.id}=>{o.id}")
                             print(f"{n.stage_id}=>{o.stage_id}")
                             print(f"{n.value_type}")
-                            print(f"weight:{edge_weights[(n,o)]:.2f}\n")
+                            print(f"weight:{edge_weights[(n, o)]:.2f}\n")
                         edge_cut += edge_weights[(n, o)]
                         number_of_cutting_edges += 1
 
@@ -366,7 +368,7 @@ class VerticeStageConnections():
     def out_connections(self, n, dst: int) -> int:
         return self._out_connections[n][dst]
 
-    def move_node(self, n, dest:int):
+    def move_node(self, n, dest: int):
         for u in n.in_edges:
             self.remove_out_connection(u, n.stage_id)
             self.add_out_connection(u, dest)
@@ -426,7 +428,7 @@ class PathSet():
 
         assert src is not dst
 
-        #edges between partitions are not eligible
+        # edges between partitions are not eligible
         if src.stage_id != dst.stage_id:
             return False
 
@@ -441,11 +443,11 @@ class PathSet():
             return False
 
         if src_path is not dst_path:
-            #we do not close a cycle so we merge paths
+            # we do not close a cycle so we merge paths
             self.n_active_paths -= 1
             src_path.length += (dst_path.length + 1)
 
-            #update paths basically handle the 4 possible direction combinations
+            # update paths basically handle the 4 possible direction combinations
             if (src_path.start is src and dst_path.start is dst):
                 self.paths[dst_path.end] = src_path
                 src_path.start = dst_path.end
@@ -459,7 +461,7 @@ class PathSet():
                 self.paths[dst_path.start] = src_path
                 src_path.end = dst_path.start
 
-            #update the doubly linked list
+            # update the doubly linked list
             if self.next[src] is src:
                 assert self.next_edge[src] is None
                 self.next[src] = dst
@@ -478,7 +480,7 @@ class PathSet():
                 self.prev[dst] = src
                 self.prev_edge[dst] = edge
 
-            #deactivate the path as it has been merged
+            # deactivate the path as it has been merged
             dst_path.active = False
 
         elif (src_path.length % 2) == 1:
@@ -525,8 +527,8 @@ class SimpleNode():
 
 
 class ContractedGraph():
-    def __init__(self,in_edges,partition,node_weights,edge_weights,params_per_node,matching):
-        self._nodes:Dict[int, SimpleNode]=dict()
+    def __init__(self, in_edges, partition, node_weights, edge_weights, params_per_node, matching):
+        self._nodes: Dict[int, SimpleNode] = dict()
         for n in set(matching.values()):
             self._nodes[n] = SimpleNode(n, partition[n])
 
@@ -548,9 +550,9 @@ class ContractedGraph():
                 self._edge_weights[(self._nodes[matched_i],
                                     self._nodes[matched])] += edge_weights[(i,
                                                                             n)]
-    
+
     @property
-    def n_stages(self)->int:
+    def n_stages(self) -> int:
         return len({n.stage_id for n in self.nodes})
 
     def __len__(self) -> int:
@@ -565,7 +567,7 @@ class ContractedGraph():
     def edge_weight(self, u, v) -> float:
         return self._edge_weights[u, v]
 
-    def params_per_node(self,n)->float:
+    def params_per_node(self, n) -> float:
         return self._params_per_node[n]
 
     @property
@@ -595,7 +597,7 @@ class ContractedGraph():
 
             return self
         except AssertionError as e:
-            self.save_as_pdf("selfcheck_error",".")
+            self.save_as_pdf("selfcheck_error", ".")
             raise e
 
     @classmethod
@@ -616,21 +618,21 @@ class ContractedGraph():
                 edge_weights[(u.id, n.id)] = contracted_graph.edge_weight(u, n)
             in_edges[n.id] = us
 
-        return cls(in_edges, partition, node_weights, edge_weights,params_per_node, matching)
+        return cls(in_edges, partition, node_weights, edge_weights, params_per_node, matching)
 
     @classmethod
     def from_Graph(cls, graph: Graph, node_weights,
-                   edge_weights,params_per_node) -> "ContractedGraph":
+                   edge_weights, params_per_node) -> "ContractedGraph":
         node_weights = {n.id: w for n, w in node_weights.items()}
         edge_weights = {(u.id, v.id): w for (u, v), w in edge_weights.items()}
-        params_per_node = {n.id: p for n,p in params_per_node.items()}
+        params_per_node = {n.id: p for n, p in params_per_node.items()}
         in_edges = dict()
         partition = dict()
         for n in graph.nodes:
             in_edges[n.id] = {u.id for u in n.in_edges}
             partition[n.id] = n.stage_id
 
-        return cls(in_edges, partition, node_weights, edge_weights,params_per_node,
+        return cls(in_edges, partition, node_weights, edge_weights, params_per_node,
                    {n: n
                     for n in node_weights})
 
@@ -709,7 +711,7 @@ class ContractedGraph():
             for i in node.in_edges:
                 dot.edge(str(i.id),
                          str(node.id),
-                         label=f"weight:{self.edge_weight(i,node)}")
+                         label=f"weight:{self.edge_weight(i, node)}")
 
         return dot
 

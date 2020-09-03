@@ -1,13 +1,15 @@
 import abc
 import operator
+from contextlib import nullcontext
 from functools import wraps
 from importlib import import_module
 from typing import Any, Callable, Dict, List, Optional, Tuple
-from contextlib import nullcontext
-from torch import nn,Tensor
+
+from torch import nn, Tensor
+
 from pytorch_Gpipe.model_profiling import (Graph, Node, NodeTypes,
                                            used_namespaces)
-from pytorch_Gpipe.utils import layerDict, tensorDict,force_out_of_place,inplace_arithmetic_ops
+from pytorch_Gpipe.utils import layerDict, tensorDict, force_out_of_place, inplace_arithmetic_ops
 
 
 class PreHook(abc.ABC):
@@ -18,8 +20,10 @@ class PreHook(abc.ABC):
 
     the hook can modify the args/kwargs or return None
     """
+
     @abc.abstractmethod
-    def __call__(self, node: Node, function: Callable, args: tuple, kwargs: dict) -> Tuple[Optional[Tuple], Optional[Dict]]:
+    def __call__(self, node: Node, function: Callable, args: tuple, kwargs: dict) -> Tuple[
+        Optional[Tuple], Optional[Dict]]:
         pass
 
 
@@ -31,12 +35,14 @@ class PostHook(abc.ABC):
 
     the hook can modify the output or return None
     """
+
     @abc.abstractmethod
     def __call__(self, node: Node, function: Callable, args: tuple, kwargs: Dict, outputs: Any) -> Optional:
         pass
 
 
-def execute_graph(model: nn.Module, graph: Graph, model_args=(), model_kwargs=None, pre_hook: Optional[PreHook] = None, post_hook: Optional[PostHook] = None,enforce_out_of_place=True):
+def execute_graph(model: nn.Module, graph: Graph, model_args=(), model_kwargs=None, pre_hook: Optional[PreHook] = None,
+                  post_hook: Optional[PostHook] = None, enforce_out_of_place=True):
     if model_kwargs is None:
         model_kwargs = dict()
     if not isinstance(model_args, tuple):
@@ -106,7 +112,7 @@ def execute_graph(model: nn.Module, graph: Graph, model_args=(), model_kwargs=No
             outputs = call_function(namespaces,
                                     node,
                                     args, kwargs,
-                                    pre_hook, post_hook,enforce_out_of_place=enforce_out_of_place)
+                                    pre_hook, post_hook, enforce_out_of_place=enforce_out_of_place)
 
             ready_expressions[node] = outputs
         del args
@@ -140,8 +146,8 @@ def create_container_construct(node, args, kwargs):
         return slice(*args)
 
 
-def call_function(namespaces, node, args, kwargs, pre_hook, post_hook,enforce_out_of_place=True):
-    op_path,idx = node.scope.rsplit("/", maxsplit=1)[1].rsplit("_",maxsplit=1)
+def call_function(namespaces, node, args, kwargs, pre_hook, post_hook, enforce_out_of_place=True):
+    op_path, idx = node.scope.rsplit("/", maxsplit=1)[1].rsplit("_", maxsplit=1)
     namespace, func_name = op_path.split("::")
 
     # if we enforce out of place convert inplace functions
@@ -149,20 +155,22 @@ def call_function(namespaces, node, args, kwargs, pre_hook, post_hook,enforce_ou
     forced_out_of_place = enforce_out_of_place and node.type is NodeTypes.OP
     if forced_out_of_place:
         inplace_torch_function = ("torch" in namespace) and (func_name[-1] == '_')
-        inplace_tensor_function = (namespace == "Tensor") and (func_name[-1] == "_") and (not func_name.startswith("__"))
+        inplace_tensor_function = (namespace == "Tensor") and (func_name[-1] == "_") and (
+            not func_name.startswith("__"))
         inplace_tensor_magic = (namespace == "Tensor") and (func_name in inplace_arithmetic_ops)
         if inplace_tensor_magic or inplace_tensor_function or inplace_torch_function:
             debug_str = f"converted {namespace}.{func_name} "
             if inplace_tensor_magic:
                 # function is an __imagic__
-                out_of_place = "__"+func_name[3:]
+                out_of_place = "__" + func_name[3:]
             else:
                 # function torch.func_ or Tensor.func_
                 out_of_place = func_name[:-1]
 
-            if (namespace == "Tensor" and hasattr(Tensor,out_of_place)) or (namespace != "Tensor" and hasattr(import_module(namespace),out_of_place)):
+            if (namespace == "Tensor" and hasattr(Tensor, out_of_place)) or (
+                    namespace != "Tensor" and hasattr(import_module(namespace), out_of_place)):
                 func_name = out_of_place
-   
+
             debug_str += f"to {namespace}.{func_name}"
 
     # function call
@@ -184,8 +192,7 @@ def call_function(namespaces, node, args, kwargs, pre_hook, post_hook,enforce_ou
 
     if forced_out_of_place:
         original_scope = node.scope
-        node.scope = node.scope.rsplit("/",maxsplit=1)[0]+f"/{namespace}::{func_name}_{idx}"
-
+        node.scope = node.scope.rsplit("/", maxsplit=1)[0] + f"/{namespace}::{func_name}_{idx}"
 
     args, kwargs = pre_hook(node, function, args, kwargs)
     output = function(*args, **kwargs)
@@ -201,7 +208,7 @@ def fetch_args_kwargs(node, ready_expressions):
     args = [ready_expressions[n] for n in node.args]
     kwargs = dict()
 
-    for n,kws in node.kwargs.items():
+    for n, kws in node.kwargs.items():
         for k in kws:
             kwargs[k] = ready_expressions[n]
 
@@ -234,7 +241,8 @@ def apply_post_hook(post_hook):
 
 
 class IdentityPreHook(PreHook):
-    def __call__(self, node: Node, function: Callable, args: tuple, kwargs: dict) -> Tuple[Optional[Tuple], Optional[Dict]]:
+    def __call__(self, node: Node, function: Callable, args: tuple, kwargs: dict) -> Tuple[
+        Optional[Tuple], Optional[Dict]]:
         return args, kwargs
 
 
