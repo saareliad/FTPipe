@@ -9,10 +9,9 @@ import pickle
 import os
 
 from pytorch_Gpipe import trace_module, Graph, GraphProfiler, execute_graph, ExecTimes, acyclic_partition, \
-    infer_req_grad, compile_partitioned_model, METIS_partition, partition_2dbin_pack, profile_network, partition_model
+    infer_req_grad, compile_partitioned_model, METIS_partition, partition_2dbin_pack, profile_network
 from pytorch_Gpipe.model_profiling import Node
 from pytorch_Gpipe.utils import move_tensors
-
 
 FullExecTimes = namedtuple('FullExecTimes', 'recomputation no_recomputation')
 

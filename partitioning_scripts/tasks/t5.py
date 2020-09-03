@@ -16,23 +16,16 @@ from models.normal.NLP_models.modeling_t5_tied_weights import \
     T5Model as TiedT5Model
 from pytorch_Gpipe.model_profiling.tracer import (
     register_new_explicit_untraced_function, register_new_traced_function)
-
 from . import register_task
 from .task import Parser, Partitioner
-
-
-
-
-
 
 # See https://huggingface.co/models
 T5_PRETRAINED_MODELS = {'t5-small', 't5-base', 't5-large', 't5-3b', 't5-11b'}
 
 
-
 def get_input_dummy(args, tokenizer, analysis=False):
     input_ids = tokenizer.encode("Hello, my dog is cute",
-                                 return_tensors="pt") # Batch (1,6)
+                                 return_tensors="pt")  # Batch (1,6)
 
     if analysis:
         batch_size = args.analysis_batch_size
@@ -40,14 +33,13 @@ def get_input_dummy(args, tokenizer, analysis=False):
         batch_size = args.partitioning_batch_size
 
     input_ids = input_ids.repeat(batch_size,
-                                     10).contiguous()  #Batch (ab,60)
-    
+                                 10).contiguous()  # Batch (ab,60)
+
     decoder_input_ids = input_ids
 
     attention_mask = None
     decoder_attention_mask = None
 
-    
     if args.lmhead:
         lm_labels = input_ids
         kwargs = {
@@ -60,17 +52,19 @@ def get_input_dummy(args, tokenizer, analysis=False):
             "input_ids": input_ids,
             "decoder_input_ids": decoder_input_ids,
         }
-    
+
     if args.precompute_masks:
         # precomputed masks
-        inverted_encoder_attention_mask = get_inverted_encoder_attention_mask(input_ids.size(),attention_mask,input_ids.device)
-        attention_mask = get_attention_mask(input_ids.size(),attention_mask,input_ids.device,is_decoder=False)    
-        decoder_attention_mask = get_attention_mask(decoder_input_ids.size(),decoder_attention_mask,input_ids.device,is_decoder=True)
+        inverted_encoder_attention_mask = get_inverted_encoder_attention_mask(input_ids.size(), attention_mask,
+                                                                              input_ids.device)
+        attention_mask = get_attention_mask(input_ids.size(), attention_mask, input_ids.device, is_decoder=False)
+        decoder_attention_mask = get_attention_mask(decoder_input_ids.size(), decoder_attention_mask, input_ids.device,
+                                                    is_decoder=True)
 
         kwargs.update({
-            "attention_mask":attention_mask,
-            "decoder_attention_mask":decoder_attention_mask,
-            "inverted_encoder_attention_mask":inverted_encoder_attention_mask
+            "attention_mask": attention_mask,
+            "decoder_attention_mask": decoder_attention_mask,
+            "inverted_encoder_attention_mask": inverted_encoder_attention_mask
         })
 
     return kwargs
@@ -80,6 +74,7 @@ def get_input_squad1(args, tokenizer, analysis=False):
     # see https://colab.research.google.com/github/patil-suraj/exploring-T5/blob/master/T5_on_TPU.ipynb#scrollTo=2ZWE4addfSmi
     batch_size = args.analysis_batch_size if analysis else args.partitioning_batch_size
     config = T5Config.from_pretrained(args.model_name_or_path)
+
     #########################
     # Yucky squad stuff
     #########################
@@ -137,6 +132,7 @@ def get_input_squad1(args, tokenizer, analysis=False):
         'input_ids', 'target_ids', 'attention_mask', 'target_attention_mask'
     ]
     train_dataset.set_format(type='torch', columns=columns)
+
     # valid_dataset.set_format(type='torch', columns=columns)
 
     # prepares lm_labels from target_ids, returns examples with keys as expected by the forward method
@@ -147,8 +143,8 @@ def get_input_squad1(args, tokenizer, analysis=False):
     @dataclass
     class T2TDataCollator():
         # NOTE: in transformers 3.02 they changed it to function so it can't be subclassed.
-        def __init__(self,config,precompute_masks):
-            super(T2TDataCollator,self).__init__()
+        def __init__(self, config, precompute_masks):
+            super(T2TDataCollator, self).__init__()
             self.precompute_masks = precompute_masks
             self.config = config
 
@@ -172,25 +168,28 @@ def get_input_squad1(args, tokenizer, analysis=False):
 
             batch = {
                 'input_ids': input_ids,
-                "attention_mask":attention_mask,
+                "attention_mask": attention_mask,
                 'decoder_input_ids': decoder_input_ids,
-                "decoder_attention_mask":decoder_attention_mask,
+                "decoder_attention_mask": decoder_attention_mask,
                 'lm_labels': lm_labels,
             }
-            
+
             if self.precompute_masks:
                 # precomputed masks
-                inverted_encoder_attention_mask = get_inverted_encoder_attention_mask(input_ids.size(),attention_mask,attention_mask.device)
-                attention_mask = get_attention_mask(input_ids.size(),attention_mask,attention_mask.device,is_decoder=False)    
-                decoder_attention_mask = get_attention_mask(decoder_input_ids.size(),decoder_attention_mask,decoder_attention_mask.device,is_decoder=True)
+                inverted_encoder_attention_mask = get_inverted_encoder_attention_mask(input_ids.size(), attention_mask,
+                                                                                      attention_mask.device)
+                attention_mask = get_attention_mask(input_ids.size(), attention_mask, attention_mask.device,
+                                                    is_decoder=False)
+                decoder_attention_mask = get_attention_mask(decoder_input_ids.size(), decoder_attention_mask,
+                                                            decoder_attention_mask.device, is_decoder=True)
 
-                #override with precomputed masks
+                # override with precomputed masks
                 batch.update({
-                    "attention_mask":attention_mask,
-                    "decoder_attention_mask":decoder_attention_mask,
-                    "inverted_encoder_attention_mask":inverted_encoder_attention_mask
+                    "attention_mask": attention_mask,
+                    "decoder_attention_mask": decoder_attention_mask,
+                    "inverted_encoder_attention_mask": inverted_encoder_attention_mask
                 })
-            
+
             # truncation=True`
             if not args.lmhead:
                 del batch['lm_labels']
@@ -202,7 +201,7 @@ def get_input_squad1(args, tokenizer, analysis=False):
             pad_token_id = self.config.pad_token_id
 
             assert (
-                decoder_start_token_id is not None
+                    decoder_start_token_id is not None
             ), "self.model.config.decoder_start_token_id has to be defined. In T5 it is usually set to the pad_token_id. See T5 docs for more information"
 
             # shift inputs to the right
@@ -218,7 +217,7 @@ def get_input_squad1(args, tokenizer, analysis=False):
 
             return shifted_input_ids
 
-    collate_fn = T2TDataCollator(config,args.precompute_masks).collate_batch
+    collate_fn = T2TDataCollator(config, args.precompute_masks).collate_batch
 
     dl = torch.utils.data.DataLoader(
         dataset=train_dataset,
@@ -244,25 +243,25 @@ def get_input(args, tokenizer, analysis=False):
 
 
 class ParsePartitioningT5Opts(Parser):
-    def _add_model_args(self,group):
+    def _add_model_args(self, group):
         group.add_argument("--model_name_or_path",
-                            choices=T5_PRETRAINED_MODELS,
-                            default='t5-small')
+                           choices=T5_PRETRAINED_MODELS,
+                           default='t5-small')
 
         # Paper: (512, 97). Also working: (384, 32)
         group.add_argument("--max_seq_length", type=int, default=384)
         group.add_argument("--answer_max_seq_length", type=int, default=32)
         group.add_argument("--stateless_tied",
-                            action="store_true",
-                            default=False)
-        group.add_argument("--lmhead", action="store_true", default=False)      
-        group.add_argument("--precompute_masks",action="store_true",default=False)
+                           action="store_true",
+                           default=False)
+        group.add_argument("--lmhead", action="store_true", default=False)
+        group.add_argument("--precompute_masks", action="store_true", default=False)
 
-    def _add_data_args(self,group):
+    def _add_data_args(self, group):
         group.add_argument("--t5_task",
-                    type=str,
-                    choices=T5_TASK_TO_GET_INPUT.keys(),
-                    default="dummy")
+                           type=str,
+                           choices=T5_TASK_TO_GET_INPUT.keys(),
+                           default="dummy")
 
     def _default_values(self):
         return {
@@ -282,7 +281,7 @@ class ParsePartitioningT5Opts(Parser):
         model_str += f"_{tied}"
         if args.lmhead:
             model_str += "_lmhead"
-        
+
         seq_len_str = f"s_{args.max_seq_length}_{args.answer_max_seq_length}"
 
         model_str += seq_len_str
@@ -295,16 +294,16 @@ class ParsePartitioningT5Opts(Parser):
 
         return output_file
 
+
 class T5Partitioner(Partitioner):
-    def __init__(self,args) -> None:
+    def __init__(self, args) -> None:
         super().__init__(args)
         self.tokenizer = T5Tokenizer.from_pretrained(args.model_name_or_path)
-
 
     @property
     def batch_dim(self) -> int:
         return 0
-    
+
     def register_functions(self):
         register_new_explicit_untraced_function(operator.is_, operator)
         register_new_explicit_untraced_function(operator.is_not, operator)
@@ -316,7 +315,7 @@ class T5Partitioner(Partitioner):
         config.output_attentions = False
         config.output_hidden_states = False
         setattr(config, "output_only", True)
-        setattr(config,"precomputed_masks",args.precompute_masks)
+        setattr(config, "precomputed_masks", args.precompute_masks)
 
         base = not args.lmhead
         tied = args.stateless_tied
@@ -329,20 +328,19 @@ class T5Partitioner(Partitioner):
             model_cls = TiedT5ForConditionalGeneration
         else:
             model_cls = T5ForConditionalGeneration
-        
+
         use_cdn = args.model_name_or_path != "t5-11b"
         model = model_cls.from_pretrained(args.model_name_or_path,
-                                        config=config,use_cdn=use_cdn).train()
+                                          config=config, use_cdn=use_cdn).train()
 
         if tied:
             model.make_stateless()
-        
+
         return model
 
     def get_input(self, args, analysis):
-        tokenizer =self.tokenizer
-        return get_input(args,tokenizer,analysis=analysis)
+        tokenizer = self.tokenizer
+        return get_input(args, tokenizer, analysis=analysis)
 
 
-
-register_task("t5",ParsePartitioningT5Opts,T5Partitioner)
+register_task("t5", ParsePartitioningT5Opts, T5Partitioner)

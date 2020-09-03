@@ -1,18 +1,17 @@
+import os
 import shlex
 import sys
+from shutil import copyfile, rmtree
 from typing import Tuple
-import os
-from shutil import copyfile,rmtree
 
 import torch
 
 
-
-def choose_blocks(model, args)->Tuple[torch.nn.Module]:
+def choose_blocks(model, args) -> Tuple[torch.nn.Module]:
     blocks = dict()
 
     for m in model.modules():
-        m_superclasses = {c.__name__:c for c in type(m).mro()}
+        m_superclasses = {c.__name__: c for c in type(m).mro()}
         blocks.update(m_superclasses)
 
     if args.basic_blocks is None:
@@ -21,6 +20,7 @@ def choose_blocks(model, args)->Tuple[torch.nn.Module]:
         return tuple([blocks[name] for name in args.basic_blocks])
     except KeyError:
         raise ValueError(f"invalid basic blocks possible blocks are {list(blocks.keys())}")
+
 
 def record_cmdline(output_file):
     """Add cmdline to generated python output file."""
@@ -33,7 +33,7 @@ def record_cmdline(output_file):
         f.write(cmdline.rstrip('\r\n') + '\n' + content)
 
 
-def bruteforce_main(main,main_kwargs=None, override_dicts=None, NUM_RUNS=2, TMP="/tmp/partitioning_outputs/") :
+def bruteforce_main(main, main_kwargs=None, override_dicts=None, NUM_RUNS=2, TMP="/tmp/partitioning_outputs/"):
     # TODO: put all hyper parameters here, a dict for each setting we want to try.
     # d1 = dict(basic_blocks=[])
     # ovverride_dicts.append(d1)
@@ -42,13 +42,13 @@ def bruteforce_main(main,main_kwargs=None, override_dicts=None, NUM_RUNS=2, TMP=
 
     results = {}
     best = None
-    
+
     if override_dicts is None:
         override_dicts = []
 
     if not override_dicts:
         override_dicts = [{}]
-    
+
     os.makedirs(TMP, exist_ok=True)
     DICT_PREFIX = "_d%d"
     current_dict_prefix = ""
@@ -60,7 +60,7 @@ def bruteforce_main(main,main_kwargs=None, override_dicts=None, NUM_RUNS=2, TMP=
             main_kwargs['override_dict'] = override_dict
             try:
                 out = main(**main_kwargs)
-            except (Exception,RuntimeError,AssertionError) as e:
+            except (Exception, RuntimeError, AssertionError) as e:
                 last_exception = e
                 continue
             (analysis_result, output_file) = out
@@ -74,25 +74,25 @@ def bruteforce_main(main,main_kwargs=None, override_dicts=None, NUM_RUNS=2, TMP=
                     name = name[:-3]
                 flag = True
 
-            while (name+".py" in results) or flag:
+            while (name + ".py" in results) or flag:
                 flag = False
                 name += f"_{counter}"
-            
+
             name += current_dict_prefix
-            new_path = os.path.join(TMP, name+".py")
-            copyfile(orig_name+".py",  new_path)  # Save the last generated file
+            new_path = os.path.join(TMP, name + ".py")
+            copyfile(orig_name + ".py", new_path)  # Save the last generated file
 
             results[name] = analysis_result
 
             if best is None:
                 best = (new_path, analysis_result)
             elif analysis_result > best[1]:
-                    best = (new_path, analysis_result)
+                best = (new_path, analysis_result)
 
     print(f"best: {best}")
     if best is None:
         print("-I- hyper parameter search failed raising last exception")
         raise last_exception
-    copyfile(best[0], orig_name+".py")
+    copyfile(best[0], orig_name + ".py")
     print(f"-I- copied best to {orig_name}.py")
     rmtree(TMP)

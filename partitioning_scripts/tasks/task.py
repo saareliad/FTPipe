@@ -32,6 +32,9 @@ class Parser(argparse.ArgumentParser, ABC):
         acyclic_args = self.add_argument_group("acyclic_args")
         self._add_acyclic_args(acyclic_args)
 
+        binpack_args = self.add_argument_group("binpack_args")
+        self._add_binpack_args(binpack_args)
+
         analysis_args = self.add_argument_group("analysis_args")
         self._add_analysis_args(analysis_args)
 
@@ -203,7 +206,7 @@ class Parser(argparse.ArgumentParser, ABC):
             '--metis_compress',
             default=False,
             action='store_true',
-            help="Compress")  # NOTE: this is differnt from default!
+            help="Compress")  # NOTE: this is different from default!
         group.add_argument(
             '--metis_niter',
             type=int,
@@ -241,6 +244,14 @@ class Parser(argparse.ArgumentParser, ABC):
             help="A boolean to create contigous partitions."
             # see http://glaros.dtc.umn.edu/gkhome/metis/metis/faq"
         )
+
+    def _add_binpack_args(self, group):
+        group.add_argument("--n_clusters",
+                           default=2,
+                           type=int,
+                           help="number of clusters in the model")
+        group.add_argument("--determine_n_clusters", action="set_true", default=False,
+                           help="analyze number of clusters")
 
     def _add_acyclic_args(self, group):
         group.add_argument("--epsilon",
@@ -304,6 +315,7 @@ class Parser(argparse.ArgumentParser, ABC):
         args, extra = super().parse_known_args(args, namespace)
         args.acyclic_opt = self._acyclic_opts_dict_from_parsed_args(args)
         args.METIS_opt = self._metis_opts_dict_from_parsed_args(args)
+        args.binpack_opt = self._binpack_opts_dict_from_parsed_args(args)
 
         if not args.output_file:
             args.output_file = self._auto_file_name(args)
@@ -391,11 +403,16 @@ class Parser(argparse.ArgumentParser, ABC):
 
         return METIS_opt
 
+    def _binpack_opts_dict_from_parsed_args(self, args):
+        d = dict()
+        d['n_clusters'] = args.n_clusters
+        return d
+
 
 class Partitioner(ABC):
 
     def __init__(self, args) -> None:
-        return None
+        pass
 
     @property
     @abstractmethod

@@ -9,23 +9,17 @@ from torch.utils.data import DataLoader, RandomSampler, TensorDataset
 from transformers import (AutoConfig, AutoTokenizer, GlueDataset,
                           GlueDataTrainingArguments, glue_tasks_num_labels)
 
-
 from models.normal import BertForSequenceClassification
 from models.normal.NLP_models.modeling_bert import get_extended_attention_mask
 from models.normal.NLP_models.modeling_roberta import RobertaForSequenceClassification
 from pytorch_Gpipe.model_profiling import (register_new_explicit_untraced_function,
-                                             register_new_traced_function)
-
+                                           register_new_traced_function)
 from . import register_task
 from .task import Parser, Partitioner
 
-
-
-
 logger = logging.getLogger(__name__)
 
-
-MODEL_TYPES = ['bert','roberta']
+MODEL_TYPES = ['bert', 'roberta']
 
 
 def make_just_x(ds):
@@ -40,7 +34,6 @@ def make_just_x(ds):
 
     print(d.keys())
     return TensorDataset(*[torch.tensor(x) for x in d.values()])
-
 
 
 # TODO:    "diagnostic"
@@ -95,7 +88,7 @@ def get_dataset(args, tokenizer, cache_name="glue_ds.pt"):
     return ds
 
 
-def get_sample(args, tokenizer,analysis=False):
+def get_sample(args, tokenizer, analysis=False):
     train_dataset = get_dataset(args, tokenizer)
     train_sampler = RandomSampler(train_dataset)
     # TODO: create a dataloader like they do in transformers...
@@ -105,7 +98,7 @@ def get_sample(args, tokenizer,analysis=False):
     batch = next(iter(train_dataloader))
 
     if args.precompute_attention_mask:
-        attention_mask = get_extended_attention_mask(batch[1],batch[0])
+        attention_mask = get_extended_attention_mask(batch[1], batch[0])
     else:
         attention_mask = batch[1]
 
@@ -121,11 +114,11 @@ def get_sample(args, tokenizer,analysis=False):
 
 
 class ParsePartitioningOptsGlue(Parser):
-    def _add_model_args(self,group):
+    def _add_model_args(self, group):
         group.add_argument("--task_name",
-                    type=str,
-                    default="mnli",
-                    help="Glue task")
+                           type=str,
+                           default="mnli",
+                           help="Glue task")
         # Required parameters
         group.add_argument(
             "--model_type",
@@ -142,11 +135,11 @@ class ParsePartitioningOptsGlue(Parser):
             help="Path to pre-trained model or shortcut name.",
         )
         group.add_argument(
-                "--precompute_attention_mask",
-                action="store_true",
-                default=False,
-                help="wether to compute attention mask inside or outside the model"
-            )
+            "--precompute_attention_mask",
+            action="store_true",
+            default=False,
+            help="wether to compute attention mask inside or outside the model"
+        )
         group.add_argument(
             "--max_seq_length",
             default=128,
@@ -160,7 +153,7 @@ class ParsePartitioningOptsGlue(Parser):
             action="store_true",
             help="Set this flag if you are using an uncased model.")
 
-    def _add_data_args(self,group):
+    def _add_data_args(self, group):
         group.add_argument(
             "--data_dir",
             default="/home_local/saareliad/data/glue_data/",
@@ -188,11 +181,11 @@ class ParsePartitioningOptsGlue(Parser):
             "analysis_batch_size": 1
         }
         return d
-    
-    def _post_parse(self, args,argv):
+
+    def _post_parse(self, args, argv):
         args.model_type = args.model_type.lower()
-        return super()._post_parse(args,argv)
-    
+        return super()._post_parse(args, argv)
+
     def _auto_file_name(self, args) -> str:
         bw_str = str(args.bw).replace(".", "_")
         model_str = str(args.model_name_or_path).replace("-", "_")
@@ -208,28 +201,27 @@ class ParsePartitioningOptsGlue(Parser):
 
 
 class GluePartitioner(Partitioner):
-    def __init__(self,args) -> None:
+    def __init__(self, args) -> None:
         super().__init__(args)
 
         self.tokenizer = AutoTokenizer.from_pretrained(
-       args.model_name_or_path,
-        do_lower_case=args.do_lower_case,
-        cache_dir=args.cache_dir if args.cache_dir else None,
-    )
-
+            args.model_name_or_path,
+            do_lower_case=args.do_lower_case,
+            cache_dir=args.cache_dir if args.cache_dir else None,
+        )
 
     @property
     def batch_dim(self) -> int:
         return 0
-    
+
     def get_input(self, args, analysis):
-        return get_sample(args, self.tokenizer,analysis=analysis)
+        return get_sample(args, self.tokenizer, analysis=analysis)
 
     def get_model(self, args) -> torch.nn.Module:
         config = AutoConfig.from_pretrained(args.model_name_or_path,
-        cache_dir=args.cache_dir if args.cache_dir else None)
+                                            cache_dir=args.cache_dir if args.cache_dir else None)
 
-        setattr(config,"precompute_attention_mask",args.precompute_attention_mask)
+        setattr(config, "precompute_attention_mask", args.precompute_attention_mask)
 
         # get correct number of labels.
         config.num_labels = glue_tasks_num_labels.get(args.task_name)
@@ -247,12 +239,11 @@ class GluePartitioner(Partitioner):
         ).train()
 
         return model
-    
+
     def register_functions(self):
         register_new_explicit_untraced_function(operator.is_, operator)
         register_new_explicit_untraced_function(operator.is_not, operator)
         register_new_traced_function(math.sqrt, math)
 
 
-
-register_task("glue",ParsePartitioningOptsGlue,GluePartitioner)
+register_task("glue", ParsePartitioningOptsGlue, GluePartitioner)

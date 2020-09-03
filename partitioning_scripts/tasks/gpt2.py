@@ -12,11 +12,8 @@ from models.normal import (GPT2LMHeadModel, GPT2Model,
                            StatelessGPT2LMHeadModel, StatelessGPT2Model)
 from pytorch_Gpipe.model_profiling.tracer import (
     register_new_explicit_untraced_function, register_new_traced_function)
-
 from . import register_task
 from .task import Parser, Partitioner
-
-
 
 
 class TextDataset(Dataset):
@@ -25,7 +22,7 @@ class TextDataset(Dataset):
         directory, filename = os.path.split(file_path)
         cached_features_file = os.path.join(
             directory, args.model_name_or_path + '_cached_lm_' +
-            str(block_size) + '_' + filename)
+                       str(block_size) + '_' + filename)
 
         if os.path.exists(cached_features_file) and not args.overwrite_cache:
             with open(cached_features_file, 'rb') as handle:
@@ -63,22 +60,22 @@ class TextDataset(Dataset):
 
 def load_and_cache_examples(args, tokenizer):
     return TextDataset(tokenizer,
-                          args,
-                          file_path=args.train_data_file,
-                          block_size=args.block_size)
+                       args,
+                       file_path=args.train_data_file,
+                       block_size=args.block_size)
 
 
 class ParsePartitioningOptsLM(Parser):
-    def _add_model_args(self,group):
+    def _add_model_args(self, group):
         group.add_argument(
             "--model_name_or_path",
             default="gpt2",
             type=str,
             help="The model checkpoint for weights initialization.")
         group.add_argument("--lmhead",
-                            default=False,
-                            action="store_true",
-                            help="Partition a model with LM head")
+                           default=False,
+                           action="store_true",
+                           help="Partition a model with LM head")
 
         group.add_argument(
             "--stateless_tied",
@@ -91,8 +88,8 @@ class ParsePartitioningOptsLM(Parser):
             default=-1,
             type=int,
             help="Optional input sequence length after tokenization."
-            "The training dataset will be truncated in block of this size for training."
-            "Default to the model max input length for single sentence inputs (take into account special tokens)."
+                 "The training dataset will be truncated in block of this size for training."
+                 "Default to the model max input length for single sentence inputs (take into account special tokens)."
         )
         group.add_argument(
             "--do_lower_case",
@@ -101,10 +98,10 @@ class ParsePartitioningOptsLM(Parser):
 
     def _add_data_args(self, group):
         group.add_argument("--train_data_file",
-                            default=None,
-                            type=str,
-                            required=True,
-                            help="The input training data file (a text file).")
+                           default=None,
+                           type=str,
+                           required=True,
+                           help="The input training data file (a text file).")
         group.add_argument(
             "--cache_dir",
             default="",
@@ -124,7 +121,7 @@ class ParsePartitioningOptsLM(Parser):
             "n_partitions": 4,
             "bw": 12,
             "analysis_batch_size": 1,
-            "force_no_recomputation_scopes":["stateless_lm_head","lm_head"]
+            "force_no_recomputation_scopes": ["stateless_lm_head", "lm_head"]
         }
 
         return d
@@ -150,14 +147,14 @@ class ParsePartitioningOptsLM(Parser):
 
 
 class GPT2Partitioner(Partitioner):
-    def __init__(self,args) -> None:
+    def __init__(self, args) -> None:
         super().__init__(args)
         self.tokenizer = GPT2Tokenizer.from_pretrained(args.model_name_or_path,
-                                                        do_lower_case=args.do_lower_case,
-                                                        cache_dir=args.cache_dir if args.cache_dir else None)
+                                                       do_lower_case=args.do_lower_case,
+                                                       cache_dir=args.cache_dir if args.cache_dir else None)
 
-        #NOTE idealy this will be part of _post_parse
-        #but we do not have access to the tokenizer there
+        # NOTE idealy this will be part of _post_parse
+        # but we do not have access to the tokenizer there
         if args.block_size <= 0:
             # Our input block size will be the max possible for the model
             args.block_size = self.tokenizer.max_len_single_sentence
@@ -168,7 +165,7 @@ class GPT2Partitioner(Partitioner):
     @property
     def batch_dim(self) -> int:
         return 0
-    
+
     def post_partitioning(self, args, graph, analysis_result, summary):
         # Replace the dummy partition wtih cuda:0.
         if args.stateless_tied:
@@ -181,7 +178,7 @@ class GPT2Partitioner(Partitioner):
             except:
                 print("Failed to replaced tied dummy partition device")
 
-    def update_analysis_kwargs(self,args,config, analysis_kwargs: Dict) -> Dict:
+    def update_analysis_kwargs(self, args, config, analysis_kwargs: Dict) -> Dict:
         stages_on_same_gpu = set()
         if args.lmhead and args.stateless_tied and len(
                 config['stages']) == args.n_partitions + 1:
@@ -207,14 +204,13 @@ class GPT2Partitioner(Partitioner):
         else:
             model_class = GPT2Model
         model_config = GPT2Config.from_pretrained(args.model_name_or_path,
-        cache_dir=args.cache_dir if args.cache_dir else None)
-
+                                                  cache_dir=args.cache_dir if args.cache_dir else None)
 
         model = model_class.from_pretrained(
-        args.model_name_or_path,
-        from_tf=bool('.ckpt' in args.model_name_or_path),
-        config=model_config,
-        cache_dir=args.cache_dir if args.cache_dir else None).train()
+            args.model_name_or_path,
+            from_tf=bool('.ckpt' in args.model_name_or_path),
+            config=model_config,
+            cache_dir=args.cache_dir if args.cache_dir else None).train()
 
         model.resize_token_embeddings(len(self.tokenizer))
 
@@ -227,20 +223,16 @@ class GPT2Partitioner(Partitioner):
         batch_size = args.analysis_batch_size if analysis else args.partitioning_batch_size
         sampler = RandomSampler(self.ds)
         dl = DataLoader(self.ds,
-                                  sampler=sampler,
-                                  batch_size=batch_size)
+                        sampler=sampler,
+                        batch_size=batch_size)
 
         batch = next(dl)
         if args.lmhead:
-            sample = {"input_ids":batch,"labels":batch}
+            sample = {"input_ids": batch, "labels": batch}
         else:
-            sample = {"input_ids":batch}
-        
+            sample = {"input_ids": batch}
+
         return sample
-        
-
-
-
 
 
 # download dataset from https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip
@@ -248,4 +240,4 @@ class GPT2Partitioner(Partitioner):
 # export TRAIN_FILE=wikitext-2-raw/wiki.train.raw
 # python partition_gpt2_models.py --train_data_file=$TRAIN_FILE --no_analysis
 
-register_task("gpt2",ParsePartitioningOptsLM,GPT2Partitioner)
+register_task("gpt2", ParsePartitioningOptsLM, GPT2Partitioner)

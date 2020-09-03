@@ -1,7 +1,7 @@
 import torch
+
 from models.normal import WideResNet, amoebanetd, vgg16_bn
 from models.normal.vision_models import ResNet
-
 from . import register_task
 from .task import Parser, Partitioner
 
@@ -59,6 +59,7 @@ def _register_model(dict_params, model_cls):
         {k: model_cls
          for k in dict_params.keys()})
 
+
 _register_model(_WIDE_RESNETS, WideResNet)
 _register_model(_RESENETS, ResNet.ResNet)
 _register_model(_AMOEBANET_D, amoebanetd)
@@ -68,16 +69,16 @@ DATASETS = ['cifar10', 'cifar100', 'imagenet']
 
 
 class ParsePartitioningOptsVision(Parser):
-    def _add_model_args(self,group):
+    def _add_model_args(self, group):
         group.add_argument('--model',
-                            choices=MODEL_CONFIGS.keys(),
-                            default='wrn_16x4')
-                            
+                           choices=MODEL_CONFIGS.keys(),
+                           default='wrn_16x4')
+
     def _add_data_args(self, group):
         group.add_argument('-d',
-                            '--dataset',
-                            choices=DATASETS,
-                            default='cifar10')
+                           '--dataset',
+                           choices=DATASETS,
+                           default='cifar10')
 
     def _default_values(self):
         return {
@@ -88,7 +89,7 @@ class ParsePartitioningOptsVision(Parser):
             "bw": 12,
             "analysis_batch_size": 32,
         }
-    
+
     def _auto_file_name(self, args) -> str:
         return f"{args.model}_p{args.n_partitions}"
 
@@ -100,7 +101,7 @@ class VisionPartioner(Partitioner):
     @property
     def batch_dim(self) -> int:
         return 0
-    
+
     def get_input(self, args, analysis):
         dataset = args.dataset
         assert dataset in DATASETS
@@ -116,5 +117,4 @@ class VisionPartioner(Partitioner):
         return sample
 
 
-
-register_task("vision",ParsePartitioningOptsVision,VisionPartioner)
+register_task("vision", ParsePartitioningOptsVision, VisionPartioner)

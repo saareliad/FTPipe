@@ -1,8 +1,10 @@
 import logging
-import os
-import operator
 import math
+import operator
+import os
 
+import torch
+from torch.utils.data import DataLoader, RandomSampler
 from transformers import (
     BertConfig,
     BertTokenizer,
@@ -10,21 +12,14 @@ from transformers import (
 )
 from transformers.data.processors.squad import SquadV1Processor, SquadV2Processor
 
-import torch
-from torch.utils.data import DataLoader, RandomSampler
-
-
-
 from models.normal import BertForQuestionAnswering
 from models.normal.NLP_models.modeling_bert import get_extended_attention_mask
-
-from pytorch_Gpipe.model_profiling import register_new_explicit_untraced_function,register_new_traced_function
+from pytorch_Gpipe.model_profiling import register_new_explicit_untraced_function, register_new_traced_function
 
 logger = logging.getLogger(__name__)
 
 from . import register_task
 from .task import Parser, Partitioner
-
 
 
 def load_and_cache_examples(args,
@@ -58,7 +53,7 @@ def load_and_cache_examples(args,
         else:
             processor = SquadV2Processor() if args.version_2_with_negative else SquadV1Processor()
             examples = processor.get_train_examples(
-                    args.data_dir, filename=args.train_file)
+                args.data_dir, filename=args.train_file)
 
         features, dataset = squad_convert_examples_to_features(
             examples=examples,
@@ -84,7 +79,7 @@ def load_and_cache_examples(args,
 
 
 class ParsePartitioningOptsSquad(Parser):
-    def _add_model_args(self,group):
+    def _add_model_args(self, group):
         group.add_argument(
             "--model_name_or_path",
             default=None,
@@ -120,7 +115,7 @@ class ParsePartitioningOptsSquad(Parser):
             action="store_true",
             help="Set this flag if you are using an uncased model.")
 
-    def _add_data_args(self,group):
+    def _add_data_args(self, group):
         group.add_argument(
             "--data_dir",
             default=None,
@@ -168,7 +163,7 @@ class ParsePartitioningOptsSquad(Parser):
             type=int,
             default=4,
             help="multiple threads for converting example to features")
-    
+
     def _default_values(self):
         return {
             # "threads": 20,
@@ -184,34 +179,31 @@ class ParsePartitioningOptsSquad(Parser):
 
 
 class BertPartitioner(Partitioner):
-    def __init__(self,args) -> None:
+    def __init__(self, args) -> None:
         super().__init__(args)
         self.tokenizer = BertTokenizer.from_pretrained(args.model_name_or_path,
-        do_lower_case=args.do_lower_case,
-        cache_dir=args.cache_dir if args.cache_dir else None)
-
+                                                       do_lower_case=args.do_lower_case,
+                                                       cache_dir=args.cache_dir if args.cache_dir else None)
 
     @property
     def batch_dim(self) -> int:
         return 0
-    
+
     def get_model(self, args) -> torch.nn.Module:
         config = BertConfig.from_pretrained(args.model_name_or_path,
-        cache_dir=args.cache_dir if args.cache_dir else None)
-        setattr(config,"precompute_attention_mask",args.precompute_attention_mask)
+                                            cache_dir=args.cache_dir if args.cache_dir else None)
+        setattr(config, "precompute_attention_mask", args.precompute_attention_mask)
 
         model = BertForQuestionAnswering.from_pretrained(
-        args.model_name_or_path,
-        from_tf=bool(".ckpt" in args.model_name_or_path),
-        config=config,
-        cache_dir=args.cache_dir if args.cache_dir else None).train()
+            args.model_name_or_path,
+            from_tf=bool(".ckpt" in args.model_name_or_path),
+            config=config,
+            cache_dir=args.cache_dir if args.cache_dir else None).train()
 
         return model
 
     def get_input(self, args, analysis):
-        return get_inputs_squad(args,self.tokenizer,analysis=analysis)
-    
-    
+        return get_inputs_squad(args, self.tokenizer, analysis=analysis)
 
     def register_functions(self):
         register_new_explicit_untraced_function(operator.is_, operator)
@@ -232,9 +224,8 @@ def get_inputs_squad(args, tokenizer, analysis=False):
     batch = next(iter(train_dataloader))
     batch = tuple(t.to(args.device) for t in batch)
 
-
     if args.precompute_attention_mask:
-        attention_mask = get_extended_attention_mask(batch[1],batch[0])
+        attention_mask = get_extended_attention_mask(batch[1], batch[0])
     else:
         attention_mask = batch[1]
 
@@ -246,5 +237,4 @@ def get_inputs_squad(args, tokenizer, analysis=False):
     return inputs
 
 
-
-register_task("bert_squad",ParsePartitioningOptsSquad,BertPartitioner)
+register_task("bert_squad", ParsePartitioningOptsSquad, BertPartitioner)
