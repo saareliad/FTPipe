@@ -4,6 +4,11 @@ from typing import Tuple, Optional, Callable, Dict, Iterable, List,Set
 from itertools import chain
 from torch import Tensor, nn as nn
 from collections import defaultdict
+try:
+    import networkx as nx
+except ImportError:
+    print("networkx package not found")
+
 
 class NodeTypes(IntEnum):
     '''
@@ -133,7 +138,7 @@ class Graph():
     def asNetworkx(self,
                    directed: bool = False,
                    node_weight_function: Optional[NodeWeightFunction] = None,
-                   edge_weight_function: Optional[EdgeWeightFunction] = None):
+                   edge_weight_function: Optional[EdgeWeightFunction] = None) -> nx.Graph:
         '''
         convert the graph into a weighted networkx graph.\n
         each node will have a scope,partition idx and weight associated with it.\n
@@ -155,9 +160,9 @@ class Graph():
         '''
         try:
             import networkx as nx
-        except ImportError:
+        except ImportError as e:
             print("networkx package not found")
-            return
+            raise e
 
         if directed:
             G = nx.DiGraph()

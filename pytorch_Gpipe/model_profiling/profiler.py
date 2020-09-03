@@ -175,7 +175,7 @@ class GraphProfiler():
     @staticmethod
     def avg_time(times):
         vs = times
-
+        # FIXME: this should only drop one
         for i in range(2):
             max_v = max(vs)
             vs_cand = [t for t in vs if t < max_v]

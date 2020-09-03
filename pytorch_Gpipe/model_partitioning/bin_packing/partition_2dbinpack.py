@@ -5,6 +5,7 @@ from typing import Optional, List
 import matplotlib.pyplot as plt
 import pandas as pd
 from sklearn.cluster import KMeans
+import networkx as nx
 
 from pytorch_Gpipe.model_partitioning.heuristics import NodeWeightFunction
 from pytorch_Gpipe.model_profiling import Graph, Node
@@ -93,9 +94,9 @@ def determine_n_clusters(nodes: List[Node], node_weight_function, max_k=10):
 
     records = [node_to_record(node) for node in nodes]
     X = pd.DataFrame.from_records(data=records, index="id")
-    # print(X)
+    print(X)
     sse = {}
-    for k in range(1, max_k):
+    for k in range(1, max_k+1):
         kmeans = KMeans(n_clusters=k, max_iter=1000).fit(X)
         X["cluster"] = kmeans.labels_
         sse[k] = kmeans.inertia_  # Inertia: Sum of distances of samples to their closest cluster center
@@ -113,14 +114,14 @@ def partition_2dbin_pack(graph: Graph,
                          # edge_weight_function: Optional[EdgeWeightFunction] = None,
                          ):
     K = num_gpus
-    nodes = graph.nodes
+    nodes = [n for n in graph.nodes if n not in graph.inputs]
     # determine_n_clusters(nodes, node_weight_function, max_k=10)
     # import sys
     # sys.exit(0)
     id_to_node = {node.id: node for node in nodes}
     C = n_clusters
     X = make_clusters(nodes, node_weight_function, C=C)
-    # print(X)
+    print(X)
     cluster_sums = X.groupby("cluster")['weight'].sum()
     print("cluster_sums", cluster_sums)
     # Pandas object. (id->Index)
@@ -139,12 +140,12 @@ def partition_2dbin_pack(graph: Graph,
 
     bins = {i: node_list(bins[i]) for i in bins}
     # Balance:
-    times = {i: sum(x.weight for x in bins[i]) for i in bins}
+    times = {i: sum(node_weight_function(x) for x in bins[i]) for i in bins}
     print("times:")
     pprint(times)
 
     # Convert
-    for stage_id, ns in bins:
+    for stage_id, ns in bins.items():
         for n in ns:
             n: Node
             n.stage_id = stage_id
@@ -158,10 +159,26 @@ if __name__ == '__main__':
     from torch.nn import Sequential, Linear
     import torch
 
+    IN_FEATURES = 1000
+    OUT_FEATURES = 500
+
     model = Sequential(
-        *[Linear(10, 10), Linear(10, 10), Linear(10, 10), Linear(10, 10),
-          Linear(10, 5),
-          Linear(5, 5), Linear(5, 5), Linear(5, 5)])
-    graph = build_graph(model, args=torch.randn(10, 10))
+        *[Linear(IN_FEATURES, IN_FEATURES), Linear(IN_FEATURES, IN_FEATURES), Linear(IN_FEATURES, IN_FEATURES), Linear(
+            IN_FEATURES, IN_FEATURES),
+          Linear(IN_FEATURES, OUT_FEATURES),
+          Linear(OUT_FEATURES, OUT_FEATURES), Linear(OUT_FEATURES, OUT_FEATURES), Linear(OUT_FEATURES, OUT_FEATURES)])
+    graph = build_graph(model, args=(torch.randn(IN_FEATURES, IN_FEATURES),))
     node_weight_function = NodeWeightFunction(bwd_to_fwd_ratio=1)
+    # graph.display(node_weight_function=node_weight_function)
+    import graphviz
+    # dot = graph.build_dot(node_weight_function=node_weight_function)
+    # graphviz.Source(graph.build_dot(node_weight_function=node_weight_function))
+    # nxg = graph.asNetworkx(directed=False, node_weight_function=node_weight_function)
+    # import matplotlib.pyplot as plt
+    # nx.draw_networkx(nxg, labels={n: {"weight": v["weight"]} for n,v in nxg.nodes.items()})
+    # plt.show()
+
+
+    nodes = [n for n in graph.nodes if n not in graph.inputs]
+    # determine_n_clusters(nodes=nodes, node_weight_function=node_weight_function, max_k=4)
     partition_2dbin_pack(graph=graph, num_gpus=2, n_clusters=2, node_weight_function=node_weight_function)
