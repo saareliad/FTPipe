@@ -9,9 +9,10 @@ import pickle
 import os
 
 from pytorch_Gpipe import trace_module, Graph, GraphProfiler, execute_graph, ExecTimes, acyclic_partition, \
-    infer_req_grad, compile_partitioned_model, METIS_partition, profile_network
+    infer_req_grad, compile_partitioned_model, METIS_partition, partition_2dbin_pack, profile_network, partition_model
 from pytorch_Gpipe.model_profiling import Node
 from pytorch_Gpipe.utils import move_tensors
+
 
 FullExecTimes = namedtuple('FullExecTimes', 'recomputation no_recomputation')
 
@@ -82,22 +83,30 @@ def partition_async_pipe(
             else:
                 n.weight = weights[n].recomputation
 
+        node_weight_function = evaluator
+        edge_weight_function = evaluator
+
+        # TODO stop the double code..
+
         if cmd_args.partitioning_method == "ACYCLIC":
             acyclic_partition(model, graph,
                               cmd_args.n_partitions,
-                              node_weight_function=evaluator,
-                              edge_weight_function=evaluator,
+                              node_weight_function=node_weight_function,
+                              edge_weight_function=edge_weight_function,
                               use_layers_graph=True,
                               **cmd_args.acyclic_opt)
         elif cmd_args.partitioning_method == "METIS":
             METIS_partition(graph,
                             cmd_args.n_partitions,
-                            node_weight_function=evaluator,
-                            edge_weight_function=evaluator,
-                            use_layers_graph=True,
+                            node_weight_function=node_weight_function,
+                            edge_weight_function=edge_weight_function,
+                            use_layers_only_graph=True,
                             **cmd_args.METIS_opt)
         elif cmd_args.partitioning_method == "2DBIN":
-            raise NotImplementedError()
+            # TODO: cmd arg for n_clusters
+            graph, stage_to_gpu_map = partition_2dbin_pack(graph, num_gpus=cmd_args.n_partitions, n_clusters=2,
+                                                           node_weight_function=node_weight_function)
+            # TODO: handle stage_to_gpu_map
         else:
             raise NotImplementedError()
 

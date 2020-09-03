@@ -98,6 +98,8 @@ def make_clusters(nodes: List[Node], node_weight_function, C: int):
 
 
 def determine_n_clusters(nodes: List[Node], node_weight_function, max_k=10):
+    """ utility to help determind number of clusters for partition_2dbin_pack"""
+
     def node_to_record(node):
         return {"id": node.id, "weight": node_weight_function(node)}
 
@@ -121,7 +123,13 @@ def partition_2dbin_pack(graph: Graph,
                          n_clusters: int,
                          node_weight_function: Optional[NodeWeightFunction] = None,
                          # edge_weight_function: Optional[EdgeWeightFunction] = None,
+                         use_layers_graph: bool = True
                          ):
+    if use_layers_graph:
+        work_graph, lookup = graph.layers_graph()
+    else:
+        work_graph, lookup = graph, None
+
     K = num_gpus
     nodes = [n for n in graph.nodes if n not in graph.inputs]
     # determine_n_clusters(nodes, node_weight_function, max_k=10)
@@ -168,6 +176,9 @@ def partition_2dbin_pack(graph: Graph,
 
     print("node_to_stage_map:")
     pprint(node_to_stage_map)
+
+    if use_layers_graph:
+        graph.induce_layer_partition(work_graph, lookup)
 
     return graph, stage_to_gpu_map
 

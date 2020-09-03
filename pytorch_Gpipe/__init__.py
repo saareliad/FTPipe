@@ -4,7 +4,8 @@ import torch
 import torch.nn as nn
 
 from .compiler import compile_partitioned_model
-from .model_partitioning import METIS_partition, acyclic_partition, get_weight_functions
+from .model_partitioning import METIS_partition, acyclic_partition, partition_2dbin_pack, determine_n_clusters, \
+    get_weight_functions
 from .model_profiling import Graph, profile_network, GraphProfiler, trace_module, ExecTimes, NodeWeightFunction, \
     EdgeWeightFunction
 from .model_profiling.graph_executor import execute_graph
@@ -39,6 +40,7 @@ def pipe_model(model: nn.Module,
                partitioning_method: str = "ACYCLIC",
                METIS_opt: Optional[Dict] = None,
                acyclic_opt: Optional[Dict] = None,
+               binpack_opt: Optional[Dict] = None,
                force_no_recomp_scopes: Optional[Callable[[str], bool]] = None,
                save_memory_mode: bool = False,
                use_graph_profiler: bool = True,
@@ -97,6 +99,8 @@ def pipe_model(model: nn.Module,
         dict of additional kwargs to pass to the METIS partitioning algorithm
     acyclic_opt:
         dict of additional kwargs to pass to the acyclic partitioning algorithm
+    binpack_opt:
+        dict of additional kwargs to pass to the binback partitioning algorithm
     force_no_recomp_scopes:
         fn(scope):
             returns true if we want to force recomputation scope_specific_recomp
@@ -136,6 +140,7 @@ def pipe_model(model: nn.Module,
                             partitioning_method=partitioning_method,
                             METIS_opt=METIS_opt,
                             acyclic_opt=acyclic_opt,
+                            binpack_opt=binpack_opt,
                             force_no_recomp_scopes=force_no_recomp_scopes,
                             use_graph_profiler=use_graph_profiler,
                             use_network_profiler=use_network_profiler,
@@ -169,6 +174,7 @@ def partition_model(model: nn.Module,
                     partitioning_method: str = "ACYCLIC",
                     METIS_opt: Optional[Dict] = None,
                     acyclic_opt: Optional[Dict] = None,
+                    binpack_opt:  Optional[Dict] = None,
                     force_no_recomp_scopes: Optional[Callable[[str], bool]] = None,
                     use_graph_profiler: bool = True,
                     use_network_profiler: bool = False,
@@ -209,6 +215,8 @@ def partition_model(model: nn.Module,
         dict of additional kwargs to pass to the METIS partitioning algorithm
     acyclic_opt:
         dict of additional kwargs to pass to the acyclic partitioning algorithm
+    binpack_opt:
+        dict of additional kwargs to pass to the binpack partitioning algorithm
     use_graph_profiler:
         whether to use the new graph based profiler
         default True
@@ -225,6 +233,8 @@ def partition_model(model: nn.Module,
         METIS_opt = dict()
     if acyclic_opt is None:
         acyclic_opt = dict()
+    if binpack_opt is None:
+        binpack_opt = dict()
 
     if graph is None:
         graph = build_graph(model,
@@ -255,7 +265,11 @@ def partition_model(model: nn.Module,
                           use_layers_graph=use_layers_only_graph,
                           **acyclic_opt)
     elif partitioning_method == "2DBIN":
-        raise NotImplementedError()
+        if "n_clusters" not in binpack_opt:
+            binpack_opt["n_clusters"] = 2
+        # TODO: determine nclusters
+        graph, stage_to_gpu_map = partition_2dbin_pack(graph, num_gpus=nparts,
+                                                       node_weight_function=node_weight_function, **binpack_opt)
     else:
         raise NotImplementedError()
 
