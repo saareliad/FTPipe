@@ -1,11 +1,11 @@
 from collections import deque, defaultdict
+from itertools import count
 from pprint import pprint
 from typing import Optional, List
-from itertools import count
+
 import matplotlib.pyplot as plt
 import pandas as pd
 from sklearn.cluster import KMeans
-import networkx as nx
 
 from pytorch_Gpipe.model_partitioning.heuristics import NodeWeightFunction
 from pytorch_Gpipe.model_profiling import Graph, Node
@@ -105,7 +105,7 @@ def determine_n_clusters(nodes: List[Node], node_weight_function, max_k=10):
     X = pd.DataFrame.from_records(data=records, index="id")
     print(X)
     sse = {}
-    for k in range(1, max_k+1):
+    for k in range(1, max_k + 1):
         kmeans = KMeans(n_clusters=k, max_iter=1000).fit(X)
         X["cluster"] = kmeans.labels_
         sse[k] = kmeans.inertia_  # Inertia: Sum of distances of samples to their closest cluster center
@@ -162,16 +162,14 @@ def partition_2dbin_pack(graph: Graph,
             stage_to_gpu_map[n.stage_id].add(gpu_id)
             node_to_stage_map[n.id] = n.stage_id
 
-    stage_to_gpu_map = {i: sorted(v) for i,v in stage_to_gpu_map.items()}
+    stage_to_gpu_map = {i: sorted(v) for i, v in stage_to_gpu_map.items()}
     print("stage_to_gpu_map:")
     pprint(stage_to_gpu_map)
-
 
     print("node_to_stage_map:")
     pprint(node_to_stage_map)
 
-
-    return graph
+    return graph, stage_to_gpu_map
 
 
 if __name__ == '__main__':
@@ -196,7 +194,6 @@ if __name__ == '__main__':
 
     node_weight_function = NodeWeightFunction(bwd_to_fwd_ratio=1, MULT_FACTOR=100000)
     # graph.display(node_weight_function=node_weight_function)
-    import graphviz
     # dot = graph.build_dot(node_weight_function=node_weight_function)
     # graphviz.Source(graph.build_dot(node_weight_function=node_weight_function))
     # nxg = graph.asNetworkx(directed=False, node_weight_function=node_weight_function)
@@ -204,7 +201,7 @@ if __name__ == '__main__':
     # nx.draw_networkx(nxg, labels={n: {"weight": v["weight"]} for n,v in nxg.nodes.items()})
     # plt.show()
 
-
     nodes = [n for n in graph.nodes if n not in graph.inputs]
     # determine_n_clusters(nodes=nodes, node_weight_function=node_weight_function, max_k=4)
-    partition_2dbin_pack(graph=graph, num_gpus=2, n_clusters=2, node_weight_function=node_weight_function)
+    graph, stage_to_gpu_map = partition_2dbin_pack(graph=graph, num_gpus=2, n_clusters=2,
+                                                   node_weight_function=node_weight_function)
