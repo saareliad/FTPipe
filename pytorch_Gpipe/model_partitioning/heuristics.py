@@ -3,8 +3,8 @@ from functools import reduce
 
 import torch
 
-from ..model_profiling import Node, NodeTypes, ExecTimes
-from ..utils import flatten
+from pytorch_Gpipe.utils import ExecTimes, flatten
+from ..model_profiling import Node, NodeTypes
 
 __all__ = ["get_weight_functions"]
 

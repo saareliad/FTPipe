@@ -6,11 +6,11 @@ import torch.nn as nn
 from .compiler import compile_partitioned_model
 from .model_partitioning import METIS_partition, acyclic_partition, partition_2dbin_pack, analyze_n_clusters, \
     get_weight_functions
-from .model_profiling import Graph, profile_network, GraphProfiler, trace_module, ExecTimes, NodeWeightFunction, \
+from .model_profiling import Graph, profile_network, GraphProfiler, trace_module, NodeWeightFunction, \
     EdgeWeightFunction
 from .model_profiling.graph_executor import execute_graph
 from .model_profiling.infer_req_grad import infer_req_grad
-from .utils import move_tensors
+from .utils import move_tensors, ExecTimes
 
 __all__ = [
     'pipe_model', 'profile_network', 'trace_module', 'partition_model',

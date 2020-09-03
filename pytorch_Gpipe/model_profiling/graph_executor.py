@@ -7,9 +7,9 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from torch import nn, Tensor
 
-from pytorch_Gpipe.model_profiling import (Graph, Node, NodeTypes,
-                                           used_namespaces)
 from pytorch_Gpipe.utils import layerDict, tensorDict, force_out_of_place, inplace_arithmetic_ops
+from .control_flow_graph import (Graph, Node, NodeTypes)
+from .tracer import used_namespaces
 
 
 class PreHook(abc.ABC):
