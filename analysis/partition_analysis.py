@@ -218,9 +218,16 @@ def run_analysis(sample,
 
     expected_speedup = expected_speedup_after_partitioning(*pipe_times)
 
-    tuple_seq_no_recom_times = get_seq_no_recomp_no_comm_times()
-    expected_speedup_compared_to_seq_no_comm = expected_speedup_compared_to_seq(
-        pipe_times, tuple_seq_no_recom_times)
+    try:
+        tuple_seq_no_recom_times = get_seq_no_recomp_no_comm_times()
+        seq_success = True
+    except (Exception,RuntimeError) as e:
+        print(f"sequential no_recomputation analysis failed: {sys.exc_info()[0]}", str(e))
+        seq_success = False
+
+    if seq_success: 
+        expected_speedup_compared_to_seq_no_comm = expected_speedup_compared_to_seq(
+            pipe_times, tuple_seq_no_recom_times)
 
     comp_comm_ratio_f = rounddict(comp_comm_ratio_f)
     comp_comm_ratio_b = rounddict(comp_comm_ratio_b)
@@ -239,7 +246,7 @@ def run_analysis(sample,
     fwd_plus_backward['pipeline_no_comm'] = add_dicts(nocomm_real_f_times,
                                                       nocomm_real_b_times)
     fwd_plus_backward['seq_no_comm_no_recomp'] = add_dicts(
-        tuple_seq_no_recom_times[-3], tuple_seq_no_recom_times[-2])
+        tuple_seq_no_recom_times[-3], tuple_seq_no_recom_times[-2]) if seq_success else dict()
 
     for i, v in fwd_plus_backward.items():
         if i == 'seq_no_comm_no_recomp':
@@ -354,7 +361,8 @@ def run_analysis(sample,
             # worstcase is important, it allows comparing between partitions
             s += f"\nworstcase: bwd: {max(real_b_times.values()):.3f} fwd: {max(real_f_times.values()):.3f}"
 
-            s += f"\nexpected_speedup_compared_to_seq_no_recomp_no_comm: {expected_speedup_compared_to_seq_no_comm:.3f}"
+            if seq_success:
+                s += f"\nexpected_speedup_compared_to_seq_no_recomp_no_comm: {expected_speedup_compared_to_seq_no_comm:.3f}"
 
             s += f"\nExpected speedup for {num_real_stages} partitions is: {expected_speedup:.3f}"
 
