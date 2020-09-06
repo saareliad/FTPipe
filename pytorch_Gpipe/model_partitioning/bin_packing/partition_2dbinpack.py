@@ -255,10 +255,11 @@ def partition_2dbin_pack(graph: Graph,
 
     stages_from_bins(work_graph, bins)
 
+    work_graph = post_process_partition(work_graph)
+
     if use_layers_graph:
         graph.induce_layer_partition(work_graph, lookup)
 
-    graph = post_process_partition(graph)
 
     # Get stage to GPU map
     node_to_stage_map = {}

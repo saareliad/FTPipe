@@ -3,6 +3,7 @@ import importlib
 import os
 import sys
 from argparse import Namespace
+from collections import defaultdict
 from typing import Dict, Optional, Tuple
 
 sys.path.append("../")
@@ -172,6 +173,16 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: Partitioner, overri
                                async_pipeline=cmd_args.async_pipeline,
                                sequential_model=model)
 
+        gpu_to_stages = defaultdict(set)
+        stage_to_gpu = dict()
+        for n in graph.nodes:
+            if n.gpu_id is None:
+                continue
+            gpu_to_stages[n.gpu_id].add(n.stage_id)
+            stage_to_gpu[n.stage_id] = n.gpu_id
+        if gpu_to_stages:
+            analysis_kwargs['stages_on_same_gpu'] = list(gpu_to_stages.values())
+        stage_to_gpu = [stage_to_gpu[i] for i in sorted(stage_to_gpu.keys())]
         analysis_kwargs = partitioner.update_analysis_kwargs(cmd_args, analysis_config, analysis_kwargs)
         analysis_result, summary = run_analysis(**analysis_kwargs)
         with open(f"{cmd_args.output_file}.py", "a") as f:
