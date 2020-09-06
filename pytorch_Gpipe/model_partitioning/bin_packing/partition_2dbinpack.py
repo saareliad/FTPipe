@@ -106,7 +106,15 @@ def make_clusters(nodes: List[Node], node_weight_function, C: int):
     kmeans = KMeans(n_clusters=C, max_iter=1000).fit(X)
     X["cluster"] = kmeans.labels_
 
-    return X
+
+    # sort clusters by id.
+    cluster_to_min_node_id = {i: X.query(f"cluster == {i}").first_valid_index() for i in range(C)}
+    min_node_id_to_cluster = {v:i for i,v in cluster_to_min_node_id.items()}
+    Y = X.copy()
+    for i, v in enumerate(min_node_id_to_cluster):
+        Y[X["cluster"] == v]['cluster'] = i
+
+    return Y
 
 
 def analyze_n_clusters(nodes: List[Node], node_weight_function, max_k=10):
@@ -160,6 +168,10 @@ def partition_2dbin_pack(graph: Graph,
     id_to_node = {node.id: node for node in nodes}
     C = n_clusters
     X = make_clusters(nodes, node_weight_function, C=C)
+
+    # Try to sort clusters
+
+
     print(X)
     Y = X.copy()
     Y['scope'] = [node.scope for node in nodes]
