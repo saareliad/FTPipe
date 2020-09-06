@@ -118,7 +118,7 @@ def stages_from_bins(graph, bins):
                 if not y.id not in uf:
                     nodes_with_out_edges[gpu_id].add(x)
                     nodes_with_in_edges[y.gpu_id].add(y)
-                if uf.find(y.id) != uf.find(x.id):
+                elif uf.find(y.id) != uf.find(x.id):
                     uf.union(uf.component(y.id), uf.component(x.id))
 
         # Now, it is problematic if we have:
