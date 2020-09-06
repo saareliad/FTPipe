@@ -118,8 +118,8 @@ def stages_from_bins(graph, bins):
                 if y.id not in uf:
                     nodes_with_out_edges[gpu_id].add(x)
                     nodes_with_in_edges[y.gpu_id].add(y)
-                elif uf.find(y.id) != uf.find(x.id):
-                    uf.union(uf.component(y.id), uf.component(x.id))
+                    continue
+                uf.union(x.id, y.id)
 
         # Now, it is problematic if we have:
         #  a->d, b->d, c->d, b->c, and b->d
@@ -135,7 +135,7 @@ def stages_from_bins(graph, bins):
         unbroken_stages = uf.sorted_components()
         for dummy_stage_id, unbroken_stage in zip(stage_id_generator, unbroken_stages):
             for n in unbroken_stage:
-                n.stage_id = dummy_stage_id
+                graph[n].stage_id = dummy_stage_id
 
     # cannonize_partition_indices(graph)
     # break cycles
@@ -253,14 +253,14 @@ def partition_2dbin_pack(graph: Graph,
 
     # TODO: to stages
 
-    stages_from_bins(graph, bins)
+    stages_from_bins(work_graph, bins)
 
     if use_layers_graph:
         graph.induce_layer_partition(work_graph, lookup)
 
     graph = post_process_partition(graph)
 
-    ## Get stage to GPU map
+    # Get stage to GPU map
     node_to_stage_map = {}
     # Convert
     stage_to_gpu_map = defaultdict(set)

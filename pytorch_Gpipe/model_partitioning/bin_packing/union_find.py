@@ -211,7 +211,7 @@ class UnionFind(object):
         # Initialize if they are not already in the collection
         for elt in [x, y]:
             if elt not in self:
-                self.add(elt)
+                raise ValueError('{} is not an element'.format(x))
 
         xroot = self.find(x)
         yroot = self.find(y)
