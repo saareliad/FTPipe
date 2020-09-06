@@ -458,7 +458,7 @@ class Graph():
     def layers_graph(self) -> Tuple["Graph", Dict[int, int]]:
         '''
         creates a graph g with nodes of type CONSTANT 
-        or nodes who soley depend on constants are removed
+        or nodes who solely depend on constants are removed
         leaving only inputs layers and params/buffers
 
         returns the created graph and a map between g's indices and self indices
@@ -508,7 +508,7 @@ class Graph():
             if node.id in old_to_new:
                 node.stage_id = layers_graph[old_to_new[node.id]].stage_id
             else:
-                # as we iterate in reverse topological order we've already handled this node's outupts
+                # as we iterate in reverse topological order we've already handled this node's outputs
                 # select the lowest partition index to ensure no cycles are created
                 node.stage_id = sorted(node.out_edges, key=lambda n: n.stage_id)[0].stage_id
             assert node.stage_id >= 0

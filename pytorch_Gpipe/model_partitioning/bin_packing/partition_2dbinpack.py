@@ -120,6 +120,7 @@ def analyze_n_clusters(nodes: List[Node], node_weight_function, max_k=10):
     n_clusters = int(n_clusters)
     return n_clusters
 
+
 def partition_2dbin_pack(graph: Graph,
                          num_gpus: int,
                          n_clusters: int,
@@ -133,7 +134,7 @@ def partition_2dbin_pack(graph: Graph,
     else:
         work_graph, lookup = graph, None
 
-    nodes = [n for n in graph.nodes if n not in graph.inputs]
+    nodes = [n for n in work_graph.nodes if n not in work_graph.inputs]
 
     K = num_gpus
     if "analyze_n_clusters" in kwargs:
@@ -169,8 +170,8 @@ def partition_2dbin_pack(graph: Graph,
     node_to_stage_map = {}
     # Convert
     stage_to_gpu_map = defaultdict(set)
-    for gpu_id, ns in bins.items():
-        for n in ns:
+    for gpu_id, bin_nodes in bins.items():
+        for n in bin_nodes:
             n: Node
             stage_to_gpu_map[n.stage_id].add(gpu_id)
             node_to_stage_map[n.id] = n.stage_id
