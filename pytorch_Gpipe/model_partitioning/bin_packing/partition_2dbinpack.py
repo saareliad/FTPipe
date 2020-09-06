@@ -246,7 +246,7 @@ def partition_2dbin_pack(graph: Graph,
     pprint(times)
 
     # Bins to GPUs:
-    for i,bin_nodes in bins:
+    for i,bin_nodes in bins.items():
         for n in bin_nodes:
             n.gpu_id = i
 
