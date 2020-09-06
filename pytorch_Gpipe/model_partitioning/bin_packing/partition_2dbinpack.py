@@ -10,7 +10,7 @@ from sklearn.cluster import KMeans
 
 from pytorch_Gpipe.model_partitioning.heuristics import NodeWeightFunction
 from pytorch_Gpipe.model_profiling import Graph, Node
-
+from pytorch_Gpipe.model_partitioning.bin_packing.post_process import post_process_partition
 
 # from ...model_profiling import Graph, Node, NodeWeightFunction
 
@@ -27,6 +27,7 @@ from pytorch_Gpipe.model_profiling import Graph, Node
 
 
 def maketree(iterable, N):
+    # TODO: can implement remonder here.
     d = deque(iterable)
     res = []
     while d:
@@ -204,6 +205,7 @@ def partition_2dbin_pack(graph: Graph,
     if use_layers_graph:
         graph.induce_layer_partition(work_graph, lookup)
 
+    graph = post_process_partition(graph)
     return graph, stage_to_gpu_map
 
 
