@@ -53,6 +53,7 @@ def run_analysis(sample,
 
     UTILIZATION_SLOWDOWN_SPEEDUP = True
     PRINT_1F1B = True
+    DO_THEORETICAL = False
 
     TRY_SSGD_ANALYSIS = False
     TRY_ASGD_ANALYSIS = True
@@ -75,7 +76,7 @@ def run_analysis(sample,
 
     num_dummy_stages = sum((len(i) - 1) for i in unique_stages_on_same_gpu)
 
-    if graph is not None:
+    if graph is not None and DO_THEORETICAL:
         # thoeretical analysis
         sequential_f, sequential_b, parallel_f, parallel_b = theoretical_analysis(
             graph, recomputation=recomputation, async_pipeline=async_pipeline)
@@ -972,6 +973,7 @@ def theoretical_analysis(graph, recomputation=True, async_pipeline=False):
         the parallel assumption assumes that all computation paths are concurrent.
     '''
     n_parts = len(set(n.stage_id for n in graph.nodes))
+    print(f"Theoretical analysis found n_parts={n_parts}")
     parallel_b = dict()
     parallel_f = dict()
 

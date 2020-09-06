@@ -13,9 +13,9 @@ except ImportError:
 
 
 class NodeTypes(IntEnum):
-    '''
+    """
     Enum representing the possible types of Nodes in the Graph
-    '''
+    """
     IN = 1
     BUFF_PARAM = 2
     LAYER = 3
@@ -389,6 +389,7 @@ class Graph():
                          scope=node.scope,
                          type=node.type,
                          stage_id=node.stage_id,
+                         gpu_id=node.gpu_id,
                          weight=node.weight,
                          out_edges=[n.id for n in node.out_edges],
                          args=[n.id for n in node.args],
@@ -421,6 +422,7 @@ class Graph():
             nodes[node.id] = node
 
             node.stage_id = state['stage_id']
+            node.gpu_id = state['gpu_id']
             node.weight = state['weight']
             node.args = [nodes[n] for n in state['args']]
             node.kwargs = {nodes[n]: kw for n, kw in state['kwargs'].items()}
