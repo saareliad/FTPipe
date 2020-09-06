@@ -75,8 +75,9 @@ def get_all_splits(K, clusters, id_to_node):
                           f"will put reminding {reminder} nodes in last partition")
             # raise NotImplementedError(f"{c_i}, {n_i}, {K}")
         N = n_i // K
-        split = maketree(cluster, N=N)
 
+        cluster_for_split = cluster if not reminder else cluster[:-reminder]
+        split = maketree(cluster_for_split, N=N)
         if reminder > 0:
             # extend last.
             split[-1].extend(cluster[-reminder:])
