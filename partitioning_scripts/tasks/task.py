@@ -250,7 +250,7 @@ class Parser(argparse.ArgumentParser, ABC):
                            default=2,
                            type=int,
                            help="number of clusters in the model")
-        group.add_argument("--analyze_n_clusters", action="set_true", default=False,
+        group.add_argument("--analyze_n_clusters", action="store_true", default=False,
                            help="analyze number of clusters")
 
     def _add_acyclic_args(self, group):

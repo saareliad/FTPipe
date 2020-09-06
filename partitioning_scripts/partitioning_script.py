@@ -20,7 +20,7 @@ from analysis.analysis_utils import convert_to_analysis_format
 
 def parse_cli() -> Tuple[Namespace, Dict, Partitioner]:
     task_parser = argparse.ArgumentParser(description="partitioning task parser", add_help=False)
-    task_parser.add_argument("--partitioning_task", help="partitioning task to perform")
+    task_parser.add_argument("partitioning_task", help="partitioning task to perform")
     task, rest = task_parser.parse_known_args()
 
     parser_cls, partitioner_cls = get_parser_and_partitioner(task.partitioning_task)
