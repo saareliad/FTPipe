@@ -111,8 +111,8 @@ def get_problematic_partitions(graph):
     for u in graph.nodes:
         for v in u.out_edges:
             if v.stage_id < u.stage_id:
-                problems.append([v.stage_id, u.stage_id])
-                info.append([v.scope, u.scope])
+                problems.append([u.stage_id, v.stage_id])
+                info.append([(u.id , u.stage_id, u.scope), (v.id, v.stage_id, v.scope),])
     return problems, info
 
 
