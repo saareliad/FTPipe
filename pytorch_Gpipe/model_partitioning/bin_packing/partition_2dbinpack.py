@@ -104,7 +104,7 @@ def stages_from_bins(graph, bins):
 
     bins_to_cc = {}
     bins_to_visited = defaultdict(set)
-    for i,v in bins:
+    for i,v in bins.items():
         # TODO: find all connected componenets
         uf = UnionFind(elements=bins_to_id[i])
         visited = set()
