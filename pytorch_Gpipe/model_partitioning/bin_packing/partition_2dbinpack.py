@@ -159,6 +159,9 @@ def partition_2dbin_pack(graph: Graph,
     C = n_clusters
     X = make_clusters(nodes, node_weight_function, C=C)
     print(X)
+    Y = X.copy()
+    Y['scope'] = [node.scope for node in nodes]
+    print(Y)
     cluster_sums = X.groupby("cluster")['weight'].sum()
     print("cluster_sums", cluster_sums)
     # Pandas object. (id->Index)
