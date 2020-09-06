@@ -115,7 +115,7 @@ def stages_from_bins(graph, bins):
             x = open.popleft()
             x: Node
             for y in x.out_edges:
-                if not y.id not in uf:
+                if y.id not in uf:
                     nodes_with_out_edges[gpu_id].add(x)
                     nodes_with_in_edges[y.gpu_id].add(y)
                 elif uf.find(y.id) != uf.find(x.id):
