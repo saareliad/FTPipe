@@ -23,9 +23,10 @@ def generate_forward_method(stage_id: int,
                             model_outputs: List[Node],
                             partition_fields: Dict[str, str],
                             generate_explicit_del=False,
-                            generate_activation_propagation=True) -> Tuple[List[str], Dict[str, List]]:
-    '''the gateway to generate a forward function of a partition
-    '''
+                            generate_activation_propagation=True,
+                            move_tensors=False) -> Tuple[List[str], Dict[str, List]]:
+    """the gateway to generate a forward function of a partition
+    """
     # function arguments are x0...xn
     # function arguments correspond to sorted input scopes
     # functions outputs are o0,o1,... sorted by their scopes
@@ -66,7 +67,7 @@ def generate_forward_method(stage_id: int,
     lines = []
     lines.append(
         generateDeclaration(input_ids, partition_fields,
-                            ready_expressions))
+                            ready_expressions, move_tensors=move_tensors))
     outputs = partitionOutputs(partition_nodes, model_outputs)
 
     if generate_activation_propagation:
@@ -122,9 +123,9 @@ def generate_forward_method(stage_id: int,
 
 def generateDeclaration(input_ids: List[str], partition_fields: Dict[Node,
                                                                      str],
-                        input_args: Dict[Node, str]) -> str:
-    ''' generates the forward function declaration and the variable map of inputs and layers
-    '''
+                        input_args: Dict[Node, str], move_tensors=False) -> str:
+    """ generates the forward function declaration and the variable map of inputs and layers
+    """
     lines = [tab + f'def forward(self, *args):\n']
 
     # comments describing relation between variables and scopes
@@ -132,8 +133,12 @@ def generateDeclaration(input_ids: List[str], partition_fields: Dict[Node,
                              input_args.items()):
         lines.append(f"{dtab}# {node.scope} <=> {field}\n")
 
-    lines.extend([f"\n{dtab}# moving inputs to current device no op if already on the correct device\n",
-                  f"{dtab}{', '.join(input_ids)} = move_tensors(unflatten(args,self.input_structure), self.device)"])
+    if move_tensors:
+        lines.extend([f"\n{dtab}# moving inputs to current device no op if already on the correct device\n",
+                      f"{dtab}{', '.join(input_ids)} = move_tensors(unflatten(args,self.input_structure), self.device)"])
+    else:
+        lines.extend([f"{dtab}{', '.join(input_ids)} = unflatten(args,self.input_structure)"])
+
     if len(input_ids) == 1:
         lines[-1] += "[0]"
     return ''.join(lines)
@@ -143,8 +148,8 @@ def generateBody(outputs: List[Node],
                  partition: List[Node],
                  scope_to_class_field: Dict[str, str],
                  ready_expressions: Dict[Node, str]) -> List[str]:
-    '''generates the forwad function body and return statement
-    '''
+    """generates the forwad function body and return statement
+    """
     uses = node_uses(partition, outputs)
     # do not overwrite the model layers/bufferes/parameters
     for e in ready_expressions:
@@ -166,9 +171,9 @@ def generate_statements(partition_nodes: List[Node],
                         partition_layers: Dict[str, str],
                         ready_expressions: Dict[Node, str],
                         uses: Dict[Node, int]) -> List[str]:
-    ''' generate statements according to topological ordering of the partition
+    """ generate statements according to topological ordering of the partition
         constants will be inlined, variable names will be reused
-    '''
+    """
     statements = []
     available_names = deque()
     variable_name_generator = variableNameGenerator()
@@ -255,8 +260,8 @@ def allocate_variable(node, ready_expressions, uses, available_names, variable_n
 
 
 def generate_container_construct(ready_expressions, node, variable_name):
-    '''generate a dict/list/tuple/set/etc. object which has special syntax
-    '''
+    """generate a dict/list/tuple/set/etc. object which has special syntax
+    """
     if "prim::DictConstruct" in node.scope:
         kwargs = []
         for a, kws in node.kwargs.items():
@@ -372,8 +377,8 @@ def generate_parameter_list(node_args, node_kwargs, ready_expressions, inject_de
 
 
 def generate_return_statement(output_nodes: List[Node], ready_expressions: Dict[Node, str]):
-    ''' generate the return statement and descriptive comment
-    '''
+    """ generate the return statement and descriptive comment
+    """
     scope_comment = f'\n{dtab}# '.join(map(lambda n: n.scope, output_nodes))
     comment = f'# returning:\n{dtab}# {scope_comment}'
 
@@ -449,9 +454,9 @@ def node_uses(partition: List[Node], outputs: Set[Node]) -> Dict[str, int]:
 
 
 def variableNameGenerator() -> Iterator[str]:
-    '''return an infinite generator yielding
+    """return an infinite generator yielding
        names t_0 , t_1,...
-    '''
+    """
 
     def f():
         temp_idx = -1

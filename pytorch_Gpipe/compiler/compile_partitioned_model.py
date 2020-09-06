@@ -27,7 +27,8 @@ def compile_partitioned_model(graph: Graph,
                               generate_model_parallel: bool = False,
                               generate_explicit_del=False,
                               generate_activation_propagation=True,
-                              output_file: Optional[str] = None):
+                              output_file: Optional[str] = None,
+                              move_tensors=False):
     '''generates the code for the partitioned model.
        The partitions can be consumed using the `create_pipeline_configuration` method in the generated code
 
@@ -84,7 +85,8 @@ def compile_partitioned_model(graph: Graph,
                                                        graph.outputs,
                                                        scope_to_class_field,
                                                        generate_explicit_del=generate_explicit_del,
-                                                       generate_activation_propagation=generate_activation_propagation)
+                                                       generate_activation_propagation=generate_activation_propagation,
+                                                       move_tensors=False)
         partitions_code.append(class_decl)
         partitions_code.extend(forward_function)
         partitions_code.append("")
