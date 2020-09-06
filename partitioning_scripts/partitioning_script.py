@@ -183,6 +183,7 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: Partitioner, overri
         if gpu_to_stages:
             analysis_kwargs['stages_on_same_gpu'] = list(gpu_to_stages.values())
         stage_to_gpu = [stage_to_gpu[i] for i in sorted(stage_to_gpu.keys())]
+        print("stage_to_gpu", stage_to_gpu)
         analysis_kwargs = partitioner.update_analysis_kwargs(cmd_args, analysis_config, analysis_kwargs)
         analysis_result, summary = run_analysis(**analysis_kwargs)
         with open(f"{cmd_args.output_file}.py", "a") as f:

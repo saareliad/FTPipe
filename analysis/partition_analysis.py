@@ -1,4 +1,5 @@
 import sys
+
 sys.path.append("../")
 import torch
 from collections import deque, defaultdict
@@ -18,14 +19,11 @@ from pytorch_Gpipe.utils import flatten, move_tensors, nested_map
 from pytorch_Gpipe.model_profiling import NodeTypes
 from .analysis_utils import (extra_communication_time_lower_bound,
                              extra_communication_time_upper_bound,
-                             upper_utilization_bound, lower_utilization_bound,
                              apply_ratio)
 
 
 def rounddict(d, x=2):
     return {k: round(v, x) for k, v in d.items()}
-
-
 
 
 def run_analysis(sample,
@@ -39,10 +37,10 @@ def run_analysis(sample,
                  add_comm_times_to_balance=True,
                  sequential_model=None,
                  stages_on_same_gpu: List[Set[int]] = list()):
-    #kwarg input
+    # kwarg input
     if isinstance(sample, dict):
         sample = tuple([sample[i] for i in config['model inputs']])
-    elif not isinstance(sample,tuple):
+    elif not isinstance(sample, tuple):
         sample = (sample,)
 
     # NOTE: setting add_comm_times_to_balance, is for only debug porpuses
@@ -50,15 +48,14 @@ def run_analysis(sample,
     TOPO_AWARE = False
     PRINT_THEORETICAL = False
     PRINT_MIN_MAX_BALANCE = False
-    
+
     PRINT_VAR_STD = False
-    
+
     UTILIZATION_SLOWDOWN_SPEEDUP = True
     PRINT_1F1B = True
 
     TRY_SSGD_ANALYSIS = False
     TRY_ASGD_ANALYSIS = True
-
 
     # given:
     # stages_on_same_gpu = [{0, 4}]
@@ -89,7 +86,7 @@ def run_analysis(sample,
         if TOPO_AWARE:
             (topology_aware_sequential_f_balance,
              topology_aware_sequential_b_balance) = topology_aware_balance(
-                 sequential_f, sequential_b, edges)
+                sequential_f, sequential_b, edges)
         # theoretical anaysis based on the graph assuming the computation is fully parallel
         theoretical_parallel_b_balance = worst_balance(parallel_b)
         theoretical_parallel_f_balance = worst_balance(parallel_f)
@@ -107,16 +104,16 @@ def run_analysis(sample,
     ((real_f_times, f_vars, f_deviance), (real_b_times, b_vars, b_deviance),
      comm_volume_stats, nocomm_real_f_times, nocomm_real_b_times,
      warnings_list) = profile_execution(
-         sample,
-         config,
-         n_iter + 1,
-         recomputation=recomputation,
-         bw_GBps=bw_GBps,
-         async_pipeline=async_pipeline,
-         add_comm_times_to_balance=add_comm_times_to_balance,
-         stages_on_same_gpu=stages_on_same_gpu)
+        sample,
+        config,
+        n_iter + 1,
+        recomputation=recomputation,
+        bw_GBps=bw_GBps,
+        async_pipeline=async_pipeline,
+        add_comm_times_to_balance=add_comm_times_to_balance,
+        stages_on_same_gpu=stages_on_same_gpu)
 
-    #max memory
+    # max memory
     if torch.cuda.is_available():
         max_memory_allocated = torch.cuda.max_memory_allocated()
 
@@ -146,7 +143,6 @@ def run_analysis(sample,
     def get_comm_vol_str(comm_volume_stats):
         communication_volume = dict()
         for idx, stats in comm_volume_stats.items():
-
             units = {
                 "input size": "MB",
                 "recieve_time": "ms",
@@ -170,8 +166,8 @@ def run_analysis(sample,
                 if k == j:
                     continue
                 for means_list in [
-                        real_f_times, real_b_times, nocomm_real_f_times,
-                        nocomm_real_b_times, comm_volume_stats
+                    real_f_times, real_b_times, nocomm_real_f_times,
+                    nocomm_real_b_times, comm_volume_stats
                 ]:
                     if isinstance(means_list[j], dict):
 
@@ -193,7 +189,7 @@ def run_analysis(sample,
     if TOPO_AWARE:
         (topology_aware_real_f_balance,
          topology_aware_real_b_balance) = topology_aware_balance(
-             real_f_times, real_b_times, edges)
+            real_f_times, real_b_times, edges)
 
     real_b_slowdown = slowdown(real_b_times, nocomm_real_b_times)
     real_f_slowdown = slowdown(real_f_times, nocomm_real_f_times)
@@ -221,11 +217,11 @@ def run_analysis(sample,
     try:
         tuple_seq_no_recom_times = get_seq_no_recomp_no_comm_times()
         seq_success = True
-    except (Exception,RuntimeError) as e:
+    except (Exception, RuntimeError) as e:
         print(f"sequential no_recomputation analysis failed: {sys.exc_info()[0]}", str(e))
         seq_success = False
 
-    if seq_success: 
+    if seq_success:
         expected_speedup_compared_to_seq_no_comm = expected_speedup_compared_to_seq(
             pipe_times, tuple_seq_no_recom_times)
 
@@ -263,7 +259,7 @@ def run_analysis(sample,
         for i, v in fwd_plus_backward['pipeline_no_comm'].items()
         if i != 'worstcase'
     }
-    
+
     for i in list(fwd_plus_backward.keys()):
         v = fwd_plus_backward[i]
         fwd_plus_backward[i] = rounddict(v, 2) if isinstance(
@@ -305,7 +301,6 @@ def run_analysis(sample,
 
         s += f"\nreal times are based on real measurements of execution time ({with_comm_str} communication) of generated partitions ms\n"
         s += f"forward {rounddict(real_f_times)}\nbackward {rounddict(real_b_times)}\n"
-
 
         if PRINT_VAR_STD:
             s += f"variance of real execution times ms\n"
@@ -349,7 +344,6 @@ def run_analysis(sample,
         if PRINT_1F1B:
             s += f"\nAnalysis for T = fwd + bwd:\n {s_fwd_plus_backward}"
 
-        
         if UTILIZATION_SLOWDOWN_SPEEDUP:
             s += f"\nAnalysis for T = (1-R)fwd + R*bwd:\n"
             s += f"\nPipeline Slowdown: (compared to sequential executation with no communication, and same recompute policy)\n"
@@ -431,10 +425,9 @@ def run_analysis(sample,
             except Exception as e:
                 print(f"ASGD analysis failed: {sys.exc_info()[0]}", str(e))
                 # raise
-        
-        
+
     if torch.cuda.is_available():
-        s+= f"\nmax cuda memory used {max_memory_allocated/1e9:.2f}GB"
+        s += f"\nmax cuda memory used {max_memory_allocated / 1e9:.2f}GB"
     print(s)
 
     # Choose a metric to maximize and return it
@@ -477,7 +470,7 @@ def profile_execution(model_inputs,
     communication_stats = {}
     is_parameter = set()
     if not isinstance(model_inputs, (tuple, list)):
-        model_inputs = (model_inputs, )
+        model_inputs = (model_inputs,)
 
     # Return warnings so we can print
     warnings_list = []
@@ -564,7 +557,7 @@ def profile_execution(model_inputs,
                             continue
 
                         recv_sizes_by_gpu[sender_stage_id] += (
-                            tensor_sizes(t) / 1e6)
+                                tensor_sizes(t) / 1e6)
 
                     max_recv_time = 0
                     for s, size in recv_sizes_by_gpu.items():
@@ -598,12 +591,12 @@ def profile_execution(model_inputs,
                 out_size_mb = 0
                 send_time = 0
 
-                #NOTE it's possible we record a tuple
-                #in that case we have only one output in the config but multiple in the model
+                # NOTE it's possible we record a tuple
+                # in that case we have only one output in the config but multiple in the model
                 if len(partition_config[idx]['outputs']) != len(outputs):
                     assert len(partition_config[idx]['outputs']) == 1
 
-                    outputs = (outputs, )
+                    outputs = (outputs,)
 
                 # outputs
                 # stage_outputs = outputs
@@ -1068,7 +1061,6 @@ def extract_time(w, forward=False):
 
 
 def computation_communication_ratio(comp_times, comm_times):
-
     # comm_times = {k: v['send time'] for k, v in comm_times.items()}
     # comm_times = {k: v['recieve_times'] for k, v in comm_times.items()}
 
@@ -1093,7 +1085,6 @@ def utilization(times, comp_fraction):
 
 
 def slowdown(times, times_wo_comm):
-
     worst = max(times.values())
     n_partitions = len(times)
 
@@ -1124,7 +1115,6 @@ def imbbalance_slowdown(times):
 
 def expected_speedup_after_partitioning(fwd_times, bwd_times,
                                         fwd_times_wo_comm, bwd_times_wo_comm):
-
     n_partitions = len(fwd_times)
     assert (len(fwd_times) == len(bwd_times))
 
@@ -1199,10 +1189,10 @@ def topology_aware_balance(f_times, b_times, cutting_edges):
     f_balance = b_balance = 10
     for u, v in cutting_edges:
         f_ratio = min(f_times[u.stage_id], f_times[v.stage_id]) / \
-            max(f_times[u.stage_id], f_times[v.stage_id])
+                  max(f_times[u.stage_id], f_times[v.stage_id])
 
         b_ratio = min(b_times[u.stage_id], b_times[v.stage_id]) / \
-            max(b_times[u.stage_id], b_times[v.stage_id])
+                  max(b_times[u.stage_id], b_times[v.stage_id])
 
         if f_ratio < f_balance:
             f_balance = f_ratio
@@ -1214,7 +1204,6 @@ def topology_aware_balance(f_times, b_times, cutting_edges):
 
 
 def parameter_count(partition_config):
-
     n_partitions = sum(1 for k in partition_config if isinstance(k, int))
     d = {}
     for i in range(n_partitions):
