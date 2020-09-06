@@ -34,6 +34,7 @@ class Node():
         self.scope = scope
 
         self.stage_id = 0
+        self.gpu_id = None  # New feature
         self.weight = None
         self.out_edges: List[Node] = []
         self.args = []
@@ -74,6 +75,7 @@ class Node():
     def from_other(cls, other):
         node = cls(other.type, other.id, other.scope)
         node.stage_id = other.stage_id
+        node.gpu_id = other.gpu_id
         node.weight = other.weight
 
         node.out_edges = list(other.out_edges)

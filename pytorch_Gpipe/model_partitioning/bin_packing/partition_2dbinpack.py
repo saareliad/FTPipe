@@ -10,8 +10,8 @@ from sklearn.cluster import KMeans
 
 from pytorch_Gpipe.model_partitioning.heuristics import NodeWeightFunction
 from pytorch_Gpipe.model_profiling import Graph, Node
-from pytorch_Gpipe.model_partitioning.bin_packing.post_process import post_process_partition
-
+from pytorch_Gpipe.model_partitioning.bin_packing.post_process import post_process_partition, cannonize_partition_indices
+from pytorch_Gpipe.model_partitioning.bin_packing.union_find import UnionFind
 # from ...model_profiling import Graph, Node, NodeWeightFunction
 
 
@@ -63,7 +63,6 @@ def first_fit_cluster(K, clusters, id_to_node):
 
 def get_all_splits(K, clusters, id_to_node):
     all_splits = []
-    stage_id_generator = count()
 
     for c_i, cluster in enumerate(clusters):
         n_i = len(cluster)
@@ -87,14 +86,66 @@ def get_all_splits(K, clusters, id_to_node):
         if is_reversed:
             split = list(reversed(split))
 
-        for sub_split in split:
-            stage_id = next(stage_id_generator)
-            for record in sub_split:
-                node = id_to_node[record.Index]
-                node.stage_id = stage_id
+        # for sub_split in split:
+        #     stage_id = next(stage_id_generator)
+        #     for record in sub_split:
+        #         node = id_to_node[record.Index]
+        #         node.stage_id = stage_id
 
         all_splits.append(split)
     return all_splits
+
+def stages_from_bins(graph, bins):
+    stage_id_generator = count()
+    cur_gpu = 0
+
+    # shallow copy bins:
+    bins_to_id = {i: set(n.id for n in v) for i,v in bins.items()}
+
+    bins_to_cc = {}
+    bins_to_visited = defaultdict(set)
+    for i,v in bins:
+        # TODO: find all connected componenets
+        uf = UnionFind(elements=bins_to_id[i])
+        visited = set()
+        open = deque(sorted(v, key=lambda x: x.id))
+        while open:
+            x = open.popleft()
+            x: Node
+            for y in x.out_edges:
+                if uf.find(y.id) != uf.find(x.id):
+                    uf.union(uf.component(y), uf.component(x))
+
+        # Now, it is problematic if we have:
+        #  a->d, b->d, c->d, b->c, and b->d
+        # each on different gpu.
+        # problem is we can't say {b,d} are same stage because it will create a cycle:
+        # a->bd->c->bd
+        # if we can break bd, we can solve it afterwards.
+        # we alreay know how to break:
+        # af->b->c->d->e->af
+        # but how can we know it?
+
+        # give a dummy stage id
+        unbroken_stages = uf.sorted_components()
+        for dummy_stage_id, unbroken_stage in zip(stage_id_generator, unbroken_stages):
+            for n in unbroken_stage:
+                n.stage_id = dummy_stage_id
+
+    # cannonize_partition_indices(graph)
+    # break cycles
+
+
+    # TODO: get max subtree
+    # directed DFS, keep ends
+
+    # for end in sorted(ends):
+
+    # get all ends which and on another GPU x
+
+    # output -> another GPU -> create stage
+
+
 
 
 def make_clusters(nodes: List[Node], node_weight_function, C: int):
@@ -168,10 +219,6 @@ def partition_2dbin_pack(graph: Graph,
     id_to_node = {node.id: node for node in nodes}
     C = n_clusters
     X = make_clusters(nodes, node_weight_function, C=C)
-
-    # Try to sort clusters
-
-
     print(X)
     Y = X.copy()
     Y['scope'] = [node.scope for node in nodes]
@@ -198,6 +245,21 @@ def partition_2dbin_pack(graph: Graph,
     print("times:")
     pprint(times)
 
+    # Bins to GPUs:
+    for i,bin_nodes in bins:
+        for n in bin_nodes:
+            n.gpu_id = i
+
+    # TODO: to stages
+
+    stages_from_bins(graph, bins)
+
+    if use_layers_graph:
+        graph.induce_layer_partition(work_graph, lookup)
+
+    graph = post_process_partition(graph)
+
+    ## Get stage to GPU map
     node_to_stage_map = {}
     # Convert
     stage_to_gpu_map = defaultdict(set)
@@ -214,10 +276,6 @@ def partition_2dbin_pack(graph: Graph,
     print("node_to_stage_map:")
     pprint(node_to_stage_map)
 
-    if use_layers_graph:
-        graph.induce_layer_partition(work_graph, lookup)
-
-    graph = post_process_partition(graph)
     return graph, stage_to_gpu_map
 
 
@@ -254,3 +312,59 @@ if __name__ == '__main__':
     # analyze_n_clusters(nodes=nodes, node_weight_function=node_weight_function, max_k=4)
     graph, stage_to_gpu_map = partition_2dbin_pack(graph=graph, num_gpus=2, n_clusters=2,
                                                    node_weight_function=node_weight_function)
+
+#################
+# Layers for T5 small (tied)
+#     LAYER_SCOPES=[
+# >>            'T5ForConditionalGeneration/T5Stack[encoder]/StatelessEmbedding[embed_tokens]',
+#               'T5ForConditionalGeneration/T5Stack[encoder]/Dropout[dropout]',
+#               'T5ForConditionalGeneration/T5Stack[encoder]/T5Block[0]',
+#               'T5ForConditionalGeneration/T5Stack[encoder]/T5Block[1]',
+#               'T5ForConditionalGeneration/T5Stack[encoder]/T5Block[2]',
+#               'T5ForConditionalGeneration/T5Stack[encoder]/T5Block[3]',
+#               'T5ForConditionalGeneration/T5Stack[encoder]/T5Block[4]',
+#               'T5ForConditionalGeneration/T5Stack[encoder]/T5Block[5]',
+# >>            'T5ForConditionalGeneration/T5Stack[encoder]/T5LayerNorm[final_layer_norm]',
+#               'T5ForConditionalGeneration/T5Stack[encoder]/Dropout[dropout]',
+# >>            'T5ForConditionalGeneration/T5Stack[decoder]/StatelessEmbedding[embed_tokens]',
+#               'T5ForConditionalGeneration/T5Stack[decoder]/Dropout[dropout]',
+#               'T5ForConditionalGeneration/T5Stack[decoder]/T5Block[0]',
+#               'T5ForConditionalGeneration/T5Stack[decoder]/T5Block[1]',
+#               'T5ForConditionalGeneration/T5Stack[decoder]/T5Block[2]',
+#               'T5ForConditionalGeneration/T5Stack[decoder]/T5Block[3]',
+#               'T5ForConditionalGeneration/T5Stack[decoder]/T5Block[4]',
+#               'T5ForConditionalGeneration/T5Stack[decoder]/T5Block[5]',
+# >>            'T5ForConditionalGeneration/T5Stack[decoder]/T5LayerNorm[final_layer_norm]',
+#               'T5ForConditionalGeneration/T5Stack[decoder]/Dropout[dropout]',
+#               'T5ForConditionalGeneration/Linear[lm_head]',
+#               'T5ForConditionalGeneration/CrossEntropyLoss[lm_loss]',
+#           ]
+#################
+#################
+#################
+
+# when partitioning to 2 gpus we want something like:
+#     LAYER_SCOPES_TO_GPU={
+# >>            'T5ForConditionalGeneration/T5Stack[encoder]/StatelessEmbedding[embed_tokens]':0,
+#               'T5ForConditionalGeneration/T5Stack[encoder]/Dropout[dropout]':0,
+#               'T5ForConditionalGeneration/T5Stack[encoder]/T5Block[0]':0,
+#               'T5ForConditionalGeneration/T5Stack[encoder]/T5Block[1]':0,
+#               'T5ForConditionalGeneration/T5Stack[encoder]/T5Block[2]':0,
+#               'T5ForConditionalGeneration/T5Stack[encoder]/T5Block[3]':1,
+#               'T5ForConditionalGeneration/T5Stack[encoder]/T5Block[4]':1,
+#               'T5ForConditionalGeneration/T5Stack[encoder]/T5Block[5]':1,
+# >>            'T5ForConditionalGeneration/T5Stack[encoder]/T5LayerNorm[final_layer_norm]':1,
+#               'T5ForConditionalGeneration/T5Stack[encoder]/Dropout[dropout]':1,
+# >>            'T5ForConditionalGeneration/T5Stack[decoder]/StatelessEmbedding[embed_tokens]':1,
+#               'T5ForConditionalGeneration/T5Stack[decoder]/Dropout[dropout]':1,
+#               'T5ForConditionalGeneration/T5Stack[decoder]/T5Block[0]':1,
+#               'T5ForConditionalGeneration/T5Stack[decoder]/T5Block[1]':1,
+#               'T5ForConditionalGeneration/T5Stack[decoder]/T5Block[2]':1,
+#               'T5ForConditionalGeneration/T5Stack[decoder]/T5Block[3]':0,
+#               'T5ForConditionalGeneration/T5Stack[decoder]/T5Block[4]':0,
+#               'T5ForConditionalGeneration/T5Stack[decoder]/T5Block[5]':0,
+# >>            'T5ForConditionalGeneration/T5Stack[decoder]/T5LayerNorm[final_layer_norm]':0,
+#               'T5ForConditionalGeneration/T5Stack[decoder]/Dropout[dropout]':0,
+#               'T5ForConditionalGeneration/Linear[lm_head]':0,
+#               'T5ForConditionalGeneration/CrossEntropyLoss[lm_loss]':0,
+#           }

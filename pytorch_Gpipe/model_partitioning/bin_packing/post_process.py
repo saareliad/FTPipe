@@ -24,20 +24,21 @@ def post_process_partition(graph: Graph, edge_weight_function=None, verbose_on_e
         print extra info when cycle can't be solved
     '''
 
-    # cannonize_partition_indices(graph)
+    cannonize_partition_indices(graph)
     if has_cycles(graph):
         if os.environ.get("DEBUG", False):
             graph.save_as_pdf(f"{graph.model_name}_before_fix",
                               ".")
 
-        # break_partition_cycles(graph)
+        break_partition_cycles(graph)
 
-        # possibly redundant
+        # possibly redundant (SE: its not redundant...)
         try:
             cannonize_partition_indices(graph)
-        except:
+        except Exception as e:
             print(
                 "-W- ignoring exception of redundant cannonize_partition_indices(graph)")
+            raise e
 
     # this is a sanity check
     if has_cycles(graph):
@@ -128,7 +129,7 @@ def has_cycles(graph: Graph) -> bool:
 def break_partition_cycles(graph: Graph):
     parts = set()
     roots = defaultdict(set)
-    # roots[i] = nodes in partition j s.t j<i and exists backward edge from partition i to j
+    # roots[i] = nodes in gpu j s.t j<i and exists backward edge from partition i to j
     for u in graph.nodes:
         parts.add(u.stage_id)
         for v in u.out_edges:
@@ -141,6 +142,7 @@ def break_partition_cycles(graph: Graph):
         for n in find_subtree(group, len(graph.nodes)):
             n.stage_id = n_parts
         n_parts += 1
+    # cannonize_partition_indices(graph)
 
 
 def find_subtree(roots: Set[Node], graph_size: int):

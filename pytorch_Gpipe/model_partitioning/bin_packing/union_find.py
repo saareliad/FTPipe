@@ -270,6 +270,14 @@ class UnionFind(object):
         #     comps.append(comp)
         # return comps
 
+    def sorted_components(self, *args, **kwargs):
+        elts = np.array(self._elts)
+        vfind = np.vectorize(self.find)
+        roots = vfind(elts)
+        distinct_roots = set(roots)
+        distinct_roots = sorted(distinct_roots, *args, **kwargs)
+        return [set(elts[roots == root]) for root in distinct_roots]
+
     def component_mapping(self):
         """Return a dict mapping elements to their components.
 
