@@ -1,3 +1,4 @@
+import warnings
 from collections import deque, defaultdict
 from itertools import count
 from pprint import pprint
@@ -65,12 +66,21 @@ def get_all_splits(K, clusters, id_to_node):
 
     for c_i, cluster in enumerate(clusters):
         n_i = len(cluster)
+        reminder = n_i % K
+
         if n_i < K:
-            raise NotImplementedError(f"{c_i}, {n_i}, {K}")
-        if n_i % K != 0:
-            raise NotImplementedError(f"{c_i}, {n_i}, {K}")
+            raise NotImplementedError(f"insufficient number of items in cluster {c_i}, {n_i}, {K}")
+        if reminder > 0:
+            warnings.warn(f"cluster {c_i} is problematic {c_i}, {n_i}%{K}!=0, "
+                          f"will put reminding {reminder} nodes in last partition")
+            # raise NotImplementedError(f"{c_i}, {n_i}, {K}")
         N = n_i // K
         split = maketree(cluster, N=N)
+
+        if reminder > 0:
+            # extend last.
+            split[-1].extend(cluster[-reminder:])
+
         is_reversed = c_i % 2 == 0
         if is_reversed:
             split = list(reversed(split))
@@ -107,7 +117,7 @@ def analyze_n_clusters(nodes: List[Node], node_weight_function, max_k=10):
     X = pd.DataFrame.from_records(data=records, index="id")
     print(X)
     Y = X.copy()
-    Y['scope'] =  [node.scope for node in nodes]
+    Y['scope'] = [node.scope for node in nodes]
     print(Y)
 
     sse = {}
