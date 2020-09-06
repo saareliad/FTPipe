@@ -510,11 +510,15 @@ class Graph():
         # iterate in reverse order
         for node in sorted(self.nodes, key=lambda n: n.id, reverse=True):
             if node.id in old_to_new:
-                node.stage_id = layers_graph[old_to_new[node.id]].stage_id
+                take_from = layers_graph[old_to_new[node.id]]
+                node.stage_id = take_from.stage_id
+                node.gpu_id = take_from.gpu_id
             else:
                 # as we iterate in reverse topological order we've already handled this node's outputs
                 # select the lowest partition index to ensure no cycles are created
-                node.stage_id = sorted(node.out_edges, key=lambda n: n.stage_id)[0].stage_id
+                first = sorted(node.out_edges, key=lambda n: n.stage_id)[0]
+                node.stage_id = first.stage_id
+                node.gpu_id = first.gpu_id
             assert node.stage_id >= 0
 
         return self
