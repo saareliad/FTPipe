@@ -137,7 +137,7 @@ def partition_2dbin_pack(graph: Graph,
     nodes = [n for n in work_graph.nodes if n not in work_graph.inputs]
 
     K = num_gpus
-    if "analyze_n_clusters" in kwargs:
+    if "analyze_n_clusters" in kwargs and kwargs["analyze_n_clusters"]:
         n_clusters = analyze_n_clusters(nodes, node_weight_function, max_k=10)
     # import sys
     # sys.exit(0)
