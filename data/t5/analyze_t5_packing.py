@@ -1,8 +1,9 @@
+from pprint import pprint
+
 import numpy as np
 import pandas as pd
 
 from data.t5.t5_tfds import like_mtf
-from pprint import pprint
 
 
 def density(x):
@@ -10,7 +11,6 @@ def density(x):
 
 
 def analyze_packing(mixture_or_task_name, sequence_length, dataset_split="train", packed_ds=None):
-
     if packed_ds is None:
         packed_ds = like_mtf(mixture_or_task_name=mixture_or_task_name, sequence_length=sequence_length,
                              dataset_split=dataset_split, pack=True)
@@ -30,7 +30,6 @@ def analyze_packing(mixture_or_task_name, sequence_length, dataset_split="train"
     # Note: npacked and density can vary between shuffled iterations.
 
     df = pd.DataFrame.from_records([create_record(x) for x in ds.as_numpy_iterator()])
-    # df.describe()
     return df
 
 
@@ -129,8 +128,8 @@ def t5_tasks_we_want():
         # super_glue_wsc_v102_simple_eval
         # glue_wnli_v002_simple_eval
         "squad_v010_allanswers",
-        #"trivia_qa_v010" # too long
-        ]
+        # "trivia_qa_v010" # too long
+    ]
 
 
 #######################################
@@ -154,7 +153,7 @@ def glue_rte_v002():
     return df_packing, df_padding
 
 
-def sum_task(mixture_or_task_name,  dataset_split = "train"):
+def sum_task(mixture_or_task_name, dataset_split="train", add_percentiles=True):
     # HACK: npacked is detemined by inputs anyway
     sequence_length = {
         "inputs": 512,
@@ -166,13 +165,13 @@ def sum_task(mixture_or_task_name,  dataset_split = "train"):
     df_padding = analyze_padding(mixture_or_task_name=mixture_or_task_name, sequence_length=sequence_length,
                                  dataset_split=dataset_split)
 
-
-    print(40*"=")
+    print(40 * "=")
     print("-I- mixture_or_task_name", mixture_or_task_name)
     print("-I- packing:")
-    print(df_packing.describe())
+    print(df_packing.describe(percentiles=[0.5, 0.75, 0.9, 0.99]))
     print("-I- padding:")
-    print(df_padding.describe())
+    described_padding = df_padding.describe(percentiles=[0.5, 0.75, 0.9, 0.99])
+    print(described_padding)
 
     splits = ["train"]
     npacked = df_packing['npacked'].mean()
@@ -184,11 +183,21 @@ def sum_task(mixture_or_task_name,  dataset_split = "train"):
         "max_input": sequence_length_req['inputs'],
         "max_targets": sequence_length_req['targets'],
         "npacked": npacked,
-        "examples": ntrain
+        "examples": ntrain,
     }
+
+    if add_percentiles:
+        percs_input = {f"input_seq_length_{i}%": described_padding['input_seq_length'][f'{i}%'] for i in
+                       [50, 75, 90, 99]}
+        percs_target = {f"target_seq_length_{i}%": described_padding['target_seq_length'][f'{i}%'] for i in
+                        [50, 75, 90, 99]}
+
+        record.update(percs_input)
+        record.update(percs_target)
+
     print("-I summary:")
     pprint(record)
-    print(40*"=")
+    print(40 * "=")
 
     return record
 
