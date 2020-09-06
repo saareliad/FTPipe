@@ -8,10 +8,12 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from sklearn.cluster import KMeans
 
+from pytorch_Gpipe.model_partitioning.bin_packing.post_process import post_process_partition
+from pytorch_Gpipe.model_partitioning.bin_packing.union_find import UnionFind
 from pytorch_Gpipe.model_partitioning.heuristics import NodeWeightFunction
 from pytorch_Gpipe.model_profiling import Graph, Node
-from pytorch_Gpipe.model_partitioning.bin_packing.post_process import post_process_partition, cannonize_partition_indices
-from pytorch_Gpipe.model_partitioning.bin_packing.union_find import UnionFind
+
+
 # from ...model_profiling import Graph, Node, NodeWeightFunction
 
 
@@ -95,24 +97,27 @@ def get_all_splits(K, clusters, id_to_node):
         all_splits.append(split)
     return all_splits
 
+
 def stages_from_bins(graph, bins):
     stage_id_generator = count()
-    cur_gpu = 0
 
     # shallow copy bins:
-    bins_to_id = {i: set(n.id for n in v) for i,v in bins.items()}
+    bins_to_id = {i: set(n.id for n in v) for i, v in bins.items()}
 
-    bins_to_cc = {}
-    bins_to_visited = defaultdict(set)
-    for i,v in bins.items():
+    nodes_with_out_edges = defaultdict(set)
+    nodes_with_in_edges = defaultdict(set)
+    for gpu_id, v in bins.items():
         # TODO: find all connected componenets
-        uf = UnionFind(elements=bins_to_id[i])
+        uf = UnionFind(elements=bins_to_id[gpu_id])
         visited = set()
         open = deque(sorted(v, key=lambda x: x.id))
         while open:
             x = open.popleft()
             x: Node
             for y in x.out_edges:
+                if not y.id not in uf:
+                    nodes_with_out_edges[gpu_id].add(x)
+                    nodes_with_in_edges[y.gpu_id].add(y)
                 if uf.find(y.id) != uf.find(x.id):
                     uf.union(uf.component(y), uf.component(x))
 
@@ -135,7 +140,6 @@ def stages_from_bins(graph, bins):
     # cannonize_partition_indices(graph)
     # break cycles
 
-
     # TODO: get max subtree
     # directed DFS, keep ends
 
@@ -144,8 +148,6 @@ def stages_from_bins(graph, bins):
     # get all ends which and on another GPU x
 
     # output -> another GPU -> create stage
-
-
 
 
 def make_clusters(nodes: List[Node], node_weight_function, C: int):
@@ -157,10 +159,9 @@ def make_clusters(nodes: List[Node], node_weight_function, C: int):
     kmeans = KMeans(n_clusters=C, max_iter=1000).fit(X)
     X["cluster"] = kmeans.labels_
 
-
     # sort clusters by id.
     cluster_to_min_node_id = {i: X.query(f"cluster == {i}").first_valid_index() for i in range(C)}
-    min_node_id_to_cluster = {v:i for i,v in cluster_to_min_node_id.items()}
+    min_node_id_to_cluster = {v: i for i, v in cluster_to_min_node_id.items()}
     Y = X.copy()
     for i, v in enumerate(min_node_id_to_cluster):
         Y[X["cluster"] == v]['cluster'] = i
@@ -246,7 +247,7 @@ def partition_2dbin_pack(graph: Graph,
     pprint(times)
 
     # Bins to GPUs:
-    for i,bin_nodes in bins.items():
+    for i, bin_nodes in bins.items():
         for n in bin_nodes:
             n.gpu_id = i
 
