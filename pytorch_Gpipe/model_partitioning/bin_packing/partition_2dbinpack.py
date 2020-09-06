@@ -51,7 +51,7 @@ def first_fit_cluster(K, clusters, id_to_node):
     for k in range(K):
         for split in all_splits:
             assert len(split) == K, (len(split), len(split[k]), split)
-            print(split[k])
+            # print(split[k])
             bins[k].extend(split[k])
 
     assert len(bins) == K
@@ -106,6 +106,10 @@ def analyze_n_clusters(nodes: List[Node], node_weight_function, max_k=10):
     records = [node_to_record(node) for node in nodes]
     X = pd.DataFrame.from_records(data=records, index="id")
     print(X)
+    Y = X.copy()
+    Y['scope'] =  [node.scope for node in nodes]
+    print(Y)
+
     sse = {}
     for k in range(1, max_k + 1):
         kmeans = KMeans(n_clusters=k, max_iter=1000).fit(X)
