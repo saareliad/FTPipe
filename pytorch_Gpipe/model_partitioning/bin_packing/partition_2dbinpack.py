@@ -1,6 +1,6 @@
 import warnings
 from collections import deque, defaultdict
-from itertools import count, zip_longest
+from itertools import count
 from pprint import pprint
 from typing import Optional, List, Dict, Any, Union
 
@@ -29,10 +29,13 @@ from pytorch_Gpipe.model_profiling import Graph, Node
 # ######## ######## ############# ############## ######### ########### ######## ###########
 
 
-def grouper(n, iterable, fillvalue=None):
-    "grouper(3, 'ABCDEFG', 'x') --> ABC DEF Gxx"
-    args = [iter(iterable)] * n
-    return zip_longest(*args, fillvalue=fillvalue)
+def maketree(n, iterable):
+    d = deque(iterable)
+    res = []
+    while d:
+        pair = [d.popleft() for _ in range(n)]
+        res.append(pair)
+    return res
 
 
 def get_all_splits(K: int, clusters, id_to_node: Dict[int, Node], to_unify: Dict[int, List[Union[List, Any]]], C: int):
@@ -105,7 +108,8 @@ def get_all_splits(K: int, clusters, id_to_node: Dict[int, Node], to_unify: Dict
         N = n_i // K
 
         cluster_for_split = cluster if not reminder else cluster[:-reminder]
-        split = list(grouper(n=N, iterable=cluster_for_split))
+
+        split = list(maketree(n=N, iterable=cluster_for_split))
 
         if reminder > 0:
             # extend last.
@@ -166,6 +170,8 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
                         broke = _basic_nest(y, X, set_idx, node_id, to_unify)  # 2
                         if broke:
                             break
+                    if broke:
+                        break
                 else:
                     for y in node.out_edges:
                         for y in y.out_edges:
@@ -173,6 +179,11 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
                                 broke = _basic_nest(y, X, set_idx, node_id, to_unify)  # 3
                                 if broke:
                                     break
+                            if broke:
+                                break
+                        if broke:
+                            break
+
             if not broke:
                 raise NotImplementedError(f"need to go one level deeper "
                                           f"to find node with above THRESHOLD={THRESHOLD} weight to unify")

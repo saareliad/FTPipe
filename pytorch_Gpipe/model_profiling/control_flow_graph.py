@@ -47,6 +47,9 @@ class Node():
 
         self.constant_value = None
 
+    # def __repr__(self):
+    #     return self.scope
+
     def add_kwarg(self, kwarg, kwarg_node):
         self.kwargs[kwarg_node].append(kwarg)
 
