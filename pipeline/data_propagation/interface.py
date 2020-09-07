@@ -28,6 +28,7 @@ class PipelineDataPropagator(abc.ABC):
         t = propagator.pack_send_context(model_out, *ctx)
         send(t) ...
     """
+
     # @staticmethod
     @abc.abstractmethod
     def unpack_data_for_partition(self, data) -> Tuple[Tuple[Any], Tuple[Any]]:

@@ -1,14 +1,13 @@
+import numpy as np
 import torch
 from torch import Tensor
-import numpy as np
+
 # from copy import deepcopy
 
 # Conversion Table
 TABLE = {
     torch.Size: torch.int64,
 }
-
-
 
 
 def None_tensor():
@@ -27,6 +26,7 @@ class TensorWrapper:
 
         TODO: mapping conventions
     """
+
     def __init__(self, dtypes):
         self.send_dtype_map = TensorWrapper.make_send_dtype_map(dtypes)
         self.recv_dtype_map = TensorWrapper.make_recv_dtype_map(dtypes)
@@ -37,7 +37,8 @@ class TensorWrapper:
             return value  # NOTE: if we quantize sends change this
         elif value is None:
             if self.dtypes[name] is not None:
-                raise NotImplementedError(f"expected to send dtype {self.dtypes[name]} for tensor {name} for got None instead")
+                raise NotImplementedError(
+                    f"expected to send dtype {self.dtypes[name]} for tensor {name} for got None instead")
                 # TODO: can also send fake tensor of zeros, its is probably the gradients.
                 # TODO: can do it by informing recver he has to accept None instead of tensor
             return None_tensor()

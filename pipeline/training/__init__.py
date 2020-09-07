@@ -1,10 +1,10 @@
-from .interface import AnyTrainer
-from .gap_aware_trainer import gap_aware_trainer_factory
 from .cv_trainer import CVTrainer
+from .gap_aware_trainer import gap_aware_trainer_factory
+from .glue_trainer import GlueTrainer
+from .interface import AnyTrainer
 from .lm_trainer import LMTrainer
 from .squad_trainer import SquadTrainer
 from .t5_squad_trainer import T5Trainer
-from .glue_trainer import GlueTrainer
 
 AVAILABLE_TRAINERS = {}
 

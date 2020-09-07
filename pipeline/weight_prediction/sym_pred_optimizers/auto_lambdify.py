@@ -1,11 +1,12 @@
 # from .sympy_optimizer import *
-from .sympy_optimizer import Symbol, run_sim, tplus_time
-
-from .sympy_optimizer import NormalSympyAdam, WDSympySGDMsnag
+import inspect
+from collections import defaultdict
 
 from sympy import lambdify
-from collections import defaultdict
-import inspect
+
+from .sympy_optimizer import NormalSympyAdam, WDSympySGDMsnag
+from .sympy_optimizer import Symbol, run_sim, tplus_time
+
 
 def lambdify_dict(coeff):
     """ Lambidfy the given expression, returns a dict describing result """
@@ -20,8 +21,8 @@ def lambdify_dict(coeff):
 
 
 def auto_lambdify_delay_1(optimizer_class,
-                  simplify=False,
-                  allow_no_coeff=False):
+                          simplify=False,
+                          allow_no_coeff=False):
     _, preds, gaps = run_sim(1, optimizer_class, simplify=simplify)
     gap = gaps[0]
     pred = preds[0]
@@ -99,8 +100,8 @@ def auto_lambdify(max_staleness,
 if __name__ == "__main__":
     from pprint import pprint
 
-    def sgd():
 
+    def sgd():
         max_staleness = 3
         optimizer_class = WDSympySGDMsnag
         simplify = True
@@ -119,6 +120,7 @@ if __name__ == "__main__":
         values = [d[a] for a in required_args]
         print(f(*values))
 
+
     def adam():
         max_staleness = 1
         optimizer_class = NormalSympyAdam
@@ -132,9 +134,11 @@ if __name__ == "__main__":
         pprint(res)
         pprint(gap_res)
 
+
     # sgd()
 
     import ptvsd
+
     port = 3000 + 0
     address = ('127.0.0.1', port)
     print(f"-I- rank {0} waiting for attachment on {address}")

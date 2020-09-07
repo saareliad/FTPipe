@@ -1,4 +1,4 @@
-from .interface import BaseOutPutIsLossTrainer, BaseLossTrainer
+from .interface import BaseOutPutIsLossTrainer
 
 
 class T5Trainer(BaseOutPutIsLossTrainer):
@@ -11,7 +11,6 @@ class T5Trainer(BaseOutPutIsLossTrainer):
         raise NotImplementedError()
 
     def calc_test_stats(self, x, batch_size=None):
-
         # NOTE: we include loss for dev, huggingface does not
         loss = x
         self.statistics.update_on_batch("loss", loss.item(), batch_size)
@@ -19,7 +18,7 @@ class T5Trainer(BaseOutPutIsLossTrainer):
         # TODO: this happens in eval only.
         # if example_indices is not None:
         #    self.advanced_test_stats(x, example_indices)
-    
+
     def backprop_last_partition(self, x, batch_size):
         # logits = x[0]
         loss = x

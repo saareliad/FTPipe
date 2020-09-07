@@ -1,8 +1,9 @@
-import torch
-from .interface import WeightPredictor
 import math
-import warnings
+
+import torch
+
 from .cow_dict import CowDict
+from .interface import WeightPredictor
 
 
 def get_adafactor_weight_predictor(
@@ -12,7 +13,6 @@ def get_adafactor_weight_predictor(
         scheduler=None,
         nag_with_predictor=False,
         true_weights_storage=None) -> WeightPredictor:
-
     has_weight_decay = any(
         [pg['weight_decay'] != 0 for pg in optimizer.param_groups])
 
@@ -156,7 +156,7 @@ class AdaFactorWClonedWeightPredictionForAggregation(WeightPredictor):
                                 fill_value=group['eps'][0],
                                 memory_format=torch.preserve_format)
                         else:
-                            update = (grad**2) + group['eps'][0]
+                            update = (grad ** 2) + group['eps'][0]
                         if factored:
                             # exp_avg_sq_row = state['exp_avg_sq_row']
                             # exp_avg_sq_col = state['exp_avg_sq_col']
@@ -191,7 +191,7 @@ class AdaFactorWClonedWeightPredictionForAggregation(WeightPredictor):
                         if group['weight_decay'] != 0:
                             p_data_fp32.add_(p_data_fp32,
                                              alpha=-group['weight_decay'] *
-                                             group['lr'])
+                                                   group['lr'])
 
                         p_data_fp32.add_(-update)
 
@@ -202,7 +202,6 @@ class AdaFactorWClonedWeightPredictionForAggregation(WeightPredictor):
         if not self.n_steps:
             return
         self.true_weights_storage.restore_if_needed()
-
 
 ###########
 # For aggregation:

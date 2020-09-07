@@ -1,7 +1,9 @@
 import abc
-from typing import Dict
 from types import SimpleNamespace
+from typing import Dict
+
 from .utils import fit_res_to_dict
+
 
 # TODO: support for every X batches
 
@@ -138,4 +140,3 @@ class Stats(abc.ABC):
 
     def get_metric_for_early_stop(self):
         return None
-

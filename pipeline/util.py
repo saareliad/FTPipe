@@ -1,11 +1,11 @@
 # Utils
 import os
 from enum import Enum, auto
-from collections import deque
+from typing import Any, List
+
 import torch
 import torch.nn as nn
 from torch import Tensor
-from typing import Any, List
 
 
 def get_world_size(backend) -> int:

@@ -26,6 +26,7 @@ class CommunicationHandlerBase(abc.ABC):
     """ Base class for all communication handlers.
             Handles communication between stages.
     """
+
     def __init__(self):
         pass
 
@@ -110,4 +111,3 @@ class CommunicationHandlerBase(abc.ABC):
     @abc.abstractmethod
     def create_futures_handler(*args, **kw) -> FuturesHandlerBase:
         pass
-

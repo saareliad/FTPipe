@@ -1,6 +1,6 @@
 import torch
-from .interface import WeightPredictor, FixFunction
-import math  # For sympy stuff.
+
+from .interface import WeightPredictor
 from .sym_pred_optimizers import auto_lambdify, WDSympySGD
 
 
@@ -8,6 +8,7 @@ class SGDWDClonedWeightPrediction(WeightPredictor):
     """ Pytorch SGD. Mentioned as eq 9 Goyal et al.
         Used msnag to predict, including weight decay.
      """
+
     def __init__(self, *args, **kw):
 
         super().__init__(*args, **kw)

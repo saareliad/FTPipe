@@ -1,7 +1,10 @@
+import math
+
 import torch
+
 from .interface import WeightPredictor, FixFunction
 from .sgd_wd import SGDWDClonedWeightPrediction
-import math
+
 
 # """
 # SGD: momentum fix coeff is the same for all parameters in group,
@@ -86,6 +89,7 @@ class SGD2MSNAG(FixFunction):
     Mentioned as eq 10 Goyal et al.
     Fixed with MSNAG
      """
+
     def __call__(self, p: WeightPredictor, pg):
         gamma = pg['momentum']
         if p.n_steps == 1:
@@ -96,6 +100,7 @@ class SGD2MSNAG(FixFunction):
 
 class SGD1MSNAG(SGD2MSNAG):
     """ Pytorch SGD. Mentioned as eq 9 Goyal et al. """
+
     def __call__(self, p: WeightPredictor, pg):
         return pg['lr'] * super().__call__(p, pg)
 

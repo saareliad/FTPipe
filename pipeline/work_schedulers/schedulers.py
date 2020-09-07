@@ -153,6 +153,7 @@ class Synchronous1F1BScheduler(WorkScheduler):
     """ "1f1b-gpipe.
         First scheduler I implemented in simulation 1.5 years ago...
     """
+
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
         assert hasattr(self, "step_every")

@@ -1,8 +1,10 @@
-import torch
-from .interface import GapAwareBase
-from itertools import chain
-import numpy as np
 import math
+from itertools import chain
+
+import numpy as np
+import torch
+
+from .interface import GapAwareBase
 
 
 def gap_aware_adam_init(optimizer):
@@ -47,7 +49,7 @@ def adam_gap1(beta1, beta2, eps, eta, gt, m, v):
     nom2 = nom2_1 + nom2_2
 
     tmp4 = tmp0 / math.sqrt(1 - beta2)
-    dnom2 = (beta2 * v + (gt**2) * (1 - beta2)).sqrt_().mul_(tmp4).add_(tmp1)
+    dnom2 = (beta2 * v + (gt ** 2) * (1 - beta2)).sqrt_().mul_(tmp4).add_(tmp1)
 
     e2 = nom2 / dnom2  # todo can save memory by inplace to either nom2 or dnom2
 
@@ -56,6 +58,7 @@ def adam_gap1(beta1, beta2, eps, eta, gt, m, v):
 
 class AdamGapAware(GapAwareBase):
     """ Gap aware for ADAM optimizer """
+
     def __init__(self, optimizer, from_grad=False):  # FIXME:?
         """ Apply Gap Aware on computed gradients """
         super().__init__(optimizer)
@@ -86,7 +89,7 @@ class AdamGapAware(GapAwareBase):
 
                 for p in pg['params']:
                     avg_steps_needed = (
-                        (opt_state[p]['exp_step_avg_sq'])**0.5) + eps
+                                               (opt_state[p]['exp_step_avg_sq']) ** 0.5) + eps
 
                     m = opt_state[p]['exp_avg']
                     v = opt_state[p]['exp_avg_sq']
@@ -116,7 +119,6 @@ class AdamGapAware(GapAwareBase):
                 eps = pg['eps']
 
                 for p, sp in zip(pg['params'], spg):
-
                     # step_count = opt_state[p]['step'] + 1
                     # bias_correction2 = 1 - beta2**(step_count)
 
@@ -126,14 +128,14 @@ class AdamGapAware(GapAwareBase):
                     # Note: can remove the "data". but whatever.
                     # TODO: use max_lr somwhow, instead of doing it in optimizer
                     avg_steps_needed = (
-                        (opt_state[p]['exp_step_avg_sq'].data)**0.5) + eps
+                                               (opt_state[p]['exp_step_avg_sq'].data) ** 0.5) + eps
 
                     gap = (p - sp).abs()
                     # pg['lr'] * p.grad.abs()
 
                     # calculate the gap per-element
                     # mul by LR?
-                    penalty = 1 + ( gap / (max_lr * avg_steps_needed))
+                    penalty = 1 + (gap / (max_lr * avg_steps_needed))
 
                     # Apply penalty to gradient
                     p.grad.data /= penalty
@@ -181,7 +183,7 @@ class AdamGapAware(GapAwareBase):
 
                     # TODO: use max_lr somwhow, instead of doing it in optimizer
                     avg_steps_needed = (
-                        (opt_state[p]['exp_step_avg_sq'].data)**0.5) + eps
+                                               (opt_state[p]['exp_step_avg_sq'].data) ** 0.5) + eps
 
                     gap = (p - rp).abs()
                     # pg['lr'] * p.grad.abs()

@@ -1,5 +1,7 @@
-import torch
 from itertools import chain
+
+import torch
+
 from .interface import GapAwareBase
 
 
@@ -130,18 +132,18 @@ class GapAware(GapAwareBase):
                 if pg['momentum'] != 0:
                     for p in pg['params']:
                         ra[id(p)] = bg * ra[id(p)] + \
-                            (1 - bg) * \
-                            (opt_s[p]["momentum_buffer"] ** 2)
+                                    (1 - bg) * \
+                                    (opt_s[p]["momentum_buffer"] ** 2)
                 else:
                     for p in pg['params']:
                         ra[id(p)] = bg * ra[id(p)] + \
-                            (1 - bg) * ((p.grad) ** 2)
+                                    (1 - bg) * ((p.grad) ** 2)
 
     def apply_from_grad(self):
         """ Calculate gap aware from gradient. Requires knowing the exact gap """
         with torch.no_grad():
             ra = self.running_avg_step
-            bias_correction = 1 - (self.big_gamma**self.step_count)
+            bias_correction = 1 - (self.big_gamma ** self.step_count)
             eps = self.epsilon
             # Calculate gap from grad
             for pg in self.optimizer.param_groups:
@@ -152,7 +154,7 @@ class GapAware(GapAwareBase):
                 for p in pg['params']:
                     # calculate C coefficient per-element
                     avg_steps_needed = max_lr * \
-                        (((ra[id(p)] / bias_correction) ** 0.5) + eps)
+                                       (((ra[id(p)] / bias_correction) ** 0.5) + eps)
 
                     # calculate the gap per-element
                     penalty = 1 + (pg['lr'] * p.grad.abs() / avg_steps_needed)
@@ -176,7 +178,7 @@ class GapAware(GapAwareBase):
     def apply_on_theta(self, real_theta):
         with torch.no_grad():
             ra = self.running_avg_step
-            bias_correction = 1 - (self.big_gamma**self.step_count)
+            bias_correction = 1 - (self.big_gamma ** self.step_count)
             eps = self.epsilon
             # Calculate gap from grad
             for pg, rpg in zip(self.optimizer.param_groups, real_theta):
@@ -190,7 +192,7 @@ class GapAware(GapAwareBase):
                     # calculate C coefficient per-element
                     # Note: can remove the "data". but whatever.
                     avg_steps_needed = max_lr * \
-                        (((ra[id(p)] / bias_correction) ** 0.5) + eps)
+                                       (((ra[id(p)] / bias_correction) ** 0.5) + eps)
 
                     gap = (p - rp).abs()
                     # pg['lr'] * p.grad.abs()
@@ -220,7 +222,7 @@ class GapAware(GapAwareBase):
         """ True weights are loaded into the model, and given a stashed theta """
         with torch.no_grad():
             ra = self.running_avg_step
-            bias_correction = 1 - (self.big_gamma**self.step_count)
+            bias_correction = 1 - (self.big_gamma ** self.step_count)
             eps = self.epsilon
             # Calculate gap from grad
             for pg, spg in zip(self.optimizer.param_groups, stashed_theta):
@@ -234,7 +236,7 @@ class GapAware(GapAwareBase):
                     # calculate C coefficient per-element
                     # Note: can remove the "data". but whatever.
                     avg_steps_needed = max_lr * \
-                        (((ra[id(p)] / bias_correction) ** 0.5) + eps)
+                                       (((ra[id(p)] / bias_correction) ** 0.5) + eps)
 
                     gap = (p - sp).abs()
                     # pg['lr'] * p.grad.abs()
@@ -272,6 +274,5 @@ def get_sgd_gap_aware_cls(sgd_type: str) -> GapAware:
     gap_aware_cls = SGD_TYPE_TO_GAP_AWARE_CLASS.get(sgd_type, None)
     return gap_aware_cls
     # return gap_aware_cls(*args, **kw)
-
 
 # class GAStats:

@@ -1,6 +1,8 @@
-import torch
-from .interface import WeightPredictor  # , FixFunction
 import math
+
+import torch
+
+from .interface import WeightPredictor  # , FixFunction
 
 
 def get_adam_weight_predictor(pred_mem: str,
@@ -9,7 +11,6 @@ def get_adam_weight_predictor(pred_mem: str,
                               scheduler=None,
                               nag_with_predictor=False,
                               true_weights_storage=None) -> WeightPredictor:
-
     has_weight_decay = any(
         [pg['weight_decay'] != 0 for pg in optimizer.param_groups])
 
@@ -95,15 +96,15 @@ class AdamClonedWeightPrediction(WeightPredictor):
                         if lr == 0:
                             continue
 
-                        bias_correction1 = 1 - beta1**(step + staleness)
-                        bias_correction2 = 1 - beta2**(step + staleness)
+                        bias_correction1 = 1 - beta1 ** (step + staleness)
+                        bias_correction2 = 1 - beta2 ** (step + staleness)
 
                         denom = (exp_avg_sq.sqrt() /
                                  math.sqrt(bias_correction2)).add_(eps)
 
                         step_size = lr / bias_correction1
 
-                        p.data.addcdiv_(exp_avg * (beta1**staleness),
+                        p.data.addcdiv_(exp_avg * (beta1 ** staleness),
                                         denom,
                                         value=-step_size)
 
@@ -164,8 +165,8 @@ class AdamClonedWeightPredictionWithWD(WeightPredictor):
                             d_p = weight_decay * p.data
 
                         exp_avg_hat = exp_avg_hat * beta1 + (1 - beta1) * d_p
-                        bias_correction1 = 1 - beta1**(step + staleness)
-                        bias_correction2 = 1 - beta2**(step + staleness)
+                        bias_correction1 = 1 - beta1 ** (step + staleness)
+                        bias_correction2 = 1 - beta2 ** (step + staleness)
 
                         denom = (exp_avg_sq.sqrt() /
                                  math.sqrt(bias_correction2)).add_(eps)
@@ -242,8 +243,8 @@ class AdamClonedWeightPredictionForAggregationWithWD(WeightPredictor):
                             d_p += weight_decay * p.data
 
                         exp_avg_hat = exp_avg_hat * beta1 + (1 - beta1) * d_p
-                        bias_correction1 = 1 - beta1**(step + staleness)
-                        bias_correction2 = 1 - beta2**(step + staleness)
+                        bias_correction1 = 1 - beta1 ** (step + staleness)
+                        bias_correction2 = 1 - beta2 ** (step + staleness)
 
                         denom = (exp_avg_sq.sqrt() /
                                  math.sqrt(bias_correction2)).add_(eps)

@@ -1,7 +1,11 @@
-import torch
-from .interface import GapAwareBase
 from itertools import chain
+
+import torch
+
 from .adam_gap_aware import gap_aware_adam_init
+from .interface import GapAwareBase
+
+
 # TODO: check that the step count is indeed OK (and ahead by 1)
 
 
@@ -40,6 +44,7 @@ class AdamWGapAware(GapAwareBase):
             p.data.add_(-group["lr"] * group["weight_decay"], p.data)
 
     """
+
     def __init__(self,
                  optimizer,
                  from_grad=True):
@@ -68,7 +73,6 @@ class AdamWGapAware(GapAwareBase):
                 eps = pg['eps']
 
                 for p, sp in zip(pg['params'], spg):
-
                     # step_count = opt_state[p]['step'] + 1
                     # bias_correction2 = 1 - beta2**(step_count)
 
@@ -121,7 +125,6 @@ class AdamWGapAware(GapAwareBase):
                 eps = pg['eps']
 
                 for p, rp in zip(pg['params'], rpg):
-
                     # step_count = opt_state[p]['step'] + 1
                     # bias_correction2 = 1 - beta2**(step_count)
 

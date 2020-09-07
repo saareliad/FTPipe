@@ -1,17 +1,22 @@
+import math
+
 from .interface import Stats
 from .utils import AverageMeter
-import math
+
 
 class PPLMeter(AverageMeter):
     """ Update like loss, get_avg() gets the PPL """
+
     def get_avg(self):
         # avg_loss = super().get_avg()
         avg_loss = self.sum / self.count
         # ppl = math.exp(avg_loss)
         return math.exp(avg_loss)
 
+
 class LMStats(Stats):
     """ Class to handle statistics collection for LM """
+
     def __init__(self, record_loss_per_batch=False, is_last_partition=True):
         # Stats
         super().__init__(is_last_partition=is_last_partition)

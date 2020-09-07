@@ -15,9 +15,9 @@
 """Functions for making ``torch.nn.Module`` subclass instances stateless."""
 
 import abc as _abc
-from collections import OrderedDict as _OrderedDict
 import typing as _typing
 import warnings as _warnings
+from collections import OrderedDict as _OrderedDict
 
 import torch as _torch
 
@@ -37,7 +37,7 @@ _BufferType = _typing.Dict[str, _typing.Optional[_torch.Tensor]]
 
 
 def _patched_parameters(
-    self, recurse: bool = True, time: _typing.Optional[int] = None
+        self, recurse: bool = True, time: _typing.Optional[int] = None
 ) -> _typing.Iterable[_torch.Tensor]:
     r"""Returns an iterator over monkey patched module fast parameters.
 
@@ -88,7 +88,7 @@ class _MonkeyPatchBase(_abc.ABC, _torch.nn.Module):
         )
 
     def _expand_params(
-        self, params: _typing.List[_torch.Tensor]
+            self, params: _typing.List[_torch.Tensor]
     ) -> _typing.List[_torch.Tensor]:
         return [params[index] for index in self._param_mapping]
 
@@ -109,9 +109,9 @@ class _MonkeyPatchBase(_abc.ABC, _torch.nn.Module):
 
 
 def buffer_sync(
-    module: _torch.nn.Module,
-    fmodule: _MonkeyPatchBase,
-    device: _typing.Optional[_torch.device] = None
+        module: _torch.nn.Module,
+        fmodule: _MonkeyPatchBase,
+        device: _typing.Optional[_torch.device] = None
 ) -> None:
     r"""One off sync (copy) of buffers in ``fmodule`` with those from ``module``.
     """
@@ -149,17 +149,17 @@ class _ParameterPlaceholder():
 _ParameterPlaceholder.__name__ = "ParameterPlaceholder"
 _ParameterPlaceholder.__qualname__ = "ParameterPlaceholder"
 
+
 # ==============================================================================
 # Helper function for recursively patching submodules.
 # ==============================================================================
 
 
 def _make_functional(
-    module: _torch.nn.Module,
-    params_box: _typing.Sequence[_typing.Optional[_typing.List[_torch.Tensor]]],
-    params_offset: int
+        module: _torch.nn.Module,
+        params_box: _typing.Sequence[_typing.Optional[_typing.List[_torch.Tensor]]],
+        params_offset: int
 ) -> _typing.Tuple[int, _MonkeyPatchBase, _typing.Type[_MonkeyPatchBase]]:
-
     if isinstance(module, _MonkeyPatchBase):
         raise ValueError(
             "Monkey-patching monkey-patched modules is untested uncharted "
@@ -231,7 +231,7 @@ def _make_functional(
                     buffers = self.__dict__.get('_buffers')
                     if buffers is not None and name in buffers:
                         if value is not None and not isinstance(
-                            value, _torch.Tensor
+                                value, _torch.Tensor
                         ):
                             raise TypeError(
                                 "cannot assign '{}' as buffer '{}' "
@@ -297,9 +297,9 @@ def _make_functional(
 
 
 def _update_patched_params(
-    fmodule: _MonkeyPatchBase,
-    params_box: _typing.Sequence[_typing.List[_torch.Tensor]],
-    params_offset: int
+        fmodule: _MonkeyPatchBase,
+        params_box: _typing.Sequence[_typing.List[_torch.Tensor]],
+        params_offset: int
 ) -> int:
     num_params = len([1 for p in fmodule._parameters.values() if p is not None])
     child_params_offset = params_offset + num_params
@@ -308,8 +308,8 @@ def _update_patched_params(
             child, params_box, child_params_offset
         )
     for name, param in zip(
-        fmodule._param_names,
-        params_box[0][params_offset:params_offset + num_params]
+            fmodule._param_names,
+            params_box[0][params_offset:params_offset + num_params]
     ):
         setattr(fmodule, name, param)
     return child_params_offset
@@ -323,8 +323,8 @@ _EncapsulatorType = _typing.Optional[
 
 
 def make_functional(
-    module: _torch.nn.Module,
-    encapsulator: _EncapsulatorType = None
+        module: _torch.nn.Module,
+        encapsulator: _EncapsulatorType = None
 ) -> _MonkeyPatchBase:
     r"""Returns a stateless version of an ``nn.Module`` instance."""
     params_box = [None]
@@ -378,7 +378,7 @@ def make_functional(
 
 
 def dummy_forward_monkeypatch(
-    module: _torch.nn.Module,
+        module: _torch.nn.Module,
 ) -> _MonkeyPatchBase:
     r"""Create a monkey-patched stateless version of a module.
 
@@ -404,7 +404,7 @@ def dummy_forward_monkeypatch(
     """
 
     def encapsulator(
-        fmodule: _MonkeyPatchBase, module: _torch.nn.Module
+            fmodule: _MonkeyPatchBase, module: _torch.nn.Module
     ) -> None:
         params = list(module.parameters())
         buffer_sync(module, fmodule, None)
@@ -423,9 +423,9 @@ def dummy_forward_monkeypatch(
 
 # Original
 def monkeypatch(
-    module: _torch.nn.Module,
-    device: _typing.Optional[_torch.device] = None,
-    copy_initial_weights: bool = True
+        module: _torch.nn.Module,
+        device: _typing.Optional[_torch.device] = None,
+        copy_initial_weights: bool = True
 ) -> _MonkeyPatchBase:
     r"""Create a monkey-patched stateless version of a module.
 
@@ -454,7 +454,7 @@ def monkeypatch(
     """
 
     def encapsulator(
-        fmodule: _MonkeyPatchBase, module: _torch.nn.Module
+            fmodule: _MonkeyPatchBase, module: _torch.nn.Module
     ) -> None:
         if copy_initial_weights:
             params = _utils.get_func_params(module, device=device)

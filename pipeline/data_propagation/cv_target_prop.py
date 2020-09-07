@@ -1,5 +1,6 @@
-from .interface import PipelineDataPropagator
 import torch
+
+from .interface import PipelineDataPropagator
 
 
 class CVTargetInPipePropagator(PipelineDataPropagator):

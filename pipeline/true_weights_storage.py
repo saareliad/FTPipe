@@ -9,6 +9,7 @@ class TrueWeightsStorage:
         This is handled by `self.restored_true_weights_to_the_model`.
 
     """
+
     def __init__(self, optimizer):
         self.true_weights = None
         self.true_weights_exist = False

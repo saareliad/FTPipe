@@ -1,10 +1,10 @@
 from __future__ import division
 
 import torch
-from torch.nn.modules.module import Module
-from torch.nn.parameter import Parameter
 from torch.nn import functional as F
 from torch.nn import init
+from torch.nn.modules.module import Module
+from torch.nn.parameter import Parameter
 
 
 class _NormBase(Module):
@@ -106,10 +106,10 @@ class _BatchNorm(_NormBase):
                     exponential_average_factor = self.momentum
 
         return torch.cat([F.batch_norm(
-                chunk, getattr(self, f"running_mean_{i}"), getattr(self, f"running_var_{i}"),
-                self.weight, self.bias,
-                self.training or not self.track_running_stats,
-                exponential_average_factor, self.eps) for i, chunk in enumerate(torch.chunk(input, self.num_gpus_to_sim)) ])
+            chunk, getattr(self, f"running_mean_{i}"), getattr(self, f"running_var_{i}"),
+            self.weight, self.bias,
+            self.training or not self.track_running_stats,
+            exponential_average_factor, self.eps) for i, chunk in enumerate(torch.chunk(input, self.num_gpus_to_sim))])
 
 
 class BatchNorm1d(_BatchNorm):

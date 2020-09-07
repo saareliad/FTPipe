@@ -12,6 +12,7 @@ class PartitionRngStasher:
     #   (1) it will be problematic when 2 recomputing stages are use the same device. (e.g tied GPipe)
     #   (2) currently does not set numpy or python random seeds. just pytorch's. (TODO)
     """
+
     def __init__(self, device=torch.device('cpu')):
         self.device = device
         self.state = {}

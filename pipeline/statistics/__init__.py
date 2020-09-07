@@ -1,9 +1,8 @@
 from .cv import CVStats, NormCVstats, CVDistanceNorm, CVDistance
+from .glue import GlueStats, NormGluestats, GlueDistanceNorm, GlueDistance
+from .interface import Stats
 from .lm import LMStats, NormLMstats, LMDistanceNorm, LMDistance
 from .squad import SquadStats, NormSquadstats, SquadDistanceNorm, SquadDistance
-from .glue import GlueStats, NormGluestats, GlueDistanceNorm, GlueDistance
-
-from .interface import Stats
 
 # TODO: remove the "record_loss_per_batch", it is not used mostly.
 # TODO: option to record every X batches, when epoch is giant.

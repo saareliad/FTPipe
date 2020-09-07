@@ -81,7 +81,7 @@ class P2PCommunicationHandler(SimpleCommBase):
                     else:
                         cname = tensor_name
                     tensor = self.tensor_comm_warper.convert_activations_send(cname, tensor)
-                    
+
                     if self.verbose:
                         self.logger.info(
                             f"rank={self.local_rank}: isend, dst={send_rank}, tag={tensor_tag}, name={tensor_name}, shape={tensor.shape}"

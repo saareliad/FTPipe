@@ -1,7 +1,9 @@
 """ Buffer for MPI """
-from itertools import cycle
 from collections import deque
+from itertools import cycle
+
 from . import CommunicationHandlerBase
+
 
 # TODO: remove spagetti code between buffer and comm handler.
 

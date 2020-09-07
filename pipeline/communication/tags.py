@@ -2,7 +2,8 @@ from models.simple_partitioning_config import PipelineConfig
 
 
 # TODO tags for tensors we send multiple times
-def tensor_tags_from_config(pipe_config: PipelineConfig, num_chunks=1, target_tensor_names=None, GRAD_UGLY_SHAMEFUL_NAME="_grad"):
+def tensor_tags_from_config(pipe_config: PipelineConfig, num_chunks=1, target_tensor_names=None,
+                            GRAD_UGLY_SHAMEFUL_NAME="_grad"):
     # Note: same tags for all process
 
     tensor_tags = {}

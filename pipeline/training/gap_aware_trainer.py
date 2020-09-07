@@ -43,4 +43,5 @@ def gap_aware_trainer_factory(trainer_cls):
             # super(GapAwareCVTrainer, self).__init__(**kw)
             trainer_cls.__init__(self, scheduler=scheduler, **kw)
             GapAwareTrainerBase.__init__(self, gap_aware, scheduler=scheduler)
+
     return GapAwareCreatedTrainer

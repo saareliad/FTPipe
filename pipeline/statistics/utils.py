@@ -1,5 +1,5 @@
-from typing import Dict, NamedTuple
 from types import SimpleNamespace
+from typing import Dict, NamedTuple
 
 
 def fit_res_to_dict(fit_res) -> Dict:
@@ -15,6 +15,7 @@ def fit_res_to_dict(fit_res) -> Dict:
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
+
     def __init__(self):
         self.reset()
 

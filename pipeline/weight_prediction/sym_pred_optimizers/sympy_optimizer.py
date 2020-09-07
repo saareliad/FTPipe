@@ -1,10 +1,12 @@
 # import torch
+from abc import ABC, abstractmethod
+from pprint import pprint
+
 import sympy
 from sympy import Symbol
-from pprint import pprint
-from abc import ABC, abstractmethod
 
-# TODO 
+
+# TODO
 # TODO
 # TODO
 # TODO: instead of using dp=0 use the gradient we already have for weight prediction !!!!thats awassome.
@@ -34,7 +36,6 @@ class SympyPredictingOptimizer(ABC):
 
 
 class SympySGD(SympyPredictingOptimizer):
-
     collect_order = ["v", 'theta']
 
     def __init__(self):
@@ -113,15 +114,15 @@ class SympyAdam(SympyPredictingOptimizer):
 
         self.timestep += 1  # FIXME:
 
-        bias_correction1 = 1 - self.beta1**self.timestep
-        bias_correction2 = 1 - self.beta2**self.timestep
+        bias_correction1 = 1 - self.beta1 ** self.timestep
+        bias_correction2 = 1 - self.beta2 ** self.timestep
 
         #     exp_avg.mul_(beta1).add_(1 - beta1, grad)
         #     exp_avg_sq.mul_(beta2).addcmul_(1 - beta2, grad, grad)
 
         self.exp_avg = self.beta1 * self.exp_avg + (1 - self.beta1) * d_p
         self.exp_avg_sq = self.beta2 * \
-            self.exp_avg_sq + (1-self.beta2) * d_p ** 2
+                          self.exp_avg_sq + (1 - self.beta2) * d_p ** 2
 
         denom = (sympy.sqrt(self.exp_avg_sq) / (sympy.sqrt(bias_correction2)) +
                  self.eps)
@@ -130,7 +131,6 @@ class SympyAdam(SympyPredictingOptimizer):
 
     # def simplified_prediction(self, nsteps):
     def prediction(self, nsteps):
-
         # d_p = 0
 
         timestep = self.timestep
@@ -148,14 +148,14 @@ class SympyAdam(SympyPredictingOptimizer):
         for i in range(1, nsteps + 1):
             timestep += 1
 
-            bias_correction1 = 1 - beta1**timestep
+            bias_correction1 = 1 - beta1 ** timestep
             # stay the same...
-            bias_correction2 = 1 - beta2**timestep
+            bias_correction2 = 1 - beta2 ** timestep
 
             # exp_avg.mul_(beta1).add_(1 - beta1, grad)
             # exp_avg_sq stays the same
             momentum_coeff += (
-                (sympy.sqrt(bias_correction2)) / bias_correction1) * (beta1**i)
+                                      (sympy.sqrt(bias_correction2)) / bias_correction1) * (beta1 ** i)
 
         # momentum_coeff += (beta1 - beta1 ** (nsteps + 1)) / (1 - beta1)
         a = exp_avg / (sympy.sqrt(exp_avg_sq) + eps)
@@ -187,9 +187,9 @@ class NormalSympyAdam(SympyAdam):
         for i in range(1, nsteps + 1):
             timestep += 1
 
-            bias_correction1 = 1 - beta1**timestep
+            bias_correction1 = 1 - beta1 ** timestep
             # stay the same...
-            bias_correction2 = 1 - beta2**timestep
+            bias_correction2 = 1 - beta2 ** timestep
 
             # exp_avg.mul_(beta1).add_(1 - beta1, grad)
             # exp_avg_sq.mul_(beta2).addcmul_(1 - beta2, grad, grad)
@@ -237,7 +237,6 @@ def run_sim(nsteps,
 
 
 def display_sim_resuts(theta_true, theta_preds, gaps, displayer=pprint):
-
     print("True thetas:")
     list(map(displayer, theta_true))
 

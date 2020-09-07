@@ -2,7 +2,6 @@
 import concurrent
 import concurrent.futures
 import sys
-import traceback
 from collections import defaultdict
 
 import torch

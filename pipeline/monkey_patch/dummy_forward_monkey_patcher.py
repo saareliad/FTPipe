@@ -1,5 +1,5 @@
-from .patch import dummy_forward_monkeypatch
 from .find_modules import find_modules
+from .patch import dummy_forward_monkeypatch
 
 
 def convert_child_by_dict(model, dict_id_b4_to_after):

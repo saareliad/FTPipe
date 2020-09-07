@@ -14,17 +14,18 @@
 
 """Utility functions for components of ``higher``\ ."""
 
-import torch as _torch
 import typing as _typing
+
+import torch as _torch
 
 _T = _typing.TypeVar('_T')
 _U = _typing.TypeVar('_U')
 
 
 def _copy_tensor(
-    t: _torch.Tensor,
-    safe_copy: bool,
-    device: _typing.Optional[_torch.device] = None
+        t: _torch.Tensor,
+        safe_copy: bool,
+        device: _typing.Optional[_torch.device] = None
 ) -> _torch.Tensor:
     if safe_copy:
         t = t.clone().detach().requires_grad_(t.requires_grad)
@@ -35,20 +36,21 @@ def _copy_tensor(
 
 
 def _recursive_copy_and_cast(
-    target: _typing.Union[list, tuple, dict, set, _torch.Tensor],
-    device: _typing.Optional[_torch.device]
+        target: _typing.Union[list, tuple, dict, set, _torch.Tensor],
+        device: _typing.Optional[_torch.device]
 ) -> _torch.Tensor:
     def map_fn(x):
         if _torch.is_tensor(x):
             return _copy_tensor(x, True, device=device)
         else:
             return x
+
     return _recursive_map(target, map_fn)
 
 
 def _recursive_map(
-    target: _typing.Union[list, tuple, dict, set, _T],
-    map_fn: _typing.Callable[[_T], _U],
+        target: _typing.Union[list, tuple, dict, set, _T],
+        map_fn: _typing.Callable[[_T], _U],
 ) -> _typing.Union[list, tuple, dict, set, _U]:
     if isinstance(target, list):
         return type(target)(
@@ -74,16 +76,16 @@ def _recursive_map(
 
 def _is_container(target: _typing.Any) -> bool:
     flag = (
-        isinstance(target, list) or
-        isinstance(target, tuple) or
-        isinstance(target, dict) or
-        isinstance(target, set)
+            isinstance(target, list) or
+            isinstance(target, tuple) or
+            isinstance(target, dict) or
+            isinstance(target, set)
     )
     return flag
 
 
 def _find_param_in_list(
-    param: _torch.Tensor, l: _typing.Iterable[_torch.Tensor]
+        param: _torch.Tensor, l: _typing.Iterable[_torch.Tensor]
 ) -> _typing.Optional[int]:
     for i, p in enumerate(l):
         if p is param:
@@ -93,10 +95,9 @@ def _find_param_in_list(
 
 
 def _get_param_mapping(
-    module: _torch.nn.Module, seen: _typing.List[_torch.Tensor],
-    mapping: _typing.List[int]
+        module: _torch.nn.Module, seen: _typing.List[_torch.Tensor],
+        mapping: _typing.List[int]
 ) -> _typing.List[int]:
-
     for param in module._parameters.values():
         if param is None:
             continue
@@ -128,9 +129,9 @@ def flatten(x: _typing.Any) -> _typing.List[_typing.Any]:
 
 
 def get_func_params(
-    module: _torch.nn.Module,
-    device: _typing.Optional[_torch.device] = None,
-    safe_copy: bool = True
+        module: _torch.nn.Module,
+        device: _typing.Optional[_torch.device] = None,
+        safe_copy: bool = True
 ) -> _typing.List[_torch.Tensor]:
     r"""Returns a detached copy of module parameters which requires gradient."""
     params = [_copy_tensor(p, safe_copy, device) for p in module.parameters()]

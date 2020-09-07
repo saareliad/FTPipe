@@ -1,4 +1,5 @@
-from .interface import BaseOutPutIsLossTrainer, BaseLossTrainer
+from .interface import BaseOutPutIsLossTrainer
+
 
 # HACK we layzyly use BaseOutPutIsLossTrainer
 class GlueTrainer(BaseOutPutIsLossTrainer):
@@ -18,7 +19,6 @@ class GlueTrainer(BaseOutPutIsLossTrainer):
             labels,
             # example_indices=None,  we know them, its sequential!
             batch_size=None):
-
         # NOTE: we include loss for dev, huggingface does not
         loss = self.loss_fn(x, labels)
         self.statistics.update_on_batch("loss", loss.item(), batch_size)

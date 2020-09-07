@@ -1,11 +1,10 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from collections import deque
 import itertools
 import types
+from collections import deque
 from functools import wraps
+
+import torch.nn as nn
+import torch.optim as optim
 
 __all__ = ["get_sched_predictor", "SchedulerPredictor"]
 
@@ -47,7 +46,6 @@ class SchedulerPredictor:
         self.scheduler.step()
 
     def get_next(self, n_next):
-
         while len(self.q) < n_next:
             self.q.append(self.scheduler.get_last_lr())
             self.scheduler.step()
@@ -80,7 +78,6 @@ class SchedulerPredictor:
 
 
 if __name__ == "__main__":
-
     from transformers import (
         # get_constant_schedule_with_warmup,
         # get_constant_schedule,

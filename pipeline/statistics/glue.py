@@ -31,6 +31,7 @@ def glue_compute_metrics_name(task_name):
 
 class GlueStats(Stats):
     """ Class to handle statistics collection for Glue Tasks """
+
     def __init__(self, record_loss_per_batch=False, is_last_partition=True):
         # Stats
         super().__init__(is_last_partition=is_last_partition)

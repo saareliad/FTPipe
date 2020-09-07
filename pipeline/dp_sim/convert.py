@@ -1,4 +1,5 @@
 import torch
+
 from . import BatchNorm1d, BatchNorm2d, BatchNorm3d
 
 MODULE_INSTANCES_TO_REPLACE = {
@@ -6,6 +7,7 @@ MODULE_INSTANCES_TO_REPLACE = {
     torch.nn.BatchNorm2d.__name__: BatchNorm2d,
     torch.nn.BatchNorm3d.__name__: BatchNorm3d
 }
+
 
 def convert_to_num_gpus(module, num_gpus_to_sim):
     """Converts torch.nn.BatchNorm instances to simulate DDP with the desired number of GPUs"""
@@ -27,7 +29,6 @@ def convert_to_num_gpus(module, num_gpus_to_sim):
             # keep requires_grad unchanged
             module_output.weight.requires_grad = module.weight.requires_grad
             module_output.bias.requires_grad = module.bias.requires_grad
-        
 
         module_output.num_batches_tracked = module.num_batches_tracked
         # module_output.running_mean = module.running_mean
@@ -41,6 +42,7 @@ def convert_to_num_gpus(module, num_gpus_to_sim):
     del module
     return module_output
 
+
 if __name__ == "__main__":
     # to test run: python -m dp_sim.convert
     # Network with nn.BatchNorm layer
@@ -49,5 +51,3 @@ if __name__ == "__main__":
         torch.nn.BatchNorm1d(100)
     )
     convert_to_num_gpus(module, 2)
-
-    

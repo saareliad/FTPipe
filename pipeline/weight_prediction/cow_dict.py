@@ -1,4 +1,3 @@
-
 # Taken from https://github.com/csernazs/cowdict/blob/master/cowdict/cowdict.py
 from collections import MutableMapping
 

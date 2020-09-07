@@ -1,6 +1,8 @@
 from itertools import zip_longest
 
 __all__ = ["grouper"]
+
+
 # Creating iteration tool for "Double Buffers"
 
 
@@ -17,7 +19,6 @@ def grouper(iterable, n):
     # grouper('ABCDEFG', 3,) --> ABC DEF Gxx"
     args = [iter(iterable)] * n
     return zip_discard_compr(*args)
-
 
 # Fixed recved:
 # [torch.cat(group) for group in grouper(x, num_chunks)]

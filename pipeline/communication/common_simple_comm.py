@@ -500,7 +500,7 @@ class FuturesHandler(FuturesHandlerBase):
         else:
             self.sent_obejct_patience = 1
 
-        self.sent_obejct_patience = 9 
+        self.sent_obejct_patience = 9
 
         # Holds Async handle objects (for isends)
         self.async_fwd_objects = OrderedDict()

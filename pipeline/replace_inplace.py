@@ -1,4 +1,3 @@
-
 __all__ = ['replace_inplace_for_first_innermost_layer_']
 
 
@@ -56,7 +55,6 @@ def get_innnermost_first_layer_and_name(partition, name=''):
     return get_innnermost_first_layer_and_name(last_layer, name)
 
 
-
 def get_outermost_last_layer_and_name(partition, name=''):
     """ 
     Args:
@@ -84,6 +82,8 @@ def get_outermost_last_layer_and_name(partition, name=''):
     del list_children
     return get_outermost_last_layer_and_name(last_layer, name)
 
+
 if __name__ == "__main__":
     import torch
+
     assert (replace_inplace_for_first_innermost_layer_(torch.nn.ReLU(True)))

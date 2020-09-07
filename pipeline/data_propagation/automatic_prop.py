@@ -1,8 +1,11 @@
+import types
+
 import torch
+
+from models.simple_partitioning_config import PipelineConfig
 # from typing import Tuple, Any
 from .interface import PipelineDataPropagator
-import types
-from models.simple_partitioning_config import PipelineConfig
+
 
 # NOTE: outputing the batch for last partition. (trainer should handle)
 # TODO: allow flag to know if we send labels in pipeline.
@@ -73,7 +76,7 @@ class AutomaticPipelinePropagator(PipelineDataPropagator):
             if isinstance(y, tuple) or isinstance(y, list):
                 y = tuple(z.to(self.device, non_blocking=True) for z in y)
             else:
-                y = (y.to(self.device, non_blocking=True), )
+                y = (y.to(self.device, non_blocking=True),)
 
         to_partition = y[:self.len_inputs_from_dl]
         to_outside_loss = y[self.len_inputs_from_dl:]

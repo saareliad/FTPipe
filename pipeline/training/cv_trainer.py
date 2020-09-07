@@ -1,5 +1,8 @@
 import torch
+
 from .interface import BaseLossTrainer
+
+
 # TODO: typehint for statistics. maybe it should actually sit under statistics
 
 class CVTrainer(BaseLossTrainer):
@@ -11,7 +14,7 @@ class CVTrainer(BaseLossTrainer):
     def calc_test_stats(self, x, y, batch_size):
         # print("Called calc_test_stats")
         loss = self.loss_fn(x, y)
-        assert(batch_size == len(y))
+        assert (batch_size == len(y))
         y_pred = torch.argmax(x, 1)
         num_correct = torch.sum(y == y_pred).item()
 
@@ -26,7 +29,7 @@ class CVTrainer(BaseLossTrainer):
         step can be used later for grad accumulations
         """
 
-        assert(batch_size == len(y))
+        assert (batch_size == len(y))
         y_pred = torch.argmax(x, 1)
         num_correct = torch.sum(y == y_pred).item()
 

@@ -1,5 +1,7 @@
 # import torch
 from .interface import BaseOutPutIsLossTrainer
+
+
 # TODO: typehint for statistics. maybe it should actually sit under statistics
 
 
@@ -10,7 +12,6 @@ class LMTrainer(BaseOutPutIsLossTrainer):
         super().__init__(*args, **kw)
 
     def calc_test_stats(self, loss, batch_size):
-
         loss = loss.item()
         self.statistics.update_on_batch("loss", loss, batch_size)
         self.statistics.update_on_batch("ppl", loss, batch_size)

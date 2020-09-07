@@ -1,9 +1,8 @@
-from .interface import BaseOutPutIsLossTrainer, BaseLossTrainer
-from collections import defaultdict
-from transformers.data.processors.squad import SquadResult
 # TODO: typehint for statistics. maybe it should actually sit under statistics
-import torch
 import torch.nn.functional as F
+from transformers.data.processors.squad import SquadResult
+
+from .interface import BaseOutPutIsLossTrainer
 
 
 def SQUAD_loss(logits, start_positions, end_positions):
@@ -92,7 +91,7 @@ class SquadTrainer(BaseOutPutIsLossTrainer):
         # TODO: this happens in eval only.
         if example_indices is not None:
             self.advanced_test_stats(x, example_indices)
-    
+
     def backprop_last_partition(self, x, start_positions, end_positions,
                                 batch_size):
         # logits = x[0]

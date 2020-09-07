@@ -1,7 +1,8 @@
 # import warnings
 import torch
-from torch._six import inf
 import torch.distributed.rpc as rpc
+from torch._six import inf
+
 # from torch.distributed.rpc import RRef
 
 OBSERVER_NAME = "observer{}"
@@ -53,7 +54,7 @@ class Observer:
             total_norm = 0
             for p in parameters:
                 param_norm = p.grad.data.norm(norm_type)
-                total_norm += param_norm.item()**norm_type
+                total_norm += param_norm.item() ** norm_type
 
         self.last_calc = total_norm
         return total_norm
@@ -75,6 +76,7 @@ class Agent:
 
         if no there is no previous grad norm result, will use 0 as default.
     """
+
     def __init__(self, world_size, rank):
         self.ob_rrefs = []
         self.rank = rank
@@ -105,7 +107,7 @@ class Agent:
         my_norm = my_rref.calc_local_partial_total_norm()
 
         total_norm = sum([i.wait() for i in others_res], my_norm)
-        total_norm = total_norm**(1. / norm_type)
+        total_norm = total_norm ** (1. / norm_type)
 
         clip_coef = max_norm / (total_norm + 1e-6)
         if clip_coef < 1:

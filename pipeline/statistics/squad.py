@@ -4,6 +4,7 @@ from .utils import AverageMeter
 
 class SquadStats(Stats):
     """ Class to handle statistics collection for Squad """
+
     def __init__(self, record_loss_per_batch=False, is_last_partition=True):
         # Stats
         super().__init__(is_last_partition=is_last_partition)
@@ -24,15 +25,15 @@ class SquadStats(Stats):
     def non_last_partition_on_epoch_end(self):
         pass
 
-
     def last_partition_on_epoch_end(self):
         super().last_partition_on_epoch_end()
 
         if not self.training:
-            if hasattr(self,"evaluate_squad"):
+            if hasattr(self, "evaluate_squad"):
                 self.evaluate_squad()  # FIXME: set by dataset
             else:
-                print(f"-W- {type(self)} does not have `evaluate_squad()` method, which should e set by dataset script. Will calculate loss.")
+                print(
+                    f"-W- {type(self)} does not have `evaluate_squad()` method, which should e set by dataset script. Will calculate loss.")
 
         self.all_results.clear()  # Clear results for next time
 
