@@ -48,6 +48,10 @@ def get_all_splits(K: int, clusters, id_to_node: Dict[int, Node], to_unify: Dict
     # Pandas object. (id->Index)
 
     clusters = [list(clusters.groupby("cluster").get_group(c).sort_values("id").itertuples()) for c in range(C)]
+
+    if len(clusters) > 2:
+        raise NotImplementedError()
+
     # clusters: List[List[Any]]
     clusters_lengths = {i: len(clusters[i]) for i in range(len(clusters))}
     print("cluster_lengths, before compressing", clusters_lengths)
@@ -151,8 +155,7 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
 
 def first_fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
                       to_unify: Dict[int, List[Union[List, Any]]], C: int):
-    if len(clusters) > 2:
-        raise NotImplementedError()
+
     # result
     bins = defaultdict(list)
     bin_weights = heapdict({i: 0 for i in range(K)})
@@ -170,10 +173,17 @@ def first_fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
         if len(split) != K:
             raise NotImplementedError()
 
-        for subsplit_idx, subsplit in split:
+        for subsplit_idx, subsplit in enumerate(split):
             bin_idx = choose_bin(subsplit, subsplit_idx, cluster_idx)
             bin = bins[bin_idx]
-            to_add = list(flatten(subsplit))
+            to_add = []
+            for i in subsplit:
+                if isinstance(i, list):
+                    to_add.extend(i)
+                else:
+                    to_add.append(i)
+            # to_add = [i for i in subsplit if is]
+            # to_add = list(flatten(subsplit))
             bin.extend(to_add)
             bin_weights[bin_idx] += sum(i.weight for i in to_add)
 
