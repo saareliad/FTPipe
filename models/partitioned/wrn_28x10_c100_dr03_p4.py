@@ -30,11 +30,12 @@ def create_pipeline_configuration(DEBUG=False):
         "depth":
         3,
         "basic_blocks": [
-            "torch.nn.modules.dropout.Dropout",
-            "torch.nn.modules.pooling.AvgPool2d",
-            "torch.nn.modules.conv.Conv2d", "torch.nn.modules.linear.Linear",
-            "torch.nn.modules.batchnorm.BatchNorm2d",
-            "torch.nn.modules.activation.ReLU"
+            torch.nn.modules.dropout.Dropout,
+            torch.nn.modules.pooling.AvgPool2d,
+            torch.nn.modules.conv.Conv2d,
+            torch.nn.modules.linear.Linear,
+            torch.nn.modules.batchnorm.BatchNorm2d,
+            torch.nn.modules.activation.ReLU
         ],
         "model_inputs": {
             "input0": {
@@ -51,7 +52,7 @@ def create_pipeline_configuration(DEBUG=False):
             }
         },
         "stages": {
-            "0": {
+            0: {
                 "inputs": {
                     "input0": {
                         "shape": torch.Size([64, 3, 32, 32]),
@@ -75,7 +76,7 @@ def create_pipeline_configuration(DEBUG=False):
                     }
                 },
                 "stage_cls":
-                "models.partitioned.wrn_28x10_c100_dr03_p4.WideResNetPartition0",
+                WideResNetPartition0,
                 "devices": ["cpu" if DEBUG else "cuda:0"]
             },
             1: {
@@ -104,7 +105,7 @@ def create_pipeline_configuration(DEBUG=False):
                     }
                 },
                 "stage_cls":
-                "models.partitioned.wrn_28x10_c100_dr03_p4.WideResNetPartition1",
+                WideResNetPartition1,
                 "devices": ["cpu" if DEBUG else "cuda:1"]
             },
             2: {
@@ -132,7 +133,7 @@ def create_pipeline_configuration(DEBUG=False):
                     }
                 },
                 "stage_cls":
-                "models.partitioned.wrn_28x10_c100_dr03_p4.WideResNetPartition2",
+                WideResNetPartition2,
                 "devices": ["cpu" if DEBUG else "cuda:2"]
             },
             3: {
@@ -160,7 +161,7 @@ def create_pipeline_configuration(DEBUG=False):
                     }
                 },
                 "stage_cls":
-                "models.partitioned.wrn_28x10_c100_dr03_p4.WideResNetPartition3",
+                WideResNetPartition3,
                 "devices": ["cpu" if DEBUG else "cuda:3"]
             }
         }
@@ -168,7 +169,7 @@ def create_pipeline_configuration(DEBUG=False):
 
 
 class WideResNetPartition0(nn.Module):
-    def __init__(self, layers, tensors):
+    def __init__(self, layers, tensors, device):
         super(WideResNetPartition0, self).__init__()
         # WideResNet/Conv2d[conv1]
         assert 'WideResNet/Conv2d[conv1]' in layers, 'layer WideResNet/Conv2d[conv1] was expected but not given'
@@ -390,7 +391,7 @@ class WideResNetPartition0(nn.Module):
 
 
 class WideResNetPartition1(nn.Module):
-    def __init__(self, layers, tensors):
+    def __init__(self, layers, tensors, device):
         super(WideResNetPartition1, self).__init__()
         # WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[2]/Conv2d[conv1]
         assert 'WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[2]/Conv2d[conv1]' in layers, 'layer WideResNet/NetworkBlock[block1]/Sequential[layer]/BasicBlock[2]/Conv2d[conv1] was expected but not given'
@@ -563,7 +564,7 @@ class WideResNetPartition1(nn.Module):
 
 
 class WideResNetPartition2(nn.Module):
-    def __init__(self, layers, tensors):
+    def __init__(self, layers, tensors, device):
         super(WideResNetPartition2, self).__init__()
         # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu1]
         assert 'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu1]' in layers, 'layer WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[0]/ReLU[relu1] was expected but not given'
@@ -878,7 +879,7 @@ class WideResNetPartition2(nn.Module):
 
 
 class WideResNetPartition3(nn.Module):
-    def __init__(self, layers, tensors):
+    def __init__(self, layers, tensors, device):
         super(WideResNetPartition3, self).__init__()
         # WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[3]/Conv2d[conv2]
         assert 'WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[3]/Conv2d[conv2]' in layers, 'layer WideResNet/NetworkBlock[block2]/Sequential[layer]/BasicBlock[3]/Conv2d[conv2] was expected but not given'
@@ -1280,6 +1281,7 @@ def traverse_model(
     full:
         whether to yield only layers specified by the depth and basick_block options or to yield all layers
     '''
+    # print("basic_blocks", basic_blocks)
     if prefix is None:
         prefix = type(module).__name__
 

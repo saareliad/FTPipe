@@ -412,9 +412,12 @@ class SinglePartitionManager:
                     step_and_stats_ctx = trainer.backprop_last_partition(
                         x, *ctx)
             else:
-                step_and_stats_ctx = trainer.backprop_last_partition(
-                    x, *ctx)  # NOTE: Usually, this is loss
-
+                try:
+                    step_and_stats_ctx = trainer.backprop_last_partition(
+                        x, *ctx)  # NOTE: Usually, this is loss
+                except Exception as e:
+                    print("*ctx:", *ctx)
+                    raise e
             # Send partition border gradients
             grads = partition.get_grad(batch_idx)
             request_objects = self.comm_handler.send_gradients(

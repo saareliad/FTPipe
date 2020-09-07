@@ -1,6 +1,7 @@
 import types
 from functools import partial
 from typing import Tuple, Union
+import warnings
 
 import torch
 import torch.nn as nn
@@ -30,7 +31,8 @@ __all__ = [
 ]
 
 # Deprecated. This should be handled by partitioning.
-_REPLACE_INPLACE = False
+# _REPLACE_INPLACE = False
+_REPLACE_INPLACE = True
 _VERBOSE_ON_NONE_GRADIENTS = False
 
 # LayerNorm? GroupNorm?
@@ -348,7 +350,7 @@ class PartitionWithoutRecomputation(nn.Module):
                 is_replaced = replace_inplace_for_first_innermost_layer_(self.layers)
                 if is_replaced:
                     print("-W- replace_inplace_for_first_innermost_layer_=True")
-
+                    warnings.warn("deprecated replace inplace, can turn this on and off manually")
         if _REQ_GRAD:
             self.input_buffer = {}  # For saving activations
         else:

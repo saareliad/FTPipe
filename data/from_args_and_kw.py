@@ -85,8 +85,13 @@ def get_separate_dls_from_args(args,
     dataloader_keywords = get_dataloader_keywords(args)
     assert 'shuffle' not in dataloader_keywords, str(dataloader_keywords)
     experiment_manual_seed = torch.initial_seed()
-
-    handler = AVAILABLE_DATASETS[args.dataset](just=just, DATA_DIR=data_dir, args=args, **dataset_keywords)
+    
+    try:
+        handler = AVAILABLE_DATASETS[args.dataset](just=just, DATA_DIR=data_dir, args=args, **dataset_keywords)
+    except KeyError as e:
+        print("available datasets", AVAILABLE_DATASETS.keys())
+        raise e
+    
     ds_train = handler.get_train_ds(just=just, DATA_DIR=data_dir, args=args, **dataset_keywords)
     ds_test = handler.get_test_ds(just=just, DATA_DIR=data_dir, args=args, **dataset_keywords)
     dataloader_keywords = handler.modify_dataloader_keywords(dataloader_keywords)

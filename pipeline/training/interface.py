@@ -180,7 +180,7 @@ class BaseLossTrainer(GradNormStepper, PartitionedSupervisedTrainer):
         # Stats
         self.statistics = statistics
 
-    def backprop_last_partition(self, x, y):
+    def backprop_last_partition(self, x, y, *args):
         loss = self.loss_fn(x, y)
         if self.step_every > 1:
             loss /= self.step_every

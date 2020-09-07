@@ -13,7 +13,7 @@ class ParamDictCVMOdelHandler(CommonModelHandler):
 
     def get_normal_model_instance(self, *args, **kw):
         if self.normal_model_instance is None:
-            self.normal_model_instance = self.model_class(self.dict_params)
+            self.normal_model_instance = self.model_class(**self.dict_params)
         return self.normal_model_instance
 
     def get_loader(self, *args, **kw):
