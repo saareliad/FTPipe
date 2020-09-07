@@ -1,6 +1,6 @@
 import torch
 
-from . import BatchNorm1d, BatchNorm2d, BatchNorm3d
+from .simulated_dp_batchnorm import BatchNorm1d, BatchNorm2d, BatchNorm3d
 
 MODULE_INSTANCES_TO_REPLACE = {
     torch.nn.BatchNorm1d.__name__: BatchNorm1d,
