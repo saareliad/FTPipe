@@ -13,7 +13,6 @@ from pytorch_Gpipe.model_partitioning.bin_packing.post_process import post_proce
 from pytorch_Gpipe.model_partitioning.bin_packing.union_find import UnionFind
 from pytorch_Gpipe.model_partitioning.heuristics import NodeWeightFunction
 from pytorch_Gpipe.model_profiling import Graph, Node
-from pytorch_Gpipe.utils import flatten
 
 
 # from ...model_profiling import Graph, Node, NodeWeightFunction
@@ -66,10 +65,21 @@ def get_all_splits(K: int, clusters, id_to_node: Dict[int, Node], to_unify: Dict
             x = l[1]
             if isinstance(cluster_D[x], list):
                 v = cluster_D[x]
-                v.append(cluster_D[z])
+                zz = cluster_D[z]
+                if isinstance(zz, list):
+                    v.extend(zz)
+                else:
+                    v.append(zz)
                 v.sort(key=lambda y: y.Index)
             else:
-                cluster_D[x] = [cluster_D[z], cluster_D[x]]
+                v = [cluster_D[x]]
+                zz = cluster_D[z]
+                if isinstance(zz, list):
+                    v.extend(zz)
+                else:
+                    v.append(zz)
+                v.sort(key=lambda y: y.Index)
+                cluster_D[x] = v
 
             del cluster_D[z]
 
@@ -125,12 +135,47 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
         for y in node.out_edges:
             if y.id not in set_idx:
                 dst_cluster = X.iloc[y.id]['cluster']
-                X.iloc[node_id]['cluster'] = dst_cluster
+                X.loc[X.index == node_id, 'cluster'] = dst_cluster
                 to_unify[dst_cluster].append([node_id, y.id])
                 break
+            # else:
+            #     print(f"node_id:{node_id}, y.id:{y.id}", node.scope, y.scope)
         else:
-            raise NotImplementedError(f"need to go one level deeper "
-                                      f"to find node with above THRESHOLD={THRESHOLD} weight to unify")
+            # Unify:
+            print(f"Going 1 more nesting level for node:{node_id} because all outputs are in {set_idx}")
+
+            broke = False
+
+            def _basic_nest(y, X, set_idx, node_id, to_unify):
+                for y in y.out_edges:  # This is the nesting level
+                    if y.id not in set_idx:
+                        dst_cluster = X.iloc[y.id]['cluster']
+                        X.loc[X.index == node_id, 'cluster'] = dst_cluster
+                        to_unify[dst_cluster].append([node_id, y.id])
+                        return True
+                return False
+
+            for y in node.out_edges:
+                broke = _basic_nest(y, X, set_idx, node_id, to_unify)  # 1
+                if broke:
+                    break
+            else:
+                # while not broke:
+                for y in node.out_edges:
+                    for y in y.out_edges:
+                        broke = _basic_nest(y, X, set_idx, node_id, to_unify)  # 2
+                        if broke:
+                            break
+                else:
+                    for y in node.out_edges:
+                        for y in y.out_edges:
+                            for y in y.out_edges:
+                                broke = _basic_nest(y, X, set_idx, node_id, to_unify)  # 3
+                                if broke:
+                                    break
+            if not broke:
+                raise NotImplementedError(f"need to go one level deeper "
+                                          f"to find node with above THRESHOLD={THRESHOLD} weight to unify")
 
     # sort clusters by id.
     cluster_to_min_node_id = {i: X.query(f"cluster == {i}").first_valid_index() for i in range(C)}
@@ -155,7 +200,6 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
 
 def first_fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
                       to_unify: Dict[int, List[Union[List, Any]]], C: int):
-
     # result
     bins = defaultdict(list)
     bin_weights = heapdict({i: 0 for i in range(K)})
