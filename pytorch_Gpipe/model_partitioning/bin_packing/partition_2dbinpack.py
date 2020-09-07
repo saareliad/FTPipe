@@ -134,7 +134,7 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
         node = graph[node_id]
         for y in node.out_edges:
             if y.id not in set_idx:
-                dst_cluster = X.iloc[y.id]['cluster']
+                dst_cluster = X.loc[y.id]['cluster']
                 X.loc[X.index == node_id, 'cluster'] = dst_cluster
                 to_unify[dst_cluster].append([node_id, y.id])
                 break
@@ -149,7 +149,7 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
             def _basic_nest(y, X, set_idx, node_id, to_unify):
                 for y in y.out_edges:  # This is the nesting level
                     if y.id not in set_idx:
-                        dst_cluster = X.iloc[y.id]['cluster']
+                        dst_cluster = X.loc[y.id]['cluster']
                         X.loc[X.index == node_id, 'cluster'] = dst_cluster
                         to_unify[dst_cluster].append([node_id, y.id])
                         return True
