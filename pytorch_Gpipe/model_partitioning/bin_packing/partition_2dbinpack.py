@@ -1,17 +1,19 @@
 import warnings
 from collections import deque, defaultdict
-from itertools import count
+from itertools import count, zip_longest
 from pprint import pprint
-from typing import Optional, List
+from typing import Optional, List, Dict, Any, Union
 
 import matplotlib.pyplot as plt
 import pandas as pd
 from sklearn.cluster import KMeans
 
+from pytorch_Gpipe.model_partitioning.bin_packing.heap_dict import heapdict
 from pytorch_Gpipe.model_partitioning.bin_packing.post_process import post_process_partition
 from pytorch_Gpipe.model_partitioning.bin_packing.union_find import UnionFind
 from pytorch_Gpipe.model_partitioning.heuristics import NodeWeightFunction
 from pytorch_Gpipe.model_profiling import Graph, Node
+from pytorch_Gpipe.utils import flatten
 
 
 # from ...model_profiling import Graph, Node, NodeWeightFunction
@@ -28,43 +30,53 @@ from pytorch_Gpipe.model_profiling import Graph, Node
 # ######## ######## ############# ############## ######### ########### ######## ###########
 
 
-def maketree(iterable, N):
-    # TODO: can implement remonder here.
-    d = deque(iterable)
-    res = []
-    while d:
-        pair = [d.popleft() for _ in range(N)]
-        res.append(pair)
-    return res
+def grouper(n, iterable, fillvalue=None):
+    "grouper(3, 'ABCDEFG', 'x') --> ABC DEF Gxx"
+    args = [iter(iterable)] * n
+    return zip_longest(*args, fillvalue=fillvalue)
 
 
-def first_fit_cluster(K, clusters, id_to_node):
-    if len(clusters) > 2:
-        raise NotImplementedError()
-
-    # def add_id_to_split_k(list_of_items):
-    #     for
-
-    # result
-    bins = defaultdict(list)
-
-    # get splits
-    all_splits = get_all_splits(K, clusters, id_to_node=id_to_node)
-
-    # Unify splits to bins
-    for k in range(K):
-        for split in all_splits:
-            assert len(split) == K, (len(split), len(split[k]), split)
-            # print(split[k])
-            bins[k].extend(split[k])
-
-    assert len(bins) == K
-
-    return bins
-
-
-def get_all_splits(K, clusters, id_to_node):
+def get_all_splits(K: int, clusters, id_to_node: Dict[int, Node], to_unify: Dict[int, List[Union[List, Any]]], C: int):
     all_splits = []
+
+    # TODO: unify
+
+    # for group in to_unify_for_cluster:
+
+    # Make splits
+    # Change data type
+    # Pandas object. (id->Index)
+
+    clusters = [list(clusters.groupby("cluster").get_group(c).sort_values("id").itertuples()) for c in range(C)]
+    # clusters: List[List[Any]]
+    clusters_lengths = {i: len(clusters[i]) for i in range(len(clusters))}
+    print("cluster_lengths, before compressing", clusters_lengths)
+
+    # nest clusters with zero
+    new_clusters = []
+    for c_i, cluster in enumerate(clusters):
+        to_unify_for_cluster = to_unify[c_i]
+        cluster_D = {i.Index: i for i in cluster}
+        for l in to_unify_for_cluster:
+            z = l[0]
+            x = l[1]
+            if isinstance(cluster_D[x], list):
+                v = cluster_D[x]
+                v.append(cluster_D[z])
+                v.sort(key=lambda y: y.Index)
+            else:
+                cluster_D[x] = [cluster_D[z], cluster_D[x]]
+
+            del cluster_D[z]
+
+        cluster = []
+        for i in sorted(cluster_D.keys()):
+            cluster.append(cluster_D[i])
+        new_clusters.append(cluster)
+    clusters = new_clusters
+
+    clusters_lengths = {i: len(clusters[i]) for i in range(len(clusters))}
+    print("cluster_lengths, after compressing", clusters_lengths)
 
     for c_i, cluster in enumerate(clusters):
         n_i = len(cluster)
@@ -79,23 +91,95 @@ def get_all_splits(K, clusters, id_to_node):
         N = n_i // K
 
         cluster_for_split = cluster if not reminder else cluster[:-reminder]
-        split = maketree(cluster_for_split, N=N)
+        split = list(grouper(n=N, iterable=cluster_for_split))
+
         if reminder > 0:
             # extend last.
+            # FIXME:
             split[-1].extend(cluster[-reminder:])
-
-        is_reversed = c_i % 2 == 0
-        if is_reversed:
-            split = list(reversed(split))
-
-        # for sub_split in split:
-        #     stage_id = next(stage_id_generator)
-        #     for record in sub_split:
-        #         node = id_to_node[record.Index]
-        #         node.stage_id = stage_id
 
         all_splits.append(split)
     return all_splits
+
+
+def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int, THRESHOLD=0):
+    def node_to_record(node):
+        return {"id": node.id, "weight": node_weight_function(node)}
+
+    records = [node_to_record(node) for node in nodes]
+    X = pd.DataFrame.from_records(data=records, index="id")
+    kmeans = KMeans(n_clusters=C, max_iter=1000).fit(X)
+    X["cluster"] = kmeans.labels_
+
+    # TODO: for nodes with zero weight, just unify them to close node.
+    to_unify = defaultdict(list)
+    nodes_below_thresholds = X[X["weight"] <= THRESHOLD]
+
+    set_idx = set(nodes_below_thresholds.index)
+    for node_id in nodes_below_thresholds.index:
+        node = graph[node_id]
+        for y in node.out_edges:
+            if y.id not in set_idx:
+                dst_cluster = X.iloc[y.id]['cluster']
+                X.iloc[node_id]['cluster'] = dst_cluster
+                to_unify[dst_cluster].append([node_id, y.id])
+                break
+        else:
+            raise NotImplementedError(f"need to go one level deeper "
+                                      f"to find node with above THRESHOLD={THRESHOLD} weight to unify")
+
+    # sort clusters by id.
+    cluster_to_min_node_id = {i: X.query(f"cluster == {i}").first_valid_index() for i in range(C)}
+    min_node_id_to_cluster = {v: i for i, v in cluster_to_min_node_id.items()}
+    Y = X.copy()
+    for i, v in enumerate(min_node_id_to_cluster):
+        Y[X["cluster"] == v]['cluster'] = i
+
+    # Print
+    X = Y
+    print(X)
+    Y = X.copy()
+    Y['scope'] = [node.scope for node in nodes]
+    print(Y)
+    cluster_sums = X.groupby("cluster")['weight'].sum()
+    print("cluster_sums", cluster_sums)
+
+    clusters = X
+
+    return clusters, to_unify
+
+
+def first_fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
+                      to_unify: Dict[int, List[Union[List, Any]]], C: int):
+    if len(clusters) > 2:
+        raise NotImplementedError()
+    # result
+    bins = defaultdict(list)
+    bin_weights = heapdict({i: 0 for i in range(K)})
+    # get splits
+    all_splits = get_all_splits(K, clusters, id_to_node=id_to_node, to_unify=to_unify, C=C)
+
+    def choose_bin(subsplit, subsplit_idx, cluster_idx):
+        # TODO: be smarter after the 1st cluster
+        if cluster_idx % 2 != 0:
+            return K - subsplit_idx - 1  # reversed
+        return subsplit_idx
+
+    # Partition splits in bins
+    for cluster_idx, split in enumerate(all_splits):
+        if len(split) != K:
+            raise NotImplementedError()
+
+        for subsplit_idx, subsplit in split:
+            bin_idx = choose_bin(subsplit, subsplit_idx, cluster_idx)
+            bin = bins[bin_idx]
+            to_add = list(flatten(subsplit))
+            bin.extend(to_add)
+            bin_weights[bin_idx] += sum(i.weight for i in to_add)
+
+    assert len(bins) == K
+
+    return bins
 
 
 def stages_from_bins(graph, bins):
@@ -150,25 +234,6 @@ def stages_from_bins(graph, bins):
     # output -> another GPU -> create stage
 
 
-def make_clusters(nodes: List[Node], node_weight_function, C: int):
-    def node_to_record(node):
-        return {"id": node.id, "weight": node_weight_function(node)}
-
-    records = [node_to_record(node) for node in nodes]
-    X = pd.DataFrame.from_records(data=records, index="id")
-    kmeans = KMeans(n_clusters=C, max_iter=1000).fit(X)
-    X["cluster"] = kmeans.labels_
-
-    # sort clusters by id.
-    cluster_to_min_node_id = {i: X.query(f"cluster == {i}").first_valid_index() for i in range(C)}
-    min_node_id_to_cluster = {v: i for i, v in cluster_to_min_node_id.items()}
-    Y = X.copy()
-    for i, v in enumerate(min_node_id_to_cluster):
-        Y[X["cluster"] == v]['cluster'] = i
-
-    return Y
-
-
 def analyze_n_clusters(nodes: List[Node], node_weight_function, max_k=10):
     """ utility to help determine number of clusters for partition_2dbin_pack"""
 
@@ -219,18 +284,9 @@ def partition_2dbin_pack(graph: Graph,
     # sys.exit(0)
     id_to_node = {node.id: node for node in nodes}
     C = n_clusters
-    X = make_clusters(nodes, node_weight_function, C=C)
-    print(X)
-    Y = X.copy()
-    Y['scope'] = [node.scope for node in nodes]
-    print(Y)
-    cluster_sums = X.groupby("cluster")['weight'].sum()
-    print("cluster_sums", cluster_sums)
-    # Pandas object. (id->Index)
-    clusters = [list(X.groupby("cluster").get_group(c).sort_values("id").itertuples()) for c in range(C)]
-    clusters_lengths = {i: len(clusters[i]) for i in range(len(clusters))}
-    print("cluster_lengths", clusters_lengths)
-    bins = first_fit_cluster(K, clusters, id_to_node=id_to_node)
+
+    clusters, to_unify = make_clusters(work_graph, nodes, node_weight_function, C=C)
+    bins = first_fit_cluster(K, clusters, id_to_node=id_to_node, to_unify=to_unify, C=C)
     # sort
     for v in bins.values():
         v.sort(key=lambda x: x.Index)
@@ -251,15 +307,13 @@ def partition_2dbin_pack(graph: Graph,
         for n in bin_nodes:
             n.gpu_id = i
 
-    # TODO: to stages
-
+    # bins to stages
     stages_from_bins(work_graph, bins)
 
     work_graph = post_process_partition(work_graph)
 
     if use_layers_graph:
         graph.induce_layer_partition(work_graph, lookup)
-
 
     # Get stage to GPU map
     node_to_stage_map = {}
@@ -315,6 +369,16 @@ if __name__ == '__main__':
     graph, stage_to_gpu_map = partition_2dbin_pack(graph=graph, num_gpus=2, n_clusters=2,
                                                    node_weight_function=node_weight_function)
 
+# TODO: weird "cycle". seems that just switching will solve
+# [10, 4]
+# [(30, 10, 'T5ForConditionalGeneration/T5Stack[encoder]/T5Block[17]'), (31, 4, 'T5ForConditionalGeneration/T5Stack[encoder]/T5Block[18]')]
+# n_partitions: 20
+# TODO consider doing another cluster for zeros weights and so on.
+# TODO: support smaller cluster
+# TODO: Actually do the bin pack (first fit) with the splits (triples).
+#    Starting from 2nd cluster it matters.
+#    However, it can cause weird communication pattern.
+# TODO: weird error: "keyerror 0" - stage disappeared! (can fix it afterwards)
 #################
 # Layers for T5 small (tied)
 #     LAYER_SCOPES=[
