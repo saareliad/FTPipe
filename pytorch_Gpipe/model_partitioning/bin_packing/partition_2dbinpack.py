@@ -1,9 +1,9 @@
 import warnings
 from collections import deque, defaultdict
+from enum import IntEnum
 from itertools import count
 from pprint import pprint
 from typing import Optional, List, Dict, Any, Union
-from enum import IntEnum
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -34,10 +34,12 @@ class ReminderPolicy(IntEnum):
     ToLast = 0
     ToMin = 1
 
+
 class SecondAndOnClusterPolicy(IntEnum):
     FirstFitBinPacking = 0
     InOrder = 1
     Reversed = 2
+
 
 def maketree(n, iterable):
     d = deque(iterable)
@@ -249,14 +251,32 @@ def first_fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
 
     def choose_bin(subsplit, subsplit_idx, cluster_idx):
         # TODO: be smarter after the 1st cluster
+
+        if cluster_idx == 0 and subsplit_idx >= K:
+            warnings.warn(
+                f"not fully implemented behavior for 1st cluster subsplit_idx >= K (subsplit_idx:{subsplit_idx},K:{K}), will do FirstFitBinPacking")
         if cluster_idx == 0 and subsplit_idx < K:
             return subsplit_idx
-        else:
+        elif second_and_on_cluster_policy == SecondAndOnClusterPolicy.FirstFitBinPacking or (
+                cluster_idx == 0 and subsplit_idx >= K):
             # Tradeoff: communication vs computational balance.
             # Choose bin with minimal weight.
             # subsplits are given by size, decreasing order
             (emptiest_bin_id, current_bin_weight) = bin_weights.peekitem()
             return emptiest_bin_id
+        elif second_and_on_cluster_policy == SecondAndOnClusterPolicy.InOrder:
+            if subsplit_idx < K:
+                return subsplit_idx
+            else:
+                raise NotImplementedError("probably 1st cluster  >= K came here")
+        elif second_and_on_cluster_policy == SecondAndOnClusterPolicy.Reversed:
+            if subsplit_idx < K:
+                if cluster_idx % 2 != 0:
+                    return K - subsplit_idx - 1  # reversed
+                else:
+                    return subsplit_idx
+            else:
+                raise NotImplementedError("probably 1st cluster >= K came here")
 
         #     # if cluster_idx % 2 != 0:
         #     #     return K - subsplit_idx - 1  # reversed
@@ -268,7 +288,7 @@ def first_fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
         if len(split) > K and cluster_idx == 0:
             raise NotImplementedError()
 
-        if cluster_idx > 0:
+        if cluster_idx > 0 and second_and_on_cluster_policy == SecondAndOnClusterPolicy.FirstFitBinPacking:
             # sort subsplits by size
             split = sorted(split, key=sum_subsplit_weight, reverse=True)
 
@@ -427,7 +447,8 @@ def partition_2dbin_pack(graph: Graph,
     C = n_clusters
 
     clusters, to_unify = make_clusters(work_graph, nodes, node_weight_function, C=C, THRESHOLD=THRESHOLD)
-    bins = first_fit_cluster(K, clusters, id_to_node=id_to_node, to_unify=to_unify, C=C, second_and_on_cluster_policy=second_and_on_cluster_policy)
+    bins = first_fit_cluster(K, clusters, id_to_node=id_to_node, to_unify=to_unify, C=C,
+                             second_and_on_cluster_policy=second_and_on_cluster_policy)
     # sort
     for v in bins.values():
         v.sort(key=lambda x: x.Index)
@@ -467,6 +488,30 @@ def partition_2dbin_pack(graph: Graph,
             node_to_stage_map[n.id] = n.stage_id
 
     stage_to_gpu_map = {i: sorted(v) for i, v in stage_to_gpu_map.items()}
+
+    # TODO: can do it more efficiently but i'm tired...
+    to_check = sorted(stage_to_gpu_map.keys())
+    if to_check[0] != 0 or to_check[-1] != len(to_check) - 1:
+        print(f"-V- stages gone, stages_ids_before: {to_check} reassigning...")
+
+        stage_to_fixed = {prev_s: i for i, prev_s in enumerate(to_check)}
+
+        # 1
+        for n, prev_s in list(node_to_stage_map.items()):
+            fix = stage_to_fixed[prev_s]
+            node_to_stage_map[n] = fix
+
+        # 2
+        for n in graph.nodes:
+            n.stage_id = stage_to_fixed[n.stage_id]
+
+        # 3
+        stage_to_gpu_map = defaultdict(set)
+        for gpu_id, bin_nodes in bins.items():
+            for n in bin_nodes:
+                stage_to_gpu_map[n.stage_id].add(gpu_id)
+        stage_to_gpu_map = {i: sorted(v) for i, v in stage_to_gpu_map.items()}
+
     print("stage_to_gpu_map:")
     pprint(stage_to_gpu_map)
 
