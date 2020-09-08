@@ -102,8 +102,7 @@ def get_all_splits(K: int, clusters, id_to_node: Dict[int, Node], to_unify: Dict
         if n_i < K:
             raise NotImplementedError(f"insufficient number of items in cluster {c_i}, {n_i}, {K}")
         if reminder > 0:
-            warnings.warn(f"cluster {c_i} is problematic {c_i}, {n_i}%{K}!=0, "
-                          f"will put reminding {reminder} nodes in last partition")
+            warnings.warn(f"cluster {c_i} is problematic {c_i}, {n_i}%{K}!=0, will put reminding {reminder} nodes in last partition")
             # raise NotImplementedError(f"{c_i}, {n_i}, {K}")
         N = n_i // K
 
@@ -219,8 +218,8 @@ def first_fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
 
     def choose_bin(subsplit, subsplit_idx, cluster_idx):
         # TODO: be smarter after the 1st cluster
-        if cluster_idx % 2 != 0:
-            return K - subsplit_idx - 1  # reversed
+        # if cluster_idx % 2 != 0:
+        #     return K - subsplit_idx - 1  # reversed
         return subsplit_idx
 
     # Partition splits in bins
@@ -247,7 +246,7 @@ def first_fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
     return bins
 
 
-def stages_from_bins(graph, bins):
+def stages_from_bins(graph, bins, id_to_node_worked_on):
     stage_id_generator = count()
 
     # shallow copy bins:
@@ -299,7 +298,8 @@ def stages_from_bins(graph, bins):
                     missing_topo_sort_ids = range(prev_topo_sort_id+1, topo_sort_id)
                     is_ok = True
                     for missing_topo_sort_id in missing_topo_sort_ids:
-                        if missing_topo_sort_id in graph:
+                        # TODO: missing_topo_sort_id in graph is redundant, but here just in case
+                        if missing_topo_sort_id in graph and missing_topo_sort_id in id_to_node_worked_on:
                             is_ok = False
                             break
                     if not is_ok:
@@ -322,30 +322,14 @@ def stages_from_bins(graph, bins):
         print("broken_stages")
         print(broken_stages)
 
-        # TODO: could have been more gentle: e.g nodes 13 and 14 should be together
-        # unbroken_stages
-        # [{3, 5, 7, 8, 9, 10, 11, 22, 23, 24}, {13}, {14, 18, 19, 20, 21}]
-        # broken_stages
-        # [[3], [5], [7, 8, 9, 10, 11], [13], [14], [18, 19, 20, 21], [22, 23, 24]]
-
         # Give a dummy stage id
         for dummy_stage_id, broken_stage in zip(stage_id_generator, broken_stages):
             # Try to break stage if not TOPOLOGICALLY sorted.
             for n in broken_stage:
                 graph[n].stage_id = dummy_stage_id
 
-
-    # cannonize_partition_indices(graph)
-    # break cycles
-
-    # TODO: get max subtree
-    # directed DFS, keep ends
-
-    # for end in sorted(ends):
-
-    # get all ends which and on another GPU x
-
-    # output -> another GPU -> create stage
+    # cannonize_partition_indices(graph) <--- TODO: redundant
+    # break cycles <--- TODO: redundant
 
 
 def analyze_n_clusters(nodes: List[Node], node_weight_function, max_k=10):
@@ -381,9 +365,11 @@ def partition_2dbin_pack(graph: Graph,
                          n_clusters: int,
                          node_weight_function: Optional[NodeWeightFunction] = None,
                          # edge_weight_function: Optional[EdgeWeightFunction] = None,
-                         use_layers_graph: bool = True,
+                         use_layers_graph: bool = False,
                          **kwargs
                          ):
+    print(f"use_layers_graph={use_layers_graph}")
+
     graph.topo_sort()
 
     if use_layers_graph:
@@ -426,7 +412,7 @@ def partition_2dbin_pack(graph: Graph,
             n.gpu_id = i
 
     # bins to stages
-    stages_from_bins(work_graph, bins)
+    stages_from_bins(work_graph, bins, id_to_node_worked_on=id_to_node)
 
     work_graph = post_process_partition(work_graph)
 
@@ -449,6 +435,13 @@ def partition_2dbin_pack(graph: Graph,
 
     print("node_to_stage_map:")
     pprint(node_to_stage_map)
+
+    stage_to_nodes_map = defaultdict(list)
+    for i,v in node_to_stage_map.items():
+        stage_to_nodes_map[v].append(i)
+
+    print("stage_to_nodes_map:")
+    pprint(stage_to_nodes_map)
 
     return graph, stage_to_gpu_map
 
@@ -485,7 +478,8 @@ if __name__ == '__main__':
     nodes = [n for n in graph.nodes if n not in graph.inputs]
     # analyze_n_clusters(nodes=nodes, node_weight_function=node_weight_function, max_k=4)
     graph, stage_to_gpu_map = partition_2dbin_pack(graph=graph, num_gpus=2, n_clusters=2,
-                                                   node_weight_function=node_weight_function)
+                                                   node_weight_function=node_weight_function,
+                                                   use_layers_graph=False)
 
 # TODO: weird "cycle". seems that just switching will solve
 # [10, 4]

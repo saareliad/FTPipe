@@ -1,3 +1,4 @@
+import warnings
 from typing import Callable, List, Dict, Optional
 
 import torch
@@ -266,11 +267,15 @@ def partition_model(model: nn.Module,
                           **acyclic_opt)
     elif partitioning_method == "2DBIN":
         if "n_clusters" not in binpack_opt:
+            if "analyze_n_clusters" not in binpack_opt:
+                warnings.warn(
+                    "expected --n_clusters or --analyze_n_clusters to be given to binpack_opt. will set n_clusters=2 as default")
             binpack_opt["n_clusters"] = 2
 
         # TODO: determine nclusters
         graph, stage_to_gpu_map = partition_2dbin_pack(graph, num_gpus=nparts,
-                                                       node_weight_function=node_weight_function, **binpack_opt)
+                                                       node_weight_function=node_weight_function,
+                                                       use_layers_graph=False, **binpack_opt)
     else:
         raise NotImplementedError()
 

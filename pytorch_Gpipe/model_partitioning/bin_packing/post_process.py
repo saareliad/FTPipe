@@ -3,7 +3,6 @@ from collections import defaultdict
 from copy import copy
 from typing import List, Dict, Set
 
-import networkx as nx
 import torch
 
 from pytorch_Gpipe.model_profiling import Graph, Node, NodeTypes
@@ -235,4 +234,3 @@ def print_all_problematic_outputs_between_partitions(graph: Graph, edge_weight_f
 
     s = f"Valid outputs states = {valid_state}\n" + "problems:\n" + "\n".join(problems)
     print(s)
-
