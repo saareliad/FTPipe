@@ -287,6 +287,21 @@ def t5_3b_tied_lmheads_320_8_8p_bw12_squad1():
                 },
                 stateless_tied=True)
 
+def t5_3b_tied_lmheads_64_4_8p_bw12_squad1():
+    return dict(model_type='t5_stateless',
+                model_name_or_path='t5-3b',
+                do_lower_case=False,
+                output_past=False,
+                output_attentions=False,
+                output_hidden_states=False,
+                explicitly_set_dict={
+                    "output_only": True,
+                    "output_attentions": False,
+                    "precomputed_masks": True,
+                    "output_hidden_states": False
+                },
+                stateless_tied=True)
+
 def t5_small_untied_4p_bw12_squad1():
     return dict(model_type='t5',
                 model_name_or_path='t5-small',
