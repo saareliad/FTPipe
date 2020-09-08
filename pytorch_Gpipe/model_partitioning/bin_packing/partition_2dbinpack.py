@@ -9,7 +9,7 @@ import pandas as pd
 from sklearn.cluster import KMeans
 
 from pytorch_Gpipe.model_partitioning.bin_packing.heap_dict import heapdict
-from pytorch_Gpipe.model_partitioning.bin_packing.post_process import post_process_partition, topo_sort
+from pytorch_Gpipe.model_partitioning.bin_packing.post_process import post_process_partition
 from pytorch_Gpipe.model_partitioning.bin_packing.union_find import UnionFind
 from pytorch_Gpipe.model_partitioning.heuristics import NodeWeightFunction
 from pytorch_Gpipe.model_profiling import Graph, Node
@@ -192,8 +192,8 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
     cluster_to_min_node_id = {i: X.query(f"cluster == {i}").first_valid_index() for i in range(C)}
     min_node_id_to_cluster = {v: i for i, v in cluster_to_min_node_id.items()}
     Y = X.copy()
-    for i, v in enumerate(min_node_id_to_cluster):
-        Y[X["cluster"] == v]['cluster'] = i
+    for i, (min_node_id, cluster_id) in enumerate(min_node_id_to_cluster.items()):
+        Y.loc[X["cluster"] == cluster_id, 'cluster'] = i
 
     # Print
     X = Y
@@ -339,12 +339,14 @@ def partition_2dbin_pack(graph: Graph,
                          use_layers_graph: bool = True,
                          **kwargs
                          ):
+    graph.topo_sort()
+
     if use_layers_graph:
         work_graph, lookup = graph.layers_graph()
     else:
         work_graph, lookup = graph, None
 
-    topo_sort(graph)
+    # topo_sort(graph)
 
     nodes = [n for n in work_graph.nodes if n not in work_graph.inputs]
 

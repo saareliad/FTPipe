@@ -105,7 +105,7 @@ class Graph():
                  basic_blocks: Tuple[nn.Module, ...]):
         # TODO: created in trace module, take doc from there.
         self._nodes: GraphNodes = nodes
-        self.input_kw_ids = input_kw_ids
+        self.input_kw_ids = input_kw_ids  # id to kw name.
         self.output_ids = output_ids
         self.depth = depth
         self.basic_blocks = basic_blocks
@@ -484,7 +484,7 @@ class Graph():
 
             # NOTE i hate this but it handles passing labels which are used only at last partiton
             input_or_buff_param_with_one_use_at_end = (node.type in [NodeTypes.IN, NodeTypes.BUFF_PARAM]) and (
-                        len(node.out_edges) == 1)
+                    len(node.out_edges) == 1)
             if input_or_buff_param_with_one_use_at_end:
                 input_or_buff_param_with_one_use_at_end &= (list(node.out_edges)[0].id - node.id) >= (len(self) / 2)
 
@@ -625,3 +625,72 @@ class Graph():
             n.kwargs.clear()
 
         return copy
+
+    def topo_sort(self):
+        # We don't care about the weights here.
+        # node_weight_function: Optional[NodeWeightFunction] = None,
+        # edge_weight_function: Optional[EdgeWeightFunction] = None
+
+        # To networkx
+        G = nx.DiGraph()
+        for u in self.nodes:
+            dsts = set()
+            for v in u.out_edges:
+                # disallow parallel in edges
+                # disallow parallel out edges
+                if v.id in dsts:
+                    continue
+                dsts.add(v.id)
+                G.add_edge(u.id, v.id)
+
+        nx_graph = self.asNetworkx(directed=True)
+
+        # key function, which will result in breaking ties by node id.
+        def key(node):
+            return None
+
+        topo_sorted = nx.dag.lexicographical_topological_sort(nx_graph, key=key)
+        topo_sorted = list(topo_sorted)
+        for topo_sort_id, node_id in enumerate(topo_sorted):
+            self[node_id].topo_sort_id = topo_sort_id
+
+        if (ids_sort := sorted(topo_sorted)) != topo_sorted:
+            print("-W- topo_sort: node_ids are not topo sorted!")
+            print("topo_sorted:", topo_sorted)
+            print("node_ids", ids_sort)
+            replace_ids_with_topo = True
+        else:
+            print("-I- topo_sort: node_ids are topo sorted")
+            replace_ids_with_topo = False
+
+        if replace_ids_with_topo:
+            print("-I- replacing node_ids by topo_sort_ids for graph")
+
+            # Fix nodes
+            for node in self.nodes:
+                node.id = node.topo_sort_id
+
+            # Fix graph:
+            #             self.input_kw_ids = input_kw_ids
+            input_kw_ids = {}
+            for i, v in self.input_kw_ids.items():
+                topo_sort_id = self[i].topo_sort_id
+                if topo_sort_id != i:
+                    print(f"-I- topo_sort: changed id to input {v}")
+                input_kw_ids[topo_sort_id] = v
+
+            self.input_kw_ids = input_kw_ids
+
+            # o
+            output_ids = []
+            for i in self.output_ids:
+                topo_sort_id = self[i].topo_sort_id
+                if topo_sort_id != i:
+                    print(f"-I- topo_sort: changed id to output {i}")
+                output_ids.append(topo_sort_id)
+            self.output_ids = output_ids
+
+            # Note this has to be last
+            #             self._nodes: GraphNodes = nodes
+            _nodes = {n.topo_sort_id: n for n in self.nodes}
+            self._nodes = _nodes
