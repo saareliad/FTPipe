@@ -12,7 +12,7 @@ from pprint import pprint
 import io
 from contextlib import redirect_stdout
 import warnings
-from typing import List, Set
+from typing import List, Set, Dict, Union, Any, Optional
 from functools import wraps
 from contextlib import contextmanager
 from pytorch_Gpipe.utils import flatten, move_tensors, nested_map
@@ -22,8 +22,8 @@ from .analysis_utils import (extra_communication_time_lower_bound,
                              apply_ratio)
 
 
-def rounddict(d, x=2):
-    return {k: round(v, x) for k, v in d.items()}
+def rounddict(d: Dict[Any, float], x=2):
+    return {k: round(number=v, ndigits=x) for k, v in d.items()}
 
 
 def run_analysis(sample,
@@ -36,7 +36,9 @@ def run_analysis(sample,
                  async_pipeline=False,
                  add_comm_times_to_balance=True,
                  sequential_model=None,
-                 stages_on_same_gpu: List[Set[int]] = list()):
+                 stages_on_same_gpu: Optional[List[Set[int]]] = None):
+    if not stages_on_same_gpu:
+        stages_on_same_gpu = list()
     # kwarg input
     if isinstance(sample, dict):
         sample = tuple([sample[i] for i in config['model inputs']])
@@ -237,6 +239,13 @@ def run_analysis(sample,
         pprint(d_param_count)
         s_param_count = buf.getvalue()
 
+    d_same_gpu_parameter_count = same_gpu_parameter_count(stage_param_count=d_param_count,
+                                                          stages_on_same_gpu=stages_on_same_gpu)
+
+    with io.StringIO() as buf, redirect_stdout(buf):
+        pprint(d_same_gpu_parameter_count)
+        s_gpu_param_count = buf.getvalue()
+
     fwd_plus_backward = dict()
     fwd_plus_backward['pipeline_with_non_parallel_comm'] = add_dicts(
         real_f_times, real_b_times)
@@ -297,6 +306,9 @@ def run_analysis(sample,
             s += f"parallel forward {parallel_f}\nparallel backward {parallel_b}\n"
 
         s += f"\nStage parameter count:\n {s_param_count}"
+
+        if s_gpu_param_count:
+            s += f"\nGPU parameter count:\n {s_gpu_param_count}"
 
         with_comm_str = "with" if add_comm_times_to_balance else "without"
 
@@ -707,6 +719,7 @@ def profile_execution(model_inputs,
                                 ub, lb, PARALLEL_RATIO)
                             b_time += extra_bwd_send_time
 
+                # TODO: can check nans
                 f_times[idx].append(f_time)
                 b_times[idx].append(b_time)
 
@@ -1217,3 +1230,22 @@ def parameter_count(partition_config):
     d['total'] = total
 
     return d
+
+
+def same_gpu_parameter_count(stage_param_count: Dict[Union[int, str], int], stages_on_same_gpu: Dict[int, Set[int]]):
+    def set_to_hashable(s: Set[int]):
+        return tuple(sorted(s))[0]
+
+    gpu_to_params = defaultdict(int)
+    for stage_id, v in stages_on_same_gpu.items():
+        k = set_to_hashable(v)
+        gpu_to_params[k] += stage_param_count[stage_id]
+
+    gpu_to_params['total'] = stage_param_count['total']
+    return dict(gpu_to_params)
+
+    # given:
+    # stages_on_same_gpu = [{0, 4}]
+    # internal represntation:
+    # stages_on_same_gpu[0] = {0, 4}
+    # stages_on_same_gpu[4] = {0, 4}
