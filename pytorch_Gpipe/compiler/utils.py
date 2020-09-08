@@ -1,5 +1,5 @@
 from typing import List
-
+import warnings
 import torch
 
 from pytorch_Gpipe.model_profiling import Node, NodeTypes, Graph
@@ -33,7 +33,12 @@ def pretty_format_obj(obj, dict_prefix=dtab) -> str:
             else:
                 assert isinstance(k, int)
             items.append(f'{k}: {pretty_format_obj(v, dict_prefix + tab)}')
-        items[0] = f"\n{dict_prefix}" + items[0]
+        
+        try:
+            items[0] = f"\n{dict_prefix}" + items[0]
+        except IndexError as e:
+            items[0] = f"\n{dict_prefix}"
+            warnings.warn("empty dict in configuration")
         return "{" + f",\n{dict_prefix}".join(items) + "}"
     elif obj is type(None):
         return "None"
