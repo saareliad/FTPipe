@@ -3,8 +3,10 @@ from collections import deque, defaultdict
 from itertools import count
 from pprint import pprint
 from typing import Optional, List, Dict, Any, Union
+from enum import IntEnum
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
 
@@ -28,6 +30,11 @@ from pytorch_Gpipe.model_profiling import Graph, Node
 # take N =  n_i // K values, and maketree.
 # ######## ######## ############# ############## ######### ########### ######## ###########
 
+class ReminderPolicy(IntEnum):
+    ToLast = 0
+    ToMin = 1
+
+
 
 def maketree(n, iterable):
     d = deque(iterable)
@@ -38,17 +45,26 @@ def maketree(n, iterable):
     return res
 
 
-def get_all_splits(K: int, clusters, id_to_node: Dict[int, Node], to_unify: Dict[int, List[Union[List, Any]]], C: int):
+def flatten_subsplit(subsplit):
+    to_add = []
+    for i in subsplit:
+        if isinstance(i, list):
+            to_add.extend(i)
+        else:
+            to_add.append(i)
+    return to_add
+
+
+def sum_subsplit_weight(subsplit):
+    return sum(i.weight for i in flatten_subsplit(subsplit))
+
+
+def get_all_splits(K: int, clusters, id_to_node: Dict[int, Node], to_unify: Dict[int, List[Union[List, Any]]], C: int,
+                   reminder_policy: ReminderPolicy = ReminderPolicy.ToLast):
     all_splits = []
 
-    # TODO: unify
-
-    # for group in to_unify_for_cluster:
-
     # Make splits
-    # Change data type
-    # Pandas object. (id->Index)
-
+    # Change data type: Pandas object. (id->Index)
     clusters = [list(clusters.groupby("cluster").get_group(c).sort_values("id").itertuples()) for c in range(C)]
 
     if len(clusters) > 2:
@@ -102,7 +118,8 @@ def get_all_splits(K: int, clusters, id_to_node: Dict[int, Node], to_unify: Dict
         if n_i < K:
             raise NotImplementedError(f"insufficient number of items in cluster {c_i}, {n_i}, {K}")
         if reminder > 0:
-            warnings.warn(f"cluster {c_i} is problematic {c_i}, {n_i}%{K}!=0, will put reminding {reminder} nodes in last partition")
+            warnings.warn(
+                f"cluster {c_i} is problematic {c_i}, {n_i}%{K}!=0, will put reminding {reminder} nodes in last partition")
             # raise NotImplementedError(f"{c_i}, {n_i}, {K}")
         N = n_i // K
 
@@ -111,9 +128,14 @@ def get_all_splits(K: int, clusters, id_to_node: Dict[int, Node], to_unify: Dict
         split = list(maketree(n=N, iterable=cluster_for_split))
 
         if reminder > 0:
-            # extend last.
-            # FIXME:
-            split[-1].extend(cluster[-reminder:])
+            if reminder_policy == ReminderPolicy.ToLast:
+                # extend last.
+                split[-1].extend(cluster[-reminder:])
+            elif reminder_policy == ReminderPolicy.ToMin:
+                min_idx = np.argmin([sum_subsplit_weight(subsplit) for subsplit in split])
+                split[min_idx].extend(cluster[-reminder:])
+            else:
+                raise NotImplementedError()
 
         all_splits.append(split)
     return all_splits
@@ -125,12 +147,16 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
 
     records = [node_to_record(node) for node in nodes]
     X = pd.DataFrame.from_records(data=records, index="id")
-    kmeans = KMeans(n_clusters=C, max_iter=1000).fit(X)
-    X["cluster"] = kmeans.labels_
-
-    # TODO: for nodes with zero weight, just unify them to close node.
-    to_unify = defaultdict(list)
     nodes_below_thresholds = X[X["weight"] <= THRESHOLD]
+
+    # filter below-threashold items
+    nodes_above_thresholds = X[X["weight"] > THRESHOLD]
+
+    kmeans = KMeans(n_clusters=C, max_iter=1000, copy_x=True).fit(nodes_above_thresholds)
+    X.loc[nodes_above_thresholds.index, "cluster"] = kmeans.labels_
+
+    # For nodes with zero weight, just unify them to close "real" node.
+    to_unify = defaultdict(list)
 
     set_idx = set(nodes_below_thresholds.index)
     for node_id in nodes_below_thresholds.index:
@@ -200,8 +226,8 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
     Y = X.copy()
     Y['scope'] = [node.scope for node in nodes]
     print(Y)
-    cluster_sums = X.groupby("cluster")['weight'].sum()
-    print("cluster_sums", cluster_sums)
+    cluster_sums = X.groupby("cluster")['weight'].describe().transpose()
+    print("cluster_sums_statistics", cluster_sums)
 
     clusters = X
 
@@ -218,26 +244,33 @@ def first_fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
 
     def choose_bin(subsplit, subsplit_idx, cluster_idx):
         # TODO: be smarter after the 1st cluster
-        # if cluster_idx % 2 != 0:
-        #     return K - subsplit_idx - 1  # reversed
-        return subsplit_idx
+        if cluster_idx == 0 and subsplit_idx < K:
+            return subsplit_idx
+        else:
+            # Tradeoff: communication vs computational balance.
+            # Choose bin with minimal weight.
+            # subsplits are given by size, decreasing order
+            (emptiest_bin_id, current_bin_weight) = bin_weights.peekitem()
+            return emptiest_bin_id
+
+        #     # if cluster_idx % 2 != 0:
+        #     #     return K - subsplit_idx - 1  # reversed
+        # return subsplit_idx
 
     # Partition splits in bins
-    for cluster_idx, split in enumerate(all_splits):
-        if len(split) != K:
+    for cluster_idx, split in enumerate(reversed(all_splits)):
+        # larger clusters will be first
+        if len(split) > K and cluster_idx == 0:
             raise NotImplementedError()
+
+        if cluster_idx > 0:
+            # sort subsplits by size
+            split = sorted(split, key=sum_subsplit_weight, reverse=True)
 
         for subsplit_idx, subsplit in enumerate(split):
             bin_idx = choose_bin(subsplit, subsplit_idx, cluster_idx)
             bin = bins[bin_idx]
-            to_add = []
-            for i in subsplit:
-                if isinstance(i, list):
-                    to_add.extend(i)
-                else:
-                    to_add.append(i)
-            # to_add = [i for i in subsplit if is]
-            # to_add = list(flatten(subsplit))
+            to_add = flatten_subsplit(subsplit)
             bin.extend(to_add)
             bin_weights[bin_idx] += sum(i.weight for i in to_add)
 
@@ -281,7 +314,7 @@ def stages_from_bins(graph, bins, id_to_node_worked_on):
 
         unbroken_stages = uf.sorted_components()
         broken_stages = []
-        # TODO: break stages according to topological sort
+        # Break stages according to topological sort
         for unbroken_stage in unbroken_stages:
             broken_stages_for_unbroken_stage = []
             cur_set = list()  # its sorted so its more efficient
@@ -295,7 +328,7 @@ def stages_from_bins(graph, bins, id_to_node_worked_on):
                     pass
                 else:
                     # Check if nothing is missing (it is possible due to layers_graph)
-                    missing_topo_sort_ids = range(prev_topo_sort_id+1, topo_sort_id)
+                    missing_topo_sort_ids = range(prev_topo_sort_id + 1, topo_sort_id)
                     is_ok = True
                     for missing_topo_sort_id in missing_topo_sort_ids:
                         # TODO: missing_topo_sort_id in graph is redundant, but here just in case
@@ -365,19 +398,17 @@ def partition_2dbin_pack(graph: Graph,
                          n_clusters: int,
                          node_weight_function: Optional[NodeWeightFunction] = None,
                          # edge_weight_function: Optional[EdgeWeightFunction] = None,
-                         use_layers_graph: bool = False,
+                         use_layers_graph: bool = True,
+                         THRESHOLD=0,
                          **kwargs
                          ):
     print(f"use_layers_graph={use_layers_graph}")
-
     graph.topo_sort()
 
     if use_layers_graph:
         work_graph, lookup = graph.layers_graph()
     else:
         work_graph, lookup = graph, None
-
-    # topo_sort(graph)
 
     nodes = [n for n in work_graph.nodes if n not in work_graph.inputs]
 
@@ -389,7 +420,7 @@ def partition_2dbin_pack(graph: Graph,
     id_to_node = {node.id: node for node in nodes}
     C = n_clusters
 
-    clusters, to_unify = make_clusters(work_graph, nodes, node_weight_function, C=C)
+    clusters, to_unify = make_clusters(work_graph, nodes, node_weight_function, C=C, THRESHOLD=THRESHOLD)
     bins = first_fit_cluster(K, clusters, id_to_node=id_to_node, to_unify=to_unify, C=C)
     # sort
     for v in bins.values():
@@ -437,7 +468,7 @@ def partition_2dbin_pack(graph: Graph,
     pprint(node_to_stage_map)
 
     stage_to_nodes_map = defaultdict(list)
-    for i,v in node_to_stage_map.items():
+    for i, v in node_to_stage_map.items():
         stage_to_nodes_map[v].append(i)
 
     print("stage_to_nodes_map:")
@@ -481,16 +512,12 @@ if __name__ == '__main__':
                                                    node_weight_function=node_weight_function,
                                                    use_layers_graph=False)
 
-# TODO: weird "cycle". seems that just switching will solve
-# [10, 4]
-# [(30, 10, 'T5ForConditionalGeneration/T5Stack[encoder]/T5Block[17]'), (31, 4, 'T5ForConditionalGeneration/T5Stack[encoder]/T5Block[18]')]
-# n_partitions: 20
-# TODO consider doing another cluster for zeros weights and so on.
-# TODO: support smaller cluster
 # TODO: Actually do the bin pack (first fit) with the splits (triples).
 #    Starting from 2nd cluster it matters.
 #    However, it can cause weird communication pattern.
 # TODO: weird error: "keyerror 0" - stage disappeared! (can fix it afterwards)
+# TODO: THRESHOLD hyper-parameter can be higher.
+
 #################
 # Layers for T5 small (tied)
 #     LAYER_SCOPES=[

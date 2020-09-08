@@ -273,9 +273,10 @@ def partition_model(model: nn.Module,
             binpack_opt["n_clusters"] = 2
 
         # TODO: determine nclusters
+        # use_layers_graph=False
         graph, stage_to_gpu_map = partition_2dbin_pack(graph, num_gpus=nparts,
                                                        node_weight_function=node_weight_function,
-                                                       use_layers_graph=False, **binpack_opt)
+                                                       **binpack_opt)
     else:
         raise NotImplementedError()
 

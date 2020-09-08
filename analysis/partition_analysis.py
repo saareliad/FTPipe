@@ -745,13 +745,19 @@ def force_out_of_place(model: torch.nn.Module):
         m.inplace = s
 
 
-def mean_var(times):
+def mean_var(times, drop=1):
     means = dict()
     variances = dict()
     avg_deviations = dict()
     for i, ts in times.items():
-        max_v = max(ts)
-        arr = np.array([t for t in ts if t < max_v])
+        for _ in range(drop):
+            max_v = max(ts)
+            vs_cand = [t for t in ts if t < max_v]
+            if len(vs_cand) == 0:
+                break
+            ts = vs_cand
+        arr = np.array(ts)
+
         means[i] = np.mean(arr)
         variances[i] = np.var(arr)
         avg_deviations[i] = np.abs((arr - means[i])).mean()
