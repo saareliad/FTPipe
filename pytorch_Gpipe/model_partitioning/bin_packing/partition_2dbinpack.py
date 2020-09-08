@@ -496,14 +496,17 @@ def partition_2dbin_pack(graph: Graph,
 
         stage_to_fixed = {prev_s: i for i, prev_s in enumerate(to_check)}
 
+
         # 1
         for n, prev_s in list(node_to_stage_map.items()):
-            fix = stage_to_fixed[prev_s]
-            node_to_stage_map[n] = fix
+            if prev_s in stage_to_fixed:
+                fix = stage_to_fixed[prev_s]
+                node_to_stage_map[n] = fix
 
         # 2
         for n in graph.nodes:
-            n.stage_id = stage_to_fixed[n.stage_id]
+            if n.stage_id in stage_to_fixed:
+                n.stage_id = stage_to_fixed[n.stage_id]
 
         # 3
         stage_to_gpu_map = defaultdict(set)
