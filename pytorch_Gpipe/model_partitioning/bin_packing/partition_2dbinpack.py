@@ -256,7 +256,7 @@ def stages_from_bins(graph, bins):
     nodes_with_out_edges = defaultdict(set)
     nodes_with_in_edges = defaultdict(set)
     for gpu_id, v in bins.items():
-        # TODO: find all connected componenets
+        # Find all connected components
         uf = UnionFind(elements=bins_to_id[gpu_id])
         visited = set()
         open = deque(sorted(v, key=lambda x: x.id))
@@ -276,20 +276,65 @@ def stages_from_bins(graph, bins):
         # problem is we can't say {b,d} are same stage because it will create a cycle:
         # a->bd->c->bd
         # if we can break bd, we can solve it afterwards.
-        # we alreay know how to break:
+        # we already know how to break:
         # af->b->c->d->e->af
         # but how can we know it?
 
-        # give a dummy stage id
         unbroken_stages = uf.sorted_components()
-        for dummy_stage_id, unbroken_stage in zip(stage_id_generator, unbroken_stages):
-            # Try to break stage if not TOPOLOGICALLY sorted.
+        broken_stages = []
+        # TODO: break stages according to topological sort
+        for unbroken_stage in unbroken_stages:
+            broken_stages_for_unbroken_stage = []
+            cur_set = list()  # its sorted so its more efficient
+            unbroken_stage = deque(sorted(unbroken_stage))
+            prev_topo_sort_id = unbroken_stage.popleft()
+            cur_set.append(prev_topo_sort_id)
+            while unbroken_stage:
+                topo_sort_id = unbroken_stage.popleft()
+                if topo_sort_id == prev_topo_sort_id + 1:
+                    # easy, nothing to do.
+                    pass
+                else:
+                    # Check if nothing is missing (it is possible due to layers_graph)
+                    missing_topo_sort_ids = range(prev_topo_sort_id+1, topo_sort_id)
+                    is_ok = True
+                    for missing_topo_sort_id in missing_topo_sort_ids:
+                        if missing_topo_sort_id in graph:
+                            is_ok = False
+                            break
+                    if not is_ok:
+                        broken_stages_for_unbroken_stage.append(cur_set)
+                        cur_set = list()
+                    else:  # Nothing is missing
+                        cur_set.append(topo_sort_id)
 
-            for n in unbroken_stage:
-                graph[n].stage_id = dummy_stage_id
+                cur_set.append(topo_sort_id)
+                prev_topo_sort_id = topo_sort_id
+
+            if cur_set:
+                broken_stages_for_unbroken_stage.append(cur_set)
+            broken_stages.extend(broken_stages_for_unbroken_stage)
+
+        broken_stages.sort(key=lambda topo_sorted_list: topo_sorted_list[0])
 
         print("unbroken_stages")
         print(unbroken_stages)
+        print("broken_stages")
+        print(broken_stages)
+
+        # TODO: could have been more gentle: e.g nodes 13 and 14 should be together
+        # unbroken_stages
+        # [{3, 5, 7, 8, 9, 10, 11, 22, 23, 24}, {13}, {14, 18, 19, 20, 21}]
+        # broken_stages
+        # [[3], [5], [7, 8, 9, 10, 11], [13], [14], [18, 19, 20, 21], [22, 23, 24]]
+
+        # Give a dummy stage id
+        for dummy_stage_id, broken_stage in zip(stage_id_generator, broken_stages):
+            # Try to break stage if not TOPOLOGICALLY sorted.
+            for n in broken_stage:
+                graph[n].stage_id = dummy_stage_id
+
+
     # cannonize_partition_indices(graph)
     # break cycles
 

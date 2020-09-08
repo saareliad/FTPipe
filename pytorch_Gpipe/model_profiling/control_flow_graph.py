@@ -530,6 +530,10 @@ class Graph():
     def __getitem__(self, idx):
         return self._nodes[idx]
 
+
+    def __contains__(self, node_id):
+        return node_id in self._nodes
+
     def selfcheck(self):
         visited = set()
         try:
