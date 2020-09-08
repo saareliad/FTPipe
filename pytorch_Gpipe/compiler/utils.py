@@ -37,7 +37,7 @@ def pretty_format_obj(obj, dict_prefix=dtab) -> str:
         try:
             items[0] = f"\n{dict_prefix}" + items[0]
         except IndexError as e:
-            items[0] = f"\n{dict_prefix}"
+            items.append(f"\n{dict_prefix}")
             warnings.warn("empty dict in configuration")
         return "{" + f",\n{dict_prefix}".join(items) + "}"
     elif obj is type(None):
