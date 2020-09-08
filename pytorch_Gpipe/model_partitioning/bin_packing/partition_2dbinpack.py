@@ -9,7 +9,7 @@ import pandas as pd
 from sklearn.cluster import KMeans
 
 from pytorch_Gpipe.model_partitioning.bin_packing.heap_dict import heapdict
-from pytorch_Gpipe.model_partitioning.bin_packing.post_process import post_process_partition
+from pytorch_Gpipe.model_partitioning.bin_packing.post_process import post_process_partition, topo_sort
 from pytorch_Gpipe.model_partitioning.bin_packing.union_find import UnionFind
 from pytorch_Gpipe.model_partitioning.heuristics import NodeWeightFunction
 from pytorch_Gpipe.model_profiling import Graph, Node
@@ -283,9 +283,13 @@ def stages_from_bins(graph, bins):
         # give a dummy stage id
         unbroken_stages = uf.sorted_components()
         for dummy_stage_id, unbroken_stage in zip(stage_id_generator, unbroken_stages):
+            # Try to break stage if not TOPOLOGICALLY sorted.
+
             for n in unbroken_stage:
                 graph[n].stage_id = dummy_stage_id
 
+        print("unbroken_stages")
+        print(unbroken_stages)
     # cannonize_partition_indices(graph)
     # break cycles
 
@@ -339,6 +343,8 @@ def partition_2dbin_pack(graph: Graph,
         work_graph, lookup = graph.layers_graph()
     else:
         work_graph, lookup = graph, None
+
+    topo_sort(graph)
 
     nodes = [n for n in work_graph.nodes if n not in work_graph.inputs]
 

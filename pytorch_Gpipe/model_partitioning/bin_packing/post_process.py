@@ -3,6 +3,7 @@ from collections import defaultdict
 from copy import copy
 from typing import List, Dict, Set
 
+import networkx as nx
 import torch
 
 from pytorch_Gpipe.model_profiling import Graph, Node, NodeTypes
@@ -42,6 +43,7 @@ def post_process_partition(graph: Graph, edge_weight_function=None, verbose_on_e
 
     # this is a sanity check
     if has_cycles(graph):
+        fixed = False
         if os.environ.get("DEBUG", False):
             graph.save_as_pdf(f"{graph.model_name}_after_fix",
                               ".")
@@ -53,11 +55,34 @@ def post_process_partition(graph: Graph, edge_weight_function=None, verbose_on_e
                 print(p)
                 print(i)
 
+            if len(problems) == 1:
+                print("Trying to fix the single problem by switching")
+                a, b = problems[0]
+
+                stage_a_nodes = [n for n in graph.nodes if n.stage_id == a]
+                stage_b_nodes = [n for n in graph.nodes if n.stage_id == b]
+
+                for n in stage_a_nodes:
+                    n.stage_id = b
+                for n in stage_b_nodes:
+                    n.stage_id = a
+
             n_partitions = len(set(u.stage_id for u in graph.nodes))
             print("n_partitions:", n_partitions)
 
-        error = "error cycle detected mutual dependency between partitions"
-        raise AssertionError(error)
+            fixed = not has_cycles(graph)
+            print(f"Fixed={fixed}")
+
+        if not fixed:
+            if verbose_on_error and len(problems) == 1:
+                problems, info = get_problematic_partitions(graph)
+                print("-V- printing problematic partitions, after fix:")
+                for p, i in zip(problems, info):
+                    print(p)
+                    print(i)
+
+            error = "error cycle detected mutual dependency between partitions"
+            raise AssertionError(error)
 
     is_valid, error = is_output_only_tensors(graph, edge_weight_function)
     if assert_output_types:
@@ -113,7 +138,7 @@ def get_problematic_partitions(graph):
         for v in u.out_edges:
             if v.stage_id < u.stage_id:
                 problems.append([u.stage_id, v.stage_id])
-                info.append([(u.id , u.stage_id, u.scope), (v.id, v.stage_id, v.scope),])
+                info.append([(u.id, u.stage_id, u.scope), (v.id, v.stage_id, v.scope), ])
     return problems, info
 
 
@@ -210,3 +235,46 @@ def print_all_problematic_outputs_between_partitions(graph: Graph, edge_weight_f
 
     s = f"Valid outputs states = {valid_state}\n" + "problems:\n" + "\n".join(problems)
     print(s)
+
+
+def topo_sort(graph: Graph):
+    # We don't care about the weights here.
+    # node_weight_function: Optional[NodeWeightFunction] = None,
+    # edge_weight_function: Optional[EdgeWeightFunction] = None
+
+    # To networkx
+    G = nx.DiGraph()
+    for u in graph.nodes:
+        dsts = set()
+        for v in u.out_edges:
+            # disallow parallel in edges
+            # disallow parallel out edges
+            if v.id in dsts:
+                continue
+            dsts.add(v.id)
+            G.add_edge(u.id, v.id)
+
+    nx_graph = graph.asNetworkx(directed=True)
+
+    # key function, which will result in breaking ties by node id.
+    def key(node):
+        return None
+
+    topo_sorted = nx.dag.lexicographical_topological_sort(nx_graph, key=key)
+    topo_sorted = list(topo_sorted)
+    for topo_sort_id, node_id in enumerate(topo_sorted):
+        graph[node_id].topo_sort_id = topo_sort_id
+
+    if (ids_sort := sorted(topo_sorted)) != topo_sorted:
+        print("-W- topo_sort: node_ids are not topo sorted!")
+        print("topo_sorted:", topo_sorted)
+        print("node_ids", ids_sort)
+        replace_ids_with_topo = True
+    else:
+        print("-I- topo_sort: node_ids are topo sorted")
+        replace_ids_with_topo = False
+
+    if replace_ids_with_topo:
+        pass
+        raise NotImplementedError()
+        print("-I- replacing node_ids by topo_sort_ids for graph")

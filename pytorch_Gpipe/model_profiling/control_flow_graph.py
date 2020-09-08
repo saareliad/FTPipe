@@ -101,8 +101,9 @@ EdgeWeightFunction = Callable[[Tuple[Node, Node]], int]
 
 
 class Graph():
-    def __init__(self, nodes: GraphNodes, input_kw_ids, output_ids: List[int], depth: int,
+    def __init__(self, nodes: GraphNodes, input_kw_ids: Dict[int, str], output_ids: List[int], depth: int,
                  basic_blocks: Tuple[nn.Module, ...]):
+        # TODO: created in trace module, take doc from there.
         self._nodes: GraphNodes = nodes
         self.input_kw_ids = input_kw_ids
         self.output_ids = output_ids
