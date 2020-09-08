@@ -133,6 +133,10 @@ def generateDeclaration(input_ids: List[str], partition_fields: Dict[Node,
                              input_args.items()):
         lines.append(f"{dtab}# {node.scope} <=> {field}\n")
 
+    if len(input_ids) == 0:
+        # Handle stages with no inputs (e.g a shared parameter : only grad computation)
+        return ''.join(lines)
+
     if move_tensors:
         lines.extend([f"\n{dtab}# moving inputs to current device no op if already on the correct device\n",
                       f"{dtab}{', '.join(input_ids)} = move_tensors(unflatten(args,self.input_structure), self.device)"])

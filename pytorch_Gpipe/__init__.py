@@ -272,6 +272,7 @@ def partition_model(model: nn.Module,
                     "expected --n_clusters or --analyze_n_clusters to be given to binpack_opt. will set n_clusters=2 as default")
             binpack_opt["n_clusters"] = 2
 
+
         # TODO: determine nclusters
         # use_layers_graph=False
         graph, stage_to_gpu_map = partition_2dbin_pack(graph, num_gpus=nparts,

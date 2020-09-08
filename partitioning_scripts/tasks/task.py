@@ -7,6 +7,7 @@ from typing import Dict
 import torch
 
 from pytorch_Gpipe.model_partitioning.acyclic_partitioning import Objective, META_ALGORITH, Constraint
+from pytorch_Gpipe.model_partitioning.bin_packing.partition_2dbinpack import SecondAndOnClusterPolicy, ReminderPolicy
 
 
 class Parser(argparse.ArgumentParser, ABC):
@@ -252,6 +253,14 @@ class Parser(argparse.ArgumentParser, ABC):
                            help="number of clusters in the model")
         group.add_argument("--analyze_n_clusters", action="store_true", default=False,
                            help="analyze number of clusters")
+
+        group.add_argument("--reminder_policy", type=int,
+                           choices=list(ReminderPolicy._value2member_map_.keys()),
+                           help=f"Policy for reminder items in cluster, {ReminderPolicy._value2member_map_}")
+
+        group.add_argument("--second_and_on_cluster_policy", type=int,
+                           choices=list(SecondAndOnClusterPolicy._value2member_map_.keys()),
+                           help=f"Policy for 2nd and on cluster {SecondAndOnClusterPolicy._value2member_map_}")
 
     def _add_acyclic_args(self, group):
         group.add_argument("--epsilon",

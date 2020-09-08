@@ -34,7 +34,10 @@ class ReminderPolicy(IntEnum):
     ToLast = 0
     ToMin = 1
 
-
+class SecondAndOnClusterPolicy(IntEnum):
+    FirstFitBinPacking = 0
+    InOrder = 1
+    Reversed = 2
 
 def maketree(n, iterable):
     d = deque(iterable)
@@ -235,7 +238,9 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
 
 
 def first_fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
-                      to_unify: Dict[int, List[Union[List, Any]]], C: int):
+                      to_unify: Dict[int, List[Union[List, Any]]], C: int,
+                      second_and_on_cluster_policy: SecondAndOnClusterPolicy = SecondAndOnClusterPolicy.FirstFitBinPacking
+                      ):
     # result
     bins = defaultdict(list)
     bin_weights = heapdict({i: 0 for i in range(K)})
@@ -400,6 +405,7 @@ def partition_2dbin_pack(graph: Graph,
                          # edge_weight_function: Optional[EdgeWeightFunction] = None,
                          use_layers_graph: bool = True,
                          THRESHOLD=0,
+                         second_and_on_cluster_policy: SecondAndOnClusterPolicy = SecondAndOnClusterPolicy.FirstFitBinPacking,
                          **kwargs
                          ):
     print(f"use_layers_graph={use_layers_graph}")
@@ -421,7 +427,7 @@ def partition_2dbin_pack(graph: Graph,
     C = n_clusters
 
     clusters, to_unify = make_clusters(work_graph, nodes, node_weight_function, C=C, THRESHOLD=THRESHOLD)
-    bins = first_fit_cluster(K, clusters, id_to_node=id_to_node, to_unify=to_unify, C=C)
+    bins = first_fit_cluster(K, clusters, id_to_node=id_to_node, to_unify=to_unify, C=C, second_and_on_cluster_policy=second_and_on_cluster_policy)
     # sort
     for v in bins.values():
         v.sort(key=lambda x: x.Index)
