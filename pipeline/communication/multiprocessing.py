@@ -16,19 +16,15 @@ from .interface import FuturesHandlerBase
 # TODO: send to the closest stage first (priority)
 # TODO: recv queue per tensor can potentially make life easier
 # TODO: send to different GPUs on different cuda streams
-# TODO: can do the tied weights via cloning the parameter and sending it to a different process on same GPU like mpi does.
+
+# TODO: shared parameters should check if its the same GPU.
+# TODO: HACK: currently doing tied weights by cloning the parameter and sending it to a different process on same GPU like mpi does.
+
 
 _COPY_INSTEAD_CLONE_WORKING = False
 
 
 class MultiprocessingCommunicationHandler(SimpleCommBase):
-    # NOTE:
-    # to send ack, USE:
-    # comm_handler.create_activations_recv_buffers()
-    # comm_handler.create_gradients_rcv_buffers()
-    # For finding who we send too:
-    # self.send_ranks.items()
-    # self.grad_send_items
     def __init__(self, share, stage_to_device_map, local_rank_to_device_map,
                  *args, **kw):
         kw["GRAD_UGLY_SHAMEFUL_NAME"] = "_grad"
@@ -118,13 +114,15 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             senders = self.grad_rcv_dict_without_extention
 
         for tensor_name in tensor_names:
-            if is_activations:
-                is_parameter = is_shared_parameter(tensor_name)
-                if is_parameter:
-                    # if tensor_name not in self.send_shared_parameters:
-                    # TODO: avoid double send
-                    self.send_shared_parameters[tensor_name] = set()
-                    continue
+
+            # TODO: special handling for shared parameters
+            # if is_activations:
+            #     is_parameter = is_shared_parameter(tensor_name)
+            #     if is_parameter:
+            #         # if tensor_name not in self.send_shared_parameters:
+            #         # TODO: avoid double send
+            #         self.send_shared_parameters[tensor_name] = set()
+            #         continue
 
             sending_ranks = senders[tensor_name]
             if is_activations:
@@ -142,9 +140,9 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         """ the sender creates the buffers """
         tensor_names = tensor_send_ranks.keys()
         for tensor_name in tensor_names:
-            if is_activations and is_shared_parameter(tensor_name):
-                self.send_shared_parameters[tensor_name] = set()
-                continue
+            # if is_activations and is_shared_parameter(tensor_name):
+            #     self.send_shared_parameters[tensor_name] = set()
+            #     continue
 
             d = {}
             for rank in tensor_send_ranks[tensor_name]:
@@ -170,18 +168,20 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                         # receive_ranks = reversed(receive_ranks)
                     for receive_rank in receive_ranks:
                         q = self.rcv_queues[self.rank][receive_rank]
-                        # Only do for shared shared parameters FIXME
-                        if is_activations and is_shared_parameter(tensor_name):
-                            # we don't use a reuse queue.
-                            if tensor_name in self.rcv_shared_parameters:
-                                # from dict
-                                p = self.rcv_shared_parameters[tensor_name]
-                            else:
-                                # recv first time
-                                p = q.get()
-                                self.rcv_shared_parameters[tensor_name] = p
-                            request_objects.append(p)
-                            continue
+
+                        # TODO: special handling for shared parameters
+                        # # Only do for shared shared parameters FIXME
+                        # if is_activations and is_shared_parameter(tensor_name):
+                        #     # we don't use a reuse queue.
+                        #     if tensor_name in self.rcv_shared_parameters:
+                        #         # from dict
+                        #         p = self.rcv_shared_parameters[tensor_name]
+                        #     else:
+                        #         # recv first time
+                        #         p = q.get()
+                        #         self.rcv_shared_parameters[tensor_name] = p
+                        #     request_objects.append(p)
+                        #     continue
 
                         # Get the item
                         if self.verbose:
@@ -254,17 +254,24 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                         if is_grad:
                             pass
                             # send_ranks = reversed(send_ranks)
+
+                        # TODO: special handling for shared parameters
+                        # is_shared_parameter
                         if isinstance(tensor, torch.nn.Parameter):
-                            for send_rank in send_ranks:
-                                if tensor_name not in self.send_shared_parameters or send_rank not in \
-                                        self.send_shared_parameters[
-                                            tensor_name]:
-                                    tensor.share_memory_()
-                                    out_q = self.rcv_queues[send_rank][self.rank]
-                                    out_q.put(tensor)
-                                    self.send_shared_parameters[tensor_name].add(
-                                        send_rank)
-                            continue
+                            # FIXME: in general it is broken implementation since the tensor is not protected and a step() can change its data.
+                            tensor.share_memory_()
+
+                        # if isinstance(tensor, torch.nn.Parameter):
+                        #     for send_rank in send_ranks:
+                        #         if tensor_name not in self.send_shared_parameters or send_rank not in \
+                        #                 self.send_shared_parameters[
+                        #                     tensor_name]:
+                        #             tensor.share_memory_()
+                        #             out_q = self.rcv_queues[send_rank][self.rank]
+                        #             out_q.put(tensor)
+                        #             self.send_shared_parameters[tensor_name].add(
+                        #                 send_rank)
+                        #     continue
 
                         my_buff_reuse_queues = self.buffer_reuse_queues[self.rank]
                         if isinstance(tensor, torch.Tensor):
