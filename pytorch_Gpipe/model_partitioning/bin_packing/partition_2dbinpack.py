@@ -3,12 +3,13 @@ from collections import deque, defaultdict
 from enum import Enum
 from itertools import count
 from pprint import pprint
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any, Union, Set
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
+import networkx as nx
 
 from pytorch_Gpipe.model_partitioning.bin_packing.heap_dict import heapdict
 from pytorch_Gpipe.model_partitioning.bin_packing.post_process import post_process_partition
@@ -306,7 +307,7 @@ def first_fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
     return bins
 
 
-def stages_from_bins(graph, bins, id_to_node_worked_on):
+def stages_from_bins(graph: Graph, bins, id_to_node_worked_on: Dict[int, Node]):
     stage_id_generator = count()
 
     # shallow copy bins:
@@ -355,13 +356,50 @@ def stages_from_bins(graph, bins, id_to_node_worked_on):
                     pass
                 else:
                     # Check if nothing is missing (it is possible due to layers_graph)
-                    missing_topo_sort_ids = range(prev_topo_sort_id + 1, topo_sort_id)
+                    # Example: 9->13
+                    # prev: {7,8, 9}
+                    # unbroken: {13,14,15}
+                    # candidate is 13.
+                    # Now, the following code
+                    # checks that there is no path from {7,8,9} to {13,14,15} via missing {10,11,12}
+                    # if there is: break: 13 can't be together with {7,8,9}.
+                    missing_topo_sort_ids = list(range(prev_topo_sort_id + 1, topo_sort_id))
                     is_ok = True
                     for missing_topo_sort_id in missing_topo_sort_ids:
                         # TODO: missing_topo_sort_id in graph is redundant, but here just in case
                         if missing_topo_sort_id in graph and missing_topo_sort_id in id_to_node_worked_on:
-                            is_ok = False
-                            break
+                            # TODO: this is too coarse grained. Need to actually check if there is a cycle.
+
+                            cur_nodes = [id_to_node_worked_on[x] for x in cur_set]
+                            scs = set(cur_set)
+                            missing_nodes_in_work_graph = [id_to_node_worked_on[x] for x in missing_topo_sort_ids if x not in scs and x in id_to_node_worked_on]
+                            nodes_left_in_unborken_stage = set(id_to_node_worked_on[x] for x in unbroken_stage)
+                            nodes_left_in_unborken_stage.add(id_to_node_worked_on[topo_sort_id])
+
+                            A: Set[Node] = set(cur_nodes)
+                            B: Set[Node] = set(nodes_left_in_unborken_stage)
+                            edge_nodes: Set[Node] = set(missing_nodes_in_work_graph)
+                            edges = []
+                            for a in A:
+                                for c in a.out_edges:
+                                    if c in edge_nodes:
+                                        edges.append((0, c.id+2))
+
+                            for c in edge_nodes:
+                                for nc in c.out_edges:
+                                    if nc in edge_nodes:
+                                        edges.append((c.id+2, nc.id+2))
+                                    elif nc in B:
+                                        edges.append((c.id+2, 1))
+
+                            G = nx.DiGraph(incoming_graph_data=edges)
+                            G.add_node(0)
+                            G.add_node(1)
+                            has_path = nx.algorithms.shortest_paths.generic.has_path(G, 0, 1)
+                            # Scream if has path
+                            is_ok = not has_path
+                            if not is_ok:
+                                break
                     if not is_ok:
                         broken_stages_for_unbroken_stage.append(cur_set)
                         cur_set = list()
