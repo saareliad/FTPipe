@@ -101,12 +101,13 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
 
         # TODO: flush every 1000
         did_train = run_train(train_batches_limit)
-        cp_saver.maybe_save_checkpoint(partition.partition.layers)
         did_eval = run_eval(test_batches_limit)
 
         epochs += 1
         if did_train:
             steps += math.ceil(train_batches_limit / args.step_every)
+
+        cp_saver.maybe_save_checkpoint(partition.partition.layers, steps)
 
         total_epoch_time = (time.time() - epoch_start_time)
         total_epoch_times_list.append(total_epoch_time)
@@ -185,7 +186,7 @@ class CheckpointsSaver:
             print("-W- will not save checkpoints")
             # (To change this, set: args.save_checkpoints=True, args.checkpoints_save_dir")
 
-    def maybe_save_checkpoint(self, model):
+    def maybe_save_checkpoint(self, model, steps):
         args = self.args
         if not getattr(args, "save_checkpoints", False):
             return
@@ -194,7 +195,12 @@ class CheckpointsSaver:
         name_prefix += f"_{self.num_saved_checkpoints}"
         # name_prefix += add_to_prefix
         fn = os.path.join(args.checkpoints_save_dir, f"{name_prefix}_Partition{args.stage}.pt")
+
+        tik = time.time()
         torch.save(model.state_dict(), fn)
+        tok = time.time()
+
+        print(f"-V- saving checkpoint took: {tok-tik}")
 
         self.num_saved_checkpoints += 1
         print(f"-I- model checkpoint saved: {fn}")
