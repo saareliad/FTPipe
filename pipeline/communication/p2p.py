@@ -65,8 +65,9 @@ class P2PCommunicationHandler(SimpleCommBase):
         with torch.no_grad():
             request_objects = []
 
+            assert len(x) == len(ranks_dict_items)
+
             for tensor, (tensor_name, send_ranks) in zip(x, ranks_dict_items):
-                tensor = tensor.detach()
                 tensor_tag = self.tensor_tags[tensor_name] + (self.TOTAL_TAGS * batch_idx)
                 if is_grad:
                     pass
@@ -81,6 +82,7 @@ class P2PCommunicationHandler(SimpleCommBase):
                     else:
                         cname = tensor_name
                     tensor = self.tensor_comm_warper.convert_activations_send(cname, tensor)
+                    tensor = tensor.detach()
 
                     if self.verbose:
                         self.logger.info(
@@ -113,4 +115,4 @@ class P2PCommunicationHandler(SimpleCommBase):
         #             self.logger.debug(name, f"Computed a NONE GRADIENT in stage {self.stage}")
         #
         # can't avoid sending None
-        return self._send_tensors_p2p(x, batch_idx, self.grad_send_items, True)
+        return self._send_tensors_p2p(x, batch_idx, self.grad_send_items, is_grad=True)

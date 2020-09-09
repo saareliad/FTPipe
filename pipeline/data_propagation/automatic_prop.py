@@ -24,7 +24,7 @@ class AutomaticPipelinePropagator(PipelineDataPropagator):
         num_total_inputs = len(pcs['inputs'])
         if self.len_inputs_from_dl == num_total_inputs and not is_first_partition:
             raise NotImplementedError(
-                f"a non-first stage ({stage_id}) got all {num_total_inputs} inputs from dataloded, we currently assume it does not happen"
+                f"a non-first stage ({stage_id}) got all {num_total_inputs} inputs from dataloder, we currently assume it does not happen"
             )
 
         # Determine unpack_cls

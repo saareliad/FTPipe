@@ -23,6 +23,7 @@ from train import training_loop
 # TODO: support multiple servers,
 # TODO heterogeneous servers
 # TODO: support mix precision, in the future
+# TODO: can load the model once when doing multiprocessing and share mem to save time
 
 
 def parse_distributed_cli(parser):
