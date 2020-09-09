@@ -392,13 +392,21 @@ def stages_from_bins(graph, bins, id_to_node_worked_on):
     # break cycles <--- TODO: redundant
 
 
-def analyze_n_clusters(nodes: List[Node], node_weight_function, max_k=10):
+def analyze_n_clusters(nodes: List[Node], node_weight_function, max_k=10, THRESHOLD=0, manual_choose_n_clusters=True):
     """ utility to help determine number of clusters for partition_2dbin_pack"""
 
     def node_to_record(node):
         return {"id": node.id, "weight": node_weight_function(node)}
 
     records = [node_to_record(node) for node in nodes]
+
+    records = [node_to_record(node) for node in nodes]
+    X = pd.DataFrame.from_records(data=records, index="id")
+    nodes_below_thresholds = X[X["weight"] <= THRESHOLD]
+
+    # filter below-threashold items
+    nodes_above_thresholds = X[X["weight"] > THRESHOLD]
+
     X = pd.DataFrame.from_records(data=records, index="id")
     print(X)
     Y = X.copy()
@@ -407,17 +415,20 @@ def analyze_n_clusters(nodes: List[Node], node_weight_function, max_k=10):
 
     sse = {}
     for k in range(1, max_k + 1):
-        kmeans = KMeans(n_clusters=k, max_iter=1000).fit(X)
-        X["cluster"] = kmeans.labels_
+        kmeans = KMeans(n_clusters=k, max_iter=1000, copy_x=True).fit(nodes_above_thresholds)
+        X.loc[nodes_above_thresholds.index, "cluster"] = kmeans.labels_
+
         sse[k] = kmeans.inertia_  # Inertia: Sum of distances of samples to their closest cluster center
     plt.figure()
     plt.plot(list(sse.keys()), list(sse.values()))
     plt.xlabel("Number of clusters")
     plt.ylabel("SSE")
-    plt.show()
-    n_clusters = input("choose desired number of clusters to continue...")
-    n_clusters = int(n_clusters)
-    return n_clusters
+    plt.show(block=False)
+
+    if manual_choose_n_clusters:
+        n_clusters = input("-I- choose desired number of clusters to continue...")
+        n_clusters = int(n_clusters)
+        return n_clusters
 
 
 def partition_2dbin_pack(graph: Graph,
@@ -431,6 +442,10 @@ def partition_2dbin_pack(graph: Graph,
                          reminder_policy: ReminderPolicy = ReminderPolicy.ToLast,
                          **kwargs
                          ):
+    # Policies control whether we Actually do the bin pack (first fit) with the splits (triples).
+    #    Starting from 2nd cluster it matters.
+    #    However, it can cause weird communication pattern.
+
     # Convert
     if isinstance(second_and_on_cluster_policy, type(next(iter(ReminderPolicy._value2member_map_.keys())))):
         second_and_on_cluster_policy = SecondAndOnClusterPolicy._value2member_map_[second_and_on_cluster_policy]
@@ -450,7 +465,12 @@ def partition_2dbin_pack(graph: Graph,
 
     K = num_gpus
     if "analyze_n_clusters" in kwargs and kwargs["analyze_n_clusters"]:
-        n_clusters = analyze_n_clusters(nodes, node_weight_function, max_k=10)
+        n_clusters = analyze_n_clusters(nodes, node_weight_function, max_k=10, THRESHOLD=THRESHOLD, manual_choose_n_clusters=True)
+        print(f"-I- Will use n_clusters={n_clusters}")
+    else:
+        print("-V- displaying info about n_clusters")
+        analyze_n_clusters(nodes, node_weight_function, max_k=10, THRESHOLD=THRESHOLD, manual_choose_n_clusters=False)
+
     # import sys
     # sys.exit(0)
     id_to_node = {node.id: node for node in nodes}
@@ -576,10 +596,6 @@ if __name__ == '__main__':
                                                    node_weight_function=node_weight_function,
                                                    use_layers_graph=False)
 
-# TODO: Actually do the bin pack (first fit) with the splits (triples).
-#    Starting from 2nd cluster it matters.
-#    However, it can cause weird communication pattern.
-# TODO: weird error: "keyerror 0" - stage disappeared! (can fix it afterwards)
 # TODO: THRESHOLD hyper-parameter can be higher.
 
 #################

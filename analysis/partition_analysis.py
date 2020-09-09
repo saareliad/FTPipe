@@ -47,7 +47,6 @@ def run_analysis(sample,
 
     # NOTE: setting add_comm_times_to_balance, is for only debug porpuses
 
-    TOPO_AWARE = False
     PRINT_THEORETICAL = False
     PRINT_MIN_MAX_BALANCE = False
 
@@ -62,13 +61,14 @@ def run_analysis(sample,
 
     # given:
     # stages_on_same_gpu = [{0, 4}]
-    # internal represntation:
+    # internal representation:
     # stages_on_same_gpu[0] = {0, 4}
     # stages_on_same_gpu[4] = {0, 4}
+    # pipeline representation:
+    # stage_to_device_map = [0,1,2,3,0,...]
 
     unique_stages_on_same_gpu = stages_on_same_gpu
     stages_on_same_gpu = defaultdict(set)
-
     for i in unique_stages_on_same_gpu:
         for j in i:
             stages_on_same_gpu[j] = i
@@ -79,26 +79,19 @@ def run_analysis(sample,
     num_dummy_stages = sum((len(i) - 1) for i in unique_stages_on_same_gpu)
 
     if graph is not None and DO_THEORETICAL:
-        # thoeretical analysis
+        # theoretical analysis
         sequential_f, sequential_b, parallel_f, parallel_b = theoretical_analysis(
             graph, recomputation=recomputation, async_pipeline=async_pipeline)
         edges = edge_cut(graph)
         # theoretical analysis based on the graph assuming the computation is sequential
         theoretical_sequential_b_balance = worst_balance(sequential_b)
         theoretical_sequential_f_balance = worst_balance(sequential_f)
-        if TOPO_AWARE:
-            (topology_aware_sequential_f_balance,
-             topology_aware_sequential_b_balance) = topology_aware_balance(
-                sequential_f, sequential_b, edges)
         # theoretical anaysis based on the graph assuming the computation is fully parallel
         theoretical_parallel_b_balance = worst_balance(parallel_b)
         theoretical_parallel_f_balance = worst_balance(parallel_f)
-        if TOPO_AWARE:
-            topology_aware_parallel_f_balance, topology_aware_parallel_b_balance = topology_aware_balance(
-                parallel_f, parallel_b, edges)
+
     else:
         edges = None
-        TOPO_AWARE = False
         PRINT_THEORETICAL = False
 
     # real statistics based on generated partitions
@@ -161,6 +154,16 @@ def run_analysis(sample,
     n_partitions = sum(1 for k in config if isinstance(k, int))
     num_real_stages = n_partitions - num_dummy_stages
 
+    pipeline_representation_stage_to_device_map = list()
+    for stage_id in range(n_partitions):
+        seen_devices = set()
+        if stage_id in stages_on_same_gpu:
+            device_id = min(stages_on_same_gpu[stage_id])
+        else:
+            device_id = len(seen_devices)
+        seen_devices.add(device_id)
+        pipeline_representation_stage_to_device_map.append(device_id)
+
     if n_partitions != num_real_stages:
         # TODO: shrink everything
         for i in unique_stages_on_same_gpu:
@@ -188,11 +191,6 @@ def run_analysis(sample,
     comm_volume_str = get_comm_vol_str(comm_volume_stats)
     real_b_balance = worst_balance(real_b_times)
     real_f_balance = worst_balance(real_f_times)
-
-    if TOPO_AWARE:
-        (topology_aware_real_f_balance,
-         topology_aware_real_b_balance) = topology_aware_balance(
-            real_f_times, real_b_times, edges)
 
     real_b_slowdown = slowdown(real_b_times, nocomm_real_b_times)
     real_f_slowdown = slowdown(real_f_times, nocomm_real_f_times)
@@ -291,11 +289,12 @@ def run_analysis(sample,
         if num_dummy_stages:
             s += f"n_partitions:{n_partitions}, num_dummy_stages:{num_dummy_stages}\n"
             s += f"unique_stages_on_same_gpu: {unique_stages_on_same_gpu}\n"
+            s += f"stage_to_device_map = {pipeline_representation_stage_to_device_map}\n"
 
         if edges is not None:
             s += f"cutting edges are edges between partitions\n"
             s += f"number of cutting edges: {len(edges)}\n\n"
-            # TODO: for partitions on differnt devices...
+            # TODO: for partitions on different devices...
 
         s += f"backward times {'do not ' if not recomputation else ''}include recomputation\n"
         if async_pipeline and recomputation:
@@ -333,18 +332,6 @@ def run_analysis(sample,
 
             s += f"\nreal balance:\n"
             s += f"forward {real_f_balance:.3f}\nbackward {real_b_balance:.3f}\n"
-
-            # if TOPO_AWARE:
-            #     s += f"\ntopology aware balance is worst balance between 2 connected partitions\n"
-            #     s += f"theoretical sequential topology aware balance:\n"
-            #     s += f"forwad {topology_aware_sequential_f_balance:.3f}\n"
-            #     s += f"backward {topology_aware_sequential_b_balance:.3f}\n"
-            #     s += f"theoretical parallel topology aware balance:\n"
-            #     s += f"forwad {topology_aware_parallel_f_balance:.3f}\n"
-            #     s += f"backward {topology_aware_parallel_b_balance:.3f}\n"
-
-            #     s += f"\nreal topology aware balance:\n"
-            #     s += f"forwad {topology_aware_real_f_balance:.3f}\nbackward {topology_aware_real_b_balance:.3f}\n"
 
         s += f"\nAssuming bandwidth of {bw_GBps} GBps between GPUs\n"
         s += f"\ncommunication volumes size of activations of each partition\n"
@@ -463,7 +450,7 @@ def run_analysis(sample,
 # FIXME: setting different_links_between_accelerators=False because some parts were not implemented. will be fixed in next commit.
 def profile_execution(model_inputs,
                       partition_config,
-                      n_iters,
+                      n_iters: int,
                       recomputation=True,
                       bw_GBps=12,
                       async_pipeline=False,
@@ -471,8 +458,10 @@ def profile_execution(model_inputs,
                       stages_on_same_gpu=[],
                       parallel_comm_and_comp_ratio=0,
                       different_links_between_accelerators=False):
-    '''perfrom forward/backward passes and measure execution times accross n batches
-    '''
+    """
+    Perform forward/backward passes and measure execution times across n_iters batches
+    # TODO: currently its just the same input sample n_iter times, this could be improved.
+    """
     n_partitions = sum(1 for k in partition_config if isinstance(k, int))
     f_times = {i: [] for i in range(n_partitions)}
     b_times = {i: [] for i in range(n_partitions)}
@@ -582,7 +571,7 @@ def profile_execution(model_inputs,
                 else:
                     recv_time = in_size_mb / bw_GBps
 
-                # TODO: calculate Backward send times with differnt links (sending grads)
+                # TODO: calculate Backward send times with different links (sending grads)
                 # TODO: calculate Forward send times with different links (sending activations)
 
                 # Compute times measurement
@@ -1202,26 +1191,6 @@ def expected_speedup_compared_to_seq(pipe_times, seq_times):
 
 def worst_balance(times):
     return min(times.values()) / max(times.values())
-
-
-def topology_aware_balance(f_times, b_times, cutting_edges):
-    ''' find the lowest balance between 2 connected partitions
-    '''
-    f_balance = b_balance = 10
-    for u, v in cutting_edges:
-        f_ratio = min(f_times[u.stage_id], f_times[v.stage_id]) / \
-                  max(f_times[u.stage_id], f_times[v.stage_id])
-
-        b_ratio = min(b_times[u.stage_id], b_times[v.stage_id]) / \
-                  max(b_times[u.stage_id], b_times[v.stage_id])
-
-        if f_ratio < f_balance:
-            f_balance = f_ratio
-
-        if b_ratio < b_balance:
-            b_balance = b_ratio
-
-    return f_balance, b_balance
 
 
 def parameter_count(partition_config):

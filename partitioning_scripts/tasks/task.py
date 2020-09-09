@@ -462,4 +462,4 @@ class Partitioner(ABC):
         return analysis_kwargs
 
     def post_partitioning(self, args, graph, analysis_result, summary):
-        """ hook which is called after the partitoning process is done"""
+        """ hook which is called after the partitioning process is done"""
