@@ -23,7 +23,7 @@ class PipelineConfig:
     def n_ranks(self) -> int:
         return sum(len(stage['devices']) for stage in self.d['stages'])
 
-    def get_stage_to_ranks_map(self) -> Dict[List[int]]:
+    def get_stage_to_ranks_map(self) -> Dict[int, List[int]]:
         counter = itertools.count()
         stage_to_ranks_map = {
             i: [next(counter) for _ in stage['devices']]
