@@ -394,7 +394,7 @@ def preproc_data(args, cache=None, save_cache=True):
 
     pipe_config = parsed_config.pipe_config
     args.num_stages = parsed_config.num_stages
-    args.stage = parsed_config.stage
+    args.stage = parsed_config.stage_id
     train_dl, test_dl, samplers, extra = get_dataloaders(
         args,
         pipe_config=pipe_config,
@@ -455,7 +455,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     training_tensor_shapes = parsed_config.training_tensor_shapes
 
     args.num_stages = parsed_config.num_stages
-    args.stage = parsed_config.stage
+    args.stage = parsed_config.stage_id
 
     # NOTE: here its the sliced model.
     model = parsed_config.model

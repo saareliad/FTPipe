@@ -1,6 +1,7 @@
+import itertools
 import warnings
 from itertools import chain
-from typing import Dict
+from typing import Dict, List
 
 import torch
 from torch import Tensor
@@ -21,6 +22,14 @@ class PipelineConfig:
     @property
     def n_ranks(self) -> int:
         return sum(len(stage['devices']) for stage in self.d['stages'])
+
+    def get_stage_to_ranks_map(self) -> Dict[List[int]]:
+        counter = itertools.count()
+        stage_to_ranks_map = {
+            i: [next(counter) for _ in stage['devices']]
+            for i, stage in self.d['stages'].items()
+        }
+        return stage_to_ranks_map
 
     def rank_to_stage_idx(self, rank) -> int:
         assert (rank >= 0)

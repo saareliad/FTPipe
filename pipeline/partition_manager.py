@@ -258,7 +258,7 @@ class SinglePartitionManager:
     def eval(self):
         """Sets evaluation mode.
             Also handles the transition : train -> eval
-            Also handles buffer sync in case stage is replicated
+            Also handles buffer sync in case stage_id is replicated
         """
         self.comm_handler.eval()
         self.partition.eval()

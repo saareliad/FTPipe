@@ -80,8 +80,8 @@ class WeightStasher:
                 # def get_micro_batch(self, batch_index):
                 #     return batch_index % se
             # else:
-            #     warnings.warn(f"Did not implement better caching so setting EVERY_BATCH caching weight stashing policy instead of STEP_EVERY for stage {stage}")
-            #     return self.set_problematic(stage,num_stages,forward=forward,policy=CachePolicy.EVERY_BATCH)
+            #     warnings.warn(f"Did not implement better caching so setting EVERY_BATCH caching weight stashing policy instead of STEP_EVERY for stage_id {stage_id}")
+            #     return self.set_problematic(stage_id,num_stages,forward=forward,policy=CachePolicy.EVERY_BATCH)
             #     # raise NotImplementedError()
 
         elif policy == CachePolicy.EVERY_BATCH:

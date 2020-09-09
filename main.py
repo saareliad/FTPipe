@@ -1,5 +1,6 @@
 import argparse
 import io
+import itertools
 import os
 import time
 from contextlib import redirect_stdout
@@ -13,6 +14,7 @@ from configs.parse_json_config import parse_json_config
 from data import add_dataset_argument
 from experiments import save_experiment, load_experiment_for_update
 from models import AVAILABLE_MODELS
+from models.parse_config import get_my_send_recv_ranks
 from pipeline.util import get_world_size
 from prepare_pipeline import prepare_pipeline, preproc_data
 from train import training_loop
@@ -277,40 +279,43 @@ def save_distributed_experiment(statistics, args, world_size, rank, local_rank,
     print(f"rank{rank}: save_distributed_experiment - Done")
 
 
-def mp_queue_matrix(world_size):
-    # create queues matrix.
-    # rcv_queues[i][j] : proc i rcevs from proc j
-    # with rcv_queues[i][i] = None
-    queues = []
-    for i in range(world_size):
-        qs = []
-        for j in range(world_size):
-            qs.append(mp.SimpleQueue() if i != j else None)
-        queues.append(qs)
+def mp_queue_matrix(args, ack=False):
+    """create queues matrix to be shared among precesses"""
+    world_size = args.world_size
+    cfg = args.model
+    prefer_seq_sends = True
+
+    # Get pipe config
+    handler = AVAILABLE_MODELS.get(cfg)
+    if handler is None:
+        raise ValueError(f"Model {cfg} not found. AVAILABLE_MODELS={AVAILABLE_MODELS.keys()}")
+    pipe_config = handler.get_pipe_config()
+    stage_to_rank_map = pipe_config.get_stage_to_ranks_map()
+
+    # infer which communication we want
+    #  rank 0 -> rank 1
+    #  rank 1 -> rank 2
+    # and so on
+    queues = {i: dict() for i in range(world_size)}
+    for rank in range(world_size):
+        stage_id = pipe_config.rank_to_stage_idx(rank)
+        send_ranks_i, receive_ranks_i = get_my_send_recv_ranks(pipe_config, stage_id,
+                                                               stage_to_rank_map=stage_to_rank_map,
+                                                               prefer_seq_sends=prefer_seq_sends)
+
+        # TODO: can be slightly more fine-grained with more effort and looking at req_grad property
+        # receive_ranks_i: recv activations from these ranks
+        # Also: little less than # send_ranks_i: recv gradients from these ranks
+
+        # send_ranks_i: recv acks on activations from these ranks
+        # receive_ranks_i:  little less than # recv acks on gradients from these ranks
+        for r in itertools.chain.from_iterable(send_ranks_i.values()):
+            queues[rank][r] = mp.SimpleQueue()
+
+        for r in itertools.chain.from_iterable(receive_ranks_i.values()):
+            queues[rank][r] = mp.SimpleQueue()
+
     return queues
-
-
-def mp_recv_queue_per_tensor(args_model, world_size, ushn="_grad"):
-    # FIXME: unused.
-    # FIXME FIXME: this whole thing did not assume nested tuples...
-    handler = AVAILABLE_MODELS.get(args_model)
-    pc = handler.get_pipe_config()
-
-    d = {}
-    for i, s in pc.stages.items():
-        recv_inputs = [
-            name for name in s.inputs if name not in pc.model_inputs
-        ]
-        rcv_grads = [
-            name for name in s.outputs if name not in pc.model_outputs
-        ]
-        rcv_grads = [j + ushn for j in rcv_grads]
-
-        comb = recv_inputs + rcv_grads
-        dd = {name: mp.Queue() for name in comb}
-
-        d[i] = dd
-    return d
 
 
 def multiprocessing_worker(rank, args, share):
@@ -418,8 +423,8 @@ def start_mutiprocessing():
     args.world_size = args.nprocs
 
     # create queus for communication
-    rcv_queues = mp_queue_matrix(args.world_size)
-    buffer_reuse_queues = mp_queue_matrix(args.world_size)
+    rcv_queues = mp_queue_matrix(args)
+    buffer_reuse_queues = mp_queue_matrix(args)
     # TODO: change to normal q
     share = (rcv_queues, buffer_reuse_queues)
 
