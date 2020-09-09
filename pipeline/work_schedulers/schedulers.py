@@ -35,7 +35,7 @@ class FBScheduler(WorkScheduler):
 
         delta = done_fwds - done_bwds
         # allowed_staleness = num_stages-stage-1
-        # TODO: we want to allow more staleness when step_every > 1.
+        # TODO: we may want to allow more staleness when step_every > 1.
 
         return delta < num_stages - stage
 
@@ -43,7 +43,7 @@ class FBScheduler(WorkScheduler):
 class VirtualStagesFBScheduler(FBScheduler):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
-        self.staleness_supremum = kw['staleness_supremum']
+        self.supremum_staleness = kw['supremum_staleness']
 
     def __call__(self, stage, num_stages, num_batches, done_fwds, done_bwds):
         assert 0 <= stage < num_stages
@@ -57,9 +57,9 @@ class VirtualStagesFBScheduler(FBScheduler):
 
         delta = done_fwds - done_bwds
         # allowed_staleness = num_stages-stage-1
-        # TODO: we want to allow more staleness when step_every > 1.
+        # TODO: we may want to allow more staleness when step_every > 1.
 
-        return delta < min(self.staleness_supremum, num_stages - stage)
+        return delta < min(self.supremum_staleness, num_stages - stage)
 
 
 class PipeDream1F1BScheduler(WorkScheduler):
