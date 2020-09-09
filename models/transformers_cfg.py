@@ -1,26 +1,22 @@
 # See https://huggingface.co/models
 # GPT2_NAMES_OR_PATHES = {'gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'}
-from .models import register_model
 # TODO: replace with auto config & tokenizers
-from transformers import (GPT2Config, GPT2Tokenizer)
+import sys
+from inspect import getmembers, isfunction
+
 from transformers import (BertConfig, BertTokenizer)
+from transformers import (GPT2Config, GPT2Tokenizer)
 from transformers import (RobertaConfig, RobertaTokenizer)
 from transformers import (T5Config, T5Tokenizer)
-from transformers import (AutoConfig, AutoTokenizer)
 
 from .normal.NLP_models import (GPT2LMHeadModel, GPT2Model,
                                 StatelessGPT2LMHeadModel)
+from .normal.NLP_models.modeling_bert import BertForSequenceClassification
 from .normal.NLP_models.modeling_bert_old import BertForQuestionAnswering
-
 # from .normal.NLP_models.modeling_roberta import RobertaForQuestionAnswering
 from .normal.NLP_models.modeling_roberta import RobertaForSequenceClassification
-from .normal.NLP_models.modeling_bert import BertForSequenceClassification
-
 from .normal.NLP_models.modeling_t5 import T5ForConditionalGeneration
 from .normal.NLP_models.modeling_t5_tied_weights import T5ForConditionalGeneration as StatelesT5ForConditionalGeneration
-
-import sys
-from inspect import getmembers, isfunction
 
 # We use this to get cfg_class, model_class, and tokenizer_class
 MODEL_TYPES = {
@@ -30,11 +26,12 @@ MODEL_TYPES = {
     'bert_squad_old': (BertConfig, BertForQuestionAnswering, BertTokenizer),
     'bert_glue': (BertConfig, BertForSequenceClassification, BertTokenizer),
     'roberta_glue':
-    (RobertaConfig, RobertaForSequenceClassification, RobertaTokenizer),
+        (RobertaConfig, RobertaForSequenceClassification, RobertaTokenizer),
     't5': (T5Config, T5ForConditionalGeneration, T5Tokenizer),
     't5_stateless':
-    (T5Config, StatelesT5ForConditionalGeneration, T5Tokenizer),
+        (T5Config, StatelesT5ForConditionalGeneration, T5Tokenizer),
 }
+
 
 # NOTE: some of these configs are just for this repo, see
 # `models.transformers_utils.pretrained_model_config_and_tokenizer`
@@ -124,13 +121,12 @@ def roberta_base_8p_bw11_0_async_mnli_glue():
                 finetuning_task='mnli')
 
 
-
 def gpt2_p4_lm_untied():
     return dict(model_type='gpt2_lm_stateless',
                 model_name_or_path='gpt2',
                 do_lower_case=False,
                 explicitly_set_dict=dict(
-                        output_past=False,),
+                    output_past=False, ),
                 stateless_tied=False)
 
 
@@ -139,7 +135,7 @@ def gpt2_p4_lm_tied():
                 model_name_or_path='gpt2',
                 do_lower_case=False,
                 explicitly_set_dict=dict(
-                        output_past=False,),
+                    output_past=False, ),
                 stateless_tied=True)
 
 
@@ -148,7 +144,7 @@ def new_gpt2_xl_tied_lm_p8_seq_512():
                 model_name_or_path='gpt2-xl',
                 do_lower_case=False,
                 explicitly_set_dict=dict(
-                        output_past=False,),
+                    output_past=False, ),
                 stateless_tied=False)
 
 
@@ -157,7 +153,7 @@ def old_gpt2xl_8p_untied():
                 model_name_or_path='gpt2-xl',
                 do_lower_case=False,
                 explicitly_set_dict=dict(
-                        output_past=False,),
+                    output_past=False, ),
                 stateless_tied=False)
 
 
@@ -166,7 +162,7 @@ def gpt2_xl_p8_lm_untied():
                 model_name_or_path='gpt2-xl',
                 do_lower_case=False,
                 explicitly_set_dict=dict(
-                        output_past=False,),
+                    output_past=False, ),
                 stateless_tied=False)
 
 
@@ -175,7 +171,7 @@ def gpt2_xl_p8_lm_tied():
                 model_name_or_path='gpt2-xl',
                 do_lower_case=False,
                 explicitly_set_dict=dict(
-                        output_past=False,),
+                    output_past=False, ),
                 stateless_tied=True)
 
 
@@ -224,7 +220,6 @@ def t5_small_tied_lmhead_4p_bw12_async_squad1():
                 stateless_tied=True)
 
 
-
 def t5_large_tied_lmhead_8p_bw12_async_squad1():
     return dict(model_type='t5_stateless',
                 model_name_or_path='t5-large',
@@ -240,36 +235,6 @@ def t5_large_tied_lmhead_8p_bw12_async_squad1():
                 },
                 stateless_tied=True)
 
-
-def t5_3b_tied_lmheads_128_16_8p_bw12_mem_constraint():
-    return dict(model_type='t5_stateless',
-                model_name_or_path='t5-3b',
-                do_lower_case=False,
-                output_past=False,
-                output_attentions=False,
-                output_hidden_states=False,
-                explicitly_set_dict={
-                    "output_only": True,
-                    "output_attentions": False,
-                    "precomputed_masks": True,
-                    "output_hidden_states": False
-                },
-                stateless_tied=True)
-
-def t5_3b_tied_lmhead_8p_bw12_squad1_mem_stage_time_seq_sends():
-    return dict(model_type='t5_stateless',
-                model_name_or_path='t5-3b',
-                do_lower_case=False,
-                output_past=False,
-                output_attentions=False,
-                output_hidden_states=False,
-                explicitly_set_dict={
-                    "output_only": True,
-                    "output_attentions": False,
-                    "precomputed_masks": True,
-                    "output_hidden_states": False
-                },
-                stateless_tied=True)    
 
 def t5_3b_tied_lmheads_320_8_8p_bw12_squad1():
     # also, seq sends, mem constaint, ....
@@ -287,6 +252,23 @@ def t5_3b_tied_lmheads_320_8_8p_bw12_squad1():
                 },
                 stateless_tied=True)
 
+
+def t5_3b_tied_lmheads_320_8_8p_bw12_squad1_virtual_stages():
+    return dict(model_type='t5_stateless',
+                model_name_or_path='t5-3b',
+                do_lower_case=False,
+                output_past=False,
+                output_attentions=False,
+                output_hidden_states=False,
+                explicitly_set_dict={
+                    "output_only": True,
+                    "output_attentions": False,
+                    "precomputed_masks": True,
+                    "output_hidden_states": False
+                },
+                stateless_tied=True)
+
+
 def t5_3b_tied_lmheads_64_4_8p_bw12_squad1():
     return dict(model_type='t5_stateless',
                 model_name_or_path='t5-3b',
@@ -301,6 +283,7 @@ def t5_3b_tied_lmheads_64_4_8p_bw12_squad1():
                     "output_hidden_states": False
                 },
                 stateless_tied=True)
+
 
 def t5_small_untied_4p_bw12_squad1():
     return dict(model_type='t5',
@@ -330,7 +313,6 @@ MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS = {i: v for i, v in functions_list}
 def _register_hardcoded(name, dict):
     global MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS
     MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS[name] = dict
-
 
 # for name in MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS:
 #     # HACK: called with a ready model instance.
