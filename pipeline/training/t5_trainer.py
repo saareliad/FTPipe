@@ -4,8 +4,12 @@ from .interface import BaseOutPutIsLossTrainer
 class T5Trainer(BaseOutPutIsLossTrainer):
     PER_STEP_SCHEDULER = True
 
-    def __init__(self, *args, **kw):
+    def __init__(self, *args, loss_multiplier=1, **kw):
         super().__init__(*args, **kw)
+        # when doing our type of packing vs T5 it loss_multiplier has effect (e.g batch 256 instead of 8)
+        # set it to amount of packing we do.
+        self.loss_multiplier = loss_multiplier
+        print(f"-I- trainer: got loss_multiplier={self.loss_multiplier}")
 
     def advanced_test_stats(self, x, example_indices):
         raise NotImplementedError()
@@ -22,6 +26,9 @@ class T5Trainer(BaseOutPutIsLossTrainer):
     def backprop_last_partition(self, x, batch_size):
         # logits = x[0]
         loss = x
+        loss_multiplier = self.loss_multiplier
+        if loss_multiplier != 1:
+            loss *= loss_multiplier
         return super().backprop_last_partition(loss)
         # if self.step_every > 1:
         #     loss /= self.step_every

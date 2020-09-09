@@ -4,7 +4,7 @@ from .glue_trainer import GlueTrainer
 from .interface import AnyTrainer
 from .lm_trainer import LMTrainer
 from .squad_trainer import SquadTrainer
-from .t5_squad_trainer import T5Trainer
+from .t5_trainer import T5Trainer
 
 AVAILABLE_TRAINERS = {}
 
