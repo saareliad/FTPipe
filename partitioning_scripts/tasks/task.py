@@ -254,12 +254,14 @@ class Parser(argparse.ArgumentParser, ABC):
         group.add_argument("--analyze_n_clusters", action="store_true", default=False,
                            help="analyze number of clusters")
 
-        group.add_argument("--reminder_policy", type=int,
+        group.add_argument("--reminder_policy", type=str,
                            choices=list(ReminderPolicy._value2member_map_.keys()),
+                           default="last",
                            help=f"Policy for reminder items in cluster, {ReminderPolicy._value2member_map_}")
 
-        group.add_argument("--second_and_on_cluster_policy", type=int,
+        group.add_argument("--second_and_on_cluster_policy", type=str,
                            choices=list(SecondAndOnClusterPolicy._value2member_map_.keys()),
+                           default="first_fit",
                            help=f"Policy for 2nd and on cluster {SecondAndOnClusterPolicy._value2member_map_}")
 
     def _add_acyclic_args(self, group):
@@ -416,6 +418,13 @@ class Parser(argparse.ArgumentParser, ABC):
         d = dict()
         d['n_clusters'] = args.n_clusters
         d['analyze_n_clusters'] = args.analyze_n_clusters
+
+        if hasattr(args, "second_and_on_cluster_policy"):
+            d['second_and_on_cluster_policy'] = args.second_and_on_cluster_policy
+
+        if hasattr(args, "reminder_policy"):
+            d['reminder_policy'] = args.reminder_policy
+
         return d
 
 

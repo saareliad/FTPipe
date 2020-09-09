@@ -95,4 +95,4 @@ def bruteforce_main(main, main_kwargs=None, override_dicts=None, NUM_RUNS=2, TMP
         raise last_exception
     copyfile(best[0], orig_name + ".py")
     print(f"-I- copied best to {orig_name}.py")
-    rmtree(TMP)
+    # rmtree(TMP)

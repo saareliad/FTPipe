@@ -1,5 +1,5 @@
 import warnings
-from typing import Callable, List, Dict, Optional
+from typing import Callable, List, Dict, Optional, Union, Tuple
 
 import torch
 import torch.nn as nn
@@ -167,7 +167,7 @@ def partition_model(model: nn.Module,
                     n_iter: int = 10,
                     nparts: int = 4,
                     max_depth: int = 100,
-                    basic_blocks: Optional[List[nn.Module]] = None,
+                    basic_blocks: Optional[Union[List[nn.Module], Tuple[nn.Module]]] = None,
                     node_weight_function: Optional[NodeWeightFunction] = None,
                     edge_weight_function: Optional[EdgeWeightFunction] = None,
                     use_layers_only_graph: bool = True,
@@ -271,7 +271,6 @@ def partition_model(model: nn.Module,
                 warnings.warn(
                     "expected --n_clusters or --analyze_n_clusters to be given to binpack_opt. will set n_clusters=2 as default")
             binpack_opt["n_clusters"] = 2
-
 
         # TODO: determine nclusters
         # use_layers_graph=False

@@ -1,6 +1,6 @@
 import warnings
 from collections import deque, defaultdict
-from enum import IntEnum
+from enum import Enum
 from itertools import count
 from pprint import pprint
 from typing import Optional, List, Dict, Any, Union
@@ -30,15 +30,15 @@ from pytorch_Gpipe.model_profiling import Graph, Node
 # take N =  n_i // K values, and maketree.
 # ######## ######## ############# ############## ######### ########### ######## ###########
 
-class ReminderPolicy(IntEnum):
-    ToLast = 0
-    ToMin = 1
+class ReminderPolicy(Enum):
+    ToLast = "last"
+    ToMin = "min"
 
 
-class SecondAndOnClusterPolicy(IntEnum):
-    FirstFitBinPacking = 0
-    InOrder = 1
-    Reversed = 2
+class SecondAndOnClusterPolicy(Enum):
+    FirstFitBinPacking = "first_fit"
+    InOrder = "order"
+    Reversed = "reversed"
 
 
 def maketree(n, iterable):
@@ -140,7 +140,7 @@ def get_all_splits(K: int, clusters, id_to_node: Dict[int, Node], to_unify: Dict
                 min_idx = np.argmin([sum_subsplit_weight(subsplit) for subsplit in split])
                 split[min_idx].extend(cluster[-reminder:])
             else:
-                raise NotImplementedError()
+                raise NotImplementedError(f"reminder_policy:{reminder_policy}")
 
         all_splits.append(split)
     return all_splits
@@ -241,13 +241,15 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
 
 def first_fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
                       to_unify: Dict[int, List[Union[List, Any]]], C: int,
-                      second_and_on_cluster_policy: SecondAndOnClusterPolicy = SecondAndOnClusterPolicy.FirstFitBinPacking
+                      second_and_on_cluster_policy: SecondAndOnClusterPolicy = SecondAndOnClusterPolicy.FirstFitBinPacking,
+                      reminder_policy: ReminderPolicy = ReminderPolicy.ToLast,
                       ):
     # result
     bins = defaultdict(list)
     bin_weights = heapdict({i: 0 for i in range(K)})
     # get splits
-    all_splits = get_all_splits(K, clusters, id_to_node=id_to_node, to_unify=to_unify, C=C)
+    all_splits = get_all_splits(K, clusters, id_to_node=id_to_node, to_unify=to_unify, C=C,
+                                reminder_policy=reminder_policy)
 
     def choose_bin(subsplit, subsplit_idx, cluster_idx):
         # TODO: be smarter after the 1st cluster
@@ -426,8 +428,16 @@ def partition_2dbin_pack(graph: Graph,
                          use_layers_graph: bool = True,
                          THRESHOLD=0,
                          second_and_on_cluster_policy: SecondAndOnClusterPolicy = SecondAndOnClusterPolicy.FirstFitBinPacking,
+                         reminder_policy: ReminderPolicy = ReminderPolicy.ToLast,
                          **kwargs
                          ):
+    # Convert
+    if isinstance(second_and_on_cluster_policy, type(next(iter(ReminderPolicy._value2member_map_.keys())))):
+        second_and_on_cluster_policy = SecondAndOnClusterPolicy._value2member_map_[second_and_on_cluster_policy]
+
+    if isinstance(reminder_policy, type(next(iter(ReminderPolicy._value2member_map_.keys())))):
+        reminder_policy = ReminderPolicy._value2member_map_[reminder_policy]
+
     print(f"use_layers_graph={use_layers_graph}")
     graph.topo_sort()
 
@@ -448,7 +458,8 @@ def partition_2dbin_pack(graph: Graph,
 
     clusters, to_unify = make_clusters(work_graph, nodes, node_weight_function, C=C, THRESHOLD=THRESHOLD)
     bins = first_fit_cluster(K, clusters, id_to_node=id_to_node, to_unify=to_unify, C=C,
-                             second_and_on_cluster_policy=second_and_on_cluster_policy)
+                             second_and_on_cluster_policy=second_and_on_cluster_policy,
+                             reminder_policy=reminder_policy)
     # sort
     for v in bins.values():
         v.sort(key=lambda x: x.Index)
@@ -495,7 +506,6 @@ def partition_2dbin_pack(graph: Graph,
         print(f"-V- stages gone, stages_ids_before: {to_check} reassigning...")
 
         stage_to_fixed = {prev_s: i for i, prev_s in enumerate(to_check)}
-
 
         # 1
         for n, prev_s in list(node_to_stage_map.items()):

@@ -19,7 +19,7 @@ from ..model_profiling import Node, NodeTypes, Graph, used_namespaces
 
 tab = '    '
 dtab = tab + tab
-
+GET_STAGES_ON_CPU_NAME = "DEBUG"
 
 def compile_partitioned_model(graph: Graph,
                               model: Module,
@@ -189,7 +189,7 @@ def create_pipeline_configuration(graph: Graph,
 
     # function header
     lines = [
-        f"def create_pipeline_configuration(DEBUG=False, batch_size={batch_size}):"
+        f"def create_pipeline_configuration({GET_STAGES_ON_CPU_NAME}=False, batch_size={batch_size}):"
     ]
 
     # create and return the partition config
@@ -255,7 +255,7 @@ def connections(graph: Graph) -> str:
     return '\n'.join(lines) + '\n'
 
 
-def create_stages_config(ios: Dict, is_batched: Callable[[torch.Size], bool]) -> Dict:
+def create_stages_config(ios: Dict, is_batched: Callable[[torch.Size], bool], stage_to_device_map = None) -> Dict:
     '''generates the stages portion of the config
      stages:
        id
@@ -309,7 +309,7 @@ def create_stages_config(ios: Dict, is_batched: Callable[[torch.Size], bool]) ->
         config[idx] = {"stage_cls": f"Partition{idx}",
                        "inputs": stage_inputs,
                        "outputs": stage_outputs,
-                       "devices": f"['cpu' if DEBUG else 'cuda:{idx}']"}
+                       "devices": f"['cpu' if {GET_STAGES_ON_CPU_NAME} else 'cuda:{idx}']"}
     return config
 
 

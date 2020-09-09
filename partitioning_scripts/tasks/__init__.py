@@ -1,13 +1,13 @@
 import importlib
 import os
-from typing import Tuple
+from typing import Tuple, Type
 
 from .task import Parser, Partitioner
 
 REGISTRY = dict()
 
 
-def register_task(task_name, parser_cls: Parser, partitioner_cls: Partitioner):
+def register_task(task_name, parser_cls: Type[Parser], partitioner_cls: Type[Partitioner]):
     if not isinstance(task_name, str):
         raise ValueError(f"task name must be a string got {task_name} of type {type(task_name).__name__}")
     elif task_name in REGISTRY:
@@ -21,7 +21,7 @@ def register_task(task_name, parser_cls: Parser, partitioner_cls: Partitioner):
     REGISTRY[task_name] = (parser_cls, partitioner_cls)
 
 
-def get_parser_and_partitioner(task_name) -> Tuple[Parser, Partitioner]:
+def get_parser_and_partitioner(task_name) -> Tuple[Type[Parser], Type[Partitioner]]:
     if task_name in REGISTRY:
         return REGISTRY[task_name]
     else:
