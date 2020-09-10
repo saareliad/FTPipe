@@ -8,10 +8,12 @@ from enum import Enum, auto
 
 
 class SmallerLastBatchPolicy(Enum):
-    ProportionalStep: auto()
-    DropReminder: auto()
+    ProportionalStep = auto()
+    DropReminder = auto()
+
 
 SMALLER_LAST_BATCH_POLICY = SmallerLastBatchPolicy.ProportionalStep
+
 
 def training_loop(args, logger, train_dl, test_dl, is_first_partition,
                   is_last_partition, partition: SinglePartitionManager, statistics: Stats, train_dl_len,
@@ -125,7 +127,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
                         break
                 elif SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.ProportionalStep:
                     logger.info(
-                        f"Got reminder of {reminder_to_drop} micro batches. Will take proportional {reminder_to_drop/args.step_every} last step")
+                        f"Got reminder of {reminder_to_drop} micro batches. Will take proportional {reminder_to_drop / args.step_every} last step")
                 else:
                     raise NotImplementedError(f"Unknown SMALLER_LAST_BATCH_POLICY, {SMALLER_LAST_BATCH_POLICY}")
         else:
@@ -202,7 +204,7 @@ def should_stop_early(args, valid_loss, logger):
         if should_stop_early.num_runs >= args.patience:
             logger.info(
                 "early stop since valid performance hasn't improved for last {} runs"
-                .format(args.patience))
+                    .format(args.patience))
             return True
         else:
             return False
@@ -234,7 +236,7 @@ class CheckpointsSaver:
         torch.save(model.state_dict(), fn)
         tok = time.time()
 
-        print(f"-V- saving checkpoint took: {tok-tik}")
+        print(f"-V- saving checkpoint took: {tok - tik}")
 
         self.num_saved_checkpoints += 1
         print(f"-I- model checkpoint saved: {fn}")
