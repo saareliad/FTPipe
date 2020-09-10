@@ -18,6 +18,7 @@ from pytorch_Gpipe.model_profiling.tracer import (
     register_new_explicit_untraced_function, register_new_traced_function)
 from . import register_task
 from .task import Parser, Partitioner
+from .transformers_utils import pretrained_model_config_and_tokenizer
 
 # See https://huggingface.co/models
 T5_PRETRAINED_MODELS = {'t5-small', 't5-base', 't5-large', 't5-3b', 't5-11b'}
@@ -298,7 +299,6 @@ class ParsePartitioningT5Opts(Parser):
 class T5Partitioner(Partitioner):
     def __init__(self, args) -> None:
         super().__init__(args)
-        self.tokenizer = T5Tokenizer.from_pretrained(args.model_name_or_path)
 
     @property
     def batch_dim(self) -> int:
@@ -311,11 +311,6 @@ class T5Partitioner(Partitioner):
         register_new_traced_function(torch.einsum, torch)
 
     def get_model(self, args) -> torch.nn.Module:
-        config = T5Config.from_pretrained(args.model_name_or_path)
-        config.output_attentions = False
-        config.output_hidden_states = False
-        setattr(config, "output_only", True)
-        setattr(config, "precomputed_masks", args.precompute_masks)
 
         base = not args.lmhead
         tied = args.stateless_tied
@@ -329,17 +324,36 @@ class T5Partitioner(Partitioner):
         else:
             model_cls = T5ForConditionalGeneration
 
-        use_cdn = args.model_name_or_path != "t5-11b"
-        model = model_cls.from_pretrained(args.model_name_or_path,
-                                          config=config, use_cdn=use_cdn).train()
+        config_cls = T5Config
+        tokenizer_class = T5Tokenizer
 
-        if tied:
-            model.make_stateless()
+        explicitly_set_dict = {
+            "output_attentions": False,
+            "output_hidden_states": False,
+            "output_only": True,
+            "precomputed_masks": args.precompute_masks,
+
+        }
+
+        model, config, tokenizer = pretrained_model_config_and_tokenizer(model_class=model_cls, config_class=config_cls,
+                                                                         tokenizer_class=tokenizer_class,
+                                                                         model_name_or_path=args.model_name_or_path,
+                                                                         do_lower_case=False,
+                                                                         stateless_tied=tied,
+                                                                         do_resize_token_embedding=True,
+                                                                         explicitly_set_dict=explicitly_set_dict
+                                                                         )
+        self.tokenizer = tokenizer
 
         return model
 
-    def get_input(self, args, analysis):
-        tokenizer = self.tokenizer
+    def get_input(self, args, analysis=False):
+        # Requires: get_model() is called first
+        try:
+            tokenizer = self.tokenizer
+        except AttributeError as e:
+            print("Please call get_model() first")
+            raise e
         return get_input(args, tokenizer, analysis=analysis)
 
 
