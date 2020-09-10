@@ -1,31 +1,30 @@
 import torch
-
-from experiments.experiments import ArgsStasher, auto_file_name
-from misc.filelogger import FileLogger
-from data import get_separate_dls_from_args
+import gc
 
 import models
+import optimizers.lr_scheduler
+from data import get_separate_dls_from_args
+from experiments.experiments import ArgsStasher, auto_file_name
+from misc.filelogger import FileLogger
 from models import parse_config
-
-from pipeline.partition_manager import (SinglePartitionManager, GPipePartitionManager)
+from optimizers import AVAILBALE_OPTIMIZERS
 from pipeline import CommunicationHandlerBase, get_auto_comm_handler_cls
-from pipeline.communication.multiprocessing import MultiprocessingCommunicationHandler
-from pipeline.statistics import get_statistics  # , Stats
-from pipeline.weight_prediction import get_sched_predictor
-from pipeline.weight_prediction import get_weight_predictor as get_weight_predictor_partial
-from pipeline.gap_aware import (get_sgd_gap_aware_cls, get_adam_gap_aware_cls,
-                                get_adamw_gap_aware_cls)
-from pipeline.weight_stashing import WeightStasher
 from pipeline import TrueWeightsStorage
 from pipeline import dp_sim
-
-import optimizers.lr_scheduler
-
-# TODO: migrate to `register_xxx()` convention
-from pipeline.work_schedulers import AVAILABLE_WORK_SCHEDULERS, get_work_scheduler
-from pipeline.training import AVAILABLE_TRAINERS
+from pipeline.communication.multiprocessing import MultiprocessingCommunicationHandler
 from pipeline.data_propagation import AVAILABLE_PROPAGATORS
-from optimizers import AVAILBALE_OPTIMIZERS
+from pipeline.gap_aware import (get_sgd_gap_aware_cls, get_adam_gap_aware_cls,
+                                get_adamw_gap_aware_cls)
+from pipeline.partition_manager import (SinglePartitionManager, GPipePartitionManager)
+from pipeline.statistics import get_statistics  # , Stats
+from pipeline.training import AVAILABLE_TRAINERS
+from pipeline.weight_prediction import get_sched_predictor
+from pipeline.weight_prediction import get_weight_predictor as get_weight_predictor_partial
+from pipeline.weight_stashing import WeightStasher
+# TODO: migrate to `register_xxx()` convention
+from pipeline.work_schedulers import get_work_scheduler
+
+
 # from data import AVAILABLE_DATASETS
 
 
@@ -198,8 +197,6 @@ def try_replace_prediction_with_nesterov(args):
                 # For naming purposes
                 ArgsStasher.stash_to_args(args, replaced_key='weight_prediction', old_value=res)
                 delattr(args, 'weight_prediction')
-
-
 
 
 def get_weight_predictor(args,
@@ -382,7 +379,7 @@ def preproc_data(args, cache=None, save_cache=True):
         args.bs_test,  # NOTE: changed name
         handler=handler,
         send_target_in_pipe=("_nonsep" in args.data_propagator),
-        prefer_seq_sends=getattr(args, "prefer_seq_sends",True))
+        prefer_seq_sends=getattr(args, "prefer_seq_sends", True))
 
     dataset_keywords = {}
     extra_kw = handler.get_extra()
@@ -430,21 +427,26 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     print(f"Loading partitioned model and dataset...")
     handler = models.AVAILABLE_MODELS.get(args.model)
 
-    parsed_config = parse_config.PartitioningConfigParser(
-        args.model,
-        args.rank,
-        args.bs_train,
-        args.bs_test,  # NOTE: changed name
-        handler=handler,
-        send_target_in_pipe=("_nonsep" in args.data_propagator),
-        prefer_seq_sends=getattr(args, "prefer_seq_sends",True))
+    for i in range(args.world_size):
+        if getattr(args, "load_model_one_by_one", True):
+            torch.distributed.barrier()
+        if i == args.rank:
+            parsed_config = parse_config.PartitioningConfigParser(
+                args.model,
+                args.rank,
+                args.bs_train,
+                args.bs_test,  # NOTE: changed name
+                handler=handler,
+                send_target_in_pipe=("_nonsep" in args.data_propagator),
+                prefer_seq_sends=getattr(args, "prefer_seq_sends", True))
 
-    dataset_keywords = {}
-    extra_kw = handler.get_extra()
-    if isinstance(extra_kw, dict):
-        dataset_keywords.update(extra_kw)
-    # delete to save mem, in contains original model
-    del handler
+            dataset_keywords = {}
+            extra_kw = handler.get_extra()
+            if isinstance(extra_kw, dict):
+                dataset_keywords.update(extra_kw)
+            # delete to save mem, in contains original model
+            del handler
+            gc.collect()
 
     pipe_config = parsed_config.pipe_config
 
@@ -518,7 +520,6 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         last_batch_test_shapes = parsed_config.get_shapes(last_batch_diff_test)
     else:
         last_batch_test_shapes = None
-
 
     steps_per_epoch = train_dl_len // args.step_every
     if train_dl_len % args.step_every > 0:
