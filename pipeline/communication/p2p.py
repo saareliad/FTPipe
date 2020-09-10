@@ -18,7 +18,7 @@ class P2PCommunicationHandler(SimpleCommBase):
     def set_tensor_dtypes(self, tensor_dtypes):
         if tensor_dtypes is not self.tensor_dtypes:
             super().set_tensor_dtypes(tensor_dtypes)
-            self.tensor_comm_warper = TensorWrapper(dtypes=self.tensor_dtypes)
+            self.tensor_comm_warper = TensorWrapper(self, dtypes=self.tensor_dtypes)
 
     def fix_after_recv(self, x, is_grad=False):
         res = []

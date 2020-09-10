@@ -462,6 +462,8 @@ def create_pipeline_configuration(DEBUG=False, batch_size=8):
                         'is_batched': True,
                         'created_by': 9},
                     'T5ForConditionalGeneration/T5Stack[decoder]/T5Block[0]_0': {
+                        # TODO: None gradients problem
+                        # NotImplementedError: expected to send dtype torch.float32 for tensor T5ForConditionalGeneration/T5Stack[decoder]/T5Block[0]_0 for got None instead
                         'shape': torch.Size([8, 8, 1024]),
                         'dtype': torch.float32,
                         'req_grad': True,

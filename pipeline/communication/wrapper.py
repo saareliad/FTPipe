@@ -1,6 +1,11 @@
+import warnings
+from typing import Dict
+
 import numpy as np
 import torch
 from torch import Tensor
+from pipeline.communication.interface import CommunicationHandlerBase
+from pipeline.communication.common_simple_comm import SimpleCommBase
 
 # from copy import deepcopy
 
@@ -27,20 +32,29 @@ class TensorWrapper:
         TODO: mapping conventions
     """
 
-    def __init__(self, dtypes):
+    def __init__(self, comm_handler: SimpleCommBase, dtypes: Dict[str, type]):
         self.send_dtype_map = TensorWrapper.make_send_dtype_map(dtypes)
         self.recv_dtype_map = TensorWrapper.make_recv_dtype_map(dtypes)
         self.dtypes = dtypes
+
+        # In one edge scenario also want the shape, we just take it from comm_handler
+        self.comm_handler = comm_handler
 
     def convert_activations_send(self, name: str, value):
         if isinstance(value, Tensor):
             return value  # NOTE: if we quantize sends change this
         elif value is None:
-            if self.dtypes[name] is not None:
-                raise NotImplementedError(
-                    f"expected to send dtype {self.dtypes[name]} for tensor {name} for got None instead")
+            if (dtype:=self.dtypes[name]) is not None:
+
+                warnings.warn(f"expected to send dtype {self.dtypes[name]} for tensor {name} for got None instead, will send a tensor of zeros")
+                shape = self.comm_handler.tensor_shapes[name]
+                # TODO: there is also hack we can send smaller data
+                return torch.zeros(shape, dtype=dtype)
+
+                # raise NotImplementedError(
+                #     f"expected to send dtype {self.dtypes[name]} for tensor {name} for got None instead")
                 # TODO: can also send fake tensor of zeros, its is probably the gradients.
-                # TODO: can do it by informing recver he has to accept None instead of tensor
+                # TODO: can do it by informing reciever he has to accept None instead of tensor
             return None_tensor()
 
         # NOTE: this si quite redundant actually.
