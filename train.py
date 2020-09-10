@@ -8,8 +8,8 @@ from enum import Enum, auto
 
 
 class SmallerLastBatchPolicy(Enum):
-    ProportionalStep: auto
-    DropReminder: auto
+    ProportionalStep: auto()
+    DropReminder: auto()
 
 SMALLER_LAST_BATCH_POLICY = SmallerLastBatchPolicy.ProportionalStep
 
