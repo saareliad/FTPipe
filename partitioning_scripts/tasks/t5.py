@@ -335,7 +335,7 @@ class T5Partitioner(Partitioner):
 
         }
 
-        model, config, tokenizer = pretrained_model_config_and_tokenizer(model_class=model_cls, config_class=config_cls,
+        model, tokenizer, config = pretrained_model_config_and_tokenizer(model_class=model_cls, config_class=config_cls,
                                                                          tokenizer_class=tokenizer_class,
                                                                          model_name_or_path=args.model_name_or_path,
                                                                          do_lower_case=False,
