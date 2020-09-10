@@ -438,7 +438,20 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         prefer_seq_sends=getattr(args, "prefer_seq_sends", True))
 
     # ini distributed
+    args.num_stages = parsed_config.num_stages
+    args.stage = parsed_config.stage_id
     comm_init_args = parsed_config.comm_init_args()
+
+    assert (args.epochs >= 1 or args.steps >= 1)
+    assert (not (args.stage is None))
+    # FIXME: real name
+    logger = FileLogger(args.logdir,
+                        global_rank=args.rank,
+                        local_rank=args.local_rank,
+                        name='msnag',
+                        world_size=args.world_size,
+                        name_prefix=args.out_filename)
+
     # Comm handler
     if COMM_VERSION == 1:
         comm_handler = create_comm_handler(args, comm_init_args, device)
@@ -472,8 +485,6 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     eval_tensor_shapes = parsed_config.eval_tensor_shapes
     training_tensor_shapes = parsed_config.training_tensor_shapes
 
-    args.num_stages = parsed_config.num_stages
-    args.stage = parsed_config.stage_id
 
     # NOTE: here its the sliced model.
     model = parsed_config.model
@@ -482,16 +493,6 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
 
     is_first_partition = args.stage == 0
     is_last_partition = args.stage == args.num_stages - 1
-
-    assert (args.epochs >= 1 or args.steps >= 1)
-    assert (not (args.stage is None))
-    # FIXME: real name
-    logger = FileLogger(args.logdir,
-                        global_rank=args.rank,
-                        local_rank=args.local_rank,
-                        name='msnag',
-                        world_size=args.world_size,
-                        name_prefix=args.out_filename)
 
     eval_tensor_dtypes = training_tensor_dtypes  # HACK, TODO
 
