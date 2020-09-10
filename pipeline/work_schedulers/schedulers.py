@@ -44,9 +44,14 @@ class VirtualStagesFBScheduler(FBScheduler):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
         self.supremum_staleness = kw['supremum_staleness']
+        self.num_gpus = kw['num_gpus']
 
     def __call__(self, stage, num_stages, num_batches, done_fwds, done_bwds):
         assert 0 <= stage < num_stages
+
+        # Convert virtual:
+        stage = max(0, stage - self.supremum_staleness)
+        num_stages = num_stages - self.supremum_staleness
 
         # Last stage
         if stage == num_stages - 1:
