@@ -4,7 +4,14 @@ import torch
 import os
 from pipeline import SinglePartitionManager
 from pipeline.statistics import Stats
+from enum import Enum, auto
 
+
+class SmallerLastBatchPolicy:
+    ProportionalStep: auto
+    DropReminder: auto
+
+SMALLER_LAST_BATCH_POLICY = SmallerLastBatchPolicy.ProportionalStep
 
 def training_loop(args, logger, train_dl, test_dl, is_first_partition,
                   is_last_partition, partition: SinglePartitionManager, statistics: Stats, train_dl_len,
@@ -55,7 +62,6 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
         if train_batches_to_run == 0:
             return False
         # Set Dataloader
-        # sets only to first (+last) partition
         if train_dl:
             partition.set_dataloader(train_dl, train_batches_to_run)
         # Start training
@@ -86,26 +92,54 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
             s.set_epoch(epochs)
 
         if args.steps > 0:
-            train_batches_limit = min(train_batches_limit, args.steps - steps)
+            steps_left = args.steps - steps
+            train_batches_limit_to_use = min(train_batches_limit, steps_left)
 
             # handle step every.
-            reminder_to_drop = train_batches_limit % args.step_every
+            # if we don't do anything, we will do:
+            # `train_batches_limit` batches
+            # which are (train_batches_limit // args.step_every) steps.
+            # So the reminder is problematic
+            # we can either:
+            # (1) take a smaller step for it (proportional to number of grad accumulations taken).
+            # (2) drop the reminder
+            #
+            # Note: (1) only effects the last batch so there is no problem with staleness.
+
+            reminder_to_drop = train_batches_limit_to_use % args.step_every
             if reminder_to_drop:
-                logger.info(
-                    f"Drop {reminder_to_drop} steps for each epoch>={epochs}")
-                train_batches_limit -= reminder_to_drop
-                if train_batches_limit <= 0:
-                    break
+                if SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.DropReminder:
+                    d_info = {
+                        "steps_left": steps_left,
+                        "original_train_batches_limit": train_batches_limit,
+                        "train_batches_limit_until_flush": train_batches_limit_to_use,
+                        "step_every": args.step_every,
+                        "train_dl_len": train_dl_len
+                    }
+                    logger.info(
+                        f"Got reminder of {reminder_to_drop} micro batches. Will dropping them.")
+                    train_batches_limit_to_use -= reminder_to_drop
+                    if train_batches_limit_to_use <= 0:
+                        logger.info(
+                            f"breaking early since can't complete a full step with {args.step_every} gradient accumulations.")
+                        break
+                elif SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.ProportionalStep:
+                    logger.info(
+                        f"Got reminder of {reminder_to_drop} micro batches. Will take proportional {reminder_to_drop/args.step_every} last step")
+                else:
+                    raise NotImplementedError(f"Unknown SMALLER_LAST_BATCH_POLICY, {SMALLER_LAST_BATCH_POLICY}")
+        else:
+            train_batches_limit_to_use = train_batches_limit
 
         epoch_start_time = time.time()
 
         # TODO: flush every 1000
-        did_train = run_train(train_batches_limit)
+        did_train = run_train(train_batches_limit_to_use)
         did_eval = run_eval(test_batches_limit)
 
         epochs += 1
         if did_train:
-            steps += math.ceil(train_batches_limit / args.step_every)
+            steps += math.ceil(train_batches_limit_to_use / args.step_every)
 
         cp_saver.maybe_save_checkpoint(partition.partition.layers, steps)
 
@@ -125,7 +159,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
             logger.info(info_str)
             logger.info('-' * 89)
 
-        if args.steps > 0 and steps >= args.steps:
+        if 0 < args.steps <= steps:
             logger.info(
                 f"Finished all steps. Total steps:{steps}, rank:{args.local_rank}"
             )

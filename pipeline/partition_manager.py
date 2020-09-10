@@ -577,7 +577,7 @@ class SinglePartitionManager:
         """
         Running evaluation (pipelined)
         Requires:
-            set_dataloader() was called (if first partition)
+            set_dataloader() was called (in case stage requires data loading)
             eval() was called
         """
 
@@ -597,7 +597,7 @@ class SinglePartitionManager:
     def run_until_flush(self, num_batches, flush_rate=-1):
         """
         Requires:
-            set_dataloader() was called (if first partition)
+            set_dataloader() was called (in case stage requires data loading)
             train() was called
         """
         done_bwds = 0
@@ -889,7 +889,7 @@ class GPipePartitionManager(SinglePartitionManager):
     def run_until_flush(self, num_batches, flush_rate=-1):
         """
         Requires:
-            set_dataloader() was called (if first partition)
+            set_dataloader() was called (in case stage requires data loading)
             train() was called
 
         # NOTE: its different from async pipeline
