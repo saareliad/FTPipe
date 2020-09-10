@@ -478,6 +478,7 @@ def partition_2dbin_pack(graph: Graph,
                          THRESHOLD=0,
                          second_and_on_cluster_policy: SecondAndOnClusterPolicy = SecondAndOnClusterPolicy.FirstFitBinPacking,
                          reminder_policy: ReminderPolicy = ReminderPolicy.ToLast,
+                         display_cluster_sse_plot = False,
                          **kwargs
                          ):
     # Policies control whether we Actually do the bin pack (first fit) with the splits (triples).
@@ -505,7 +506,7 @@ def partition_2dbin_pack(graph: Graph,
     if "analyze_n_clusters" in kwargs and kwargs["analyze_n_clusters"]:
         n_clusters = analyze_n_clusters(nodes, node_weight_function, max_k=10, THRESHOLD=THRESHOLD, manual_choose_n_clusters=True)
         print(f"-I- Will use n_clusters={n_clusters}")
-    else:
+    elif display_cluster_sse_plot:
         print("-V- displaying info about n_clusters")
         analyze_n_clusters(nodes, node_weight_function, max_k=10, THRESHOLD=THRESHOLD, manual_choose_n_clusters=False)
 
