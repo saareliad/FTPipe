@@ -72,12 +72,10 @@ class PartitioningConfigParser:
             if handler is None:
                 raise ValueError(f"Model {cfg} not found. AVAILABLE_MODELS={AVAILABLE_MODELS.keys()}")
         pipe_config = handler.get_pipe_config()
-        model = handler.realize_stage_for_rank(batch_size=bs_train, my_rank=rank)
 
         self.stage_id = pipe_config.rank_to_stage_idx(rank)
         self.pipe_config = pipe_config
 
-        self.model = model
         self.num_stages = pipe_config.n_stages
 
         stage_to_rank_map = pipe_config.get_stage_to_ranks_map()
@@ -121,11 +119,17 @@ class PartitioningConfigParser:
 
         _check_shared_parameters(pipe_config)
 
+        # self.load_model(handler=handler, bs_train=bs_train, rank=rank)
+
     def comm_init_args(self):
         return (self.receive_ranks, self.send_ranks,
                 self.target_tensor_names, self.ranks_in_previous_stage,
                 self.ranks_in_next_stage, self.req_grad,
                 self.outputs_req_grad, self.pipe_config)
+
+    def load_model(self, handler, bs_train, rank):
+        model = handler.realize_stage_for_rank(batch_size=bs_train, my_rank=rank)
+        self.model = model
 
     def get_shapes(self, batch_size):
         pipe_config = self.pipe_config

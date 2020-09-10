@@ -1,5 +1,6 @@
-import torch
 import gc
+
+import torch
 
 import models
 import optimizers.lr_scheduler
@@ -427,19 +428,36 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     print(f"Loading partitioned model and dataset...")
     handler = models.AVAILABLE_MODELS.get(args.model)
 
+    parsed_config = parse_config.PartitioningConfigParser(
+        args.model,
+        args.rank,
+        args.bs_train,
+        args.bs_test,  # NOTE: changed name
+        handler=handler,
+        send_target_in_pipe=("_nonsep" in args.data_propagator),
+        prefer_seq_sends=getattr(args, "prefer_seq_sends", True))
+
+    # ini distributed
+    comm_init_args = parsed_config.comm_init_args()
+    # Comm handler
+    if COMM_VERSION == 1:
+        comm_handler = create_comm_handler(args, comm_init_args, device)
+        comm_handler.init_process_group()
+    elif COMM_VERSION == 2:
+        # Multiprocessing
+        stage_to_device_map = []  # TODO
+        v2_args = (shared_ctx, stage_to_device_map, local_rank_to_device_map)
+        comm_handler = create_comm_handler_v2(args, comm_init_args, device,
+                                              v2_args)
+    else:
+        raise NotImplementedError("In progress")
+
+    # Do heavy ram part one by one to save memory.
     for i in range(args.world_size):
         if getattr(args, "load_model_one_by_one", True):
             torch.distributed.barrier()
         if i == args.rank:
-            parsed_config = parse_config.PartitioningConfigParser(
-                args.model,
-                args.rank,
-                args.bs_train,
-                args.bs_test,  # NOTE: changed name
-                handler=handler,
-                send_target_in_pipe=("_nonsep" in args.data_propagator),
-                prefer_seq_sends=getattr(args, "prefer_seq_sends", True))
-
+            parsed_config.load_model(handler=handler, bs_train=args.bs_train, rank=args.rank)
             dataset_keywords = {}
             extra_kw = handler.get_extra()
             if isinstance(extra_kw, dict):
@@ -449,8 +467,6 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
             gc.collect()
 
     pipe_config = parsed_config.pipe_config
-
-    comm_init_args = parsed_config.comm_init_args()
 
     training_tensor_dtypes = parsed_config.training_tensor_dtypes
     eval_tensor_shapes = parsed_config.eval_tensor_shapes
@@ -486,19 +502,6 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         dataset_keywords=dataset_keywords)
 
     del dataset_keywords
-
-    # Comm handler
-    if COMM_VERSION == 1:
-        comm_handler = create_comm_handler(args, comm_init_args, device)
-        comm_handler.init_process_group()
-    elif COMM_VERSION == 2:
-        # Multiprocessing
-        stage_to_device_map = []  # TODO
-        v2_args = (shared_ctx, stage_to_device_map, local_rank_to_device_map)
-        comm_handler = create_comm_handler_v2(args, comm_init_args, device,
-                                              v2_args)
-    else:
-        raise NotImplementedError("In progress")
 
     # instead of loading dl on every device just to get its length
     # we synchronize length as a message, from first stage
