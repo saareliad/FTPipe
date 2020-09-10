@@ -7,7 +7,7 @@ from pipeline.statistics import Stats
 from enum import Enum, auto
 
 
-class SmallerLastBatchPolicy:
+class SmallerLastBatchPolicy(Enum):
     ProportionalStep: auto
     DropReminder: auto
 
