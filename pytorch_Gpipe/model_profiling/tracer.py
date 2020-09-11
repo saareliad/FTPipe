@@ -197,8 +197,8 @@ def tracing_not_supported(func):
     """a decortaor to have pretty error messages when accessing an unsupported
     __magic__ method
     """
-
-    # TODO add general warning
+    
+    #TODO add general warning
     # show file name, actual line, operator
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -238,14 +238,14 @@ class TracedValue(object):
         NODES[self.id] = self.node
 
         self.creation_site = get_call_site(__file__)
-
+        
     def set_data(self, data):
         assert isTracedValue(
             data), f"TracedValue expects a basic type got {type(data)} scope {self.scope}"
 
-        # target device is managed by the stage and is not dynamic
-        # so we will convert this node to a CONSTANT
-        if isinstance(data, torch.device) or (data == "cpu") or (isinstance(data, str) and "cuda" in data):
+        #target device is managed by the stage and is not dynamic
+        #so we will convert this node to a CONSTANT
+        if isinstance(data,torch.device) or (data == "cpu") or (isinstance(data,str) and "cuda" in data):
             data = torch.device(data)
             self.node.constant_value = data
 
@@ -271,8 +271,8 @@ class TracedValue(object):
             # so here we try and find the namespace explicitly
             # first encounter was when tracing a torch.relu_
             namespace = None
-            for m in [torch, F, torch.functional]:
-                if hasattr(m, func_name):
+            for m in [torch,F,torch.functional]:
+                if hasattr(m,func_name):
                     namespace = m.__name__
                     break
             if namespace is None:
@@ -315,9 +315,9 @@ class TracedValue(object):
 
     ##############################
     # Magic Method delegation
-    # intentionaly explicit
-    # NOTE if the method requires specific syntax
-    # then it should be also added in utils.py
+    #intentionaly explicit
+    #NOTE if the method requires specific syntax
+    #then it should be also added in utils.py
     # and ensure correct code generation in compiler/partition_forward_method.generate_magic
     ##############################
 
@@ -335,31 +335,33 @@ class TracedValue(object):
     def __setitem__(self, idx, value):
         pass
 
-    # NOTE this must return an integer
+    #NOTE this must return an integer
     def __len__(self):
-        # TODO add general warning
+        #TODO add general warning
         # show file name, actual line, operator
         # print(f"{self.scope}::__len__ is treated as constant")
         return len(self._data)
 
     @tracing_not_supported
-    def __contains__(self, key):
+    def __contains__(self,key):
         pass
 
+        
     ##############################
     # Conversions
     ##############################
-
-    # support for conditionals if statements while loops etc.
-    # NOTE this must return unwraped value
+    
+    #support for conditionals if statements while loops etc.
+    #NOTE this must return unwraped value
     # it is prohibited to not return a converted value
     def __bool__(self):
         return bool(self._data)
+    
 
     ##############################
     # Unary operations
     ##############################
-
+    
     @delegate_to_traced_value
     def __neg__(self):
         pass
@@ -432,6 +434,7 @@ class TracedValue(object):
     def __or__(self, other):
         pass
 
+
     ##############################
     # Reflected Arithmetic operators
     ##############################
@@ -488,6 +491,7 @@ class TracedValue(object):
     def __ror__(self, other):
         pass
 
+    
     ##############################
     # Augmented  Assingment operators
     ##############################
@@ -544,6 +548,7 @@ class TracedValue(object):
     def __ior__(self, other):
         pass
 
+
     ##############################
     # Logical operations
     ##############################
@@ -585,6 +590,7 @@ class TracedInstanceFunction(object):
         self.namespace = namespace
 
     def __call__(self, *args, **kwargs):
+
         # record the operation
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
         out = TracedValue(NodeTypes.OP,
@@ -656,7 +662,7 @@ class TracedLayer(nn.Module):
         return out
 
     def __getattr__(self, name):
-        # NOTE this is different than what we did in TracedValue as layers store buffers/parameters/modules in separate dicts
+        #NOTE this is different than what we did in TracedValue as layers store buffers/parameters/modules in separate dicts
         try:
             return super().__getattr__(name)
         except Exception:
@@ -700,7 +706,7 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
     args, kwargs = prepare_args_and_kwargs(args=args, kwargs=kwargs)
 
     _wrap_traced_layers(module, depth=depth,
-                        basic_blocks=basic_blocks)
+                                      basic_blocks=basic_blocks)
 
     trace_registered_functions()
     ExplicitUntracedFunctions.enable()
@@ -728,6 +734,9 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
     nodes = make_constant(NODES)
     nodes, output_id = duplicate_constants(nodes, output_id)
 
+    propagate_constant_tuple_accessors(nodes)
+
+    nodes = discard_unused_nodes(nodes, output_id)
     nodes = discard_unused_nodes(nodes, output_id)
 
     # record input kwargs explicitly as they are not passed by position
@@ -945,6 +954,47 @@ def discard_unused_nodes(nodes, output_id):
 
     # reverse dict_order
     return dict(reversed(new_nodes))
+
+
+def propagate_constant_tuple_accessors(nodes):
+    # t = (a,b)
+    # t_0 = t[0]
+    # t_1 = t[1]
+    # t_2 = t_0 + 10
+    # t_3 = t_1 * 2
+
+    #equivalent to
+    # t_2 = a + 10
+    # t_3 = b * 2
+
+    # we use do while semantics in order to handle nested tuples for example:
+    # ((a,b),c)[0][1] => (a,b)[1] => b
+
+    #NOTE we do not support propagating slicing here (a,b,c)[:2]
+    # we also do not support tuple concatenation (t_0+t_1)[1]
+    while True:
+        changed = False
+        for n in nodes.values():
+            if "prim::TupleConstruct" in n.scope:
+                tuple_elements = n.in_edges
+                for o in n.out_edges:
+                    # access using a constant index
+                    if ("tuple::__getitem__" in o.scope) and (o.in_edges[1].type is NodeTypes.CONSTANT):
+                        idx = o.in_edges[1].constant_value
+                        accessed_element = tuple_elements[idx]
+                        tuple_accessor = o
+
+                        for dst in tuple_accessor.out_edges:
+                            changed = True
+                            # connect the element to the destination directly
+                            dst.replace_input(tuple_accessor,accessed_element)
+                            accessed_element.add_out_edge(dst)
+
+                        # make the tuple accessor a leaf node as it's no longer being used
+                        # later passes will remove this node entirely
+                        tuple_accessor.out_edges.clear()
+        if not changed:
+            break
 
 
 def make_constant(nodes):
