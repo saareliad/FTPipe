@@ -1,5 +1,6 @@
-from typing import List
 import warnings
+from typing import List
+
 import torch
 
 from pytorch_Gpipe.model_profiling import Node, NodeTypes, Graph
@@ -33,7 +34,7 @@ def pretty_format_obj(obj, dict_prefix=dtab) -> str:
             else:
                 assert isinstance(k, int)
             items.append(f'{k}: {pretty_format_obj(v, dict_prefix + tab)}')
-        
+
         try:
             items[0] = f"\n{dict_prefix}" + items[0]
         except IndexError as e:
@@ -88,3 +89,25 @@ def ensure_inputs_are_used(graph: Graph):
         assert len(n.out_edges) > 0, "inputs must be used"
 
         n.stage_id = min(n.out_edges, key=lambda u: u.stage_id).stage_id
+
+
+def ensure_no_unnecessary_tuple_sends(graph: Graph):
+    # prevent undesired partition borders like:
+    # sender:
+    #   return a
+    # reciever:
+    #   do something only with a[0]
+    # there is no need to send all the elements of a, if only some of them are used
+
+    for n in graph.nodes:
+        if (n.type != NodeTypes.OP) or ("tuple::__getitem__" not in n.scope):
+            continue
+
+        getitem_node = n
+        tuple_node = n.in_edges[0]
+        index_node = n.in_edges[1]
+
+        if index_node.type is NodeTypes.CONSTANT:
+            # NOTE we only do this for constant index
+            # if the index node itself has inputs better logic is needed to prevent cycles in the graph
+            getitem_node.stage_id = index_node.stage_id = tuple_node.stage_id

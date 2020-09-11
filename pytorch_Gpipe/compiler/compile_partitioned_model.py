@@ -10,16 +10,18 @@ from torch.nn import Module
 
 from pytorch_Gpipe.utils import traverse_model, traverse_params_buffs, layerDict, tensorDict, nested_map, move_tensors, \
     flatten, _unflatten, unflatten
+# from .partition_class import Partition
 from .compile_modelParallel_module import create_model_parallel_module
 from .partition_forward_method import generate_forward_method
 from .partition_init_method import generate_init_method
 from .state_methods import get_state_methods, generate_partition_state_methods
-from .utils import pretty_format_obj, ensure_inputs_are_used
+from .utils import ensure_no_unnecessary_tuple_sends, pretty_format_obj, ensure_inputs_are_used
 from ..model_profiling import Node, NodeTypes, Graph, used_namespaces
 
 tab = '    '
 dtab = tab + tab
 GET_STAGES_ON_CPU_NAME = "DEBUG"
+
 
 def compile_partitioned_model(graph: Graph,
                               model: Module,
@@ -44,11 +46,18 @@ def compile_partitioned_model(graph: Graph,
     generate_explicit_del:
         whether to generate del statements to explicitly delete variables when they are no longer used
         default False
+    generate_activation_propagation:
+        in cases where a stage sends an activation to multiple stages.
+        for example 0->[1,3,4]
+        decide wether to have each stage send the activation to the next target
+        0->1->3->4
+        or have it sent directly from the source
     output_file:
         optional path to the generated code. if None uses generated_{model_name}{numberOfPatitions}.py
     '''
 
     ensure_inputs_are_used(graph)
+    ensure_no_unnecessary_tuple_sends(graph)
 
     layer_classes = {
         scope: type(layer)
@@ -103,6 +112,8 @@ def compile_partitioned_model(graph: Graph,
     lines.append(create_pipeline_configuration_str)
     if generate_model_parallel:
         lines.append(create_model_parallel_module(config))
+
+    # lines .append(inspect.getsource(Partition))
     lines += partitions_code
     lines.append(generateHelpFunctions())
 
@@ -138,6 +149,7 @@ def generateImports(layer_classes: Dict[str, Module]) -> List[str]:
                     'from itertools import chain',
                     'from typing import Optional, Tuple, Iterator, Iterable, OrderedDict, Dict',
                     'import collections',
+                    # 'from abc import ABC, abstractmethod'
                     ''])
     unique_classes = set(layer_classes.values())
 
@@ -255,7 +267,7 @@ def connections(graph: Graph) -> str:
     return '\n'.join(lines) + '\n'
 
 
-def create_stages_config(ios: Dict, is_batched: Callable[[torch.Size], bool], stage_to_device_map = None) -> Dict:
+def create_stages_config(ios: Dict, is_batched: Callable[[torch.Size], bool], stage_to_device_map=None) -> Dict:
     '''generates the stages portion of the config
      stages:
        id
