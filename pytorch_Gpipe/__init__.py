@@ -227,7 +227,15 @@ def partition_model(model: nn.Module,
     profile_ops:
         weheter to also profile ops when using the GraphProfiler
         default True
+    save_memory_mode:
+        minimize memory footprint during profiling
+        sacrifice speed for memory
+        default False
+    graph:
+        an existing graph to repartition
+        default None
     '''
+
     if basic_blocks is None:
         basic_blocks = ()
     if METIS_opt is None:
@@ -250,37 +258,54 @@ def partition_model(model: nn.Module,
                             recomputation=recomputation,
                             force_no_recomp_scopes=force_no_recomp_scopes,
                             save_memory_mode=save_memory_mode)
-    if partitioning_method == "MEITS":
-        print("-I- using METIS partitioning algorithm")
-        graph = METIS_partition(graph,
-                                nparts,
-                                node_weight_function=node_weight_function,
-                                edge_weight_function=edge_weight_function,
-                                use_layers_only_graph=use_layers_only_graph,
-                                **METIS_opt)
-    elif partitioning_method == "ACYCLIC":
-        print("-I- using Acyclic Partitioning algorithm")
-        acyclic_partition(model, graph, nparts,
-                          node_weight_function=node_weight_function,
-                          edge_weight_function=edge_weight_function,
-                          use_layers_graph=use_layers_only_graph,
-                          **acyclic_opt)
-    elif partitioning_method == "2DBIN":
-        if "n_clusters" not in binpack_opt:
-            if "analyze_n_clusters" not in binpack_opt:
-                warnings.warn(
-                    "expected --n_clusters or --analyze_n_clusters to be given to binpack_opt. will set n_clusters=2 as default")
-            binpack_opt["n_clusters"] = 2
+    if nparts > 1:
+        if partitioning_method == "MEITS":
+            print("-I- using METIS partitioning algorithm")
+            graph = METIS_partition(graph,
+                                    nparts,
+                                    node_weight_function=node_weight_function,
+                                    edge_weight_function=edge_weight_function,
+                                    use_layers_only_graph=use_layers_only_graph,
+                                    **METIS_opt)
+        elif partitioning_method == "ACYCLIC":
+            print("-I- using Acyclic Partitioning algorithm")
+            acyclic_partition(model, graph, nparts,
+                              node_weight_function=node_weight_function,
+                              edge_weight_function=edge_weight_function,
+                              use_layers_graph=use_layers_only_graph,
+                              **acyclic_opt)
+        elif partitioning_method == "2DBIN":
+            if "n_clusters" not in binpack_opt:
+                if "analyze_n_clusters" not in binpack_opt:
+                    warnings.warn(
+                        "expected --n_clusters or --analyze_n_clusters to be given to binpack_opt. will set n_clusters=2 as default")
+                binpack_opt["n_clusters"] = 2
 
-        # TODO: determine nclusters
-        # use_layers_graph=False
-        graph, stage_to_gpu_map = partition_2dbin_pack(graph, num_gpus=nparts,
-                                                       node_weight_function=node_weight_function,
-                                                       **binpack_opt)
-    else:
-        raise NotImplementedError()
+            # TODO: determine nclusters
+            # use_layers_graph=False
+            graph, stage_to_gpu_map = partition_2dbin_pack(graph, num_gpus=nparts,
+                                                           node_weight_function=node_weight_function,
+                                                           **binpack_opt)
+        else:
+            raise NotImplementedError()
+    if nparts > 1:
+        if use_METIS:
+            print("-I- using METIS partitioning algorithm")
+            graph = METIS_partition(graph,
+                                    nparts,
+                                    node_weight_function=node_weight_function,
+                                    edge_weight_function=edge_weight_function,
+                                    use_layers_only_graph=use_layers_only_graph,
+                                    **METIS_opt)
+        else:
+            print("-I- using Acyclic Partitioning algorithm")
+            acyclic_partition(model,graph,nparts,
+            node_weight_function=node_weight_function,
+            edge_weight_function=edge_weight_function,
+            use_layers_graph=use_layers_only_graph,
+            **acyclic_opt)
 
-    print("-I- partitioned model")
+        print("-I- partitioned model")
 
     return graph
 
