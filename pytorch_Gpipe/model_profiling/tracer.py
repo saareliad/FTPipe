@@ -240,15 +240,13 @@ class TracedValue(object):
         self.creation_site = get_call_site(__file__)
         
     def set_data(self, data):
-        assert isTracedValue(
+        assert is_traceable(
             data), f"TracedValue expects a basic type got {type(data)} scope {self.scope}"
 
-        #target device is managed by the stage and is not dynamic
-        #so we will convert this node to a CONSTANT
-        if isinstance(data,torch.device) or (data == "cpu") or (isinstance(data,str) and "cuda" in data):
-            data = torch.device(data)
-            self.node.constant_value = data
 
+        #NOTE assuming this is called after setting graph input dependencies
+        # aka we first record graph inputs prior to calling set_data
+        maybe_make_constant(self.node,data)
         self._data = data
         self.namespace = f"{type(self._data).__name__}"
         self.node.value_type = type(data)
@@ -299,16 +297,17 @@ class TracedValue(object):
                           str), f"getattr support only for string args got {type(name)}"
 
         out = getattr(self._data, name)
-        if isTracedValue(out):
+        if is_traceable(out):
             name_arg = TracedValue(NodeTypes.CONSTANT, "/prim::Constant")
             name_arg.set_data(name)
             name_arg.node.constant_value = name
 
             ret = TracedValue(NodeTypes.OP,
                               f"/{self.namespace}::__getattribute__")
-            ret.set_data(out)
             record_arg(ret.id, self.id)
             record_arg(ret.id, name_arg.id)
+            ret.set_data(out)
+
             return ret
 
         return TracedInstanceFunction(self.id, self.namespace, out)
@@ -686,8 +685,7 @@ class TracedLayer(nn.Module):
     def __contains__(self, key):
         return key in self._module
 
-
-def isTracedValue(data):
+def is_traceable(data):
     """
     predicate to check if a value can be traced
     """
@@ -730,14 +728,15 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
     assert CURRENT_SCOPE == traced_module._name
 
     CURRENT_SCOPE = ""
+    nodes = NODES
 
-    nodes = make_constant(NODES)
-    nodes, output_id = duplicate_constants(nodes, output_id)
+    nodes = discard_unused_nodes(nodes,output_id)
+
+    nodes,output_id = duplicate_constants(nodes,output_id)
 
     propagate_constant_tuple_accessors(nodes)
 
-    nodes = discard_unused_nodes(nodes, output_id)
-    nodes = discard_unused_nodes(nodes, output_id)
+    nodes = discard_unused_nodes(nodes,output_id)
 
     # record input kwargs explicitly as they are not passed by position
     # we only retain kwargs that are actually used
@@ -885,12 +884,11 @@ def reset_tracing_state():
     TracedValue.ID = 0
 
 
-def duplicate_constants(nodes, output_id):
-    new_nodes = dict()
-    offset = 0
-    new_output_id = 0
-    for idx in range(len(nodes)):
-        node = nodes[idx]
+def duplicate_constants(nodes,output_id):
+    new_nodes=dict()
+    offset=0
+    new_output_id=0
+    for node in nodes.values():
         if node.id == output_id:
             new_output_id = node.id + offset
         node.id += offset
@@ -969,9 +967,8 @@ def propagate_constant_tuple_accessors(nodes):
 
     # we use do while semantics in order to handle nested tuples for example:
     # ((a,b),c)[0][1] => (a,b)[1] => b
+    # NOTE we also do not support tuple concatenation (t_0+t_1)[1]
 
-    #NOTE we do not support propagating slicing here (a,b,c)[:2]
-    # we also do not support tuple concatenation (t_0+t_1)[1]
     while True:
         changed = False
         for n in nodes.values():
@@ -981,6 +978,9 @@ def propagate_constant_tuple_accessors(nodes):
                     # access using a constant index
                     if ("tuple::__getitem__" in o.scope) and (o.in_edges[1].type is NodeTypes.CONSTANT):
                         idx = o.in_edges[1].constant_value
+                        if not isinstance(idx,int):
+                            #NOTE we do not support propagating slicing here (a,b,c)[:2]
+                            continue
                         accessed_element = tuple_elements[idx]
                         tuple_accessor = o
 
@@ -997,14 +997,26 @@ def propagate_constant_tuple_accessors(nodes):
             break
 
 
-def make_constant(nodes):
-    # devices are managed by the stage and are static
-    def device_predicate(n):
-        return n.value_type is torch.device
+def maybe_make_constant(node,data):
+    can_convert = False
+    if isinstance(data,torch.device) or (data == "cpu") or (isinstance(data,str) and "cuda" in data):
+        # torch devices will be explicitly managed by the stage itself
+        # there is no need to dynamicaly infering the cuda device
+        data = torch.device(data)
+        can_convert = True
+    elif (node.type is NodeTypes.PRIMITIVE) and all(i.type is NodeTypes.CONSTANT for i in node.in_edges):
+        # for example (1,2,3) is constant there is no need to explicitly record the creation process
+        # 1,2,3 => TupleConstruct => (1,2,3) is simply (1,2,3)
+        # we can have 1 graph node instead of many
+        can_convert = True
 
-    _make_constant(nodes, device_predicate)
-    return nodes
-
+    if can_convert:
+        node.constant_value = data
+        node.type = NodeTypes.CONSTANT
+        for i in node.in_edges:
+            i.remove_output(node)
+        node.args.clear()
+        node.kwargs.clear()
 
 def _make_constant(nodes, predicate):
     for n in nodes.values():
@@ -1065,29 +1077,31 @@ def record_args(args, top_level):
                                                       top_level=False)
             traced_value = TracedValue(NodeTypes.PRIMITIVE,
                                        "/" + container_construct_op_name(type(a)))
-            traced_value.set_data(type(a)(traced_children))
-
             for id in traced_ids:
                 record_arg(traced_value.id, id)
+
+            traced_value.set_data(type(a)(traced_children))
 
         elif isinstance(a, dict):
             traced_children, traced_ids = record_kwargs(a,
                                                         top_level=False)
             traced_value = TracedValue(NodeTypes.PRIMITIVE,
                                        "/" + container_construct_op_name(type(a)))
-            traced_value.set_data(type(a)(traced_children))
-
             for k, id in traced_ids.items():
                 record_kwarg(traced_value.id, k, id)
+
+            traced_value.set_data(type(a)(traced_children))
+
         elif isinstance(a, slice):
             traced_children, traced_ids = record_args((a.start, a.stop, a.step),
                                                       top_level=False)
             traced_value = TracedValue(NodeTypes.PRIMITIVE,
                                        "/" + container_construct_op_name(type(a)))
-            traced_value.set_data(type(a)(*traced_children))
 
             for id in traced_ids:
                 record_arg(traced_value.id, id)
+
+            traced_value.set_data(type(a)(*traced_children))
 
         elif isinstance(a, TracedValue):
             traced_value = a
@@ -1119,20 +1133,20 @@ def record_kwargs(kwargs, top_level):
                                                         top_level=False)
             traced_value = TracedValue(NodeTypes.PRIMITIVE,
                                        "/" + container_construct_op_name(type(v)))
-            traced_value.set_data(type(v)(traced_children))
-
             for id in children_ids:
                 record_arg(traced_value.id, id)
+
+            traced_value.set_data(type(v)(traced_children))
 
         elif isinstance(v, dict):
             traced_children, traced_ids = record_kwargs(v,
                                                         top_level=False)
             traced_value = TracedValue(NodeTypes.PRIMITIVE,
                                        "/" + container_construct_op_name(type(v)))
-            traced_value.set_data(type(v)(traced_children))
-
             for key, id in traced_ids.items():
                 record_kwarg(traced_value.id, key, id)
+
+            traced_value.set_data(type(v)(traced_children))
 
         elif isinstance(v, TracedValue):
             traced_value = v
