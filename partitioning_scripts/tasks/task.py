@@ -264,6 +264,9 @@ class Parser(argparse.ArgumentParser, ABC):
                            default="first_fit",
                            help=f"Policy for 2nd and on cluster {SecondAndOnClusterPolicy._value2member_map_}")
 
+        group.add_argument("--THRESHOLD", type=float, default=0,
+                           help="values <= threshold will be contagious with closest stage")
+
     def _add_acyclic_args(self, group):
         group.add_argument("--epsilon",
                            default=0.1,
