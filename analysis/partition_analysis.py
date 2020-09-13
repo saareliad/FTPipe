@@ -164,6 +164,11 @@ def run_analysis(sample,
         seen_devices.add(device_id)
         pipeline_representation_stage_to_device_map.append(device_id)
 
+    # Canonize
+    tmp = sorted(set(pipeline_representation_stage_to_device_map))
+    tmp = {i:v for i,v in enumerate(sorted)}
+    pipeline_representation_stage_to_device_map = [tmp[i] for i in pipeline_representation_stage_to_device_map]
+
     if n_partitions != num_real_stages:
         # TODO: shrink everything
         for i in unique_stages_on_same_gpu:
@@ -289,7 +294,7 @@ def run_analysis(sample,
         if num_dummy_stages:
             s += f"n_partitions:{n_partitions}, num_dummy_stages:{num_dummy_stages}\n"
             s += f"unique_stages_on_same_gpu: {unique_stages_on_same_gpu}\n"
-            s += f"stage_to_device_map = {pipeline_representation_stage_to_device_map}\n"
+            s += f"\"stage_to_device_map\": {pipeline_representation_stage_to_device_map},\n"
 
         if edges is not None:
             s += f"cutting edges are edges between partitions\n"
