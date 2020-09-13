@@ -166,7 +166,7 @@ def run_analysis(sample,
 
     # Canonize
     tmp = sorted(set(pipeline_representation_stage_to_device_map))
-    tmp = {i:v for i,v in enumerate(sorted)}
+    tmp = {i:v for i,v in enumerate(tmp)}
     pipeline_representation_stage_to_device_map = [tmp[i] for i in pipeline_representation_stage_to_device_map]
 
     if n_partitions != num_real_stages:
