@@ -466,9 +466,10 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         raise NotImplementedError("In progress")
 
     # Do heavy ram part one by one to save memory.
+    # TODO this can be done better, e.g by local ranks or in parallel.
     for i in range(args.world_size):
         if getattr(args, "load_model_one_by_one", True):
-            print(f"loading the model rank by rank to save ram {i+1}/{args.word_Size}")
+            print(f"loading the model rank by rank to save host RAM {i+1}/{args.world_size}")
             torch.distributed.barrier()
         if i == args.rank:
             parsed_config.load_model(handler=handler, bs_train=args.bs_train, rank=args.rank)
