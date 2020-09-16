@@ -428,6 +428,8 @@ class Parser(argparse.ArgumentParser, ABC):
         if hasattr(args, "reminder_policy"):
             d['reminder_policy'] = args.reminder_policy
 
+        d['THRESHOLD'] = args.THRESHOLD
+
         return d
 
 

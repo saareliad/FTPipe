@@ -437,7 +437,7 @@ class Graph():
             node.req_grad = state['req_grad']
 
         for node in nodes.values():
-            node.out_edges = {nodes[n] for n in node_states[node.id]['out_edges']}
+            node.out_edges = sorted({nodes[n] for n in node_states[node.id]['out_edges']}, key=lambda x: x.id)
 
         self._nodes = nodes
         self.basic_blocks = basic_blocks

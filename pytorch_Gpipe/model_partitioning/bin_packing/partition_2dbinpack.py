@@ -1,18 +1,20 @@
 import warnings
 from collections import deque, defaultdict
+from dataclasses import dataclass
 from enum import Enum
 from itertools import count
 from pprint import pprint
 from typing import Optional, List, Dict, Any, Union, Set
 
 import matplotlib.pyplot as plt
+import networkx as nx
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
-import networkx as nx
 
 from pytorch_Gpipe.model_partitioning.bin_packing.heap_dict import heapdict
-from pytorch_Gpipe.model_partitioning.bin_packing.post_process import post_process_partition
+from pytorch_Gpipe.model_partitioning.bin_packing.post_process import post_process_partition, \
+    cannonize_partition_indices
 from pytorch_Gpipe.model_partitioning.bin_packing.union_find import UnionFind
 from pytorch_Gpipe.model_partitioning.heuristics import NodeWeightFunction
 from pytorch_Gpipe.model_profiling import Graph, Node
@@ -86,9 +88,13 @@ def get_all_splits(K: int, clusters, id_to_node: Dict[int, Node], to_unify: Dict
         to_unify_for_cluster = to_unify[c_i]
         cluster_D = {i.Index: i for i in cluster}
         for l in to_unify_for_cluster:
+            # make a list
+            # before:   d: id->item
+            # after:    d: id->[item, item]
             z = l[0]
             x = l[1]
             if isinstance(cluster_D[x], list):
+                # already was listed
                 v = cluster_D[x]
                 zz = cluster_D[z]
                 if isinstance(zz, list):
@@ -97,6 +103,7 @@ def get_all_splits(K: int, clusters, id_to_node: Dict[int, Node], to_unify: Dict
                     v.append(zz)
                 v.sort(key=lambda y: y.Index)
             else:
+                # Make a list and put it
                 v = [cluster_D[x]]
                 zz = cluster_D[z]
                 if isinstance(zz, list):
@@ -106,6 +113,7 @@ def get_all_splits(K: int, clusters, id_to_node: Dict[int, Node], to_unify: Dict
                 v.sort(key=lambda y: y.Index)
                 cluster_D[x] = v
 
+            # delete what we unified.
             del cluster_D[z]
 
         cluster = []
@@ -124,9 +132,8 @@ def get_all_splits(K: int, clusters, id_to_node: Dict[int, Node], to_unify: Dict
         if n_i < K:
             raise NotImplementedError(f"insufficient number of items in cluster {c_i}, {n_i}, {K}")
         if reminder > 0:
-            warnings.warn(
-                f"cluster {c_i} is problematic {c_i}, {n_i}%{K}!=0, will put reminding {reminder} nodes in last partition")
-            # raise NotImplementedError(f"{c_i}, {n_i}, {K}")
+            pass
+
         N = n_i // K
 
         cluster_for_split = cluster if not reminder else cluster[:-reminder]
@@ -135,9 +142,13 @@ def get_all_splits(K: int, clusters, id_to_node: Dict[int, Node], to_unify: Dict
 
         if reminder > 0:
             if reminder_policy == ReminderPolicy.ToLast:
+                warnings.warn(
+                    f"cluster {c_i} is problematic {c_i}, {n_i}%{K}!=0, will put reminding {reminder} nodes in last partition")
                 # extend last.
                 split[-1].extend(cluster[-reminder:])
             elif reminder_policy == ReminderPolicy.ToMin:
+                warnings.warn(
+                    f"cluster {c_i} is problematic {c_i}, {n_i}%{K}!=0, will put reminding {reminder} nodes in min weight partition")
                 min_idx = np.argmin([sum_subsplit_weight(subsplit) for subsplit in split])
                 split[min_idx].extend(cluster[-reminder:])
             else:
@@ -167,17 +178,20 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
     set_idx = set(nodes_below_thresholds.index)
     for node_id in nodes_below_thresholds.index:
         node = graph[node_id]
+        # find a "big"
         for y in node.out_edges:
-            if y.id not in set_idx:
+            if y.id not in set_idx:  # found a "big"
                 dst_cluster = X.loc[y.id]['cluster']
                 X.loc[X.index == node_id, 'cluster'] = dst_cluster
                 to_unify[dst_cluster].append([node_id, y.id])
+
+                print(f"-V- unify node: {node.id} to dst: {y.id}, cluster: {dst_cluster}")
                 break
             # else:
             #     print(f"node_id:{node_id}, y.id:{y.id}", node.scope, y.scope)
         else:
             # Unify:
-            print(f"Going 1 more nesting level for node:{node_id} because all outputs are in {set_idx}")
+            print(f"Going 1 more nesting level for node:{node_id} because all outputs are below threshold {set_idx}")
 
             broke = False
 
@@ -218,6 +232,25 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
             if not broke:
                 raise NotImplementedError(f"need to go one level deeper "
                                           f"to find node with above THRESHOLD={THRESHOLD} weight to unify")
+
+
+    # fix to 8->9 and 8->10 and 9->10 prolem which is reduced to 8->9->10 and useless data jump between gpus
+    # TODO
+    # TODO
+    # TODO
+    # TODO  topo sort out edges for nodes.
+    # TODO  topo sort out edges for nodes.
+    # TODO  topo sort out edges for nodes.
+    # TODO  topo sort out edges for nodes.
+    # TODO  topo sort out edges for nodes.
+    # TODO  topo sort out edges for nodes.
+    # TODO  topo sort out edges for nodes.
+    # TODO  topo sort out edges for nodes.
+    # TODO: topo sort all node ids in the graph
+    # TODO: go over candidates by distance (Can use matrices representation...)
+
+    for n in graph.nodes:
+        n.out_edges.sort(key=lambda x: x.id)
 
     # sort clusters by id.
     cluster_to_min_node_id = {i: X.query(f"cluster == {i}").first_valid_index() for i in range(C)}
@@ -313,10 +346,10 @@ def stages_from_bins(graph: Graph, bins, id_to_node_worked_on: Dict[int, Node]):
     # shallow copy bins:
     bins_to_id = {i: set(n.id for n in v) for i, v in bins.items()}
 
-    nodes_with_out_edges = defaultdict(set)
-    nodes_with_in_edges = defaultdict(set)
+    nodes_with_out_edges_to_different_gpu = defaultdict(set)
+    nodes_with_in_edges_from_different_gpu = defaultdict(set)
     for gpu_id, v in bins.items():
-        # Find all connected components
+        # Find all connected components in the bin
         uf = UnionFind(elements=bins_to_id[gpu_id])
         visited = set()
         open = deque(sorted(v, key=lambda x: x.id))
@@ -325,8 +358,8 @@ def stages_from_bins(graph: Graph, bins, id_to_node_worked_on: Dict[int, Node]):
             x: Node
             for y in x.out_edges:
                 if y.id not in uf:
-                    nodes_with_out_edges[gpu_id].add(x)
-                    nodes_with_in_edges[y.gpu_id].add(y)
+                    nodes_with_out_edges_to_different_gpu[gpu_id].add(x)
+                    nodes_with_in_edges_from_different_gpu[y.gpu_id].add(y)
                     continue
                 uf.union(x.id, y.id)
 
@@ -372,7 +405,8 @@ def stages_from_bins(graph: Graph, bins, id_to_node_worked_on: Dict[int, Node]):
 
                             cur_nodes = [id_to_node_worked_on[x] for x in cur_set]
                             scs = set(cur_set)
-                            missing_nodes_in_work_graph = [id_to_node_worked_on[x] for x in missing_topo_sort_ids if x not in scs and x in id_to_node_worked_on]
+                            missing_nodes_in_work_graph = [id_to_node_worked_on[x] for x in missing_topo_sort_ids if
+                                                           x not in scs and x in id_to_node_worked_on]
                             nodes_left_in_unborken_stage = set(id_to_node_worked_on[x] for x in unbroken_stage)
                             nodes_left_in_unborken_stage.add(id_to_node_worked_on[topo_sort_id])
 
@@ -383,14 +417,14 @@ def stages_from_bins(graph: Graph, bins, id_to_node_worked_on: Dict[int, Node]):
                             for a in A:
                                 for c in a.out_edges:
                                     if c in edge_nodes:
-                                        edges.append((0, c.id+2))
+                                        edges.append((0, c.id + 2))
 
                             for c in edge_nodes:
                                 for nc in c.out_edges:
                                     if nc in edge_nodes:
-                                        edges.append((c.id+2, nc.id+2))
+                                        edges.append((c.id + 2, nc.id + 2))
                                     elif nc in B:
-                                        edges.append((c.id+2, 1))
+                                        edges.append((c.id + 2, 1))
 
                             G = nx.DiGraph(incoming_graph_data=edges)
                             G.add_node(0)
@@ -403,10 +437,9 @@ def stages_from_bins(graph: Graph, bins, id_to_node_worked_on: Dict[int, Node]):
                     if not is_ok:
                         broken_stages_for_unbroken_stage.append(cur_set)
                         cur_set = list()
-                    else:  # Nothing is missing
-                        cur_set.append(topo_sort_id)
 
                 cur_set.append(topo_sort_id)
+
                 prev_topo_sort_id = topo_sort_id
 
             if cur_set:
@@ -420,11 +453,100 @@ def stages_from_bins(graph: Graph, bins, id_to_node_worked_on: Dict[int, Node]):
         print("broken_stages")
         print(broken_stages)
 
+        broken_stages: List[List[int]]
+
         # Give a dummy stage id
         for dummy_stage_id, broken_stage in zip(stage_id_generator, broken_stages):
             # Try to break stage if not TOPOLOGICALLY sorted.
             for n in broken_stage:
                 graph[n].stage_id = dummy_stage_id
+
+        # Unify redundant stages
+        cannonize_partition_indices(graph)
+
+        # Current problem:
+        # that we have 7->8>9 and we can spare 8,
+        # however 8 is in the same GPU (bin) with 10 somehow
+        # ids 34,35 -> 41
+
+        fixes = []
+
+        @dataclass
+        class Fix:
+            stage_id: int
+            dst_stage_id: int
+            gpu_id: int
+            dst_gpu_id: int
+
+        for broken_stage in broken_stages:
+            # if not broken_stage:
+            #     continue
+            #
+            tmp = graph[broken_stage[0]]
+            gpu_id = tmp.gpu_id
+            stage_id = tmp.stage_id
+            all_outputs = set()
+            all_gpus_ids = set()
+            for n in broken_stage:
+                n = graph[n]
+                for out in n.out_edges:
+                    if out.stage_id != n.stage_id:
+                        all_outputs.add(out.stage_id)
+                        if len(all_outputs) > 1:
+                            break
+                        if len(all_outputs) == 1 and len(all_gpus_ids) == 1 and out.gpu_id not in all_gpus_ids:
+                            raise ValueError()
+                        all_gpus_ids.add(out.gpu_id)
+
+                if len(all_outputs) > 1:
+                    break
+            if len(all_outputs) == 1:
+                dst_stage_id = next(iter(all_outputs))
+                assert len(all_gpus_ids) == 1
+                dst_gpu_id = next(iter(all_gpus_ids))
+
+                # Important:
+                # Unify only if in same GPU.
+                print(f"-I- one2one stage: {stage_id}->{dst_stage_id}  ||| GPU: {gpu_id}->{dst_gpu_id}")
+                if dst_gpu_id == gpu_id:
+                    fixes.append(
+                        Fix(stage_id=stage_id, gpu_id=gpu_id, dst_gpu_id=dst_gpu_id, dst_stage_id=dst_stage_id))
+
+        print(f"-I- got {len(fixes)} fixes.")
+        d_stage_to_dst = dict()
+        d_gpu_to_dst = dict()
+        for fix in fixes:
+            d_stage_to_dst[fix.stage_id] = fix.dst_stage_id
+            d_gpu_to_dst[fix.gpu_id] = fix.dst_gpu_id
+
+        def last_dst_stage(stage_id, stack=None):
+            if stage_id in d_stage_to_dst:
+                if stack is None:
+                    stack = []
+                stack.append(stage_id)
+                return last_dst_stage(d_stage_to_dst[stage_id], stack)
+            else:
+                for v in stack:
+                    d_stage_to_dst[v] = stage_id
+                return stage_id
+
+        # Apply on all to fix the d_stage_to_dst dict to last
+        for stage_id in list(d_stage_to_dst.keys()):
+            last_dst_stage(stage_id)
+
+        print(f"-I- fixing d_stage_to_dst: {d_stage_to_dst}")
+        for i, v in d_stage_to_dst.items():
+            a = [n.id for n in graph.nodes if n.stage_id == i]
+            b = [n.id for n in graph.nodes if n.stage_id == v]
+            print("-I-merge:", i, v, a, b)
+
+        # Replace
+        for n in graph.nodes:
+            if n.stage_id in d_stage_to_dst:
+                dst = d_stage_to_dst[n.stage_id]
+                n.stage_id = dst
+
+        #     # NOTE: this create an empty stage, but it will be wiped out by following functions
 
     # cannonize_partition_indices(graph) <--- TODO: redundant
     # break cycles <--- TODO: redundant
@@ -478,12 +600,13 @@ def partition_2dbin_pack(graph: Graph,
                          THRESHOLD=0,
                          second_and_on_cluster_policy: SecondAndOnClusterPolicy = SecondAndOnClusterPolicy.FirstFitBinPacking,
                          reminder_policy: ReminderPolicy = ReminderPolicy.ToLast,
-                         display_cluster_sse_plot = False,
+                         display_cluster_sse_plot=False,
                          **kwargs
                          ):
     # Policies control whether we Actually do the bin pack (first fit) with the splits (triples).
     #    Starting from 2nd cluster it matters.
     #    However, it can cause weird communication pattern.
+    # print(f"-I- THRESHOLD={THRESHOLD}")
 
     # Convert
     if isinstance(second_and_on_cluster_policy, type(next(iter(ReminderPolicy._value2member_map_.keys())))):
@@ -504,7 +627,8 @@ def partition_2dbin_pack(graph: Graph,
 
     K = num_gpus
     if "analyze_n_clusters" in kwargs and kwargs["analyze_n_clusters"]:
-        n_clusters = analyze_n_clusters(nodes, node_weight_function, max_k=10, THRESHOLD=THRESHOLD, manual_choose_n_clusters=True)
+        n_clusters = analyze_n_clusters(nodes, node_weight_function, max_k=10, THRESHOLD=THRESHOLD,
+                                        manual_choose_n_clusters=True)
         print(f"-I- Will use n_clusters={n_clusters}")
     elif display_cluster_sse_plot:
         print("-V- displaying info about n_clusters")
@@ -560,6 +684,24 @@ def partition_2dbin_pack(graph: Graph,
     stage_to_gpu_map = {i: sorted(v) for i, v in stage_to_gpu_map.items()}
 
     # TODO: can do it more efficiently but i'm tired...
+    stage_to_gpu_map = handle_missing_stages(bins, graph, node_to_stage_map, stage_to_gpu_map)
+    stage_to_nodes_map = defaultdict(list)
+    for i, v in node_to_stage_map.items():
+        stage_to_nodes_map[v].append(i)
+
+    print("stage_to_gpu_map:")
+    pprint(stage_to_gpu_map)
+
+    print("node_to_stage_map:")
+    pprint(node_to_stage_map)
+
+    print("stage_to_nodes_map:")
+    pprint(stage_to_nodes_map)
+
+    return graph, stage_to_gpu_map
+
+
+def handle_missing_stages(bins, graph, node_to_stage_map, stage_to_gpu_map):
     to_check = sorted(stage_to_gpu_map.keys())
     if to_check[0] != 0 or to_check[-1] != len(to_check) - 1:
         print(f"-V- stages gone, stages_ids_before: {to_check} reassigning...")
@@ -583,21 +725,7 @@ def partition_2dbin_pack(graph: Graph,
             for n in bin_nodes:
                 stage_to_gpu_map[n.stage_id].add(gpu_id)
         stage_to_gpu_map = {i: sorted(v) for i, v in stage_to_gpu_map.items()}
-
-    print("stage_to_gpu_map:")
-    pprint(stage_to_gpu_map)
-
-    print("node_to_stage_map:")
-    pprint(node_to_stage_map)
-
-    stage_to_nodes_map = defaultdict(list)
-    for i, v in node_to_stage_map.items():
-        stage_to_nodes_map[v].append(i)
-
-    print("stage_to_nodes_map:")
-    pprint(stage_to_nodes_map)
-
-    return graph, stage_to_gpu_map
+    return stage_to_gpu_map
 
 
 if __name__ == '__main__':
