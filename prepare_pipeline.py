@@ -468,6 +468,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     # Do heavy ram part one by one to save memory.
     for i in range(args.world_size):
         if getattr(args, "load_model_one_by_one", True):
+            print(f"loading the model rank by rank to save ram {i+1}/{args.word_Size}")
             torch.distributed.barrier()
         if i == args.rank:
             parsed_config.load_model(handler=handler, bs_train=args.bs_train, rank=args.rank)

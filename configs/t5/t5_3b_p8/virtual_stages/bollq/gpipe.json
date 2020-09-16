@@ -2,9 +2,9 @@
     "base_config_path": "common.json",
     "base_config_path_is_relative": true,
     "work_scheduler": "GPIPE",
-    "step_every": 8,
-    "bs_train": 16,
-    "bs_test": 16,
+    "step_every": 5,
+    "bs_train": 4,
+    "bs_test": 8,
     "checkpoints_save_name_prefix": "gpipe_adafactor",
-    "checkpoints_save_dir": "/nfs_Disk2/virtual_stages/checkpoints/t5/3b/wic/gpipe/"
+    "checkpoints_save_dir": "/nfs_Disk2/virtual_stages/checkpoints/t5/3b/boolq/gpipe/"
 }
