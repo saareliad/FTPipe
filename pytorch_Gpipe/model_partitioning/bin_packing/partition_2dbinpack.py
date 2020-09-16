@@ -499,10 +499,10 @@ def stages_from_bins(graph: Graph, bins, id_to_node_worked_on: Dict[int, Node]):
                             print(all_gpus_ids, out.gpu_id, out.id, out.scope,)
 
                             print("all graph:")
-                            print("{}  |  {}  |  {} } ".format("id", "stage", "gpu"))
+                            print("{}  |  {}  |  {} ".format("id", "stage", "gpu"))
                             for broken_stage in broken_stages:
                                 for x in broken_stage:
-                                    print("{}  |  {}  |  {} } ".format(x.id, x.stage_id, x.gpu_id))
+                                    print("{}  |  {}  |  {} ".format(x.id, x.stage_id, x.gpu_id))
                             raise ValueError("Detected problematic GPU id {out.gpu_id}")
                         all_gpus_ids.add(out.gpu_id)
 
