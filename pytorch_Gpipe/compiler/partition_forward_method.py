@@ -17,11 +17,14 @@ dtab = tab + tab
 __all__ = ['generate_forward_method']
 
 
+# TODO: remove coupling between IO (config) and code generation and create IO somewhere else.
+
 def generate_forward_method(stage_id: int,
                             graph: Graph,
                             partition_nodes: List[Node],
                             model_outputs: List[Node],
                             partition_fields: Dict[str, str],
+                            stage_depth_from_end: int,  # see TODO above...
                             generate_explicit_del=False,
                             generate_activation_propagation=True,
                             move_tensors=False) -> Tuple[List[str], Dict[str, List]]:
@@ -116,7 +119,8 @@ def generate_forward_method(stage_id: int,
           "inputs_req_grad": inputs_req_grad,
           "outputs_req_grad": outputs_req_grad,
           "created_by": input_sources,
-          "used_by": output_destinations}
+          "used_by": output_destinations,
+          "depth": stage_depth_from_end}
 
     return lines, io
 
@@ -152,10 +156,10 @@ def generateBody(outputs: List[Node],
                  partition: List[Node],
                  scope_to_class_field: Dict[str, str],
                  ready_expressions: Dict[Node, str]) -> List[str]:
-    """generates the forwad function body and return statement
+    """generates the forward function body and return statement
     """
-    uses = node_uses(partition, outputs)
-    # do not overwrite the model layers/bufferes/parameters
+    uses = node_uses(partition, set(outputs))
+    # do not overwrite the model layers/buffers/parameters
     for e in ready_expressions:
         uses[e] = 100000
 
@@ -443,7 +447,7 @@ def add_del_statements(statements: List[str]) -> Iterator[str]:
     return reversed(new_statements)
 
 
-def node_uses(partition: List[Node], outputs: Set[Node]) -> Dict[str, int]:
+def node_uses(partition: List[Node], outputs: Set[Node]) -> Dict[Node, int]:
     uses = defaultdict(lambda: 0)
 
     for node in partition:
