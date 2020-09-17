@@ -7,8 +7,7 @@ from models.simple_partitioning_config import PipelineConfig
 from .interface import PipelineDataPropagator
 
 
-# NOTE: outputing the batch for last partition. (trainer should handle)
-# TODO: allow flag to know if we send labels in pipeline.
+# NOTE: outputting the batch for last partition. (trainer should handle)
 class AutomaticPipelinePropagator(PipelineDataPropagator):
     SENDING_LABELS_IN_PIPELINE = False
 
@@ -45,7 +44,7 @@ class AutomaticPipelinePropagator(PipelineDataPropagator):
                 assert isinstance(x, tuple) or isinstance(x, list)
                 # HACK: Also returning batch size
                 # The batch size will be used as ctx, to calc test statistics.
-                return (x, x[i].size(batch_dim))
+                return x, x[i].size(batch_dim)
 
         else:
             # No-op.
@@ -63,7 +62,7 @@ class AutomaticPipelinePropagator(PipelineDataPropagator):
     def pack_send_context(self, model_out, *ctx):
         # ctx here is just the label y, in case we send it in the pipeline.
         # otherwise, it just returns model_out.
-        return (*model_out, *ctx)
+        return *model_out, *ctx
 
     def preload_from_dataloader(self, dlitr):
         # Return: two tuples

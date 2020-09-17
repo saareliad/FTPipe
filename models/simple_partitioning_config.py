@@ -1,5 +1,6 @@
 import itertools
 import warnings
+from collections import defaultdict
 from itertools import chain
 from typing import Dict, List
 
@@ -8,6 +9,7 @@ from torch import Tensor
 
 # Used only to assert correct shape dtype
 _SHAPE_CLS = torch.Size
+
 
 # TODO: shared parameters. (see parse_config.py)
 
@@ -114,7 +116,7 @@ class PipelineConfig:
 
         n_my_model_outputs = len([i for i in my_outputs if i in self.d['model_outputs']])
         assert len(my_outputs) == len(outputs_req_grad) + n_my_model_outputs, (
-        my_outputs, outputs_req_grad, n_my_model_outputs)
+            my_outputs, outputs_req_grad, n_my_model_outputs)
 
         if not outputs_req_grad:
             assert len(my_outputs) == n_my_model_outputs
@@ -128,6 +130,57 @@ class PipelineConfig:
             i for i in pcs['inputs'] if i in self.d['model_inputs']
         ]
         return inputs_from_dl
+
+    def get_depth_for_stage(self, stage_id: int) -> int:
+        stage = self.d['stages'][stage_id]
+        try:
+            stage_depth = stage['stage_depth']
+        except KeyError as e:
+            warnings.warn("KeyError: missing stage_depth. Probably using old config. Will try to infer otherwise")
+            raise NotImplementedError()
+
+        return stage_depth
+
+    def max_send_depth_dict(self, is_activations=True):
+        stage_to_depth = {x: self.get_depth_for_stage(x) for x in range(self.n_stages)}
+        stage_to_max_send_depth = defaultdict(int)
+        for stage_id in range(self.n_stages):
+            targets = self.d['stages'][stage_id]['outputs'] if is_activations else self.d['stages'][stage_id]['inputs']
+
+            for tgt in targets:
+                if tgt in self.d['model_inputs'] or tgt in self.d['model_outputs']:
+                    continue
+
+                if not is_activations and not tgt['req_grad']:
+                    continue
+
+                used_by = tgt['used_by']
+                used_by_depth = [stage_to_depth[x] for x in used_by]
+                my_depth = stage_to_depth[stage_id]
+
+                if is_activations:
+                    used_by_send_depth_diff = [my_depth - x for x in used_by_depth]
+                else:
+                    used_by_send_depth_diff = [x - my_depth for x in used_by_depth]
+
+                if used_by_send_depth_diff:
+                    stage_max_send_depth = max(used_by_send_depth_diff)
+                else:
+                    stage_max_send_depth = None
+
+                stage_to_max_send_depth[stage_id] = stage_max_send_depth
+
+        return stage_to_max_send_depth
+
+    def max_send_depth(self):
+        max_send_depth_dict = self.max_send_depth_dict()
+        return max(max_send_depth_dict.values())
+
+    def max_send_depth_for_stage(self, stage_id: int):
+        max_send_depth_dict_a = self.max_send_depth_dict(is_activations=True)
+        max_send_depth_dict_g = self.max_send_depth_dict(is_activations=False)
+        return max(max_send_depth_dict_a[stage_id], max_send_depth_dict_g[stage_id])
+
 
 def atomic_batch_change(atomic_is_batched, atomic_shape, dim, batch_size):
     assert isinstance(atomic_is_batched, bool)

@@ -478,7 +478,7 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
     # @staticmethod
     def create_futures_handler(self, is_first_partition, is_last_partition, stateless_tied,
                                num_stages):
-        self.futures_handler = FuturesHandler(self.pipe_config, is_first_partition, is_last_partition,
+        self.futures_handler = FuturesHandler(self.pipe_config, self.stage, is_first_partition, is_last_partition,
                                               stateless_tied, num_stages)
         return self.futures_handler
 
@@ -486,7 +486,7 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
 class FuturesHandler(FuturesHandlerBase):
     """ This is mostly for MPI, where sent objects are problematic - currently not deleted automatically """
 
-    def __init__(self, pipe_config: PipelineConfig, is_first_partition, is_last_partition, stateless_tied,
+    def __init__(self, pipe_config: PipelineConfig, my_stage_id, is_first_partition, is_last_partition, stateless_tied,
                  num_stages):
         super().__init__()
         # FIXME: this is ugly solution for freeing send buffers in tied weights trick. its a waste of memory.
@@ -495,12 +495,12 @@ class FuturesHandler(FuturesHandlerBase):
         # FIXME: this is ugly solution for freeing send buffers in tied weights trick. its a waste of memory.
         # FIXME: this is ugly solution for freeing send buffers in tied weights trick. its a waste of memory.
 
-        if stateless_tied and (is_first_partition or is_last_partition):
-            self.sent_obejct_patience = num_stages - 2
-        else:
-            self.sent_obejct_patience = 1
+        # if stateless_tied and (is_first_partition or is_last_partition):
+        #     self.sent_object_patience = num_stages - 2
+        # else:
+        #     self.sent_object_patience = 1
 
-        self.sent_obejct_patience = 9
+        self.sent_object_patience = pipe_config.max_send_depth_for_stage(my_stage_id)
 
         # Holds Async handle objects (for isends)
         self.async_fwd_objects = OrderedDict()
@@ -551,7 +551,7 @@ class FuturesHandler(FuturesHandlerBase):
             if not obj_holder:
                 return
 
-        if not fin and (len(obj_holder) <= self.sent_obejct_patience):
+        if not fin and (len(obj_holder) <= self.sent_object_patience):
             return
 
         # Pop the item that was increased first.

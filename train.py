@@ -236,7 +236,6 @@ class CheckpointsSaver:
         torch.save(model.state_dict(), fn)
         tok = time.time()
 
-        print(f"-V- saving checkpoint took: {tok - tik}")
-
+        print(f"-V- stage {args.stage}: saving checkpoint took: {tok - tik}")
         self.num_saved_checkpoints += 1
-        print(f"-I- model checkpoint saved: {fn}")
+        print(f"-I- stage {args.stage}: model checkpoint saved: {fn}")

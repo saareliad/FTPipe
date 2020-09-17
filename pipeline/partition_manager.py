@@ -26,6 +26,7 @@ DEBUG_FAKE_DRAW = False
 # TODO: multiprocessing: problem when sharing weights (sending nn.Parameters),
 # TODO: weight prediction + weight stashing + step_every + cache (aggmsnag, no aggmsnag)
 # TODO: gap aware + step_every >1
+# TODO: currently assuming is_last_partition also means zero staleness.
 
 class SinglePartitionManager:
     def __init__(self,

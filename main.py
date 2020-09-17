@@ -42,6 +42,9 @@ def parse_distributed_cli(parser):
                         default='mpi',
                         type=str,
                         help='distributed backend to use')
+
+    parser.add_argument('--nnodes', default=1, type=int, help='number of nodes')
+
     # Also buffers, which we use in distributed.
     parser.add_argument(
         "--max_buffers",

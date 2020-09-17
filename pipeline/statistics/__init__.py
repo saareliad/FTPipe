@@ -17,7 +17,6 @@ def register_statistics(name: str, stats_cls: Stats):
     AVAILBALE_STATS[name + "_loss_per_batch"] = stats_cls
 
 
-#  is_last_partition=True
 def get_statistics(name: str, *args, **kw) -> Stats:
     record_loss_per_batch = "loss_per_batch" in name
     st_cls = AVAILBALE_STATS.get(name)

@@ -1,4 +1,5 @@
 import gc
+import warnings
 
 import torch
 
@@ -13,7 +14,7 @@ from pipeline import CommunicationHandlerBase, get_auto_comm_handler_cls
 from pipeline import TrueWeightsStorage
 from pipeline import dp_sim
 from pipeline.communication.multiprocessing import MultiprocessingCommunicationHandler
-from pipeline.data_propagation import AVAILABLE_PROPAGATORS
+from pipeline.data_propagation import get_propagator_cls
 from pipeline.gap_aware import (get_sgd_gap_aware_cls, get_adam_gap_aware_cls,
                                 get_adamw_gap_aware_cls)
 from pipeline.partition_manager import (SinglePartitionManager, GPipePartitionManager)
@@ -27,12 +28,6 @@ from pipeline.work_schedulers import get_work_scheduler
 
 
 # from data import AVAILABLE_DATASETS
-
-
-def get_propagator_cls(args):
-    propagator_cls = AVAILABLE_PROPAGATORS.get(args.data_propagator)
-    return propagator_cls
-
 
 def get_trainer_cls(args):
     trainer_cls = AVAILABLE_TRAINERS.get(args.trainer['type'])
@@ -274,45 +269,89 @@ def get_dataloaders(args,
     return train_dl, test_dl, samplers, extra
 
 
-def get_device(args, local_rank):
+def get_device(args):
+    nnodes = getattr(args, "nnodes", 1)
+    if not hasattr(args, "ngpus_per_node"):
+        # same number across all nodes
+        if args.world_size % nnodes != 0:
+            raise NotImplementedError()
+        ngpus_per_node = [args.world_size // nnodes] * nnodes
+    else:
+        ngpus_per_node = getattr(args, "ngpus_per_node")
+    assert len(ngpus_per_node) == nnodes
+
+    rank = args.rank
+
+    # Infer local device ID.
     if hasattr(args, "stage_to_device_map"):
         stage_to_device_map = args.stage_to_device_map
-        cuda_device_id = stage_to_device_map[local_rank]
-        device = torch.device('cpu' if args.cpu else f"cuda:{cuda_device_id}")
+        cuda_device_id = stage_to_device_map[rank]
+
+        # global to local device id
+        if nnodes > 1:
+            for node_idx, x in enumerate(ngpus_per_node):
+                if cuda_device_id >= x:
+                    cuda_device_id -= x
+                else:
+                    break
+            else:
+                raise ValueError(
+                    f"Can't determine device index. rank={rank}, stage_to_device_map={stage_to_device_map}, global_device_id={cuda_device_id},  nnodes={nnodes}, ngpus_per_node={ngpus_per_node}")
+
+        local_device_id = cuda_device_id
     else:
-        device = torch.device('cpu' if args.cpu else f"cuda:{local_rank}")
+        local_device_id = args.local_rank
+
+    # Get device
+    device = torch.device('cpu' if args.cpu else f"cuda:{local_device_id}")
     return device
 
 
 def get_rank_to_device_map(args):
     return {
-        rank: get_device(args, local_rank=rank)
+        rank: get_device(args)
         for rank in range(args.world_size)
     }
 
 
-def hack_trainer_type_to_gap_aware(args):
+def hack_trainer_type_to_gap_aware(args, stage_depth=None):
+    """ replaces TRAINER with TRAINER_gap_aware,
+        according to parsed policy
+        SUPPORTED_POLICIES = {
+            'almost_last_partition', 
+            'all_except_last',
+            'all_except_last_two'
+            }
+        # TODO: policy for max delay 1
+        # TODO: policy with staleness limit
+    """
     def hack():
         args.trainer['type'] += "_gap_aware"
 
     if hasattr(args, 'gap_aware'):
-        if args.gap_aware['policy'] == 'almost_last_partition':
-            is_almost_last_partition = args.local_rank == args.world_size - 2
 
+        if stage_depth is None:
+            is_zero_staleness_stage = args.local_rank == args.world_size - 1
+            is_one_staleness_stage = args.local_rank == args.world_size - 2
+
+        else:
+            is_zero_staleness_stage = stage_depth == 0
+            is_one_staleness_stage = stage_depth == 1
+            warnings.warn("Assuming no grad accumulation and no staleness limit...")
+
+
+
+        if args.gap_aware['policy'] == 'almost_last_partition':
             # HACK: change trainer name
-            if is_almost_last_partition:
+            if is_one_staleness_stage:
                 hack()
                 return True
-
         elif args.gap_aware['policy'] == 'all_except_last':
-            is_last_partition = args.local_rank == args.world_size - 1
-            if not is_last_partition:
+            if not is_zero_staleness_stage:
                 hack()
                 return True
         elif args.gap_aware['policy'] == 'all_except_last_two':
-            is_last_partition = args.local_rank == args.world_size - 1
-            is_almost_last_partition = args.local_rank == args.world_size - 2
-            if (not is_last_partition) and (not is_almost_last_partition):
+            if (not is_zero_staleness_stage) and (not is_one_staleness_stage):
                 hack()
                 return True
         else:
@@ -323,7 +362,6 @@ def hack_trainer_type_to_gap_aware(args):
             raise ValueError(
                 f"Unknown policy for GA {args.gap_aware['policy']}.\
                              supported policies are {SUPPORTED_POLICIES}")
-
     return False
 
 
@@ -465,15 +503,15 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     else:
         raise NotImplementedError("In progress")
 
+    dataset_keywords = {}
     # Do heavy ram part one by one to save memory.
     # TODO this can be done better, e.g by local ranks or in parallel.
     for i in range(args.world_size):
         if getattr(args, "load_model_one_by_one", True):
-            print(f"loading the model rank by rank to save host RAM {i+1}/{args.world_size}")
+            print(f"loading the model rank by rank to save host RAM {i + 1}/{args.world_size}")
             torch.distributed.barrier()
         if i == args.rank:
             parsed_config.load_model(handler=handler, bs_train=args.bs_train, rank=args.rank)
-            dataset_keywords = {}
             extra_kw = handler.get_extra()
             if isinstance(extra_kw, dict):
                 dataset_keywords.update(extra_kw)
@@ -487,17 +525,19 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     eval_tensor_shapes = parsed_config.eval_tensor_shapes
     training_tensor_shapes = parsed_config.training_tensor_shapes
 
-
     # NOTE: here its the sliced model.
     model = parsed_config.model
 
     model.device = device
 
-    is_first_partition = args.stage == 0
+    stage_depth = pipe_config.get_depth_for_stage(args.stage)
+
+    # we assume last stage is the output
     is_last_partition = args.stage == args.num_stages - 1
+    is_first_partition = args.stage == 0 or stage_depth == 0
 
+    is_zero_staleness_stage = stage_depth == 0 if not is_gpipe else True
     eval_tensor_dtypes = training_tensor_dtypes  # HACK, TODO
-
     # Get dataloaders needed for this stage
     train_dl, test_dl, samplers, extra = get_dataloaders(
         args,
@@ -563,7 +603,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     # Will automatically change trainer to gap aware compatible trainer
     partition_using_gap_aware = False
     if not is_gpipe:
-        partition_using_gap_aware = hack_trainer_type_to_gap_aware(args)
+        partition_using_gap_aware = hack_trainer_type_to_gap_aware(args, stage_depth)
 
     if partition_using_gap_aware:
         logger.info(f"Stage {args.stage} will use Gap Aware")
@@ -575,12 +615,12 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
                                 is_last_partition=is_last_partition)
     assert not (statistics is None)
 
-    # Gap aware penatly just for the loss
+    # Gap aware penalty just for the loss
     gap_aware_just_loss = False
     if not is_gpipe:
         gap_aware_just_loss = getattr(args, 'gap_aware_just_loss', False)
         if gap_aware_just_loss:
-            if is_last_partition:
+            if is_zero_staleness_stage:
                 gap_aware_just_loss = False
             else:
                 if args.no_recomputation:
@@ -620,7 +660,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     optimizer_grouped_parameters = get_optimizer_parameter_groups(args, partition)
 
     # if we replace wp with nesterov, we save the wp arg, and set it back for config and auto experiment naming.
-    if not is_gpipe and is_last_partition:
+    if not is_gpipe and is_zero_staleness_stage:
         try_replace_prediction_with_nesterov(args)
 
     optimizer = get_optimizer(args, optimizer_cls,
@@ -774,12 +814,3 @@ def get_optimizer_parameter_groups(args, partition):
         parameters_count = sum(p.numel() for p in optimizer_grouped_parameters)
     print(f"-I- optimized parameters count: {parameters_count}")
     return optimizer_grouped_parameters
-
-# Example
-# if __name__ == "__main__":
-#     import argparse
-#     parser = argparse.ArgumentsParser()
-#     args = parser.parse_args()
-#     (logger, train_dl, test_dl, is_first_partition, is_last_partition,
-#      partition, statistics, train_dl_len, test_dl_len,
-#      samplers) = prepare_pipeline(args)
