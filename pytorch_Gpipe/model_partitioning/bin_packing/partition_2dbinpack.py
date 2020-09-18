@@ -468,93 +468,97 @@ def stages_from_bins(graph: Graph, bins, id_to_node_worked_on: Dict[int, Node]):
         # that we have 7->8>9 and we can spare 8,
         # however 8 is in the same GPU (bin) with 10 somehow
         # ids 34,35 -> 41
+        # TODO: this should be fix with topo sort edges so I am about to deprecate this fix as its ofter unessesary,
+        # And there is a bug in the way we do it (we look at stages we did not break yet. as its inside a for)
 
-        fixes = []
+        EXPERIMENTAL_FIX_ONE_TO_ONE = False
+        if EXPERIMENTAL_FIX_ONE_TO_ONE:
+            fixes = []
 
-        @dataclass
-        class Fix:
-            stage_id: int
-            dst_stage_id: int
-            gpu_id: int
-            dst_gpu_id: int
+            @dataclass
+            class Fix:
+                stage_id: int
+                dst_stage_id: int
+                gpu_id: int
+                dst_gpu_id: int
 
-        for broken_stage in broken_stages:
-            # if not broken_stage:
-            #     continue
-            #
-            tmp = graph[broken_stage[0]]
-            gpu_id = tmp.gpu_id
-            stage_id = tmp.stage_id
-            all_outputs = set()
-            all_gpus_ids = set()
-            for n in broken_stage:
-                n = graph[n]
-                for out in n.out_edges:
-                    if out.stage_id != n.stage_id:
-                        all_outputs.add(out.stage_id)
-                        if len(all_outputs) > 1:
-                            break
-                        if len(all_outputs) == 1 and len(all_gpus_ids) == 1 and out.gpu_id not in all_gpus_ids:
-                            print("all_gpus_ids, out.gpu_id, out.id, out.scope:")
-                            print(all_gpus_ids, out.gpu_id, out.id, out.scope,)
+            for broken_stage in broken_stages:
+                # if not broken_stage:
+                #     continue
+                #
+                tmp = graph[broken_stage[0]]
+                gpu_id = tmp.gpu_id
+                stage_id = tmp.stage_id
+                all_outputs = set()
+                all_gpus_ids = set()
+                for n in broken_stage:
+                    n = graph[n]
+                    for out in n.out_edges:
+                        if out.stage_id != n.stage_id:
+                            all_outputs.add(out.stage_id)
+                            if len(all_outputs) > 1:
+                                break
+                            if len(all_outputs) == 1 and len(all_gpus_ids) == 1 and out.gpu_id not in all_gpus_ids:
+                                print("all_gpus_ids, out.gpu_id, out.id, out.scope:")
+                                print(all_gpus_ids, out.gpu_id, out.id, out.scope,)
 
-                            print("all graph:")
-                            print("{}  |  {}  |  {} ".format("id", "stage", "gpu"))
+                                print("all graph:")
+                                print("{}  |  {}  |  {} ".format("id", "stage", "gpu"))
 
-                            for x in graph.nodes:
-                                print("{}  |  {}  |  {} ".format(x.id, x.stage_id, x.gpu_id))
-                            raise ValueError(f"Detected problematic GPU id {out.gpu_id}")
-                        all_gpus_ids.add(out.gpu_id)
+                                for x in graph.nodes:
+                                    print("{}  |  {}  |  {} ".format(x.id, x.stage_id, x.gpu_id))
+                                raise ValueError(f"Detected problematic GPU id {out.gpu_id}")
+                            all_gpus_ids.add(out.gpu_id)
 
-                if len(all_outputs) > 1:
-                    break
-            if len(all_outputs) == 1:
-                dst_stage_id = next(iter(all_outputs))
-                assert len(all_gpus_ids) == 1
-                dst_gpu_id = next(iter(all_gpus_ids))
+                    if len(all_outputs) > 1:
+                        break
+                if len(all_outputs) == 1:
+                    dst_stage_id = next(iter(all_outputs))
+                    assert len(all_gpus_ids) == 1
+                    dst_gpu_id = next(iter(all_gpus_ids))
 
-                # Important:
-                # Unify only if in same GPU.
-                print(f"-I- one2one stage: {stage_id}->{dst_stage_id}  ||| GPU: {gpu_id}->{dst_gpu_id}")
-                if dst_gpu_id == gpu_id:
-                    fixes.append(
-                        Fix(stage_id=stage_id, gpu_id=gpu_id, dst_gpu_id=dst_gpu_id, dst_stage_id=dst_stage_id))
+                    # Important:
+                    # Unify only if in same GPU.
+                    print(f"-I- one2one stage: {stage_id}->{dst_stage_id}  ||| GPU: {gpu_id}->{dst_gpu_id}")
+                    if dst_gpu_id == gpu_id:
+                        fixes.append(
+                            Fix(stage_id=stage_id, gpu_id=gpu_id, dst_gpu_id=dst_gpu_id, dst_stage_id=dst_stage_id))
 
-        print(f"-I- got {len(fixes)} fixes.")
-        d_stage_to_dst = dict()
-        d_gpu_to_dst = dict()
-        for fix in fixes:
-            d_stage_to_dst[fix.stage_id] = fix.dst_stage_id
-            d_gpu_to_dst[fix.gpu_id] = fix.dst_gpu_id
+            print(f"-I- got {len(fixes)} fixes.")
+            d_stage_to_dst = dict()
+            d_gpu_to_dst = dict()
+            for fix in fixes:
+                d_stage_to_dst[fix.stage_id] = fix.dst_stage_id
+                d_gpu_to_dst[fix.gpu_id] = fix.dst_gpu_id
 
-        def last_dst_stage(stage_id, stack=None):
-            if stage_id in d_stage_to_dst:
-                if stack is None:
-                    stack = []
-                stack.append(stage_id)
-                return last_dst_stage(d_stage_to_dst[stage_id], stack)
-            else:
-                for v in stack:
-                    d_stage_to_dst[v] = stage_id
-                return stage_id
+            def last_dst_stage(stage_id, stack=None):
+                if stage_id in d_stage_to_dst:
+                    if stack is None:
+                        stack = []
+                    stack.append(stage_id)
+                    return last_dst_stage(d_stage_to_dst[stage_id], stack)
+                else:
+                    for v in stack:
+                        d_stage_to_dst[v] = stage_id
+                    return stage_id
 
-        # Apply on all to fix the d_stage_to_dst dict to last
-        for stage_id in list(d_stage_to_dst.keys()):
-            last_dst_stage(stage_id)
+            # Apply on all to fix the d_stage_to_dst dict to last
+            for stage_id in list(d_stage_to_dst.keys()):
+                last_dst_stage(stage_id)
 
-        print(f"-I- fixing d_stage_to_dst: {d_stage_to_dst}")
-        for i, v in d_stage_to_dst.items():
-            a = [n.id for n in graph.nodes if n.stage_id == i]
-            b = [n.id for n in graph.nodes if n.stage_id == v]
-            print("-I-merge:", i, v, a, b)
+            print(f"-I- fixing d_stage_to_dst: {d_stage_to_dst}")
+            for i, v in d_stage_to_dst.items():
+                a = [n.id for n in graph.nodes if n.stage_id == i]
+                b = [n.id for n in graph.nodes if n.stage_id == v]
+                print("-I-merge:", i, v, a, b)
 
-        # Replace
-        for n in graph.nodes:
-            if n.stage_id in d_stage_to_dst:
-                dst = d_stage_to_dst[n.stage_id]
-                n.stage_id = dst
+            # Replace
+            for n in graph.nodes:
+                if n.stage_id in d_stage_to_dst:
+                    dst = d_stage_to_dst[n.stage_id]
+                    n.stage_id = dst
 
-        #     # NOTE: this create an empty stage, but it will be wiped out by following functions
+            #     # NOTE: this create an empty stage, but it will be wiped out by following functions
 
     # cannonize_partition_indices(graph) <--- TODO: redundant
     # break cycles <--- TODO: redundant
