@@ -525,7 +525,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     model.device = device
 
     stage_depth = pipe_config.get_depth_for_stage(args.stage)
-    pipeline_depth = pipe_config.pipeline_depth()
+    pipeline_depth = pipe_config.pipeline_depth
     args.pipeline_depth = pipeline_depth
 
     # we assume last stage is the output
