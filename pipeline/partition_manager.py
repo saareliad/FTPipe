@@ -1,5 +1,6 @@
 import logging
 import types
+import warnings
 
 import torch
 from torch import Tensor
@@ -27,10 +28,13 @@ DEBUG_FAKE_DRAW = False
 # TODO: weight prediction + weight stashing + step_every + cache (aggmsnag, no aggmsnag)
 # TODO: gap aware + step_every >1
 # TODO: currently assuming is_last_partition also means zero staleness.
+# experimental "virtual last partition"
 
 class SinglePartitionManager:
     def __init__(self,
-                 stage,
+                 stage: int,
+                 stage_depth: int,
+                 pipeline_depth: int,
                  num_stages,
                  partition: torch.nn.Module,
                  comm_handler: CommunicationHandlerBase,
@@ -44,12 +48,16 @@ class SinglePartitionManager:
                  gap_aware_just_loss=False,
                  sync_buffers=False,
                  weight_stashing_just_for_stats=False,
-                 stateless_tied=False,
-                 is_mp=False,
+                 disable_clone_inputs=False,
                  req_grad=None,
+                 # outputs_req_grad=None,
                  ):
 
-        if (gap_aware_just_loss and (not use_recomputation)):
+        if not disable_clone_inputs:
+            disable_clone_inputs = True
+            warnings.warn("setting disable_clone_inputs=True to avoid double clone since we clone in MPI too.")
+
+        if gap_aware_just_loss and not use_recomputation:
             raise NotImplementedError(
                 "gap_aware_just_loss works only with recomputation on")
         self.logger = logging.getLogger("msnag")  # FIXME
@@ -60,12 +68,27 @@ class SinglePartitionManager:
         self.sync_buffers = sync_buffers
         self.device = device
         self.is_last_partition = is_last_partition
-        self.is_first_partition = is_first_partition
+        self.is_first_partition = is_first_partition or stage_depth == pipeline_depth - 1
         self.stage = stage
+
+        self.true_stage_depth = stage_depth
+        if hasattr(self.work_scheduler, "get_virtual_stage_depth"):
+            # replace stage_depth with virtual
+            virtual_stage_depth = self.work_scheduler.get_virtual_stage_depth(stage_depth)
+            self.stage_depth = virtual_stage_depth
+        else:
+            self.stage_depth = stage_depth
+
+        self.pipeline_depth = pipeline_depth
+
         self.num_stages = num_stages
         self.step_every = step_every
         self.work_scheduler = work_scheduler
-        self._init_partition(partition, use_recomputation, is_mp, req_grad,
+
+        if self.stage_depth == 0:
+            use_recomputation = False
+
+        self._init_partition(partition, use_recomputation, disable_clone_inputs, req_grad,
                              )
         if hasattr(comm_handler, "init_ddp_context"):
             ddp = comm_handler.init_ddp_context(self.partition.layers)
@@ -94,8 +117,7 @@ class SinglePartitionManager:
 
         self.delay_at_batch = {}
 
-        self.futures_handler = self.comm_handler.create_futures_handler(
-            is_first_partition, is_last_partition, stateless_tied, num_stages)
+        self.futures_handler = self.comm_handler.create_futures_handler()
 
         # Hints,May be set later.
         # self.dl_iter = None
@@ -111,9 +133,11 @@ class SinglePartitionManager:
         TO_DEVICE = False
         is_last_partition = self.is_last_partition
         is_first_partition = self.is_first_partition
+
         device = self.device
 
         # Set partition.
+        # TODO: partition class for non last stage which does not need to recompute
         if use_recomputation:
             if is_last_partition:
                 partition_cls = LastPartition
@@ -244,7 +268,9 @@ class SinglePartitionManager:
             else:
                 policy = CachePolicy.STEP_EVERY
 
-            self.weight_stasher.set_problematic(stage=self.stage, num_stages=self.num_stages, forward=True,
+            # FIXME: use actual depth (and max depth?)
+            self.weight_stasher.set_problematic(stage_depth=self.stage_depth, pipeline_depth=self.pipeline_depth,
+                                                forward=True,
                                                 policy=policy)
 
         self.weight_stasher = weight_stasher
@@ -287,7 +313,7 @@ class SinglePartitionManager:
         x = self.partition(x, batch_idx)
         request_objects = None
         # For non last partition - send forward.
-        if not self.is_last_partition:
+        if not self.is_last_partition:  # TODO: or non virtual depth == 0
             send_ctx = self.data_propagator.pack_send_context(x, *ctx)
             request_objects = self.comm_handler.send_activations(
                 send_ctx, batch_idx)
@@ -378,7 +404,8 @@ class SinglePartitionManager:
             request_objects, x, ctx = self.forward_pass_and_send(
                 batch_idx, num_batches, preload_input_partition)
 
-        if not self.is_last_partition:
+        # TODO: for depth 0 stages.
+        if self.stage_depth > 0:
             # For the last partition - we restore later.
             if is_training:
                 self.true_weights_storage.restore_if_needed()
@@ -388,13 +415,23 @@ class SinglePartitionManager:
         ############################
         else:
             # Last partition - also do backward.
-            ctx = (*preload_input_to_outside_loss, *ctx)
-            if not is_training:
-                # In Eval: Just calculate statistics.
-                self.trainer.calc_test_stats(x, *ctx)
+            if self.is_last_partition:
+                ctx = (*preload_input_to_outside_loss, *ctx)
+                if not is_training:
+                    # In Eval: Just calculate statistics.
+                    self.trainer.calc_test_stats(x, *ctx)
+                    return []
+            elif not is_training:
                 return []
 
             trainer = self.trainer
+
+            # TODO: currently only last partition should be at depth 0.
+            # TODO: currently only last partition should be at depth 0.
+            # TODO: currently only last partition should be at depth 0.
+
+            if not self.is_last_partition:
+                return self.run_batch_backward(batch_idx=batch_idx, num_batches=num_batches)
 
             # NOTE: for last partition- batch idx is the same as num backwards.
             old_lrs = None
@@ -473,7 +510,7 @@ class SinglePartitionManager:
         g = self.comm_handler.wait_recv_gradients(batch_idx, last_due_end)
         self.comm_handler.post_recv_gradients(batch_idx, num_batches)
 
-        # Allow skiping steps (Gradient aggregation)
+        # Allow skipping steps (Gradient aggregation)
         old_lrs = None
         do_step = self.should_do_step(batch_idx)
         # also do step for the last. (but with smaller LR)
@@ -490,13 +527,13 @@ class SinglePartitionManager:
 
         # recompute and send backward
         request_objects = None
-        if not (self.is_first_partition):
+        if not self.is_first_partition:
             request_objects = self.comm_handler.send_gradients(
                 self.partition.get_grad(batch_idx), batch_idx)
 
         # NOTE: we can start the next recv here
 
-        # TODO: just make it a STEP funciton
+        # TODO: just make it a STEP function
         if do_step:
             trainer = self.trainer
             weight_stasher = self.weight_stasher
@@ -609,8 +646,9 @@ class SinglePartitionManager:
         self.first_effected_batch = num_batches - reminder
         self.reminder_scaler_lr_factor = reminder / self.step_every
 
-        stage = self.stage
-        num_stages = self.num_stages
+        stage_depth = self.stage_depth
+        pipeline_depth = self.pipeline_depth
+
         work_scheduler = self.work_scheduler
         is_last_partition = self.is_last_partition
         run_batch_backward = self.run_batch_backward
@@ -626,13 +664,14 @@ class SinglePartitionManager:
 
         while done_bwds < num_batches:
             # Act according to some policy
-            action_is_fwd = work_scheduler(stage, num_stages, num_batches,
+            # TODO: depth
+            action_is_fwd = work_scheduler(stage_depth, pipeline_depth, num_batches,
                                            done_fwds, done_bwds)
             if action_is_fwd:
                 ro = run_batch_forward(done_fwds,
                                        num_batches,
                                        done_bwds=done_bwds)
-                if is_last_partition:
+                if stage_depth == 0:
                     futures_handler.after_backward(ro, done_bwds)
                 else:
                     futures_handler.after_forward(ro, done_fwds, True)
@@ -642,10 +681,11 @@ class SinglePartitionManager:
                 futures_handler.after_backward(ro, done_bwds)
 
             # Increase counters
-            if is_last_partition:
+            if stage_depth == 0:
                 done_bwds += 1
                 done_fwds += 1
-                next(b_tqdm_it)
+                if is_last_partition:
+                    next(b_tqdm_it)
             else:
                 if action_is_fwd:
                     done_fwds += 1
@@ -664,12 +704,9 @@ class SinglePartitionManager:
 #################
 class GPipePartitionManager(SinglePartitionManager):
     def __init__(self, *args, **kw):
-        # NOTE: we changed partition type choice
         super().__init__(*args, **kw)
 
         self.saved_for_backward = dict()
-        # assert "GPIPE" in self.work_scheduler
-        # step_every
 
     def _init_partition(self, partition, use_recomputation, is_mp, req_grad,
                         ):
@@ -698,7 +735,7 @@ class GPipePartitionManager(SinglePartitionManager):
                                            )
         else:
             # Partition without recomputation
-            # NOTE: its pretty stupied to use GPIPE in this case.
+            # NOTE: its pretty stupid to use GPIPE in this case.
             # TODO: but I have plan doing so. "per-stage recomputation"
             raise NotImplementedError()
 
@@ -748,7 +785,7 @@ class GPipePartitionManager(SinglePartitionManager):
                 return []
             elif is_last_micro_batch:
                 # Save the out for later, when we don't do recomputation
-                # TODO: can ask trainer what exactly is neccesary from the output to save space, but its very minor.
+                # TODO: can ask trainer what exactly is necessary from the output to save space, but its very minor.
 
                 # NOTE: for the micro batch (no recomputation), we have x as root of the computation graph.
                 # otherwise, it can be saved just for statistics, and we need to do recomputation.
@@ -760,7 +797,7 @@ class GPipePartitionManager(SinglePartitionManager):
             else:
                 self.saved_for_backward[batch_idx] = ctx
 
-    def last_partition_batch_backward(self, batch_idx, num_batches):
+    def last_partition_batch_backward(self, batch_idx: int, num_batches: int):
         # NOTE: Partition already knows if its the last micro batch, from backward
         ##############################
         # Last partition backward
@@ -828,7 +865,7 @@ class GPipePartitionManager(SinglePartitionManager):
         self.log_training_stats()
         return request_objects
 
-    def run_batch_backward(self, batch_idx, num_batches):
+    def run_batch_backward(self, batch_idx: int, num_batches: int):
         """ Runs the backwards pass + step for all partitions except the last partition """
 
         partition = self.partition
@@ -903,8 +940,9 @@ class GPipePartitionManager(SinglePartitionManager):
         self.first_effected_batch = num_batches - reminder
         self.reminder_scaler_lr_factor = reminder / self.step_every
 
-        stage = self.stage
-        num_stages = self.num_stages
+        stage_depth = self.stage_depth
+        pipeline_depth = self.pipeline_depth
+
         work_scheduler = self.work_scheduler
         is_last_partition = self.is_last_partition
         run_batch_backward = self.run_batch_backward if not is_last_partition else self.last_partition_batch_backward
@@ -919,7 +957,7 @@ class GPipePartitionManager(SinglePartitionManager):
 
         while done_bwds < num_batches:
             # Act according to some policy
-            action_is_fwd = work_scheduler(stage, num_stages, num_batches,
+            action_is_fwd = work_scheduler(stage_depth, pipeline_depth, num_batches,
                                            done_fwds, done_bwds)
             if action_is_fwd:
                 # micro_batch_to_run = done_fwds - done_bwds

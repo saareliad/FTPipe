@@ -1,5 +1,6 @@
 import gc
 import warnings
+from typing import Type
 
 import torch
 
@@ -325,6 +326,7 @@ def hack_trainer_type_to_gap_aware(args, stage_depth=None):
         # TODO: policy for max delay 1
         # TODO: policy with staleness limit
     """
+
     def hack():
         args.trainer['type'] += "_gap_aware"
 
@@ -338,8 +340,6 @@ def hack_trainer_type_to_gap_aware(args, stage_depth=None):
             is_zero_staleness_stage = stage_depth == 0
             is_one_staleness_stage = stage_depth == 1
             warnings.warn("Assuming no grad accumulation and no staleness limit...")
-
-
 
         if args.gap_aware['policy'] == 'almost_last_partition':
             # HACK: change trainer name
@@ -441,19 +441,12 @@ def preproc_data(args, cache=None, save_cache=True):
 
 def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     is_gpipe = "gpipe" == args.work_scheduler.lower()
-    # select a partition manager
-    if is_gpipe:
-        print("Preparing pipeline for GPipe")
-        partition_cls = GPipePartitionManager
-    else:
-        partition_cls = SinglePartitionManager
 
     if args.is_multiprocessing_worker:
         # multiprocessing communication handler
         COMM_VERSION = 2
 
     # get work scheduler
-    work_scheduler = get_work_scheduler(args)
 
     # set device
     local_rank_to_device_map = get_rank_to_device_map(args)
@@ -474,6 +467,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         handler=handler,
         send_target_in_pipe=("_nonsep" in args.data_propagator),
         prefer_seq_sends=getattr(args, "prefer_seq_sends", True))
+    pipe_config = parsed_config.pipe_config
 
     # ini distributed
     args.num_stages = parsed_config.num_stages
@@ -503,6 +497,8 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     else:
         raise NotImplementedError("In progress")
 
+    work_scheduler = get_work_scheduler(args)
+
     dataset_keywords = {}
     # Do heavy ram part one by one to save memory.
     # TODO this can be done better, e.g by local ranks or in parallel.
@@ -519,8 +515,6 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
             del handler
             gc.collect()
 
-    pipe_config = parsed_config.pipe_config
-
     training_tensor_dtypes = parsed_config.training_tensor_dtypes
     eval_tensor_shapes = parsed_config.eval_tensor_shapes
     training_tensor_shapes = parsed_config.training_tensor_shapes
@@ -531,12 +525,15 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     model.device = device
 
     stage_depth = pipe_config.get_depth_for_stage(args.stage)
+    pipeline_depth = pipe_config.pipeline_depth()
+    args.pipeline_depth = pipeline_depth
 
     # we assume last stage is the output
-    is_last_partition = args.stage == args.num_stages - 1
-    is_first_partition = args.stage == 0 or stage_depth == 0
+    is_last_partition = args.stage == args.num_stages - 1  # or stage_depth == 0
+    is_first_partition = args.stage == 0 #  or stage_depth == pipeline_depth - 1
 
     is_zero_staleness_stage = stage_depth == 0 if not is_gpipe else True
+
     eval_tensor_dtypes = training_tensor_dtypes  # HACK, TODO
     # Get dataloaders needed for this stage
     train_dl, test_dl, samplers, extra = get_dataloaders(
@@ -628,8 +625,17 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
                         "gap_aware_just_loss works only with recomputation on")
 
     # Init the partition manager itself, warping the model and loading it to device.
-    partition = partition_cls(
+    # select a partition manager
+    if is_gpipe:
+        partition_mgr_cls = GPipePartitionManager
+    else:
+        partition_mgr_cls = SinglePartitionManager
+
+    partition_mgr_cls: Type[SinglePartitionManager]
+    partition = partition_mgr_cls(
         args.stage,
+        stage_depth,
+        pipeline_depth,
         args.num_stages,
         model,
         comm_handler,
@@ -643,9 +649,9 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         gap_aware_just_loss=gap_aware_just_loss,
         weight_stashing_just_for_stats=getattr(
             args, "weight_stashing_just_for_stats", False),
-        stateless_tied=getattr(args, "stateless_tied", False),
-        is_mp=args.is_multiprocessing_worker,
+        disable_clone_inputs=args.is_multiprocessing_worker,
         req_grad=parsed_config.req_grad,
+        # outputs_req_grad=parsed_config.outputs_req_grad
     )
 
     # support for simulating stage replication (dev)
@@ -714,7 +720,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
 
         # Set Weight Stashing
         if getattr(args, "weight_stashing", False):
-            if not is_last_partition:
+            if not is_zero_staleness_stage:
 
                 has_weight_predictor = weight_predictor is not None
                 if has_weight_predictor:

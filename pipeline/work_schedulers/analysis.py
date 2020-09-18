@@ -3,7 +3,7 @@ import re
 from collections import Counter
 from typing import List, Tuple, Dict, Any
 
-from pipeline.work_schedulers import AVAILABLE_WORK_SCHEDULERS
+from pipeline.work_schedulers import AVAILABLE_WORK_SCHEDULERS, get_work_scheduler
 from pipeline.work_schedulers import WorkScheduler, GpipeScheduler
 
 
@@ -12,8 +12,9 @@ def get_fwd_bwd_string_for_stage(stage, scheduler: WorkScheduler, num_stages,
     f = 0
     b = 0
     s = ""
+    stage_depth = num_stages - stage - 1
     while b < num_batches:
-        if scheduler(stage, num_stages, num_batches, f, b):
+        if scheduler(stage_depth, num_stages, num_batches, f, b):
             s += "F"
             f += 1
             if stage == num_stages - 1 and not isinstance(scheduler, GpipeScheduler):
@@ -169,12 +170,19 @@ if __name__ == "__main__":
     PRINT_JUST_PROBLEMATIC_STAGES = False
     PRINT_JUST_FOR_THE_FWDS = False
 
-    d = dict(sched_name=sched_name,
-             step_every=step_every,
-             num_stages=num_stages)
-    print(f"-I- got args: {pprint.pformat(d)}")
 
-    scheduler = AVAILABLE_WORK_SCHEDULERS.get(sched_name)(step_every)
+    from types import SimpleNamespace
+
+    args = SimpleNamespace(
+        work_scheduler=sched_name,
+        step_every=step_every,
+        num_stages=num_stages
+    )
+
+    print(f"-I- got args: {pprint.pformat(vars(args))}")
+
+    scheduler = get_work_scheduler(args=args, pipe_config=None)
+    # scheduler = AVAILABLE_WORK_SCHEDULERS.get(sched_name)(step_every)
 
     if PRINT_STAGE_STRINGS:
         print_string_for_all_stages(num_stages, scheduler, num_batches)

@@ -1,7 +1,7 @@
 import types
 import warnings
 from functools import partial
-from typing import Tuple, Union
+from typing import Tuple, Union, Dict, Any
 
 import torch
 import torch.nn as nn
@@ -36,19 +36,19 @@ _REPLACE_INPLACE = True
 _VERBOSE_ON_NONE_GRADIENTS = False
 
 # LayerNorm? GroupNorm?
-DEFAULT_CLASSES_LIST_TO_PATCH = [
+DEFAULT_CLASSES_LIST_TO_PATCH = (
     nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d, nn.SyncBatchNorm,
     nn.InstanceNorm1d, nn.InstanceNorm2d, nn.InstanceNorm3d,
     dp_sim.BatchNorm1d, dp_sim.BatchNorm2d, dp_sim.BatchNorm3d
-]
+)
 
 
 def get_buffers_for_ddp_sync(model,
                              classes_to_patch=DEFAULT_CLASSES_LIST_TO_PATCH):
     # This function should be used once.
 
+    found = []  # list of tuples: (access_string, model)
     for model_to_patch in classes_to_patch:
-        found = []  # list of tuples: (access_string, model)
         find_modules(model, "", model_to_patch, found)
 
     found = sorted(found, key=lambda t: t[0])
@@ -63,7 +63,7 @@ def get_buffers_for_ddp_sync(model,
 class Partition(nn.Module):
     """
     Partition with recomputation.
-    Should be used as Intermidiate partition.
+    Should be used as Intermediate partition.
 
     saves activations.
     pop happens when we read the gradient.
@@ -182,9 +182,9 @@ class Partition(nn.Module):
         """ returns an iteretable of grads """
         x = self.input_buffer.pop(micro_batch_idx)
         if isinstance(x, Tensor):
-            return (x.grad,)
+            return x.grad,
         else:
-            return [y.grad for y in filter_req_grad_tensors(x)]
+            return [y.grad for y in filter_req_grad_tensors_for_send(x)]
 
     def backward(self, g, **kw):
         raise NotImplementedError()
@@ -214,18 +214,13 @@ class FirstPartition(Partition):
 
             with torch.no_grad():
                 # EXPLICITLY DO CLONE
-                if isinstance(x, Tensor):
-                    # Note - we clone here because we don't want the tensor to get overriden.
-                    # TODO: it could be done better if we use multiple input buffers instead of allocating
-                    # (when #buffers==#max(len(input_buffer)))
-                    # In pytorch it can happen auto matically with THCCashingAlocator.
-                    self.input_buffer[micro_batch_idx] = x
-                    self.rng_stasher.stash_rng_state(micro_batch_idx)
-                    x = self.layers(x)
+                # HACK: we do not clone in the first stage
+                self.input_buffer[micro_batch_idx] = x
+                self.rng_stasher.stash_rng_state(micro_batch_idx)
 
+                if isinstance(x, Tensor):
+                    x = self.layers(x)
                 else:
-                    self.input_buffer[micro_batch_idx] = x
-                    self.rng_stasher.stash_rng_state(micro_batch_idx)
                     x = self.layers(*x)
 
                 if self.dummy_forward_monkey_patcher:
@@ -244,7 +239,7 @@ class FirstPartition(Partition):
 
     def recompute(self, micro_batch_idx):
         # Unlike normal partition, here we pop the activations after we read from buffer
-        # This is a sperate function with code copy,
+        # This is a separate function with code copy,
         # because we want to pop as early as possible to possibly save memory.
         x = self.input_buffer.pop(micro_batch_idx)  # Note: here we pop.
 
@@ -287,23 +282,27 @@ class LastPartition(Partition):
             # TODO: if _HAS_DUMMY_FORWARD == False we can store only activations which need gradients.
             if isinstance(x, Tensor):
                 # # See note on option 1 below.
-                x = x.requires_grad_(self.req_grad[0])
+                rg = self.req_grad[0]
+                if not rg:
+                    warnings.warn(
+                        "Backpropagation will not happen beyond last partition since it has a single input which does not requires grad")
+                x = x.requires_grad_(rg)
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(x)
             else:
                 # Option 2
                 x = list(get_r(x, self.req_grad))
 
+                # FIXME: it can be problematic to filter, since it can filter unwanted
+                # TODO: without filtering: we save un-needed stuff.
                 self.input_buffer[micro_batch_idx] = list(filter_req_grad_tensors(x))
 
-                # UNFLATEN
                 x = self.layers(*x)
         else:
             with torch.no_grad():
                 if isinstance(x, Tensor):
                     x = self.layers(x)
                 else:
-                    # UNFLATEN
                     x = self.layers(*x)
 
         #  Last partition outputs should be in a tensor format
@@ -328,7 +327,7 @@ class PartitionWithoutRecomputation(nn.Module):
                  _REQ_GRAD=True,
                  req_grad=None):
         """
-            Intermidiate partition which does not do recomputation.
+            Intermediate partition which does not do recomputation.
             HACK: has misleading names to be used with existing code.
 
             NOTE:
@@ -391,7 +390,6 @@ class PartitionWithoutRecomputation(nn.Module):
                         x = list(get_dr(x, self.req_grad))
                     self.input_buffer[micro_batch_idx] = x
 
-                # UNFLATEN
                 x = self.layers(*x)
 
             # save the head.
@@ -403,7 +401,6 @@ class PartitionWithoutRecomputation(nn.Module):
                 if isinstance(x, Tensor):
                     x = self.layers(x)
                 else:
-                    # UNFLATEN
                     x = self.layers(*x)
                 return x
 
@@ -417,13 +414,13 @@ class PartitionWithoutRecomputation(nn.Module):
         torch.autograd.backward(x, g)
 
     def get_grad(self, micro_batch_idx):
-        """ returns an iteretable of grads """
+        """ returns an iterable of grads """
         # NOTE: This method can be patched.
         x = self.input_buffer.pop(micro_batch_idx)
         if isinstance(x, Tensor):
-            return (x.grad,)
+            return x.grad,
         else:
-            return [y.grad for y in filter_req_grad_tensors(x)]
+            return [y.grad for y in filter_req_grad_tensors_for_send(x)]
 
 
 class FirstPartitionWithoutRecomputation(PartitionWithoutRecomputation):
@@ -539,6 +536,18 @@ class GPipeLastPartition(GPipePartition):
 
 filter_req_grad_tensors = partial(filter, lambda a: isinstance(a, Tensor) and a.requires_grad)
 
+filter_req_grad_tensors_for_send = partial(filter, lambda a: isinstance(a, Tensor) and a.requires_grad)
+
+
+# TODO: it can be dangerous to filter for send like this and can cause deadlock in edge cases.
+# need to take care of accidental Nones for example
+
+# def filter_req_grad_tensors_for_send(x, inputs_buffer_req_grad):
+#     # TODO: make sure th inputs_buffer_req_grad is the same as input buffers length since for some partititions we filter
+#     # e.g: last partition or partitions which do not do recomputation.
+#     assert len(x) == len(inputs_buffer_req_grad)
+#     return [g for g, r in zip(x, inputs_buffer_req_grad) if r]
+
 
 def filter_for_backward(x, g):
     # NOTE: we currently build on this behavior  so be careful when removing.
@@ -558,7 +567,7 @@ def filter_for_backward(x, g):
     return tensors, grad_tensors
 
 
-def req_grad_dict_to_tuple(req_grad: dict):
+def req_grad_dict_to_tuple(req_grad: Dict[Any, bool]) -> Tuple[bool]:
     ret = tuple(v for i, v in req_grad.items())
     # print(f"-I- req_grad tuple: {ret}")
     return ret

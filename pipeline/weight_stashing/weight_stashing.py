@@ -52,19 +52,19 @@ class WeightStasher:
         self.true_weights_storage = true_weights_storage
         # TODO: reduce redundant stashing for micro batches. (check do simply at init...)
 
-    def set_problematic(self, stage, num_stages, forward=True, policy: CachePolicy = CachePolicy.EVERY_BATCH):
+    def set_problematic(self, stage_depth, pipeline_depth, forward=True, policy: CachePolicy = CachePolicy.EVERY_BATCH):
 
         self.is_problematic = True
         se = self.step_every
-        depth = num_stages - stage - 1
         if policy == CachePolicy.STEP_EVERY:
-            if se >= num_stages or se >= depth:
+            if se >= stage_depth:
+                # FIXME: whole usage of num_stages
                 def get_micro_batch(self, batch_index):
                     true_mb = batch_index % se
-                    if true_mb <= stage + (se - num_stages):
+                    if true_mb <= stage_depth + (se - pipeline_depth):  # FIXME
                         return true_mb  # staleness 0
                     else:
-                        return true_mb - (stage + (se - num_stages) + 1)  # staleness 1
+                        return true_mb - (stage_depth + (se - pipeline_depth) + 1)  # staleness 1  # FIXME
 
                     # TODO: can do a more "fine grained condition"
                     # saves computation for earlier partitions:
@@ -165,7 +165,8 @@ class WeightStasher:
         # NOTE: its ok to do so, because we only stash once.
         with torch.no_grad():
             for pg, cloned in zip(self.optimizer.param_groups, buff):
-                for p, bp in zip(pg['params'], cloned):
+                pgp = pg['params']
+                for p, bp in zip(pgp, cloned):
                     p.data = bp.detach()
 
     def pop_and_load_stashed_params(self, batch_index):

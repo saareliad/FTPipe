@@ -181,6 +181,10 @@ class PipelineConfig:
         max_send_depth_dict_g = self.max_send_depth_dict(is_activations=False)
         return max(max_send_depth_dict_a[stage_id], max_send_depth_dict_g[stage_id])
 
+    @property
+    def pipeline_depth(self) -> int:
+        return max(self.get_depth_for_stage(x) for x in range(self.n_stages)) + 1
+
 
 def atomic_batch_change(atomic_is_batched, atomic_shape, dim, batch_size):
     assert isinstance(atomic_is_batched, bool)

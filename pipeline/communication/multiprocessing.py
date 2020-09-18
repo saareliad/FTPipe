@@ -406,18 +406,16 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         g = self.fix_after_recv(g, True)
         return g
 
-    def create_futures_handler(self, is_first_partition, is_last_partition, stateless_tied, num_stages):
-        self.futures_handler = FuturesHandler(is_first_partition, is_last_partition, stateless_tied, num_stages)
+    def create_futures_handler(self, *args, **kw):
+        self.futures_handler = FuturesHandler(*args, **kw)
         return self.futures_handler
 
 
 class FuturesHandler(FuturesHandlerBase):
     """ Handle sent object futures """
 
-    def __init__(self, is_first_partition, is_last_partition, stateless_tied, num_stages):
+    def __init__(self, *args, **kw):
         super().__init__()
-        self.is_first_partition = is_first_partition
-        self.is_last_partition = is_last_partition
 
         self.last_fwd_result = []
         self.last_bwd_result = []
@@ -431,9 +429,6 @@ class FuturesHandler(FuturesHandlerBase):
 
     def after_backward(self, ro, done_bwds):
         self.last_bwd_result.append(ro)
-
-        # if not (self.is_first_partition):
-        #     sent_request_objects.result()
 
     def clean_train(self):
         for ll in [self.last_fwd_result, self.last_bwd_result]:

@@ -1,12 +1,13 @@
 # Make sure you have prerequisites, e,g:
-# RUN apt-get update && apt-get install -y --no-install-recommends \
+#
+# apt-get install -y --no-install-recommends \
 #          build-essential \
 #          cmake \
 #          git \
 #          curl \
 #          ca-certificates \
 #          libjpeg-dev \
-#          libpng-dev && \
+#          libpng-dev
 
 # Also needed:
 # cuda 10.2
@@ -18,7 +19,7 @@ conda_stuff() {
 }
 
 new_env() {
-    conda create -n py38 python=3.8
+    conda create -y -n py38 python=3.8
     conda activate py38
     conda install -y numpy
     conda install -y pyyaml
@@ -59,7 +60,7 @@ pytorch_sources() {
     git clone --recursive https://github.com/pytorch/pytorch
     cd pytorch || exit 1
     # Added required version (not checked the line below)
-    git checkout --recurse-submodules v1.5.0
+    git checkout --recurse-submodules v1.6.0
 
     # if you are updating an existing checkout
     git submodule sync

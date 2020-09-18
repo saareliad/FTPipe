@@ -17,6 +17,7 @@ dependencies:
     - transformers
     - yapf
     - t5
+    - nlp # TODO: replace with datasets
 
 
 prefix: /home_local/saareliad/miniconda3/envs/py38

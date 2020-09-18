@@ -1,10 +1,12 @@
 import math
-import time
-import torch
 import os
+import time
+from enum import Enum, auto
+
+import torch
+
 from pipeline import SinglePartitionManager
 from pipeline.statistics import Stats
-from enum import Enum, auto
 
 
 class SmallerLastBatchPolicy(Enum):
@@ -12,12 +14,18 @@ class SmallerLastBatchPolicy(Enum):
     DropReminder = auto()
 
 
-SMALLER_LAST_BATCH_POLICY = SmallerLastBatchPolicy.ProportionalStep
+STEP_EVERY_SMALLER_LAST_BATCH_POLICY = SmallerLastBatchPolicy.ProportionalStep
 
 
 def training_loop(args, logger, train_dl, test_dl, is_first_partition,
                   is_last_partition, partition: SinglePartitionManager, statistics: Stats, train_dl_len,
                   test_dl_len, samplers):
+    global STEP_EVERY_SMALLER_LAST_BATCH_POLICY
+    if args.steps > 0 and args.work_scheduler.lower() == "gpipe" and args.mode == "dist" and STEP_EVERY_SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.ProportionalStep:
+        raise NotImplementedError(
+            "Some unsolved problems with buffer sizes, can't yet drop last batch. try using --mode mp or change STEP_EVERY_SMALLER_LAST_BATCH_POLICY to drop")
+    #     # STEP_EVERY_SMALLER_LAST_BATCH_POLICY = SmallerLastBatchPolicy.DropReminder
+
     epochs = 0
     steps = 0
     total_epoch_times_list = []
@@ -110,7 +118,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
 
             reminder_to_drop = train_batches_limit_to_use % args.step_every
             if reminder_to_drop:
-                if SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.DropReminder:
+                if STEP_EVERY_SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.DropReminder:
                     d_info = {
                         "steps_left": steps_left,
                         "original_train_batches_limit": train_batches_limit,
@@ -125,11 +133,16 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
                         logger.info(
                             f"breaking early since can't complete a full step with {args.step_every} gradient accumulations.")
                         break
-                elif SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.ProportionalStep:
+                elif STEP_EVERY_SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.ProportionalStep:
+                    # TODO: to fix GPipe MPI, we can do it, but needs to be only for last batch.
+                    # tmp = partition.work_scheduler.step_every
+                    # print("-I- replacing step every for scheduler for last batch")
+                    # partition.work_scheduler.step_every = reminder_to_drop
                     logger.info(
                         f"Got reminder of {reminder_to_drop} micro batches. Will take proportional {reminder_to_drop / args.step_every} last step")
                 else:
-                    raise NotImplementedError(f"Unknown SMALLER_LAST_BATCH_POLICY, {SMALLER_LAST_BATCH_POLICY}")
+                    raise NotImplementedError(
+                        f"Unknown SMALLER_LAST_BATCH_POLICY, {STEP_EVERY_SMALLER_LAST_BATCH_POLICY}")
         else:
             train_batches_limit_to_use = train_batches_limit
 
@@ -137,11 +150,18 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
 
         # TODO: flush every 1000
         did_train = run_train(train_batches_limit_to_use)
+
+        # if args.steps > 0 and reminder_to_drop and STEP_EVERY_SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.ProportionalStep:
+        #     partition.work_scheduler.step_every = tmp
+
         did_eval = run_eval(test_batches_limit)
 
         epochs += 1
         if did_train:
-            steps += math.ceil(train_batches_limit_to_use / args.step_every)
+            if args.steps > 0 and reminder_to_drop and STEP_EVERY_SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.DropReminder:
+                steps += math.floor(train_batches_limit_to_use / args.step_every)
+            else:
+                steps += math.ceil(train_batches_limit_to_use / args.step_every)
 
         cp_saver.maybe_save_checkpoint(partition.partition.layers, steps)
 

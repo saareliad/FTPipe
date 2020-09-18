@@ -1,10 +1,11 @@
-from .models import AVAILABLE_MODELS
-
-from itertools import count, chain
+import warnings
 from collections import OrderedDict, defaultdict
-from .simple_partitioning_config import PipelineConfig
-from pprint import pprint
 from copy import deepcopy
+from itertools import chain
+from pprint import pprint
+
+from .models import AVAILABLE_MODELS
+from .simple_partitioning_config import PipelineConfig
 
 
 def get_my_send_recv_ranks(pipe_config: PipelineConfig, stage_id, stage_to_rank_map=None, prefer_seq_sends=True):
@@ -30,7 +31,8 @@ def get_my_send_recv_ranks(pipe_config: PipelineConfig, stage_id, stage_to_rank_
                     if stage_id == j:  # recv
                         if tensor_name in receive_ranks:
                             if prefer_seq_sends:
-                                print(f"-V- stage {stage_id}: preferring to recv from a later: {i}-->{j}: {tensor_name}")
+                                print(
+                                    f"-V- stage {stage_id}: preferring to recv from a later: {i}-->{j}: {tensor_name}")
                             else:
                                 raise ValueError(f"Input {tensor_name} received from multiple stages")
                         receive_ranks[tensor_name] = ranks_in_stage(i)
@@ -89,6 +91,7 @@ class PartitioningConfigParser:
 
         # Handle sending target in pipe. (deprecated)
         if send_target_in_pipe:
+            warnings.warn("Sending targets in pipeline is deprecated")
             self.target_tensor_names = pipe_config.d['model_outputs']  # else None
             if self.stage_id > 0:
                 self.ranks_in_previous_stage = stage_to_rank_map[self.stage_id - 1]

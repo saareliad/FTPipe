@@ -476,18 +476,15 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
                          create=True)
 
     # @staticmethod
-    def create_futures_handler(self, is_first_partition, is_last_partition, stateless_tied,
-                               num_stages):
-        self.futures_handler = FuturesHandler(self.pipe_config, self.stage, is_first_partition, is_last_partition,
-                                              stateless_tied, num_stages)
+    def create_futures_handler(self, *args, **kw):
+        self.futures_handler = FuturesHandler(self.pipe_config, self.stage)
         return self.futures_handler
 
 
 class FuturesHandler(FuturesHandlerBase):
     """ This is mostly for MPI, where sent objects are problematic - currently not deleted automatically """
 
-    def __init__(self, pipe_config: PipelineConfig, my_stage_id, is_first_partition, is_last_partition, stateless_tied,
-                 num_stages):
+    def __init__(self, pipe_config: PipelineConfig, my_stage_id):
         super().__init__()
         # FIXME: this is ugly solution for freeing send buffers in tied weights trick. its a waste of memory.
         # FIXME: this is ugly solution for freeing send buffers in tied weights trick. its a waste of memory.
@@ -506,7 +503,8 @@ class FuturesHandler(FuturesHandlerBase):
         self.async_fwd_objects = OrderedDict()
         self.async_bwd_objects = OrderedDict()
 
-        self.is_first_partition = is_first_partition
+        stage_depth = pipe_config.get_depth_for_stage(my_stage_id)
+        self.is_first_partition = stage_depth == pipe_config.pipeline_depth - 1
 
     def after_forward(self, sent_request_objects, done_fwds, training):
         # NOTE: Last partition inserts its gradients into async_fwd_objects,
