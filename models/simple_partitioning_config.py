@@ -60,7 +60,7 @@ class PipelineConfig:
                chain(self.d['stages'][stage_id]['inputs'].items(), self.d['stages'][stage_id]['outputs'].items())}
         return res
 
-    def change_batch(self, batch_size: int, for_replicated: bool=True):
+    def change_batch(self, batch_size: int, for_replicated: bool = True):
         d = self.d
         batch_dim = d['batch_dim']
 
@@ -81,7 +81,7 @@ class PipelineConfig:
                                tensors: Dict[str, Tensor],
                                batch_size: int,
                                my_rank: int,
-                               for_replicated: bool=True,
+                               for_replicated: bool = True,
                                device='cpu'):
         stage_id = self.rank_to_stage_idx(my_rank)
         self.change_batch(batch_size=batch_size, for_replicated=for_replicated)
@@ -183,14 +183,14 @@ class PipelineConfig:
 
         return stage_depth
 
-    def max_send_depth_dict(self, is_activations: bool=True) -> Dict[int, int]:
+    def max_send_depth_dict(self, is_activations: bool = True) -> Dict[int, int]:
         stage_to_depth = {x: self.get_depth_for_stage(x) for x in range(self.n_stages)}
         stage_to_max_send_depth = defaultdict(int)
         for stage_id in range(self.n_stages):
             targets = self.d['stages'][stage_id]['outputs'] if is_activations else self.d['stages'][stage_id]['inputs']
 
-            for tgt in targets:
-                if tgt in self.d['model_inputs'] or tgt in self.d['model_outputs']:
+            for name, tgt in targets.items():
+                if name in self.d['model_inputs'] or name in self.d['model_outputs']:
                     continue
 
                 if not is_activations and not tgt['req_grad']:
