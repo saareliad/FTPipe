@@ -57,6 +57,8 @@ class SinglePartitionManager:
             disable_clone_inputs = True
             warnings.warn("setting disable_clone_inputs=True to avoid double clone since we clone in MPI too.")
 
+        self.work_scheduler = work_scheduler
+
         if gap_aware_just_loss and not use_recomputation:
             raise NotImplementedError(
                 "gap_aware_just_loss works only with recomputation on")
@@ -83,7 +85,6 @@ class SinglePartitionManager:
 
         self.num_stages = num_stages
         self.step_every = step_every
-        self.work_scheduler = work_scheduler
 
         if self.stage_depth == 0:
             use_recomputation = False

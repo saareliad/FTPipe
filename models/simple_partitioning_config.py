@@ -48,19 +48,19 @@ class PipelineConfig:
     def n_stages(self) -> int:
         return len(self.d['stages'])
 
-    def get_shapes_for_stage(self, stage_id) -> Dict[str, torch.Size]:
+    def get_shapes_for_stage(self, stage_id: int) -> Dict[str, torch.Size]:
         res = {name: inorout['shape']
                for name, inorout in
                chain(self.d['stages'][stage_id]['inputs'].items(), self.d['stages'][stage_id]['outputs'].items())}
         return res
 
-    def get_dtypes_for_stage(self, stage_id) -> Dict[str, torch.Size]:
+    def get_dtypes_for_stage(self, stage_id: int) -> Dict[str, torch.Size]:
         res = {name: inorout['dtype']
                for name, inorout in
                chain(self.d['stages'][stage_id]['inputs'].items(), self.d['stages'][stage_id]['outputs'].items())}
         return res
 
-    def change_batch(self, batch_size, for_replicated=True):
+    def change_batch(self, batch_size: int, for_replicated: bool=True):
         d = self.d
         batch_dim = d['batch_dim']
 
@@ -81,14 +81,14 @@ class PipelineConfig:
                                tensors: Dict[str, Tensor],
                                batch_size: int,
                                my_rank: int,
-                               for_replicated=True,
+                               for_replicated: bool=True,
                                device='cpu'):
         stage_id = self.rank_to_stage_idx(my_rank)
         self.change_batch(batch_size=batch_size, for_replicated=for_replicated)
         d = self.d
         stage_cls = d['stages'][stage_id]['stage_cls']
         # note it has device arg it a design problem...
-        return stage_cls(layers, tensors, device='cpu')
+        return stage_cls(layers, tensors, device=device)
 
     def get_inputs_req_grad_for_stage(self, stage_id: int) -> Dict[str, bool]:
         my_inputs = self.d['stages'][stage_id]['inputs']
@@ -183,7 +183,7 @@ class PipelineConfig:
 
         return stage_depth
 
-    def max_send_depth_dict(self, is_activations=True):
+    def max_send_depth_dict(self, is_activations: bool=True) -> Dict[int, int]:
         stage_to_depth = {x: self.get_depth_for_stage(x) for x in range(self.n_stages)}
         stage_to_max_send_depth = defaultdict(int)
         for stage_id in range(self.n_stages):
@@ -214,11 +214,11 @@ class PipelineConfig:
 
         return stage_to_max_send_depth
 
-    def max_send_depth(self):
+    def max_send_depth(self) -> int:
         max_send_depth_dict = self.max_send_depth_dict()
         return max(max_send_depth_dict.values())
 
-    def max_send_depth_for_stage(self, stage_id: int):
+    def max_send_depth_for_stage(self, stage_id: int) -> int:
         max_send_depth_dict_a = self.max_send_depth_dict(is_activations=True)
         max_send_depth_dict_g = self.max_send_depth_dict(is_activations=False)
         return max(max_send_depth_dict_a[stage_id], max_send_depth_dict_g[stage_id])
@@ -228,7 +228,7 @@ class PipelineConfig:
         return max(self.get_depth_for_stage(x) for x in range(self.n_stages)) + 1
 
 
-def atomic_batch_change(atomic_is_batched, atomic_shape, dim, batch_size):
+def atomic_batch_change(atomic_is_batched, atomic_shape, dim, batch_size) -> torch.Size:
     assert isinstance(atomic_is_batched, bool)
     if atomic_is_batched:
         TMP_SHAPE_CLS = type(atomic_shape)
