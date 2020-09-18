@@ -1,6 +1,7 @@
 import itertools
 import warnings
 from collections import defaultdict
+from functools import reduce
 from itertools import chain
 from typing import Dict, List
 
@@ -137,7 +138,48 @@ class PipelineConfig:
             stage_depth = stage['stage_depth']
         except KeyError as e:
             warnings.warn("KeyError: missing stage_depth. Probably using old config. Will try to infer otherwise")
-            raise NotImplementedError()
+            inputs_to_stage_ids = defaultdict(set)
+
+            for stage_id, s in self.d['stages'].items():
+                for input_name in s['inputs']:
+                    inputs_to_stage_ids[input_name].add(stage_id)
+
+            edges = list()
+            for stage_id, s in self.d['stages'].items():
+                for output_name in s['outputs']:
+                    if output_name in inputs_to_stage_ids:
+                        edges.extend([(x, stage_id) for x in inputs_to_stage_ids[output_name]])
+                    else:
+                        assert output_name in self.d['model_outputs']
+                        edges.append(("output", stage_id))
+
+            import networkx as nx
+
+            num_partitions = self.n_stages
+            G = nx.DiGraph(list(edges))
+
+            # For full graph, can do it much more efficiently with dynamic programing,
+            # but its a tiny graph so its meaningless
+            def longest_depth_length(target):
+                return reduce(max, map(len, nx.all_simple_edge_paths(G, source="output", target=target))) - 1
+
+            # can exit now:
+            # return longest_depth_length(stage_id)
+            # but go over everything for the check
+
+            distance_dict = {i: longest_depth_length(i) for i in range(num_partitions)}
+
+            for i, v in distance_dict.items():
+                if v < 0:
+                    warnings.warn(f"Stage {i} was not used in output calculation. distance_dict={distance_dict}")
+
+            if len(set(distance_dict.values())) < num_partitions:
+                warnings.warn(
+                    f"Detected parallel stages. Naive pipelines can't run this. distance_dict={distance_dict}")
+
+            stage_depth = distance_dict[stage_id]
+
+            # raise NotImplementedError()
 
         return stage_depth
 
