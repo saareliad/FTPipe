@@ -44,16 +44,17 @@ class VirtualStagesFBScheduler(FBScheduler):
         super().__init__(*args, **kw)
         self.supremum_staleness = kw['supremum_staleness']
         self.num_gpus = kw['num_gpus']
-        self.stage_depth = kw['stage_depth']
+        # self.stage_depth = kw['stage_depth']
 
     def __call__(self, stage_depth, pipeline_depth, num_batches, done_fwds, done_bwds):
+        """ Requires conversion to virtual stage to be done by caller e.g by get_virtual_stage_depth"""
         assert 0 <= stage_depth < pipeline_depth
 
-        # Convert virtual:
-        stage_virtual_depth = max(0, stage_depth - self.supremum_staleness + 1)
+        # Convert virtual: done by user
+        # stage_virtual_depth = max(0, stage_depth - self.supremum_staleness + 1)
 
         # Last stage
-        if stage_virtual_depth == 0:
+        if stage_depth == 0:
             return True
 
         if done_fwds == num_batches:
@@ -62,7 +63,7 @@ class VirtualStagesFBScheduler(FBScheduler):
         delta = done_fwds - done_bwds
         # TODO: we may want to allow more staleness when step_every > 1.
 
-        return delta <= stage_virtual_depth
+        return delta <= stage_depth
 
     def get_virtual_stage_depth(self, stage_depth: int) -> int:
         return max(0, stage_depth - self.supremum_staleness + 1)
