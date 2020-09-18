@@ -462,7 +462,7 @@ def stages_from_bins(graph: Graph, bins, id_to_node_worked_on: Dict[int, Node]):
                 graph[n].stage_id = dummy_stage_id
 
         # Unify redundant stages
-        cannonize_partition_indices(graph)
+        # cannonize_partition_indices(graph)
 
         # Current problem:
         # that we have 7->8>9 and we can spare 8,
@@ -505,7 +505,7 @@ def stages_from_bins(graph: Graph, bins, id_to_node_worked_on: Dict[int, Node]):
                                     x = graph[x]
                                     x: Node
                                     print("{}  |  {}  |  {} ".format(x.id, x.stage_id, x.gpu_id))
-                            raise ValueError("Detected problematic GPU id {out.gpu_id}")
+                            raise ValueError(f"Detected problematic GPU id {out.gpu_id}")
                         all_gpus_ids.add(out.gpu_id)
 
                 if len(all_outputs) > 1:
