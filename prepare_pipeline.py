@@ -6,7 +6,7 @@ import torch
 
 import models
 import optimizers.lr_scheduler
-from data import get_separate_dls_from_args
+# from data import get_dataloaders  # Commented out because can't install t5 on windows.
 from experiments.experiments import ArgsStasher, auto_file_name
 from misc.filelogger import FileLogger
 from models import parse_config
@@ -39,10 +39,6 @@ def is_huggingface_transformer(args):
     if getattr(args, "is_huggingface_transformer", False):
         return True
     return args.model in models.transformers_cfg.MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS.keys()
-
-
-def is_explicit_non_seperated_dataset(args):
-    return "_nonsep" in args.data_propagator
 
 
 def create_comm_handler(args, comm_init_args,
@@ -254,34 +250,22 @@ def get_sched_aware_predictor(args, optimizer, scheduler):
     return sched_predictor
 
 
-def get_dataloaders(args,
-                    pipe_config=None,
-                    dataset_keywords=dict()):
-    # TODO: replicated
-    if not is_explicit_non_seperated_dataset(args):
-        train_dl, test_dl, samplers, extra = get_separate_dls_from_args(
-            args,
-            pipe_config=pipe_config,
-            verbose=False,
-            dataset_keywords=dataset_keywords,
-        )
-    else:
-        raise NotImplementedError("now deprecated")
-    return train_dl, test_dl, samplers, extra
-
-
-def get_device(args):
-    nnodes = getattr(args, "nnodes", 1)
+def get_ngpus_per_node(args):
+    nnodes = args.nnodes
     if not hasattr(args, "ngpus_per_node"):
         # same number across all nodes
         if args.world_size % nnodes != 0:
             raise NotImplementedError()
         ngpus_per_node = [args.world_size // nnodes] * nnodes
     else:
-        ngpus_per_node = getattr(args, "ngpus_per_node")
+        ngpus_per_node = args.ngpus_per_node
     assert len(ngpus_per_node) == nnodes
+    return ngpus_per_node
 
-    rank = args.rank
+
+def get_device_for_rank(args, rank, local_rank):
+    nnodes = args.nnodes
+    ngpus_per_node = get_ngpus_per_node(args)
 
     # Infer local device ID.
     if hasattr(args, "stage_to_device_map"):
@@ -301,7 +285,7 @@ def get_device(args):
 
         local_device_id = cuda_device_id
     else:
-        local_device_id = args.local_rank
+        local_device_id = local_rank
 
     # Get device
     device = torch.device('cpu' if args.cpu else f"cuda:{local_device_id}")
@@ -309,9 +293,18 @@ def get_device(args):
 
 
 def get_rank_to_device_map(args):
+    if args.nnodes == 1:
+        local_ranks = list(range(args.world_size))
+    else:
+
+        ngpus_per_node = get_ngpus_per_node(args)
+        local_ranks = list()
+        for n in ngpus_per_node:
+            local_ranks.extend(range(n))
+
     return {
-        rank: get_device(args)
-        for rank in range(args.world_size)
+        rank: get_device_for_rank(args, rank, local_rank)
+        for rank, local_rank in zip(range(args.world_size), local_ranks)
     }
 
 
@@ -431,6 +424,7 @@ def preproc_data(args, cache=None, save_cache=True):
     pipe_config = parsed_config.pipe_config
     args.num_stages = parsed_config.num_stages
     args.stage = parsed_config.stage_id
+    from data import get_dataloaders
     train_dl, test_dl, samplers, extra = get_dataloaders(
         args,
         pipe_config=pipe_config,
@@ -490,7 +484,9 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         comm_handler.init_process_group()
     elif COMM_VERSION == 2:
         # Multiprocessing
-        stage_to_device_map = []  # TODO
+        # TODO stage_to_device_map is currently unused, local_rank_to_device_map is used instead.
+        # stage_to_device_map will be used when combining MPI overlay
+        stage_to_device_map = [] # TODO ^
         v2_args = (shared_ctx, stage_to_device_map, local_rank_to_device_map)
         comm_handler = create_comm_handler_v2(args, comm_init_args, device,
                                               v2_args)
@@ -530,12 +526,13 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
 
     # we assume last stage is the output
     is_last_partition = args.stage == args.num_stages - 1  # or stage_depth == 0
-    is_first_partition = args.stage == 0 #  or stage_depth == pipeline_depth - 1
+    is_first_partition = args.stage == 0  # or stage_depth == pipeline_depth - 1
 
     is_zero_staleness_stage = stage_depth == 0 if not is_gpipe else True
 
     eval_tensor_dtypes = training_tensor_dtypes  # HACK, TODO
     # Get dataloaders needed for this stage
+    from data import get_dataloaders
     train_dl, test_dl, samplers, extra = get_dataloaders(
         args,
         pipe_config=pipe_config,
@@ -820,3 +817,10 @@ def get_optimizer_parameter_groups(args, partition):
         parameters_count = sum(p.numel() for p in optimizer_grouped_parameters)
     print(f"-I- optimized parameters count: {parameters_count}")
     return optimizer_grouped_parameters
+
+
+if __name__ == '__main__':
+    from types import SimpleNamespace
+
+    args = SimpleNamespace(cpu=False, world_size=8, nnodes=1)
+    print(get_rank_to_device_map(args))

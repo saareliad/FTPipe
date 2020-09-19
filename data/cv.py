@@ -1,15 +1,18 @@
+import os
+
+import numpy as np
 import torch
 import torchvision
-import numpy as np
+from PIL import Image
 from torchvision import transforms
 from torchvision.datasets import CIFAR10, CIFAR100, ImageFolder, DatasetFolder
 from torchvision.datasets.folder import default_loader
-from PIL import Image
-import os
 
-from .hardcoded_dirs import DEFAULT_DATA_DIR, IMAGENET_ROOT_DIR
 from .datasets import CommonDatasetHandler, register_dataset
+from .hardcoded_dirs import DEFAULT_DATA_DIR, IMAGENET_ROOT_DIR
+
 DOWNLOAD = False
+
 
 # NOTE: CIFAR best practice:
 # https://github.com/facebookresearch/pycls/tree/master/configs/cifar
@@ -49,7 +52,6 @@ def cifar100_transformations():
 
 
 def imagenet_transformations():
-
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
 
@@ -214,6 +216,7 @@ class ImageFolderJustX(DatasetFolderJustX):
         class_to_idx (dict): Dict with items (class_name, class_index).
         imgs (list): List of (image path, class_index) tuples
     """
+
     def __init__(self,
                  root,
                  transform=None,
@@ -255,6 +258,7 @@ class ImageFolderJustY(DatasetFolderJustY):
         class_to_idx (dict): Dict with items (class_name, class_index).
         imgs (list): List of (image path, class_index) tuples
     """
+
     def __init__(self,
                  root,
                  transform=None,
@@ -371,6 +375,7 @@ class CIFAR100JustY(CIFAR10JustY):
         'md5': '7973b15100ade9c7d40fb424638fde48',
     }
 
+
 #############################################################
 # CIFAR 100
 ############################################################
@@ -378,7 +383,7 @@ class CIFAR100JustY(CIFAR10JustY):
 def get_cifar_100_just_x_or_y_train_ds(**kw):
     just = kw['just']
     DATA_DIR = kw.get("DATA_DIR", DEFAULT_DATA_DIR)
-    
+
     train_transform, _ = cifar100_transformations()
     just = just.lower()
     if just == 'x':
@@ -400,7 +405,7 @@ def get_cifar_100_just_x_or_y_train_ds(**kw):
 def get_cifar_100_just_x_or_y_test_ds(**kw):
     just = kw['just']
     DATA_DIR = kw.get("DATA_DIR", DEFAULT_DATA_DIR)
-    
+
     _, test_transform = cifar100_transformations()
     just = just.lower()
     if just == 'x':
@@ -418,21 +423,23 @@ def get_cifar_100_just_x_or_y_test_ds(**kw):
     else:
         raise ValueError(f"'just' should be in x,y. Got {just} instead.")
 
-        
+
 class SEP_CIFAR100_DatasetHandler(CommonDatasetHandler):
     def __init__(self, **kw):
         super().__init__()
 
     def get_train_ds(self, **kw):
         return get_cifar_100_just_x_or_y_train_ds(**kw)
-    
+
     def get_test_ds(self, *args, **kw):
         return get_cifar_100_just_x_or_y_test_ds(**kw)
-    
+
     def get_validation_ds(self, **kw):
         NotImplementedError()
 
+
 register_dataset("cifar100", SEP_CIFAR100_DatasetHandler)
+
 
 #############################################################
 # CIFAR 10
@@ -442,7 +449,7 @@ register_dataset("cifar100", SEP_CIFAR100_DatasetHandler)
 def get_cifar_10_just_x_or_y_test_ds(**kw):
     just = kw['just']
     DATA_DIR = kw.get("DATA_DIR", DEFAULT_DATA_DIR)
- 
+
     _, test_transform = cifar10_transformations()
     just = just.lower()
     if just == 'x':
@@ -490,12 +497,13 @@ class SEP_CIFAR10_DatasetHandler(CommonDatasetHandler):
 
     def get_train_ds(self, **kw):
         return get_cifar_10_just_x_or_y_train_ds(**kw)
-    
+
     def get_test_ds(self, **kw):
         return get_cifar_10_just_x_or_y_test_ds(**kw)
-    
+
     def get_validation_ds(self, **kw):
         NotImplementedError()
+
 
 register_dataset("cifar10", SEP_CIFAR10_DatasetHandler)
 
@@ -507,7 +515,7 @@ register_dataset("cifar10", SEP_CIFAR10_DatasetHandler)
 def get_imagenet_just_x_or_y_train_ds(**kw):
     just = kw['just']
     DATA_DIR = kw.get("DATA_DIR", DEFAULT_DATA_DIR)
-    
+
     just = just.lower()
     traindir = os.path.join(DATA_DIR, 'train')
 
@@ -522,11 +530,10 @@ def get_imagenet_just_x_or_y_train_ds(**kw):
         raise ValueError(f"'just' should be in x,y. Got {just} instead.")
 
 
-        
 def get_imagenet_just_x_or_y_test_ds(**kw):
     just = kw['just']
     DATA_DIR = kw.get("DATA_DIR", DEFAULT_DATA_DIR)
-    
+
     train_transform, test_transform = imagenet_transformations()
     just = just.lower()
     valdir = os.path.join(DATA_DIR, 'val')
@@ -540,18 +547,19 @@ def get_imagenet_just_x_or_y_test_ds(**kw):
     else:
         raise ValueError(f"'just' should be in x,y. Got {just} instead.")
 
-        
+
 class SEP_IMAGENET_DatasetHandler(CommonDatasetHandler):
     def __init__(self, **kw):
         super().__init__()
 
     def get_train_ds(self, **kw):
         return get_imagenet_just_x_or_y_train_ds(**kw)
-    
+
     def get_test_ds(self, **kw):
         return get_imagenet_just_x_or_y_test_ds(**kw)
-    
+
     def get_validation_ds(self, **kw):
         NotImplementedError()
+
 
 register_dataset("imagenet", SEP_IMAGENET_DatasetHandler)

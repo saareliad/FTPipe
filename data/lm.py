@@ -1,14 +1,15 @@
-
-import os
-import torch
-from torch.utils.data import Dataset, RandomSampler, SequentialSampler, DataLoader  # DistributedSampler
-import pickle
-from transformers import PreTrainedTokenizer
-from torch.nn.utils.rnn import pad_sequence
-from typing import List, Tuple
-from .hardcoded_dirs import DEFAULT_DATA_DIR
 import functools
+import os
+import pickle
+from typing import List, Tuple
+
+import torch
+from torch.nn.utils.rnn import pad_sequence
+from torch.utils.data import Dataset, RandomSampler, SequentialSampler, DataLoader  # DistributedSampler
+from transformers import PreTrainedTokenizer
+
 from .datasets import CommonDatasetHandler, register_dataset
+from .hardcoded_dirs import DEFAULT_DATA_DIR
 
 
 class TextDataset(Dataset):
@@ -21,12 +22,12 @@ class TextDataset(Dataset):
                  overwrite_cache=False,
                  file_path='train',
                  block_size=512):
-        
+
         assert os.path.isfile(file_path), file_path
         directory, filename = os.path.split(file_path)
         cached_features_file = os.path.join(
             directory, model_name_or_path + '_cached_lm_' + str(block_size) +
-            '_' + filename)
+                       '_' + filename)
 
         if os.path.exists(cached_features_file) and not overwrite_cache:
             print(f"Loading from cahced feature file: {cached_features_file}")
@@ -61,6 +62,7 @@ class TextDataset(Dataset):
 
     def __getitem__(self, item):
         return torch.tensor(self.examples[item])
+
 
 ################
 # Transforms
@@ -232,7 +234,6 @@ def get_wikitext2_raw_train_valid_test_ds(
         overwrite_cache=False,
         DATA_DIR=DEFAULT_DATA_DIR,
         split='all'):
-
     wt2_data_path = os.path.join(DATA_DIR, "wikitext-2-raw")
     train_file = os.path.join(wt2_data_path, "wiki.train.raw")
     valid_file = os.path.join(wt2_data_path, "wiki.valid.raw")
@@ -242,7 +243,7 @@ def get_wikitext2_raw_train_valid_test_ds(
         return TextDataset(tokenizer,
                            model_name_or_path,
                            overwrite_cache=overwrite_cache,
-                           file_path=file_path,block_size=block_size)
+                           file_path=file_path, block_size=block_size)
 
     if split == 'all':
         train_ds = get_ds(train_file)
@@ -291,7 +292,6 @@ def get_wikitext2_raw_train_valid_ds(model_name_or_path,
                                      valid_seq_len=512,
                                      overwrite_cache=False,
                                      DATA_DIR=DEFAULT_DATA_DIR):
-
     train_ds = get_wikitext2_raw_train_valid_test_ds(
         model_name_or_path=model_name_or_path,
         tokenizer=tokenizer,
@@ -400,13 +400,13 @@ class SEP_WIKITEXT2_DatasetHandler(CommonDatasetHandler):
 
         tokenizer = kw['tokenizer']
         self.collate_fn = lm_collate_factory(tokenizer)
-    
+
     def get_train_ds(self, **kw):
         return self.train_ds
-    
+
     def get_test_ds(self, **kw):
         return self.test_ds
-    
+
     def get_validation_ds(self, **kw):
         NotImplementedError()
 

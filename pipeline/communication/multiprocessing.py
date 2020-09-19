@@ -33,7 +33,8 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         rcv_queues, buffer_reuse_queues = share
         self.rcv_queues = rcv_queues
         self.buffer_reuse_queues = buffer_reuse_queues
-        self.stage_to_device_map = stage_to_device_map
+        # TODO: currently we do not use stage_to_device_map
+        # self.stage_to_device_map = stage_to_device_map
         self.local_rank_to_device_map = local_rank_to_device_map
 
         self._create_streams()
