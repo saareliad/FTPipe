@@ -202,14 +202,21 @@ class PipelineConfig:
                     used_by_depth = [stage_to_depth[x] for x in used_by]
                     used_by_send_depth_diff = [my_depth - x for x in used_by_depth]
                 else:
-                    used_by = tgt['created_by']
-                    used_by_depth = [stage_to_depth[x] for x in used_by]
-                    used_by_send_depth_diff = [x - my_depth for x in used_by_depth]
+                    created_by = tgt['created_by']
+                    assert isinstance(created_by, int)
+                    if created_by == -1:
+                        raise NotImplementedError(
+                            f"we assume model_inputs do not require grad. But got: {name}, {stage_id}")
+                    else:
+                        created_by_depth = stage_to_depth[created_by]
+
+                    used_by_send_depth_diff = [created_by_depth - my_depth]
 
                 if used_by_send_depth_diff:
                     stage_max_send_depth = max(used_by_send_depth_diff)
                 else:
-                    stage_max_send_depth = None
+                    # its redundant but whatever
+                    stage_max_send_depth = 0
 
                 stage_to_max_send_depth[stage_id] = stage_max_send_depth
 
