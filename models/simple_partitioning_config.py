@@ -231,7 +231,7 @@ class PipelineConfig:
         max_send_depth_dict_g = self.max_send_depth_dict(is_activations=False)
         res = max(max_send_depth_dict_a[stage_id], max_send_depth_dict_g[stage_id])
         if res > 1:
-            warnings.warn(f"Stage: {stage_id} has max_send_depth={res}. This means holding multiple ({res}) versions of activations/gradients in memory")
+            warnings.warn(f"Stage: {stage_id} has max_send_depth={res}. This means holding multiple versions of activations/gradients in memory")
         return res
 
     @property
