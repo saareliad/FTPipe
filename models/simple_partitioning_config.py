@@ -196,13 +196,14 @@ class PipelineConfig:
                 if not is_activations and not tgt['req_grad']:
                     continue
 
-                used_by = tgt['used_by']
-                used_by_depth = [stage_to_depth[x] for x in used_by]
                 my_depth = stage_to_depth[stage_id]
-
                 if is_activations:
+                    used_by = tgt['used_by']
+                    used_by_depth = [stage_to_depth[x] for x in used_by]
                     used_by_send_depth_diff = [my_depth - x for x in used_by_depth]
                 else:
+                    used_by = tgt['created_by']
+                    used_by_depth = [stage_to_depth[x] for x in used_by]
                     used_by_send_depth_diff = [x - my_depth for x in used_by_depth]
 
                 if used_by_send_depth_diff:
