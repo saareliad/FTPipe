@@ -132,8 +132,8 @@ class PipelineConfig:
         ]
         return inputs_from_dl
 
-    def get_depth_for_stage(self, stage_id: int) -> int:
-        stage = self.d['stages'][stage_id]
+    def get_depth_for_stage(self, my_stage_id: int) -> int:
+        stage = self.d['stages'][my_stage_id]
         try:
             stage_depth = stage['stage_depth']
         except KeyError as e:
@@ -177,7 +177,7 @@ class PipelineConfig:
                 warnings.warn(
                     f"Detected parallel stages. Naive pipelines can't run this. distance_dict={distance_dict}")
 
-            stage_depth = distance_dict[stage_id]
+            stage_depth = distance_dict[my_stage_id]
 
             # raise NotImplementedError()
 
@@ -218,7 +218,7 @@ class PipelineConfig:
                     # its redundant but whatever
                     stage_max_send_depth = 0
 
-                stage_to_max_send_depth[stage_id] = stage_max_send_depth
+                stage_to_max_send_depth[stage_id] = max(stage_max_send_depth, stage_to_max_send_depth[stage_id])
 
         return stage_to_max_send_depth
 
@@ -229,7 +229,10 @@ class PipelineConfig:
     def max_send_depth_for_stage(self, stage_id: int) -> int:
         max_send_depth_dict_a = self.max_send_depth_dict(is_activations=True)
         max_send_depth_dict_g = self.max_send_depth_dict(is_activations=False)
-        return max(max_send_depth_dict_a[stage_id], max_send_depth_dict_g[stage_id])
+        res = max(max_send_depth_dict_a[stage_id], max_send_depth_dict_g[stage_id])
+        if res > 1:
+            warnings.warn(f"Stage: {stage_id} has max_send_depth={res}. This means holding multiple ({res}) versions of activations/gradients in memory")
+        return res
 
     @property
     def pipeline_depth(self) -> int:
@@ -277,3 +280,13 @@ def atomic_batch_change(atomic_is_batched, atomic_shape, dim, batch_size) -> tor
 #    is_batched
 # stage_cls convention is package.path.cls
 # devices list of devices
+
+if __name__ == '__main__':
+    from models.partitioned.t5_3b_tied_lmheads_512_4_8p_bw12_squad1_virtual_stages import create_pipeline_configuration
+    pipe_config = PipelineConfig(create_pipeline_configuration(DEBUG=True))
+    print(pipe_config.get_depth_for_stage(0))
+
+
+    print(pipe_config.max_send_depth_dict(is_activations=True))
+    print(pipe_config.max_send_depth_dict(is_activations=False))
+

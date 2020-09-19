@@ -3,7 +3,7 @@ import importlib
 import os
 from typing import Dict
 
-from .simple_partitioning_config import PipelineConfig
+from models.simple_partitioning_config import PipelineConfig
 
 _PARTITIONED_MODELS_PACKAGE = "models.partitioned"
 

@@ -4,7 +4,7 @@ import os
 import abc
 from transformers import AutoModel, AutoConfig, AutoTokenizer, T5ForConditionalGeneration
 from .transformers_utils import resize_token_embeddings
-from .models import AVAILABLE_MODELS
+from .model_handler import AVAILABLE_MODELS
 
 
 class Loader(abc.ABC):

@@ -1,8 +1,8 @@
 from .normal.WideResNet_GN import WideResNet as WideResNet_GN
 from .normal import WideResNet, Bottleneck, ResNet
 
-from .models import register_model
-from .models import CommonModelHandler
+from .model_handler import register_model
+from .model_handler import CommonModelHandler
 
 
 class ParamDictCVMOdelHandler(CommonModelHandler):
