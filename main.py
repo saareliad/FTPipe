@@ -13,7 +13,7 @@ import torch.multiprocessing as mp
 from configs.parse_json_config import parse_json_config
 from data import add_dataset_argument
 from experiments import save_experiment, load_experiment_for_update
-from models import AVAILABLE_MODELS
+from models import AVAILABLE_MODELS, parse_config
 from models.parse_config import get_my_send_recv_ranks
 from pipeline.util import get_world_size
 from prepare_pipeline import prepare_pipeline, preproc_data
@@ -485,15 +485,10 @@ def start_eval_checkpoint():
     # args.single_worker_eval_batch_size = 64
 
     all_results = {}
-    # TODO: currently its hardcoded...
-    # def infer_all_cps(args):
-    #     if args.epochs > 0:
-    #         return list(range(args.epochs))
-    #     else:
-    #         raise NotImplementedError()
-
-    # all_cps = list(range(args.epochs)) + ["c4"]
-    all_cps = list(range(0, 102 + 1))  # + ["c4"]
+    # TODO: currently its semi hardcoded...
+    # all_cps = list(range(0, 102 + 1))  # + ["c4"]
+    all_cps = list(range(0, infer_all_cps(args)))  # + ["c4"]
+    print(f"-I- evaluating {len(all_cps)}: {all_cps}")
 
     if args.dataset == "t5_tfds":
         from data.t5 import t5_tfds
@@ -522,6 +517,59 @@ def start_eval_checkpoint():
 
     with open(f"results/all_results_{args.out_filename}.txt", "w+") as f:
         f.write(s)
+
+
+def infer_all_cps(args) -> int:
+    if args.epochs > 0:
+        n_cps = args.epochs
+    elif args.steps > 0:
+        # TODO: Get train dl length
+        # print(f"-I- preprocessing data for rank {rank}/{args.world_size - 1} (word size is {args.world_size})...")
+        local_rank = 0
+        args.rank = 0
+        args.local_rank = local_rank
+        args.is_multiprocessing_worker = False
+
+        handler = AVAILABLE_MODELS.get(args.model)
+
+        parsed_config = parse_config.PartitioningConfigParser(
+            args.model,
+            args.rank,
+            args.bs_train,
+            args.bs_test,  # NOTE: changed name
+            handler=None,
+            send_target_in_pipe=("_nonsep" in args.data_propagator),
+            prefer_seq_sends=getattr(args, "prefer_seq_sends", True))
+
+        dataset_keywords = {}
+        extra_kw = handler.get_extra()
+        if isinstance(extra_kw, dict):
+            dataset_keywords.update(extra_kw)
+        # NOTE: it can be saved in cache
+        # delete to save mem, in contains original model
+        del handler
+
+        pipe_config = parsed_config.pipe_config
+        args.num_stages = parsed_config.num_stages
+        args.stage = parsed_config.stage_id
+        from data import get_dataloaders
+        train_dl, test_dl, samplers, extra = get_dataloaders(
+            args,
+            pipe_config=pipe_config,
+            dataset_keywords=dataset_keywords)
+        len_train_dl = len(train_dl)
+
+        left_steps = args.steps
+        left_batches = args.steps * args.step_every
+        n = 0
+        while left_batches > 0:
+            left_batches -= len_train_dl  # We ignore all the drop policies here.
+            n += 1
+        n_cps = n
+    else:
+        raise NotImplementedError()
+
+    return n_cps
 
 
 if __name__ == "__main__":
