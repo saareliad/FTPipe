@@ -181,7 +181,8 @@ def partition_model(model: nn.Module,
                     use_network_profiler: bool = False,
                     profile_ops: bool = True,
                     save_memory_mode: bool = False,
-                    graph: Optional[Graph] = None) -> Graph:
+                    graph: Optional[Graph] = None,
+                    use_virtual_stages: bool = True, ) -> Graph:
     '''
     profiles the network and return a graph representing the partition
 
@@ -234,6 +235,8 @@ def partition_model(model: nn.Module,
     graph:
         an existing graph to repartition
         default None
+    use_virtual_stages:
+        will try to use virtual stages if partitioning method supports it.
     '''
 
     if basic_blocks is None:
@@ -266,6 +269,7 @@ def partition_model(model: nn.Module,
                                     node_weight_function=node_weight_function,
                                     edge_weight_function=edge_weight_function,
                                     use_layers_only_graph=use_layers_only_graph,
+                                    use_virtual_stages=use_virtual_stages,
                                     **METIS_opt)
         elif partitioning_method == "ACYCLIC":
             print("-I- using Acyclic Partitioning algorithm")
@@ -315,7 +319,7 @@ def build_graph(model: nn.Module,
     args:
         a sample input to use for tracing
     kwargs:
-        aditional kwargs dictionary to pass to the model
+        additional kwargs dictionary to pass to the model
     n_iter:
         number of profiling iteration used to gather statistics
     max_depth:

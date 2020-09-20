@@ -340,7 +340,7 @@ def first_fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
     return bins
 
 
-def stages_from_bins(graph: Graph, bins, id_to_node_worked_on: Dict[int, Node]):
+def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worked_on: Dict[int, Node]):
     stage_id_generator = count()
 
     # shallow copy bins:
@@ -683,6 +683,12 @@ def partition_2dbin_pack(graph: Graph,
     if use_layers_graph:
         graph.induce_layer_partition(work_graph, lookup)
 
+    stage_to_gpu_map = convert_handle_missing_print(bins, graph)
+
+    return graph, stage_to_gpu_map
+
+
+def convert_handle_missing_print(bins, graph):
     # Get stage to GPU map
     node_to_stage_map = {}
     # Convert
@@ -692,25 +698,19 @@ def partition_2dbin_pack(graph: Graph,
             n: Node
             stage_to_gpu_map[n.stage_id].add(gpu_id)
             node_to_stage_map[n.id] = n.stage_id
-
     stage_to_gpu_map = {i: sorted(v) for i, v in stage_to_gpu_map.items()}
-
     # TODO: can do it more efficiently but i'm tired...
     stage_to_gpu_map = handle_missing_stages(bins, graph, node_to_stage_map, stage_to_gpu_map)
     stage_to_nodes_map = defaultdict(list)
     for i, v in node_to_stage_map.items():
         stage_to_nodes_map[v].append(i)
-
     print("stage_to_gpu_map:")
     pprint(stage_to_gpu_map)
-
     print("node_to_stage_map:")
     pprint(node_to_stage_map)
-
     print("stage_to_nodes_map:")
     pprint(stage_to_nodes_map)
-
-    return graph, stage_to_gpu_map
+    return stage_to_gpu_map
 
 
 def handle_missing_stages(bins, graph, node_to_stage_map, stage_to_gpu_map):

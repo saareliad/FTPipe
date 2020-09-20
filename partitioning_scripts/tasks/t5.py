@@ -1,9 +1,15 @@
 import math
 import operator
+import warnings
 from dataclasses import dataclass
 from typing import Dict, List
 
-import nlp
+try:
+    import datasets as nlp
+except Exception as e:
+    warnings.warn("Did not find datasets, will import nlp instead")
+    import nlp
+
 import torch
 from transformers import T5Config, T5Tokenizer
 
@@ -118,9 +124,9 @@ def get_input_squad1(args, tokenizer, analysis=False):
     # valid_dataset = nlp.load_dataset('squad', split=nlp.Split.VALIDATION)
 
     # map add_eos_to_examples function to the dataset example wise
-    train_dataset = train_dataset.map(add_eos_to_examples)
+    train_dataset = train_dataset.map(add_eos_to_examples, load_from_cache_file=False)
     # map convert_to_features batch wise
-    train_dataset = train_dataset.map(convert_to_features, batched=True)
+    train_dataset = train_dataset.map(convert_to_features, batched=True, load_from_cache_file=False)
 
     # valid_dataset = valid_dataset.map(add_eos_to_examples,
     #                                   load_from_cache_file=False)
@@ -137,10 +143,10 @@ def get_input_squad1(args, tokenizer, analysis=False):
     # valid_dataset.set_format(type='torch', columns=columns)
 
     # prepares lm_labels from target_ids, returns examples with keys as expected by the forward method
-    # this is necessacry because the trainer directly passes this dict as arguments to the model
+    # this is necessary because the trainer directly passes this dict as arguments to the model
     # so make sure the keys match the parameter names of the forward method
 
-    # NOTE: slightly changed becase we want to pin memory and huggingface don't do it
+    # NOTE: slightly changed because we want to pin memory and huggingface don't do it
     @dataclass
     class T2TDataCollator():
         # NOTE: in transformers 3.02 they changed it to function so it can't be subclassed.
@@ -292,6 +298,10 @@ class ParsePartitioningT5Opts(Parser):
             output_file += "_async"
 
         output_file += f"_{args.t5_task}"
+
+        m = args.partitioning_method.lower()
+        tmp = m if m != "2dbin" else "virtual_stages"
+        output_file += f"_{tmp}"
 
         return output_file
 

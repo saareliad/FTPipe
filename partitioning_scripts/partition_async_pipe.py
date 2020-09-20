@@ -27,6 +27,7 @@ def partition_async_pipe(
         # CACHE
         profiles_cache_name="",
         overwrite_profiles_cache=False,
+        use_virtual_stages=True
 ) -> Graph:
     allowed_mistakes = 0
     # HACK: allow mistakes for multilevel and acyclic...
@@ -100,6 +101,7 @@ def partition_async_pipe(
                             node_weight_function=node_weight_function,
                             edge_weight_function=edge_weight_function,
                             use_layers_only_graph=True,
+                            use_virtual_stages=use_virtual_stages,
                             **cmd_args.METIS_opt)
         elif cmd_args.partitioning_method == "2DBIN":
             # TODO: cmd arg for n_clusters
