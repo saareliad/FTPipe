@@ -104,7 +104,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
         if args.steps > 0:
             steps_left = args.steps - steps
             # TODO: it can be more fine-grained depends on policy but I leave it for now.
-            batches_left = steps_left // args.step_every
+            batches_left = steps_left * args.step_every
             train_batches_limit_to_use = min(train_batches_limit, batches_left)
 
             # handle step every.
