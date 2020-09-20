@@ -13,11 +13,18 @@ def get_fwd_bwd_string_for_stage(stage, scheduler: WorkScheduler, num_stages,
     b = 0
     s = ""
     stage_depth = num_stages - stage - 1
+    if hasattr(scheduler, "get_virtual_stage_depth"):
+        original_stage = stage
+        virtual_stage_depth = scheduler.get_virtual_stage_depth(stage_depth)
+        stage_depth = virtual_stage_depth
+
+    # pipeline_depth = num_stages
+
     while b < num_batches:
         if scheduler(stage_depth, num_stages, num_batches, f, b):
             s += "F"
             f += 1
-            if stage == num_stages - 1 and not isinstance(scheduler, GpipeScheduler):
+            if stage_depth == 0 and not isinstance(scheduler, GpipeScheduler):
                 s += "B"
                 b += 1
         else:
@@ -159,8 +166,9 @@ if __name__ == "__main__":
     EXTRA = 30
     # stage = 0  # Should test the edge case.
     num_batches = num_stages * 2 + 1 + EXTRA
-    step_every = 4
-    sched_name = "1F1B"
+    step_every = 1
+    # sched_name = "1F1B"
+    sched_name = "virtual_stages_1f1b"
     # sched_name = "SEQ"
     # sched_name = 'GPIPE'
     # sched_name = "PIPEDREAM"
@@ -176,7 +184,9 @@ if __name__ == "__main__":
     args = SimpleNamespace(
         work_scheduler=sched_name,
         step_every=step_every,
-        num_stages=num_stages
+        num_stages=num_stages,
+        supremum_staleness="auto",
+        stage_to_device_map=[0,1,1,0]
     )
 
     print(f"-I- got args: {pprint.pformat(vars(args))}")

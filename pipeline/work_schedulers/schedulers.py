@@ -66,7 +66,7 @@ class VirtualStagesFBScheduler(FBScheduler):
         return delta <= stage_depth
 
     def get_virtual_stage_depth(self, stage_depth: int) -> int:
-        return max(0, stage_depth - self.supremum_staleness + 1)
+        return max(0, stage_depth - self.supremum_staleness)
 
 
 class PipeDream1F1BScheduler(WorkScheduler):

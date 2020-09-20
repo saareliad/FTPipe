@@ -314,7 +314,7 @@ class SinglePartitionManager:
         x = self.partition(x, batch_idx)
         request_objects = None
         # For non last partition - send forward.
-        if not self.is_last_partition:  # TODO: or non virtual depth == 0
+        if not self.is_last_partition or self.true_stage_depth > 0:
             send_ctx = self.data_propagator.pack_send_context(x, *ctx)
             request_objects = self.comm_handler.send_activations(
                 send_ctx, batch_idx)
@@ -406,15 +406,16 @@ class SinglePartitionManager:
                 batch_idx, num_batches, preload_input_partition)
 
         # TODO: for depth 0 stages.
-        if self.stage_depth > 0:
+        if self.true_stage_depth > 0:  # Non zero staleness partition
             # For the last partition - we restore later.
             if is_training:
                 self.true_weights_storage.restore_if_needed()
             return request_objects
-        ############################
-        # Last partition backward
-        ############################
         else:
+            ############################
+            # zero staleness partition backward
+            # Last partition backward
+            ############################
             # Last partition - also do backward.
             if self.is_last_partition:
                 ctx = (*preload_input_to_outside_loss, *ctx)
@@ -432,7 +433,8 @@ class SinglePartitionManager:
             # TODO: currently only last partition should be at depth 0.
 
             if not self.is_last_partition:
-                return self.run_batch_backward(batch_idx=batch_idx, num_batches=num_batches)
+                raise NotImplementedError()
+                # return self.run_batch_backward(batch_idx=batch_idx, num_batches=num_batches)
 
             # NOTE: for last partition- batch idx is the same as num backwards.
             old_lrs = None
@@ -648,6 +650,7 @@ class SinglePartitionManager:
         self.reminder_scaler_lr_factor = reminder / self.step_every
 
         stage_depth = self.stage_depth
+        true_stage_depth = self.true_stage_depth
         pipeline_depth = self.pipeline_depth
 
         work_scheduler = self.work_scheduler
@@ -672,7 +675,11 @@ class SinglePartitionManager:
                 ro = run_batch_forward(done_fwds,
                                        num_batches,
                                        done_bwds=done_bwds)
-                if stage_depth == 0:
+                if true_stage_depth == 0:
+                    futures_handler.after_backward(ro, done_bwds)
+                elif stage_depth == 0:
+                    futures_handler.after_forward(ro, done_fwds, True)
+                    ro = run_batch_backward(done_bwds, num_batches)
                     futures_handler.after_backward(ro, done_bwds)
                 else:
                     futures_handler.after_forward(ro, done_fwds, True)
@@ -744,7 +751,8 @@ class GPipePartitionManager(SinglePartitionManager):
             self.partition.to(device)
 
     def run_batch_forward(self, batch_idx, num_batches, done_bwds=None):
-        """ Handles the forward pass, for last partition also handles the backward pass.
+        """ Handles the forward pass, for last partition also prepares for the backward pass.
+            by saving last result
 
             Algorithm:
                 - Get the data

@@ -497,7 +497,20 @@ class FuturesHandler(FuturesHandlerBase):
         # else:
         #     self.sent_object_patience = 1
 
-        self.sent_object_patience = pipe_config.max_send_depth_for_stage(my_stage_id)
+        patience = pipe_config.max_send_depth_for_stage(my_stage_id)
+        pipeline_depth = pipe_config.pipeline_depth
+        if patience > 1:
+            warnings.warn(f"stage {my_stage_id}: Got max_send_depth_for_stage {patience}, but setting to pipeline_depth={pipeline_depth} for safety")
+            patience = pipeline_depth
+        # TODO: it depends on scheduler.
+        # TODO: we should let activations run without this blocking it
+        # GPIPE: min(depth diff for activations, num micro batches)
+        # stale: depth diff for activations
+        # TODO: we should let gradients run without this blocking it.
+        # TODO: this super duper annoying to calculate
+
+        print(f"-V- stage: {my_stage_id}, sent_object_patience: {patience}")
+        self.sent_object_patience = patience
 
         # Holds Async handle objects (for isends)
         self.async_fwd_objects = OrderedDict()
@@ -548,7 +561,7 @@ class FuturesHandler(FuturesHandlerBase):
             self.clean_sent_requests(obj_holder)
             if not obj_holder:
                 return
-
+        # TODO for grads and activations...
         if not fin and (len(obj_holder) <= self.sent_object_patience):
             return
 
