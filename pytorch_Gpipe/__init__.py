@@ -262,7 +262,7 @@ def partition_model(model: nn.Module,
                             force_no_recomp_scopes=force_no_recomp_scopes,
                             save_memory_mode=save_memory_mode)
     if nparts > 1:
-        if partitioning_method == "MEITS":
+        if partitioning_method == "METIS":
             print("-I- using METIS partitioning algorithm")
             graph = METIS_partition(graph,
                                     nparts,
@@ -291,7 +291,7 @@ def partition_model(model: nn.Module,
                                                            node_weight_function=node_weight_function,
                                                            **binpack_opt)
         else:
-            raise NotImplementedError()
+            raise NotImplementedError(partitioning_method) # shouldn't happen
 
     return graph
 
