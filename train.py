@@ -103,7 +103,9 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
 
         if args.steps > 0:
             steps_left = args.steps - steps
-            train_batches_limit_to_use = min(train_batches_limit, steps_left)
+            # TODO: it can be more fine-grained depends on policy but I leave it for now.
+            batches_left = steps_left // args.step_every
+            train_batches_limit_to_use = min(train_batches_limit, batches_left)
 
             # handle step every.
             # if we don't do anything, we will do:
@@ -121,6 +123,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
                 if STEP_EVERY_SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.DropReminder:
                     d_info = {
                         "steps_left": steps_left,
+                        "batches_left": batches_left,
                         "original_train_batches_limit": train_batches_limit,
                         "train_batches_limit_until_flush": train_batches_limit_to_use,
                         "step_every": args.step_every,

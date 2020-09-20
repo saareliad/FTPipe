@@ -178,7 +178,7 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
                         # shape = torch.Size()
                 if len(ranks) > 1:
                     print(
-                        f"-V- creating double buffers for {tensor_name} which is sent/receved to/from multiple ranks: {ranks}"
+                        f"-V- creating double buffers for {tensor_name} which is sent/received to/from multiple ranks: {ranks}"
                     )
                     assert for_grads
                 for _ in ranks:
@@ -409,7 +409,7 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
                                          is_bwd=False,
                                          create=False)
 
-            # Overrride
+            # Override
             self.fwd_recv_buffers = fwd_recv_buffers
         else:
             fwd_recv_buffers = self.fwd_recv_buffers
