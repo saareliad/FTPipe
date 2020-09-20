@@ -221,7 +221,7 @@ class PipelineConfig:
                 continue
 
             my_depth = stage_to_depth[stage_id]
-            tgt_dept = stage_to_depth[stage_id]
+            tgt_dept = stage_to_depth[recv_stage]
             if is_activations:
                 used_by_send_depth_diff = [my_depth - tgt_dept]
                 if recv_stage not in tgt['used_by']:
@@ -355,3 +355,4 @@ if __name__ == '__main__':
 
     print(pipe_config.max_send_depth_dict(is_activations=True))
     print(pipe_config.max_send_depth_dict(is_activations=False))
+    print(pipe_config.send_depth_between_stages(send_stage=0, recv_stage=9, is_activations=True))
