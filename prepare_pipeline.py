@@ -425,7 +425,7 @@ def preproc_data(args, cache=None, save_cache=True):
     args.num_stages = parsed_config.num_stages
     args.stage = parsed_config.stage_id
     from data import get_dataloaders
-    train_dl, test_dl, samplers, extra = get_dataloaders(
+    get_dataloaders(
         args,
         pipe_config=pipe_config,
         dataset_keywords=dataset_keywords)
@@ -486,7 +486,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         # Multiprocessing
         # TODO stage_to_device_map is currently unused, local_rank_to_device_map is used instead.
         # stage_to_device_map will be used when combining MPI overlay
-        stage_to_device_map = [] # TODO ^
+        stage_to_device_map = []  # TODO ^
         v2_args = (shared_ctx, stage_to_device_map, local_rank_to_device_map)
         comm_handler = create_comm_handler_v2(args, comm_init_args, device,
                                               v2_args)
@@ -533,7 +533,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     eval_tensor_dtypes = training_tensor_dtypes  # HACK, TODO
     # Get dataloaders needed for this stage
     from data import get_dataloaders
-    train_dl, test_dl, samplers, extra = get_dataloaders(
+    train_dl, eval_dl, samplers, extra = get_dataloaders(
         args,
         pipe_config=pipe_config,
         dataset_keywords=dataset_keywords)
@@ -542,13 +542,13 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
 
     # instead of loading dl on every device just to get its length
     # we synchronize length as a message, from first stage
-    (last_batch_diff_test,
+    (last_batch_diff_eval,
      last_batch_diff_train,
-     test_dl_len,
+     eval_dl_len,
      train_dl_len) = synchronize_dataloaders_length(args,
                                                     is_first_partition,
                                                     logger,
-                                                    test_dl,
+                                                    eval_dl,
                                                     train_dl)
     if last_batch_diff_train > 0:
         last_batch_train_shapes = parsed_config.get_shapes(
@@ -556,10 +556,10 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     else:
         last_batch_train_shapes = None
 
-    if last_batch_diff_test > 0:
-        last_batch_test_shapes = parsed_config.get_shapes(last_batch_diff_test)
+    if last_batch_diff_eval > 0:
+        last_batch_eval_shapes = parsed_config.get_shapes(last_batch_diff_eval)
     else:
-        last_batch_test_shapes = None
+        last_batch_eval_shapes = None
 
     steps_per_epoch = train_dl_len // args.step_every
     if train_dl_len % args.step_every > 0:
@@ -582,7 +582,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         training_tensor_dtypes,
         eval_tensor_dtypes,
         last_batch_train_shapes,
-        last_batch_test_shapes,
+        last_batch_eval_shapes,
         args.max_buffers,
         args.keep_buffers_alive,
     )
@@ -744,39 +744,39 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     if hasattr(args, "auto_file_name"):
         auto_file_name(args)
 
-    return (logger, train_dl, test_dl, is_first_partition, is_last_partition,
-            partition, statistics, train_dl_len, test_dl_len, samplers)
+    return (logger, train_dl, eval_dl, is_first_partition, is_last_partition,
+            partition, statistics, train_dl_len, eval_dl_len, samplers)
 
 
-def synchronize_dataloaders_length(args, is_first_partition, logger, test_dl, train_dl):
+def synchronize_dataloaders_length(args, is_first_partition, logger, eval_dl, train_dl):
     if args.rank == 0:
         assert is_first_partition
-        train_dl_len, test_dl_len = len(train_dl), len(test_dl)
-        logger.info(f"train_dl_len {train_dl_len}")
-        logger.info(f"test_dl_len {test_dl_len}")
+        train_dl_len, eval_dl_len = len(train_dl), len(eval_dl)
+        train_dataset_len, eval_dataset_len = len(train_dl.dataset), len(
+            eval_dl.dataset)
 
-        train_dataset_len, test_dataset_len = len(train_dl.dataset), len(
-            test_dl.dataset)
-        logger.info(f"train_dataset_len {train_dataset_len}")
-        logger.info(f"test_dataset_len {test_dataset_len}")
-
-        # TODO: support replicated
         last_batch_diff_train = train_dataset_len % args.bs_train if not train_dl.drop_last else 0
-        last_batch_diff_test = test_dataset_len % args.bs_test if not test_dl.drop_last else 0
+        last_batch_diff_eval = eval_dataset_len % args.bs_test if not eval_dl.drop_last else 0
+
+        d = dict(train_dataset_len=train_dataset_len, eval_dataset_len=eval_dataset_len,
+                 train_dl_len=train_dl_len, eval_dl_len=eval_dl_len,
+                 last_batch_diff_train=last_batch_diff_train, last_batch_diff_eval=last_batch_diff_eval)
+        logger.info(f"Synchronizing: {d}")
+        # TODO: support replicated
 
         data = [
-            train_dl_len, test_dl_len, last_batch_diff_train,
-            last_batch_diff_test
+            train_dl_len, eval_dl_len, last_batch_diff_train,
+            last_batch_diff_eval
         ]
         data = torch.tensor(data, dtype=torch.long)
     else:
         data = torch.zeros(4, dtype=torch.long)
     torch.distributed.broadcast(data, 0)
     train_dl_len = data[0].item()
-    test_dl_len = data[1].item()
+    eval_dl_len = data[1].item()
     last_batch_diff_train = data[2].item()
-    last_batch_diff_test = data[3].item()
-    return last_batch_diff_test, last_batch_diff_train, test_dl_len, train_dl_len
+    last_batch_diff_eval = data[3].item()
+    return last_batch_diff_eval, last_batch_diff_train, eval_dl_len, train_dl_len
 
 
 def get_optimizer_parameter_groups(args, partition):
