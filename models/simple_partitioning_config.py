@@ -183,6 +183,70 @@ class PipelineConfig:
 
         return stage_depth
 
+    def sent_items_between_stages(self, send_stage, recv_stage, is_activations:bool = True):
+        stage_id = send_stage
+        targets = self.d['stages'][stage_id]['outputs'] if is_activations else self.d['stages'][stage_id]['inputs']
+
+        names = set()
+        for name, tgt in targets.items():
+            if name in self.d['model_inputs'] or name in self.d['model_outputs']:
+                continue
+            if not is_activations and not tgt['req_grad']:
+                continue
+            if is_activations:
+                if recv_stage in tgt['used_by']:
+                    names.add(name)
+            else:
+                if recv_stage == tgt['created_by']:
+                    names.add(name)
+        return names
+
+    def send_depth_between_stages(self, send_stage, recv_stage, specific_tensor_name=None, is_activations: bool = True):
+        stage_to_depth = {x: self.get_depth_for_stage(x) for x in [send_stage, recv_stage]}
+
+        stage_id = send_stage
+        targets = self.d['stages'][stage_id]['outputs'] if is_activations else self.d['stages'][stage_id]['inputs']
+
+        if specific_tensor_name is not None:
+            assert specific_tensor_name in targets
+
+        stage_to_max_send_depth = 0
+
+        for name, tgt in targets.items():
+            if name in self.d['model_inputs'] or name in self.d['model_outputs']:
+                continue
+            if not is_activations and not tgt['req_grad']:
+                continue
+            if specific_tensor_name is not None and name != specific_tensor_name:
+                continue
+
+            my_depth = stage_to_depth[stage_id]
+            tgt_dept = stage_to_depth[stage_id]
+            if is_activations:
+                used_by_send_depth_diff = [my_depth - tgt_dept]
+                if recv_stage not in tgt['used_by']:
+                    continue
+            else:
+                created_by = tgt['created_by']
+                assert isinstance(created_by, int)
+                if created_by == -1:
+                    raise NotImplementedError(
+                        f"we assume model_inputs do not require grad. But got: {name}, {stage_id}")
+
+                if recv_stage != created_by:
+                    continue
+                used_by_send_depth_diff = [tgt_dept - my_depth]
+
+            if used_by_send_depth_diff:
+                stage_max_send_depth_for_tgt = max(used_by_send_depth_diff)
+            else:
+                # its redundant but whatever
+                stage_max_send_depth_for_tgt = 0
+
+            stage_to_max_send_depth = max(stage_max_send_depth_for_tgt, stage_to_max_send_depth)
+
+        return stage_to_max_send_depth
+
     def max_send_depth_dict(self, is_activations: bool = True) -> Dict[int, int]:
         stage_to_depth = {x: self.get_depth_for_stage(x) for x in range(self.n_stages)}
         stage_to_max_send_depth = defaultdict(int)
@@ -213,12 +277,12 @@ class PipelineConfig:
                     used_by_send_depth_diff = [created_by_depth - my_depth]
 
                 if used_by_send_depth_diff:
-                    stage_max_send_depth = max(used_by_send_depth_diff)
+                    stage_max_send_depth_for_tgt = max(used_by_send_depth_diff)
                 else:
                     # its redundant but whatever
-                    stage_max_send_depth = 0
+                    stage_max_send_depth_for_tgt = 0
 
-                stage_to_max_send_depth[stage_id] = max(stage_max_send_depth, stage_to_max_send_depth[stage_id])
+                stage_to_max_send_depth[stage_id] = max(stage_max_send_depth_for_tgt, stage_to_max_send_depth[stage_id])
 
         return stage_to_max_send_depth
 
@@ -231,7 +295,8 @@ class PipelineConfig:
         max_send_depth_dict_g = self.max_send_depth_dict(is_activations=False)
         res = max(max_send_depth_dict_a[stage_id], max_send_depth_dict_g[stage_id])
         if res > 1:
-            warnings.warn(f"Stage: {stage_id} has max_send_depth={res}. This means holding multiple versions of activations/gradients in memory")
+            warnings.warn(
+                f"Stage: {stage_id} has max_send_depth={res}. This means holding multiple versions of activations/gradients in memory")
         return res
 
     @property
@@ -249,6 +314,7 @@ def atomic_batch_change(atomic_is_batched, atomic_shape, dim, batch_size) -> tor
         atomic_shape = TMP_SHAPE_CLS(atomic_shape)
         # atomic_shape = torch.Size(atomic_shape)
     return atomic_shape
+
 
 # config structure
 # batch_dim
@@ -283,10 +349,9 @@ def atomic_batch_change(atomic_is_batched, atomic_shape, dim, batch_size) -> tor
 
 if __name__ == '__main__':
     from models.partitioned.t5_3b_tied_lmheads_512_4_8p_bw12_squad1_virtual_stages import create_pipeline_configuration
+
     pipe_config = PipelineConfig(create_pipeline_configuration(DEBUG=True))
     print(pipe_config.get_depth_for_stage(0))
 
-
     print(pipe_config.max_send_depth_dict(is_activations=True))
     print(pipe_config.max_send_depth_dict(is_activations=False))
-

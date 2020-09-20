@@ -2,11 +2,13 @@
 import concurrent
 import concurrent.futures
 import sys
+import warnings
 from collections import defaultdict
 
 import torch
 
 from models.parse_config import is_shared_parameter
+from models.simple_partitioning_config import PipelineConfig
 from .common_simple_comm import SimpleCommBase
 from .interface import FuturesHandlerBase
 
@@ -51,6 +53,8 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             1, initializer=torch.cuda.set_device, initargs=(self.device,))
         self.pool_send_grad = concurrent.futures.ThreadPoolExecutor(
             1, initializer=torch.cuda.set_device, initargs=(self.device,))
+
+        self.sent_object_patience = self.pipe_config.max_send_depth_for_stage(self.stage)
 
     def _create_streams(self):
         # start with 2 streams, then do more
@@ -131,7 +135,28 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
 
             for sending_rank in sending_ranks:
                 reuse_q = self.buffer_reuse_queues[sending_rank][self.rank]
-                reuse_q.put(None)
+
+                n_acks_to_send = 1
+                if is_activations:
+                    # rank to stage id
+                    send_stage = self.pipe_config.rank_to_stage_idx(sending_rank)
+                    recv_stage = self.pipe_config.rank_to_stage_idx(self.rank)
+
+                    send_dist_between_stages  = self.pipe_config.send_depth_between_stages(send_stage=send_stage, recv_stage=recv_stage, is_activations=True)
+
+                    if send_dist_between_stages > 1:
+                        # TODO: check that there is a single taget between stages
+                        sent_items_between_stages = self.pipe_config.sent_items_between_stages(send_stage, recv_stage)
+                        is_single_tensor_between_stages = len(sent_items_between_stages) == 1
+                        if not is_single_tensor_between_stages:
+                            raise NotImplementedError(f"Items: total of {len(sent_items_between_stages)} items are send between stages with patience={send_dist_between_stages} we currently support only 1, such items. {sent_items_between_stages}")
+
+                        required_patience = send_dist_between_stages
+                        n_acks_to_send = required_patience
+                        warnings.warn("Sending multiple acks between stages to allow higher patience")
+
+                for _ in n_acks_to_send:
+                    reuse_q.put(None)
 
     def _create_send_buffers(self,
                              tensor_send_ranks,
@@ -408,15 +433,17 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         return g
 
     def create_futures_handler(self, *args, **kw):
-        self.futures_handler = FuturesHandler(*args, **kw)
+        self.futures_handler = FuturesHandler(self.pipe_config, self.stage)
         return self.futures_handler
 
 
 class FuturesHandler(FuturesHandlerBase):
     """ Handle sent object futures """
 
-    def __init__(self, *args, **kw):
+    def __init__(self, pipe_config: PipelineConfig, my_stage_id: int):
         super().__init__()
+
+        self.sent_object_patience = pipe_config.max_send_depth_for_stage(my_stage_id)
 
         self.last_fwd_result = []
         self.last_bwd_result = []
