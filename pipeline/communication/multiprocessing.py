@@ -155,7 +155,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                         n_acks_to_send = required_patience
                         warnings.warn("Sending multiple acks between stages to allow higher patience")
 
-                for _ in n_acks_to_send:
+                for _ in range(n_acks_to_send):
                     reuse_q.put(None)
 
     def _create_send_buffers(self,
