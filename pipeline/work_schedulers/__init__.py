@@ -45,8 +45,11 @@ def get_work_scheduler(args, pipe_config: Optional[PipelineConfig] = None) -> Wo
     if sched_name == "virtual_stages_1f1b":
         kw['num_gpus'] = _get_num_unique_gpus(args)
         kw['supremum_staleness'] = _get_supremum_staleness(args)
-        # if pipe_config is None:
-        #     raise ValueError()
+        if pipe_config is None:
+            raise ValueError()
+        kw['pipeline_depth'] = pipe_config.pipeline_depth
+
+
         # kw['stage_depth'] = pipe_config.get_depth_for_stage(stage_id=args.stage)
 
     return AVAILABLE_WORK_SCHEDULERS.get(sched_name)(args.step_every, **kw)

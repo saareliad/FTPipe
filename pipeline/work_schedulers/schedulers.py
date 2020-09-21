@@ -44,6 +44,7 @@ class VirtualStagesFBScheduler(FBScheduler):
         super().__init__(*args, **kw)
         self.supremum_staleness = kw['supremum_staleness']
         self.num_gpus = kw['num_gpus']
+        self.pipeline_depth = kw['pipeline_depth']
         # self.stage_depth = kw['stage_depth']
 
     def __call__(self, stage_depth, pipeline_depth, num_batches, done_fwds, done_bwds):
@@ -69,7 +70,11 @@ class VirtualStagesFBScheduler(FBScheduler):
         # V1:
         # return max(0, stage_depth - self.supremum_staleness)
         # V2:
-        return min(stage_depth, self.supremum_staleness - 1)
+        # Cut the first, the rest follow.
+        if stage_depth == self.pipeline_depth:
+            return min(stage_depth, self.supremum_staleness - 1)
+        else:
+            return max(0, self.get_virtual_stage_depth(stage_depth+1) - 1 )
 
 
 class PipeDream1F1BScheduler(WorkScheduler):
@@ -96,7 +101,7 @@ class PipeDream1F1BScheduler(WorkScheduler):
             self.warmup = True
 
         # Reached
-        if delta == pipeline_depth:  # FIXME?
+        if delta == stage_depth:  # FIXME?
             self.warmup = False
 
         if self.warmup:

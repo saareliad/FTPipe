@@ -3,8 +3,8 @@ import re
 from collections import Counter
 from typing import List, Tuple, Dict, Any
 
-from pipeline.work_schedulers import AVAILABLE_WORK_SCHEDULERS, get_work_scheduler
 from pipeline.work_schedulers import WorkScheduler, GpipeScheduler
+from pipeline.work_schedulers import get_work_scheduler
 
 
 def get_fwd_bwd_string_for_stage(stage, scheduler: WorkScheduler, num_stages,
@@ -162,7 +162,7 @@ if __name__ == "__main__":
         ptvsd.wait_for_attach()
         breakpoint()
 
-    num_stages = 4
+    num_stages = 16
     EXTRA = 30
     # stage = 0  # Should test the edge case.
     num_batches = num_stages * 2 + 1 + EXTRA
@@ -178,7 +178,6 @@ if __name__ == "__main__":
     PRINT_JUST_PROBLEMATIC_STAGES = False
     PRINT_JUST_FOR_THE_FWDS = False
 
-
     from types import SimpleNamespace
 
     args = SimpleNamespace(
@@ -186,7 +185,7 @@ if __name__ == "__main__":
         step_every=step_every,
         num_stages=num_stages,
         supremum_staleness="auto",
-        stage_to_device_map=[0,1,1,0]
+        stage_to_device_map=list(range(num_stages)) + list(reversed(range(num_stages)))
     )
 
     print(f"-I- got args: {pprint.pformat(vars(args))}")
