@@ -1,26 +1,24 @@
 import math
 import os
 import time
-from enum import Enum, auto
+import warnings
 
 import torch
 
 from pipeline import SinglePartitionManager
 from pipeline.statistics import Stats
+from prepare_pipeline import SmallerLastBatchPolicy
 
 
-class SmallerLastBatchPolicy(Enum):
-    ProportionalStep = auto()
-    DropReminder = auto()
-
-
-STEP_EVERY_SMALLER_LAST_BATCH_POLICY = SmallerLastBatchPolicy.ProportionalStep
+# DEFAULT_STEP_EVERY_SMALLER_LAST_BATCH_POLICY = SmallerLastBatchPolicy.ProportionalStep
 
 
 def training_loop(args, logger, train_dl, test_dl, is_first_partition,
                   is_last_partition, partition: SinglePartitionManager, statistics: Stats, train_dl_len,
                   test_dl_len, samplers):
-    global STEP_EVERY_SMALLER_LAST_BATCH_POLICY
+    # Prepare for loop
+    STEP_EVERY_SMALLER_LAST_BATCH_POLICY = getattr(args, "STEP_EVERY_SMALLER_LAST_BATCH_POLICY",
+                                                   SmallerLastBatchPolicy.ProportionalStep)
     if args.steps > 0 and args.work_scheduler.lower() == "gpipe" and args.mode == "dist" and STEP_EVERY_SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.ProportionalStep:
         raise NotImplementedError(
             "Some unsolved problems with buffer sizes, can't yet drop last batch. try using --mode mp or change STEP_EVERY_SMALLER_LAST_BATCH_POLICY to drop")
@@ -40,9 +38,14 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
     train_batches_limit = getattr(args, "train_batches_limit", train_dl_len)
     test_batches_limit = getattr(args, "test_batches_limit", test_dl_len)
 
+    if getattr(args, "train_batches_limit", -1) > 0:  # or getattr(args, "test_batches_limit", -1) > 0
+        warnings.warn(
+            "hard limiting train batches per flush (dev feature): different last batch not supported, messages may get truncated")
+
     train_batches_limit = train_dl_len if train_batches_limit < 0 else train_batches_limit
     test_batches_limit = test_dl_len if test_batches_limit < 0 else test_batches_limit
 
+    # Here comes utility functions:     run_eval and run_train
     def run_eval(eval_batches_to_run):
         logger.info(f"Running eval")
         if eval_batches_to_run == 0:
@@ -97,6 +100,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
             statistics.non_last_partition_on_epoch_end()
         return True
 
+    # Actual training loop
     while epochs < args.epochs or args.epochs < 0:
         for s in samplers:
             s.set_epoch(epochs)
@@ -106,6 +110,12 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
             # TODO: it can be more fine-grained depends on policy but I leave it for now.
             batches_left = steps_left * args.step_every
             train_batches_limit_to_use = min(train_batches_limit, batches_left)
+
+            if batches_left < train_batches_limit:
+                # Re-define last batch train shapes.
+                # now, the last batch shapes are not smaller.
+                logger.info("batches_left are smaller than dataloader or limit: killing comm_handler.last_batch_train_shapes")
+                partition.comm_handler.last_batch_train_shapes = None
 
             # handle step every.
             # if we don't do anything, we will do:
@@ -118,8 +128,8 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
             #
             # Note: (1) only effects the last batch so there is no problem with staleness.
 
-            reminder_to_drop = train_batches_limit_to_use % args.step_every
-            if reminder_to_drop:
+            reminder_micro_batches = train_batches_limit_to_use % args.step_every
+            if reminder_micro_batches:
                 if STEP_EVERY_SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.DropReminder:
                     d_info = {
                         "steps_left": steps_left,
@@ -130,8 +140,8 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
                         "train_dl_len": train_dl_len
                     }
                     logger.info(
-                        f"Got reminder of {reminder_to_drop} micro batches. Will dropping them.")
-                    train_batches_limit_to_use -= reminder_to_drop
+                        f"Got reminder of {reminder_micro_batches} micro batches. Will drop them.")
+                    train_batches_limit_to_use -= reminder_micro_batches
                     if train_batches_limit_to_use <= 0:
                         logger.info(
                             f"breaking early since can't complete a full step with {args.step_every} gradient accumulations.")
@@ -140,9 +150,9 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
                     # TODO: to fix GPipe MPI, we can do it, but needs to be only for last batch.
                     # tmp = partition.work_scheduler.step_every
                     # print("-I- replacing step every for scheduler for last batch")
-                    # partition.work_scheduler.step_every = reminder_to_drop
+                    # partition.work_scheduler.step_every = reminder_micro_batches
                     logger.info(
-                        f"Got reminder of {reminder_to_drop} micro batches. Will take proportional {reminder_to_drop / args.step_every} last step")
+                        f"Got reminder of {reminder_micro_batches} micro batches. Will take proportional {reminder_micro_batches / args.step_every} last step")
                 else:
                     raise NotImplementedError(
                         f"Unknown SMALLER_LAST_BATCH_POLICY, {STEP_EVERY_SMALLER_LAST_BATCH_POLICY}")
@@ -154,14 +164,14 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
         # TODO: flush every 1000
         did_train = run_train(train_batches_limit_to_use)
 
-        # if args.steps > 0 and reminder_to_drop and STEP_EVERY_SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.ProportionalStep:
+        # if args.steps > 0 and reminder_micro_batches and STEP_EVERY_SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.ProportionalStep:
         #     partition.work_scheduler.step_every = tmp
 
         did_eval = run_eval(test_batches_limit)
 
         epochs += 1
         if did_train:
-            if args.steps > 0 and reminder_to_drop and STEP_EVERY_SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.DropReminder:
+            if args.steps > 0 and reminder_micro_batches and STEP_EVERY_SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.DropReminder:
                 steps += math.floor(train_batches_limit_to_use / args.step_every)
             else:
                 steps += math.ceil(train_batches_limit_to_use / args.step_every)
@@ -190,7 +200,8 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
             )
             break  # steps condition met
         elif getattr(args, "patience", False):
-            if is_last_partition:  # FIXME:  args.world_size - 1
+            if args.world_size - 1:
+                assert is_last_partition
                 # TODO: Try catch?                    
                 should_early_stop = should_stop_early(
                     args, statistics.get_metric_for_early_stop(), logger)
@@ -262,3 +273,12 @@ class CheckpointsSaver:
         print(f"-V- stage {args.stage}: saving checkpoint took: {tok - tik}")
         self.num_saved_checkpoints += 1
         print(f"-I- stage {args.stage}: model checkpoint saved: {fn}")
+
+        # Also save number of steps
+        metatdata_fn = os.path.join(args.checkpoints_save_dir, f"{name_prefix}_Partition{args.stage}.steps")
+        try:
+            # We don't want it to kill training if it fails somehow
+            with open(metatdata_fn, "w") as f:
+                f.write(str(steps))
+        except Exception as e:
+            warnings.warn(f"Failed to save metadata for checkpoint {metatdata_fn}")

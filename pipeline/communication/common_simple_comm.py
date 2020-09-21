@@ -286,6 +286,7 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
         # FIXME used to avoid this clone
         # FIXME used to avoid this clone
         # FIXME used to avoid this clone
+        # TODO: this clone can happen in another stream
         x = [v.clone() for v in x]
 
         # pre-Start the next fwd Irecv:
@@ -500,7 +501,8 @@ class FuturesHandler(FuturesHandlerBase):
         patience = pipe_config.max_send_depth_for_stage(my_stage_id)
         pipeline_depth = pipe_config.pipeline_depth
         if patience > 1:
-            warnings.warn(f"stage {my_stage_id}: Got max_send_depth_for_stage {patience}, but setting to pipeline_depth={pipeline_depth} for safety")
+            warnings.warn(
+                f"stage {my_stage_id}: Got max_send_depth_for_stage {patience}, but setting to pipeline_depth={pipeline_depth} for safety")
             patience = pipeline_depth
         # TODO: it depends on scheduler.
         # TODO: we should let activations run without this blocking it

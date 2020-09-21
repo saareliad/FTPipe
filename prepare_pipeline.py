@@ -1,8 +1,10 @@
 import gc
 import warnings
+from enum import Enum, auto
 from typing import Type
 
 import torch
+from torch.utils.data import DataLoader
 
 import models
 import optimizers.lr_scheduler
@@ -561,19 +563,23 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     else:
         last_batch_eval_shapes = None
 
-    steps_per_epoch = train_dl_len // args.step_every
-    if train_dl_len % args.step_every > 0:
-        steps_per_epoch += 1
-
     # Get expected training steps:
     if args.epochs > 0 and args.steps < 0:
+        steps_per_epoch = train_dl_len // args.step_every
+        # TODO: and policy is proportional
+        if train_dl_len % args.step_every > 0:
+            STEP_EVERY_SMALLER_LAST_BATCH_POLICY = getattr(args, "STEP_EVERY_SMALLER_LAST_BATCH_POLICY",
+                                                           SmallerLastBatchPolicy.ProportionalStep)
+            if STEP_EVERY_SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.ProportionalStep:
+                steps_per_epoch += 1
+        args.steps_per_epoch = steps_per_epoch  # used later if preproc lr scheduler from epochs
         expected_training_steps = steps_per_epoch * args.epochs
     elif args.epochs < 0 and args.steps > 0:
         expected_training_steps = args.steps
     else:
         raise NotImplementedError("Missing steps or epochs limit")
 
-    args.steps_per_epoch = steps_per_epoch
+    # TODO: this is unused
     args.expected_training_steps = expected_training_steps
 
     buffers_ctx = (
@@ -748,25 +754,17 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
             partition, statistics, train_dl_len, eval_dl_len, samplers)
 
 
-def synchronize_dataloaders_length(args, is_first_partition, logger, eval_dl, train_dl):
+def synchronize_dataloaders_length(args, is_first_partition: bool, logger, eval_dl: DataLoader, train_dl: DataLoader):
     if args.rank == 0:
         assert is_first_partition
         train_dl_len, eval_dl_len = len(train_dl), len(eval_dl)
         train_dataset_len, eval_dataset_len = len(train_dl.dataset), len(
             eval_dl.dataset)
-
-        last_batch_diff_train = train_dataset_len % args.bs_train if not train_dl.drop_last else 0
-        last_batch_diff_eval = eval_dataset_len % args.bs_test if not eval_dl.drop_last else 0
-
-        d = dict(train_dataset_len=train_dataset_len, eval_dataset_len=eval_dataset_len,
-                 train_dl_len=train_dl_len, eval_dl_len=eval_dl_len,
-                 last_batch_diff_train=last_batch_diff_train, last_batch_diff_eval=last_batch_diff_eval)
-        logger.info(f"Synchronizing: {d}")
         # TODO: support replicated
 
         data = [
-            train_dl_len, eval_dl_len, last_batch_diff_train,
-            last_batch_diff_eval
+            train_dl_len, eval_dl_len, train_dataset_len,
+            eval_dataset_len
         ]
         data = torch.tensor(data, dtype=torch.long)
     else:
@@ -774,8 +772,18 @@ def synchronize_dataloaders_length(args, is_first_partition, logger, eval_dl, tr
     torch.distributed.broadcast(data, 0)
     train_dl_len = data[0].item()
     eval_dl_len = data[1].item()
-    last_batch_diff_train = data[2].item()
-    last_batch_diff_eval = data[3].item()
+    train_dataset_len = data[2].item()
+    eval_dataset_len = data[3].item()
+
+    last_batch_diff_train = train_dataset_len % args.bs_train if not train_dl.drop_last else 0
+    last_batch_diff_eval = eval_dataset_len % args.bs_test if not eval_dl.drop_last else 0
+
+    if args.rank == 0:
+        d = dict(train_dataset_len=train_dataset_len, eval_dataset_len=eval_dataset_len,
+                 train_dl_len=train_dl_len, eval_dl_len=eval_dl_len,
+                 last_batch_diff_train=last_batch_diff_train, last_batch_diff_eval=last_batch_diff_eval)
+        logger.info(f"Synchronized: {d}")
+
     return last_batch_diff_eval, last_batch_diff_train, eval_dl_len, train_dl_len
 
 
@@ -824,3 +832,8 @@ if __name__ == '__main__':
 
     args = SimpleNamespace(cpu=False, world_size=8, nnodes=1)
     print(get_rank_to_device_map(args))
+
+
+class SmallerLastBatchPolicy(Enum):
+    ProportionalStep = auto()
+    DropReminder = auto()
