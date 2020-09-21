@@ -495,7 +495,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     else:
         raise NotImplementedError("In progress")
 
-    work_scheduler = get_work_scheduler(args)
+    work_scheduler = get_work_scheduler(args, pipe_config=pipe_config)
 
     dataset_keywords = {}
     # Do heavy ram part one by one to save memory.
