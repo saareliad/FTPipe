@@ -762,9 +762,15 @@ def synchronize_dataloaders_length(args, is_first_partition: bool, logger, eval_
             eval_dl.dataset)
         # TODO: support replicated
 
+        last_batch_diff_train = train_dataset_len % args.bs_train if not train_dl.drop_last else 0
+        last_batch_diff_eval = eval_dataset_len % args.bs_test if not eval_dl.drop_last else 0
+        d = dict(train_dataset_len=train_dataset_len, eval_dataset_len=eval_dataset_len,
+                 train_dl_len=train_dl_len, eval_dl_len=eval_dl_len,
+                 last_batch_diff_train=last_batch_diff_train, last_batch_diff_eval=last_batch_diff_eval)
+        logger.info(f"Synchronized: {d}")
         data = [
-            train_dl_len, eval_dl_len, train_dataset_len,
-            eval_dataset_len
+            train_dl_len, eval_dl_len, last_batch_diff_train,
+            last_batch_diff_eval
         ]
         data = torch.tensor(data, dtype=torch.long)
     else:
@@ -772,17 +778,8 @@ def synchronize_dataloaders_length(args, is_first_partition: bool, logger, eval_
     torch.distributed.broadcast(data, 0)
     train_dl_len = data[0].item()
     eval_dl_len = data[1].item()
-    train_dataset_len = data[2].item()
-    eval_dataset_len = data[3].item()
-
-    last_batch_diff_train = train_dataset_len % args.bs_train if not train_dl.drop_last else 0
-    last_batch_diff_eval = eval_dataset_len % args.bs_test if not eval_dl.drop_last else 0
-
-    if args.rank == 0:
-        d = dict(train_dataset_len=train_dataset_len, eval_dataset_len=eval_dataset_len,
-                 train_dl_len=train_dl_len, eval_dl_len=eval_dl_len,
-                 last_batch_diff_train=last_batch_diff_train, last_batch_diff_eval=last_batch_diff_eval)
-        logger.info(f"Synchronized: {d}")
+    last_batch_diff_train = data[2].item()
+    last_batch_diff_eval = data[3].item()
 
     return last_batch_diff_eval, last_batch_diff_train, eval_dl_len, train_dl_len
 
