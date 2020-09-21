@@ -86,8 +86,6 @@ class SinglePartitionManager:
         self.num_stages = num_stages
         self.step_every = step_every
 
-        if self.stage_depth == 0:
-            use_recomputation = False
 
         self._init_partition(partition, use_recomputation, disable_clone_inputs, req_grad,
                              )
@@ -131,6 +129,10 @@ class SinglePartitionManager:
 
     def _init_partition(self, partition, use_recomputation, is_mp, req_grad,
                         ):
+
+        if self.stage_depth == 0:
+            use_recomputation = False
+
         TO_DEVICE = False
         is_last_partition = self.is_last_partition
         is_first_partition = self.is_first_partition
