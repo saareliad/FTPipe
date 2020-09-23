@@ -1,11 +1,11 @@
 
 import json
-from typing import NamedTuple, Dict
+from typing import NamedTuple, Dict, Any, Tuple
 import os
 from types import SimpleNamespace
 
 
-def load_experiment(filename):
+def load_experiment(filename) -> Tuple[Dict[Any, Any], Dict[Any, Any]]:
     """ Returns:
             config, fit_res
     """
