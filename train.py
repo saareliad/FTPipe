@@ -19,10 +19,6 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
     # Prepare for loop
     STEP_EVERY_SMALLER_LAST_BATCH_POLICY = getattr(args, "STEP_EVERY_SMALLER_LAST_BATCH_POLICY",
                                                    SmallerLastBatchPolicy.ProportionalStep)
-    if args.steps > 0 and args.work_scheduler.lower() == "gpipe" and args.mode == "dist" and STEP_EVERY_SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.ProportionalStep:
-        raise NotImplementedError(
-            "Some unsolved problems with buffer sizes, can't yet drop last batch. try using --mode mp or change STEP_EVERY_SMALLER_LAST_BATCH_POLICY to drop")
-    #     # STEP_EVERY_SMALLER_LAST_BATCH_POLICY = SmallerLastBatchPolicy.DropReminder
 
     epochs = 0
     steps = 0
