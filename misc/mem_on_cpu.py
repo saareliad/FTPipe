@@ -156,7 +156,7 @@ if __name__ == '__main__':
     parser.add_argument("--model_name_or_path", type=str, default="t5-3b")
     parser.add_argument("--max_seq_length", type=int, default=320)
     parser.add_argument("--answer_max_seq_length", type=int, default=8)
-    parser.add_argument("--batch_size", type=int, default=4)
+    parser.add_argument("--batch_size", type=int, default=1)
 
     parser.add_argument("--n_steps", type=int, default=3)
     parser.add_argument("--step_every", type=int, default=2)
@@ -174,7 +174,7 @@ if __name__ == '__main__':
     print("memory use, begin1:", check_cpu_mem())
     mem_usage['begin1'] = check_cpu_mem()
 
-    use_cdn = args.model_name_or_path in {"t5-11b"}
+    use_cdn = args.model_name_or_path not in {"t5-11b"}
     model = T5ForConditionalGeneration.from_pretrained(
         args.model_name_or_path,
         # from_tf=bool('.ckpt' in model_name_or_path),

@@ -43,7 +43,7 @@
         }
     },
     "epochs": -1,
-    "steps": 7000,
+    "steps": 17000,
     "seed_from_cmd": false,
     "seed": 42,
     "bs_train_from_cmd": false,
@@ -67,5 +67,7 @@
     "precomputed_masks": true,
     "save_checkpoints":  true,
     "checkpoints_save_name_prefix": "stale_adafactor",
-    "checkpoints_save_dir": "/nfs_Disk2/virtual_stages/checkpoints/t5/3b/wic/stale/"
+    "checkpoints_save_dir": "/nfs_Disk2/virtual_stages/checkpoints/t5/3b/wic/stale/",
+    "load_model_one_by_one": false,
+    "save_checkpoint_every_x_steps": 500
 }

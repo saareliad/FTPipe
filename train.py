@@ -20,6 +20,17 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
     STEP_EVERY_SMALLER_LAST_BATCH_POLICY = getattr(args, "STEP_EVERY_SMALLER_LAST_BATCH_POLICY",
                                                    SmallerLastBatchPolicy.ProportionalStep)
 
+    save_checkpoint_every_x_epochs = getattr(args, "save_checkpoint_every_x_steps",None)
+    approx_step_per_epoch = train_dl_len // args.step_every
+    if save_checkpoint_every_x_epochs is not None:
+        save_checkpoint_every_x_epochs = save_checkpoint_every_x_epochs // approx_step_per_epoch
+    else:
+        save_checkpoint_every_x_epochs = 1
+
+    assert save_checkpoint_every_x_epochs >= 1
+    print(f"Approximating: An epoch is approx {approx_step_per_epoch} steps.")
+    print(f"Approximating: will save checkpoint every {save_checkpoint_every_x_epochs} epochs, and at the end.")
+
     epochs = 0
     steps = 0
     total_epoch_times_list = []
@@ -172,7 +183,9 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
             else:
                 steps += math.ceil(train_batches_limit_to_use / args.step_every)
 
-        cp_saver.maybe_save_checkpoint(partition.partition.layers, steps)
+        is_last = (args.epochs > 0 and epochs >= args.epochs) or (args.steps > 0 and steps >= args.steps)
+        if is_last or epochs % save_checkpoint_every_x_epochs == 0:
+            cp_saver.maybe_save_checkpoint(partition.partition.layers, steps)
 
         total_epoch_time = (time.time() - epoch_start_time)
         total_epoch_times_list.append(total_epoch_time)

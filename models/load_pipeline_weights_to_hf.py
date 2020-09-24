@@ -140,7 +140,7 @@ class HFLoader(Loader):
             cache_dir=cache_dir if cache_dir else None,
             **tokenizer_kw)
 
-        use_cdn = model_name_or_path in {"t5-11b"}
+        use_cdn = model_name_or_path not in {"t5-11b"}
         model = self.MODEL_CLASS.from_pretrained(
             model_name_or_path,
             from_tf=bool('.ckpt' in model_name_or_path),
