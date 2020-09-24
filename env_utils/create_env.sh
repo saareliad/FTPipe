@@ -19,6 +19,7 @@ conda_stuff() {
 }
 
 new_env() {
+  # conda create -y -n pt python=3.8 numpy ninja pyyaml mkl mkl-include setuptools cmake cffi typing_extensions future six requests dataclasses cython
     conda create -y -n py38 python=3.8
     conda activate py38
     conda install -y numpy
@@ -46,9 +47,10 @@ avx2pillow_torchvision() {
 
 cuda_awre_openmpi() {
     # Can also do it from conda, but I didn't try.
-    wget https://download.open-mpi.org/release/open-mpi/v4.0/openmpi-4.0.3.tar.gz
-    tar -xvzf openmpi-4.0.3.tar.gz
-    cd openmpi-4.0.3 || exit 1
+    sudo apt-get install libnuma-dev
+    wget https://download.open-mpi.org/release/open-mpi/v4.0/openmpi-4.0.5.tar.gz
+    tar -xvzf openmpi-4.0.5.tar.gz
+    cd openmpi-4.0.5 || exit 1
     ./configure --with-cuda
     make
     sudo make install
@@ -60,6 +62,7 @@ pytorch_sources() {
     git clone --recursive https://github.com/pytorch/pytorch
     cd pytorch || exit 1
     # Added required version (not checked the line below)
+
     git checkout --recurse-submodules v1.6.0
 
     # if you are updating an existing checkout

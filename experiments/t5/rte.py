@@ -1,0 +1,4 @@
+
+
+exp_stale_seq = "results/t5/glue/rte_paper_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_t5_tfds_stale_bs_32_se_32_seed_42.json"
+exp_stale_gpipe = "results/t5/glue/rte_paper_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_t5_tfds_gpipe_bs_32_se_32_seed_42.json"
