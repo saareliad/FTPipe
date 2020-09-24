@@ -22,7 +22,7 @@
     "bs_test": 32,
     "step_every": 4,
     "max_seq_length": 64,
-    "answer_max_seq_length": 6,
+    "answer_max_seq_length": 4,
     "num_data_workers": 5,
     "optimizer": {
         "type": "adafactor",
