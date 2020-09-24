@@ -260,7 +260,7 @@ def t5_3b_tied_lmheads_320_8_8p_bw12_squad1_virtual_stages():
                 output_past=False,
                 output_attentions=False,
                 output_hidden_states=False,
-                do_resize_token_embedding=False,
+                do_resize_token_embedding=True,
                 explicitly_set_dict={
                     "output_only": True,
                     "output_attentions": False,
