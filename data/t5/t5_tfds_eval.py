@@ -1,6 +1,7 @@
 import functools
 import logging
 import os
+import warnings
 
 import t5
 import tensorflow.compat.v1 as tf
@@ -204,10 +205,16 @@ class T5Evaluator:
 
         all_results = {}
         for checkpoint_step in checkpoint_steps:
-            self.load_checkpoint(checkpoint_step)
-            results = _eval_current_model()
-            print("partial result:", checkpoint_step, results)
-            all_results[checkpoint_step] = results
+            try:
+                self.load_checkpoint(checkpoint_step)
+                results = _eval_current_model()
+                print("partial result:", checkpoint_step, results)
+                all_results[checkpoint_step] = results
+            except Exception as e:
+                if all_results:
+                    warnings.warn(f"ignoring exeption {str(e)}")
+                else:
+                    raise e
 
         return all_results
 

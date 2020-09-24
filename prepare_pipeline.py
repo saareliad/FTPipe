@@ -416,6 +416,7 @@ def preproc_data(args, cache=None, save_cache=True):
         prefer_seq_sends=getattr(args, "prefer_seq_sends", True))
 
     dataset_keywords = {}
+    parsed_config.load_model(handler=handler, bs_train=args.bs_train, rank=args.rank)
     extra_kw = handler.get_extra()
     if isinstance(extra_kw, dict):
         dataset_keywords.update(extra_kw)
