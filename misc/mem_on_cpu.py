@@ -12,7 +12,7 @@ except ImportError as e:
     import nlp
 
 import torch
-from transformers import T5ForConditionalGeneration, AutoConfig, AutoTokenizer
+from transformers import T5ForConditionalGeneration, AutoConfig, AutoTokenizer, AutoModel
 
 from optimizers import Adafactor
 
@@ -168,14 +168,19 @@ if __name__ == '__main__':
     print("memory use, begin:", check_cpu_mem())
     config = AutoConfig.from_pretrained(args.model_name_or_path)
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
-    sample = get_input_squad1(args, config, tokenizer)
+    if "t5" in args.model_name_or_path:
+        sample = get_input_squad1(args, config, tokenizer)
+    else:
+        # TODO some dataset for GPT2 and bert
+        raise NotImplementedError()
+
     print("memory use, after config, tokenizer and sample loaded:", check_cpu_mem())
 
     print("memory use, begin1:", check_cpu_mem())
     mem_usage['begin1'] = check_cpu_mem()
 
     use_cdn = args.model_name_or_path not in {"t5-11b"}
-    model = T5ForConditionalGeneration.from_pretrained(
+    model = AutoModel.from_pretrained(
         args.model_name_or_path,
         # from_tf=bool('.ckpt' in model_name_or_path),
         config=config,
@@ -186,8 +191,11 @@ if __name__ == '__main__':
     print("memory use, after model loaded:", check_cpu_mem())
 
     # optimizer = torch.optim.Adam(model.parameters())
-    print("Using adafactor optimizer")
-    optimizer = Adafactor(model.parameters(), lr=0.0001, relative_step=False, scale_parameter=True)
+    if "t5" in args.model_name_or_path:
+        print("Using adafactor optimizer")
+        optimizer = Adafactor(model.parameters(), lr=0.0001, relative_step=False, scale_parameter=True)
+    else:
+        optimizer = torch.optim.Adam(model.parameters())
 
     print("memory use, after optimizer loaded:", check_cpu_mem())
 

@@ -1,0 +1,2 @@
+
+stale_fn = "results/all_results_wic_stale_test_vs_t5_3b_tied_lmheads_64_4_8p_bw12_squad1_virtual_stages_t5_tfds_stale_bs_128_se_2_seed_42.txt"
