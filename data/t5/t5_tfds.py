@@ -254,7 +254,8 @@ def get_separated_dataset(just, DATA_DIR, args, **dataset_keywords):
 
 
 def evaluate_t5_tfds(args, cp_number, device="cpu"):
-    model_dir = auto_file_name(args)
+    DIR_NAME = "results/t5_eval_dir/"
+    model_dir = os.path.join(DIR_NAME, auto_file_name(args))
     batch_size = getattr(args, "single_worker_eval_batch_size", 32)
     generate_kwargs = getattr(args, "generate_kwargs", {})
     # generate_kwargs['max_length'] = args.answer_max_length

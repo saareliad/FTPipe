@@ -12,8 +12,10 @@ import torch.multiprocessing as mp
 
 from configs.parse_json_config import parse_json_config
 from data import add_dataset_argument
+from eval import get_all_eval_results
 from experiments import save_experiment, load_experiment_for_update
-from models import AVAILABLE_MODELS, parse_config
+from experiments.experiments import auto_file_name
+from models import AVAILABLE_MODELS
 from models.parse_config import get_my_send_recv_ranks
 from pipeline.util import get_world_size
 from prepare_pipeline import prepare_pipeline, preproc_data
@@ -22,7 +24,7 @@ from train import training_loop
 
 # TODO: support multiple servers,
 # TODO heterogeneous servers
-# TODO: support mix precision, in the future
+# TODO: support mixed precision, in the future
 # TODO: can load the model once when doing multiprocessing and share mem to save time
 
 
@@ -366,14 +368,12 @@ def main(args, shared_ctx=None):
         print(f"-I- rank {args.rank} waiting for attachment on {address}")
         ptvsd.enable_attach(address=address)
         ptvsd.wait_for_attach()
-
     else:
         delattr(args, "debug")
 
     # TODO: ideally we want to choose device here, but we moved it down.
 
     # Set Random Seed
-    # FIXME: I suspect there is a problem here because it does it on it on ALL VISIBLE GPUs.
     # should probably hide with CUDA VISIBLE DEVICES,
     # or do it just for a single GPU:
     # torch._C.default_generator.manual_seed(int(args.seed))
@@ -414,7 +414,6 @@ def main(args, shared_ctx=None):
     args.exp_total_time = exp_total_time
 
     # TODO: option to run test at end of training
-
     # Synchronize and save statistics from all partitions
     save_distributed_experiment(statistics, args, args.world_size, args.rank,
                                 args.local_rank, args.stage)
@@ -484,30 +483,7 @@ def start_eval_checkpoint():
     parse_json_config(args, args.config, first=True)
     # args.single_worker_eval_batch_size = 64
 
-    all_results = {}
-    # TODO: currently its semi hardcoded...
-    # all_cps = list(range(0, 102 + 1))  # + ["c4"]
-    all_cps = list(range(0, infer_all_cps(args)))  # + ["c4"]
-    print(f"-I- evaluating {len(all_cps)}: {all_cps}")
-
-    if args.dataset == "t5_tfds":
-        from data.t5 import t5_tfds
-        device = getattr(args, "eval_device", "cpu")
-        if not isinstance(device, list):
-            all_results = t5_tfds.evaluate_t5_tfds(args, cp_number=all_cps, device=device)
-        else:
-            raise NotImplementedError()
-            # TODO: map with GPU queue.
-    elif args.dataset == "t5_squad":  # deprecated
-        from data.t5 import t5_squad
-        for cp_number in all_cps:
-            args.cp_number = cp_number
-            args.eval_on_cuda = True
-            squad_result = t5_squad.evaluate_squad_checkpoint(args, cp_number=args.cp_number)
-            all_results[cp_number] = squad_result
-    else:
-        # TODO: allow others.
-        raise NotImplementedError()
+    all_results = get_all_eval_results(args)
     pprint(all_results)
 
     # Also write to file
@@ -515,61 +491,12 @@ def start_eval_checkpoint():
         pprint(all_results)
         s = buf.getvalue()
 
-    with open(f"results/all_results_{args.out_filename}.txt", "w+") as f:
+    auto_file_name(args)
+    fn = f"results/all_results_{args.out_filename}.txt"
+    with open(fn, "w+") as f:
         f.write(s)
-
-
-def infer_all_cps(args) -> int:
-    if args.epochs > 0:
-        n_cps = args.epochs
-    elif args.steps > 0:
-        # TODO: Get train dl length
-        # print(f"-I- preprocessing data for rank {rank}/{args.world_size - 1} (word size is {args.world_size})...")
-        local_rank = 0
-        args.rank = 0
-        args.local_rank = local_rank
-        args.is_multiprocessing_worker = False
-
-        handler = AVAILABLE_MODELS.get(args.model)
-
-        parsed_config = parse_config.PartitioningConfigParser(
-            args.model,
-            args.rank,
-            args.bs_train,
-            args.bs_test,  # NOTE: changed name
-            handler=None,
-            send_target_in_pipe=("_nonsep" in args.data_propagator),
-            prefer_seq_sends=getattr(args, "prefer_seq_sends", True))
-
-        dataset_keywords = {}
-        extra_kw = handler.get_extra()
-        if isinstance(extra_kw, dict):
-            dataset_keywords.update(extra_kw)
-        # NOTE: it can be saved in cache
-        # delete to save mem, in contains original model
-        del handler
-
-        pipe_config = parsed_config.pipe_config
-        args.num_stages = parsed_config.num_stages
-        args.stage = parsed_config.stage_id
-        from data import get_dataloaders
-        train_dl, test_dl, samplers, extra = get_dataloaders(
-            args,
-            pipe_config=pipe_config,
-            dataset_keywords=dataset_keywords)
-        len_train_dl = len(train_dl)
-
-        left_steps = args.steps
-        left_batches = args.steps * args.step_every
-        n = 0
-        while left_batches > 0:
-            left_batches -= len_train_dl  # We ignore all the drop policies here.
-            n += 1
-        n_cps = n
-    else:
-        raise NotImplementedError()
-
-    return n_cps
+    print("-I- saved all all results in {fn}")
+    print("-I- Done")
 
 
 if __name__ == "__main__":
