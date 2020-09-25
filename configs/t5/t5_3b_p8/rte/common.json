@@ -3,7 +3,7 @@
     "data_dir": "/home_local/saareliad/data",
     "out_dir": "results/t5/glue/rte",
     "auto_file_name": true,
-    "out_filename": "rte_momentum",
+    "out_filename": "glue_rte",
     "distributed_backend": "mpi",
     "model": "t5_3b_tied_lmheads_320_8_8p_bw12_squad1",
     "dataset": "t5_tfds",
