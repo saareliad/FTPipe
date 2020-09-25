@@ -216,6 +216,10 @@ if __name__ == "__main__":
     print("-I- loading")
     # Test loading
     loader = T5HFLoader(hf_transformers_model_class=T5ForConditionalGeneration)
+    # Note: can also use
+    # from .t5_for_generation import T5ForConditionalGeneration as ModelParallelT5ForConditionalGeneration
+    # and spead across devices...
+
     hugg, extra = loader.load_from_saved_pipeline(args, to_original=True)
     config = extra['config']
     tokenizer = extra['tokenizer']

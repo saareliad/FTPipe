@@ -6,16 +6,42 @@ import warnings
 import t5
 import tensorflow.compat.v1 as tf
 import torch
+from tqdm import tqdm
 from transformers import T5ForConditionalGeneration
 
-from .t5_squad import load_huggingface_checkpoint
+from models.load_pipeline_weights_to_hf import T5HFLoader
+from models.t5_for_generation import T5ForConditionalGeneration as ModelParallelT5ForConditionalGeneration
 
 get_dataset = t5.models.hf_model.get_dataset
-from tqdm import tqdm
+
+
+def load_huggingface_checkpoint(args, cp_number, spread_across_devices=True, **kwargs):
+    if spread_across_devices:
+        hf_transformers_model_class = ModelParallelT5ForConditionalGeneration
+    else:
+        hf_transformers_model_class = T5ForConditionalGeneration
+    loader = T5HFLoader(hf_transformers_model_class=hf_transformers_model_class)
+
+    if cp_number == "c4":
+        model_name_or_path = args.model_name_or_path
+        print(f"-I- Will evaluate {model_name_or_path}, no further finetuining")
+        # TODO: call with other hyperparameters...
+        hugg, tokenizer, config = loader.get_hf_original_model_tokenizer_and_config(
+            model_name_or_path)
+    else:
+        # Get current eval:
+        add_to_prefix = f"_{cp_number}"
+        hugg, extra = loader.load_from_saved_pipeline(args, to_original=True, add_to_prefix=add_to_prefix, **kwargs)
+        config = extra['config']
+        tokenizer = extra['tokenizer']
+    return hugg, tokenizer, config
 
 
 class T5Evaluator:
-    def __init__(self, args, model_dir, device, model: T5ForConditionalGeneration = None):
+    """Slightly patched with features"""
+
+    def __init__(self, args, model_dir, device, model: T5ForConditionalGeneration = None, spread_across_devices=True,
+                 use_existing_model_next_loads=True):
         super().__init__()
         self._model: T5ForConditionalGeneration = None
         self._writer = torch.utils.tensorboard.writer.SummaryWriter(model_dir)
@@ -23,6 +49,7 @@ class T5Evaluator:
         if isinstance(device, str):
             device = torch.device(device)
         self._device = device
+        self.spread_across_devices = spread_across_devices
 
         if model is not None:
             self._model = model
@@ -33,6 +60,7 @@ class T5Evaluator:
         # self.load_latest_checkpoint()
         self.to_tensor = functools.partial(torch.as_tensor, device=self._device)
         self.args = args
+        self.use_existing_model_next_loads = use_existing_model_next_loads
 
     def load_checkpoint(self, cp_number):
         # TODO: can use existing model to save load time by passing
@@ -43,9 +71,34 @@ class T5Evaluator:
         # }
         # to `load_huggingface_checkpoint`, but decided not to do it because not sure about internal state HF saves.
         # so better load from scratch to be sure.
-        hugg, tokenizer = load_huggingface_checkpoint(args=self.args, cp_number=cp_number)
+        use_existing = self.use_existing_model_next_loads
+        kwargs = dict()
+        if use_existing and self._model is not None and getattr(self, "_tokenizer", None) is not None and getattr(self,
+                                                                                                                  "_config",
+                                                                                                                  None) is not None:
+            try:
+                kwargs['model'] = self._model
+                kwargs['tokenizer'] = self._tokenizer
+                kwargs['config'] = self._config
+            except Exception as e:
+                kwargs.pop('model', None)
+                kwargs.pop('tokenizer', None)
+                kwargs.pop('config', None)
+
+        hugg, tokenizer, config = load_huggingface_checkpoint(args=self.args,
+                                                              spread_across_devices=self.spread_across_devices,
+                                                              cp_number=cp_number, **kwargs)
         self._model = hugg
+        if use_existing:
+            self._tokenizer = tokenizer
+            self._config = config
         self._step = cp_number  # HACK
+
+        if self.spread_across_devices:
+            # will spread across all visible devices
+            assert isinstance(hugg, ModelParallelT5ForConditionalGeneration)
+            hugg: ModelParallelT5ForConditionalGeneration
+            hugg.spread_on_devices(devices=None)
 
         if self._device.type == "cuda":
             self._model.to(self._device)
@@ -212,7 +265,7 @@ class T5Evaluator:
                 all_results[checkpoint_step] = results
             except Exception as e:
                 if all_results:
-                    warnings.warn(f"ignoring exeption {str(e)}")
+                    warnings.warn(f"ignoring exception {str(e)}")
                 else:
                     raise e
 
