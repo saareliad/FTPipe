@@ -13,8 +13,7 @@ import pandas as pd
 from sklearn.cluster import KMeans
 
 from pytorch_Gpipe.model_partitioning.bin_packing.heap_dict import heapdict
-from pytorch_Gpipe.model_partitioning.bin_packing.post_process import post_process_partition, \
-    cannonize_partition_indices
+from pytorch_Gpipe.model_partitioning.bin_packing.post_process import post_process_partition
 from pytorch_Gpipe.model_partitioning.bin_packing.union_find import UnionFind
 from pytorch_Gpipe.model_partitioning.heuristics import NodeWeightFunction
 from pytorch_Gpipe.model_profiling import Graph, Node
@@ -195,44 +194,37 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
 
             broke = False
 
-            def _basic_nest(y, X, set_idx, node_id, to_unify):
+            def _basic_nest(y, X, set_idx, node_id, to_unify, nesting_to_take=0, curr_nesting=0):
                 for y in y.out_edges:  # This is the nesting level
-                    if y.id not in set_idx:
-                        dst_cluster = X.loc[y.id]['cluster']
-                        X.loc[X.index == node_id, 'cluster'] = dst_cluster
-                        to_unify[dst_cluster].append([node_id, y.id])
-                        return True
+                    if curr_nesting == nesting_to_take:
+                        if y.id not in set_idx:
+                            dst_cluster = X.loc[y.id]['cluster']
+                            X.loc[X.index == node_id, 'cluster'] = dst_cluster
+                            to_unify[dst_cluster].append([node_id, y.id])
+                            return True
+                    else:
+                        return _basic_nest(y, X, set_idx, node_id, to_unify, nesting_to_take=nesting_to_take,
+                                           curr_nesting=curr_nesting + 1)
                 return False
 
-            for y in node.out_edges:
-                broke = _basic_nest(y, X, set_idx, node_id, to_unify)  # 1
-                if broke:
-                    break
-            else:
-                # while not broke:
+            # TODO: this can all happen normally with graph matirx representation and mamtuls
+            # (A^x length x paths)
+
+            nesting_to_take = 0
+            while True:
                 for y in node.out_edges:
-                    for y in y.out_edges:
-                        broke = _basic_nest(y, X, set_idx, node_id, to_unify)  # 2
-                        if broke:
-                            break
+                    broke = _basic_nest(y, X, set_idx, node_id, to_unify, nesting_to_take=nesting_to_take,
+                                        curr_nesting=0)  # 1
                     if broke:
                         break
                 else:
-                    for y in node.out_edges:
-                        for y in y.out_edges:
-                            for y in y.out_edges:
-                                broke = _basic_nest(y, X, set_idx, node_id, to_unify)  # 3
-                                if broke:
-                                    break
-                            if broke:
-                                break
-                        if broke:
-                            break
+                    nesting_to_take += 1
+                    print(
+                        f"Going {nesting_to_take + 1} more nesting level for node:{node_id} because all outputs are below threshold {set_idx}")
 
-            if not broke:
-                raise NotImplementedError(f"need to go one level deeper "
-                                          f"to find node with above THRESHOLD={THRESHOLD} weight to unify")
-
+            # if not broke:
+            #     raise NotImplementedError(f"need to go one level deeper "
+            #                               f"to find node with above THRESHOLD={THRESHOLD} weight to unify")
 
     # fix to 8->9 and 8->10 and 9->10 prolem which is reduced to 8->9->10 and useless data jump between gpus
     # TODO
@@ -500,7 +492,7 @@ def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worke
                                 break
                             if len(all_outputs) == 1 and len(all_gpus_ids) == 1 and out.gpu_id not in all_gpus_ids:
                                 print("all_gpus_ids, out.gpu_id, out.id, out.scope:")
-                                print(all_gpus_ids, out.gpu_id, out.id, out.scope,)
+                                print(all_gpus_ids, out.gpu_id, out.id, out.scope, )
 
                                 print("all graph:")
                                 print("{}  |  {}  |  {} ".format("id", "stage", "gpu"))
