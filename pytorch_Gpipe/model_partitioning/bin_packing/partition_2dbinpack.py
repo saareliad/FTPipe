@@ -211,6 +211,7 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
             # (A^x length x paths)
 
             nesting_to_take = 0
+            broke=False
             while True:
                 for y in node.out_edges:
                     broke = _basic_nest(y, X, set_idx, node_id, to_unify, nesting_to_take=nesting_to_take,
@@ -221,7 +222,8 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
                     nesting_to_take += 1
                     print(
                         f"Going {nesting_to_take + 1} more nesting level for node:{node_id} because all outputs are below threshold {set_idx}")
-
+                if broke:
+                    break
             # if not broke:
             #     raise NotImplementedError(f"need to go one level deeper "
             #                               f"to find node with above THRESHOLD={THRESHOLD} weight to unify")
