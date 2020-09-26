@@ -394,8 +394,24 @@ def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worke
                         # TODO: missing_topo_sort_id in graph is redundant, but here just in case
                         if missing_topo_sort_id in graph and missing_topo_sort_id in id_to_node_worked_on:
                             # TODO: this is too coarse grained. Need to actually check if there is a cycle.
+                            try:
+                                cur_nodes = [id_to_node_worked_on[x] for x in cur_set]
+                            except KeyError as e:
+                                print("-V- Known bug/issue (currently happens in METIS only?). Raising extra info")
+                                print("-V- cur_nodes = [id_to_node_worked_on[x] for x in cur_set]")
+                                print("-V- id_to_node_worked_on:", id_to_node_worked_on)
+                                print("-V- cur_set", cur_set)
+                                print("-V- Finding problematic keys:")
+                                _first=True
+                                for x in cur_set:
+                                    if x not in id_to_node_worked_on:
+                                        if _first:
+                                            print("-V- First problematic key (node_id):", x)
+                                            _first = False
+                                        else:
+                                            print("-V- Problematic key (node_id):", x)
+                                raise e
 
-                            cur_nodes = [id_to_node_worked_on[x] for x in cur_set]
                             scs = set(cur_set)
                             missing_nodes_in_work_graph = [id_to_node_worked_on[x] for x in missing_topo_sort_ids if
                                                            x not in scs and x in id_to_node_worked_on]
