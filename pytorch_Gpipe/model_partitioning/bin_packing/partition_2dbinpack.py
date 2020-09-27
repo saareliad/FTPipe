@@ -193,7 +193,10 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
         for y in y.in_edges:  # This is the nesting level
             if curr_nesting == nesting_to_take:
                 if y.id not in set_idx:
-                    dst_cluster = X.loc[y.id]['cluster']
+                    try:
+                        dst_cluster = X.loc[y.id]['cluster']
+                    except KeyError:
+                        continue
                     X.loc[X.index == node_id, 'cluster'] = dst_cluster
                     to_unify[dst_cluster].append(reversed([node_id, y.id]))  # intentional: reverse
                     print(f"-V- unify node: {node.id} to dst: {y.id}, cluster: {dst_cluster} (backward)")
