@@ -165,7 +165,7 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
     X = pd.DataFrame.from_records(data=records, index="id")
     nodes_below_thresholds = X[X["weight"] <= THRESHOLD]
 
-    # filter below-threashold items
+    # filter below-threshold items
     nodes_above_thresholds = X[X["weight"] > THRESHOLD]
 
     kmeans = KMeans(n_clusters=C, max_iter=1000, copy_x=True).fit(nodes_above_thresholds)
@@ -173,60 +173,43 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
 
     # For nodes with zero weight, just unify them to close "real" node.
     to_unify = defaultdict(list)
-
     set_idx = set(nodes_below_thresholds.index)
+
+    def _basic_nest(y, X, set_idx, node_id, to_unify, nesting_to_take=0, curr_nesting=0):
+        for y in y.out_edges:  # This is the nesting level
+            if curr_nesting == nesting_to_take:
+                if y.id not in set_idx:
+                    dst_cluster = X.loc[y.id]['cluster']
+                    X.loc[X.index == node_id, 'cluster'] = dst_cluster
+                    to_unify[dst_cluster].append([node_id, y.id])
+                    print(f"-V- unify node: {node.id} to dst: {y.id}, cluster: {dst_cluster}")
+                    return True
+            else:
+                return _basic_nest(y, X, set_idx, node_id, to_unify, nesting_to_take=nesting_to_take,
+                                   curr_nesting=curr_nesting + 1)
+        return False
+
     for node_id in nodes_below_thresholds.index:
         node = graph[node_id]
         # find a "big"
-        for y in node.out_edges:
-            if y.id not in set_idx:  # found a "big"
-                dst_cluster = X.loc[y.id]['cluster']
-                X.loc[X.index == node_id, 'cluster'] = dst_cluster
-                to_unify[dst_cluster].append([node_id, y.id])
 
-                print(f"-V- unify node: {node.id} to dst: {y.id}, cluster: {dst_cluster}")
+        # TODO: this can all happen normally with graph matirx representation and mamtuls
+        # (A^x length x paths)
+
+        nesting_to_take = 0
+        broke = False
+        NESTING_LIMIT = len(graph) + 1
+        while True:
+            broke = _basic_nest(node, X, set_idx, node_id, to_unify, nesting_to_take=nesting_to_take,
+                                curr_nesting=0)  # 1
+            if broke:
                 break
-            # else:
-            #     print(f"node_id:{node_id}, y.id:{y.id}", node.scope, y.scope)
-        else:
-            # Unify:
-            print(f"Going 1 more nesting level for node:{node_id} because all outputs are below threshold {set_idx}")
-
-            broke = False
-
-            def _basic_nest(y, X, set_idx, node_id, to_unify, nesting_to_take=0, curr_nesting=0):
-                for y in y.out_edges:  # This is the nesting level
-                    if curr_nesting == nesting_to_take:
-                        if y.id not in set_idx:
-                            dst_cluster = X.loc[y.id]['cluster']
-                            X.loc[X.index == node_id, 'cluster'] = dst_cluster
-                            to_unify[dst_cluster].append([node_id, y.id])
-                            return True
-                    else:
-                        return _basic_nest(y, X, set_idx, node_id, to_unify, nesting_to_take=nesting_to_take,
-                                           curr_nesting=curr_nesting + 1)
-                return False
-
-            # TODO: this can all happen normally with graph matirx representation and mamtuls
-            # (A^x length x paths)
-
-            nesting_to_take = 0
-            broke=False
-            while True:
-                for y in node.out_edges:
-                    broke = _basic_nest(y, X, set_idx, node_id, to_unify, nesting_to_take=nesting_to_take,
-                                        curr_nesting=0)  # 1
-                    if broke:
-                        break
-                else:
-                    nesting_to_take += 1
-                    print(
-                        f"Going {nesting_to_take + 1} more nesting level for node:{node_id} because all outputs are below threshold {set_idx}")
-                if broke:
-                    break
-            # if not broke:
-            #     raise NotImplementedError(f"need to go one level deeper "
-            #                               f"to find node with above THRESHOLD={THRESHOLD} weight to unify")
+            nesting_to_take += 1
+            print(
+                f"Going {nesting_to_take + 1} more nesting level for node:{node_id} because all outputs are below threshold {set_idx}")
+            if nesting_to_take >= NESTING_LIMIT:
+                raise NotImplementedError(f"did not find node with above THRESHOLD={THRESHOLD} weight to unify"
+                                          "need to implement unifying backwards")
 
     # fix to 8->9 and 8->10 and 9->10 prolem which is reduced to 8->9->10 and useless data jump between gpus
     # TODO
@@ -404,7 +387,7 @@ def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worke
                                 print("-V- id_to_node_worked_on:", id_to_node_worked_on)
                                 print("-V- cur_set", cur_set)
                                 print("-V- Finding problematic keys:")
-                                _first=True
+                                _first = True
                                 for x in cur_set:
                                     if x not in id_to_node_worked_on:
                                         if _first:
