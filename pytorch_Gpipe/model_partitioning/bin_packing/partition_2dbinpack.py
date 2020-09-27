@@ -175,18 +175,32 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
     to_unify = defaultdict(list)
     set_idx = set(nodes_below_thresholds.index)
 
-    def _basic_nest(y, X, set_idx, node_id, to_unify, nesting_to_take=0, curr_nesting=0):
+    def _basic_nest_forward(y: Node, X, set_idx, node_id, to_unify, nesting_to_take=0, curr_nesting=0):
         for y in y.out_edges:  # This is the nesting level
             if curr_nesting == nesting_to_take:
                 if y.id not in set_idx:
                     dst_cluster = X.loc[y.id]['cluster']
                     X.loc[X.index == node_id, 'cluster'] = dst_cluster
                     to_unify[dst_cluster].append([node_id, y.id])
-                    print(f"-V- unify node: {node.id} to dst: {y.id}, cluster: {dst_cluster}")
+                    print(f"-V- unify node: {node.id} to dst: {y.id}, cluster: {dst_cluster} (forward)")
                     return True
             else:
-                return _basic_nest(y, X, set_idx, node_id, to_unify, nesting_to_take=nesting_to_take,
-                                   curr_nesting=curr_nesting + 1)
+                return _basic_nest_forward(y, X, set_idx, node_id, to_unify, nesting_to_take=nesting_to_take,
+                                           curr_nesting=curr_nesting + 1)
+        return False
+
+    def _basic_nest_backward(y: Node, X, set_idx, node_id, to_unify, nesting_to_take=0, curr_nesting=0):
+        for y in y.in_edges:  # This is the nesting level
+            if curr_nesting == nesting_to_take:
+                if y.id not in set_idx:
+                    dst_cluster = X.loc[y.id]['cluster']
+                    X.loc[X.index == node_id, 'cluster'] = dst_cluster
+                    to_unify[dst_cluster].append(reversed([node_id, y.id]))  # intentional: reverse
+                    print(f"-V- unify node: {node.id} to dst: {y.id}, cluster: {dst_cluster} (backward)")
+                    return True
+            else:
+                return _basic_nest_backward(y, X, set_idx, node_id, to_unify, nesting_to_take=nesting_to_take,
+                                            curr_nesting=curr_nesting + 1)
         return False
 
     for node_id in nodes_below_thresholds.index:
@@ -197,19 +211,21 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
         # (A^x length x paths)
 
         nesting_to_take = 0
-        broke = False
         NESTING_LIMIT = len(graph) + 1
         while True:
-            broke = _basic_nest(node, X, set_idx, node_id, to_unify, nesting_to_take=nesting_to_take,
-                                curr_nesting=0)  # 1
+
+            broke = _basic_nest_forward(node, X, set_idx, node_id, to_unify, nesting_to_take=nesting_to_take,
+                                        curr_nesting=0) or _basic_nest_backward(node, X, set_idx, node_id, to_unify,
+                                                                                nesting_to_take=nesting_to_take,
+                                                                                curr_nesting=0)
             if broke:
                 break
+
             nesting_to_take += 1
             print(
                 f"Going {nesting_to_take + 1} more nesting level for node:{node_id} because all outputs are below threshold {set_idx}")
             if nesting_to_take >= NESTING_LIMIT:
-                raise NotImplementedError(f"did not find node with above THRESHOLD={THRESHOLD} weight to unify"
-                                          "need to implement unifying backwards")
+                raise NotImplementedError(f"did not find node with above THRESHOLD={THRESHOLD} weight to unify")
 
     # fix to 8->9 and 8->10 and 9->10 prolem which is reduced to 8->9->10 and useless data jump between gpus
     # TODO
