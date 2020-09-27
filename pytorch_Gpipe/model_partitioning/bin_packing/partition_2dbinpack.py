@@ -277,9 +277,13 @@ def first_fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
     # result
     bins = defaultdict(list)
     bin_weights = heapdict({i: 0 for i in range(K)})
+    bin_memory = heapdict({i: 0 for i in range(K)})
     # get splits
     all_splits = get_all_splits(K, clusters, id_to_node=id_to_node, to_unify=to_unify, C=C,
                                 reminder_policy=reminder_policy)
+
+    def check_memory_fit(candidate, bin_id):
+        return True
 
     def choose_bin(subsplit, subsplit_idx, cluster_idx):
         # TODO: be smarter after the 1st cluster
@@ -294,7 +298,20 @@ def first_fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
             # Tradeoff: communication vs computational balance.
             # Choose bin with minimal weight.
             # subsplits are given by size, decreasing order
-            (emptiest_bin_id, current_bin_weight) = bin_weights.peekitem()
+            saved = []
+            while True:
+                if len(bin_weights) == 0:
+                    raise RuntimeError("no bin can fit memory-wise")
+                (emptiest_bin_id, current_bin_weight) = bin_weights.peekitem()
+                fits_memory = check_memory_fit(subsplit, emptiest_bin_id)
+                if fits_memory:
+                    break
+                saved.append(bin_weights.popitem())
+
+            # restore saved
+            for k, v in saved:
+                bin_weights[k] = v
+
             return emptiest_bin_id
         elif second_and_on_cluster_policy == SecondAndOnClusterPolicy.InOrder:
             if subsplit_idx < K:
