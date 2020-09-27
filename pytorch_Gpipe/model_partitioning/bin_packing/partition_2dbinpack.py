@@ -198,7 +198,7 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
                     except KeyError:
                         continue
                     X.loc[X.index == node_id, 'cluster'] = dst_cluster
-                    to_unify[dst_cluster].append(reversed([node_id, y.id]))  # intentional: reverse
+                    to_unify[dst_cluster].append([y.id, node_id])  # intentional: reverse
                     print(f"-V- unify node: {node.id} to dst: {y.id}, cluster: {dst_cluster} (backward)")
                     return True
             else:
