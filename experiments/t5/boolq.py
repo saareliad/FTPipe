@@ -231,8 +231,24 @@ if __name__ == '__main__':
 
         ### For Gpipe: accuracy does not change.
         # Only epoch time changes.
-        mean_epoch_time = 243242
-        best_result_epochs = 51
+
+        d = {"train_epochs_times": [
+            487.2022340297699,
+            488.64417576789856,
+            487.7520182132721,
+            491.34442591667175,
+            488.5484371185303,
+            488.97134494781494,
+            490.6395933628082,
+            487.4429671764374,
+            488.1168282032013,
+            488.0837802886963,
+            487.9543607234955,
+            486.35694670677185
+        ]}
+
+        mean_epoch_time = np.mean(d["train_epochs_times"])
+        best_result_epochs = 51   # taken from another exp
         time_to_result = best_result_epochs * mean_epoch_time
         time_to_best_gpipe = time_to_result
         records.append({"alg": "seq_gpipe",
