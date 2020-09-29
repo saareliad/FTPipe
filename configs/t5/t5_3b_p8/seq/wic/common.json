@@ -18,9 +18,9 @@
         }
     },
     "statistics": "squad_loss_per_batch",
-    "bs_train": 64,
-    "bs_test": 64,
-    "step_every": 2,
+    "bs_train": 32,
+    "bs_test": 32,
+    "step_every": 4,
     "max_seq_length": 64,
     "answer_max_seq_length": 4,
     "num_data_workers": 5,
