@@ -261,7 +261,7 @@ class Parser(argparse.ArgumentParser, ABC):
 
         group.add_argument("--second_and_on_cluster_policy", type=str,
                            choices=list(SecondAndOnClusterPolicy._value2member_map_.keys()),
-                           default="first_fit",
+                           default="best_fit",
                            help=f"Policy for 2nd and on cluster {SecondAndOnClusterPolicy._value2member_map_}")
 
         group.add_argument("--THRESHOLD", type=float, default=0,

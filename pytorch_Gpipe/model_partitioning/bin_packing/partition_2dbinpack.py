@@ -22,7 +22,7 @@ from pytorch_Gpipe.model_profiling import Graph, Node
 # from ...model_profiling import Graph, Node, NodeWeightFunction
 
 
-# from .partition_2dbinpack_poc import analyze_n_clusters, first_fit_cluster, make_clusters
+# from .partition_2dbinpack_poc import analyze_n_clusters, best_Fit_cluster, make_clusters
 # Poc abstraction for 2d-packing for pipeline with virtual stages
 # ######## ######### ############ ############# ########## ########### ####### ############
 # sorts nodes by value
@@ -38,7 +38,7 @@ class ReminderPolicy(Enum):
 
 
 class SecondAndOnClusterPolicy(Enum):
-    FirstFitBinPacking = "first_fit"
+    BestFitBinPacking = "best_fit"
     InOrder = "order"
     Reversed = "reversed"
 
@@ -269,11 +269,11 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
     return clusters, to_unify
 
 
-def first_fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
-                      to_unify: Dict[int, List[Union[List, Any]]], C: int,
-                      second_and_on_cluster_policy: SecondAndOnClusterPolicy = SecondAndOnClusterPolicy.FirstFitBinPacking,
-                      reminder_policy: ReminderPolicy = ReminderPolicy.ToLast,
-                      ):
+def best_Fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
+                     to_unify: Dict[int, List[Union[List, Any]]], C: int,
+                     second_and_on_cluster_policy: SecondAndOnClusterPolicy = SecondAndOnClusterPolicy.BestFitBinPacking,
+                     reminder_policy: ReminderPolicy = ReminderPolicy.ToLast,
+                     ):
     # result
     bins = defaultdict(list)
     bin_weights = heapdict({i: 0 for i in range(K)})
@@ -293,7 +293,7 @@ def first_fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
                 f"not fully implemented behavior for 1st cluster subsplit_idx >= K (subsplit_idx:{subsplit_idx},K:{K}), will do FirstFitBinPacking")
         if cluster_idx == 0 and subsplit_idx < K:
             return subsplit_idx
-        elif second_and_on_cluster_policy == SecondAndOnClusterPolicy.FirstFitBinPacking or (
+        elif second_and_on_cluster_policy == SecondAndOnClusterPolicy.BestFitBinPacking or (
                 cluster_idx == 0 and subsplit_idx >= K):
             # Tradeoff: communication vs computational balance.
             # Choose bin with minimal weight.
@@ -301,7 +301,7 @@ def first_fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
             saved = []
             while True:
                 if len(bin_weights) == 0:
-                    raise RuntimeError("no bin can fit memory-wise")
+                    raise RuntimeError("no bin can fit (memory-wise)")
                 (emptiest_bin_id, current_bin_weight) = bin_weights.peekitem()
                 fits_memory = check_memory_fit(subsplit, emptiest_bin_id)
                 if fits_memory:
@@ -337,7 +337,7 @@ def first_fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
         if len(split) > K and cluster_idx == 0:
             raise NotImplementedError()
 
-        if cluster_idx > 0 and second_and_on_cluster_policy == SecondAndOnClusterPolicy.FirstFitBinPacking:
+        if cluster_idx > 0 and second_and_on_cluster_policy == SecondAndOnClusterPolicy.BestFitBinPacking:
             # sort subsplits by size
             split = sorted(split, key=sum_subsplit_weight, reverse=True)
 
@@ -639,7 +639,7 @@ def partition_2dbin_pack(graph: Graph,
                          # edge_weight_function: Optional[EdgeWeightFunction] = None,
                          use_layers_graph: bool = True,
                          THRESHOLD=0,
-                         second_and_on_cluster_policy: SecondAndOnClusterPolicy = SecondAndOnClusterPolicy.FirstFitBinPacking,
+                         second_and_on_cluster_policy: SecondAndOnClusterPolicy = SecondAndOnClusterPolicy.BestFitBinPacking,
                          reminder_policy: ReminderPolicy = ReminderPolicy.ToLast,
                          display_cluster_sse_plot=False,
                          **kwargs
@@ -681,7 +681,7 @@ def partition_2dbin_pack(graph: Graph,
     C = n_clusters
 
     clusters, to_unify = make_clusters(work_graph, nodes, node_weight_function, C=C, THRESHOLD=THRESHOLD)
-    bins = first_fit_cluster(K, clusters, id_to_node=id_to_node, to_unify=to_unify, C=C,
+    bins = best_Fit_cluster(K, clusters, id_to_node=id_to_node, to_unify=to_unify, C=C,
                              second_and_on_cluster_policy=second_and_on_cluster_policy,
                              reminder_policy=reminder_policy)
     # sort
